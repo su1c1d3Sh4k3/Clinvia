@@ -57,6 +57,10 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        chat: {
+          agent: "hsl(var(--chat-agent))",
+          customer: "hsl(var(--chat-customer))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
