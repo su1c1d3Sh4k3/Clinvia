@@ -53,6 +53,11 @@ All colors MUST be HSL.
     --sidebar-border: 220 13% 91%;
 
     --sidebar-ring: 217.2 91.2% 59.8%;
+    
+    --chat-agent: 142 76% 36%;
+    --chat-customer: 210 16% 93%;
+    --glassmorphism-bg: 0 0% 100% / 0.05;
+    --sidebar-nav: 222 47% 11%;
   }
 
   .dark {
@@ -91,6 +96,11 @@ All colors MUST be HSL.
     --sidebar-accent-foreground: 240 4.8% 95.9%;
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+    
+    --chat-agent: 142 76% 36%;
+    --chat-customer: 220 13% 18%;
+    --glassmorphism-bg: 0 0% 100% / 0.05;
+    --sidebar-nav: 222 47% 11%;
   }
 }
 
