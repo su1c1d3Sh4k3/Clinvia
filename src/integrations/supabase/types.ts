@@ -14,7 +14,177 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      ai_analysis: {
+        Row: {
+          conversation_id: string
+          id: string
+          last_updated: string | null
+          sentiment_score: number | null
+          summary: string | null
+        }
+        Insert: {
+          conversation_id: string
+          id?: string
+          last_updated?: string | null
+          sentiment_score?: number | null
+          summary?: string | null
+        }
+        Update: {
+          conversation_id?: string
+          id?: string
+          last_updated?: string | null
+          sentiment_score?: number | null
+          summary?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_analysis_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: true
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contacts: {
+        Row: {
+          created_at: string | null
+          custom_attributes: Json | null
+          id: string
+          profile_pic_url: string | null
+          push_name: string | null
+          remote_jid: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          custom_attributes?: Json | null
+          id?: string
+          profile_pic_url?: string | null
+          push_name?: string | null
+          remote_jid: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          custom_attributes?: Json | null
+          id?: string
+          profile_pic_url?: string | null
+          push_name?: string | null
+          remote_jid?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      conversations: {
+        Row: {
+          assigned_agent_id: string | null
+          contact_id: string
+          created_at: string | null
+          id: string
+          status: Database["public"]["Enums"]["conversation_status"] | null
+          unread_count: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          assigned_agent_id?: string | null
+          contact_id: string
+          created_at?: string | null
+          id?: string
+          status?: Database["public"]["Enums"]["conversation_status"] | null
+          unread_count?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          assigned_agent_id?: string | null
+          contact_id?: string
+          created_at?: string | null
+          id?: string
+          status?: Database["public"]["Enums"]["conversation_status"] | null
+          unread_count?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversations_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      instances: {
+        Row: {
+          apikey: string
+          created_at: string | null
+          id: string
+          name: string
+          server_url: string
+          status: Database["public"]["Enums"]["instance_status"] | null
+          updated_at: string | null
+        }
+        Insert: {
+          apikey: string
+          created_at?: string | null
+          id?: string
+          name: string
+          server_url: string
+          status?: Database["public"]["Enums"]["instance_status"] | null
+          updated_at?: string | null
+        }
+        Update: {
+          apikey?: string
+          created_at?: string | null
+          id?: string
+          name?: string
+          server_url?: string
+          status?: Database["public"]["Enums"]["instance_status"] | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      messages: {
+        Row: {
+          body: string | null
+          conversation_id: string
+          created_at: string | null
+          direction: Database["public"]["Enums"]["message_direction"]
+          evolution_id: string | null
+          id: string
+          media_url: string | null
+          message_type: Database["public"]["Enums"]["message_type"] | null
+        }
+        Insert: {
+          body?: string | null
+          conversation_id: string
+          created_at?: string | null
+          direction: Database["public"]["Enums"]["message_direction"]
+          evolution_id?: string | null
+          id?: string
+          media_url?: string | null
+          message_type?: Database["public"]["Enums"]["message_type"] | null
+        }
+        Update: {
+          body?: string | null
+          conversation_id?: string
+          created_at?: string | null
+          direction?: Database["public"]["Enums"]["message_direction"]
+          evolution_id?: string | null
+          id?: string
+          media_url?: string | null
+          message_type?: Database["public"]["Enums"]["message_type"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +193,10 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      conversation_status: "open" | "pending" | "resolved"
+      instance_status: "connected" | "disconnected"
+      message_direction: "inbound" | "outbound"
+      message_type: "text" | "image" | "audio" | "video" | "document"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +323,11 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      conversation_status: ["open", "pending", "resolved"],
+      instance_status: ["connected", "disconnected"],
+      message_direction: ["inbound", "outbound"],
+      message_type: ["text", "image", "audio", "video", "document"],
+    },
   },
 } as const
