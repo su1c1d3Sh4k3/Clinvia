@@ -1,135 +1,169 @@
 import { useState } from "react";
-import { TrendingUp, Lightbulb, Send } from "lucide-react";
+import { Send, Sparkles, TrendingUp, AlertCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { cn } from "@/lib/utils";
+import { useAIAnalysis } from "@/hooks/useAIAnalysis";
+import { supabase } from "@/integrations/supabase/client";
 
-export const AIIntelligenceSidebar = () => {
+const getScoreColor = (score: number) => {
+  if (score >= 7) return "text-green-500";
+  if (score >= 4) return "text-yellow-500";
+  return "text-red-500";
+};
+
+const getScoreLabel = (score: number) => {
+  if (score >= 7) return "Satisfeito";
+  if (score >= 4) return "Neutro";
+  return "Insatisfeito";
+};
+
+export const AIIntelligenceSidebar = ({ conversationId }: { conversationId?: string }) => {
+  const { analysis } = useAIAnalysis(conversationId);
   const [copilotMessage, setCopilotMessage] = useState("");
-  const satisfactionScore = 8.5;
-  const [copilotHistory, setCopilotHistory] = useState<Array<{ role: string; content: string }>>([
-    {
-      role: "assistant",
-      content: "Olá! Como posso ajudar você com este atendimento?",
-    },
-  ]);
+  const [copilotHistory, setCopilotHistory] = useState<Array<{ role: string; content: string }>>([]);
+  const [isLoadingCopilot, setIsLoadingCopilot] = useState(false);
 
-  const getScoreColor = (score: number) => {
-    if (score > 7) return "bg-green-500";
-    if (score > 4) return "bg-yellow-500";
-    return "bg-red-500";
-  };
+  const satisfactionScore = analysis?.sentiment_score || 5;
+  const summary = analysis?.summary || "Aguardando análise da conversa...";
 
-  const handleSendCopilot = () => {
+  const handleSendCopilot = async () => {
     if (!copilotMessage.trim()) return;
-    
-    setCopilotHistory([
-      ...copilotHistory,
-      { role: "user", content: copilotMessage },
-      { role: "assistant", content: "Entendi. Sugiro que você responda de forma empática e profissional..." },
-    ]);
+
+    const userMessage = { role: "user", content: copilotMessage };
+    setCopilotHistory((prev) => [...prev, userMessage]);
     setCopilotMessage("");
+    setIsLoadingCopilot(true);
+
+    try {
+      const { data } = await supabase.functions.invoke("ai-copilot-chat", {
+        body: {
+          message: copilotMessage,
+          conversationId,
+        },
+      });
+
+      if (data?.response) {
+        setCopilotHistory((prev) => [
+          ...prev,
+          { role: "assistant", content: data.response },
+        ]);
+      }
+    } catch (error) {
+      console.error("Error in copilot chat:", error);
+      setCopilotHistory((prev) => [
+        ...prev,
+        { role: "assistant", content: "Desculpe, ocorreu um erro. Tente novamente." },
+      ]);
+    } finally {
+      setIsLoadingCopilot(false);
+    }
   };
 
   return (
-    <div className="w-[320px] h-screen p-4 space-y-4 overflow-y-auto backdrop-blur-lg bg-[hsl(var(--glassmorphism-bg))] border-l border-border">
-      {/* Widget 1: Satisfaction Meter */}
-      <Card className="bg-card/50 backdrop-blur">
+    <div className="w-[320px] h-screen border-l border-border bg-background/50 backdrop-blur-sm flex flex-col p-4 gap-4">
+      {/* Satisfaction Meter */}
+      <Card className="bg-background/80">
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
+          <CardTitle className="text-sm flex items-center gap-2">
             <TrendingUp className="w-4 h-4" />
             Índice de Satisfação
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-2xl font-bold">{satisfactionScore.toFixed(1)}</span>
-            <span className="text-sm text-muted-foreground">/10</span>
+        <CardContent>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className={`text-2xl font-bold ${getScoreColor(satisfactionScore)}`}>
+                {satisfactionScore.toFixed(1)}
+              </span>
+              <Badge variant="outline" className={getScoreColor(satisfactionScore)}>
+                {getScoreLabel(satisfactionScore)}
+              </Badge>
+            </div>
+            <Progress value={satisfactionScore * 10} className="h-2" />
+            <p className="text-xs text-muted-foreground">
+              Baseado na análise de sentimento da IA
+            </p>
           </div>
-          <Progress 
-            value={satisfactionScore * 10} 
-            className="h-2"
-          />
-          <div className={cn(
-            "w-full h-1 rounded-full",
-            getScoreColor(satisfactionScore)
-          )} />
-          <p className="text-xs text-muted-foreground mt-2">
-            Cliente satisfeito com o atendimento
-          </p>
         </CardContent>
       </Card>
 
-      {/* Widget 2: AI Insights */}
-      <Card className="bg-card/50 backdrop-blur">
+      {/* AI Insights */}
+      <Card className="bg-background/80">
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Lightbulb className="w-4 h-4" />
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Sparkles className="w-4 h-4" />
             Insights da IA
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent>
           <div className="space-y-2">
             <div className="flex items-start gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5" />
-              <p className="text-sm">
-                <strong>Intenção:</strong> Cliente interessado em compra
-              </p>
-            </div>
-            <div className="flex items-start gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5" />
-              <p className="text-sm">
-                <strong>Sentimento:</strong> Positivo e engajado
-              </p>
-            </div>
-            <div className="flex items-start gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5" />
-              <p className="text-sm">
-                <strong>Urgência:</strong> Média - responder em até 5 minutos
-              </p>
+              <AlertCircle className="w-4 h-4 mt-0.5 text-primary" />
+              <p className="text-sm text-muted-foreground">{summary}</p>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Widget 3: Copilot Chat */}
-      <Card className="bg-card/50 backdrop-blur flex flex-col h-[400px]">
+      {/* Copilot Chat */}
+      <Card className="bg-background/80 flex-1 flex flex-col">
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium">Copilot Chat</CardTitle>
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Sparkles className="w-4 h-4" />
+            Copilot IA
+          </CardTitle>
         </CardHeader>
-        <CardContent className="flex-1 flex flex-col gap-2 p-0">
+        <CardContent className="flex-1 flex flex-col p-0">
           <ScrollArea className="flex-1 px-4">
-            <div className="space-y-3">
-              {copilotHistory.map((msg, idx) => (
-                <div
-                  key={idx}
-                  className={cn(
-                    "text-sm p-2 rounded-lg",
-                    msg.role === "user"
-                      ? "bg-primary/10 text-foreground ml-4"
-                      : "bg-muted mr-4"
-                  )}
-                >
-                  {msg.content}
+            <div className="space-y-3 py-2">
+              {copilotHistory.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-4">
+                  Pergunte algo ao assistente de IA
+                </p>
+              ) : (
+                copilotHistory.map((msg, idx) => (
+                  <div
+                    key={idx}
+                    className={`text-xs p-2 rounded ${
+                      msg.role === "user"
+                        ? "bg-primary text-primary-foreground ml-4"
+                        : "bg-muted mr-4"
+                    }`}
+                  >
+                    {msg.content}
+                  </div>
+                ))
+              )}
+              {isLoadingCopilot && (
+                <div className="text-xs p-2 rounded bg-muted mr-4">
+                  Pensando...
                 </div>
-              ))}
+              )}
             </div>
           </ScrollArea>
           
-          <div className="p-4 pt-2 flex gap-2">
-            <Input
-              placeholder="Pergunte ao Copilot..."
-              value={copilotMessage}
-              onChange={(e) => setCopilotMessage(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSendCopilot()}
-              className="text-sm"
-            />
-            <Button size="icon" onClick={handleSendCopilot}>
-              <Send className="w-4 h-4" />
-            </Button>
+          <div className="p-4 border-t border-border">
+            <div className="flex gap-2">
+              <Input
+                placeholder="Pergunte ao Copilot..."
+                value={copilotMessage}
+                onChange={(e) => setCopilotMessage(e.target.value)}
+                onKeyPress={(e) => e.key === "Enter" && handleSendCopilot()}
+                className="text-sm"
+                disabled={isLoadingCopilot}
+              />
+              <Button 
+                size="icon" 
+                onClick={handleSendCopilot}
+                disabled={isLoadingCopilot || !copilotMessage.trim()}
+              >
+                <Send className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>

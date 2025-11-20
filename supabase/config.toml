@@ -1,1 +1,10 @@
 project_id = "swfshqvvbohnahdyndch"
+
+[functions.ai-suggest-response]
+verify_jwt = false
+
+[functions.ai-copilot-chat]
+verify_jwt = false
+
+[functions.evolution-test-connection]
+verify_jwt = false
