@@ -64,6 +64,23 @@ serve(async (req) => {
 
     console.log('Using instance:', instance.instance_name);
 
+    // Verificar se a instância está conectada na Evolution API
+    const statusResponse = await fetch(
+      `${instance.server_url}/instance/connectionState/${instance.instance_name}`,
+      {
+        headers: { 'apikey': instance.apikey }
+      }
+    );
+
+    if (statusResponse.ok) {
+      const statusData = await statusResponse.json();
+      const state = statusData.instance?.state || statusData.state;
+      
+      if (state !== 'open' && state !== 'connected') {
+        throw new Error('WhatsApp not connected. Please scan the QR code to connect your instance.');
+      }
+    }
+
     // Extrair número do remote_jid (formato: 5511999999999@s.whatsapp.net)
     const phoneNumber = contact.remote_jid.split('@')[0];
 
