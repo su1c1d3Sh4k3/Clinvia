@@ -98,7 +98,7 @@ serve(async (req) => {
         instance_name: instanceName,
         qr_code: qrCodeBase64,
         webhook_url: webhookUrl,
-        status: 'qr'
+        status: 'disconnected'
       })
       .eq('id', instanceId);
 
@@ -111,7 +111,7 @@ serve(async (req) => {
         success: true,
         instanceName,
         qrCode: qrCodeBase64,
-        status: 'qr'
+        status: 'disconnected'
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

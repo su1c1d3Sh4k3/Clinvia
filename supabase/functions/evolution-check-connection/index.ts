@@ -56,8 +56,6 @@ serve(async (req) => {
 
     if (evolutionState === 'open' || evolutionState === 'connected') {
       status = 'connected';
-    } else if (evolutionState === 'connecting' || evolutionState === 'qr') {
-      status = 'qr';
     }
 
     // Atualizar status no banco
