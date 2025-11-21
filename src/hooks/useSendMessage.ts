@@ -15,6 +15,17 @@ export const useSendMessage = () => {
 
   return useMutation({
     mutationFn: async ({ conversationId, body, direction, messageType = "text" }: SendMessageParams) => {
+      // Se for mensagem outbound, enviar via Evolution API
+      if (direction === "outbound") {
+        const { data, error } = await supabase.functions.invoke("evolution-send-message", {
+          body: { conversationId, body },
+        });
+
+        if (error) throw error;
+        return data;
+      }
+
+      // Mensagens inbound são inseridas diretamente (vêm do webhook)
       const { data, error } = await supabase
         .from("messages")
         .insert({

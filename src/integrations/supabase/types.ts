@@ -119,28 +119,37 @@ export type Database = {
           apikey: string
           created_at: string | null
           id: string
+          instance_name: string | null
           name: string
+          qr_code: string | null
           server_url: string
           status: Database["public"]["Enums"]["instance_status"] | null
           updated_at: string | null
+          webhook_url: string | null
         }
         Insert: {
           apikey: string
           created_at?: string | null
           id?: string
+          instance_name?: string | null
           name: string
+          qr_code?: string | null
           server_url: string
           status?: Database["public"]["Enums"]["instance_status"] | null
           updated_at?: string | null
+          webhook_url?: string | null
         }
         Update: {
           apikey?: string
           created_at?: string | null
           id?: string
+          instance_name?: string | null
           name?: string
+          qr_code?: string | null
           server_url?: string
           status?: Database["public"]["Enums"]["instance_status"] | null
           updated_at?: string | null
+          webhook_url?: string | null
         }
         Relationships: []
       }
