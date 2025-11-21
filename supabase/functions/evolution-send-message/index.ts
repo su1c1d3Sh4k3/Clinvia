@@ -39,17 +39,27 @@ serve(async (req) => {
       throw new Error('Contact not found');
     }
 
-    // Buscar primeira instância conectada (por enquanto usamos a primeira)
-    // TODO: melhorar para permitir múltiplas instâncias
+    // Buscar primeira instância que tenha sido criada na Evolution
+    // (tem instance_name preenchido)
     const { data: instance, error: instanceError } = await supabaseClient
       .from('instances')
       .select('*')
-      .eq('status', 'connected')
+      .not('instance_name', 'is', null)
+      .order('created_at', { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
 
-    if (instanceError || !instance) {
-      throw new Error('No connected instance found');
+    if (instanceError) {
+      console.error('Error fetching instance:', instanceError);
+      throw new Error('Failed to fetch instance');
+    }
+
+    if (!instance) {
+      throw new Error('No WhatsApp instance found. Please create and connect an instance first.');
+    }
+
+    if (!instance.instance_name) {
+      throw new Error('Instance not properly configured. Please reconnect it.');
     }
 
     console.log('Using instance:', instance.instance_name);
