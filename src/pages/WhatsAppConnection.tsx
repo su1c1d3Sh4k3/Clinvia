@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -6,9 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, CheckCircle, XCircle } from "lucide-react";
+import { Trash2, CheckCircle, XCircle, Wifi } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { NavigationSidebar } from "@/components/NavigationSidebar";
+import { QRCodeDialog } from "@/components/QRCodeDialog";
 
 const WhatsAppConnection = () => {
   const { toast } = useToast();
@@ -16,6 +17,10 @@ const WhatsAppConnection = () => {
   const [name, setName] = useState("");
   const [serverUrl, setServerUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
+  const [qrDialogOpen, setQrDialogOpen] = useState(false);
+  const [currentQrCode, setCurrentQrCode] = useState<string | null>(null);
+  const [currentInstanceName, setCurrentInstanceName] = useState("");
+  const [pollingInstanceId, setPollingInstanceId] = useState<string | null>(null);
 
   const { data: instances, isLoading } = useQuery({
     queryKey: ["instances"],
@@ -78,30 +83,67 @@ const WhatsAppConnection = () => {
     },
   });
 
-  const testMutation = useMutation({
+  const connectMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { data, error } = await supabase.functions.invoke("evolution-test-connection", {
+      const { data, error } = await supabase.functions.invoke("evolution-create-instance", {
         body: { instanceId: id },
       });
 
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data, instanceId) => {
+      setCurrentQrCode(data.qrCode);
+      setCurrentInstanceName(data.instanceName);
+      setQrDialogOpen(true);
+      setPollingInstanceId(instanceId);
       queryClient.invalidateQueries({ queryKey: ["instances"] });
       toast({
-        title: "Conexão testada!",
-        description: "Status atualizado.",
+        title: "QR Code gerado!",
+        description: "Escaneie com seu WhatsApp para conectar.",
       });
     },
     onError: (error: any) => {
       toast({
-        title: "Erro ao testar conexão",
+        title: "Erro ao gerar QR Code",
         description: error.message,
         variant: "destructive",
       });
     },
   });
+
+  const checkConnectionMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase.functions.invoke("evolution-check-connection", {
+        body: { instanceId: id },
+      });
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["instances"] });
+      if (data.status === 'connected') {
+        setQrDialogOpen(false);
+        setPollingInstanceId(null);
+        toast({
+          title: "WhatsApp conectado!",
+          description: "Sua instância está pronta para uso.",
+        });
+      }
+    },
+  });
+
+  // Polling para verificar status da conexão
+  useEffect(() => {
+    if (!pollingInstanceId) return;
+
+    const interval = setInterval(() => {
+      checkConnectionMutation.mutate(pollingInstanceId);
+    }, 3000); // Verifica a cada 3 segundos
+
+    return () => clearInterval(interval);
+  }, [pollingInstanceId]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -201,14 +243,17 @@ const WhatsAppConnection = () => {
                           )}
                           {instance.status}
                         </Badge>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => testMutation.mutate(instance.id)}
-                          disabled={testMutation.isPending}
-                        >
-                          Testar
-                        </Button>
+                        {instance.status !== "connected" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => connectMutation.mutate(instance.id)}
+                            disabled={connectMutation.isPending}
+                          >
+                            <Wifi className="w-4 h-4 mr-2" />
+                            Conectar WhatsApp
+                          </Button>
+                        )}
                         <Button
                           size="sm"
                           variant="destructive"
@@ -230,6 +275,18 @@ const WhatsAppConnection = () => {
           </Card>
         </div>
       </div>
+
+      <QRCodeDialog
+        open={qrDialogOpen}
+        onOpenChange={(open) => {
+          setQrDialogOpen(open);
+          if (!open) {
+            setPollingInstanceId(null);
+          }
+        }}
+        qrCode={currentQrCode}
+        instanceName={currentInstanceName}
+      />
     </div>
   );
 };
