@@ -82,6 +82,7 @@ export type Database = {
           contact_id: string
           created_at: string | null
           id: string
+          last_message_at: string | null
           status: Database["public"]["Enums"]["conversation_status"] | null
           unread_count: number | null
           updated_at: string | null
@@ -91,6 +92,7 @@ export type Database = {
           contact_id: string
           created_at?: string | null
           id?: string
+          last_message_at?: string | null
           status?: Database["public"]["Enums"]["conversation_status"] | null
           unread_count?: number | null
           updated_at?: string | null
@@ -100,6 +102,7 @@ export type Database = {
           contact_id?: string
           created_at?: string | null
           id?: string
+          last_message_at?: string | null
           status?: Database["public"]["Enums"]["conversation_status"] | null
           unread_count?: number | null
           updated_at?: string | null
