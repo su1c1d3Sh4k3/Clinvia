@@ -37,7 +37,7 @@ serve(async (req) => {
       );
     }
 
-    // Processar evento CONNECTION_UPDATE
+      // Processar evento CONNECTION_UPDATE
     if (event === 'connection.update' || event === 'CONNECTION_UPDATE') {
       console.log('Processing connection update:', data);
       
@@ -46,8 +46,6 @@ serve(async (req) => {
       
       if (state === 'open' || state === 'connected') {
         status = 'connected';
-      } else if (state === 'connecting' || state === 'qr') {
-        status = 'qr';
       }
 
       await supabaseClient
