@@ -45,14 +45,18 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         instanceName: instanceName,
+        integration: 'WHATSAPP-BAILEYS',
         qrcode: true,
-        webhook: webhookUrl,
-        webhook_by_events: true,
-        events: [
-          'MESSAGES_UPSERT',
-          'MESSAGES_UPDATE',
-          'CONNECTION_UPDATE'
-        ]
+        webhook: {
+          url: webhookUrl,
+          byEvents: true,
+          events: [
+            'MESSAGES_UPSERT',
+            'MESSAGES_UPDATE',
+            'CONNECTION_UPDATE',
+            'QRCODE_UPDATED'
+          ]
+        }
       })
     });
 
