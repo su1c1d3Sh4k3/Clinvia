@@ -50,11 +50,15 @@ export const QRCodeDialog = ({ open, onOpenChange, qrCode, instanceName }: QRCod
         <div className="flex flex-col items-center gap-4 py-4">
           {qrCode ? (
             <>
-              <div className="bg-white p-4 rounded-lg">
+              <div className="bg-white p-4 rounded-lg flex items-center justify-center">
                 <img 
-                  src={`data:image/png;base64,${qrCode}`} 
-                  alt="QR Code"
-                  className="w-64 h-64"
+                  src={qrCode.startsWith('data:') ? qrCode : `data:image/png;base64,${qrCode}`}
+                  alt="QR Code WhatsApp"
+                  className="w-64 h-64 object-contain"
+                  onError={(e) => {
+                    console.error('Failed to load QR code image');
+                    e.currentTarget.src = '';
+                  }}
                 />
               </div>
               

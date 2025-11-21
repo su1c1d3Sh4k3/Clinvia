@@ -17,8 +17,8 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { instanceId } = await req.json();
-    console.log('Creating instance for:', instanceId);
+    const { instanceId, instanceName: customName } = await req.json();
+    console.log('Creating instance for:', instanceId, 'with name:', customName);
 
     // Buscar dados da instância
     const { data: instance, error: fetchError } = await supabaseClient
@@ -29,8 +29,10 @@ serve(async (req) => {
 
     if (fetchError) throw fetchError;
 
-    // Gerar nome único para a instância
-    const instanceName = `omnichat_${instanceId.slice(0, 8)}_${Date.now()}`;
+    // Usar nome customizado ou gerar um único
+    const instanceName = customName 
+      ? customName.toLowerCase().replace(/\s+/g, '_')
+      : `omnichat_${instanceId.slice(0, 8)}_${Date.now()}`;
     const webhookUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/evolution-webhook`;
 
     console.log('Instance name:', instanceName);

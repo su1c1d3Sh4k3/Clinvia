@@ -15,8 +15,6 @@ const WhatsAppConnection = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
-  const [serverUrl, setServerUrl] = useState("");
-  const [apiKey, setApiKey] = useState("");
   const [qrDialogOpen, setQrDialogOpen] = useState(false);
   const [currentQrCode, setCurrentQrCode] = useState<string | null>(null);
   const [currentInstanceName, setCurrentInstanceName] = useState("");
@@ -37,28 +35,49 @@ const WhatsAppConnection = () => {
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase
+      // Valores fixos da Evolution API
+      const EVOLUTION_SERVER_URL = "https://wsapi.clinvia.com.br";
+      const EVOLUTION_API_KEY = "6cbd4c9e-8862-49f9-918b-34bcce736948";
+
+      // Primeiro criar no banco
+      const { data: instance, error } = await supabase
         .from("instances")
         .insert({
           name,
-          server_url: serverUrl,
-          apikey: apiKey,
+          server_url: EVOLUTION_SERVER_URL,
+          apikey: EVOLUTION_API_KEY,
           status: "disconnected",
         })
         .select()
         .single();
 
       if (error) throw error;
-      return data;
+
+      // Depois criar na Evolution API e gerar QR code
+      const { data: evolutionData, error: evolutionError } = await supabase.functions.invoke(
+        "evolution-create-instance",
+        {
+          body: { instanceId: instance.id, instanceName: name },
+        }
+      );
+
+      if (evolutionError) throw evolutionError;
+
+      return { instance, evolutionData };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["instances"] });
       setName("");
-      setServerUrl("");
-      setApiKey("");
+      
+      // Abrir modal com QR code imediatamente
+      setCurrentQrCode(data.evolutionData.qrCode);
+      setCurrentInstanceName(data.evolutionData.instanceName);
+      setQrDialogOpen(true);
+      setPollingInstanceId(data.instance.id);
+
       toast({
         title: "Instância criada!",
-        description: "Conecte-a para começar a usar.",
+        description: "Escaneie o QR Code para conectar.",
       });
     },
     onError: (error: any) => {
@@ -83,34 +102,6 @@ const WhatsAppConnection = () => {
     },
   });
 
-  const connectMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { data, error } = await supabase.functions.invoke("evolution-create-instance", {
-        body: { instanceId: id },
-      });
-
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: (data, instanceId) => {
-      setCurrentQrCode(data.qrCode);
-      setCurrentInstanceName(data.instanceName);
-      setQrDialogOpen(true);
-      setPollingInstanceId(instanceId);
-      queryClient.invalidateQueries({ queryKey: ["instances"] });
-      toast({
-        title: "QR Code gerado!",
-        description: "Escaneie com seu WhatsApp para conectar.",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Erro ao gerar QR Code",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
 
   const checkConnectionMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -182,27 +173,6 @@ const WhatsAppConnection = () => {
                     required
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="server-url">Server URL</Label>
-                  <Input
-                    id="server-url"
-                    placeholder="https://evolution.example.com"
-                    value={serverUrl}
-                    onChange={(e) => setServerUrl(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="api-key">API Key</Label>
-                  <Input
-                    id="api-key"
-                    type="password"
-                    placeholder="Sua API Key"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    required
-                  />
-                </div>
                 <Button type="submit" disabled={createMutation.isPending}>
                   {createMutation.isPending ? "Criando..." : "Criar Instância"}
                 </Button>
@@ -243,17 +213,6 @@ const WhatsAppConnection = () => {
                           )}
                           {instance.status}
                         </Badge>
-                        {instance.status !== "connected" && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => connectMutation.mutate(instance.id)}
-                            disabled={connectMutation.isPending}
-                          >
-                            <Wifi className="w-4 h-4 mr-2" />
-                            Conectar WhatsApp
-                          </Button>
-                        )}
                         <Button
                           size="sm"
                           variant="destructive"
