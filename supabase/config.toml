@@ -6,6 +6,15 @@ verify_jwt = false
 [functions.ai-copilot-chat]
 verify_jwt = false
 
+[functions.ai-analyze-conversation]
+verify_jwt = false
+
+[functions.ai-generate-summary]
+verify_jwt = false
+
+[functions.save-attendance-data]
+verify_jwt = true
+
 [functions.evolution-test-connection]
 verify_jwt = false
 
