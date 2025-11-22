@@ -8,6 +8,17 @@ export const useResolveConversation = () => {
 
   return useMutation({
     mutationFn: async (conversationId: string) => {
+      // First, save attendance data
+      const { error: saveError } = await supabase.functions.invoke("save-attendance-data", {
+        body: { conversationId },
+      });
+
+      if (saveError) {
+        console.error('Error saving attendance data:', saveError);
+        // Continue anyway to resolve the ticket
+      }
+
+      // Then update conversation status
       const { data, error } = await supabase
         .from("conversations")
         .update({ status: "resolved" })
@@ -22,7 +33,7 @@ export const useResolveConversation = () => {
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
       toast({
         title: "Ticket resolvido!",
-        description: "A conversa foi marcada como resolvida.",
+        description: "A conversa foi marcada como resolvida e os dados foram salvos.",
       });
     },
     onError: (error: any) => {

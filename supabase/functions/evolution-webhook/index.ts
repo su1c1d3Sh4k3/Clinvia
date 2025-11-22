@@ -226,6 +226,13 @@ serve(async (req) => {
       if (messageError) throw messageError;
 
       console.log('Message inserted successfully');
+
+      // Trigger AI analysis asynchronously (fire and forget)
+      supabaseClient.functions.invoke('ai-analyze-conversation', {
+        body: { conversationId }
+      }).catch(err => {
+        console.error('Failed to trigger AI analysis:', err);
+      });
     }
 
     return new Response(
