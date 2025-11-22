@@ -20,6 +20,7 @@ export type Database = {
           id: string
           last_updated: string | null
           sentiment_score: number | null
+          speed_score: number | null
           summary: string | null
         }
         Insert: {
@@ -27,6 +28,7 @@ export type Database = {
           id?: string
           last_updated?: string | null
           sentiment_score?: number | null
+          speed_score?: number | null
           summary?: string | null
         }
         Update: {
@@ -34,6 +36,7 @@ export type Database = {
           id?: string
           last_updated?: string | null
           sentiment_score?: number | null
+          speed_score?: number | null
           summary?: string | null
         }
         Relationships: [
@@ -113,6 +116,50 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dados_atendimento: {
+        Row: {
+          created_at: string | null
+          id: string
+          qualidade: number | null
+          resumo: string | null
+          team_id: string | null
+          ticket_id: string | null
+          updated_at: string | null
+          user_id: string | null
+          velocidade: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          qualidade?: number | null
+          resumo?: string | null
+          team_id?: string | null
+          ticket_id?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+          velocidade?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          qualidade?: number | null
+          resumo?: string | null
+          team_id?: string | null
+          ticket_id?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+          velocidade?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dados_atendimento_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
             referencedColumns: ["id"]
           },
         ]
@@ -224,12 +271,50 @@ export type Database = {
         }
         Relationships: []
       }
+      response_times: {
+        Row: {
+          agent_response_time: string | null
+          client_message_time: string | null
+          conversation_id: string | null
+          created_at: string | null
+          id: string
+          response_duration_seconds: number | null
+        }
+        Insert: {
+          agent_response_time?: string | null
+          client_message_time?: string | null
+          conversation_id?: string | null
+          created_at?: string | null
+          id?: string
+          response_duration_seconds?: number | null
+        }
+        Update: {
+          agent_response_time?: string | null
+          client_message_time?: string | null
+          conversation_id?: string | null
+          created_at?: string | null
+          id?: string
+          response_duration_seconds?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "response_times_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      calculate_speed_score: {
+        Args: { duration_seconds: number }
+        Returns: number
+      }
     }
     Enums: {
       conversation_status: "open" | "pending" | "resolved"
