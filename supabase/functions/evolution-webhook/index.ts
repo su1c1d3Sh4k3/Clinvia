@@ -63,7 +63,6 @@ serve(async (req) => {
       const messageData = data.messages?.[0] || data;
       const key = messageData.key;
       const message = messageData.message;
-      const messageType = messageData.messageType || 'text';
       const pushName = messageData.pushName || 'Unknown';
       
       // Extrair remote_jid
@@ -81,12 +80,66 @@ serve(async (req) => {
 
       console.log('Message from:', remoteJid, 'Name:', pushName);
 
-      // UPSERT contact
+      // Mapear tipo de mensagem da Evolution para o enum do banco
+      const mapMessageType = (evolutionType: string): string => {
+        const typeMap: Record<string, string> = {
+          'conversation': 'text',
+          'extendedTextMessage': 'text',
+          'imageMessage': 'image',
+          'audioMessage': 'audio',
+          'videoMessage': 'video',
+          'documentMessage': 'document',
+        };
+        return typeMap[evolutionType] || 'text';
+      };
+
+      const messageType = mapMessageType(messageData.messageType || 'text');
+      console.log('Mapped message type:', messageType);
+
+      // Extrair URL de mídia
+      let mediaUrl = null;
+      if (message.imageMessage?.url) {
+        mediaUrl = message.imageMessage.url;
+      } else if (message.audioMessage?.url) {
+        mediaUrl = message.audioMessage.url;
+      } else if (message.videoMessage?.url) {
+        mediaUrl = message.videoMessage.url;
+      } else if (message.documentMessage?.url) {
+        mediaUrl = message.documentMessage.url;
+      }
+      console.log('Media URL extracted:', mediaUrl);
+
+      // Buscar foto de perfil do contato via Evolution API
+      let profilePicUrl = null;
+      try {
+        const profilePicResponse = await fetch(
+          `${instance.server_url}/chat/fetchProfilePictureUrl/${instanceName}`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': instance.apikey,
+            },
+            body: JSON.stringify({ number: remoteJid }),
+          }
+        );
+
+        if (profilePicResponse.ok) {
+          const profileData = await profilePicResponse.json();
+          profilePicUrl = profileData.profilePictureUrl || null;
+          console.log('Profile picture fetched:', profilePicUrl);
+        }
+      } catch (error) {
+        console.error('Error fetching profile picture:', error);
+      }
+
+      // UPSERT contact com foto de perfil
       const { data: contact, error: contactError } = await supabaseClient
         .from('contacts')
         .upsert({
           remote_jid: remoteJid,
           push_name: pushName,
+          profile_pic_url: profilePicUrl,
           updated_at: new Date().toISOString()
         }, {
           onConflict: 'remote_jid',
@@ -150,9 +203,15 @@ serve(async (req) => {
         bodyText = message.extendedTextMessage.text;
       } else if (message.imageMessage?.caption) {
         bodyText = message.imageMessage.caption;
+      } else if (message.audioMessage) {
+        bodyText = '[Áudio]';
+      } else if (message.videoMessage) {
+        bodyText = '[Vídeo]';
+      } else if (message.documentMessage) {
+        bodyText = message.documentMessage.fileName || '[Documento]';
       }
 
-      // Inserir mensagem
+      // Inserir mensagem com mídia
       const { error: messageError } = await supabaseClient
         .from('messages')
         .insert({
@@ -160,6 +219,7 @@ serve(async (req) => {
           body: bodyText,
           direction: 'inbound',
           message_type: messageType,
+          media_url: mediaUrl,
           evolution_id: key.id
         });
 
