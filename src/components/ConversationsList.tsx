@@ -76,7 +76,12 @@ export const ConversationsList = ({ onSelectConversation, selectedId }: {
                     
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="font-medium text-sm">{displayName}</span>
+                        <div className="flex-1">
+                          <span className="font-medium text-sm">{displayName}</span>
+                          <p className="text-xs text-muted-foreground">
+                            #{conversation.id.substring(0, 8).toUpperCase()}
+                          </p>
+                        </div>
                         <span className="text-xs text-muted-foreground">
                           {new Date(conversation.updated_at || "").toLocaleTimeString("pt-BR", {
                             hour: "2-digit",
@@ -90,7 +95,7 @@ export const ConversationsList = ({ onSelectConversation, selectedId }: {
                           WhatsApp
                         </Badge>
                         
-                        {conversation.unread_count && conversation.unread_count > 0 && (
+                        {conversation.unread_count > 0 && (
                           <Badge className="bg-primary text-primary-foreground">
                             {conversation.unread_count}
                           </Badge>

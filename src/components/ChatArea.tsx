@@ -45,6 +45,19 @@ export const ChatArea = ({ conversationId }: { conversationId?: string }) => {
     }
   }, [messages]);
 
+  // Reset unread count when conversation is opened
+  useEffect(() => {
+    if (conversationId) {
+      supabase
+        .from('conversations')
+        .update({ unread_count: 0 })
+        .eq('id', conversationId)
+        .then(() => {
+          console.log('Unread count reset for conversation:', conversationId);
+        });
+    }
+  }, [conversationId]);
+
   const handleMagicAI = async () => {
     if (!conversationId) return;
     
@@ -147,7 +160,51 @@ export const ChatArea = ({ conversationId }: { conversationId?: string }) => {
                       : "bg-[hsl(var(--chat-customer))] text-foreground"
                   )}
                 >
-                  <p className="text-sm">{msg.body}</p>
+                  {/* Renderizar imagem */}
+                  {msg.message_type === 'image' && msg.media_url && (
+                    <img 
+                      src={msg.media_url} 
+                      alt="Imagem" 
+                      className="max-w-full rounded-lg cursor-pointer mb-2"
+                      onClick={() => window.open(msg.media_url, '_blank')}
+                    />
+                  )}
+                  
+                  {/* Renderizar áudio */}
+                  {msg.message_type === 'audio' && msg.media_url && (
+                    <audio controls className="w-full max-w-xs mb-2">
+                      <source src={msg.media_url} type="audio/ogg" />
+                      <source src={msg.media_url} type="audio/mpeg" />
+                      Seu navegador não suporta o elemento de áudio.
+                    </audio>
+                  )}
+                  
+                  {/* Renderizar vídeo */}
+                  {msg.message_type === 'video' && msg.media_url && (
+                    <video controls className="w-full max-w-md rounded-lg mb-2">
+                      <source src={msg.media_url} type="video/mp4" />
+                      Seu navegador não suporta o elemento de vídeo.
+                    </video>
+                  )}
+                  
+                  {/* Renderizar documento */}
+                  {msg.message_type === 'document' && msg.media_url && (
+                    <a 
+                      href={msg.media_url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 text-sm underline mb-2"
+                    >
+                      <Paperclip className="w-4 h-4" />
+                      {msg.body || 'Documento'}
+                    </a>
+                  )}
+                  
+                  {/* Texto da mensagem */}
+                  {msg.body && msg.message_type !== 'document' && (
+                    <p className="text-sm">{msg.body}</p>
+                  )}
+                  
                   <span className={cn(
                     "text-xs mt-1 block",
                     msg.direction === "outbound" ? "text-white/70" : "text-muted-foreground"
