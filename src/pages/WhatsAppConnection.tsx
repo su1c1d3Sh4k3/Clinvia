@@ -5,19 +5,23 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Trash2, CheckCircle, XCircle, Wifi } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { NavigationSidebar } from "@/components/NavigationSidebar";
-import { QRCodeDialog } from "@/components/QRCodeDialog";
+import { ConnectInstanceDialog } from "@/components/ConnectInstanceDialog";
+import { InstanceRow } from "@/components/InstanceRow";
+import { useAuth } from "@/hooks/useAuth";
+import { useUserRole } from "@/hooks/useUserRole";
 
 const WhatsAppConnection = () => {
+  const { user } = useAuth();
+  const { data: userRole } = useUserRole();
+  const isAgent = userRole === 'agent';
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
-  const [qrDialogOpen, setQrDialogOpen] = useState(false);
-  const [currentQrCode, setCurrentQrCode] = useState<string | null>(null);
+  const [connectDialogOpen, setConnectDialogOpen] = useState(false);
+  const [currentPairCode, setCurrentPairCode] = useState<string | null>(null);
   const [currentInstanceName, setCurrentInstanceName] = useState("");
+  const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
   const [pollingInstanceId, setPollingInstanceId] = useState<string | null>(null);
 
   const { data: instances, isLoading } = useQuery({
@@ -31,53 +35,52 @@ const WhatsAppConnection = () => {
       if (error) throw error;
       return data;
     },
+    onSuccess: (data) => {
+      // Check if polling instance is connected
+      if (pollingInstanceId) {
+        const instance = data.find(i => i.id === pollingInstanceId);
+        if (instance && instance.status === 'connected') {
+          setConnectDialogOpen(false);
+          setPollingInstanceId(null);
+          setCurrentPairCode(null);
+          toast({
+            title: "WhatsApp conectado!",
+            description: "Sua instância está pronta para uso.",
+          });
+          queryClient.invalidateQueries({ queryKey: ["instances"] });
+        }
+      }
+    },
   });
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      // Valores fixos da Evolution API
-      const EVOLUTION_SERVER_URL = "https://wsapi.clinvia.com.br";
-      const EVOLUTION_API_KEY = "6cbd4c9e-8862-49f9-918b-34bcce736948";
+      if (!user?.id) throw new Error("User not authenticated");
 
-      // Primeiro criar no banco
-      const { data: instance, error } = await supabase
-        .from("instances")
-        .insert({
-          name,
-          server_url: EVOLUTION_SERVER_URL,
-          apikey: EVOLUTION_API_KEY,
-          status: "disconnected",
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Depois criar na Evolution API e gerar QR code
-      const { data: evolutionData, error: evolutionError } = await supabase.functions.invoke(
-        "evolution-create-instance",
+      const { data, error } = await supabase.functions.invoke(
+        "uzapi-create-instance",
         {
-          body: { instanceId: instance.id, instanceName: name },
+          body: { instanceName: name, userId: user.id },
         }
       );
 
-      if (evolutionError) throw evolutionError;
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error || "Failed to create instance");
 
-      return { instance, evolutionData };
+      return data;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["instances"] });
       setName("");
-      
-      // Abrir modal com QR code imediatamente
-      setCurrentQrCode(data.evolutionData.qrCode);
-      setCurrentInstanceName(data.evolutionData.instanceName);
-      setQrDialogOpen(true);
-      setPollingInstanceId(data.instance.id);
+
+      // Automatically open connect dialog for new instance
+      setCurrentInstanceName(data.instanceName);
+      setSelectedInstanceId(data.id);
+      setConnectDialogOpen(true);
 
       toast({
         title: "Instância criada!",
-        description: "Escaneie o QR Code para conectar.",
+        description: "Agora conecte seu WhatsApp.",
       });
     },
     onError: (error: any) => {
@@ -89,23 +92,36 @@ const WhatsAppConnection = () => {
     },
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("instances").delete().eq("id", id);
+  const connectMutation = useMutation({
+    mutationFn: async ({ id, phone }: { id: string, phone: string }) => {
+      const { data, error } = await supabase.functions.invoke("uzapi-connect-instance", {
+        body: { instanceId: id, phoneNumber: phone },
+      });
+
       if (error) throw error;
+      if (!data.success) throw new Error(data.error || "Failed to generate pair code");
+      return data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["instances"] });
+    onSuccess: (data) => {
+      setCurrentPairCode(data.pairCode);
+      setPollingInstanceId(selectedInstanceId);
       toast({
-        title: "Instância deletada",
+        title: "Código gerado!",
+        description: "Verifique seu WhatsApp.",
       });
     },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao conectar",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
   });
-
 
   const checkConnectionMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { data, error } = await supabase.functions.invoke("evolution-check-connection", {
+      const { data, error } = await supabase.functions.invoke("uzapi-check-connection", {
         body: { instanceId: id },
       });
 
@@ -114,14 +130,6 @@ const WhatsAppConnection = () => {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["instances"] });
-      if (data.status === 'connected') {
-        setQrDialogOpen(false);
-        setPollingInstanceId(null);
-        toast({
-          title: "WhatsApp conectado!",
-          description: "Sua instância está pronta para uso.",
-        });
-      }
     },
   });
 
@@ -131,10 +139,55 @@ const WhatsAppConnection = () => {
 
     const interval = setInterval(() => {
       checkConnectionMutation.mutate(pollingInstanceId);
-    }, 3000); // Verifica a cada 3 segundos
+    }, 5000); // Check every 5 seconds
 
     return () => clearInterval(interval);
   }, [pollingInstanceId]);
+
+  const handleConnect = (instance: any) => {
+    setCurrentInstanceName(instance.name);
+    setSelectedInstanceId(instance.id);
+    setCurrentPairCode(null); // Always force new connection flow
+    setConnectDialogOpen(true);
+    setPollingInstanceId(null);
+  };
+
+  const handleConfirmConnection = async () => {
+    if (selectedInstanceId) {
+      try {
+        toast({
+          title: "Verificando...",
+          description: "Consultando status da conexão.",
+        });
+
+        const data = await checkConnectionMutation.mutateAsync(selectedInstanceId);
+
+        if (data.status === 'connected') {
+          setConnectDialogOpen(false);
+          setPollingInstanceId(null);
+          setCurrentPairCode(null);
+          toast({
+            title: "Conectado com sucesso!",
+            description: "A instância está pronta para uso.",
+            variant: "default" // Success
+          });
+          queryClient.invalidateQueries({ queryKey: ["instances"] });
+        } else {
+          toast({
+            title: "Ainda não conectado",
+            description: `O status atual é: ${data.status}. Certifique-se de ter digitado o código no WhatsApp.`,
+            variant: "destructive"
+          });
+        }
+      } catch (error) {
+        toast({
+          title: "Erro na verificação",
+          description: "Não foi possível verificar o status.",
+          variant: "destructive"
+        });
+      }
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -142,18 +195,16 @@ const WhatsAppConnection = () => {
   };
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-background">
-      <NavigationSidebar />
-      
-      <div className="flex-1 overflow-auto p-8">
-        <div className="max-w-4xl mx-auto space-y-6">
-          <div>
-            <h1 className="text-3xl font-bold">Conexões WhatsApp</h1>
-            <p className="text-muted-foreground">
-              Gerencie suas instâncias da Evolution API
-            </p>
-          </div>
+    <div className="p-8">
+      <div className="max-w-4xl mx-auto space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold">Conexões WhatsApp</h1>
+          <p className="text-muted-foreground">
+            Gerencie suas instâncias da Evolution API
+          </p>
+        </div>
 
+        {!isAgent && (
           <Card>
             <CardHeader>
               <CardTitle>Nova Instância</CardTitle>
@@ -179,72 +230,52 @@ const WhatsAppConnection = () => {
               </form>
             </CardContent>
           </Card>
+        )}
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Instâncias Configuradas</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <p className="text-muted-foreground">Carregando...</p>
-              ) : instances && instances.length > 0 ? (
-                <div className="space-y-4">
-                  {instances.map((instance) => (
-                    <div
-                      key={instance.id}
-                      className="flex items-center justify-between p-4 border rounded-lg"
-                    >
-                      <div className="space-y-1">
-                        <h3 className="font-semibold">{instance.name}</h3>
-                        <p className="text-sm text-muted-foreground">
-                          {instance.server_url}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <Badge
-                          variant={
-                            instance.status === "connected" ? "default" : "secondary"
-                          }
-                        >
-                          {instance.status === "connected" ? (
-                            <CheckCircle className="w-3 h-3 mr-1" />
-                          ) : (
-                            <XCircle className="w-3 h-3 mr-1" />
-                          )}
-                          {instance.status}
-                        </Badge>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => deleteMutation.mutate(instance.id)}
-                          disabled={deleteMutation.isPending}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-muted-foreground">
-                  Nenhuma instância configurada ainda.
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Instâncias Configuradas</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <p className="text-muted-foreground">Carregando...</p>
+            ) : instances && instances.length > 0 ? (
+              <div className="space-y-4">
+                {instances.map((instance) => (
+                  <InstanceRow
+                    key={instance.id}
+                    instance={instance}
+                    onConnect={handleConnect}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="text-muted-foreground">
+                Nenhuma instância configurada ainda.
+              </p>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
-      <QRCodeDialog
-        open={qrDialogOpen}
+      <ConnectInstanceDialog
+        open={connectDialogOpen}
         onOpenChange={(open) => {
-          setQrDialogOpen(open);
+          setConnectDialogOpen(open);
           if (!open) {
             setPollingInstanceId(null);
+            setCurrentPairCode(null);
           }
         }}
-        qrCode={currentQrCode}
         instanceName={currentInstanceName}
+        onConnect={async (phone) => {
+          if (selectedInstanceId) {
+            await connectMutation.mutateAsync({ id: selectedInstanceId, phone });
+          }
+        }}
+        pairCode={currentPairCode}
+        isLoading={connectMutation.isPending}
+        onConfirm={handleConfirmConnection}
       />
     </div>
   );

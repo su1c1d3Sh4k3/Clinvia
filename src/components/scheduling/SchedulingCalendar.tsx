@@ -1,0 +1,299 @@
+import { useMemo } from "react";
+import { format, addMinutes, startOfDay, differenceInMinutes, parseISO, isSameDay } from "date-fns";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { cn } from "@/lib/utils";
+import { ThumbsUp, Clock, X, Check, Pen } from "lucide-react";
+import { Button } from "@/components/ui/button";
+
+interface SchedulingCalendarProps {
+    date: Date;
+    professionals: any[];
+    appointments: any[];
+    settings?: any;
+    onSlotClick: (professionalId: string, time: Date) => void;
+    onEventClick: (event: any) => void;
+    onStatusChange: (appointmentId: string, newStatus: string, event?: any) => void;
+    onEditProfessional?: (professional: any) => void;
+}
+
+const START_HOUR = 8;
+const END_HOUR = 22;
+const HOUR_HEIGHT = 60;
+
+export function SchedulingCalendar({ date, professionals, appointments, settings, onSlotClick, onEventClick, onStatusChange, onEditProfessional }: SchedulingCalendarProps) {
+    const startHour = settings?.start_hour ?? 8;
+    const endHour = settings?.end_hour ?? 22;
+    const workDays = settings?.work_days ?? [0, 1, 2, 3, 4, 5, 6];
+    const isDayBlocked = !workDays.includes(date.getDay());
+
+    const timeSlots = useMemo(() => {
+        const slots = [];
+        for (let i = startHour; i <= endHour; i++) {
+            slots.push(i);
+        }
+        return slots;
+    }, [startHour, endHour]);
+
+    const getEventStyle = (event: any) => {
+        const start = new Date(event.start_time);
+        const end = new Date(event.end_time);
+        const startMinutes = start.getHours() * 60 + start.getMinutes();
+        const endMinutes = end.getHours() * 60 + end.getMinutes();
+        const duration = endMinutes - startMinutes;
+
+        // Offset from startHour
+        const top = (startMinutes - startHour * 60);
+
+        return {
+            top: `${top}px`,
+            height: `${duration}px`,
+        };
+    };
+
+    const getStatusColor = (status: string) => {
+        switch (status) {
+            case 'confirmed':
+                return "bg-purple-100 border-purple-200 text-purple-700 hover:bg-purple-200";
+            case 'rescheduled':
+                return "bg-yellow-100 border-yellow-200 text-yellow-700 hover:bg-yellow-200";
+            case 'completed':
+                return "bg-green-100 border-green-200 text-green-700 hover:bg-green-200";
+            case 'canceled':
+                return "bg-red-100 border-red-200 text-red-700 hover:bg-red-200";
+            case 'pending':
+            default:
+                return "bg-blue-100 border-blue-200 text-blue-700 hover:bg-blue-200";
+        }
+    };
+
+    return (
+        <div className="flex flex-col h-full border rounded-lg overflow-hidden bg-background">
+            {/* Header */}
+            <div className="flex border-b">
+                <div className="w-16 shrink-0 border-r bg-muted/50" /> {/* Time column header */}
+                {professionals.map((professional) => (
+                    <div key={professional.id} className="flex-1 p-4 flex flex-row items-center justify-center gap-3 border-r last:border-r-0 bg-muted/20 min-w-[150px] relative group/header">
+                        <Avatar className="w-12 h-12">
+                            <AvatarImage src={professional.photo_url} />
+                            <AvatarFallback>{professional.name[0]}</AvatarFallback>
+                        </Avatar>
+                        <div className="flex flex-col items-start">
+                            <span className="font-medium text-sm">{professional.name}</span>
+                            <span className="text-xs text-muted-foreground">{professional.role}</span>
+                            {professional.commission > 0 && (
+                                <span className="text-xs text-orange-500 font-medium">
+                                    {professional.commission}% comissão
+                                </span>
+                            )}
+                        </div>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover/header:opacity-100 transition-opacity"
+                            onClick={() => onEditProfessional && onEditProfessional(professional)}
+                        >
+                            <Pen className="h-3 w-3" />
+                        </Button>
+                    </div>
+                ))}
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto relative [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
+                <div className="flex min-h-[660px]" style={{ height: (endHour - startHour + 1) * HOUR_HEIGHT }}>
+                    {/* Time Labels */}
+                    <div className="w-16 shrink-0 border-r bg-muted/10 flex flex-col relative">
+                        {timeSlots.map((hour) => (
+                            <div key={hour} className="absolute w-full text-right pr-2 text-xs text-muted-foreground border-t" style={{ top: (hour - startHour) * 60, height: 60 }}>
+                                {hour}:00
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Columns */}
+                    {professionals.map((professional) => (
+                        <div key={professional.id} className="flex-1 border-r last:border-r-0 relative min-w-[150px] group">
+                            {/* Grid Lines */}
+                            {timeSlots.map((hour) => {
+                                const slotDate = new Date(date);
+                                slotDate.setHours(hour, 0, 0, 0);
+
+                                // Parse professional settings
+                                const workDays = professional.work_days || settings?.work_days || [0, 1, 2, 3, 4, 5, 6];
+                                const workHours = professional.work_hours || { start: "08:00", end: "22:00", break_start: null, break_end: null };
+
+                                const startH = parseInt(workHours.start?.split(':')[0] || "8");
+                                const endH = parseInt(workHours.end?.split(':')[0] || "22");
+                                const breakStartH = workHours.break_start ? parseInt(workHours.break_start.split(':')[0]) : -1;
+                                const breakEndH = workHours.break_end ? parseInt(workHours.break_end.split(':')[0]) : -1;
+
+                                const isDayOff = !workDays.includes(date.getDay());
+                                const isBeforeStart = hour < startH;
+                                const isAfterEnd = hour >= endH;
+                                const isBreak = hour >= breakStartH && hour < breakEndH;
+
+                                const isBlocked = isDayOff || isBeforeStart || isAfterEnd || isBreak;
+                                const isPast = slotDate < new Date();
+
+                                return (
+                                    <div
+                                        key={hour}
+                                        className={cn(
+                                            "absolute w-full border-t border-dashed border-muted/50 transition-colors",
+                                            !isPast && !isBlocked && "hover:bg-accent/50 cursor-pointer",
+                                            isBlocked && "bg-muted/30",
+                                            isPast && "bg-[#C6C8CA] dark:bg-[#22262E]"
+                                        )}
+                                        style={{
+                                            top: (hour - startHour) * 60,
+                                            height: 60,
+                                            backgroundColor: isBlocked && !isPast ? "rgba(0,0,0,0.2)" : undefined,
+                                            backgroundImage: isBlocked && !isPast ? "repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.05) 10px, rgba(0,0,0,0.05) 20px)" : undefined
+                                        }}
+                                        onClick={() => {
+                                            if (!isPast && !isBlocked) {
+                                                onSlotClick(professional.id, slotDate);
+                                            }
+                                        }}
+                                    >
+                                        {isBreak && !isPast && (
+                                            <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground font-medium opacity-50 select-none">
+                                                Intervalo
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+
+                            {/* Events */}
+                            {appointments
+                                .filter((apt) => apt.professional_id === professional.id && isSameDay(new Date(apt.start_time), date))
+                                .map((apt) => {
+                                    const isFinalStatus = apt.status === 'completed' || apt.status === 'canceled';
+
+                                    return (
+                                        <div
+                                            key={apt.id}
+                                            className={cn(
+                                                "absolute left-1 right-1 rounded-md p-2 text-xs cursor-pointer border shadow-sm transition-all z-10 group/card",
+                                                apt.type === "absence" ? "bg-muted text-muted-foreground border-border" : getStatusColor(apt.status || 'pending')
+                                            )}
+                                            style={getEventStyle(apt)}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onEventClick(apt);
+                                            }}
+                                        >
+                                            {/* Actions Overlay - Floating Above */}
+                                            {apt.type !== "absence" && (
+                                                <div className="absolute -top-9 right-0 flex items-center gap-1 opacity-0 group-hover/card:opacity-100 transition-all duration-200 bg-background/95 backdrop-blur-sm border shadow-sm rounded-full p-1 z-50">
+                                                    {!isFinalStatus && (
+                                                        <>
+                                                            <div className="relative group/btn">
+                                                                <Button
+                                                                    variant="ghost" size="icon" className="h-6 w-6 rounded-full hover:bg-purple-100 hover:text-purple-600 transition-colors"
+                                                                    onClick={(e) => { e.stopPropagation(); onStatusChange(apt.id, 'confirmed'); }}
+                                                                >
+                                                                    <ThumbsUp className="h-3.5 w-3.5" strokeWidth={2} />
+                                                                </Button>
+                                                                <span className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-black text-white text-[10px] rounded opacity-0 group-hover/btn:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                                                                    Confirmar
+                                                                </span>
+                                                            </div>
+
+                                                            <div className="relative group/btn">
+                                                                <Button
+                                                                    variant="ghost" size="icon" className="h-6 w-6 rounded-full hover:bg-yellow-100 hover:text-yellow-600 transition-colors"
+                                                                    onClick={(e) => { e.stopPropagation(); onStatusChange(apt.id, 'rescheduled', apt); }}
+                                                                >
+                                                                    <Clock className="h-3.5 w-3.5" strokeWidth={2} />
+                                                                </Button>
+                                                                <span className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-black text-white text-[10px] rounded opacity-0 group-hover/btn:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                                                                    Reagendar
+                                                                </span>
+                                                            </div>
+
+                                                            <div className="relative group/btn">
+                                                                <Button
+                                                                    variant="ghost" size="icon" className="h-6 w-6 rounded-full hover:bg-red-100 hover:text-red-600 transition-colors"
+                                                                    onClick={(e) => { e.stopPropagation(); onStatusChange(apt.id, 'canceled'); }}
+                                                                >
+                                                                    <X className="h-3.5 w-3.5" strokeWidth={2} />
+                                                                </Button>
+                                                                <span className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-black text-white text-[10px] rounded opacity-0 group-hover/btn:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                                                                    Cancelar
+                                                                </span>
+                                                            </div>
+
+                                                            <div className="relative group/btn">
+                                                                <Button
+                                                                    variant="ghost" size="icon" className="h-6 w-6 rounded-full hover:bg-green-100 hover:text-green-600 transition-colors"
+                                                                    onClick={(e) => { e.stopPropagation(); onStatusChange(apt.id, 'completed', apt); }}
+                                                                >
+                                                                    <Check className="h-3.5 w-3.5" strokeWidth={2} />
+                                                                </Button>
+                                                                <span className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-black text-white text-[10px] rounded opacity-0 group-hover/btn:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                                                                    Concluir
+                                                                </span>
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                    {apt.status === 'completed' && <div className="px-2 py-1 flex items-center gap-1 text-green-600 font-medium text-[10px]"><Check className="h-3 w-3" /> Concluído</div>}
+                                                    {apt.status === 'canceled' && <div className="px-2 py-1 flex items-center gap-1 text-red-600 font-medium text-[10px]"><X className="h-3 w-3" /> Cancelado</div>}
+                                                </div>
+                                            )}
+
+                                            {(() => {
+                                                const start = new Date(apt.start_time);
+                                                const end = new Date(apt.end_time);
+                                                const durationInMinutes = differenceInMinutes(end, start);
+                                                const isCompact = durationInMinutes <= 30;
+
+                                                return (
+                                                    <div className="overflow-hidden h-full flex flex-col justify-center">
+                                                        {isCompact ? (
+                                                            <div className="flex items-center gap-2 text-xs truncate">
+                                                                <span className="font-bold shrink-0">
+                                                                    {apt.type === "absence" ? "Ausência" : (apt.contacts?.push_name || apt.contact_name || "Cliente")}
+                                                                </span>
+                                                                {apt.type === "appointment" && (
+                                                                    <>
+                                                                        <span className="opacity-60 hidden sm:inline">-</span>
+                                                                        <span className="truncate opacity-80">
+                                                                            {apt.products_services?.name || "Serviço"}
+                                                                        </span>
+                                                                        <span className="opacity-60">-</span>
+                                                                        <span className="opacity-70 shrink-0">
+                                                                            {format(start, "HH:mm")} - {format(end, "HH:mm")}
+                                                                        </span>
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex flex-col h-full">
+                                                                <div className="font-bold truncate">
+                                                                    {apt.type === "absence" ? "Ausência" : (apt.contacts?.push_name || apt.contact_name || "Cliente")}
+                                                                </div>
+                                                                {apt.type === "appointment" && (
+                                                                    <div className="truncate opacity-80 text-[11px]">
+                                                                        {apt.products_services?.name || "Serviço"}
+                                                                    </div>
+                                                                )}
+                                                                <div className="text-[10px] opacity-70 mt-auto">
+                                                                    {format(start, "HH:mm")} - {format(end, "HH:mm")}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })()}
+                                        </div>
+                                    )
+                                })}
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+}

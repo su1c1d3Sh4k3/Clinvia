@@ -17,9 +17,13 @@ export const useAIAnalysis = (conversationId?: string) => {
         .from("ai_analysis")
         .select("*")
         .eq("conversation_id", conversationId)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== "PGRST116") throw error;
+      if (error) {
+        console.error("Error fetching AI analysis:", error);
+        throw error;
+      }
+      console.log("useAIAnalysis fetched:", data);
       return data as AIAnalysis | null;
     },
     enabled: !!conversationId,

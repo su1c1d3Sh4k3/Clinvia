@@ -1,0 +1,461 @@
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Plus, Filter, ChevronLeft, ChevronRight, Search, PanelLeftClose, PanelLeftOpen, Settings } from "lucide-react";
+import { SchedulingCalendar } from "@/components/scheduling/SchedulingCalendar";
+import { ProfessionalModal } from "@/components/scheduling/ProfessionalModal";
+import { AppointmentModal } from "@/components/scheduling/AppointmentModal";
+import { SchedulingSettingsModal } from "@/components/scheduling/SchedulingSettingsModal";
+import { format, addDays, subDays, isSameDay } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
+
+export default function Scheduling() {
+    const { toast } = useToast();
+    const [date, setDate] = useState<Date | undefined>(new Date());
+    const [selectedServices, setSelectedServices] = useState<string[]>([]);
+    const [searchTerm, setSearchTerm] = useState("");
+    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const [isProfessionalModalOpen, setIsProfessionalModalOpen] = useState(false);
+    const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false);
+    const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+    const [selectedSlot, setSelectedSlot] = useState<{ professionalId: string, date: Date } | undefined>(undefined);
+    const [appointmentToEdit, setAppointmentToEdit] = useState<any>(null);
+    const [professionalToEdit, setProfessionalToEdit] = useState<any>(null);
+
+    const handlePreviousDay = () => date && setDate(subDays(date, 1));
+    const handleNextDay = () => date && setDate(addDays(date, 1));
+    const handleToday = () => setDate(new Date());
+
+    const { data: services } = useQuery({
+        queryKey: ["services-list"],
+        queryFn: async () => {
+            const { data, error } = await supabase.from("products_services").select("*").eq("type", "service");
+            if (error) throw error;
+            return data;
+        },
+    });
+
+    const { data: professionals } = useQuery({
+        queryKey: ["professionals"],
+        queryFn: async () => {
+            const { data, error } = await supabase.from("professionals").select("*");
+            if (error) throw error;
+            return data;
+        },
+    });
+
+    const { data: appointments, refetch: refetchAppointments } = useQuery({
+        queryKey: ["appointments", date],
+        queryFn: async () => {
+            if (!date) return [];
+            const start = new Date(date);
+            start.setHours(0, 0, 0, 0);
+            const end = new Date(date);
+            end.setHours(23, 59, 59, 999);
+
+            const { data, error } = await supabase
+                .from("appointments")
+                .select(`
+                    *,
+                    contacts (push_name, number),
+                    products_services (name)
+                `)
+                .gte("start_time", start.toISOString())
+                .lte("start_time", end.toISOString());
+
+            if (error) throw error;
+            return data;
+        },
+        enabled: !!date,
+    });
+
+    const { data: settings } = useQuery({
+        queryKey: ["scheduling_settings"],
+        queryFn: async () => {
+            const { data, error } = await supabase.from("scheduling_settings").select("*").single();
+            if (error && error.code !== "PGRST116") throw error; // Ignore not found error
+            return data;
+        },
+    });
+
+    const filteredProfessionals = professionals?.filter(p => {
+        if (selectedServices.length === 0) return true;
+        // If professional has ANY of the selected services
+        return p.service_ids?.some((id: string) => selectedServices.includes(id));
+    }) || [];
+
+    const handleSlotClick = (professionalId: string, slotDate: Date) => {
+        setSelectedSlot({ professionalId, date: slotDate });
+        setAppointmentToEdit(null);
+        setIsAppointmentModalOpen(true);
+    };
+
+    const handleEventClick = (event: any) => {
+        setAppointmentToEdit(event);
+        setSelectedSlot(undefined);
+        setIsAppointmentModalOpen(true);
+    };
+
+    const handleEditProfessional = (professional: any) => {
+        setProfessionalToEdit(professional);
+        setIsProfessionalModalOpen(true);
+    };
+
+    const toggleServiceFilter = (serviceId: string) => {
+        setSelectedServices(prev =>
+            prev.includes(serviceId)
+                ? prev.filter(id => id !== serviceId)
+                : [...prev, serviceId]
+        );
+    };
+
+    const handleStatusChange = async (appointmentId: string, newStatus: string, event?: any) => {
+        if (newStatus === 'rescheduled' && event) {
+            // Open modal for rescheduling
+            setAppointmentToEdit(event);
+            setSelectedSlot(undefined);
+            setIsAppointmentModalOpen(true);
+            return;
+        }
+
+        try {
+            const { error } = await supabase
+                .from("appointments")
+                .update({ status: newStatus })
+                .eq("id", appointmentId);
+
+            if (error) throw error;
+
+            // If status is completed, create revenue and commission
+            if (newStatus === 'completed' && event) {
+                console.log('[DEBUG] Appointment marked as completed:', event);
+                console.log('[DEBUG] Appointment price:', event.price, 'type:', event.type);
+                const revenueCreated = await createRevenueFromAppointment(event);
+                if (revenueCreated) {
+                    toast({
+                        title: "Nova receita criada!",
+                        description: `Receita de R$ ${event.price?.toFixed(2) || '0,00'} registrada automaticamente.`,
+                    });
+                }
+            }
+
+            // Force refetch
+            refetchAppointments();
+
+        } catch (error) {
+            console.error("Error updating status:", error);
+        }
+    };
+
+    // Create revenue and commission expense from completed appointment
+    // Returns true if revenue was created, false otherwise
+    const createRevenueFromAppointment = async (appointment: any): Promise<boolean> => {
+        try {
+            console.log('[DEBUG] createRevenueFromAppointment called with:', appointment);
+
+            // Skip if no price or type is not 'appointment'
+            if (!appointment.price || appointment.price <= 0 || appointment.type === 'absence') {
+                console.log('[DEBUG] Skipping revenue creation - price:', appointment.price, 'type:', appointment.type);
+                return false;
+            }
+
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) {
+                console.log('[DEBUG] No user found');
+                return false;
+            }
+
+            // Get or create "Agendamento" revenue category
+            let { data: agendamentoCategory } = await supabase
+                .from('revenue_categories')
+                .select('id')
+                .eq('user_id', user.id)
+                .eq('name', 'Agendamento')
+                .single();
+
+            if (!agendamentoCategory) {
+                console.log('[DEBUG] Creating Agendamento category');
+                const { data: newCategory } = await supabase
+                    .from('revenue_categories')
+                    .insert({ user_id: user.id, name: 'Agendamento', description: 'Receitas de agendamentos' })
+                    .select('id')
+                    .single();
+                agendamentoCategory = newCategory;
+            }
+
+            // Get professional info for commission
+            let professional: any = null;
+            if (appointment.professional_id) {
+                const { data: profData } = await supabase
+                    .from('professionals')
+                    .select('id, name, commission')
+                    .eq('id', appointment.professional_id)
+                    .single();
+                professional = profData;
+                console.log('[DEBUG] Professional data:', profData);
+            }
+
+            // Get service name
+            const serviceName = appointment.products_services?.name || 'Serviço';
+            const appointmentDate = new Date(appointment.start_time).toISOString().split('T')[0];
+
+            // Create revenue
+            const revenuePayload = {
+                user_id: user.id,
+                category_id: agendamentoCategory?.id || null,
+                product_service_id: appointment.service_id || null,
+                item: serviceName,
+                description: appointment.description || 'Receita de agendamento',
+                amount: appointment.price,
+                payment_method: 'other',
+                due_date: appointmentDate,
+                paid_date: appointmentDate,
+                status: 'paid',
+                professional_id: appointment.professional_id || null,
+                contact_id: appointment.contact_id || null,
+                is_recurring: false,
+            };
+
+            console.log('[DEBUG] Creating revenue with payload:', revenuePayload);
+
+            const { data: revenueResult, error: revenueError } = await supabase
+                .from('revenues')
+                .insert(revenuePayload)
+                .select()
+                .single();
+
+            if (revenueError) {
+                console.error('[DEBUG] Revenue creation error:', revenueError);
+                return false;
+            }
+
+            console.log('[DEBUG] Revenue created successfully:', revenueResult?.id);
+
+            // Create commission expense if professional has commission > 0
+            if (professional && professional.commission > 0 && revenueResult) {
+                const commissionAmount = (appointment.price * professional.commission) / 100;
+
+                // Get or create "Comissão" expense category
+                let { data: commissionCategory } = await supabase
+                    .from('expense_categories')
+                    .select('id')
+                    .eq('user_id', user.id)
+                    .eq('name', 'Comissão')
+                    .single();
+
+                if (!commissionCategory) {
+                    const { data: newCategory } = await supabase
+                        .from('expense_categories')
+                        .insert({ user_id: user.id, name: 'Comissão', description: 'Comissões de profissionais' })
+                        .select('id')
+                        .single();
+                    commissionCategory = newCategory;
+                }
+
+                // Calculate last day of current month
+                const now = new Date();
+                const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+                const lastDayStr = lastDayOfMonth.toISOString().split('T')[0];
+
+                const commissionPayload = {
+                    user_id: user.id,
+                    category_id: commissionCategory?.id || null,
+                    item: `Comissão ${professional.name}`,
+                    description: 'Comissionamento de profissional',
+                    amount: commissionAmount,
+                    payment_method: 'other',
+                    due_date: lastDayStr,
+                    status: 'pending',
+                    is_recurring: false,
+                    commission_revenue_id: revenueResult.id,
+                };
+
+                const { error: commissionError } = await supabase
+                    .from('expenses')
+                    .insert(commissionPayload);
+
+                if (commissionError) {
+                    console.error('[DEBUG] Commission expense creation error:', commissionError);
+                } else {
+                    console.log('[DEBUG] Commission expense created:', commissionAmount);
+                }
+            }
+
+            return true;
+
+        } catch (error) {
+            console.error('[DEBUG] Error creating revenue from appointment:', error);
+            return false;
+        }
+    };
+
+    return (
+        <div className="container mx-auto py-6 h-[calc(100vh-4rem)] flex gap-6 animate-fade-in">
+            {/* Sidebar */}
+            <div
+                className={`shrink-0 flex flex-col gap-6 transition-all duration-300 relative ${isSidebarOpen ? "w-80" : "w-12"}`}
+            >
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute -right-3 top-0 z-10 h-6 w-6 rounded-full border bg-background shadow-sm"
+                    onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                >
+                    {isSidebarOpen ? <ChevronLeft className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                </Button>
+
+                <div className={`flex flex-col gap-6 overflow-y-auto pb-6 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none'] transition-opacity duration-300 ${isSidebarOpen ? "opacity-100" : "opacity-0 invisible"}`}>
+                    <div className="flex flex-col items-center gap-6 origin-top scale-[0.8]">
+                        <div className="space-y-2 text-center w-full">
+                            <h1 className="text-2xl font-bold">Agendamento</h1>
+                            <p className="text-muted-foreground text-sm">Gerencie sua agenda</p>
+                        </div>
+
+                        <Card className="w-full">
+                            <CardContent className="p-0">
+                                <Calendar
+                                    mode="single"
+                                    selected={date}
+                                    onSelect={setDate}
+                                    locale={ptBR}
+                                    className="rounded-md border flex justify-center"
+                                />
+                            </CardContent>
+                        </Card>
+
+                        <Button onClick={() => {
+                            setProfessionalToEdit(null);
+                            setIsProfessionalModalOpen(true);
+                        }} variant="outline" className="w-full justify-start">
+                            <Plus className="w-4 h-4 mr-2" />
+                            Adicionar Profissional
+                        </Button>
+
+                        <Card className="w-full">
+                            <CardHeader className="pb-3">
+                                <CardTitle className="text-sm font-medium flex items-center">
+                                    <Filter className="w-4 h-4 mr-2" />
+                                    Filtrar por Serviço
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-2">
+                                {services?.map((service) => (
+                                    <div key={service.id} className="flex items-center space-x-2">
+                                        <Checkbox
+                                            id={`filter-${service.id}`}
+                                            checked={selectedServices.includes(service.id)}
+                                            onCheckedChange={() => toggleServiceFilter(service.id)}
+                                        />
+                                        <Label htmlFor={`filter-${service.id}`} className="text-sm font-normal cursor-pointer">
+                                            {service.name}
+                                        </Label>
+                                    </div>
+                                ))}
+                                {services?.length === 0 && <span className="text-muted-foreground text-xs">Nenhum serviço cadastrado</span>}
+                            </CardContent>
+                        </Card>
+                    </div>
+                </div>
+            </div>
+
+            {/* Main Calendar */}
+            <div className="flex-1 flex flex-col gap-4 overflow-hidden">
+                <div className="flex flex-col gap-4">
+                    <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-2">
+                            <div className="flex items-center border rounded-md bg-background">
+                                <Button variant="ghost" size="icon" onClick={handlePreviousDay} className="h-9 w-9 rounded-none rounded-l-md border-r">
+                                    <ChevronLeft className="h-4 w-4" />
+                                </Button>
+                                <div className="px-4 py-2 text-sm font-medium min-w-[140px] text-center">
+                                    {date ? (
+                                        <div className="flex flex-col leading-none">
+                                            <span className="font-bold">{format(date, "d MMM yyyy", { locale: ptBR })}</span>
+                                            <span className="text-xs text-muted-foreground capitalize">{format(date, "EEEE", { locale: ptBR })}</span>
+                                        </div>
+                                    ) : "Selecione"}
+                                </div>
+                                <Button variant="ghost" size="icon" onClick={handleNextDay} className="h-9 w-9 rounded-none rounded-r-md border-l">
+                                    <ChevronRight className="h-4 w-4" />
+                                </Button>
+                            </div>
+                            <Button variant="outline" onClick={handleToday} className="h-9">
+                                Hoje
+                            </Button>
+                            <Button variant="outline" size="icon" onClick={() => setIsSettingsModalOpen(true)} className="h-9 w-9">
+                                <Settings className="h-4 w-4" />
+                            </Button>
+                        </div>
+
+                        <div className="flex items-center gap-2 flex-1 max-w-md mx-4">
+                            <div className="relative w-full">
+                                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    placeholder="Buscar clientes agendados hoje"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    className="pl-8"
+                                />
+                            </div>
+                        </div>
+
+                        <Button onClick={() => {
+                            setSelectedSlot(undefined);
+                            setAppointmentToEdit(null);
+                            setIsAppointmentModalOpen(true);
+                        }}>
+                            <Plus className="w-4 h-4 mr-2" />
+                            Criar Agendamento
+                        </Button>
+                    </div>
+                </div>
+
+                {date && (
+                    <SchedulingCalendar
+                        date={date}
+                        professionals={filteredProfessionals}
+                        appointments={appointments?.filter(apt => {
+                            if (!searchTerm) return true;
+                            const searchLower = searchTerm.toLowerCase();
+                            const contactName = apt.contacts?.push_name?.toLowerCase() || apt.contact_name?.toLowerCase() || "";
+                            const phone = apt.contacts?.number || apt.contact_phone || "";
+                            return contactName.includes(searchLower) || phone.includes(searchLower);
+                        }) || []}
+                        settings={settings}
+                        onSlotClick={handleSlotClick}
+                        onEventClick={handleEventClick}
+                        onStatusChange={handleStatusChange}
+                        onEditProfessional={handleEditProfessional}
+                    />
+                )}
+            </div>
+
+            <ProfessionalModal
+                open={isProfessionalModalOpen}
+                onOpenChange={setIsProfessionalModalOpen}
+                professionalToEdit={professionalToEdit}
+            />
+
+            <AppointmentModal
+                open={isAppointmentModalOpen}
+                onOpenChange={setIsAppointmentModalOpen}
+                defaultDate={selectedSlot?.date || date}
+                defaultProfessionalId={selectedSlot?.professionalId}
+                appointmentToEdit={appointmentToEdit}
+            />
+
+            <SchedulingSettingsModal
+                open={isSettingsModalOpen}
+                onOpenChange={setIsSettingsModalOpen}
+                currentSettings={settings}
+            />
+        </div>
+    );
+}

@@ -7,6 +7,11 @@ interface SendMessageParams {
   body: string;
   direction: "inbound" | "outbound";
   messageType?: "text" | "image" | "audio" | "video" | "document";
+  mediaUrl?: string;
+  caption?: string;
+  replyId?: string;
+  quotedBody?: string;
+  quotedSender?: string;
 }
 
 export const useSendMessage = () => {
@@ -14,18 +19,35 @@ export const useSendMessage = () => {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ conversationId, body, direction, messageType = "text" }: SendMessageParams) => {
-      // Se for mensagem outbound, enviar via Evolution API
+    mutationFn: async ({ conversationId, body, direction, messageType = "text", mediaUrl, caption, replyId, quotedBody, quotedSender }: SendMessageParams) => {
+      // Se for mensagem outbound, enviar via Edge Function (que chama Evolution API)
       if (direction === "outbound") {
         const { data, error } = await supabase.functions.invoke("evolution-send-message", {
-          body: { conversationId, body },
+          body: {
+            conversationId,
+            body,
+            messageType,
+            mediaUrl,
+            caption,
+            replyId,
+            quotedBody,
+            quotedSender
+          },
         });
 
-        if (error) throw error;
+        if (error) {
+          console.error("Erro na Edge Function evolution-send-message:", error);
+          throw new Error(error.message || "Erro ao enviar mensagem via servidor.");
+        }
+
+        if (data?.error) {
+          throw new Error(data.error);
+        }
+
         return data;
       }
 
-      // Mensagens inbound são inseridas diretamente (vêm do webhook)
+      // Mensagens inbound (simulação ou inserção manual)
       const { data, error } = await supabase
         .from("messages")
         .insert({
@@ -33,6 +55,7 @@ export const useSendMessage = () => {
           body,
           direction,
           message_type: messageType,
+          media_url: mediaUrl
         })
         .select()
         .single();

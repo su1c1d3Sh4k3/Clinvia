@@ -1,0 +1,69 @@
+-- 1. Add JSONB column to conversations table
+ALTER TABLE conversations 
+ADD COLUMN IF NOT EXISTS messages_history JSONB DEFAULT '[]'::jsonb;
+
+-- 2. Create function to sync new messages to the history
+CREATE OR REPLACE FUNCTION sync_messages_to_history()
+RETURNS TRIGGER AS $$
+DECLARE
+    message_role TEXT;
+    message_content TEXT;
+    new_message_obj JSONB;
+BEGIN
+    -- Determine role based on direction
+    IF NEW.direction = 'inbound' THEN
+        message_role := 'user';
+    ELSE
+        message_role := 'assistant';
+    END IF;
+
+    -- Handle content based on message type (simplified for text, can be expanded)
+    message_content := COALESCE(NEW.body, '[Mídia]');
+
+    -- Construct the JSON object
+    new_message_obj := jsonb_build_object(
+        'role', message_role,
+        'content', message_content,
+        'created_at', NEW.created_at,
+        'type', NEW.message_type,
+        'id', NEW.id
+    );
+
+    -- Append to the array in conversations table
+    UPDATE conversations
+    SET messages_history = messages_history || new_message_obj
+    WHERE id = NEW.conversation_id;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 3. Create Trigger
+DROP TRIGGER IF EXISTS on_message_created ON messages;
+
+CREATE TRIGGER on_message_created
+AFTER INSERT ON messages
+FOR EACH ROW
+EXECUTE FUNCTION sync_messages_to_history();
+
+-- 4. Backfill existing data
+-- This query aggregates existing messages into a JSON array for each conversation
+WITH aggregated_history AS (
+    SELECT 
+        conversation_id,
+        jsonb_agg(
+            jsonb_build_object(
+                'role', CASE WHEN direction = 'inbound' THEN 'user' ELSE 'assistant' END,
+                'content', COALESCE(body, '[Mídia]'),
+                'created_at', created_at,
+                'type', message_type,
+                'id', id
+            ) ORDER BY created_at ASC
+        ) as history
+    FROM messages
+    GROUP BY conversation_id
+)
+UPDATE conversations c
+SET messages_history = ah.history
+FROM aggregated_history ah
+WHERE c.id = ah.conversation_id;

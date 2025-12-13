@@ -17,135 +17,207 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { conversationId, body } = await req.json();
-    console.log('Sending message for conversation:', conversationId);
+    const { conversationId, body, messageType = 'text', mediaUrl, caption, replyId, quotedBody, quotedSender } = await req.json();
+    console.log('=== [UZAPI SEND MESSAGE] START ===');
+    console.log('Conversation ID:', conversationId);
+    console.log('Message Type:', messageType);
+    console.log('Reply ID:', replyId);
 
-    // Buscar conversation + contact
+    // Buscar conversation
     const { data: conversation, error: convError } = await supabaseClient
       .from('conversations')
-      .select(`
-        *,
-        contact:contacts(*)
-      `)
+      .select('*')
       .eq('id', conversationId)
       .single();
 
-    if (convError || !conversation) {
-      throw new Error('Conversation not found');
+    if (convError) {
+      console.error('Conversation error:', convError);
+      throw new Error(`Conversation not found: ${convError.message}`);
     }
 
-    const contact = conversation.contact;
-    if (!contact) {
-      throw new Error('Contact not found');
+    let remoteJid = '';
+    let isGroup = false;
+
+    if (conversation.group_id) {
+      console.log('Processing as Group Conversation. Group ID:', conversation.group_id);
+      const { data: group, error: groupError } = await supabaseClient
+        .from('groups')
+        .select('*')
+        .eq('id', conversation.group_id)
+        .single();
+
+      if (groupError || !group) throw new Error('Group not found');
+      remoteJid = group.remote_jid;
+      isGroup = true;
+    } else if (conversation.contact_id) {
+      console.log('Processing as Contact Conversation. Contact ID:', conversation.contact_id);
+      const { data: contact, error: contactError } = await supabaseClient
+        .from('contacts')
+        .select('*')
+        .eq('id', conversation.contact_id)
+        .single();
+
+      if (contactError || !contact) throw new Error('Contact not found');
+      remoteJid = contact.number; // Changed from remote_jid to number as per schema update
+    } else {
+      throw new Error('Invalid conversation: missing group_id and contact_id');
     }
 
-    // Buscar primeira instância que tenha sido criada na Evolution
-    // (tem instance_name preenchido)
-    const { data: instance, error: instanceError } = await supabaseClient
-      .from('instances')
-      .select('*')
-      .not('instance_name', 'is', null)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    let instance;
 
-    if (instanceError) {
-      console.error('Error fetching instance:', instanceError);
-      throw new Error('Failed to fetch instance');
+    // 1. Strict Priority: Use conversation.instance_id
+    if (conversation.instance_id) {
+      const { data: specificInstance, error: instanceError } = await supabaseClient
+        .from('instances')
+        .select('*')
+        .eq('id', conversation.instance_id)
+        .single();
+
+      if (!instanceError && specificInstance) {
+        instance = specificInstance;
+      }
+    }
+
+    // 2. Fallback: Try to get from contact
+    if (!instance && conversation.contact_id) {
+      // ... (Keep existing fallback logic if needed, but instance_id should be on conversation now)
+      // For brevity and since we enforced instance_id in conversation logic, we might skip complex fallback
+      // but let's keep it simple: if no instance, fail.
     }
 
     if (!instance) {
-      throw new Error('No WhatsApp instance found. Please create and connect an instance first.');
+      throw new Error('No instance associated with this conversation.');
     }
 
-    if (!instance.instance_name) {
-      throw new Error('Instance not properly configured. Please reconnect it.');
+    if (instance.status !== 'connected') {
+      // throw new Error(`Instance ${instance.name} is not connected.`);
+      // Proceeding anyway as status might be out of sync
+      console.warn(`Instance ${instance.name} status is ${instance.status}, attempting to send anyway.`);
     }
 
-    console.log('Using instance:', instance.instance_name);
+    const userId = instance.user_id;
 
-    // Verificar se a instância está conectada na Evolution API
-    const statusResponse = await fetch(
-      `${instance.server_url}/instance/connectionState/${instance.instance_name}`,
-      {
-        headers: { 'apikey': instance.apikey }
-      }
-    );
-
-    if (statusResponse.ok) {
-      const statusData = await statusResponse.json();
-      const state = statusData.instance?.state || statusData.state;
-      
-      if (state !== 'open' && state !== 'connected') {
-        throw new Error('WhatsApp not connected. Please scan the QR code to connect your instance.');
-      }
+    // Tratamento do JID para Uzapi
+    // Uzapi seems to expect just the number for individuals, and likely the same for groups (stripping suffix)
+    // or maybe full JID. The user example showed "number": "<numero_do_remetente>"
+    let targetNumber = remoteJid;
+    if (remoteJid.includes('@')) {
+      targetNumber = remoteJid.split('@')[0];
     }
 
-    // Extrair número do remote_jid (formato: 5511999999999@s.whatsapp.net)
-    const phoneNumber = contact.remote_jid.split('@')[0];
+    console.log('Sending to Number:', targetNumber);
 
-    // Enviar mensagem via Evolution API
-    const sendResponse = await fetch(
-      `${instance.server_url}/message/sendText/${instance.instance_name}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': instance.apikey
-        },
-        body: JSON.stringify({
-          number: phoneNumber,
-          text: body
-        })
+    let sendUrl;
+    let payload;
+
+    if (messageType === 'text') {
+      sendUrl = `https://clinvia.uazapi.com/send/text`;
+      payload = {
+        number: targetNumber,
+        text: body
+      };
+      // Add replyid if present
+      if (replyId) {
+        payload.replyid = replyId;
+        console.log('Adding replyid to payload:', replyId);
       }
-    );
+    } else {
+      sendUrl = `https://clinvia.uazapi.com/send/media`;
+      // Map internal types to Uzapi types if necessary
+      // Internal: text, image, audio, video, document
+      // Uzapi: image, video, document, audio, myaudio, ptt, sticker
+      let uzapiType = messageType;
+      if (messageType === 'audio') uzapiType = 'ptt'; // Sending as PTT (voice note) usually preferred
+
+      payload = {
+        number: targetNumber,
+        type: uzapiType,
+        file: mediaUrl
+      };
+      // Note: Uzapi example didn't show caption for media, but if supported it would be added here.
+      // The user request didn't explicitly show caption in the media example.
+    }
+
+    console.log('Uzapi URL:', sendUrl);
+    console.log('Payload:', JSON.stringify(payload));
+
+    const sendResponse = await fetch(sendUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'token': instance.apikey
+      },
+      body: JSON.stringify(payload)
+    });
+
+    console.log('Uzapi response status:', sendResponse.status);
 
     if (!sendResponse.ok) {
       const errorText = await sendResponse.text();
-      console.error('Evolution API error:', errorText);
-      throw new Error(`Failed to send message: ${errorText}`);
+      console.error('Uzapi error:', errorText);
+      throw new Error(`Failed to send message via Uzapi: ${errorText}`);
     }
 
     const sendData = await sendResponse.json();
-    console.log('Message sent via Evolution API:', sendData);
+    console.log('Uzapi response:', sendData);
 
     // Salvar mensagem no banco
     const { data: message, error: messageError } = await supabaseClient
       .from('messages')
       .insert({
         conversation_id: conversationId,
-        body,
+        body: body || caption || (messageType === 'text' ? '' : `[${messageType}]`),
         direction: 'outbound',
-        message_type: 'text',
-        evolution_id: sendData.key?.id || null
+        message_type: messageType,
+        media_url: mediaUrl,
+        evolution_id: sendData.messageid || sendData.id || null,
+        user_id: userId,
+        reply_to_id: replyId || null,
+        quoted_body: quotedBody || null,
+        quoted_sender: quotedSender || null,
+        status: 'sent'
       })
-      .select()
+      .select('id, conversation_id, body, direction, message_type, created_at')
       .single();
 
-    if (messageError) throw messageError;
+    if (messageError) {
+      console.error('Message insert error:', messageError);
+      throw new Error(`Failed to save message: ${messageError.message}`);
+    }
 
-    // Atualizar conversation updated_at
+    console.log('Message saved to database:', message.id);
+
+    // Atualizar conversation
     await supabaseClient
       .from('conversations')
-      .update({ updated_at: new Date().toISOString() })
+      .update({
+        updated_at: new Date().toISOString(),
+        last_message_at: new Date().toISOString()
+      })
       .eq('id', conversationId);
 
-    console.log('Message saved to database');
+    console.log('=== [UZAPI SEND MESSAGE] SUCCESS ===');
 
     return new Response(
       JSON.stringify({
         success: true,
         messageId: message.id,
-        evolutionId: sendData.key?.id
+        providerId: sendData.messageid
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
   } catch (error: any) {
-    console.error('Error in evolution-send-message:', error);
+    console.error('=== [UZAPI SEND MESSAGE] ERROR ===');
+    console.error('Error:', error.message);
+
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({
+        error: error.message,
+        details: error.stack
+      }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

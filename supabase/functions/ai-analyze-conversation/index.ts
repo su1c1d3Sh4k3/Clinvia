@@ -12,16 +12,20 @@ serve(async (req) => {
   }
 
   try {
-    const { conversationId } = await req.json();
-    
+    const { conversationId, userId: requestUserId } = await req.json();
+
     if (!conversationId) {
       throw new Error('conversationId is required');
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const lovableApiKey = Deno.env.get('LOVABLE_API_KEY')!;
-    
+    const openAiKey = Deno.env.get('OPENAI_API_KEY');
+
+    if (!openAiKey) {
+      throw new Error('OPENAI_API_KEY is not set');
+    }
+
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Buscar todas as mensagens da conversa
@@ -32,6 +36,8 @@ serve(async (req) => {
       .order('created_at', { ascending: true });
 
     if (messagesError) throw messagesError;
+
+
     if (!messages || messages.length === 0) {
       return new Response(
         JSON.stringify({ sentiment_score: 5, message: 'No messages to analyze' }),
@@ -44,15 +50,15 @@ serve(async (req) => {
       .map(msg => `${msg.direction === 'inbound' ? 'Cliente' : 'Atendente'}: ${msg.body || '(mídia)'}`)
       .join('\n');
 
-    // Chamar Lovable AI para análise
-    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    // Chamar OpenAI para análise
+    const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${lovableApiKey}`,
+        'Authorization': `Bearer ${openAiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
+        model: 'gpt-4o-mini',
         messages: [
           {
             role: 'system',
@@ -64,57 +70,55 @@ serve(async (req) => {
 7-9 - Satisfeito: Cliente bem satisfeito, sem hostilidade
 10 - Impressionado: Cliente elogiou atendimento, objetivo alcançado
 
-Retorne APENAS um número de 0 a 10.`
+Retorne APENAS um JSON no formato: { "score": number }`
           },
           {
             role: 'user',
             content: `Analise esta conversa de atendimento:\n\n${conversationText}`
           }
         ],
-        tools: [
-          {
-            type: 'function',
-            function: {
-              name: 'return_satisfaction_score',
-              description: 'Return the satisfaction score analysis',
-              parameters: {
-                type: 'object',
-                properties: {
-                  score: {
-                    type: 'number',
-                    description: 'Satisfaction score from 0 to 10',
-                    minimum: 0,
-                    maximum: 10
-                  }
-                },
-                required: ['score'],
-                additionalProperties: false
-              }
-            }
-          }
-        ],
-        tool_choice: { type: 'function', function: { name: 'return_satisfaction_score' } }
+        response_format: { type: "json_object" }
       }),
     });
 
     if (!aiResponse.ok) {
       const errorText = await aiResponse.text();
-      console.error('Lovable AI error:', aiResponse.status, errorText);
+      console.error('OpenAI API error:', aiResponse.status, errorText);
       throw new Error(`AI analysis failed: ${errorText}`);
     }
 
     const aiData = await aiResponse.json();
-    const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
-    const score = toolCall ? JSON.parse(toolCall.function.arguments).score : 5;
+    const content = aiData.choices?.[0]?.message?.content;
+    const result = JSON.parse(content);
+    const score = result.score;
 
     // Garantir que o score está entre 0 e 10
     const sentimentScore = Math.max(0, Math.min(10, score));
+
+    // Determine user_id to use
+    let targetUserId = requestUserId;
+
+    if (!targetUserId) {
+      // Buscar user_id da conversa se não foi passado
+      const { data: conversation, error: conversationError } = await supabase
+        .from('conversations')
+        .select('user_id')
+        .eq('id', conversationId)
+        .single();
+
+      if (!conversationError && conversation) {
+        targetUserId = conversation.user_id;
+      }
+    }
+
+    console.log(`Upserting analysis for conversation ${conversationId}, user_id: ${targetUserId}, score: ${sentimentScore}`);
 
     // Atualizar ou inserir análise
     const { data: analysis, error: analysisError } = await supabase
       .from('ai_analysis')
       .upsert({
         conversation_id: conversationId,
+        user_id: targetUserId,
         sentiment_score: sentimentScore,
         last_updated: new Date().toISOString()
       }, {
@@ -125,10 +129,26 @@ Retorne APENAS um número de 0 a 10.`
 
     if (analysisError) throw analysisError;
 
+    // Sync with conversations table to keep score consistent
+    console.log(`Syncing conversations.sentiment_score for ${conversationId} with score ${sentimentScore}`);
+    const { error: convUpdateError } = await supabase
+      .from('conversations')
+      .update({ sentiment_score: sentimentScore })
+      .eq('id', conversationId);
+
+    if (convUpdateError) {
+      console.error('Error updating conversation sentiment_score:', convUpdateError);
+    }
+
     console.log(`Analyzed conversation ${conversationId}: score ${sentimentScore}`);
 
     return new Response(
-      JSON.stringify({ sentiment_score: sentimentScore, success: true }),
+      JSON.stringify({
+        sentiment_score: sentimentScore,
+        success: true,
+        user_id: targetUserId,
+        saved_data: analysis
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 

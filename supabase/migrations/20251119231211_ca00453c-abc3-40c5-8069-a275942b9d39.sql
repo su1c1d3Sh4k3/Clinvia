@@ -1,20 +1,3 @@
--- Create enum for conversation status
-CREATE TYPE conversation_status AS ENUM ('open', 'pending', 'resolved');
-
--- Create enum for message types
-CREATE TYPE message_type AS ENUM ('text', 'image', 'audio', 'video', 'document');
-
--- Create enum for message direction
-CREATE TYPE message_direction AS ENUM ('inbound', 'outbound');
-
--- Create enum for instance status
-CREATE TYPE instance_status AS ENUM ('connected', 'disconnected');
-
--- Table: instances (Evolution API connections)
-CREATE TABLE public.instances (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL,
-  server_url TEXT NOT NULL,
   apikey TEXT NOT NULL,
   status instance_status DEFAULT 'disconnected',
   created_at TIMESTAMPTZ DEFAULT now(),

@@ -29,3 +29,13 @@ verify_jwt = false
 
 [functions.evolution-check-connection]
 verify_jwt = false
+
+[functions.uzapi-webhook-refactor]
+verify_jwt = false
+
+[functions.uzapi-webhook]
+verify_jwt = false
+
+[functions.transcribe-audio]
+verify_jwt = false
+
