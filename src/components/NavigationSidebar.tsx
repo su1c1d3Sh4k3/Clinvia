@@ -356,12 +356,11 @@ export const NavigationSidebar = () => {
     >
       {/* Logo Header */}
       <div className="flex items-center gap-3 px-4 py-5 border-b border-white/10">
-        <div className="shrink-0 w-8 h-8 rounded-lg bg-[#00B0F0] flex items-center justify-center">
-          <MessageCircle className="w-5 h-5 text-white" />
-        </div>
-        <div className="opacity-0 group-hover/sidebar:opacity-100 transition-opacity duration-300 overflow-hidden">
-          <h1 className="text-lg font-bold text-white whitespace-nowrap">Omnichat</h1>
-        </div>
+        <img
+          src={theme === "dark" ? "/logo-dark.png" : "/logo-light.png"}
+          alt="Clinvia"
+          className="h-8 w-auto object-contain"
+        />
       </div>
 
       {/* Scrollable Menu Items */}

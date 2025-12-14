@@ -54,10 +54,13 @@ const Auth = () => {
 
       <Card className="w-full max-w-md border-white/20 bg-white/10 backdrop-blur-xl shadow-2xl relative z-10">
         <CardHeader className="text-center space-y-2 pb-6">
-          <div className="mx-auto w-12 h-12 bg-primary/20 rounded-xl flex items-center justify-center mb-2 backdrop-blur-sm border border-white/10">
-            <Sparkles className="w-6 h-6 text-white" />
+          <div className="mx-auto mb-2">
+            <img
+              src="/logo-dark.png"
+              alt="Clinvia"
+              className="h-12 w-auto object-contain"
+            />
           </div>
-          <CardTitle className="text-3xl font-bold text-white tracking-tight">OmniChat</CardTitle>
           <CardDescription className="text-white/70 text-base">
             Sua plataforma de atendimento inteligente
           </CardDescription>
@@ -183,7 +186,7 @@ const Auth = () => {
       </Card>
 
       <div className="absolute bottom-4 text-white/40 text-xs">
-        © 2024 OmniChat. Todos os direitos reservados.
+        © 2024 Clinvia. Todos os direitos reservados.
       </div>
     </div>
   );
