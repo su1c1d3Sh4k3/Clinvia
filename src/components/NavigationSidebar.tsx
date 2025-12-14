@@ -355,7 +355,7 @@ export const NavigationSidebar = () => {
       onMouseLeave={() => setIsHovered(false)}
     >
       {/* Logo Header */}
-      <div className="flex items-center justify-center px-3 py-[5px] border-b border-white/10 overflow-hidden">
+      <div className="flex items-center justify-center px-3 py-0 border-b border-white/10 overflow-hidden">
         {/* Logo icon when collapsed - same visual size as icon in full logo */}
         <img
           src="/logo-icon.png"
