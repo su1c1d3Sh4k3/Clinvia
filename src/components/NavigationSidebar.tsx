@@ -360,13 +360,13 @@ export const NavigationSidebar = () => {
         <img
           src="/logo-icon.png"
           alt="Clinvia"
-          className="h-10 w-10 object-contain shrink-0 group-hover/sidebar:hidden"
+          className="h-[120px] w-[120px] object-contain shrink-0 group-hover/sidebar:hidden"
         />
         {/* Full logo when expanded - height matches icon height for proportion */}
         <img
           src="/logo-dark.png"
           alt="Clinvia"
-          className="h-10 w-auto object-contain hidden group-hover/sidebar:block"
+          className="h-[120px] w-auto object-contain hidden group-hover/sidebar:block"
         />
       </div>
 
