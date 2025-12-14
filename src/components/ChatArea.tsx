@@ -624,9 +624,14 @@ export const ChatArea = ({
       }
     }
 
-    // Se o ticket estiver aberto e sign_messages estiver ativo, adicionar o nome do atendente
+    // Se o ticket estiver aberto, verificar se deve adicionar assinatura
     const tm = currentTeamMember as any;
-    const shouldSignMessages = tm?.sign_messages !== false; // default is true
+    // sign_messages: true (ligado) = envia assinatura / false (desligado) = não envia
+    // Se undefined, assume true (default)
+    const signMessagesValue = tm?.sign_messages;
+    const shouldSignMessages = signMessagesValue === true || signMessagesValue === undefined;
+
+    console.log('[SignMessages] sign_messages value:', signMessagesValue, 'shouldSign:', shouldSignMessages);
 
     if ((conversation?.status as string) === 'open' && messageType === 'text' && shouldSignMessages) {
       const senderName = tm?.full_name || tm?.name || "Atendente";

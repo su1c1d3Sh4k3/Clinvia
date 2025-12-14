@@ -355,7 +355,7 @@ export const NavigationSidebar = () => {
       onMouseLeave={() => setIsHovered(false)}
     >
       {/* Logo Header */}
-      <div className="flex items-center justify-center px-2 py-5 border-b border-white/10 overflow-hidden">
+      <div className="flex items-center justify-center px-1 py-2.5 border-b border-white/10 overflow-hidden">
         {/* Logo icon when collapsed */}
         <img
           src="/logo-icon.png"
@@ -366,7 +366,7 @@ export const NavigationSidebar = () => {
         <img
           src="/logo-dark.png"
           alt="Clinvia"
-          className="h-20 max-w-[220px] w-full object-contain hidden group-hover/sidebar:block px-2"
+          className="h-20 max-w-[220px] w-full object-contain hidden group-hover/sidebar:block px-1"
         />
       </div>
 
