@@ -355,18 +355,18 @@ export const NavigationSidebar = () => {
       onMouseLeave={() => setIsHovered(false)}
     >
       {/* Logo Header */}
-      <div className="flex items-center justify-center px-3 py-0 border-b border-white/10 overflow-hidden">
-        {/* Logo icon when collapsed - same visual size as icon in full logo */}
+      <div className="flex items-center justify-center gap-2 px-3 py-2 border-b border-white/10 overflow-hidden">
+        {/* Logo icon - always visible */}
         <img
           src="/logo-icon.png"
           alt="Clinvia"
-          className="h-[120px] w-[120px] object-contain shrink-0 group-hover/sidebar:hidden"
+          className="h-10 w-10 object-contain shrink-0"
         />
-        {/* Full logo when expanded - height matches icon height for proportion */}
+        {/* Brand name - only visible when expanded */}
         <img
-          src="/logo-dark.png"
+          src="/logo-name.png"
           alt="Clinvia"
-          className="h-[120px] w-auto object-contain hidden group-hover/sidebar:block"
+          className="h-7 w-auto object-contain hidden group-hover/sidebar:block"
         />
       </div>
 
