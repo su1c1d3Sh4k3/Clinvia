@@ -58,7 +58,7 @@ const Auth = () => {
             <img
               src="/logo-dark.png"
               alt="Clinvia"
-              className="h-12 w-auto object-contain"
+              className="h-24 w-auto object-contain"
             />
           </div>
           <CardDescription className="text-white/70 text-base">

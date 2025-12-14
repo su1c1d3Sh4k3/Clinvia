@@ -624,12 +624,12 @@ export const ChatArea = ({
       }
     }
 
-    // Se o ticket estiver aberto, adicionar o nome do atendente (apenas para texto puro por enquanto)
-    if ((conversation?.status as string) === 'open' && messageType === 'text') {
-      // Usar nome do team_member atual (funciona para admin e agentes)
-      const tm = currentTeamMember as any;
-      const senderName = tm?.full_name || tm?.name || "Atendente";
+    // Se o ticket estiver aberto e sign_messages estiver ativo, adicionar o nome do atendente
+    const tm = currentTeamMember as any;
+    const shouldSignMessages = tm?.sign_messages !== false; // default is true
 
+    if ((conversation?.status as string) === 'open' && messageType === 'text' && shouldSignMessages) {
+      const senderName = tm?.full_name || tm?.name || "Atendente";
       finalBody = `*${senderName}:*\n${finalBody}`;
     }
 
