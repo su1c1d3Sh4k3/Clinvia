@@ -366,7 +366,7 @@ export const NavigationSidebar = () => {
         <img
           src="/logo-dark.png"
           alt="Clinvia"
-          className="h-10 w-full object-contain hidden group-hover/sidebar:block"
+          className="h-14 max-w-[220px] w-full object-contain hidden group-hover/sidebar:block px-2"
         />
       </div>
 

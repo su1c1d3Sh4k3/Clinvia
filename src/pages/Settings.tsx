@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
-import { User, Building2, Lock, Camera, Loader2, Bell, BellRing, Users, Volume2, DollarSign } from "lucide-react";
+import { User, Building2, Lock, Camera, Loader2, Bell, BellRing, Users, Volume2, DollarSign, Settings as SettingsIcon, Pen } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useCurrentTeamMember } from "@/hooks/useStaff";
@@ -39,6 +39,7 @@ export default function Settings() {
     const [notificationsEnabled, setNotificationsEnabled] = useState(true);
     const [groupNotificationsEnabled, setGroupNotificationsEnabled] = useState(true);
     const [financialAccessEnabled, setFinancialAccessEnabled] = useState(true);
+    const [signMessagesEnabled, setSignMessagesEnabled] = useState(true);
 
     // Carregar dados quando currentTeamMember estiver disponível
     useEffect(() => {
@@ -60,6 +61,7 @@ export default function Settings() {
             setInstagram(tm.instagram || "");
             setNotificationsEnabled(tm.notifications_enabled ?? true);
             setGroupNotificationsEnabled(tm.group_notifications_enabled ?? true);
+            setSignMessagesEnabled(tm.sign_messages ?? true);
 
             // Buscar company_name e financial_access de profiles (dados da empresa)
             fetchCompanySettings(tm.user_id);
@@ -243,6 +245,34 @@ export default function Settings() {
         }
     };
 
+    const updateSignMessages = async (newValue: boolean) => {
+        try {
+            setLoading(true);
+            setSignMessagesEnabled(newValue); // Optimistic update
+
+            if (!currentTeamMember?.id) {
+                toast.error("Erro: usuário não identificado");
+                setLoading(false);
+                return;
+            }
+
+            const { error } = await supabase
+                .from("team_members")
+                .update({ sign_messages: newValue, updated_at: new Date().toISOString() })
+                .eq("id", currentTeamMember.id);
+
+            if (error) throw error;
+
+            toast.success(newValue ? "Assinatura de mensagens ativada!" : "Assinatura de mensagens desativada!");
+        } catch (error: any) {
+            setSignMessagesEnabled(!newValue); // Revert
+            toast.error("Erro ao atualizar configuração");
+            console.error(error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const playTestSound = () => {
         try {
             const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
@@ -302,8 +332,8 @@ export default function Settings() {
                         Segurança
                     </TabsTrigger>
                     <TabsTrigger value="notifications" className="flex items-center gap-2">
-                        <Bell className="h-4 w-4" />
-                        Notificações
+                        <SettingsIcon className="h-4 w-4" />
+                        Sistema
                     </TabsTrigger>
                 </TabsList>
 
@@ -573,6 +603,28 @@ export default function Settings() {
                                     disabled={!notificationsEnabled}
                                 />
                             </div>
+
+                            {/* Sign Messages (Admin and Supervisor only) */}
+                            {userRole !== 'agent' && (
+                                <div className="flex items-center justify-between p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors border-l-4 border-l-primary">
+                                    <div className="flex items-center gap-4">
+                                        <div className="p-2 bg-primary/10 rounded-full">
+                                            <Pen className="h-5 w-5 text-primary" />
+                                        </div>
+                                        <div className="space-y-0.5">
+                                            <h4 className="font-medium">Assinar mensagens</h4>
+                                            <p className="text-sm text-muted-foreground">
+                                                Quando ativo, seu nome será enviado junto com as mensagens.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <Switch
+                                        checked={signMessagesEnabled}
+                                        onCheckedChange={updateSignMessages}
+                                        disabled={loading}
+                                    />
+                                </div>
+                            )}
 
                             {/* Financial Access Control (Admin Only) */}
                             {userRole === 'admin' && (
