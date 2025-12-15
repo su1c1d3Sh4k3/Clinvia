@@ -869,7 +869,7 @@ export const ChatArea = ({
         {isLoading ? (
           <div className="text-center text-muted-foreground">Carregando mensagens...</div>
         ) : (
-          <div className="space-y-4 max-w-4xl mx-auto">
+          <div className="space-y-4 max-w-4xl md:mx-auto">
             {messages.map((msg) => {
               const isMatch = searchTerm && msg.body?.toLowerCase().includes(searchTerm.toLowerCase());
               const matchIndex = isMatch ? searchMatches.findIndex(m => m.id === msg.id) : -1;
@@ -918,7 +918,7 @@ export const ChatArea = ({
                   )}
 
                   {/* Message Bubble with Actions Menu */}
-                  <div className="group relative flex items-end gap-1 max-w-[70%]">
+                  <div className="group relative flex items-end gap-1 max-w-[85%] md:max-w-[70%]">
                     {/* Actions Menu - Left side for outbound, Right side for inbound */}
                     {msg.direction === "outbound" && (
                       <MessageActionsMenu
