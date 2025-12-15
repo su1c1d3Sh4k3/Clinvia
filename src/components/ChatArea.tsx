@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Send, Paperclip, Smile, Mic, Sparkles, CheckCircle, X, FileText, Image as ImageIcon, Video, ArrowDown, StopCircle, Check, CheckCheck } from "lucide-react";
+import { Send, Paperclip, Smile, Mic, Sparkles, CheckCircle, X, FileText, Image as ImageIcon, Video, ArrowDown, StopCircle, Check, CheckCheck, Plus, MoreVertical, MessageSquare } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -1154,24 +1154,71 @@ export const ChatArea = ({
                 className="hidden"
                 onChange={handleFileSelect}
               />
-              <Button variant="ghost" size="icon" onClick={() => fileInputRef.current?.click()}>
-                <Paperclip className="w-5 h-5" />
-              </Button>
 
-              <Popover open={isEmojiOpen} onOpenChange={setIsEmojiOpen}>
-                <PopoverTrigger asChild>
-                  <Button variant="ghost" size="icon">
-                    <Smile className="w-5 h-5" />
+              {/* Mobile: Show compact action menu */}
+              {isMobile ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon">
+                      <Plus className="w-5 h-5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-48">
+                    <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
+                      <Paperclip className="w-4 h-4 mr-2" />
+                      Anexar arquivo
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setIsEmojiOpen(true)}>
+                      <Smile className="w-4 h-4 mr-2" />
+                      Emojis
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={isRecording ? handleStopRecording : handleStartRecording}>
+                      <Mic className={cn("w-4 h-4 mr-2", isRecording && "text-red-500")} />
+                      {isRecording ? "Parar gravação" : "Gravar áudio"}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleAiAction('generate')}>
+                      <Sparkles className="w-4 h-4 mr-2" />
+                      Usar IA
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setShowQuickMessagePopup(true)}>
+                      <MessageSquare className="w-4 h-4 mr-2" />
+                      Mensagens rápidas
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : (
+                /* Desktop: Show all buttons */
+                <>
+                  <Button variant="ghost" size="icon" onClick={() => fileInputRef.current?.click()}>
+                    <Paperclip className="w-5 h-5" />
                   </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-full p-0 border-none">
-                  <EmojiPicker onEmojiClick={handleEmojiClick} />
-                </PopoverContent>
-              </Popover>
+
+                  <Popover open={isEmojiOpen} onOpenChange={setIsEmojiOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="ghost" size="icon">
+                        <Smile className="w-5 h-5" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-full p-0 border-none">
+                      <EmojiPicker onEmojiClick={handleEmojiClick} />
+                    </PopoverContent>
+                  </Popover>
+                </>
+              )}
+
+              {/* Emoji Picker Popover for Mobile (opened via dropdown) */}
+              {isMobile && (
+                <Popover open={isEmojiOpen} onOpenChange={setIsEmojiOpen}>
+                  <PopoverTrigger className="hidden" />
+                  <PopoverContent className="w-full p-0 border-none">
+                    <EmojiPicker onEmojiClick={handleEmojiClick} />
+                  </PopoverContent>
+                </Popover>
+              )}
 
               <Textarea
                 ref={textareaRef}
-                placeholder="Digite sua mensagem ou / para mensagens rápidas..."
+                placeholder={isMobile ? "Digite sua mensagem..." : "Digite sua mensagem ou / para mensagens rápidas..."}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 onKeyDown={(e) => {
@@ -1186,68 +1233,81 @@ export const ChatArea = ({
                 disabled={isUploading}
               />
 
-              <QuickMessagesMenu />
+              {/* Desktop only: Quick Messages and Audio buttons */}
+              {!isMobile && (
+                <>
+                  <QuickMessagesMenu />
 
-              {/* Audio Recording Button */}
-              {isRecording ? (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-red-500 font-medium animate-pulse">
-                    {Math.floor(recordingTime / 60).toString().padStart(2, '0')}:
-                    {(recordingTime % 60).toString().padStart(2, '0')}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={handleStopRecording}
-                    className="text-red-500 hover:text-red-600 hover:bg-red-100"
-                  >
-                    <StopCircle className="w-5 h-5" />
-                  </Button>
-                </div>
-              ) : (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleStartRecording}
-                  title="Gravar áudio"
-                >
-                  <Mic className="w-5 h-5" />
-                </Button>
-              )}
+                  {/* Audio Recording Button */}
+                  {isRecording ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-red-500 font-medium animate-pulse">
+                        {Math.floor(recordingTime / 60).toString().padStart(2, '0')}:
+                        {(recordingTime % 60).toString().padStart(2, '0')}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={handleStopRecording}
+                        className="text-red-500 hover:text-red-600 hover:bg-red-100"
+                      >
+                        <StopCircle className="w-5 h-5" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={handleStartRecording}
+                      title="Gravar áudio"
+                    >
+                      <Mic className="w-5 h-5" />
+                    </Button>
+                  )}
 
-              {!message.trim() ? (
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => handleAiAction('generate')}
-                  className="bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0 hover:opacity-90 transition-all duration-300"
-                  title="Gerar resposta com IA"
-                >
-                  <Sparkles className="w-5 h-5" />
-                </Button>
-              ) : (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
+                  {!message.trim() ? (
                     <Button
                       variant="outline"
                       size="icon"
+                      onClick={() => handleAiAction('generate')}
                       className="bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0 hover:opacity-90 transition-all duration-300"
-                      title="Opções de IA"
+                      title="Gerar resposta com IA"
                     >
                       <Sparkles className="w-5 h-5" />
                     </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => handleAiAction('fix')}>
-                      <CheckCircle className="w-4 h-4 mr-2" />
-                      Correção ortográfica
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleAiAction('improve')}>
-                      <Sparkles className="w-4 h-4 mr-2" />
-                      Melhorar a frase
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                  ) : (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0 hover:opacity-90 transition-all duration-300"
+                          title="Opções de IA"
+                        >
+                          <Sparkles className="w-5 h-5" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handleAiAction('fix')}>
+                          <CheckCircle className="w-4 h-4 mr-2" />
+                          Correção ortográfica
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleAiAction('improve')}>
+                          <Sparkles className="w-4 h-4 mr-2" />
+                          Melhorar a frase
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </>
+              )}
+
+              {/* Mobile: Recording indicator */}
+              {isMobile && isRecording && (
+                <span className="text-sm text-red-500 font-medium animate-pulse">
+                  {Math.floor(recordingTime / 60).toString().padStart(2, '0')}:
+                  {(recordingTime % 60).toString().padStart(2, '0')}
+                </span>
               )}
 
               <Button

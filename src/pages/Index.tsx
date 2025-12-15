@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Menu, X, MoreVertical, ArrowLeft } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { useMobileMenu } from "@/contexts/MobileMenuContext";
 
 // Mobile view states
 type MobileView = "list" | "chat";
@@ -20,6 +21,7 @@ const Index = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [selectedConversationId, setSelectedConversationId] = useState<string>();
+  const { setHideFloatingButton } = useMobileMenu();
 
   const [searchTerm, setSearchTerm] = useState("");
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
@@ -51,6 +53,11 @@ const Index = () => {
   const handleBackToList = () => {
     setMobileView("list");
   };
+
+  // Control floating button visibility based on mobile view
+  useEffect(() => {
+    setHideFloatingButton(mobileView === "chat");
+  }, [mobileView, setHideFloatingButton]);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -191,10 +198,10 @@ const Index = () => {
       </div>
 
       {/* Mobile Layout */}
-      <div className="flex md:hidden h-screen w-full flex-col">
+      <div className="flex md:hidden h-screen w-full flex-col overflow-hidden">
         {/* Mobile: Conversations List View */}
         <div className={cn(
-          "h-full w-full transition-transform duration-300 ease-in-out",
+          "h-full w-full transition-transform duration-300 ease-in-out overflow-hidden",
           mobileView === "list" ? "translate-x-0" : "-translate-x-full absolute"
         )}>
           <ConversationsList

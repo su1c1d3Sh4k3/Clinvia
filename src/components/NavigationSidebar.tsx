@@ -16,6 +16,7 @@ import { useCurrentTeamMember } from "@/hooks/useStaff";
 import { useFinancialAccess } from "@/hooks/useFinancialAccess";
 import { differenceInDays } from "date-fns";
 import { useState, useEffect } from "react";
+import { useMobileMenu } from "@/contexts/MobileMenuContext";
 
 // Menu structure with submenus
 interface MenuItem {
@@ -66,6 +67,26 @@ export const NavigationSidebar = () => {
   const { theme, setTheme } = useTheme();
   const [openSubmenus, setOpenSubmenus] = useState<Set<string>>(new Set());
   const [isHovered, setIsHovered] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const { hideFloatingButton } = useMobileMenu();
+
+  // Detect mobile screen
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Close mobile menu when navigating
+  useEffect(() => {
+    if (isMobile) {
+      setIsMobileMenuOpen(false);
+    }
+  }, [location.pathname, isMobile]);
 
   // Buscar dados do usuário de team_members (não mais de profiles)
   const { data: currentTeamMember } = useCurrentTeamMember();
@@ -247,8 +268,8 @@ export const NavigationSidebar = () => {
         </div>
 
         <span className={cn(
-          "whitespace-nowrap text-[15px] font-medium flex-1 text-left",
-          "opacity-0 group-hover/sidebar:opacity-100 transition-opacity duration-300"
+          "whitespace-nowrap text-[15px] font-medium flex-1 text-left transition-opacity duration-300",
+          isMobile ? "opacity-100" : "opacity-0 group-hover/sidebar:opacity-100"
         )}>
           {child.label}
         </span>
@@ -291,15 +312,16 @@ export const NavigationSidebar = () => {
           </div>
 
           <span className={cn(
-            "whitespace-nowrap text-[15px] font-medium flex-1 text-left",
-            "opacity-0 group-hover/sidebar:opacity-100 transition-opacity duration-300"
+            "whitespace-nowrap text-[15px] font-medium flex-1 text-left transition-opacity duration-300",
+            isMobile ? "opacity-100" : "opacity-0 group-hover/sidebar:opacity-100"
           )}>
             {item.label}
           </span>
 
           {hasChildren && (
             <ChevronDown className={cn(
-              "w-4 h-4 transition-transform opacity-0 group-hover/sidebar:opacity-100",
+              "w-4 h-4 transition-transform",
+              isMobile ? "opacity-100" : "opacity-0 group-hover/sidebar:opacity-100",
               isOpen && "rotate-180"
             )} />
           )}
@@ -307,15 +329,18 @@ export const NavigationSidebar = () => {
 
         {/* Expanded Submenu - visible when sidebar expanded and submenu open */}
         {hasChildren && isOpen && (
-          <div className="relative hidden group-hover/sidebar:block">
+          <div className={cn(
+            "relative",
+            isMobile ? "block" : "hidden group-hover/sidebar:block"
+          )}>
             {/* Continuous vertical line for all submenu items - flush left */}
             <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-[#272C35]" />
             {item.children!.map(child => renderSubmenuItem(child))}
           </div>
         )}
 
-        {/* Collapsed Submenu - only show icons for submenu with active item */}
-        {showCollapsedSubmenu && (
+        {/* Collapsed Submenu - only show icons for submenu with active item (desktop only) */}
+        {showCollapsedSubmenu && !isMobile && (
           <div className="group-hover/sidebar:hidden flex flex-col">
             {item.children!.map(child => {
               const ChildIcon = child.icon;
@@ -349,75 +374,120 @@ export const NavigationSidebar = () => {
   };
 
   return (
-    <div
-      className="w-[60px] hover:w-[260px] bg-[hsl(var(--sidebar-nav))] h-screen flex flex-col transition-all duration-300 ease-in-out group/sidebar z-50 shadow-xl"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
-      {/* Logo Header */}
-      <div className="flex items-center justify-center gap-2 px-3 py-2 border-b border-white/10 overflow-hidden">
-        {/* Logo icon - always visible */}
-        <img
-          src="/logo-icon.png"
-          alt="Clinvia"
-          className="h-10 w-10 object-contain shrink-0"
-        />
-        {/* Brand name - only visible when expanded */}
-        <img
-          src="/logo-name.png"
-          alt="Clinvia"
-          className="h-7 w-auto object-contain hidden group-hover/sidebar:block"
-        />
-      </div>
-
-      {/* Scrollable Menu Items */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col py-4 scrollbar-none">
-        {menuStructure.map(item => renderMenuItem(item))}
-      </div>
-
-      {/* Fixed Bottom Section */}
-      <div className="flex flex-col py-4 border-t border-white/10">
+    <>
+      {/* Mobile Floating Button - Only visible on mobile when menu is closed and NOT in chat view */}
+      {isMobile && !isMobileMenuOpen && !hideFloatingButton && (
         <button
-          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-          className="flex items-center gap-3 py-3 px-4 transition-all duration-200 hover:bg-[#1E2229] text-white/70 hover:text-white"
+          onClick={() => setIsMobileMenuOpen(true)}
+          className="fixed bottom-4 left-4 z-[60] w-14 h-14 rounded-full bg-[hsl(var(--sidebar-nav))] shadow-lg flex items-center justify-center transition-transform hover:scale-105 active:scale-95"
+          style={{ boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)' }}
         >
-          <div className="shrink-0">
-            {theme === "dark" ? (
-              <Moon className="w-[18px] h-[18px]" />
-            ) : (
-              <Sun className="w-[18px] h-[18px]" />
+          <img
+            src="/logo-icon.png"
+            alt="Menu"
+            className="h-8 w-8 object-contain"
+          />
+        </button>
+      )}
+
+      {/* Mobile Overlay - Only visible on mobile when menu is open */}
+      {isMobile && isMobileMenuOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-[55] backdrop-blur-sm"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* Sidebar - Desktop: normal behavior, Mobile: slide in/out */}
+      <div
+        className={cn(
+          "bg-[hsl(var(--sidebar-nav))] h-screen flex flex-col transition-all duration-300 ease-in-out group/sidebar shadow-xl",
+          // Desktop styles
+          !isMobile && "w-[60px] hover:w-[260px] z-50",
+          // Mobile styles
+          isMobile && "fixed top-0 left-0 w-[280px] z-[60]",
+          isMobile && (isMobileMenuOpen ? "translate-x-0" : "-translate-x-full")
+        )}
+        onMouseEnter={() => !isMobile && setIsHovered(true)}
+        onMouseLeave={() => !isMobile && setIsHovered(false)}
+      >
+        {/* Logo Header */}
+        <div className="flex items-center justify-center gap-2 px-3 py-2 border-b border-white/10 overflow-hidden">
+          {/* Logo icon - always visible */}
+          <img
+            src="/logo-icon.png"
+            alt="Clinvia"
+            className="h-10 w-10 object-contain shrink-0"
+          />
+          {/* Brand name - visible when expanded (desktop hover) or mobile */}
+          <img
+            src="/logo-name.png"
+            alt="Clinvia"
+            className={cn(
+              "h-7 w-auto object-contain",
+              isMobile ? "block" : "hidden group-hover/sidebar:block"
             )}
-          </div>
-          <span className="whitespace-nowrap opacity-0 group-hover/sidebar:opacity-100 transition-opacity duration-300 text-[15px] font-medium">
-            Alternar Tema
-          </span>
-        </button>
+          />
+        </div>
 
-        <button
-          onClick={handleLogout}
-          className="flex items-center gap-3 py-3 px-4 transition-all duration-200 hover:bg-[#1E2229] text-red-500"
-        >
-          <div className="shrink-0">
-            <LogOut className="w-[18px] h-[18px]" />
-          </div>
-          <span className="whitespace-nowrap opacity-0 group-hover/sidebar:opacity-100 transition-opacity duration-300 text-[15px] font-medium">
-            Sair
-          </span>
-        </button>
+        {/* Scrollable Menu Items */}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col py-4 scrollbar-none">
+          {menuStructure.map(item => renderMenuItem(item))}
+        </div>
 
-        <div className="flex items-center gap-3 py-2 px-4 overflow-hidden">
-          <Avatar className="w-9 h-9 border-2 border-white/20 shrink-0">
-            <AvatarImage src={profile?.avatar_url || undefined} />
-            <AvatarFallback className="bg-primary/20 text-primary font-bold text-sm">
-              {(profile?.name || profile?.full_name || user?.email)?.[0]?.toUpperCase() || "U"}
-            </AvatarFallback>
-          </Avatar>
-          <div className="flex flex-col opacity-0 group-hover/sidebar:opacity-100 transition-opacity duration-300 overflow-hidden">
-            <span className="text-sm font-bold text-white truncate">{profile?.full_name || profile?.name || "Usuário"}</span>
-            <span className="text-[11px] text-white/50 truncate">{profile?.email || user?.email}</span>
+        {/* Fixed Bottom Section */}
+        <div className="flex flex-col py-4 border-t border-white/10">
+          <button
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            className="flex items-center gap-3 py-3 px-4 transition-all duration-200 hover:bg-[#1E2229] text-white/70 hover:text-white"
+          >
+            <div className="shrink-0">
+              {theme === "dark" ? (
+                <Moon className="w-[18px] h-[18px]" />
+              ) : (
+                <Sun className="w-[18px] h-[18px]" />
+              )}
+            </div>
+            <span className={cn(
+              "whitespace-nowrap transition-opacity duration-300 text-[15px] font-medium",
+              isMobile ? "opacity-100" : "opacity-0 group-hover/sidebar:opacity-100"
+            )}>
+              Alternar Tema
+            </span>
+          </button>
+
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-3 py-3 px-4 transition-all duration-200 hover:bg-[#1E2229] text-red-500"
+          >
+            <div className="shrink-0">
+              <LogOut className="w-[18px] h-[18px]" />
+            </div>
+            <span className={cn(
+              "whitespace-nowrap transition-opacity duration-300 text-[15px] font-medium",
+              isMobile ? "opacity-100" : "opacity-0 group-hover/sidebar:opacity-100"
+            )}>
+              Sair
+            </span>
+          </button>
+
+          <div className="flex items-center gap-3 py-2 px-4 overflow-hidden">
+            <Avatar className="w-9 h-9 border-2 border-white/20 shrink-0">
+              <AvatarImage src={profile?.avatar_url || undefined} />
+              <AvatarFallback className="bg-primary/20 text-primary font-bold text-sm">
+                {(profile?.name || profile?.full_name || user?.email)?.[0]?.toUpperCase() || "U"}
+              </AvatarFallback>
+            </Avatar>
+            <div className={cn(
+              "flex flex-col transition-opacity duration-300 overflow-hidden",
+              isMobile ? "opacity-100" : "opacity-0 group-hover/sidebar:opacity-100"
+            )}>
+              <span className="text-sm font-bold text-white truncate">{profile?.full_name || profile?.name || "Usuário"}</span>
+              <span className="text-[11px] text-white/50 truncate">{profile?.email || user?.email}</span>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
