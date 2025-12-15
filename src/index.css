@@ -8,8 +8,8 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    --background: 210 40% 98%;
-    /* slate-50 */
+    --background: 220 7% 95%;
+    /* #F0F1F3 - Light Gray */
     --foreground: 220 15% 16%;
 
     --card: 0 0% 100%;
@@ -63,6 +63,8 @@ All colors MUST be HSL.
     --sidebar-nav: 208 100% 33%;
     --chart-axis: 0 0% 0%;
     /* Black */
+    --chat-background: 37 100% 96%;
+    /* #FFF7EA - Warm Cream for chat */
   }
 
   .dark {
@@ -111,6 +113,8 @@ All colors MUST be HSL.
     --chart-axis: 215 20.2% 65.1%;
     /* Muted Foreground Gray */
     /* Matches card/sidebar */
+    --chat-background: 220 15% 14%;
+    /* Same as dark background */
   }
 }
 
@@ -154,31 +158,16 @@ All colors MUST be HSL.
 }
 
 /* ===============================================
-   GLOBAL SCROLLBAR STYLES - Modern Minimalist
+   GLOBAL SCROLLBAR STYLES - Hidden but Functional
    =============================================== */
 
-/* WebKit browsers (Chrome, Safari, Edge) - vertical hidden by default */
+/* WebKit browsers (Chrome, Safari, Edge) - invisible but scrollable */
 *::-webkit-scrollbar {
-  width: 0px !important;
-  height: 10px;
+  width: 0;
+  height: 0;
 }
 
-*::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-*::-webkit-scrollbar-thumb {
-  background: hsl(var(--muted-foreground) / 0.3);
-  border-radius: 999px;
-}
-
-*::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground) / 0.5);
-}
-
-/* Firefox - hide vertical scrollbar */
-html,
-body,
+/* Firefox - hide scrollbar but keep scroll */
 * {
   scrollbar-width: none;
 }

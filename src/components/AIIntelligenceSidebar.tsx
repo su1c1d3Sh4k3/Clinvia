@@ -80,14 +80,10 @@ export const AIIntelligenceSidebar = ({ conversationId, onFollowUpMessageClick, 
       return data;
     },
     enabled: !!conversationId,
-    refetchInterval: 2000, // Poll every 2 seconds to check for updates
+    staleTime: 1000 * 60 * 5, // Cache for 5 minutes - rely on realtime for updates
   });
 
-  useEffect(() => {
-    console.log("AIIntelligenceSidebar - conversationId:", conversationId);
-    console.log("AIIntelligenceSidebar - conversationData:", conversationData);
-    console.log("AIIntelligenceSidebar - analysis:", analysis);
-  }, [conversationId, conversationData, analysis]);
+  // Debug logging removed for performance
 
   const [copilotMessage, setCopilotMessage] = useState("");
   const [copilotHistory, setCopilotHistory] = useState<Array<{ role: string; content: string }>>([]);

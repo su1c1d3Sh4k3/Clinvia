@@ -1,12 +1,13 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Message = Tables<"messages">;
 
-export const useMessages = (conversationId?: string) => {
+export const useMessages = (conversationId?: string, paused: boolean = false) => {
   const queryClient = useQueryClient();
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   const { data: messages, isLoading } = useQuery({
     queryKey: ["messages", conversationId],
@@ -59,12 +60,25 @@ export const useMessages = (conversationId?: string) => {
       return data as Message[];
     },
     enabled: !!conversationId,
+    // Disable refetching when paused
+    refetchInterval: paused ? false : undefined,
+    refetchOnWindowFocus: !paused,
   });
 
-  // Set up realtime subscription for new messages
+  // Set up realtime subscription for new messages - PAUSABLE
   useEffect(() => {
     if (!conversationId) return;
 
+    // If paused, disconnect existing channel and don't create new one
+    if (paused) {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+      return;
+    }
+
+    // Create channel only if not paused
     const channel = supabase
       .channel(`messages-${conversationId}`)
       .on(
@@ -76,15 +90,22 @@ export const useMessages = (conversationId?: string) => {
           filter: `conversation_id=eq.${conversationId}`,
         },
         () => {
-          queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
+          if (!paused) {
+            queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
+          }
         }
       )
       .subscribe();
 
+    channelRef.current = channel;
+
     return () => {
-      supabase.removeChannel(channel);
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
     };
-  }, [conversationId, queryClient]);
+  }, [conversationId, queryClient, paused]);
 
   return {
     messages: messages || [],

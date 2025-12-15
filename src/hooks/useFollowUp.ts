@@ -436,7 +436,7 @@ export function useLastClientMessage(conversationId?: string) {
             return data?.created_at ? new Date(data.created_at) : null;
         },
         enabled: !!conversationId,
-        refetchInterval: 60000, // Refetch every minute
+        refetchInterval: 120000, // Refetch every 2 minutes (optimized from 1 min)
     });
 }
 
@@ -529,7 +529,7 @@ export function useFollowUpNotifications() {
 
             return notificationSet;
         },
-        refetchInterval: 60000, // Check every minute
+        refetchInterval: 120000, // Check every 2 minutes (optimized from 1 min)
     });
 }
 

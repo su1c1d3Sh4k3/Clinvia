@@ -526,30 +526,68 @@ export const ServiceMetricsGrid = () => {
         }
     });
 
-    // Buscar métricas globais (qualidade e velocidade) diretamente das tabelas
+    // Buscar métricas globais (qualidade e velocidade)
     const { data: globalMetrics } = useQuery({
         queryKey: ['global-metrics'],
         refetchOnWindowFocus: true,
-        staleTime: 30000,
+        staleTime: 1000 * 60 * 2,
         queryFn: async () => {
-            // Buscar diretamente das tabelas para garantir dados corretos
-            const { data: aiData, error: aiError } = await supabase
-                .from('ai_analysis')
-                .select('sentiment_score, speed_score')
-                .not('sentiment_score', 'is', null);
+            // 1. Pegar o user_id do usuário logado na tabela team_members
+            const { data: userData } = await supabase.auth.getUser();
+            if (!userData.user) return null;
 
-            const { data: rtData, error: rtError } = await supabase
+            const { data: teamMember } = await supabase
+                .from('team_members')
+                .select('user_id')
+                .eq('auth_user_id', userData.user.id)
+                .maybeSingle();
+
+            // Se não encontrou por auth_user_id, tenta user_id (admin)
+            let userId = teamMember?.user_id;
+            if (!userId) {
+                const { data: adminMember } = await supabase
+                    .from('team_members')
+                    .select('user_id')
+                    .eq('user_id', userData.user.id)
+                    .maybeSingle();
+                userId = adminMember?.user_id || userData.user.id;
+            }
+
+            console.log('Buscando métricas para user_id:', userId);
+
+            // 2. Buscar ai_analysis JOIN conversations WHERE user_id = userId
+            // Usando RPC para fazer o JOIN corretamente
+            const { data: qualityData, error: qualityError } = await supabase.rpc('get_avg_sentiment_score', {
+                owner_id: userId
+            });
+
+            console.log('Quality data from RPC:', qualityData, qualityError);
+
+            // Se RPC não existir, fazer query manual via SQL
+            let avgQuality = 0;
+            if (qualityError) {
+                // Fallback: buscar via query direta
+                const { data: rawData, error: rawError } = await supabase
+                    .from('ai_analysis')
+                    .select('sentiment_score, conversations!inner(user_id)')
+                    .eq('conversations.user_id', userId)
+                    .not('sentiment_score', 'is', null);
+
+                console.log('Fallback query result:', rawData, rawError);
+
+                if (rawData && rawData.length > 0) {
+                    avgQuality = rawData.reduce((acc, a) => acc + (Number(a.sentiment_score) || 0), 0) / rawData.length;
+                }
+            } else {
+                avgQuality = qualityData || 0;
+            }
+
+            // Buscar tempo de resposta
+            const { data: rtData } = await supabase
                 .from('response_times')
                 .select('response_duration_seconds')
                 .not('response_duration_seconds', 'is', null)
                 .lt('response_duration_seconds', 86400);
-
-            console.log('AI Analysis data:', aiData, aiError);
-            console.log('Response Times data:', rtData?.length, 'records', rtError);
-
-            const avgQuality = aiData && aiData.length > 0
-                ? aiData.reduce((acc, a) => acc + (Number(a.sentiment_score) || 0), 0) / aiData.length
-                : 0;
 
             const avgResponseTime = rtData && rtData.length > 0
                 ? rtData.reduce((acc, r) => acc + (r.response_duration_seconds || 0), 0) / rtData.length
@@ -559,11 +597,10 @@ export const ServiceMetricsGrid = () => {
                 avg_quality: Math.round(avgQuality * 10) / 10,
                 avg_response_time_seconds: Math.round(avgResponseTime),
                 quality_change: 0,
-                response_time_change: 0,
-                total_evaluations: aiData?.length || 0
+                response_time_change: 0
             };
 
-            console.log('Global metrics calculated:', result);
+            console.log('Global metrics result:', result);
             return result;
         }
     });

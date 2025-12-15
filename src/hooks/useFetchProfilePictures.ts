@@ -24,7 +24,7 @@ export const useFetchProfilePictures = (conversationId?: string) => {
 
                 // 2. Se contato não tem foto, buscar da Evolution API
                 if (contact && !contact.profile_pic_url && contact.remote_jid) {
-                    console.log('📸 Buscando foto do cliente:', contact.remote_jid);
+
 
                     // Buscar instância conectada
                     const { data: instance } = await supabase
@@ -43,7 +43,7 @@ export const useFetchProfilePictures = (conversationId?: string) => {
                         );
 
                         if (photoUrl) {
-                            console.log('✅ Foto do cliente obtida:', photoUrl);
+
                             // Salvar foto no banco
                             await supabase
                                 .from("contacts")
@@ -65,7 +65,7 @@ export const useFetchProfilePictures = (conversationId?: string) => {
                     .single();
 
                 if (instance && !instance.profile_pic_url) {
-                    console.log('📸 Buscando foto da instância:', instance.name);
+
 
                     const photoUrl = await evolutionApi.fetchInstanceProfilePicture(
                         instance.name,
@@ -73,7 +73,7 @@ export const useFetchProfilePictures = (conversationId?: string) => {
                     );
 
                     if (photoUrl) {
-                        console.log('✅ Foto da instância obtida:', photoUrl);
+
                         await supabase
                             .from("instances")
                             .update({ profile_pic_url: photoUrl })

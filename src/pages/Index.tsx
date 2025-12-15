@@ -166,7 +166,7 @@ const Index = () => {
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
       {/* Desktop Layout - Original */}
-      <div className="hidden md:flex h-screen w-full">
+      <div className="hidden md:flex h-screen w-full min-w-0">
         <ConversationsList
           onSelectConversation={setSelectedConversationId}
           selectedId={selectedConversationId}
@@ -198,7 +198,7 @@ const Index = () => {
       </div>
 
       {/* Mobile Layout - Fixed full screen */}
-      <div className="md:hidden fixed inset-0 flex flex-col bg-background">
+      <div className="md:hidden fixed inset-0 flex flex-col bg-background min-w-0">
         {/* Mobile: Conversations List View - Only render when active */}
         {mobileView === "list" && (
           <div className="flex-1 flex flex-col overflow-hidden">
@@ -217,7 +217,7 @@ const Index = () => {
 
         {/* Mobile: Chat View - Only render when active */}
         {mobileView === "chat" && (
-          <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 flex flex-col overflow-hidden min-w-0">
             {/* Mobile Chat Header - Sticky */}
             <div className="sticky top-0 flex items-center justify-between p-2 border-b bg-background z-20 shrink-0">
               <Button
@@ -244,7 +244,7 @@ const Index = () => {
             </div>
 
             {/* Chat Area - Container sem scroll (scroll é interno no ChatArea) */}
-            <div className="flex-1 overflow-hidden">
+            <div className="flex-1 overflow-hidden min-w-0">
               <ChatArea
                 conversationId={selectedConversationId}
                 searchTerm={searchTerm}

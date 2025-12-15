@@ -122,7 +122,7 @@ export const NavigationSidebar = () => {
 
       return count;
     },
-    refetchInterval: 60000,
+    refetchInterval: 120000, // Check every 2 minutes (optimized from 1 min)
   });
 
   const { data: dashboardNotificationsCount } = useQuery({
@@ -144,7 +144,7 @@ export const NavigationSidebar = () => {
       const dismissedIds = new Set(dismissals?.map((d: any) => d.notification_id));
       return notifs?.filter((n: any) => !dismissedIds.has(n.id)).length || 0;
     },
-    refetchInterval: 30000,
+    refetchInterval: 60000, // Check every 1 minute (optimized from 30s)
     enabled: !!user?.id,
   });
 

@@ -38,7 +38,7 @@ export function NotificationManager() {
             if (error) throw error;
             return data;
         },
-        refetchInterval: 60000, // Check every minute
+        refetchInterval: 120000, // Check every 2 minutes (optimized from 1 min)
         enabled: !!user && preferences?.notifications_enabled !== false,
     });
 

@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useDeferredValue, useCallback } from "react";
+import { useTypingContext, useIsTyping } from "@/contexts/TypingContext";
 import { Send, Paperclip, Smile, Mic, Sparkles, CheckCircle, X, FileText, Image as ImageIcon, Video, ArrowDown, StopCircle, Check, CheckCheck, Plus, MoreVertical, MessageSquare } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -33,7 +34,11 @@ import { EditMessageModal } from "@/components/EditMessageModal";
 import { DeleteMessageModal } from "@/components/DeleteMessageModal";
 import { EmojiPickerStandalone } from "@/components/EmojiReactionPicker";
 import { ReplyQuoteBox, QuotedMessage } from "@/components/ReplyQuoteBox";
+import { LazyMedia } from "@/components/LazyMedia";
 import { uzapi } from "@/lib/uzapi";
+
+// Performance: Limit messages rendered at once
+const MESSAGES_PER_PAGE = 50;
 
 interface QuickMessage {
   id: string;
@@ -63,6 +68,8 @@ export const ChatArea = ({
   isMobile?: boolean;
 }) => {
   const [message, setMessage] = useState("");
+  const { isTyping, setTyping } = useTypingContext();
+  const deferredMessage = useDeferredValue(message);
   const [isEmojiOpen, setIsEmojiOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -79,6 +86,9 @@ export const ChatArea = ({
   const [selectedQuickMessage, setSelectedQuickMessage] = useState<QuickMessage | null>(null);
   const [isQuickMessageConfirmOpen, setIsQuickMessageConfirmOpen] = useState(false);
   const [showScrollButton, setShowScrollButton] = useState(false);
+
+  // Performance: Pagination state - show last N messages by default
+  const [visibleMessagesCount, setVisibleMessagesCount] = useState(MESSAGES_PER_PAGE);
 
   // Audio Recording State
   const [isRecording, setIsRecording] = useState(false);
@@ -113,13 +123,22 @@ export const ChatArea = ({
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
-  // Auto-resize textarea
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
-    }
-  }, [message]);
+  // Auto-resize textarea - moved to handleMessageChange for better performance
+  const handleMessageChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    setMessage(value);
+
+    // Mark as typing - this pauses all subscriptions globally via context
+    setTyping(true);
+
+    // After typing stops, the context will auto-reset after debounce
+    // So we also call setTyping(false) to trigger the debounce
+    setTimeout(() => setTyping(false), 0);
+
+    // Resize directly in handler instead of useEffect
+    e.target.style.height = "auto";
+    e.target.style.height = `${e.target.scrollHeight}px`;
+  }, [setTyping]);
 
   // Sync external message (from follow up click)
   useEffect(() => {
@@ -130,7 +149,8 @@ export const ChatArea = ({
     }
   }, [externalMessage, clearExternalMessage]);
 
-  const { messages, isLoading } = useMessages(conversationId);
+  // Pass isTyping to pause subscriptions during typing
+  const { messages, isLoading } = useMessages(conversationId, isTyping);
   const sendMessageMutation = useSendMessage();
   const resolveConversation = useResolveConversation();
   const updateStatus = useUpdateTicketStatus();
@@ -185,17 +205,21 @@ export const ChatArea = ({
     };
   }, [user?.id]);
 
-  // Handle Slash Command
+  // Handle Slash Command - with debounce for performance
   useEffect(() => {
-    if (message.startsWith('/')) {
-      const query = message.slice(1).toLowerCase();
-      const matches = quickMessages.filter(qm => qm.shortcut.toLowerCase().includes(query));
-      setFilteredQuickMessages(matches);
-      setShowQuickMessagePopup(matches.length > 0);
-    } else {
-      setShowQuickMessagePopup(false);
-    }
-  }, [message, quickMessages]);
+    const timer = setTimeout(() => {
+      if (deferredMessage.startsWith('/')) {
+        const query = deferredMessage.slice(1).toLowerCase();
+        const matches = quickMessages.filter(qm => qm.shortcut.toLowerCase().includes(query));
+        setFilteredQuickMessages(matches);
+        setShowQuickMessagePopup(matches.length > 0);
+      } else {
+        setShowQuickMessagePopup(false);
+      }
+    }, 100); // 100ms debounce
+
+    return () => clearTimeout(timer);
+  }, [deferredMessage, quickMessages]);
 
 
   // Buscar fotos de perfil automaticamente
@@ -292,7 +316,7 @@ export const ChatArea = ({
           .eq('id', conversationId);
 
         if (!error) {
-          console.log('Unread count reset for conversation:', conversationId);
+
           // Invalidate conversations cache so the badge updates
           queryClient.invalidateQueries({ queryKey: ["conversations"] });
           queryClient.invalidateQueries({ queryKey: ["unread-counts"] });
@@ -633,7 +657,7 @@ export const ChatArea = ({
     const signMessagesValue = tm?.sign_messages;
     const shouldSignMessages = signMessagesValue === true || signMessagesValue === undefined;
 
-    console.log('[SignMessages] sign_messages value:', signMessagesValue, 'shouldSign:', shouldSignMessages);
+
 
     if ((conversation?.status as string) === 'open' && messageType === 'text' && shouldSignMessages) {
       const senderName = tm?.full_name || tm?.name || "Atendente";
@@ -683,7 +707,7 @@ export const ChatArea = ({
   };
 
   const handleInstanceSelect = async (instanceId: string) => {
-    console.log("Selecting instance:", instanceId);
+
     // Update conversation with selected instance
     const { error } = await supabase
       .from('conversations')
@@ -695,7 +719,7 @@ export const ChatArea = ({
       return;
     }
 
-    console.log("Instance updated in DB. Updating cache...");
+
 
     // Optimistically update cache
     queryClient.setQueryData(["conversation", conversationId], (oldData: any) => {
@@ -796,7 +820,7 @@ export const ChatArea = ({
     : [];
 
   return (
-    <div className={cn("flex-1 flex flex-col bg-background relative w-full", isMobile ? "h-full" : "h-screen")}>
+    <div className={cn("flex-1 flex flex-col bg-background relative w-full min-w-0", isMobile ? "h-full" : "h-screen")}>
       {/* Header - Hidden on mobile (Index.tsx provides its own header) */}
       {!isMobile && (
         <div className="p-4 border-b border-border flex items-center justify-between">
@@ -865,12 +889,34 @@ export const ChatArea = ({
       )}
 
       {/* Messages */}
-      <ScrollArea className={cn("flex-1 w-full", isMobile ? "px-2 py-2" : "p-4")} onScroll={handleScroll}>
+      <ScrollArea
+        className={cn(
+          "flex-1 w-full",
+          isMobile ? "px-2 py-2" : "p-4"
+        )}
+        onScroll={handleScroll}
+        disableOverflowX={true}
+      >
         {isLoading ? (
           <div className="text-center text-muted-foreground">Carregando mensagens...</div>
         ) : (
-          <div className={cn("space-y-4 w-full", !isMobile && "max-w-4xl mx-auto")}>
-            {messages.map((msg) => {
+          <div className={cn("space-y-4 w-full min-w-0", !isMobile && "max-w-4xl mx-auto")}>
+            {/* Performance: Show Load More button if there are more messages */}
+            {messages.length > visibleMessagesCount && (
+              <div className="flex justify-center">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setVisibleMessagesCount(prev => prev + MESSAGES_PER_PAGE)}
+                  className="text-xs"
+                >
+                  Carregar mais ({messages.length - visibleMessagesCount} mensagens anteriores)
+                </Button>
+              </div>
+            )}
+
+            {/* Performance: Only render last N messages */}
+            {messages.slice(-visibleMessagesCount).map((msg) => {
               const isMatch = searchTerm && msg.body?.toLowerCase().includes(searchTerm.toLowerCase());
               const matchIndex = isMatch ? searchMatches.findIndex(m => m.id === msg.id) : -1;
 
@@ -920,7 +966,7 @@ export const ChatArea = ({
                   {/* Message Bubble with Actions Menu */}
                   <div className={cn(
                     "group relative flex items-end gap-1 min-w-0",
-                    isMobile ? "max-w-full" : "max-w-[70%]"
+                    isMobile ? "max-w-[calc(100%-3rem)]" : "max-w-[70%]"
                   )}>
                     {/* Actions Menu - Left side for outbound, Right side for inbound */}
                     {msg.direction === "outbound" && (
@@ -936,7 +982,7 @@ export const ChatArea = ({
 
                     <div
                       className={cn(
-                        "rounded-lg p-3 overflow-hidden",
+                        "rounded-lg p-3 overflow-hidden min-w-0 break-words",
                         msg.direction === "outbound"
                           ? "bg-[#044740] text-white"
                           : "bg-[hsl(var(--chat-customer))] text-foreground"
@@ -958,14 +1004,9 @@ export const ChatArea = ({
                         />
                       )}
 
-                      {/* Renderizar imagem */}
+                      {/* Renderizar imagem - LAZY LOADING */}
                       {msg.message_type === 'image' && msg.media_url && (
-                        <img
-                          src={msg.media_url}
-                          alt="Imagem"
-                          className="max-w-full rounded-lg cursor-pointer mb-2"
-                          onClick={() => window.open(msg.media_url, '_blank')}
-                        />
+                        <LazyMedia type="image" src={msg.media_url} alt="Imagem" />
                       )}
 
                       {/* Renderizar áudio */}
@@ -992,12 +1033,9 @@ export const ChatArea = ({
                         </div>
                       )}
 
-                      {/* Renderizar vídeo */}
+                      {/* Renderizar vídeo - LAZY LOADING */}
                       {msg.message_type === 'video' && msg.media_url && (
-                        <video controls className="w-full max-w-md rounded-lg mb-2">
-                          <source src={msg.media_url} type="video/mp4" />
-                          Seu navegador não suporta o elemento de vídeo.
-                        </video>
+                        <LazyMedia type="video" src={msg.media_url} />
                       )}
 
                       {/* Renderizar documento */}
@@ -1032,7 +1070,6 @@ export const ChatArea = ({
                         <span className="ml-1">
                           {(() => {
                             const status = (msg as any).status;
-                            console.log('[ReadReceipt] Message:', msg.id, 'Direction:', msg.direction, 'Status:', status);
                             if (status === 'read') {
                               // Double check green = read
                               return <CheckCheck className="w-4 h-4 text-green-400" />;
@@ -1223,7 +1260,7 @@ export const ChatArea = ({
                 ref={textareaRef}
                 placeholder={isMobile ? "Digite sua mensagem..." : "Digite sua mensagem ou / para mensagens rápidas..."}
                 value={message}
-                onChange={(e) => setMessage(e.target.value)}
+                onChange={handleMessageChange}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();

@@ -34,8 +34,8 @@ const AgentCard = ({
             {/* Rank Badge */}
             {rank <= 3 && (
                 <div className={`absolute -top-2 -left-2 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white ${rank === 1 ? 'bg-gradient-to-br from-yellow-400 to-yellow-600' :
-                        rank === 2 ? 'bg-gradient-to-br from-gray-300 to-gray-500' :
-                            'bg-gradient-to-br from-amber-600 to-amber-800'
+                    rank === 2 ? 'bg-gradient-to-br from-gray-300 to-gray-500' :
+                        'bg-gradient-to-br from-amber-600 to-amber-800'
                     }`}>
                     {rank}
                 </div>
@@ -214,9 +214,6 @@ export const TeamPerformanceTable = () => {
     return (
         <div className="space-y-6">
             <h2 className="text-xl font-bold tracking-tight">Desempenho da Equipe</h2>
-
-            {/* Summary Card */}
-            <TeamSummaryCard team={team} />
 
             {/* Agent Cards Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">

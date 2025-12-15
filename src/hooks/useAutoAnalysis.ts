@@ -99,7 +99,6 @@ export const useAutoAnalysis = (conversationId?: string, isGroup: boolean = fals
 
         // Inscrever para mudanças em tempo real (APENAS PARA ATUALIZAR UI)
         const channelName = `auto-analysis-${conversationId}-${Date.now()}`;
-        console.log('[AutoAnalysis] Subscribing to channel:', channelName);
 
         const channel = supabase
             .channel(channelName)
@@ -112,7 +111,6 @@ export const useAutoAnalysis = (conversationId?: string, isGroup: boolean = fals
                     filter: `conversation_id=eq.${conversationId}`
                 },
                 async (payload) => {
-                    console.log('[AutoAnalysis] Realtime event received:', payload);
                     await analyzeMessages(); // Recalculate speed
                 }
             )
@@ -125,7 +123,6 @@ export const useAutoAnalysis = (conversationId?: string, isGroup: boolean = fals
                     filter: `conversation_id=eq.${conversationId}`
                 },
                 (payload) => {
-                    console.log('[AutoAnalysis] AI Analysis updated:', payload);
                     if (payload.new && 'sentiment_score' in payload.new) {
                         const newScore = (payload.new as any).sentiment_score;
                         setSatisfactionScore(newScore);
@@ -133,12 +130,9 @@ export const useAutoAnalysis = (conversationId?: string, isGroup: boolean = fals
                     }
                 }
             )
-            .subscribe((status) => {
-                console.log(`[AutoAnalysis] Subscription status for ${channelName}:`, status);
-            });
+            .subscribe();
 
         return () => {
-            console.log('[AutoAnalysis] Unsubscribing from channel:', channelName);
             supabase.removeChannel(channel);
         };
     }, [conversationId, isGroup]);

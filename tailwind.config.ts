@@ -60,6 +60,7 @@ export default {
         chat: {
           agent: "hsl(var(--chat-agent))",
           customer: "hsl(var(--chat-customer))",
+          background: "hsl(var(--chat-background))",
         },
       },
       borderRadius: {

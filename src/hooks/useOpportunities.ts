@@ -78,7 +78,7 @@ export function useOpportunities() {
             if (error) throw error;
             return data as Opportunity[];
         },
-        refetchInterval: 60000, // Refetch every minute
+        refetchInterval: 120000, // Refetch every 2 minutes (optimized from 1 min)
     });
 }
 

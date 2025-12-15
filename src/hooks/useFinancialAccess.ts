@@ -22,6 +22,6 @@ export function useFinancialAccess() {
             return data ?? true;
         },
         enabled: !!role, // Only run after role is known
-        staleTime: 1000 * 60 * 2, // Cache for 2 minutes
+        staleTime: 1000 * 60 * 5, // Cache for 5 minutes (optimized from 2 min)
     });
 }

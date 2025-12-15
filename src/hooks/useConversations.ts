@@ -1,7 +1,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { Tables } from "@/integrations/supabase/types";
+import { useIsTyping } from "@/contexts/TypingContext";
 
 type Conversation = Tables<"conversations"> & {
   contacts: Tables<"contacts"> & {
@@ -25,6 +26,13 @@ interface UseConversationsOptions {
 export const useConversations = (options: UseConversationsOptions = {}) => {
   const { tab = "open", userId, role, teamMemberId } = options;
   const queryClient = useQueryClient();
+  const isTyping = useIsTyping();
+  const isTypingRef = useRef(isTyping);
+
+  // Keep ref updated so subscription callbacks have latest value
+  useEffect(() => {
+    isTypingRef.current = isTyping;
+  }, [isTyping]);
 
   const { data: conversations, isLoading } = useQuery({
     queryKey: ["conversations", tab, userId, role, teamMemberId],
@@ -95,7 +103,10 @@ export const useConversations = (options: UseConversationsOptions = {}) => {
           table: "conversations",
         },
         () => {
-          queryClient.invalidateQueries({ queryKey: ["conversations"] });
+          // Only invalidate if NOT typing - prevents re-renders during input
+          if (!isTypingRef.current) {
+            queryClient.invalidateQueries({ queryKey: ["conversations"] });
+          }
         }
       )
       .subscribe();
@@ -111,8 +122,11 @@ export const useConversations = (options: UseConversationsOptions = {}) => {
           table: "conversation_follow_ups",
         },
         () => {
-          queryClient.invalidateQueries({ queryKey: ["conversations"] });
-          queryClient.invalidateQueries({ queryKey: ["conversation-follow-up"] });
+          // Only invalidate if NOT typing
+          if (!isTypingRef.current) {
+            queryClient.invalidateQueries({ queryKey: ["conversations"] });
+            queryClient.invalidateQueries({ queryKey: ["conversation-follow-up"] });
+          }
         }
       )
       .subscribe();
@@ -128,3 +142,4 @@ export const useConversations = (options: UseConversationsOptions = {}) => {
     isLoading,
   };
 };
+

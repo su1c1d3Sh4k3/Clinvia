@@ -46,7 +46,7 @@ export const useUserRole = () => {
             return null; // Usuário não registrado em team_members
         },
         enabled: !!user,
-        staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+        staleTime: 1000 * 60 * 10, // Cache for 10 minutes (optimized from 5 min)
     });
 };
 
