@@ -919,7 +919,7 @@ export const ChatArea = ({
 
                   {/* Message Bubble with Actions Menu */}
                   <div className={cn(
-                    "group relative flex items-end gap-1",
+                    "group relative flex items-end gap-1 min-w-0",
                     isMobile ? "max-w-full" : "max-w-[70%]"
                   )}>
                     {/* Actions Menu - Left side for outbound, Right side for inbound */}
@@ -936,7 +936,7 @@ export const ChatArea = ({
 
                     <div
                       className={cn(
-                        "rounded-lg p-3",
+                        "rounded-lg p-3 overflow-hidden",
                         msg.direction === "outbound"
                           ? "bg-[#044740] text-white"
                           : "bg-[hsl(var(--chat-customer))] text-foreground"
@@ -1015,7 +1015,7 @@ export const ChatArea = ({
 
                       {/* Texto da mensagem */}
                       {msg.body && msg.message_type !== 'document' && msg.message_type !== 'audio' && msg.body !== '[Áudio]' && (
-                        <p className="text-sm">
+                        <p className="text-sm break-words whitespace-pre-wrap">
                           <HighlightText text={cleanMessageBody(msg.body)} highlight={searchTerm} />
                         </p>
                       )}
