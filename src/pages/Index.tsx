@@ -197,69 +197,67 @@ const Index = () => {
         />
       </div>
 
-      {/* Mobile Layout */}
-      <div className="flex md:hidden h-screen w-full flex-col overflow-hidden">
-        {/* Mobile: Conversations List View */}
-        <div className={cn(
-          "h-full w-full transition-transform duration-300 ease-in-out overflow-hidden",
-          mobileView === "list" ? "translate-x-0" : "-translate-x-full absolute"
-        )}>
-          <ConversationsList
-            onSelectConversation={handleSelectConversation}
-            selectedId={selectedConversationId}
-            searchTerm={searchTerm}
-            setSearchTerm={setSearchTerm}
-            currentMatchIndex={currentMatchIndex}
-            setCurrentMatchIndex={setCurrentMatchIndex}
-            totalMatches={totalMatches}
-            onOpenNewMessage={handleOpenNewMessage}
-          />
-        </div>
-
-        {/* Mobile: Chat View */}
-        <div className={cn(
-          "h-full w-full flex flex-col transition-transform duration-300 ease-in-out",
-          mobileView === "chat" ? "translate-x-0" : "translate-x-full absolute"
-        )}>
-          {/* Mobile Chat Header */}
-          <div className="flex items-center justify-between p-2 border-b bg-background/95 backdrop-blur-sm z-10">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleBackToList}
-              className="h-9 w-9"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-
-            <span className="font-medium text-sm truncate flex-1 text-center">
-              Conversa
-            </span>
-
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsActionsSheetOpen(true)}
-              className="h-9 w-9"
-            >
-              <MoreVertical className="h-5 w-5" />
-            </Button>
-          </div>
-
-          {/* Chat Area - Full height minus header */}
-          <div className="flex-1 overflow-hidden">
-            <ChatArea
-              conversationId={selectedConversationId}
+      {/* Mobile Layout - Fixed full screen */}
+      <div className="md:hidden fixed inset-0 flex flex-col bg-background">
+        {/* Mobile: Conversations List View - Only render when active */}
+        {mobileView === "list" && (
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <ConversationsList
+              onSelectConversation={handleSelectConversation}
+              selectedId={selectedConversationId}
               searchTerm={searchTerm}
+              setSearchTerm={setSearchTerm}
               currentMatchIndex={currentMatchIndex}
-              setTotalMatches={setTotalMatches}
+              setCurrentMatchIndex={setCurrentMatchIndex}
+              totalMatches={totalMatches}
               onOpenNewMessage={handleOpenNewMessage}
-              externalMessage={followUpMessage}
-              clearExternalMessage={() => setFollowUpMessage("")}
-              isMobile={true}
             />
           </div>
-        </div>
+        )}
+
+        {/* Mobile: Chat View - Only render when active */}
+        {mobileView === "chat" && (
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {/* Mobile Chat Header - Sticky */}
+            <div className="sticky top-0 flex items-center justify-between p-2 border-b bg-background z-20 shrink-0">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleBackToList}
+                className="h-9 w-9"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+
+              <span className="font-medium text-sm truncate flex-1 text-center">
+                Conversa
+              </span>
+
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsActionsSheetOpen(true)}
+                className="h-9 w-9"
+              >
+                <MoreVertical className="h-5 w-5" />
+              </Button>
+            </div>
+
+            {/* Chat Area - Scrollable */}
+            <div className="flex-1 overflow-y-auto">
+              <ChatArea
+                conversationId={selectedConversationId}
+                searchTerm={searchTerm}
+                currentMatchIndex={currentMatchIndex}
+                setTotalMatches={setTotalMatches}
+                onOpenNewMessage={handleOpenNewMessage}
+                externalMessage={followUpMessage}
+                clearExternalMessage={() => setFollowUpMessage("")}
+                isMobile={true}
+              />
+            </div>
+          </div>
+        )}
 
         {/* Mobile: Actions Sheet (Right Sidebar Content) */}
         <Sheet open={isActionsSheetOpen} onOpenChange={setIsActionsSheetOpen}>

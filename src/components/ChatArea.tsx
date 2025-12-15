@@ -796,7 +796,7 @@ export const ChatArea = ({
     : [];
 
   return (
-    <div className={cn("flex-1 flex flex-col bg-background relative", isMobile ? "h-full" : "h-screen")}>
+    <div className={cn("flex-1 flex flex-col bg-background relative", isMobile ? "h-full overflow-hidden" : "h-screen")}>
       {/* Header - Hidden on mobile (Index.tsx provides its own header) */}
       {!isMobile && (
         <div className="p-4 border-b border-border flex items-center justify-between">
