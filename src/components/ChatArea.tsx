@@ -796,7 +796,7 @@ export const ChatArea = ({
     : [];
 
   return (
-    <div className={cn("flex-1 flex flex-col bg-background relative", isMobile ? "h-full overflow-hidden" : "h-screen")}>
+    <div className={cn("flex-1 flex flex-col bg-background relative w-full", isMobile ? "h-full" : "h-screen")}>
       {/* Header - Hidden on mobile (Index.tsx provides its own header) */}
       {!isMobile && (
         <div className="p-4 border-b border-border flex items-center justify-between">
@@ -865,11 +865,11 @@ export const ChatArea = ({
       )}
 
       {/* Messages */}
-      <ScrollArea className="flex-1 p-4" onScroll={handleScroll}>
+      <ScrollArea className={cn("flex-1 w-full", isMobile ? "px-2 py-2" : "p-4")} onScroll={handleScroll}>
         {isLoading ? (
           <div className="text-center text-muted-foreground">Carregando mensagens...</div>
         ) : (
-          <div className="space-y-4 max-w-4xl md:mx-auto">
+          <div className={cn("space-y-4 w-full", !isMobile && "max-w-4xl mx-auto")}>
             {messages.map((msg) => {
               const isMatch = searchTerm && msg.body?.toLowerCase().includes(searchTerm.toLowerCase());
               const matchIndex = isMatch ? searchMatches.findIndex(m => m.id === msg.id) : -1;
@@ -918,7 +918,10 @@ export const ChatArea = ({
                   )}
 
                   {/* Message Bubble with Actions Menu */}
-                  <div className="group relative flex items-end gap-1 max-w-[85%] md:max-w-[70%]">
+                  <div className={cn(
+                    "group relative flex items-end gap-1",
+                    isMobile ? "max-w-full" : "max-w-[70%]"
+                  )}>
                     {/* Actions Menu - Left side for outbound, Right side for inbound */}
                     {msg.direction === "outbound" && (
                       <MessageActionsMenu

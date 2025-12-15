@@ -243,8 +243,8 @@ const Index = () => {
               </Button>
             </div>
 
-            {/* Chat Area - Scrollable */}
-            <div className="flex-1 overflow-y-auto">
+            {/* Chat Area - Container sem scroll (scroll é interno no ChatArea) */}
+            <div className="flex-1 overflow-hidden">
               <ChatArea
                 conversationId={selectedConversationId}
                 searchTerm={searchTerm}
