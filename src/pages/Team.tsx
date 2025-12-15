@@ -251,22 +251,22 @@ export default function Team() {
     }
 
     return (
-        <div className="p-8 space-y-8 animate-in fade-in duration-500">
-            <div className="flex items-center justify-between">
+        <div className="p-3 md:p-8 space-y-4 md:space-y-8 animate-in fade-in duration-500">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="space-y-1">
-                    <h2 className="text-3xl font-bold tracking-tight flex items-center gap-2 text-[#005AA8] dark:text-white">
-                        <Users className="h-8 w-8" />
+                    <h2 className="text-xl md:text-3xl font-bold tracking-tight flex items-center gap-2 text-[#005AA8] dark:text-white">
+                        <Users className="h-6 w-6 md:h-8 md:w-8" />
                         Equipe
                     </h2>
-                    <p className="text-muted-foreground">
-                        Gerencie os membros da sua equipe e suas permissões.
+                    <p className="text-muted-foreground text-sm md:text-base hidden sm:block">
+                        Gerencie membros e permissões
                     </p>
                 </div>
                 <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
                     <DialogTrigger asChild>
-                        <Button>
-                            <Plus className="mr-2 h-4 w-4" />
-                            Adicionar Membro
+                        <Button size="sm" className="h-8 md:h-9 text-xs md:text-sm w-fit">
+                            <Plus className="mr-1 md:mr-2 h-4 w-4" />
+                            <span className="hidden sm:inline">Adicionar </span>Membro
                         </Button>
                     </DialogTrigger>
                     <DialogContent>
@@ -351,38 +351,39 @@ export default function Team() {
                 </Dialog>
             </div>
 
-            <div className="rounded-md border">
+            <div className="rounded-md border overflow-x-auto">
                 <Table>
                     <TableHeader>
-                        <TableHead className="text-[#005AA8] dark:text-muted-foreground">Nome</TableHead>
-                        <TableHead className="text-[#005AA8] dark:text-muted-foreground">Email</TableHead>
+                        <TableHead className="text-[#005AA8] dark:text-muted-foreground min-w-[120px]">Nome</TableHead>
+                        <TableHead className="text-[#005AA8] dark:text-muted-foreground hidden md:table-cell">Email</TableHead>
                         <TableHead className="text-[#005AA8] dark:text-muted-foreground">Função</TableHead>
-                        <TableHead className="text-[#005AA8] dark:text-muted-foreground">Telefone</TableHead>
+                        <TableHead className="text-[#005AA8] dark:text-muted-foreground hidden sm:table-cell">Telefone</TableHead>
                         <TableHead className="text-right text-[#005AA8] dark:text-muted-foreground">Ações</TableHead>
                     </TableHeader>
                     <TableBody>
                         {isLoading ? (
                             <TableRow>
                                 <TableCell colSpan={5} className="text-center py-8">
-                                    <Loader2 className="h-8 w-8 animate-spin mx-auto" />
+                                    <Loader2 className="h-6 w-6 md:h-8 md:w-8 animate-spin mx-auto" />
                                 </TableCell>
                             </TableRow>
                         ) : (
                             teamMembers?.map((member: any) => (
                                 <TableRow key={member.id}>
-                                    <TableCell className="font-medium">{member.name}</TableCell>
-                                    <TableCell>{member.email}</TableCell>
-                                    <TableCell>
-                                        <Badge variant={member.role === "admin" ? "default" : member.role === "supervisor" ? "default" : "secondary"}>
-                                            {member.role === "admin" ? "Administrador" : member.role === "supervisor" ? "Supervisor" : "Atendente"}
+                                    <TableCell className="font-medium text-sm py-2 md:py-4">{member.name}</TableCell>
+                                    <TableCell className="hidden md:table-cell text-sm py-2 md:py-4">{member.email}</TableCell>
+                                    <TableCell className="py-2 md:py-4">
+                                        <Badge variant={member.role === "admin" ? "default" : member.role === "supervisor" ? "default" : "secondary"} className="text-[10px] md:text-xs">
+                                            {member.role === "admin" ? "Admin" : member.role === "supervisor" ? "Superv." : "Atend."}
                                         </Badge>
                                     </TableCell>
-                                    <TableCell>{member.phone || "-"}</TableCell>
-                                    <TableCell className="text-right">
-                                        <div className="flex justify-end gap-2">
+                                    <TableCell className="hidden sm:table-cell text-sm py-2 md:py-4">{member.phone || "-"}</TableCell>
+                                    <TableCell className="text-right py-2 md:py-4">
+                                        <div className="flex justify-end gap-1">
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
+                                                className="h-7 w-7 md:h-8 md:w-8"
                                                 onClick={() => {
                                                     setSelectedMember(member);
                                                     setFormData({
@@ -396,20 +397,20 @@ export default function Team() {
                                                     setIsEditOpen(true);
                                                 }}
                                             >
-                                                <Pencil className="h-4 w-4" />
+                                                <Pencil className="h-3.5 w-3.5 md:h-4 md:w-4" />
                                             </Button>
                                             {userRole === "admin" && (
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
-                                                    className="text-destructive hover:text-destructive"
+                                                    className="text-destructive hover:text-destructive h-7 w-7 md:h-8 md:w-8"
                                                     onClick={() => {
                                                         if (confirm("Tem certeza que deseja remover este membro?")) {
                                                             deleteMemberMutation.mutate(member.user_id);
                                                         }
                                                     }}
                                                 >
-                                                    <Trash2 className="h-4 w-4" />
+                                                    <Trash2 className="h-3.5 w-3.5 md:h-4 md:w-4" />
                                                 </Button>
                                             )}
                                         </div>
@@ -485,104 +486,105 @@ export default function Team() {
             </Dialog>
 
             {/* === SEÇÃO PROFISSIONAIS === */}
-            <div className="flex items-center justify-between mt-12">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-8 md:mt-12">
                 <div className="space-y-1">
-                    <h2 className="text-3xl font-bold tracking-tight flex items-center gap-2 text-[#005AA8] dark:text-white">
-                        <Briefcase className="h-8 w-8" />
+                    <h2 className="text-xl md:text-3xl font-bold tracking-tight flex items-center gap-2 text-[#005AA8] dark:text-white">
+                        <Briefcase className="h-6 w-6 md:h-8 md:w-8" />
                         Profissionais
                     </h2>
-                    <p className="text-muted-foreground">
-                        Gerencie os profissionais cadastrados no sistema.
+                    <p className="text-muted-foreground text-sm md:text-base hidden sm:block">
+                        Profissionais cadastrados
                     </p>
                 </div>
-                <Button onClick={() => {
+                <Button size="sm" className="h-8 md:h-9 text-xs md:text-sm w-fit" onClick={() => {
                     setSelectedProfessional(null);
                     setIsProfessionalModalOpen(true);
                 }}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Adicionar Profissional
+                    <Plus className="mr-1 md:mr-2 h-4 w-4" />
+                    <span className="hidden sm:inline">Adicionar </span>Prof.
                 </Button>
             </div>
 
-            <div className="rounded-md border">
+            <div className="rounded-md border overflow-x-auto">
                 <Table>
                     <TableHeader>
-                        <TableHead className="text-[#005AA8] dark:text-muted-foreground">Nome</TableHead>
-                        <TableHead className="text-[#005AA8] dark:text-muted-foreground">Função</TableHead>
-                        <TableHead className="text-[#005AA8] dark:text-muted-foreground">Serviços</TableHead>
-                        <TableHead className="text-[#005AA8] dark:text-muted-foreground">Dias de Atendimento</TableHead>
+                        <TableHead className="text-[#005AA8] dark:text-muted-foreground min-w-[120px]">Nome</TableHead>
+                        <TableHead className="text-[#005AA8] dark:text-muted-foreground hidden sm:table-cell">Função</TableHead>
+                        <TableHead className="text-[#005AA8] dark:text-muted-foreground hidden md:table-cell">Serviços</TableHead>
+                        <TableHead className="text-[#005AA8] dark:text-muted-foreground hidden lg:table-cell">Dias</TableHead>
                         <TableHead className="text-right text-[#005AA8] dark:text-muted-foreground">Ações</TableHead>
                     </TableHeader>
                     <TableBody>
                         {isProfessionalsLoading ? (
                             <TableRow>
                                 <TableCell colSpan={5} className="text-center py-8">
-                                    <Loader2 className="h-8 w-8 animate-spin mx-auto" />
+                                    <Loader2 className="h-6 w-6 md:h-8 md:w-8 animate-spin mx-auto" />
                                 </TableCell>
                             </TableRow>
                         ) : !professionals || professionals.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground text-sm">
                                     Nenhum profissional cadastrado.
                                 </TableCell>
                             </TableRow>
                         ) : (
                             professionals.map((professional: any) => (
                                 <TableRow key={professional.id}>
-                                    <TableCell className="font-medium">
-                                        <div className="flex items-center gap-3">
+                                    <TableCell className="font-medium py-2 md:py-4">
+                                        <div className="flex items-center gap-2">
                                             {professional.photo_url ? (
                                                 <img
                                                     src={professional.photo_url}
                                                     alt={professional.name}
-                                                    className="w-8 h-8 rounded-full object-cover"
+                                                    className="w-6 h-6 md:w-8 md:h-8 rounded-full object-cover"
                                                 />
                                             ) : (
-                                                <div className="w-8 h-8 rounded-full bg-cyan-500/20 flex items-center justify-center text-cyan-500 text-sm font-semibold">
+                                                <div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-cyan-500/20 flex items-center justify-center text-cyan-500 text-xs md:text-sm font-semibold">
                                                     {professional.name?.charAt(0).toUpperCase()}
                                                 </div>
                                             )}
-                                            {professional.name}
+                                            <span className="text-sm">{professional.name}</span>
                                         </div>
                                     </TableCell>
-                                    <TableCell>
-                                        <Badge variant="default">
-                                            {professional.role || "Profissional"}
+                                    <TableCell className="hidden sm:table-cell py-2 md:py-4">
+                                        <Badge variant="default" className="text-[10px] md:text-xs">
+                                            {professional.role || "Prof."}
                                         </Badge>
                                     </TableCell>
-                                    <TableCell className="max-w-[200px]">
-                                        <span className="text-sm text-muted-foreground truncate block">
+                                    <TableCell className="max-w-[150px] hidden md:table-cell py-2 md:py-4">
+                                        <span className="text-xs text-muted-foreground truncate block">
                                             {getServiceNames(professional.service_ids)}
                                         </span>
                                     </TableCell>
-                                    <TableCell>
-                                        <span className="text-sm">
+                                    <TableCell className="hidden lg:table-cell py-2 md:py-4">
+                                        <span className="text-xs">
                                             {getWorkDaysNames(professional.work_days)}
                                         </span>
                                     </TableCell>
-                                    <TableCell className="text-right">
-                                        <div className="flex justify-end gap-2">
+                                    <TableCell className="text-right py-2 md:py-4">
+                                        <div className="flex justify-end gap-1">
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
+                                                className="h-7 w-7 md:h-8 md:w-8"
                                                 onClick={() => {
                                                     setSelectedProfessional(professional);
                                                     setIsProfessionalModalOpen(true);
                                                 }}
                                             >
-                                                <Pencil className="h-4 w-4" />
+                                                <Pencil className="h-3.5 w-3.5 md:h-4 md:w-4" />
                                             </Button>
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
-                                                className="text-destructive hover:text-destructive"
+                                                className="text-destructive hover:text-destructive h-7 w-7 md:h-8 md:w-8"
                                                 onClick={() => {
-                                                    if (confirm("Tem certeza que deseja remover este profissional?")) {
+                                                    if (confirm("Remover este profissional?")) {
                                                         deleteProfessionalMutation.mutate(professional.id);
                                                     }
                                                 }}
                                             >
-                                                <Trash2 className="h-4 w-4" />
+                                                <Trash2 className="h-3.5 w-3.5 md:h-4 md:w-4" />
                                             </Button>
                                         </div>
                                     </TableCell>

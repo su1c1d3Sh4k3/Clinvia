@@ -295,29 +295,29 @@ service;Exemplo de Serviço;Descrição do serviço aqui;150.00;;60;7`;
     };
 
     return (
-        <div className="container mx-auto py-8 space-y-6 animate-fade-in">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div className="container mx-auto py-4 md:py-8 px-3 md:px-6 space-y-4 md:space-y-6 animate-fade-in">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 md:gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold">Produtos e Serviços</h1>
-                    <p className="text-muted-foreground">Gerencie seu catálogo de produtos e serviços</p>
+                    <h1 className="text-2xl md:text-3xl font-bold">Produtos e Serviços</h1>
+                    <p className="text-muted-foreground text-sm md:text-base">Gerencie seu catálogo</p>
                 </div>
                 {!isAgent && (
                     <div className="flex gap-2 flex-wrap">
-                        <Button variant="outline" onClick={handleDownloadTemplate}>
-                            <Download className="w-4 h-4 mr-2" />
-                            Baixar Modelo
+                        <Button variant="outline" size="sm" onClick={handleDownloadTemplate} className="h-8 md:h-9 text-xs md:text-sm px-2 md:px-3">
+                            <Download className="w-4 h-4 md:mr-2" />
+                            <span className="hidden md:inline">Baixar Modelo</span>
                         </Button>
-                        <Button variant="outline" onClick={handleImportClick} disabled={isImporting}>
+                        <Button variant="outline" size="sm" onClick={handleImportClick} disabled={isImporting} className="h-8 md:h-9 text-xs md:text-sm px-2 md:px-3">
                             {isImporting ? (
-                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                <Loader2 className="w-4 h-4 md:mr-2 animate-spin" />
                             ) : (
-                                <Upload className="w-4 h-4 mr-2" />
+                                <Upload className="w-4 h-4 md:mr-2" />
                             )}
-                            Importar Tabela
+                            <span className="hidden md:inline">Importar</span>
                         </Button>
-                        <Button onClick={handleAdd}>
-                            <Plus className="w-4 h-4 mr-2" />
-                            Novo Item
+                        <Button size="sm" onClick={handleAdd} className="h-8 md:h-9 text-xs md:text-sm px-2 md:px-3">
+                            <Plus className="w-4 h-4 md:mr-2" />
+                            <span className="hidden md:inline">Novo Item</span>
                         </Button>
                     </div>
                 )}
@@ -332,19 +332,19 @@ service;Exemplo de Serviço;Descrição do serviço aqui;150.00;;60;7`;
                 onChange={handleFileSelect}
             />
 
-            <div className="flex items-center gap-4">
-                <div className="relative flex-1 max-w-sm">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4">
+                <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
                         placeholder="Buscar..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-9"
+                        className="pl-9 h-9"
                     />
                 </div>
                 {selectedItems.length > 0 && !isAgent && !isSupervisor && (
-                    <Button variant="destructive" size="sm" onClick={handleBulkDelete}>
-                        <Trash2 className="w-4 h-4 mr-2" />
+                    <Button variant="destructive" size="sm" onClick={handleBulkDelete} className="h-9 text-xs md:text-sm">
+                        <Trash2 className="w-4 h-4 mr-1 md:mr-2" />
                         Excluir ({selectedItems.length})
                     </Button>
                 )}
@@ -357,23 +357,23 @@ service;Exemplo de Serviço;Descrição do serviço aqui;150.00;;60;7`;
                 </TabsList>
 
                 <TabsContent value="product" className="mt-4">
-                    <div className="border rounded-lg">
+                    <div className="border rounded-lg overflow-x-auto">
                         <Table>
                             <TableHeader>
                                 <TableRow>
                                     {!isAgent && (
-                                        <TableHead className="w-[50px]">
+                                        <TableHead className="w-[40px] md:w-[50px]">
                                             <Checkbox
                                                 checked={filteredItems?.length ? filteredItems.length === selectedItems.length && filteredItems.length > 0 : false}
                                                 onCheckedChange={handleSelectAll}
                                             />
                                         </TableHead>
                                     )}
-                                    <TableHead>Nome</TableHead>
-                                    <TableHead>Valor</TableHead>
-                                    <TableHead>Descrição</TableHead>
-                                    <TableHead>Alerta (dias)</TableHead>
-                                    <TableHead>Estoque</TableHead>
+                                    <TableHead className="min-w-[100px]">Nome</TableHead>
+                                    <TableHead className="min-w-[80px]">Valor</TableHead>
+                                    <TableHead className="hidden md:table-cell min-w-[150px]">Descrição</TableHead>
+                                    <TableHead className="hidden sm:table-cell">Alerta</TableHead>
+                                    <TableHead className="hidden sm:table-cell">Estoque</TableHead>
                                     {!isAgent && <TableHead className="text-right">Ações</TableHead>}
                                 </TableRow>
                             </TableHeader>
@@ -394,38 +394,35 @@ service;Exemplo de Serviço;Descrição do serviço aqui;150.00;;60;7`;
                                     filteredItems?.map((item) => (
                                         <TableRow key={item.id}>
                                             {!isAgent && (
-                                                <TableCell>
+                                                <TableCell className="py-2 md:py-4">
                                                     <Checkbox
                                                         checked={selectedItems.includes(item.id)}
                                                         onCheckedChange={(checked) => handleSelectItem(item.id, checked as boolean)}
                                                     />
                                                 </TableCell>
                                             )}
-                                            <TableCell className="font-medium">{item.name}</TableCell>
-                                            <TableCell>{formatCurrency(item.price)}</TableCell>
-                                            <TableCell className="max-w-[200px] truncate" title={item.description}>
+                                            <TableCell className="font-medium text-sm py-2 md:py-4">{item.name}</TableCell>
+                                            <TableCell className="text-sm py-2 md:py-4">{formatCurrency(item.price)}</TableCell>
+                                            <TableCell className="hidden md:table-cell max-w-[200px] truncate text-sm py-2 md:py-4" title={item.description}>
                                                 {item.description || "-"}
                                             </TableCell>
-                                            <TableCell>
+                                            <TableCell className="hidden sm:table-cell text-sm py-2 md:py-4">
                                                 {item.opportunity_alert_days > 0 ? (
-                                                    <Badge variant="outline">{item.opportunity_alert_days} dias</Badge>
+                                                    <Badge variant="outline" className="text-[10px] md:text-xs">{item.opportunity_alert_days}d</Badge>
                                                 ) : (
                                                     "-"
                                                 )}
                                             </TableCell>
-                                            <TableCell>{item.stock_quantity ?? "-"}</TableCell>
+                                            <TableCell className="hidden sm:table-cell text-sm py-2 md:py-4">{item.stock_quantity ?? "-"}</TableCell>
                                             {!isAgent && (
-                                                <TableCell className="text-right">
-                                                    <div className="flex justify-end gap-2">
-                                                        <Button variant="ghost" size="icon" onClick={() => handleEdit(item)}>
-                                                            <ImageIcon className="w-4 h-4" />
-                                                        </Button>
-                                                        <Button variant="ghost" size="icon" onClick={() => handleEdit(item)}>
-                                                            <Edit className="w-4 h-4" />
+                                                <TableCell className="text-right py-2 md:py-4">
+                                                    <div className="flex justify-end gap-1">
+                                                        <Button variant="ghost" size="icon" className="h-7 w-7 md:h-8 md:w-8" onClick={() => handleEdit(item)}>
+                                                            <Edit className="w-3.5 h-3.5 md:w-4 md:h-4" />
                                                         </Button>
                                                         {!isSupervisor && (
-                                                            <Button variant="ghost" size="icon" onClick={() => handleDelete(item.id)}>
-                                                                <Trash2 className="w-4 h-4 text-destructive" />
+                                                            <Button variant="ghost" size="icon" className="h-7 w-7 md:h-8 md:w-8" onClick={() => handleDelete(item.id)}>
+                                                                <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4 text-destructive" />
                                                             </Button>
                                                         )}
                                                     </div>
@@ -440,23 +437,23 @@ service;Exemplo de Serviço;Descrição do serviço aqui;150.00;;60;7`;
                 </TabsContent>
 
                 <TabsContent value="service" className="mt-4">
-                    <div className="border rounded-lg">
+                    <div className="border rounded-lg overflow-x-auto">
                         <Table>
                             <TableHeader>
                                 <TableRow>
                                     {!isAgent && (
-                                        <TableHead className="w-[50px]">
+                                        <TableHead className="w-[40px] md:w-[50px]">
                                             <Checkbox
                                                 checked={filteredItems?.length ? filteredItems.length === selectedItems.length && filteredItems.length > 0 : false}
                                                 onCheckedChange={handleSelectAll}
                                             />
                                         </TableHead>
                                     )}
-                                    <TableHead>Nome</TableHead>
-                                    <TableHead>Valor</TableHead>
-                                    <TableHead>Descrição</TableHead>
-                                    <TableHead>Alerta (dias)</TableHead>
-                                    <TableHead>Duração (min)</TableHead>
+                                    <TableHead className="min-w-[100px]">Nome</TableHead>
+                                    <TableHead className="min-w-[80px]">Valor</TableHead>
+                                    <TableHead className="hidden md:table-cell min-w-[150px]">Descrição</TableHead>
+                                    <TableHead className="hidden sm:table-cell">Alerta</TableHead>
+                                    <TableHead className="hidden sm:table-cell">Duração</TableHead>
                                     {!isAgent && <TableHead className="text-right">Ações</TableHead>}
                                 </TableRow>
                             </TableHeader>
@@ -477,38 +474,35 @@ service;Exemplo de Serviço;Descrição do serviço aqui;150.00;;60;7`;
                                     filteredItems?.map((item) => (
                                         <TableRow key={item.id}>
                                             {!isAgent && (
-                                                <TableCell>
+                                                <TableCell className="py-2 md:py-4">
                                                     <Checkbox
                                                         checked={selectedItems.includes(item.id)}
                                                         onCheckedChange={(checked) => handleSelectItem(item.id, checked as boolean)}
                                                     />
                                                 </TableCell>
                                             )}
-                                            <TableCell className="font-medium">{item.name}</TableCell>
-                                            <TableCell>{formatCurrency(item.price)}</TableCell>
-                                            <TableCell className="max-w-[200px] truncate" title={item.description}>
+                                            <TableCell className="font-medium text-sm py-2 md:py-4">{item.name}</TableCell>
+                                            <TableCell className="text-sm py-2 md:py-4">{formatCurrency(item.price)}</TableCell>
+                                            <TableCell className="hidden md:table-cell max-w-[200px] truncate text-sm py-2 md:py-4" title={item.description}>
                                                 {item.description || "-"}
                                             </TableCell>
-                                            <TableCell>
+                                            <TableCell className="hidden sm:table-cell text-sm py-2 md:py-4">
                                                 {item.opportunity_alert_days > 0 ? (
-                                                    <Badge variant="outline">{item.opportunity_alert_days} dias</Badge>
+                                                    <Badge variant="outline" className="text-[10px] md:text-xs">{item.opportunity_alert_days}d</Badge>
                                                 ) : (
                                                     "-"
                                                 )}
                                             </TableCell>
-                                            <TableCell>{item.duration_minutes ? `${item.duration_minutes} min` : "-"}</TableCell>
+                                            <TableCell className="hidden sm:table-cell text-sm py-2 md:py-4">{item.duration_minutes ? `${item.duration_minutes}min` : "-"}</TableCell>
                                             {!isAgent && (
-                                                <TableCell className="text-right">
-                                                    <div className="flex justify-end gap-2">
-                                                        <Button variant="ghost" size="icon" onClick={() => handleEdit(item)}>
-                                                            <ImageIcon className="w-4 h-4" />
-                                                        </Button>
-                                                        <Button variant="ghost" size="icon" onClick={() => handleEdit(item)}>
-                                                            <Edit className="w-4 h-4" />
+                                                <TableCell className="text-right py-2 md:py-4">
+                                                    <div className="flex justify-end gap-1">
+                                                        <Button variant="ghost" size="icon" className="h-7 w-7 md:h-8 md:w-8" onClick={() => handleEdit(item)}>
+                                                            <Edit className="w-3.5 h-3.5 md:w-4 md:h-4" />
                                                         </Button>
                                                         {!isSupervisor && (
-                                                            <Button variant="ghost" size="icon" onClick={() => handleDelete(item.id)}>
-                                                                <Trash2 className="w-4 h-4 text-destructive" />
+                                                            <Button variant="ghost" size="icon" className="h-7 w-7 md:h-8 md:w-8" onClick={() => handleDelete(item.id)}>
+                                                                <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4 text-destructive" />
                                                             </Button>
                                                         )}
                                                     </div>

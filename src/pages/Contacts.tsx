@@ -253,38 +253,38 @@ const Contacts = () => {
 
     return (
         <div className="flex h-screen w-full bg-background">
-            <div className="flex-1 p-8 overflow-auto">
-                <div className="max-w-6xl mx-auto space-y-8">
-                    <div className="flex items-center justify-between">
+            <div className="flex-1 p-4 md:p-8 overflow-auto">
+                <div className="max-w-6xl mx-auto space-y-4 md:space-y-8">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div>
-                            <h1 className="text-3xl font-bold">Contatos</h1>
-                            <p className="text-muted-foreground mt-2">
+                            <h1 className="text-2xl md:text-3xl font-bold">Contatos</h1>
+                            <p className="text-muted-foreground text-sm md:text-base mt-1 md:mt-2">
                                 Gerencie seus contatos
                             </p>
                         </div>
-                        <Button onClick={handleAddNew}>
-                            <Plus className="w-4 h-4 mr-2" />
-                            Novo Contato
+                        <Button onClick={handleAddNew} size="sm" className="h-8 md:h-9 text-xs md:text-sm w-fit">
+                            <Plus className="w-4 h-4 mr-1 md:mr-2" />
+                            <span className="hidden sm:inline">Novo </span>Contato
                         </Button>
                     </div>
 
-                    <div className="flex flex-col gap-4">
-                        <div className="flex gap-4 items-center">
-                            <div className="relative flex-1 max-w-sm">
+                    <div className="flex flex-col gap-3 md:gap-4">
+                        <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 sm:items-center">
+                            <div className="relative flex-1">
                                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-secondary" />
                                 <Input
-                                    placeholder="Buscar por nome ou telefone..."
+                                    placeholder="Buscar..."
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="pl-8 border-secondary"
+                                    className="pl-8 border-secondary h-9"
                                 />
                             </div>
                             <Select value={selectedTagFilter} onValueChange={setSelectedTagFilter}>
-                                <SelectTrigger className="w-[200px]">
-                                    <SelectValue placeholder="Filtrar por Tag" />
+                                <SelectTrigger className="w-full sm:w-[180px] h-9 text-sm">
+                                    <SelectValue placeholder="Filtrar Tag" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="all">Todas as Tags</SelectItem>
+                                    <SelectItem value="all">Todas</SelectItem>
                                     {tags?.map((tag) => (
                                         <SelectItem key={tag.id} value={tag.id}>
                                             <div className="flex items-center gap-2">
@@ -299,21 +299,21 @@ const Contacts = () => {
 
                         {/* Bulk Actions Toolbar */}
                         {selectedContactIds.size > 0 && (
-                            <div className="flex items-center gap-4 p-2 bg-muted/50 rounded-lg border animate-in fade-in slide-in-from-top-2">
-                                <span className="text-sm font-medium ml-2">
-                                    {selectedContactIds.size} selecionado(s)
+                            <div className="flex flex-wrap items-center gap-2 md:gap-4 p-2 bg-muted/50 rounded-lg border animate-in fade-in slide-in-from-top-2">
+                                <span className="text-xs md:text-sm font-medium ml-1 md:ml-2">
+                                    {selectedContactIds.size} sel.
                                 </span>
 
-                                <div className="h-6 w-px bg-border mx-2" />
+                                <div className="h-6 w-px bg-border hidden sm:block" />
 
                                 <Popover open={isAssignTagsOpen} onOpenChange={setIsAssignTagsOpen}>
                                     <PopoverTrigger asChild>
-                                        <Button variant="outline" size="sm" className="gap-2">
-                                            <Tag className="w-4 h-4" />
-                                            Atribuir Tags
+                                        <Button variant="outline" size="sm" className="gap-1 md:gap-2 h-7 md:h-8 text-xs">
+                                            <Tag className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                                            <span className="hidden sm:inline">Atribuir </span>Tags
                                         </Button>
                                     </PopoverTrigger>
-                                    <PopoverContent className="w-80 p-0" align="start">
+                                    <PopoverContent className="w-72 md:w-80 p-0" align="start">
                                         <div className="p-4 space-y-4">
                                             <div className="space-y-2">
                                                 <h4 className="font-medium leading-none">Selecione as Tags</h4>
@@ -358,33 +358,33 @@ const Contacts = () => {
                                 <Button
                                     variant="destructive"
                                     size="sm"
-                                    className="gap-2"
+                                    className="gap-1 md:gap-2 h-7 md:h-8 text-xs"
                                     onClick={() => setIsBulkDeleteModalOpen(true)}
                                 >
-                                    <Trash2 className="w-4 h-4" />
-                                    Excluir em massa
+                                    <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                                    <span className="hidden sm:inline">Excluir</span>
                                 </Button>
                             </div>
                         )}
                     </div>
 
-                    <div className="rounded-md border">
+                    <div className="rounded-md border overflow-x-auto">
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead className="w-[50px]">
+                                    <TableHead className="w-[40px] md:w-[50px]">
                                         <Checkbox
                                             checked={filteredContacts && filteredContacts.length > 0 && selectedContactIds.size === filteredContacts.length}
                                             onCheckedChange={toggleSelectAll}
                                             aria-label="Select all"
                                         />
                                     </TableHead>
-                                    <TableHead className="text-secondary dark:text-slate-400 font-semibold">Nome</TableHead>
-                                    <TableHead className="text-secondary dark:text-slate-400 font-semibold">Telefone</TableHead>
-                                    <TableHead className="text-secondary dark:text-slate-400 font-semibold">Etiquetas</TableHead>
-                                    {!isAgent && <TableHead className="text-secondary dark:text-slate-400 font-semibold text-center">Satisfação</TableHead>}
-                                    {!isAgent && <TableHead className="text-secondary dark:text-slate-400 font-semibold text-center">Resumos</TableHead>}
-                                    <TableHead className="w-[180px] text-secondary dark:text-slate-400 font-semibold">Ações</TableHead>
+                                    <TableHead className="text-secondary dark:text-slate-400 font-semibold min-w-[120px]">Nome</TableHead>
+                                    <TableHead className="text-secondary dark:text-slate-400 font-semibold hidden sm:table-cell">Telefone</TableHead>
+                                    <TableHead className="text-secondary dark:text-slate-400 font-semibold hidden md:table-cell">Etiquetas</TableHead>
+                                    {!isAgent && <TableHead className="text-secondary dark:text-slate-400 font-semibold text-center hidden lg:table-cell">Satisf.</TableHead>}
+                                    {!isAgent && <TableHead className="text-secondary dark:text-slate-400 font-semibold text-center hidden lg:table-cell">Resumos</TableHead>}
+                                    <TableHead className="w-[100px] md:w-[180px] text-secondary dark:text-slate-400 font-semibold">Ações</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -403,37 +403,40 @@ const Contacts = () => {
                                 ) : (
                                     filteredContacts?.map((contact) => (
                                         <TableRow key={contact.id} data-state={selectedContactIds.has(contact.id) && "selected"}>
-                                            <TableCell>
+                                            <TableCell className="py-2 md:py-4">
                                                 <Checkbox
                                                     checked={selectedContactIds.has(contact.id)}
                                                     onCheckedChange={() => toggleSelectContact(contact.id)}
                                                     aria-label={`Select ${contact.push_name}`}
                                                 />
                                             </TableCell>
-                                            <TableCell>
-                                                <div className="flex items-center gap-3">
-                                                    <Avatar>
+                                            <TableCell className="py-2 md:py-4">
+                                                <div className="flex items-center gap-2 md:gap-3">
+                                                    <Avatar className="h-8 w-8 md:h-10 md:w-10">
                                                         <AvatarImage src={contact.profile_pic_url} />
-                                                        <AvatarFallback>{contact.push_name?.[0] || "?"}</AvatarFallback>
+                                                        <AvatarFallback className="text-xs md:text-sm">{contact.push_name?.[0] || "?"}</AvatarFallback>
                                                     </Avatar>
                                                     <div className="flex flex-col">
-                                                        <span className="font-medium">{contact.push_name}</span>
+                                                        <span className="font-medium text-sm">{contact.push_name}</span>
+                                                        <span className="text-xs text-muted-foreground sm:hidden">
+                                                            {contact.phone || contact.number?.split('@')[0]}
+                                                        </span>
                                                         {contact.company && (
-                                                            <span className="text-xs text-muted-foreground">{contact.company}</span>
+                                                            <span className="text-xs text-muted-foreground hidden md:inline">{contact.company}</span>
                                                         )}
                                                     </div>
                                                 </div>
                                             </TableCell>
-                                            <TableCell>
+                                            <TableCell className="hidden sm:table-cell py-2 md:py-4 text-sm">
                                                 {contact.phone || contact.number?.split('@')[0]}
                                             </TableCell>
-                                            <TableCell>
+                                            <TableCell className="hidden md:table-cell py-2 md:py-4">
                                                 <div className="flex flex-wrap gap-1">
-                                                    {contact.contact_tags?.map((ct: any) => (
+                                                    {contact.contact_tags?.slice(0, 2).map((ct: any) => (
                                                         <Badge
                                                             key={ct.tags.id}
                                                             variant="secondary"
-                                                            className="text-xs"
+                                                            className="text-[10px]"
                                                             style={{
                                                                 backgroundColor: ct.tags.color + '20',
                                                                 color: ct.tags.color,
@@ -443,15 +446,18 @@ const Contacts = () => {
                                                             {ct.tags.name}
                                                         </Badge>
                                                     ))}
+                                                    {contact.contact_tags?.length > 2 && (
+                                                        <Badge variant="outline" className="text-[10px]">+{contact.contact_tags.length - 2}</Badge>
+                                                    )}
                                                 </div>
                                             </TableCell>
                                             {!isAgent && (
-                                                <TableCell className="text-center">
+                                                <TableCell className="text-center hidden lg:table-cell py-2 md:py-4">
                                                     {contact.quality && contact.quality.length > 0 ? (
                                                         <Badge variant="outline" className={
-                                                            (contact.quality.reduce((a, b) => a + b, 0) / contact.quality.length) >= 7 ? "bg-green-500/10 text-green-500 border-green-500/20" :
+                                                            `text-[10px] ${(contact.quality.reduce((a, b) => a + b, 0) / contact.quality.length) >= 7 ? "bg-green-500/10 text-green-500 border-green-500/20" :
                                                                 (contact.quality.reduce((a, b) => a + b, 0) / contact.quality.length) >= 4 ? "bg-yellow-500/10 text-yellow-500 border-yellow-500/20" :
-                                                                    "bg-red-500/10 text-red-500 border-red-500/20"
+                                                                    "bg-red-500/10 text-red-500 border-red-500/20"}`
                                                         }>
                                                             {(contact.quality.reduce((a, b) => a + b, 0) / contact.quality.length).toFixed(1)}
                                                         </Badge>
@@ -461,77 +467,79 @@ const Contacts = () => {
                                                 </TableCell>
                                             )}
                                             {!isAgent && (
-                                                <TableCell className="text-center">
+                                                <TableCell className="text-center hidden lg:table-cell py-2 md:py-4">
                                                     {contact.analysis && contact.analysis.length > 0 ? (
                                                         <Button
                                                             variant="ghost"
                                                             size="sm"
-                                                            className="text-xs h-7"
+                                                            className="text-[10px] h-6 px-2"
                                                             onClick={() => {
                                                                 setSelectedContactForAnalysis(contact);
                                                                 setIsAnalysisHistoryOpen(true);
                                                             }}
                                                         >
                                                             <FileText className="w-3 h-3 mr-1" />
-                                                            Visualizar {contact.analysis.length}
+                                                            {contact.analysis.length}
                                                         </Button>
                                                     ) : (
                                                         <span className="text-muted-foreground text-xs">0</span>
                                                     )}
                                                 </TableCell>
                                             )}
-                                            <TableCell>
-                                                <div className="flex items-center gap-1">
+                                            <TableCell className="py-2 md:py-4">
+                                                <div className="flex items-center gap-0.5 md:gap-1">
                                                     {!isAgent && (
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
-                                                            className="text-purple-500 hover:text-purple-600 hover:bg-purple-100 dark:hover:bg-purple-900/20"
+                                                            className="text-purple-500 hover:text-purple-600 hover:bg-purple-100 dark:hover:bg-purple-900/20 h-7 w-7 md:h-8 md:w-8"
                                                             onClick={() => {
                                                                 setSelectedContactForReport(contact);
                                                                 setIsClientReportOpen(true);
                                                             }}
                                                             title="Relatório IA"
                                                         >
-                                                            <Sparkles className="w-4 h-4" />
+                                                            <Sparkles className="w-3.5 h-3.5 md:w-4 md:h-4" />
                                                         </Button>
                                                     )}
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"
+                                                        className="h-7 w-7 md:h-8 md:w-8"
                                                         onClick={() => handleSendMessage(contact)}
                                                         title="Enviar Mensagem"
                                                     >
-                                                        <Send className="w-4 h-4" />
+                                                        <Send className="w-3.5 h-3.5 md:w-4 md:h-4" />
                                                     </Button>
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"
-                                                        className={contact.instagram ? "text-pink-600 hover:text-pink-700" : "text-muted-foreground opacity-50 cursor-not-allowed"}
+                                                        className={`h-7 w-7 md:h-8 md:w-8 hidden sm:inline-flex ${contact.instagram ? "text-pink-600 hover:text-pink-700" : "text-muted-foreground opacity-50 cursor-not-allowed"}`}
                                                         onClick={() => contact.instagram && window.open(`https://www.instagram.com/${contact.instagram}`, '_blank')}
                                                         disabled={!contact.instagram}
-                                                        title={contact.instagram ? `Instagram: @${contact.instagram}` : "Instagram não cadastrado"}
+                                                        title={contact.instagram ? `@${contact.instagram}` : "Sem Instagram"}
                                                     >
-                                                        <Instagram className="w-4 h-4" />
+                                                        <Instagram className="w-3.5 h-3.5 md:w-4 md:h-4" />
                                                     </Button>
                                                     {userRole === "admin" && (
                                                         <>
                                                             <Button
                                                                 variant="ghost"
                                                                 size="icon"
+                                                                className="h-7 w-7 md:h-8 md:w-8"
                                                                 onClick={() => handleEdit(contact)}
                                                                 title="Editar"
                                                             >
-                                                                <Pencil className="w-4 h-4" />
+                                                                <Pencil className="w-3.5 h-3.5 md:w-4 md:h-4" />
                                                             </Button>
                                                             <Button
                                                                 variant="ghost"
                                                                 size="icon"
-                                                                className="text-destructive hover:text-destructive"
+                                                                className="text-destructive hover:text-destructive h-7 w-7 md:h-8 md:w-8"
                                                                 onClick={() => setContactToDelete(contact)}
                                                                 title="Excluir"
                                                             >
-                                                                <Trash2 className="w-4 h-4" />
+                                                                <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
                                                             </Button>
                                                         </>
                                                     )}

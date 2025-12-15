@@ -14,6 +14,7 @@ import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { DateRange } from "react-day-picker";
 import { cn } from "@/lib/utils";
 import { DealsStageChart } from "./DealsStageChart";
+import { LossReasonsChart } from "./LossReasonsChart";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useCurrentTeamMember } from "@/hooks/useStaff";
 
@@ -176,10 +177,10 @@ export function LeadsFunnelPanel() {
             {userRole !== 'agent' && (
                 <>
                     {/* Header with Filters */}
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-3">
                         <div>
-                            <h3 className="text-lg font-semibold">Funil de Conversão</h3>
-                            <p className="text-sm text-muted-foreground">{totalDeals} negociações no período</p>
+                            <h3 className="text-base sm:text-lg font-semibold">Funil de Conversão</h3>
+                            <p className="text-xs sm:text-sm text-muted-foreground">{totalDeals} negociações no período</p>
                         </div>
 
                         <div className="flex items-center gap-2 flex-wrap">
@@ -226,38 +227,128 @@ export function LeadsFunnelPanel() {
                         </div>
                     </div>
 
-                    {/* Pipeline Container - Using Flexbox */}
-                    <div
-                        className="flex items-center justify-between flex-wrap"
-                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0' }}
-                    >
-                        {stageMetrics.map((metric, index) => {
-                            const isFirst = index === 0;
-                            const isGanho = metric.stage.name === "Ganho";
+                    {/* Pipeline Container - Scrollable on mobile */}
+                    <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+                        <div
+                            className="flex items-center min-w-max md:min-w-0 md:justify-between"
+                            style={{ display: 'flex', alignItems: 'center', gap: '0' }}
+                        >
+                            {stageMetrics.map((metric, index) => {
+                                const isFirst = index === 0;
+                                const isGanho = metric.stage.name === "Ganho";
 
-                            return (
-                                <div
-                                    key={metric.stage.id}
-                                    className="flex items-center"
-                                    style={{ flexGrow: 1, flexShrink: 1, minWidth: '140px' }}
-                                >
-                                    {/* Metric Block */}
+                                return (
                                     <div
-                                        className={cn(
-                                            "w-full text-center transition-all",
-                                            "rounded-xl p-5 shadow-sm"
+                                        key={metric.stage.id}
+                                        className="flex items-center"
+                                        style={{ flexGrow: 1, flexShrink: 1, minWidth: '140px' }}
+                                    >
+                                        {/* Metric Block */}
+                                        <div
+                                            className={cn(
+                                                "w-full text-center transition-all",
+                                                "rounded-xl p-3 sm:p-5 shadow-sm"
+                                            )}
+                                            style={{
+                                                borderRadius: '12px',
+                                                padding: undefined, // Using Tailwind classes instead
+                                                textAlign: 'center',
+                                                backgroundColor: isFirst
+                                                    ? 'hsl(var(--primary))'
+                                                    : isGanho
+                                                        ? 'hsl(142.1 76.2% 36.3%)'
+                                                        : 'hsl(var(--muted))',
+                                                color: isFirst || isGanho ? 'white' : 'inherit',
+                                                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                                                minHeight: '100px',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                justifyContent: 'center',
+                                                alignItems: 'center',
+                                                minWidth: '100px'
+                                            }}
+                                        >
+                                            {/* Stage Name */}
+                                            <span
+                                                className="text-xs uppercase tracking-wider font-medium mb-2"
+                                                style={{
+                                                    opacity: isFirst || isGanho ? 0.9 : 0.7,
+                                                    color: isFirst || isGanho ? 'white' : 'hsl(var(--muted-foreground))'
+                                                }}
+                                            >
+                                                {metric.stage.name}
+                                            </span>
+
+                                            {/* Main Number */}
+                                            <span
+                                                className="text-2xl sm:text-4xl font-bold tracking-tight"
+                                                style={{ color: isFirst || isGanho ? 'white' : 'hsl(var(--foreground))' }}
+                                            >
+                                                {metric.historyCount.toLocaleString('pt-BR')}
+                                            </span>
+
+                                            {/* Sub info */}
+                                            <span
+                                                className="text-xs mt-2"
+                                                style={{
+                                                    opacity: 0.7,
+                                                    color: isFirst || isGanho ? 'white' : 'hsl(var(--muted-foreground))'
+                                                }}
+                                            >
+                                                ↑ {metric.dealsInStage} atuais
+                                            </span>
+                                        </div>
+
+                                        {/* Conversion Arrow Badge Between Cards */}
+                                        {index < stageMetrics.length - 1 && (
+                                            <div
+                                                className="flex-shrink-0 z-10"
+                                                style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    marginLeft: '-15px',
+                                                    marginRight: '-15px'
+                                                }}
+                                            >
+                                                <div
+                                                    className="font-bold text-xs flex items-center justify-center"
+                                                    style={{
+                                                        backgroundColor: 'hsl(var(--foreground))',
+                                                        color: 'hsl(var(--background))',
+                                                        whiteSpace: 'nowrap',
+                                                        clipPath: 'polygon(0% 0%, calc(100% - 10px) 0%, 100% 50%, calc(100% - 10px) 100%, 0% 100%)',
+                                                        paddingLeft: '12px',
+                                                        paddingRight: '18px',
+                                                        minWidth: '75px',
+                                                        height: '32px'
+                                                    }}
+                                                >
+                                                    {stageMetrics[index + 1].conversionRate !== null
+                                                        ? `${stageMetrics[index + 1].conversionRate?.toFixed(2)}%`
+                                                        : "0.00%"
+                                                    }
+                                                </div>
+                                            </div>
                                         )}
+                                    </div>
+                                );
+                            })}
+
+                            {/* Lost Stage - Separated */}
+                            {lostStage && (
+                                <div
+                                    className="flex-shrink-0 ml-4"
+                                    style={{ flexGrow: 0, minWidth: '140px' }}
+                                >
+                                    <div
+                                        className="text-center rounded-xl shadow-sm"
                                         style={{
                                             borderRadius: '12px',
                                             padding: '20px',
                                             textAlign: 'center',
-                                            backgroundColor: isFirst
-                                                ? 'hsl(var(--primary))'
-                                                : isGanho
-                                                    ? 'hsl(142.1 76.2% 36.3%)'
-                                                    : 'hsl(var(--muted))',
-                                            color: isFirst || isGanho ? 'white' : 'inherit',
-                                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                                            backgroundColor: 'hsl(0 84.2% 60.2% / 0.15)',
+                                            border: '2px solid hsl(0 84.2% 60.2% / 0.3)',
                                             minHeight: '120px',
                                             display: 'flex',
                                             flexDirection: 'column',
@@ -265,112 +356,25 @@ export function LeadsFunnelPanel() {
                                             alignItems: 'center'
                                         }}
                                     >
-                                        {/* Stage Name */}
-                                        <span
-                                            className="text-xs uppercase tracking-wider font-medium mb-2"
-                                            style={{
-                                                opacity: isFirst || isGanho ? 0.9 : 0.7,
-                                                color: isFirst || isGanho ? 'white' : 'hsl(var(--muted-foreground))'
-                                            }}
-                                        >
-                                            {metric.stage.name}
+                                        <span className="text-xs uppercase tracking-wider font-medium mb-2 flex items-center gap-1" style={{ color: 'hsl(0 84.2% 60.2%)' }}>
+                                            <ArrowDown className="h-3 w-3" />
+                                            Perdido
                                         </span>
-
-                                        {/* Main Number */}
-                                        <span
-                                            className="text-4xl font-bold tracking-tight"
-                                            style={{ color: isFirst || isGanho ? 'white' : 'hsl(var(--foreground))' }}
-                                        >
-                                            {metric.historyCount.toLocaleString('pt-BR')}
-                                        </span>
-
-                                        {/* Sub info */}
-                                        <span
-                                            className="text-xs mt-2"
-                                            style={{
-                                                opacity: 0.7,
-                                                color: isFirst || isGanho ? 'white' : 'hsl(var(--muted-foreground))'
-                                            }}
-                                        >
-                                            ↑ {metric.dealsInStage} atuais
-                                        </span>
-                                    </div>
-
-                                    {/* Conversion Arrow Badge Between Cards */}
-                                    {index < stageMetrics.length - 1 && (
-                                        <div
-                                            className="flex-shrink-0 z-10"
-                                            style={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                marginLeft: '-15px',
-                                                marginRight: '-15px'
-                                            }}
-                                        >
-                                            <div
-                                                className="font-bold text-xs flex items-center justify-center"
-                                                style={{
-                                                    backgroundColor: 'hsl(var(--foreground))',
-                                                    color: 'hsl(var(--background))',
-                                                    whiteSpace: 'nowrap',
-                                                    clipPath: 'polygon(0% 0%, calc(100% - 10px) 0%, 100% 50%, calc(100% - 10px) 100%, 0% 100%)',
-                                                    paddingLeft: '12px',
-                                                    paddingRight: '18px',
-                                                    minWidth: '75px',
-                                                    height: '32px'
-                                                }}
-                                            >
-                                                {stageMetrics[index + 1].conversionRate !== null
-                                                    ? `${stageMetrics[index + 1].conversionRate?.toFixed(2)}%`
-                                                    : "0.00%"
-                                                }
-                                            </div>
+                                        <div className="flex items-baseline gap-2 justify-center">
+                                            <span className="text-4xl font-bold tracking-tight" style={{ color: 'hsl(0 84.2% 60.2%)' }}>
+                                                {lostDeals}
+                                            </span>
+                                            <span className="text-sm font-medium" style={{ color: 'hsl(0 84.2% 60.2% / 0.7)' }}>
+                                                ({lossRate.toFixed(1)}%)
+                                            </span>
                                         </div>
-                                    )}
-                                </div>
-                            );
-                        })}
-
-                        {/* Lost Stage - Separated */}
-                        {lostStage && (
-                            <div
-                                className="flex-shrink-0 ml-4"
-                                style={{ flexGrow: 0, minWidth: '140px' }}
-                            >
-                                <div
-                                    className="text-center rounded-xl shadow-sm"
-                                    style={{
-                                        borderRadius: '12px',
-                                        padding: '20px',
-                                        textAlign: 'center',
-                                        backgroundColor: 'hsl(0 84.2% 60.2% / 0.15)',
-                                        border: '2px solid hsl(0 84.2% 60.2% / 0.3)',
-                                        minHeight: '120px',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        justifyContent: 'center',
-                                        alignItems: 'center'
-                                    }}
-                                >
-                                    <span className="text-xs uppercase tracking-wider font-medium mb-2 flex items-center gap-1" style={{ color: 'hsl(0 84.2% 60.2%)' }}>
-                                        <ArrowDown className="h-3 w-3" />
-                                        Perdido
-                                    </span>
-                                    <div className="flex items-baseline gap-2 justify-center">
-                                        <span className="text-4xl font-bold tracking-tight" style={{ color: 'hsl(0 84.2% 60.2%)' }}>
-                                            {lostDeals}
-                                        </span>
-                                        <span className="text-sm font-medium" style={{ color: 'hsl(0 84.2% 60.2% / 0.7)' }}>
-                                            ({lossRate.toFixed(1)}%)
+                                        <span className="text-xs mt-2" style={{ color: 'hsl(0 84.2% 60.2% / 0.6)' }}>
+                                            do total
                                         </span>
                                     </div>
-                                    <span className="text-xs mt-2" style={{ color: 'hsl(0 84.2% 60.2% / 0.6)' }}>
-                                        do total
-                                    </span>
                                 </div>
-                            </div>
-                        )}
+                            )}
+                        </div>
                     </div>
                 </>
             )}
@@ -379,6 +383,13 @@ export function LeadsFunnelPanel() {
             <div className={userRole === 'agent' ? "" : "mt-8"}>
                 <DealsStageChart />
             </div>
+
+            {/* Loss Reasons Chart - Visível para admin/supervisor */}
+            {userRole !== 'agent' && (
+                <div className="mt-8">
+                    <LossReasonsChart />
+                </div>
+            )}
         </div>
     );
 }

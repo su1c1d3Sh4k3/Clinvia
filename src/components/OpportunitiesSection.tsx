@@ -287,12 +287,12 @@ export function OpportunitiesSection({ onOpportunityClick, onOpportunitySelect, 
     if (compact) {
         // Dashboard view - similar to notifications board
         return (
-            <Card className="w-full transition-all duration-300 ease-in-out border-l-4 border-l-purple-500 mb-6">
-                <div className="flex items-center justify-between p-4 border-b">
-                    <div className="flex items-center gap-2">
-                        <Lightbulb className="h-5 w-5 text-purple-500" />
-                        <h3 className="font-semibold text-lg">Oportunidades</h3>
-                        <Badge variant="secondary" className="bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300">
+            <Card className="w-full transition-all duration-300 ease-in-out border-l-4 border-l-purple-500 mb-4 md:mb-6">
+                <div className="flex items-center justify-between p-3 md:p-4 border-b gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                        <Lightbulb className="h-4 w-4 md:h-5 md:w-5 text-purple-500 flex-shrink-0" />
+                        <h3 className="font-semibold text-base md:text-lg truncate">Oportunidades</h3>
+                        <Badge variant="secondary" className="bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 flex-shrink-0">
                             {opportunities.length}
                         </Badge>
                     </div>
@@ -300,15 +300,16 @@ export function OpportunitiesSection({ onOpportunityClick, onOpportunitySelect, 
                         variant="ghost"
                         size="sm"
                         onClick={() => setIsOpen(!isOpen)}
+                        className="px-2 md:px-3 flex-shrink-0"
                     >
-                        {isOpen ? "Contrair" : "Expandir"}
-                        {isOpen ? <ChevronUp className="h-4 w-4 ml-1" /> : <ChevronDown className="h-4 w-4 ml-1" />}
+                        <span className="hidden md:inline">{isOpen ? "Contrair" : "Expandir"}</span>
+                        {isOpen ? <ChevronUp className="h-4 w-4 md:ml-1" /> : <ChevronDown className="h-4 w-4 md:ml-1" />}
                     </Button>
                 </div>
 
                 {isOpen && (
-                    <CardContent className="p-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <CardContent className="p-3 md:p-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
                             {opportunityCards}
                         </div>
                     </CardContent>

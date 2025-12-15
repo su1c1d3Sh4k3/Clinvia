@@ -97,24 +97,24 @@ export const InstanceRow = ({ instance, onConnect }: InstanceRowProps) => {
     }, []);
 
     return (
-        <div className="flex items-center justify-between p-4 border rounded-lg">
-            <div className="space-y-1">
-                <h3 className="font-semibold">{instance.name}</h3>
-                <p className="text-sm text-muted-foreground">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between p-3 md:p-4 border rounded-lg gap-3 md:gap-4">
+            <div className="space-y-0.5 md:space-y-1 min-w-0">
+                <h3 className="font-semibold text-sm md:text-base truncate">{instance.name}</h3>
+                <p className="text-xs md:text-sm text-muted-foreground truncate">
                     {instance.server_url}
                 </p>
             </div>
 
-            <div className="flex items-center gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 md:gap-4">
                 {!isAgent && (
                     <div className="flex items-center gap-2">
-                        <span className="text-sm text-muted-foreground whitespace-nowrap">Fila Padrão:</span>
+                        <span className="text-xs md:text-sm text-muted-foreground whitespace-nowrap">Fila:</span>
                         <Select
                             value={instance.default_queue_id || "none"}
                             onValueChange={(value) => updateQueueMutation.mutate({ instanceId: instance.id, queueId: value })}
                         >
-                            <SelectTrigger className="w-[180px]">
-                                <SelectValue placeholder="Selecione uma fila" />
+                            <SelectTrigger className="w-full sm:w-[140px] md:w-[180px] h-8 md:h-9 text-xs md:text-sm">
+                                <SelectValue placeholder="Selecione" />
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="none">Nenhuma</SelectItem>
@@ -128,11 +128,12 @@ export const InstanceRow = ({ instance, onConnect }: InstanceRowProps) => {
                     </div>
                 )}
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 md:gap-3 flex-wrap">
                     <Badge
                         variant={
                             instance.status === "connected" ? "default" : "secondary"
                         }
+                        className="text-[10px] md:text-xs"
                     >
                         {checkConnectionMutation.isPending ? (
                             <Loader2 className="w-3 h-3 mr-1 animate-spin" />
@@ -149,8 +150,9 @@ export const InstanceRow = ({ instance, onConnect }: InstanceRowProps) => {
                             size="sm"
                             variant="outline"
                             onClick={() => onConnect(instance)}
+                            className="h-7 md:h-8 text-xs md:text-sm px-2 md:px-3"
                         >
-                            <Wifi className="w-4 h-4 mr-2" />
+                            <Wifi className="w-3.5 h-3.5 md:w-4 md:h-4 mr-1 md:mr-2" />
                             Conectar
                         </Button>
                     )}
@@ -161,8 +163,9 @@ export const InstanceRow = ({ instance, onConnect }: InstanceRowProps) => {
                             variant="destructive"
                             onClick={() => deleteMutation.mutate(instance.id)}
                             disabled={deleteMutation.isPending}
+                            className="h-7 md:h-8 w-7 md:w-8 p-0"
                         >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
                         </Button>
                     )}
                 </div>

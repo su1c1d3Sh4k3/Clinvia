@@ -85,31 +85,31 @@ const Queues = () => {
 
     return (
         <div className="flex h-screen w-full bg-background">
-            <div className="flex-1 overflow-auto p-8">
-                <div className="max-w-5xl mx-auto space-y-8">
-                    <div className="flex items-center justify-between">
+            <div className="flex-1 overflow-auto p-4 md:p-8">
+                <div className="max-w-5xl mx-auto space-y-4 md:space-y-8">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div>
-                            <h1 className="text-3xl font-bold">Filas</h1>
-                            <p className="text-muted-foreground mt-2">
+                            <h1 className="text-2xl md:text-3xl font-bold">Filas</h1>
+                            <p className="text-muted-foreground text-sm md:text-base mt-1 md:mt-2">
                                 Gerencie as filas de atendimento
                             </p>
                         </div>
                         {isAdminOrSupervisor && (
-                            <Button onClick={handleCreate}>
-                                <Plus className="w-4 h-4 mr-2" />
-                                Nova Fila
+                            <Button onClick={handleCreate} size="sm" className="h-8 md:h-9 text-xs md:text-sm w-fit">
+                                <Plus className="w-4 h-4 mr-1 md:mr-2" />
+                                <span className="hidden sm:inline">Nova </span>Fila
                             </Button>
                         )}
                     </div>
 
-                    <div className="rounded-md border">
+                    <div className="rounded-md border overflow-x-auto">
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead className="w-[100px] text-secondary dark:text-slate-400 font-semibold">ID</TableHead>
-                                    <TableHead className="text-secondary dark:text-slate-400 font-semibold">Nome</TableHead>
+                                    <TableHead className="w-[80px] text-secondary dark:text-slate-400 font-semibold hidden sm:table-cell">ID</TableHead>
+                                    <TableHead className="text-secondary dark:text-slate-400 font-semibold min-w-[100px]">Nome</TableHead>
                                     <TableHead className="text-secondary dark:text-slate-400 font-semibold">Status</TableHead>
-                                    <TableHead className="text-secondary dark:text-slate-400 font-semibold">Atribuída</TableHead>
+                                    <TableHead className="text-secondary dark:text-slate-400 font-semibold hidden md:table-cell">Atribuída</TableHead>
                                     <TableHead className="text-right text-secondary dark:text-slate-400 font-semibold">Ações</TableHead>
                                 </TableRow>
                             </TableHeader>
@@ -129,48 +129,49 @@ const Queues = () => {
                                 ) : (
                                     queues?.map((queue) => (
                                         <TableRow key={queue.id}>
-                                            <TableCell className="font-mono text-xs">
+                                            <TableCell className="font-mono text-xs hidden sm:table-cell py-2 md:py-4">
                                                 {queue.id.substring(0, 8)}
                                             </TableCell>
-                                            <TableCell className="font-medium">{queue.name}</TableCell>
-                                            <TableCell>
+                                            <TableCell className="font-medium text-sm py-2 md:py-4">{queue.name}</TableCell>
+                                            <TableCell className="py-2 md:py-4">
                                                 {queue.is_active ? (
                                                     <div className="flex items-center text-green-600">
-                                                        <Check className="w-4 h-4 mr-1" />
-                                                        <span className="text-xs">Ativo</span>
+                                                        <Check className="w-3.5 h-3.5 md:w-4 md:h-4 mr-1" />
+                                                        <span className="text-[10px] md:text-xs">Ativo</span>
                                                     </div>
                                                 ) : (
                                                     <div className="flex items-center text-red-500">
-                                                        <X className="w-4 h-4 mr-1" />
-                                                        <span className="text-xs">Inativo</span>
+                                                        <X className="w-3.5 h-3.5 md:w-4 md:h-4 mr-1" />
+                                                        <span className="text-[10px] md:text-xs">Inativo</span>
                                                     </div>
                                                 )}
                                             </TableCell>
-                                            <TableCell>
-                                                <Badge variant="secondary">
-                                                    {queue.assigned_users?.length || 0} usuários
+                                            <TableCell className="hidden md:table-cell py-2 md:py-4">
+                                                <Badge variant="secondary" className="text-[10px] md:text-xs">
+                                                    {queue.assigned_users?.length || 0} usu.
                                                 </Badge>
                                             </TableCell>
-                                            <TableCell className="text-right">
-                                                <div className="flex justify-end gap-2">
+                                            <TableCell className="text-right py-2 md:py-4">
+                                                <div className="flex justify-end gap-1">
                                                     {isAdminOrSupervisor && (
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
+                                                            className="h-7 w-7 md:h-8 md:w-8"
                                                             onClick={() => handleEdit(queue)}
                                                         >
-                                                            <Pencil className="w-4 h-4" />
+                                                            <Pencil className="w-3.5 h-3.5 md:w-4 md:h-4" />
                                                         </Button>
                                                     )}
                                                     {userRole === "admin" && (
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
+                                                            className={`h-7 w-7 md:h-8 md:w-8 ${queue.is_default ? "opacity-50 cursor-not-allowed" : "text-red-500 hover:text-red-600"}`}
                                                             onClick={() => setDeleteId(queue.id)}
                                                             disabled={queue.is_default}
-                                                            className={queue.is_default ? "opacity-50 cursor-not-allowed" : "text-red-500 hover:text-red-600"}
                                                         >
-                                                            <Trash2 className="w-4 h-4" />
+                                                            <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
                                                         </Button>
                                                     )}
                                                 </div>

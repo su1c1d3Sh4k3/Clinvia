@@ -195,24 +195,24 @@ const WhatsAppConnection = () => {
   };
 
   return (
-    <div className="p-8">
-      <div className="max-w-4xl mx-auto space-y-6">
+    <div className="p-4 md:p-8">
+      <div className="max-w-4xl mx-auto space-y-4 md:space-y-6">
         <div>
-          <h1 className="text-3xl font-bold">Conexões WhatsApp</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl md:text-3xl font-bold">Conexões WhatsApp</h1>
+          <p className="text-muted-foreground text-sm md:text-base">
             Gerencie suas instâncias da Evolution API
           </p>
         </div>
 
         {!isAgent && (
           <Card>
-            <CardHeader>
-              <CardTitle>Nova Instância</CardTitle>
-              <CardDescription>
+            <CardHeader className="p-4 md:p-6">
+              <CardTitle className="text-base md:text-lg">Nova Instância</CardTitle>
+              <CardDescription className="text-xs md:text-sm">
                 Adicione uma nova conexão com a Evolution API
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-4 md:p-6 pt-0 md:pt-0">
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">Nome da Instância</Label>
@@ -233,10 +233,10 @@ const WhatsAppConnection = () => {
         )}
 
         <Card>
-          <CardHeader>
-            <CardTitle>Instâncias Configuradas</CardTitle>
+          <CardHeader className="p-4 md:p-6">
+            <CardTitle className="text-base md:text-lg">Instâncias Configuradas</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4 md:p-6 pt-0 md:pt-0">
             {isLoading ? (
               <p className="text-muted-foreground">Carregando...</p>
             ) : instances && instances.length > 0 ? (

@@ -50,7 +50,8 @@ export const ChatArea = ({
   setTotalMatches,
   onOpenNewMessage,
   externalMessage,
-  clearExternalMessage
+  clearExternalMessage,
+  isMobile = false
 }: {
   conversationId?: string;
   searchTerm?: string;
@@ -59,6 +60,7 @@ export const ChatArea = ({
   onOpenNewMessage?: (phone?: string) => void;
   externalMessage?: string;
   clearExternalMessage?: () => void;
+  isMobile?: boolean;
 }) => {
   const [message, setMessage] = useState("");
   const [isEmojiOpen, setIsEmojiOpen] = useState(false);
@@ -794,71 +796,73 @@ export const ChatArea = ({
     : [];
 
   return (
-    <div className="flex-1 h-screen flex flex-col bg-background relative">
-      {/* Header */}
-      <div className="p-4 border-b border-border flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Avatar>
-            <AvatarImage src={profilePic || undefined} />
-            <AvatarFallback>{displayName[0]?.toUpperCase()}</AvatarFallback>
-          </Avatar>
-          <div>
-            <h3 className="font-semibold">{displayName}</h3>
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="text-xs">
-                <div className="w-2 h-2 rounded-full bg-green-500 mr-1" />
-                WhatsApp
-              </Badge>
+    <div className={cn("flex-1 flex flex-col bg-background relative", isMobile ? "h-full" : "h-screen")}>
+      {/* Header - Hidden on mobile (Index.tsx provides its own header) */}
+      {!isMobile && (
+        <div className="p-4 border-b border-border flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Avatar>
+              <AvatarImage src={profilePic || undefined} />
+              <AvatarFallback>{displayName[0]?.toUpperCase()}</AvatarFallback>
+            </Avatar>
+            <div>
+              <h3 className="font-semibold">{displayName}</h3>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-xs">
+                  <div className="w-2 h-2 rounded-full bg-green-500 mr-1" />
+                  WhatsApp
+                </Badge>
+              </div>
             </div>
           </div>
+
+          <div className="flex items-center gap-3">
+
+
+            {/* Avatar da instância conectada */}
+            {instanceName && (
+              <div className="flex items-center gap-2">
+                <Avatar className="w-8 h-8">
+                  <AvatarImage src={instance?.profile_pic_url || undefined} />
+                  <AvatarFallback>{instanceName[0]?.toUpperCase() || 'A'}</AvatarFallback>
+                </Avatar>
+                <span className="text-sm text-muted-foreground">{instanceName}</span>
+              </div>
+            )}
+
+            {/* Hide Actions for Groups */}
+            {!isGroup && (
+              <>
+                <QueueSelector
+                  conversationId={conversationId}
+                  currentQueueId={(conversation as any)?.queue_id}
+                />
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => updateStatus.mutate({ conversationId, status: 'open' })}
+                  disabled={(conversation?.status as string) === 'open' || updateStatus.isPending}
+                  className={(conversation?.status as string) === 'open' ? "opacity-50 cursor-not-allowed" : ""}
+                >
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                  {(conversation?.status as string) === 'open' ? "Ticket Aberto" : "Atender Ticket"}
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleResolve}
+                  disabled={resolveConversation.isPending || (conversation?.status as any) === "resolved"}
+                >
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                  {(conversation?.status as any) === "resolved" ? "Resolvido" : "Resolver Ticket"}
+                </Button>
+              </>
+            )}
+          </div>
         </div>
-
-        <div className="flex items-center gap-3">
-
-
-          {/* Avatar da instância conectada */}
-          {instanceName && (
-            <div className="flex items-center gap-2">
-              <Avatar className="w-8 h-8">
-                <AvatarImage src={instance?.profile_pic_url || undefined} />
-                <AvatarFallback>{instanceName[0]?.toUpperCase() || 'A'}</AvatarFallback>
-              </Avatar>
-              <span className="text-sm text-muted-foreground">{instanceName}</span>
-            </div>
-          )}
-
-          {/* Hide Actions for Groups */}
-          {!isGroup && (
-            <>
-              <QueueSelector
-                conversationId={conversationId}
-                currentQueueId={(conversation as any)?.queue_id}
-              />
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => updateStatus.mutate({ conversationId, status: 'open' })}
-                disabled={(conversation?.status as string) === 'open' || updateStatus.isPending}
-                className={(conversation?.status as string) === 'open' ? "opacity-50 cursor-not-allowed" : ""}
-              >
-                <CheckCircle className="w-4 h-4 mr-2" />
-                {(conversation?.status as string) === 'open' ? "Ticket Aberto" : "Atender Ticket"}
-              </Button>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleResolve}
-                disabled={resolveConversation.isPending || (conversation?.status as any) === "resolved"}
-              >
-                <CheckCircle className="w-4 h-4 mr-2" />
-                {(conversation?.status as any) === "resolved" ? "Resolvido" : "Resolver Ticket"}
-              </Button>
-            </>
-          )}
-        </div>
-      </div>
+      )}
 
       {/* Messages */}
       <ScrollArea className="flex-1 p-4" onScroll={handleScroll}>

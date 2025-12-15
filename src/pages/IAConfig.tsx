@@ -441,43 +441,43 @@ export default function IAConfig() {
     }
 
     return (
-        <div className="container mx-auto py-10 max-w-4xl animate-in fade-in duration-500">
-            <h1 className="text-3xl font-bold mb-8 text-foreground">Definições de IA</h1>
+        <div className="container mx-auto py-4 md:py-10 px-3 md:px-6 max-w-4xl animate-in fade-in duration-500">
+            <h1 className="text-2xl md:text-3xl font-bold mb-4 md:mb-8 text-foreground">Definições de IA</h1>
 
             <Tabs defaultValue="company" className="w-full">
-                <TabsList className="grid w-full grid-cols-5 mb-8">
-                    <TabsTrigger value="company" className="flex items-center gap-2">
+                <TabsList className="grid w-full grid-cols-5 mb-4 md:mb-8 h-auto">
+                    <TabsTrigger value="company" className="flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
                         <Building2 className="h-4 w-4" />
                         <span className="hidden sm:inline">Empresa</span>
                     </TabsTrigger>
-                    <TabsTrigger value="restrictions" className="flex items-center gap-2">
+                    <TabsTrigger value="restrictions" className="flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
                         <Ban className="h-4 w-4" />
                         <span className="hidden sm:inline">Restrições</span>
                     </TabsTrigger>
-                    <TabsTrigger value="qualify" className="flex items-center gap-2">
+                    <TabsTrigger value="qualify" className="flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
                         <Target className="h-4 w-4" />
                         <span className="hidden sm:inline">Qualificação</span>
                     </TabsTrigger>
-                    <TabsTrigger value="faq" className="flex items-center gap-2">
+                    <TabsTrigger value="faq" className="flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
                         <HelpCircle className="h-4 w-4" />
                         <span className="hidden sm:inline">F.A.Q</span>
                     </TabsTrigger>
-                    <TabsTrigger value="settings" className="flex items-center gap-2">
+                    <TabsTrigger value="settings" className="flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
                         <Settings className="h-4 w-4" />
-                        <span className="hidden sm:inline">Configurações</span>
+                        <span className="hidden sm:inline">Config</span>
                     </TabsTrigger>
                 </TabsList>
 
                 {/* Aba: Sobre a Empresa */}
                 <TabsContent value="company">
                     <Card>
-                        <CardHeader>
-                            <CardTitle>Sobre a Empresa</CardTitle>
-                            <CardDescription>
-                                Dados fundamentais sobre sua empresa para que a IA tenha o contexto de onde ela trabalha.
+                        <CardHeader className="p-4 md:p-6">
+                            <CardTitle className="text-base md:text-lg">Sobre a Empresa</CardTitle>
+                            <CardDescription className="text-xs md:text-sm">
+                                Dados para a IA ter contexto sobre sua empresa.
                             </CardDescription>
                         </CardHeader>
-                        <CardContent className="space-y-4">
+                        <CardContent className="p-4 md:p-6 pt-0 md:pt-0 space-y-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <Label htmlFor="name">Nome da empresa</Label>
@@ -591,13 +591,13 @@ export default function IAConfig() {
                 {/* Aba: Restrições */}
                 <TabsContent value="restrictions">
                     <Card>
-                        <CardHeader>
-                            <CardTitle>Restrições</CardTitle>
-                            <CardDescription>
-                                Adicione apenas restrições do que a IA NÃO deve fazer. Procure sempre começar cada frase com uma negativa.
+                        <CardHeader className="p-4 md:p-6">
+                            <CardTitle className="text-base md:text-lg">Restrições</CardTitle>
+                            <CardDescription className="text-xs md:text-sm">
+                                O que a IA NÃO deve fazer.
                             </CardDescription>
                         </CardHeader>
-                        <CardContent className="space-y-4">
+                        <CardContent className="p-4 md:p-6 pt-0 md:pt-0 space-y-4">
                             {restrictions.map((restriction) => (
                                 <div key={restriction.id} className="flex items-center gap-2">
                                     <Input
@@ -634,14 +634,13 @@ export default function IAConfig() {
                 {/* Aba: Qualificação */}
                 <TabsContent value="qualify">
                     <Card>
-                        <CardHeader>
-                            <CardTitle>Qualificação</CardTitle>
-                            <CardDescription>
-                                Adicione perguntas de qualificação específicas baseadas em produtos ou serviços oferecidos.
-                                Quando a IA finalizar essas perguntas, ela classificará entre 'Qualificado' e 'Desqualificado'.
+                        <CardHeader className="p-4 md:p-6">
+                            <CardTitle className="text-base md:text-lg">Qualificação</CardTitle>
+                            <CardDescription className="text-xs md:text-sm">
+                                Perguntas para classificar leads.
                             </CardDescription>
                         </CardHeader>
-                        <CardContent className="space-y-6">
+                        <CardContent className="p-4 md:p-6 pt-0 md:pt-0 space-y-4 md:space-y-6">
                             {qualifyItems.map((item, index) => (
                                 <div key={index} className="relative border rounded-lg p-4 space-y-4">
                                     <Button
@@ -704,14 +703,13 @@ export default function IAConfig() {
                 {/* Aba: F.A.Q */}
                 <TabsContent value="faq">
                     <Card>
-                        <CardHeader>
-                            <CardTitle>F.A.Q (Perguntas e Respostas)</CardTitle>
-                            <CardDescription>
-                                Adicione as principais dúvidas que seus clientes possam ter a respeito de itens específicos,
-                                para que a IA tenha respostas alinhadas com as da empresa.
+                        <CardHeader className="p-4 md:p-6">
+                            <CardTitle className="text-base md:text-lg">F.A.Q</CardTitle>
+                            <CardDescription className="text-xs md:text-sm">
+                                Dúvidas frequentes sobre seus produtos.
                             </CardDescription>
                         </CardHeader>
-                        <CardContent className="space-y-6">
+                        <CardContent className="p-4 md:p-6 pt-0 md:pt-0 space-y-4 md:space-y-6">
                             {/* Campo fixo: Dúvidas sobre a empresa */}
                             <div className="border rounded-lg p-4 space-y-4">
                                 <div className="space-y-2">
@@ -793,19 +791,19 @@ export default function IAConfig() {
                 {/* Aba: Configurações */}
                 <TabsContent value="settings">
                     <Card>
-                        <CardHeader>
-                            <CardTitle>Configurações</CardTitle>
-                            <CardDescription>
-                                Configure o comportamento e ativação da IA.
+                        <CardHeader className="p-4 md:p-6">
+                            <CardTitle className="text-base md:text-lg">Configurações</CardTitle>
+                            <CardDescription className="text-xs md:text-sm">
+                                Comportamento e ativação da IA.
                             </CardDescription>
                         </CardHeader>
-                        <CardContent className="space-y-6">
+                        <CardContent className="p-4 md:p-6 pt-0 md:pt-0 space-y-3 md:space-y-6">
                             {/* Ligar IA */}
-                            <div className="flex items-center justify-between p-4 border rounded-lg">
+                            <div className="flex items-center justify-between p-3 md:p-4 border rounded-lg gap-3">
                                 <div className="space-y-0.5">
-                                    <h4 className="font-medium">Ligar IA</h4>
-                                    <p className="text-sm text-muted-foreground">
-                                        Ao ativar esse botão, a IA passará a responder todos os clientes que entrarem em contato.
+                                    <h4 className="font-medium text-sm md:text-base">Ligar IA</h4>
+                                    <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">
+                                        A IA responderá todos os clientes.
                                     </p>
                                 </div>
                                 <Switch
@@ -815,33 +813,32 @@ export default function IAConfig() {
                             </div>
 
                             {/* Delay de Resposta */}
-                            <div className="space-y-2 p-4 border rounded-lg">
-                                <div className="flex items-center justify-between">
+                            <div className="space-y-2 p-3 md:p-4 border rounded-lg">
+                                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                                     <div className="space-y-0.5">
-                                        <h4 className="font-medium">Delay de Resposta</h4>
-                                        <p className="text-sm text-muted-foreground">
-                                            Defina o tempo (em segundos) que a IA irá esperar antes de responder.
-                                            Isso evita que a IA interrompa mensagens fragmentadas.
+                                        <h4 className="font-medium text-sm md:text-base">Delay (segundos)</h4>
+                                        <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">
+                                            Tempo antes de responder.
                                         </p>
                                     </div>
+                                    <Input
+                                        type="number"
+                                        min={15}
+                                        max={120}
+                                        value={config.delay}
+                                        onChange={(e) => setConfig({ ...config, delay: parseInt(e.target.value) || 15 })}
+                                        className="w-full md:w-32"
+                                    />
                                 </div>
-                                <Input
-                                    type="number"
-                                    min={15}
-                                    max={120}
-                                    value={config.delay}
-                                    onChange={(e) => setConfig({ ...config, delay: parseInt(e.target.value) || 15 })}
-                                    className="w-32"
-                                />
                             </div>
 
                             {/* Follow Up */}
-                            <div className="space-y-4 p-4 border rounded-lg">
-                                <div className="flex items-center justify-between">
+                            <div className="space-y-3 md:space-y-4 p-3 md:p-4 border rounded-lg">
+                                <div className="flex items-center justify-between gap-3">
                                     <div className="space-y-0.5">
-                                        <h4 className="font-medium">Follow Up</h4>
-                                        <p className="text-sm text-muted-foreground">
-                                            O Follow Up serve para sua IA chamar o cliente depois de um tempo definido para retomar o contato.
+                                        <h4 className="font-medium text-sm md:text-base">Follow Up</h4>
+                                        <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">
+                                            Retomar contato após tempo definido.
                                         </p>
                                     </div>
                                     <Switch
@@ -958,11 +955,11 @@ export default function IAConfig() {
                             </div>
 
                             {/* CRM Auto */}
-                            <div className="flex items-center justify-between p-4 border rounded-lg">
+                            <div className="flex items-center justify-between p-3 md:p-4 border rounded-lg gap-3">
                                 <div className="space-y-0.5">
-                                    <h4 className="font-medium">Cadastrar clientes automaticamente no CRM</h4>
-                                    <p className="text-sm text-muted-foreground">
-                                        Ao ativar, um funil "IA" será criado e todos os clientes serão cadastrados automaticamente.
+                                    <h4 className="font-medium text-sm md:text-base">CRM Automático</h4>
+                                    <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">
+                                        Clientes cadastrados automaticamente.
                                     </p>
                                 </div>
                                 <Switch
@@ -972,11 +969,11 @@ export default function IAConfig() {
                             </div>
 
                             {/* Agendamento */}
-                            <div className="flex items-center justify-between p-4 border rounded-lg">
+                            <div className="flex items-center justify-between p-3 md:p-4 border rounded-lg gap-3">
                                 <div className="space-y-0.5">
-                                    <h4 className="font-medium">Ativar agendamento</h4>
-                                    <p className="text-sm text-muted-foreground">
-                                        A IA vai automaticamente priorizar o agendamento de horários, buscando profissionais e horários disponíveis.
+                                    <h4 className="font-medium text-sm md:text-base">Agendamento</h4>
+                                    <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">
+                                        IA prioriza agendar horários.
                                     </p>
                                 </div>
                                 <Switch
@@ -986,11 +983,11 @@ export default function IAConfig() {
                             </div>
 
                             {/* Follow Up horário comercial */}
-                            <div className="flex items-center justify-between p-4 border rounded-lg">
+                            <div className="flex items-center justify-between p-3 md:p-4 border rounded-lg gap-3">
                                 <div className="space-y-0.5">
-                                    <h4 className="font-medium">Follow Up apenas em horário comercial</h4>
-                                    <p className="text-sm text-muted-foreground">
-                                        Ao ativar, a IA só fará follow up entre 7:00h e 18:00h.
+                                    <h4 className="font-medium text-sm md:text-base">Follow Up comercial</h4>
+                                    <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">
+                                        Só entre 7h e 18h.
                                     </p>
                                 </div>
                                 <Switch

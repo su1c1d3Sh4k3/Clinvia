@@ -254,7 +254,7 @@ export function DealsStageChart() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {/* Chart - 2/3 width */}
             <div className="lg:col-span-2">
-                <div className="rounded-2xl bg-card/50 backdrop-blur-sm border border-border/50 p-6 hover:border-border transition-all duration-300 h-[400px]">
+                <div className="rounded-2xl bg-card/50 backdrop-blur-sm border border-border/50 p-4 md:p-6 hover:border-border transition-all duration-300 min-h-[480px] md:min-h-0 md:h-[400px] overflow-visible md:overflow-hidden">
                     {/* Header */}
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
                         <h3 className="text-sm font-medium text-muted-foreground">Negócios por Etapa</h3>
@@ -359,10 +359,18 @@ export function DealsStageChart() {
                                 />
                                 <Legend
                                     verticalAlign="bottom"
-                                    height={36}
+                                    height={56}
                                     iconType="circle"
                                     iconSize={8}
-                                    wrapperStyle={{ fontSize: 11, paddingTop: 10 }}
+                                    wrapperStyle={{
+                                        fontSize: 10,
+                                        paddingTop: 10,
+                                        display: 'flex',
+                                        flexWrap: 'wrap',
+                                        justifyContent: 'center',
+                                        gap: '4px 12px',
+                                        lineHeight: '1.6'
+                                    }}
                                 />
                                 {chartStages.map(({ name, color }) => (
                                     <Line
@@ -410,10 +418,18 @@ export function DealsStageChart() {
                                 />
                                 <Legend
                                     verticalAlign="bottom"
-                                    height={36}
+                                    height={56}
                                     iconType="circle"
                                     iconSize={8}
-                                    wrapperStyle={{ fontSize: 11, paddingTop: 10 }}
+                                    wrapperStyle={{
+                                        fontSize: 10,
+                                        paddingTop: 10,
+                                        display: 'flex',
+                                        flexWrap: 'wrap',
+                                        justifyContent: 'center',
+                                        gap: '4px 12px',
+                                        lineHeight: '1.6'
+                                    }}
                                 />
                                 {chartStages.map(({ name, color }) => (
                                     <Bar

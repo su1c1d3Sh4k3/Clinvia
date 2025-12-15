@@ -62,42 +62,42 @@ export default function FollowUp() {
     };
 
     return (
-        <div className="container mx-auto py-6 space-y-6">
+        <div className="container mx-auto py-4 md:py-6 px-3 md:px-6 space-y-4 md:space-y-6">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                    <h1 className="text-2xl font-bold flex items-center gap-2">
-                        <Clock className="w-6 h-6 text-[#005AA8]" />
+                    <h1 className="text-xl md:text-2xl font-bold flex items-center gap-2">
+                        <Clock className="w-5 h-5 md:w-6 md:h-6 text-[#005AA8]" />
                         Follow Up
                     </h1>
-                    <p className="text-muted-foreground">
-                        Gerencie mensagens de acompanhamento para seus contatos
+                    <p className="text-muted-foreground text-sm md:text-base">
+                        Mensagens de acompanhamento
                     </p>
                 </div>
-                <Button onClick={() => { setTemplateToEdit(null); setIsModalOpen(true); }}>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Adicionar Follow Up
+                <Button onClick={() => { setTemplateToEdit(null); setIsModalOpen(true); }} size="sm" className="h-8 md:h-9 text-xs md:text-sm w-fit">
+                    <Plus className="w-4 h-4 mr-1 md:mr-2" />
+                    <span className="hidden sm:inline">Adicionar </span>Follow Up
                 </Button>
             </div>
 
             {/* Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-                <TabsList>
-                    <TabsTrigger value="templates">Follow Ups</TabsTrigger>
-                    <TabsTrigger value="categories">Categorias</TabsTrigger>
+                <TabsList className="h-9">
+                    <TabsTrigger value="templates" className="text-xs md:text-sm py-1.5 px-2 md:px-3">Follow Ups</TabsTrigger>
+                    <TabsTrigger value="categories" className="text-xs md:text-sm py-1.5 px-2 md:px-3">Categorias</TabsTrigger>
                 </TabsList>
 
                 {/* Templates Tab */}
-                <TabsContent value="templates" className="space-y-4">
-                    <div className="rounded-md border">
+                <TabsContent value="templates" className="space-y-4 mt-4">
+                    <div className="rounded-md border overflow-x-auto">
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead className="text-[#005AA8] dark:text-muted-foreground">Nome</TableHead>
+                                    <TableHead className="text-[#005AA8] dark:text-muted-foreground min-w-[100px]">Nome</TableHead>
                                     <TableHead className="text-[#005AA8] dark:text-muted-foreground">Tempo</TableHead>
-                                    <TableHead className="text-[#005AA8] dark:text-muted-foreground">Mensagem</TableHead>
-                                    <TableHead className="text-[#005AA8] dark:text-muted-foreground">Atendente</TableHead>
-                                    <TableHead className="text-[#005AA8] dark:text-muted-foreground">Categoria</TableHead>
+                                    <TableHead className="text-[#005AA8] dark:text-muted-foreground hidden md:table-cell">Mensagem</TableHead>
+                                    <TableHead className="text-[#005AA8] dark:text-muted-foreground hidden sm:table-cell">Atendente</TableHead>
+                                    <TableHead className="text-[#005AA8] dark:text-muted-foreground hidden lg:table-cell">Categoria</TableHead>
                                     <TableHead className="text-[#005AA8] dark:text-muted-foreground text-right">Ações</TableHead>
                                 </TableRow>
                             </TableHeader>
@@ -117,20 +117,20 @@ export default function FollowUp() {
                                 ) : (
                                     filteredTemplates?.map((template) => (
                                         <TableRow key={template.id}>
-                                            <TableCell className="font-medium">{template.name}</TableCell>
-                                            <TableCell>
-                                                <Badge variant="secondary">{formatTime(template.time_minutes)}</Badge>
+                                            <TableCell className="font-medium text-sm py-2 md:py-4">{template.name}</TableCell>
+                                            <TableCell className="py-2 md:py-4">
+                                                <Badge variant="secondary" className="text-[10px] md:text-xs">{formatTime(template.time_minutes)}</Badge>
                                             </TableCell>
-                                            <TableCell className="max-w-xs truncate">{template.message}</TableCell>
-                                            <TableCell>{template.team_member?.name || "-"}</TableCell>
-                                            <TableCell>
-                                                <Badge variant="outline">{(template.category as any)?.name || "-"}</Badge>
+                                            <TableCell className="max-w-[150px] truncate hidden md:table-cell text-sm py-2 md:py-4">{template.message}</TableCell>
+                                            <TableCell className="hidden sm:table-cell text-sm py-2 md:py-4">{template.team_member?.name || "-"}</TableCell>
+                                            <TableCell className="hidden lg:table-cell py-2 md:py-4">
+                                                <Badge variant="outline" className="text-[10px] md:text-xs">{(template.category as any)?.name || "-"}</Badge>
                                             </TableCell>
-                                            <TableCell className="text-right">
+                                            <TableCell className="text-right py-2 md:py-4">
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
-                                                        <Button variant="ghost" size="icon">
-                                                            <MoreVertical className="w-4 h-4" />
+                                                        <Button variant="ghost" size="icon" className="h-7 w-7 md:h-8 md:w-8">
+                                                            <MoreVertical className="w-3.5 h-3.5 md:w-4 md:h-4" />
                                                         </Button>
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent align="end">
@@ -157,44 +157,44 @@ export default function FollowUp() {
                 </TabsContent>
 
                 {/* Categories Tab */}
-                <TabsContent value="categories" className="space-y-4">
+                <TabsContent value="categories" className="space-y-4 mt-4">
                     <div className="flex justify-end">
-                        <Button variant="outline" onClick={() => setIsCategoryModalOpen(true)}>
-                            <Plus className="w-4 h-4 mr-2" />
-                            Nova Categoria
+                        <Button variant="outline" size="sm" className="h-8 md:h-9 text-xs md:text-sm" onClick={() => setIsCategoryModalOpen(true)}>
+                            <Plus className="w-4 h-4 mr-1 md:mr-2" />
+                            <span className="hidden sm:inline">Nova </span>Categoria
                         </Button>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
                         {loadingCategories ? (
                             <div className="col-span-full flex justify-center py-8">
                                 <Loader2 className="w-6 h-6 animate-spin" />
                             </div>
                         ) : filteredCategories?.length === 0 ? (
-                            <div className="col-span-full text-center py-8 text-muted-foreground">
+                            <div className="col-span-full text-center py-8 text-muted-foreground text-sm">
                                 Nenhuma categoria cadastrada
                             </div>
                         ) : (
                             filteredCategories?.map((category) => (
                                 <Card key={category.id}>
-                                    <CardHeader className="pb-2">
+                                    <CardHeader className="pb-2 p-3 md:p-6 md:pb-2">
                                         <div className="flex items-center justify-between">
-                                            <CardTitle className="text-base flex items-center gap-2">
-                                                <FolderOpen className="w-4 h-4" />
+                                            <CardTitle className="text-sm md:text-base flex items-center gap-2">
+                                                <FolderOpen className="w-3.5 h-3.5 md:w-4 md:h-4" />
                                                 {category.name}
                                             </CardTitle>
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
-                                                className="text-destructive"
+                                                className="text-destructive h-7 w-7 md:h-8 md:w-8"
                                                 onClick={() => handleDeleteCategory(category.id)}
                                             >
-                                                <Trash2 className="w-4 h-4" />
+                                                <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
                                             </Button>
                                         </div>
                                     </CardHeader>
-                                    <CardContent>
-                                        <CardDescription>
+                                    <CardContent className="p-3 pt-0 md:p-6 md:pt-0">
+                                        <CardDescription className="text-xs md:text-sm">
                                             {templates?.filter(t => t.category_id === category.id).length || 0} follow ups
                                         </CardDescription>
                                     </CardContent>

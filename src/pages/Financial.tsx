@@ -225,7 +225,7 @@ const BalanceCards = ({ startDate, endDate }: { startDate?: string; endDate?: st
     }
 
     return (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-6">
             {cards.map((card, index) => (
                 <Card
                     key={index}
@@ -234,26 +234,26 @@ const BalanceCards = ({ startDate, endDate }: { startDate?: string; endDate?: st
                         : ''
                         }`}
                 >
-                    <CardContent className="p-6">
-                        <div className="flex flex-col gap-3">
+                    <CardContent className="p-3 md:p-6">
+                        <div className="flex flex-col gap-2 md:gap-3">
                             <div className="flex items-center justify-between">
-                                <div className={`p-3 rounded-full ${card.bgColor}`}>
-                                    <card.icon className={`w-6 h-6 ${card.color}`} />
+                                <div className={`p-2 md:p-3 rounded-full ${card.bgColor}`}>
+                                    <card.icon className={`w-4 h-4 md:w-6 md:h-6 ${card.color}`} />
                                 </div>
                                 {card.highlighted && card.badge && (
-                                    <Badge variant={billing >= 0 ? "default" : "destructive"} className="text-xs">
+                                    <Badge variant={billing >= 0 ? "default" : "destructive"} className="text-[10px] md:text-xs">
                                         {card.badge}
                                     </Badge>
                                 )}
                             </div>
                             <div>
-                                <p className="text-sm text-muted-foreground font-medium uppercase tracking-wide">
+                                <p className="text-[10px] md:text-sm text-muted-foreground font-medium uppercase tracking-wide">
                                     {card.title}
                                 </p>
-                                <p className={`text-2xl font-bold mt-1 ${card.color}`}>
+                                <p className={`text-sm sm:text-lg md:text-2xl font-bold mt-1 ${card.color}`}>
                                     {formatCurrency(card.value)}
                                 </p>
-                                <p className="text-xs text-muted-foreground mt-1">{card.description}</p>
+                                <p className="text-[10px] md:text-xs text-muted-foreground mt-1 hidden sm:block">{card.description}</p>
                             </div>
                         </div>
                     </CardContent>
@@ -662,32 +662,32 @@ const TransactionsSection = ({ startDate, endDate }: { startDate?: string; endDa
         <>
             <Card>
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                    <div className="p-6 pb-0">
-                        <TabsList className="grid w-full grid-cols-5">
-                            <TabsTrigger value="revenues">Receitas</TabsTrigger>
-                            <TabsTrigger value="expenses">Despesas</TabsTrigger>
-                            <TabsTrigger value="team">Custo com Equipe</TabsTrigger>
-                            <TabsTrigger value="marketing">Marketing</TabsTrigger>
-                            <TabsTrigger value="overview">Visão Geral</TabsTrigger>
+                    <div className="p-3 md:p-6 pb-0 overflow-x-auto">
+                        <TabsList className="grid w-full min-w-[400px] grid-cols-5">
+                            <TabsTrigger value="revenues" className="text-xs md:text-sm">Receitas</TabsTrigger>
+                            <TabsTrigger value="expenses" className="text-xs md:text-sm">Despesas</TabsTrigger>
+                            <TabsTrigger value="team" className="text-xs md:text-sm"><span className="hidden sm:inline">Custo </span>Equipe</TabsTrigger>
+                            <TabsTrigger value="marketing" className="text-xs md:text-sm">Mkt</TabsTrigger>
+                            <TabsTrigger value="overview" className="text-xs md:text-sm">Visão</TabsTrigger>
                         </TabsList>
                     </div>
-                    <CardHeader className="pt-4">
-                        <div className="flex items-center justify-between">
+                    <CardHeader className="pt-4 px-3 md:px-6">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                             <div>
-                                <CardTitle className="flex items-center gap-2">
-                                    <Receipt className="w-5 h-5 text-purple-500" />
+                                <CardTitle className="flex items-center gap-2 text-base md:text-lg">
+                                    <Receipt className="w-4 h-4 md:w-5 md:h-5 text-purple-500" />
                                     Lançamentos
                                 </CardTitle>
-                                <CardDescription>
-                                    Gerencie receitas, despesas, custos e campanhas
+                                <CardDescription className="text-xs md:text-sm">
+                                    Receitas, despesas e custos
                                 </CardDescription>
                             </div>
-                            <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-2 md:gap-4 flex-wrap">
                                 {activeTab !== 'overview' && (
                                     <>
                                         {/* Pagination Page Size Selector */}
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-sm text-muted-foreground">Exibir:</span>
+                                        <div className="flex items-center gap-1 md:gap-2">
+                                            <span className="text-xs md:text-sm text-muted-foreground hidden sm:inline">Exibir:</span>
                                             <Select
                                                 value={String(pageSize)}
                                                 onValueChange={(value) => {
@@ -695,7 +695,7 @@ const TransactionsSection = ({ startDate, endDate }: { startDate?: string; endDa
                                                     setCurrentPage(1);
                                                 }}
                                             >
-                                                <SelectTrigger className="w-[70px] h-8">
+                                                <SelectTrigger className="w-[60px] md:w-[70px] h-7 md:h-8 text-xs">
                                                     <SelectValue />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -706,15 +706,15 @@ const TransactionsSection = ({ startDate, endDate }: { startDate?: string; endDa
                                                 </SelectContent>
                                             </Select>
                                         </div>
-                                        <div className="text-right">
-                                            <p className="text-sm text-muted-foreground">{currentLabel.label}</p>
-                                            <p className={`text-xl font-bold ${currentLabel.color}`}>
+                                        <div className="text-right hidden sm:block">
+                                            <p className="text-xs text-muted-foreground">{currentLabel.label}</p>
+                                            <p className={`text-sm md:text-xl font-bold ${currentLabel.color}`}>
                                                 {formatCurrency(currentTotal)}
                                             </p>
                                         </div>
-                                        <Button className="gap-2" onClick={handleNewClick}>
-                                            <Plus className="w-4 h-4" />
-                                            Novo Lançamento
+                                        <Button className="gap-1 md:gap-2 h-8 md:h-9 text-xs md:text-sm" onClick={handleNewClick}>
+                                            <Plus className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                                            <span className="hidden sm:inline">Novo </span>Lanç.
                                         </Button>
                                     </>
                                 )}
@@ -1284,26 +1284,27 @@ const Financial = () => {
     }, [periodMode, currentPeriod]);
 
     return (
-        <div className="flex-1 space-y-8 p-8 pt-6">
+        <div className="flex-1 space-y-4 md:space-y-8 p-3 md:p-8 pt-4 md:pt-6">
             {/* Header */}
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-gradient-to-br from-green-500/20 to-emerald-500/20">
-                        <Wallet className="w-8 h-8 text-green-500" />
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2 md:gap-3">
+                    <div className="p-1.5 md:p-2 rounded-lg bg-gradient-to-br from-green-500/20 to-emerald-500/20">
+                        <Wallet className="w-6 h-6 md:w-8 md:h-8 text-green-500" />
                     </div>
                     <div>
-                        <h2 className="text-3xl font-bold tracking-tight">Financeiro</h2>
-                        <p className="text-muted-foreground">Controle de receitas, despesas e análises financeiras</p>
+                        <h2 className="text-xl md:text-3xl font-bold tracking-tight">Financeiro</h2>
+                        <p className="text-muted-foreground text-xs md:text-base hidden sm:block">Receitas, despesas e análises</p>
                     </div>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 md:gap-4 flex-wrap">
                     <Button
                         variant="outline"
                         onClick={() => setReportsModalOpen(true)}
-                        className="gap-2"
+                        className="gap-1 md:gap-2 h-8 md:h-9 text-xs md:text-sm"
+                        size="sm"
                     >
-                        <FileText className="w-4 h-4" />
-                        Relatórios Financeiros
+                        <FileText className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                        <span className="hidden sm:inline">Relatórios</span><span className="sm:hidden">Relat.</span>
                     </Button>
                     <PeriodSelector
                         mode={periodMode}
@@ -1316,8 +1317,8 @@ const Financial = () => {
 
             {/* Seção 1: Balanço Mensal */}
             <section>
-                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                    <DollarSign className="w-5 h-5 text-green-500" />
+                <h3 className="text-base md:text-lg font-semibold mb-3 md:mb-4 flex items-center gap-2">
+                    <DollarSign className="w-4 h-4 md:w-5 md:h-5 text-green-500" />
                     Balanço Mensal
                 </h3>
                 <BalanceCards startDate={startDate} endDate={endDate} />
@@ -1335,9 +1336,9 @@ const Financial = () => {
 
             {/* Seção 4: Retorno por Pessoa */}
             <section>
-                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5 text-emerald-500" />
-                    Retorno por Profissional
+                <h3 className="text-base md:text-lg font-semibold mb-3 md:mb-4 flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 md:w-5 md:h-5 text-emerald-500" />
+                    <span className="hidden sm:inline">Retorno por </span>Profissional
                 </h3>
                 <ReturnByPersonSection />
             </section>

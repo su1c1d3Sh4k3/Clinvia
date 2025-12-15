@@ -170,41 +170,42 @@ export const NotificationsBoard = () => {
     if (!notifications || notifications.length === 0) return null;
 
     return (
-        <Card className="w-full transition-all duration-300 ease-in-out border-l-4 border-l-primary mb-6">
-            <div className="flex items-center justify-between p-4 border-b">
-                <div className="flex items-center gap-2">
-                    <Bell className="h-5 w-5 text-primary" />
-                    <h3 className="font-semibold text-lg">Notificações</h3>
-                    <span className="bg-primary/10 text-primary text-xs font-bold px-2 py-0.5 rounded-full">
+        <Card className="w-full transition-all duration-300 ease-in-out border-l-4 border-l-primary mb-4 md:mb-6">
+            <div className="flex items-center justify-between p-3 md:p-4 border-b gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                    <Bell className="h-4 w-4 md:h-5 md:w-5 text-primary flex-shrink-0" />
+                    <h3 className="font-semibold text-base md:text-lg truncate">Notificações</h3>
+                    <span className="bg-primary/10 text-primary text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0">
                         {notifications.length}
                     </span>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
                     {isExpanded && (
                         <Button
                             variant="ghost"
                             size="sm"
                             onClick={handleClearAll}
-                            className="text-destructive dark:text-white hover:text-destructive dark:hover:text-white/80"
+                            className="text-destructive dark:text-white hover:text-destructive dark:hover:text-white/80 px-2 md:px-3"
                         >
-                            <Trash2 className="h-4 w-4 mr-1" />
-                            Limpar tudo
+                            <Trash2 className="h-4 w-4 md:mr-1" />
+                            <span className="hidden md:inline">Limpar tudo</span>
                         </Button>
                     )}
                     <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => setIsExpanded(!isExpanded)}
+                        className="px-2 md:px-3"
                     >
-                        {isExpanded ? "Contrair" : "Expandir"}
-                        {isExpanded ? <ChevronLeft className="h-4 w-4 ml-1 rotate-90" /> : <ChevronRight className="h-4 w-4 ml-1 rotate-90" />}
+                        <span className="hidden md:inline">{isExpanded ? "Contrair" : "Expandir"}</span>
+                        {isExpanded ? <ChevronLeft className="h-4 w-4 md:ml-1 rotate-90" /> : <ChevronRight className="h-4 w-4 md:ml-1 rotate-90" />}
                     </Button>
                 </div>
             </div>
 
             {isExpanded && (
-                <CardContent className="p-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <CardContent className="p-3 md:p-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
                         {notifications.map((notification) => {
                             const style = getNotificationStyle(notification.type);
                             const Icon = style.icon;

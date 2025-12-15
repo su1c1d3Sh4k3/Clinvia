@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef, useEffect } from "react";
 import { format, addMinutes, startOfDay, differenceInMinutes, parseISO, isSameDay } from "date-fns";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -25,6 +25,30 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
     const endHour = settings?.end_hour ?? 22;
     const workDays = settings?.work_days ?? [0, 1, 2, 3, 4, 5, 6];
     const isDayBlocked = !workDays.includes(date.getDay());
+
+    // Refs for syncing horizontal scroll between header and body on mobile
+    const headerRef = useRef<HTMLDivElement>(null);
+    const bodyRef = useRef<HTMLDivElement>(null);
+    const isSyncing = useRef(false);
+
+    // Sync scroll between header and body
+    const handleHeaderScroll = () => {
+        if (isSyncing.current) return;
+        isSyncing.current = true;
+        if (bodyRef.current && headerRef.current) {
+            bodyRef.current.scrollLeft = headerRef.current.scrollLeft;
+        }
+        requestAnimationFrame(() => { isSyncing.current = false; });
+    };
+
+    const handleBodyScroll = () => {
+        if (isSyncing.current) return;
+        isSyncing.current = true;
+        if (headerRef.current && bodyRef.current) {
+            headerRef.current.scrollLeft = bodyRef.current.scrollLeft;
+        }
+        requestAnimationFrame(() => { isSyncing.current = false; });
+    };
 
     const timeSlots = useMemo(() => {
         const slots = [];
@@ -68,20 +92,24 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
 
     return (
         <div className="flex flex-col h-full border rounded-lg overflow-hidden bg-background">
-            {/* Header */}
-            <div className="flex border-b">
-                <div className="w-16 shrink-0 border-r bg-muted/50" /> {/* Time column header */}
+            {/* Header - Synced horizontal scroll on mobile */}
+            <div
+                ref={headerRef}
+                className="flex border-b overflow-x-auto [&::-webkit-scrollbar]:hidden"
+                onScroll={handleHeaderScroll}
+            >
+                <div className="w-12 md:w-16 shrink-0 border-r bg-muted/50" /> {/* Time column header */}
                 {professionals.map((professional) => (
-                    <div key={professional.id} className="flex-1 p-4 flex flex-row items-center justify-center gap-3 border-r last:border-r-0 bg-muted/20 min-w-[150px] relative group/header">
-                        <Avatar className="w-12 h-12">
+                    <div key={professional.id} className="flex-1 p-2 md:p-4 flex flex-row items-center justify-center gap-2 md:gap-3 border-r last:border-r-0 bg-muted/20 min-w-[120px] md:min-w-[150px] relative group/header">
+                        <Avatar className="w-8 h-8 md:w-12 md:h-12">
                             <AvatarImage src={professional.photo_url} />
-                            <AvatarFallback>{professional.name[0]}</AvatarFallback>
+                            <AvatarFallback className="text-xs md:text-base">{professional.name[0]}</AvatarFallback>
                         </Avatar>
                         <div className="flex flex-col items-start">
-                            <span className="font-medium text-sm">{professional.name}</span>
-                            <span className="text-xs text-muted-foreground">{professional.role}</span>
+                            <span className="font-medium text-xs md:text-sm truncate max-w-[60px] md:max-w-none">{professional.name}</span>
+                            <span className="text-[10px] md:text-xs text-muted-foreground hidden sm:block">{professional.role}</span>
                             {professional.commission > 0 && (
-                                <span className="text-xs text-orange-500 font-medium">
+                                <span className="text-[10px] md:text-xs text-orange-500 font-medium hidden md:block">
                                     {professional.commission}% comissão
                                 </span>
                             )}
@@ -98,13 +126,17 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                 ))}
             </div>
 
-            {/* Body */}
-            <div className="flex-1 overflow-y-auto relative [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
+            {/* Body - Synced horizontal scroll on mobile */}
+            <div
+                ref={bodyRef}
+                className="flex-1 overflow-x-auto overflow-y-auto relative [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']"
+                onScroll={handleBodyScroll}
+            >
                 <div className="flex min-h-[660px]" style={{ height: (endHour - startHour + 1) * HOUR_HEIGHT }}>
                     {/* Time Labels */}
-                    <div className="w-16 shrink-0 border-r bg-muted/10 flex flex-col relative">
+                    <div className="w-12 md:w-16 shrink-0 border-r bg-muted/10 flex flex-col relative">
                         {timeSlots.map((hour) => (
-                            <div key={hour} className="absolute w-full text-right pr-2 text-xs text-muted-foreground border-t" style={{ top: (hour - startHour) * 60, height: 60 }}>
+                            <div key={hour} className="absolute w-full text-right pr-1 md:pr-2 text-[10px] md:text-xs text-muted-foreground border-t" style={{ top: (hour - startHour) * 60, height: 60 }}>
                                 {hour}:00
                             </div>
                         ))}
@@ -112,11 +144,12 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
 
                     {/* Columns */}
                     {professionals.map((professional) => (
-                        <div key={professional.id} className="flex-1 border-r last:border-r-0 relative min-w-[150px] group">
+                        <div key={professional.id} className="flex-1 border-r last:border-r-0 relative min-w-[120px] md:min-w-[150px] group">
                             {/* Grid Lines */}
                             {timeSlots.map((hour) => {
                                 const slotDate = new Date(date);
                                 slotDate.setHours(hour, 0, 0, 0);
+
 
                                 // Parse professional settings
                                 const workDays = professional.work_days || settings?.work_days || [0, 1, 2, 3, 4, 5, 6];

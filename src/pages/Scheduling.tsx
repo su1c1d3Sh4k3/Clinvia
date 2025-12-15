@@ -297,25 +297,25 @@ export default function Scheduling() {
     };
 
     return (
-        <div className="container mx-auto py-6 h-[calc(100vh-4rem)] flex gap-6 animate-fade-in">
-            {/* Sidebar */}
+        <div className="container mx-auto py-4 md:py-6 px-3 md:px-6 h-[calc(100vh-4rem)] flex flex-col md:flex-row gap-4 md:gap-6 animate-fade-in">
+            {/* Sidebar - Hidden on mobile by default, toggleable */}
             <div
-                className={`shrink-0 flex flex-col gap-6 transition-all duration-300 relative ${isSidebarOpen ? "w-80" : "w-12"}`}
+                className={`shrink-0 flex flex-col gap-4 md:gap-6 transition-all duration-300 relative ${isSidebarOpen ? "w-full md:w-80" : "hidden md:block md:w-12"}`}
             >
                 <Button
                     variant="ghost"
                     size="icon"
-                    className="absolute -right-3 top-0 z-10 h-6 w-6 rounded-full border bg-background shadow-sm"
+                    className="absolute -right-3 top-0 z-10 h-6 w-6 rounded-full border bg-background shadow-sm hidden md:flex"
                     onClick={() => setIsSidebarOpen(!isSidebarOpen)}
                 >
                     {isSidebarOpen ? <ChevronLeft className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                 </Button>
 
-                <div className={`flex flex-col gap-6 overflow-y-auto pb-6 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none'] transition-opacity duration-300 ${isSidebarOpen ? "opacity-100" : "opacity-0 invisible"}`}>
-                    <div className="flex flex-col items-center gap-6 origin-top scale-[0.8]">
+                <div className={`flex flex-col gap-4 md:gap-6 overflow-y-auto pb-4 md:pb-6 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none'] transition-opacity duration-300 ${isSidebarOpen ? "opacity-100" : "opacity-0 invisible"}`}>
+                    <div className="flex flex-col items-center gap-4 md:gap-6 origin-top md:scale-[0.8]">
                         <div className="space-y-2 text-center w-full">
-                            <h1 className="text-2xl font-bold">Agendamento</h1>
-                            <p className="text-muted-foreground text-sm">Gerencie sua agenda</p>
+                            <h1 className="text-xl md:text-2xl font-bold">Agendamento</h1>
+                            <p className="text-muted-foreground text-xs md:text-sm">Gerencie sua agenda</p>
                         </div>
 
                         <Card className="w-full">
@@ -361,24 +361,43 @@ export default function Scheduling() {
                                 {services?.length === 0 && <span className="text-muted-foreground text-xs">Nenhum serviço cadastrado</span>}
                             </CardContent>
                         </Card>
+
+                        {/* Mobile: Close sidebar button */}
+                        <Button
+                            variant="outline"
+                            className="w-full md:hidden"
+                            onClick={() => setIsSidebarOpen(false)}
+                        >
+                            Ver Agenda
+                        </Button>
                     </div>
                 </div>
             </div>
 
             {/* Main Calendar */}
-            <div className="flex-1 flex flex-col gap-4 overflow-hidden">
-                <div className="flex flex-col gap-4">
-                    <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-2">
+            <div className={`flex-1 flex flex-col gap-3 md:gap-4 overflow-hidden ${isSidebarOpen ? "hidden md:flex" : "flex"}`}>
+                <div className="flex flex-col gap-3 md:gap-4">
+                    <div className="flex flex-wrap justify-between items-center gap-2">
+                        <div className="flex items-center gap-1 md:gap-2">
+                            {/* Mobile: Toggle sidebar */}
+                            <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-9 w-9 md:hidden"
+                                onClick={() => setIsSidebarOpen(true)}
+                            >
+                                <Filter className="h-4 w-4" />
+                            </Button>
+
                             <div className="flex items-center border rounded-md bg-background">
                                 <Button variant="ghost" size="icon" onClick={handlePreviousDay} className="h-9 w-9 rounded-none rounded-l-md border-r">
                                     <ChevronLeft className="h-4 w-4" />
                                 </Button>
-                                <div className="px-4 py-2 text-sm font-medium min-w-[140px] text-center">
+                                <div className="px-2 md:px-4 py-2 text-xs md:text-sm font-medium min-w-[100px] md:min-w-[140px] text-center">
                                     {date ? (
                                         <div className="flex flex-col leading-none">
-                                            <span className="font-bold">{format(date, "d MMM yyyy", { locale: ptBR })}</span>
-                                            <span className="text-xs text-muted-foreground capitalize">{format(date, "EEEE", { locale: ptBR })}</span>
+                                            <span className="font-bold">{format(date, "d MMM", { locale: ptBR })}</span>
+                                            <span className="text-[10px] md:text-xs text-muted-foreground capitalize hidden sm:block">{format(date, "EEEE", { locale: ptBR })}</span>
                                         </div>
                                     ) : "Selecione"}
                                 </div>
@@ -386,7 +405,7 @@ export default function Scheduling() {
                                     <ChevronRight className="h-4 w-4" />
                                 </Button>
                             </div>
-                            <Button variant="outline" onClick={handleToday} className="h-9">
+                            <Button variant="outline" onClick={handleToday} className="h-9 text-xs md:text-sm px-2 md:px-3">
                                 Hoje
                             </Button>
                             <Button variant="outline" size="icon" onClick={() => setIsSettingsModalOpen(true)} className="h-9 w-9">
@@ -394,7 +413,7 @@ export default function Scheduling() {
                             </Button>
                         </div>
 
-                        <div className="flex items-center gap-2 flex-1 max-w-md mx-4">
+                        <div className="hidden md:flex items-center gap-2 flex-1 max-w-md mx-4">
                             <div className="relative w-full">
                                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                                 <Input
@@ -410,10 +429,23 @@ export default function Scheduling() {
                             setSelectedSlot(undefined);
                             setAppointmentToEdit(null);
                             setIsAppointmentModalOpen(true);
-                        }}>
-                            <Plus className="w-4 h-4 mr-2" />
-                            Criar Agendamento
+                        }} className="h-9 text-xs md:text-sm">
+                            <Plus className="w-4 h-4 md:mr-2" />
+                            <span className="hidden md:inline">Criar Agendamento</span>
                         </Button>
+                    </div>
+
+                    {/* Mobile search bar */}
+                    <div className="md:hidden">
+                        <div className="relative w-full">
+                            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                            <Input
+                                placeholder="Buscar clientes..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="pl-8 h-9 text-sm"
+                            />
+                        </div>
                     </div>
                 </div>
 

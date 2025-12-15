@@ -86,33 +86,33 @@ const Tags = () => {
 
     return (
         <div className="flex h-screen w-full bg-background">
-            <div className="flex-1 p-8 overflow-auto">
-                <div className="max-w-5xl mx-auto space-y-8">
-                    <div className="flex items-center justify-between">
+            <div className="flex-1 p-4 md:p-8 overflow-auto">
+                <div className="max-w-5xl mx-auto space-y-4 md:space-y-8">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div>
-                            <h1 className="text-3xl font-bold flex items-center gap-2">
-                                <TagIcon className="w-8 h-8" />
+                            <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
+                                <TagIcon className="w-6 h-6 md:w-8 md:h-8" />
                                 Tags
                             </h1>
-                            <p className="text-muted-foreground mt-2">
-                                Gerencie as tags para categorizar suas conversas
+                            <p className="text-muted-foreground text-sm md:text-base mt-1 md:mt-2">
+                                Gerencie as tags para categorizar conversas
                             </p>
                         </div>
                         {isAdminOrSupervisor && (
-                            <Button onClick={handleAddNew}>
-                                <Plus className="w-4 h-4 mr-2" />
-                                Nova Tag
+                            <Button onClick={handleAddNew} size="sm" className="h-8 md:h-9 text-xs md:text-sm w-fit">
+                                <Plus className="w-4 h-4 mr-1 md:mr-2" />
+                                <span className="hidden sm:inline">Nova </span>Tag
                             </Button>
                         )}
                     </div>
 
-                    <div className="border rounded-lg">
+                    <div className="border rounded-lg overflow-x-auto">
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead className="text-secondary dark:text-slate-400 font-semibold">Nome</TableHead>
+                                    <TableHead className="text-secondary dark:text-slate-400 font-semibold min-w-[120px]">Nome</TableHead>
                                     <TableHead className="text-secondary dark:text-slate-400 font-semibold">Status</TableHead>
-                                    <TableHead className="w-[100px] text-secondary dark:text-slate-400 font-semibold">Ações</TableHead>
+                                    <TableHead className="w-[80px] md:w-[100px] text-secondary dark:text-slate-400 font-semibold">Ações</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -131,43 +131,44 @@ const Tags = () => {
                                 ) : (
                                     tags?.map((tag) => (
                                         <TableRow key={tag.id}>
-                                            <TableCell>
+                                            <TableCell className="py-2 md:py-4">
                                                 <div className="flex items-center gap-2">
                                                     <div
-                                                        className="w-4 h-4 rounded-full border"
+                                                        className="w-3 h-3 md:w-4 md:h-4 rounded-full border flex-shrink-0"
                                                         style={{ backgroundColor: tag.color }}
                                                     />
-                                                    <span className="font-medium">{tag.name}</span>
+                                                    <span className="font-medium text-sm">{tag.name}</span>
                                                 </div>
                                             </TableCell>
-                                            <TableCell>
-                                                <Badge variant={tag.is_active ? "default" : "secondary"}>
+                                            <TableCell className="py-2 md:py-4">
+                                                <Badge variant={tag.is_active ? "default" : "secondary"} className="text-[10px] md:text-xs">
                                                     {tag.is_active ? "Ativo" : "Inativo"}
                                                 </Badge>
                                             </TableCell>
-                                            <TableCell>
-                                                <div className="flex items-center gap-2">
+                                            <TableCell className="py-2 md:py-4">
+                                                <div className="flex items-center gap-1">
                                                     {isAdminOrSupervisor && (
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
+                                                            className="h-7 w-7 md:h-8 md:w-8"
                                                             onClick={() => handleEdit(tag)}
                                                         >
-                                                            <Pencil className="w-4 h-4" />
+                                                            <Pencil className="w-3.5 h-3.5 md:w-4 md:h-4" />
                                                         </Button>
                                                     )}
                                                     {userRole === "admin" && (
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
-                                                            className={tag.name === "IA"
+                                                            className={`h-7 w-7 md:h-8 md:w-8 ${tag.name === "IA"
                                                                 ? "text-muted-foreground/50 cursor-not-allowed"
-                                                                : "text-destructive hover:text-destructive"}
+                                                                : "text-destructive hover:text-destructive"}`}
                                                             onClick={() => tag.name !== "IA" && setTagToDelete(tag)}
                                                             disabled={tag.name === "IA"}
-                                                            title={tag.name === "IA" ? "Tag do sistema - não pode ser excluída" : "Excluir tag"}
+                                                            title={tag.name === "IA" ? "Tag do sistema" : "Excluir tag"}
                                                         >
-                                                            <Trash2 className="w-4 h-4" />
+                                                            <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
                                                         </Button>
                                                     )}
                                                 </div>

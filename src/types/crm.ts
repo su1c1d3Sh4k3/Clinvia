@@ -34,6 +34,8 @@ export interface CRMDeal {
     quantity?: number; // NEW - default 1
     assigned_professional_id?: string; // NEW - only for services
     priority?: 'low' | 'medium' | 'high';
+    loss_reason?: string; // Motivo da perda
+    loss_reason_other?: string; // Descrição quando loss_reason = 'other'
     created_at: string;
     updated_at: string;
     stage_changed_at?: string;

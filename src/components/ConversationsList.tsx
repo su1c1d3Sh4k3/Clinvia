@@ -250,7 +250,7 @@ export const ConversationsList = ({
   };
 
   return (
-    <div className="w-[300px] h-screen border-r border-border flex flex-col bg-background">
+    <div className="w-full md:w-[300px] h-screen border-r border-border flex flex-col bg-background">
       <div className="p-4 border-b border-border space-y-4">
         <h2 className="text-xl font-semibold">Inbox</h2>
 

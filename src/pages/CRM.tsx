@@ -51,15 +51,15 @@ const CRM = () => {
     }, []);
 
     return (
-        <div className="px-6 pt-6 h-screen flex flex-col overflow-hidden">
-            <div className="flex justify-between items-center mb-6 flex-shrink-0">
-                <div className="flex items-center gap-4">
-                    <h1 className="text-2xl font-bold text-[#005AA8] dark:text-white">CRM</h1>
+        <div className="px-3 md:px-6 pt-4 md:pt-6 h-screen flex flex-col overflow-hidden">
+            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 mb-4 md:mb-6 flex-shrink-0">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                    <h1 className="text-xl md:text-2xl font-bold text-[#005AA8] dark:text-white">CRM</h1>
                     {funnels && funnels.length > 0 && (
                         <div className="flex gap-2">
                             <Select value={selectedFunnelId || ""} onValueChange={setSelectedFunnelId}>
-                                <SelectTrigger className="w-[250px]">
-                                    <SelectValue placeholder="Selecione um funil" />
+                                <SelectTrigger className="w-full sm:w-[200px] md:w-[250px] h-8 md:h-9 text-sm">
+                                    <SelectValue placeholder="Selecione funil" />
                                 </SelectTrigger>
                                 <SelectContent>
                                     {funnels.map((funnel) => (
@@ -73,7 +73,7 @@ const CRM = () => {
                         </div>
                     )}
                 </div>
-                <div className="flex gap-2 items-center">
+                <div className="flex gap-1 md:gap-2 items-center flex-wrap">
                     <CRMFilters filters={filters} onFiltersChange={setFilters} />
                     <CreateFunnelModal />
                     <CreateDealModal defaultFunnelId={selectedFunnelId || undefined} />

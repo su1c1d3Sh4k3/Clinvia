@@ -5,8 +5,9 @@ import { CRMStage, CRMDeal } from "@/types/crm";
 import { DragDropContext, DropResult } from "@hello-pangea/dnd";
 import { KanbanColumn } from "./KanbanColumn";
 import { toast } from "sonner";
-import { RevenueModal } from "@/components/financial/RevenueModal"; // NEW - CRM-Financial integration
-import type { RevenueFormData, PaymentMethod, FinancialStatus } from "@/types/financial"; // NEW
+import { RevenueModal } from "@/components/financial/RevenueModal";
+import { LossReasonModal } from "./LossReasonModal"; // Loss Reason Modal
+import type { RevenueFormData, PaymentMethod, FinancialStatus } from "@/types/financial";
 
 import { CRMFiltersState } from "./CRMFilters";
 import { isWithinInterval, startOfDay, endOfDay } from "date-fns";
@@ -25,9 +26,18 @@ export function KanbanBoard({ funnelId, filters }: KanbanBoardProps) {
     const { data: userRole } = useUserRole();
     const { data: currentTeamMember } = useCurrentTeamMember();
 
-    // NEW - CRM-Financial integration state
+    // CRM-Financial integration state
     const [revenueModalOpen, setRevenueModalOpen] = useState(false);
     const [prefillRevenueData, setPrefillRevenueData] = useState<Partial<RevenueFormData> | null>(null);
+
+    // Loss Reason Modal state
+    const [lossReasonModalOpen, setLossReasonModalOpen] = useState(false);
+    const [pendingLossDeal, setPendingLossDeal] = useState<{
+        dealId: string;
+        dealTitle: string;
+        fromStageId: string;
+        toStageId: string;
+    } | null>(null);
 
     const { data: stages, isLoading: isLoadingStages } = useQuery({
         queryKey: ["crm-stages", funnelId],
@@ -179,13 +189,85 @@ export function KanbanBoard({ funnelId, filters }: KanbanBoardProps) {
         const finishStageId = destination.droppableId;
 
         if (startStageId !== finishStageId) {
-            // Optimistic update could be implemented here
+            // Check if moving to "Perdido" stage
+            const targetStage = stages?.find(s => s.id === finishStageId);
+
+            if (targetStage?.name === 'Perdido') {
+                // Find the deal to get its title
+                const deal = deals?.find(d => d.id === draggableId);
+
+                // Open Loss Reason Modal instead of moving directly
+                setPendingLossDeal({
+                    dealId: draggableId,
+                    dealTitle: deal?.title || 'Negociação',
+                    fromStageId: startStageId,
+                    toStageId: finishStageId,
+                });
+                setLossReasonModalOpen(true);
+                return; // Don't move yet, wait for modal confirmation
+            }
+
+            // Normal movement (not to Perdido)
             moveDealMutation.mutate({
                 dealId: draggableId,
                 stageId: finishStageId,
                 fromStageId: startStageId
             });
         }
+    };
+
+    // Handle Loss Reason confirmation
+    const handleLossReasonConfirm = async (reason: string, otherDescription?: string) => {
+        if (!pendingLossDeal) return;
+
+        try {
+            console.log('Saving loss reason:', {
+                dealId: pendingLossDeal.dealId,
+                toStageId: pendingLossDeal.toStageId,
+                reason,
+                otherDescription
+            });
+
+            // Update deal with loss reason and new stage
+            const updateData: Record<string, any> = {
+                stage_id: pendingLossDeal.toStageId,
+                loss_reason: reason,
+            };
+
+            // Only set loss_reason_other if reason is 'other'
+            if (reason === 'other' && otherDescription) {
+                updateData.loss_reason_other = otherDescription;
+            }
+
+            const { data, error } = await supabase
+                .from('crm_deals' as any)
+                .update(updateData)
+                .eq('id', pendingLossDeal.dealId)
+                .select();
+
+            console.log('Update result:', { data, error });
+
+            if (error) {
+                console.error('Supabase error details:', error);
+                throw error;
+            }
+
+            toast.success('Negociação marcada como perdida');
+            queryClient.invalidateQueries({ queryKey: ['crm-deals', funnelId] });
+            queryClient.invalidateQueries({ queryKey: ['crm-stages', funnelId] });
+        } catch (error: any) {
+            console.error('Error updating deal with loss reason:', error);
+            toast.error(`Erro: ${error.message || 'Erro ao registrar motivo'}`);
+        } finally {
+            setLossReasonModalOpen(false);
+            setPendingLossDeal(null);
+        }
+    };
+
+    // Handle Loss Reason cancel - deal stays in original stage
+    const handleLossReasonCancel = () => {
+        setPendingLossDeal(null);
+        // Deal is not moved, stays in original position
     };
 
     // NEW - CRM-Financial Integration: Revenue creation trigger
@@ -277,6 +359,15 @@ export function KanbanBoard({ funnelId, filters }: KanbanBoardProps) {
                 open={revenueModalOpen}
                 onOpenChange={setRevenueModalOpen}
                 revenue={prefillRevenueData as any}
+            />
+
+            {/* Loss Reason Modal */}
+            <LossReasonModal
+                open={lossReasonModalOpen}
+                onOpenChange={setLossReasonModalOpen}
+                dealTitle={pendingLossDeal?.dealTitle || ''}
+                onConfirm={handleLossReasonConfirm}
+                onCancel={handleLossReasonCancel}
             />
         </>
     );

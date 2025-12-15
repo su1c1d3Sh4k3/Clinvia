@@ -314,51 +314,51 @@ export default function Settings() {
     };
 
     return (
-        <div className="container mx-auto py-10 max-w-4xl animate-in fade-in duration-500">
-            <h1 className="text-3xl font-bold mb-8 text-foreground">Configurações do Sistema</h1>
+        <div className="container mx-auto py-4 md:py-10 px-3 md:px-6 max-w-4xl animate-in fade-in duration-500">
+            <h1 className="text-2xl md:text-3xl font-bold mb-4 md:mb-8 text-foreground">Configurações do Sistema</h1>
 
             <Tabs defaultValue="profile" className="w-full">
-                <TabsList className="grid w-full grid-cols-4 mb-8">
-                    <TabsTrigger value="profile" className="flex items-center gap-2">
+                <TabsList className="grid w-full grid-cols-4 mb-4 md:mb-8 h-auto">
+                    <TabsTrigger value="profile" className="flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
                         <User className="h-4 w-4" />
-                        Perfil
+                        <span className="hidden md:inline">Perfil</span>
                     </TabsTrigger>
-                    <TabsTrigger value="company" className="flex items-center gap-2">
+                    <TabsTrigger value="company" className="flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
                         <Building2 className="h-4 w-4" />
-                        Empresa
+                        <span className="hidden md:inline">Empresa</span>
                     </TabsTrigger>
-                    <TabsTrigger value="security" className="flex items-center gap-2">
+                    <TabsTrigger value="security" className="flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
                         <Lock className="h-4 w-4" />
-                        Segurança
+                        <span className="hidden md:inline">Segurança</span>
                     </TabsTrigger>
-                    <TabsTrigger value="notifications" className="flex items-center gap-2">
+                    <TabsTrigger value="notifications" className="flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
                         <SettingsIcon className="h-4 w-4" />
-                        Sistema
+                        <span className="hidden md:inline">Sistema</span>
                     </TabsTrigger>
                 </TabsList>
 
                 {/* Profile Tab */}
                 <TabsContent value="profile">
                     <Card>
-                        <CardHeader>
-                            <CardTitle>Perfil do Usuário</CardTitle>
-                            <CardDescription>
-                                Gerencie suas informações pessoais e como elas aparecem para os outros.
+                        <CardHeader className="p-4 md:p-6">
+                            <CardTitle className="text-base md:text-lg">Perfil do Usuário</CardTitle>
+                            <CardDescription className="text-xs md:text-sm">
+                                Gerencie suas informações pessoais.
                             </CardDescription>
                         </CardHeader>
-                        <CardContent className="space-y-6">
-                            <div className="flex flex-col md:flex-row gap-8 items-start">
-                                {/* Left Side - Avatar */}
-                                <div className="flex flex-col items-center gap-4 min-w-[200px]">
-                                    <Avatar className="h-32 w-32 border-4 border-background shadow-xl">
+                        <CardContent className="p-4 md:p-6 pt-0 md:pt-0 space-y-4 md:space-y-6">
+                            <div className="flex flex-col gap-6 md:gap-8 items-center md:items-start md:flex-row">
+                                {/* Avatar */}
+                                <div className="flex flex-col items-center gap-3 md:gap-4 md:min-w-[200px]">
+                                    <Avatar className="h-24 w-24 md:h-32 md:w-32 border-4 border-background shadow-xl">
                                         <AvatarImage src={avatarUrl} />
-                                        <AvatarFallback className="text-4xl font-bold bg-primary/10 text-primary">
+                                        <AvatarFallback className="text-2xl md:text-4xl font-bold bg-primary/10 text-primary">
                                             {fullName?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase()}
                                         </AvatarFallback>
                                     </Avatar>
                                     <div className="flex items-center gap-2 w-full justify-center">
                                         <Label htmlFor="avatar-upload" className="cursor-pointer">
-                                            <div className="flex items-center gap-2 bg-secondary text-secondary-foreground hover:bg-secondary/90 h-9 px-4 py-2 rounded-md text-sm font-medium transition-colors">
+                                            <div className="flex items-center gap-2 bg-secondary text-secondary-foreground hover:bg-secondary/90 h-8 md:h-9 px-3 md:px-4 py-1.5 md:py-2 rounded-md text-xs md:text-sm font-medium transition-colors">
                                                 {uploading ? (
                                                     <Loader2 className="h-4 w-4 animate-spin" />
                                                 ) : (
@@ -473,13 +473,13 @@ export default function Settings() {
                 {/* Company Tab */}
                 <TabsContent value="company">
                     <Card>
-                        <CardHeader>
-                            <CardTitle>Informações da Empresa</CardTitle>
-                            <CardDescription>
+                        <CardHeader className="p-4 md:p-6">
+                            <CardTitle className="text-base md:text-lg">Informações da Empresa</CardTitle>
+                            <CardDescription className="text-xs md:text-sm">
                                 Configure os dados da sua organização.
                             </CardDescription>
                         </CardHeader>
-                        <CardContent className="space-y-4">
+                        <CardContent className="p-4 md:p-6 pt-0 md:pt-0 space-y-4">
                             <div className="space-y-2">
                                 <Label htmlFor="companyName">Nome da Empresa</Label>
                                 <Input
@@ -505,13 +505,13 @@ export default function Settings() {
                 {/* Security Tab */}
                 <TabsContent value="security">
                     <Card>
-                        <CardHeader>
-                            <CardTitle>Segurança da Conta</CardTitle>
-                            <CardDescription>
+                        <CardHeader className="p-4 md:p-6">
+                            <CardTitle className="text-base md:text-lg">Segurança da Conta</CardTitle>
+                            <CardDescription className="text-xs md:text-sm">
                                 Atualize seu email e senha.
                             </CardDescription>
                         </CardHeader>
-                        <CardContent className="space-y-4">
+                        <CardContent className="p-4 md:p-6 pt-0 md:pt-0 space-y-4">
                             <div className="space-y-2">
                                 <Label htmlFor="email">Email</Label>
                                 <Input
@@ -558,23 +558,23 @@ export default function Settings() {
                 {/* Notifications Tab */}
                 <TabsContent value="notifications">
                     <Card>
-                        <CardHeader>
-                            <CardTitle>Preferências de Notificação</CardTitle>
-                            <CardDescription>
-                                Personalize como você recebe alertas do sistema.
+                        <CardHeader className="p-4 md:p-6">
+                            <CardTitle className="text-base md:text-lg">Preferências de Notificação</CardTitle>
+                            <CardDescription className="text-xs md:text-sm">
+                                Personalize como você recebe alertas.
                             </CardDescription>
                         </CardHeader>
-                        <CardContent className="space-y-6">
+                        <CardContent className="p-4 md:p-6 pt-0 md:pt-0 space-y-3 md:space-y-6">
                             {/* Browser Notifications */}
-                            <div className="flex items-center justify-between p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors">
-                                <div className="flex items-center gap-4">
-                                    <div className="p-2 bg-primary/10 rounded-full">
-                                        <BellRing className="h-5 w-5 text-primary" />
+                            <div className="flex items-center justify-between p-3 md:p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors gap-3">
+                                <div className="flex items-center gap-3 md:gap-4">
+                                    <div className="p-1.5 md:p-2 bg-primary/10 rounded-full">
+                                        <BellRing className="h-4 w-4 md:h-5 md:w-5 text-primary" />
                                     </div>
                                     <div className="space-y-0.5">
-                                        <h4 className="font-medium">Notificações de Navegador</h4>
-                                        <p className="text-sm text-muted-foreground">
-                                            Receba alertas visuais e sonoros quando estiver fora do chat.
+                                        <h4 className="font-medium text-sm md:text-base">Notificações</h4>
+                                        <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">
+                                            Alertas visuais e sonoros.
                                         </p>
                                     </div>
                                 </div>
@@ -585,15 +585,15 @@ export default function Settings() {
                             </div>
 
                             {/* Group Notifications */}
-                            <div className="flex items-center justify-between p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors">
-                                <div className="flex items-center gap-4">
-                                    <div className="p-2 bg-primary/10 rounded-full">
-                                        <Users className="h-5 w-5 text-primary" />
+                            <div className="flex items-center justify-between p-3 md:p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors gap-3">
+                                <div className="flex items-center gap-3 md:gap-4">
+                                    <div className="p-1.5 md:p-2 bg-primary/10 rounded-full">
+                                        <Users className="h-4 w-4 md:h-5 md:w-5 text-primary" />
                                     </div>
                                     <div className="space-y-0.5">
-                                        <h4 className="font-medium">Notificações de Grupos</h4>
-                                        <p className="text-sm text-muted-foreground">
-                                            Receba alertas também para mensagens vindas de grupos.
+                                        <h4 className="font-medium text-sm md:text-base">Grupos</h4>
+                                        <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">
+                                            Alertas para mensagens de grupos.
                                         </p>
                                     </div>
                                 </div>
@@ -604,17 +604,17 @@ export default function Settings() {
                                 />
                             </div>
 
-                            {/* Sign Messages (Admin and Supervisor only) */}
+                            {/* Sign Messages */}
                             {userRole !== 'agent' && (
-                                <div className="flex items-center justify-between p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors border-l-4 border-l-primary">
-                                    <div className="flex items-center gap-4">
-                                        <div className="p-2 bg-primary/10 rounded-full">
-                                            <Pen className="h-5 w-5 text-primary" />
+                                <div className="flex items-center justify-between p-3 md:p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors border-l-4 border-l-primary gap-3">
+                                    <div className="flex items-center gap-3 md:gap-4">
+                                        <div className="p-1.5 md:p-2 bg-primary/10 rounded-full">
+                                            <Pen className="h-4 w-4 md:h-5 md:w-5 text-primary" />
                                         </div>
                                         <div className="space-y-0.5">
-                                            <h4 className="font-medium">Assinar mensagens</h4>
-                                            <p className="text-sm text-muted-foreground">
-                                                Quando ativo, seu nome será enviado junto com as mensagens.
+                                            <h4 className="font-medium text-sm md:text-base">Assinar msgs</h4>
+                                            <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">
+                                                Seu nome será enviado com as mensagens.
                                             </p>
                                         </div>
                                     </div>
@@ -626,17 +626,17 @@ export default function Settings() {
                                 </div>
                             )}
 
-                            {/* Financial Access Control (Admin Only) */}
+                            {/* Financial Access Control */}
                             {userRole === 'admin' && (
-                                <div className="flex items-center justify-between p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors border-l-4 border-l-primary">
-                                    <div className="flex items-center gap-4">
-                                        <div className="p-2 bg-primary/10 rounded-full">
-                                            <DollarSign className="h-5 w-5 text-primary" />
+                                <div className="flex items-center justify-between p-3 md:p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors border-l-4 border-l-primary gap-3">
+                                    <div className="flex items-center gap-3 md:gap-4">
+                                        <div className="p-1.5 md:p-2 bg-primary/10 rounded-full">
+                                            <DollarSign className="h-4 w-4 md:h-5 md:w-5 text-primary" />
                                         </div>
                                         <div className="space-y-0.5">
-                                            <h4 className="font-medium">Conceder acesso financeiro ao supervisor</h4>
-                                            <p className="text-sm text-muted-foreground">
-                                                Ao desativar, apenas o administrador visualizará dados financeiros da empresa.
+                                            <h4 className="font-medium text-sm md:text-base">Acesso financeiro</h4>
+                                            <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">
+                                                Supervisor visualiza dados financeiros.
                                             </p>
                                         </div>
                                     </div>
@@ -649,20 +649,20 @@ export default function Settings() {
                             )}
 
                             {/* Test Section */}
-                            <div className="flex items-center justify-between p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors">
-                                <div className="flex items-center gap-4">
-                                    <div className="p-2 bg-primary/10 rounded-full">
-                                        <Volume2 className="h-5 w-5 text-primary" />
+                            <div className="flex items-center justify-between p-3 md:p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors gap-3">
+                                <div className="flex items-center gap-3 md:gap-4">
+                                    <div className="p-1.5 md:p-2 bg-primary/10 rounded-full">
+                                        <Volume2 className="h-4 w-4 md:h-5 md:w-5 text-primary" />
                                     </div>
                                     <div className="space-y-0.5">
-                                        <h4 className="font-medium">Testar Alertas</h4>
-                                        <p className="text-sm text-muted-foreground">
-                                            Verifique se o som e os popups estão funcionando corretamente.
+                                        <h4 className="font-medium text-sm md:text-base">Testar Alertas</h4>
+                                        <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">
+                                            Verifique som e popups.
                                         </p>
                                     </div>
                                 </div>
-                                <Button variant="outline" size="sm" onClick={testNotification}>
-                                    Testar Agora
+                                <Button variant="outline" size="sm" onClick={testNotification} className="text-xs md:text-sm h-8 px-2 md:px-3">
+                                    Testar
                                 </Button>
                             </div>
 

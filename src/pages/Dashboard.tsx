@@ -17,7 +17,7 @@ type DashboardTab = "atendimentos" | "leads" | "financeiro";
 const Dashboard = () => {
     const { data: userRole } = useUserRole();
     const { data: financialAccess } = useFinancialAccess();
-    const [activeTab, setActiveTab] = useState<DashboardTab>("atendimentos");
+    const [activeTab, setActiveTab] = useState<DashboardTab>("leads");
 
     const canViewFinancial = userRole === 'admin' || (userRole === 'supervisor' && financialAccess !== false);
 
@@ -29,12 +29,12 @@ const Dashboard = () => {
     }, [userRole]);
 
     return (
-        <div className="flex-1 space-y-8 p-8 pt-6">
-            <div className="flex items-center justify-between space-y-2">
-                <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
+        <div className="flex-1 space-y-4 md:space-y-8 p-4 md:p-8 pt-4 md:pt-6">
+            <div className="flex items-center justify-between">
+                <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Dashboard</h2>
             </div>
 
-            <div className="space-y-6">
+            <div className="space-y-4 md:space-y-6">
                 <NotificationsBoard />
 
                 {/* Dashboard Tabs - Agentes só veem Painel de Negócios */}
@@ -46,17 +46,17 @@ const Dashboard = () => {
                         {userRole !== 'agent' && (
                             <TabsTrigger value="atendimentos" className="flex items-center gap-2">
                                 <Headphones className="h-4 w-4" />
-                                Painel de Atendimentos
+                                <span className="hidden sm:inline">Atendimentos</span>
                             </TabsTrigger>
                         )}
                         <TabsTrigger value="leads" className="flex items-center gap-2">
                             <Users className="h-4 w-4" />
-                            Painel de Negócios
+                            <span className="hidden sm:inline">Negócios</span>
                         </TabsTrigger>
                         {canViewFinancial && (
                             <TabsTrigger value="financeiro" className="flex items-center gap-2">
                                 <DollarSign className="h-4 w-4" />
-                                Painel Financeiro
+                                <span className="hidden sm:inline">Financeiro</span>
                             </TabsTrigger>
                         )}
                     </TabsList>
