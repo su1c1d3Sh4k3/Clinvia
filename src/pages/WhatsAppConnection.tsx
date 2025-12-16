@@ -23,6 +23,7 @@ const WhatsAppConnection = () => {
   const [currentInstanceName, setCurrentInstanceName] = useState("");
   const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
   const [pollingInstanceId, setPollingInstanceId] = useState<string | null>(null);
+  const [isConfirming, setIsConfirming] = useState(false);
 
   const { data: instances, isLoading } = useQuery({
     queryKey: ["instances"],
@@ -154,6 +155,7 @@ const WhatsAppConnection = () => {
 
   const handleConfirmConnection = async () => {
     if (selectedInstanceId) {
+      setIsConfirming(true);
       try {
         toast({
           title: "Verificando...",
@@ -163,13 +165,41 @@ const WhatsAppConnection = () => {
         const data = await checkConnectionMutation.mutateAsync(selectedInstanceId);
 
         if (data.status === 'connected') {
+          // Configure webhook via Edge Function (avoids CORS)
+          toast({
+            title: "Configurando...",
+            description: "Configurando webhook da instância.",
+          });
+
+          try {
+            console.log('[WhatsApp] Configuring global webhook via Edge Function...');
+
+            const { data: webhookResult, error: webhookError } = await supabase.functions.invoke(
+              'uzapi-configure-webhook',
+              { body: { instanceId: selectedInstanceId } }
+            );
+
+            if (webhookError) {
+              console.error('[WhatsApp] Webhook configuration error:', webhookError);
+              toast({
+                title: "Aviso",
+                description: "Webhook não configurado automaticamente. Configure manualmente se necessário.",
+                variant: "destructive"
+              });
+            } else {
+              console.log('[WhatsApp] Webhook configured successfully:', webhookResult);
+            }
+          } catch (webhookError) {
+            console.error('[WhatsApp] Error configuring webhook:', webhookError);
+          }
+
           setConnectDialogOpen(false);
           setPollingInstanceId(null);
           setCurrentPairCode(null);
           toast({
             title: "Conectado com sucesso!",
             description: "A instância está pronta para uso.",
-            variant: "default" // Success
+            variant: "default"
           });
           queryClient.invalidateQueries({ queryKey: ["instances"] });
         } else {
@@ -185,6 +215,8 @@ const WhatsAppConnection = () => {
           description: "Não foi possível verificar o status.",
           variant: "destructive"
         });
+      } finally {
+        setIsConfirming(false);
       }
     }
   };
@@ -261,10 +293,12 @@ const WhatsAppConnection = () => {
       <ConnectInstanceDialog
         open={connectDialogOpen}
         onOpenChange={(open) => {
-          setConnectDialogOpen(open);
-          if (!open) {
-            setPollingInstanceId(null);
-            setCurrentPairCode(null);
+          if (!isConfirming) {
+            setConnectDialogOpen(open);
+            if (!open) {
+              setPollingInstanceId(null);
+              setCurrentPairCode(null);
+            }
           }
         }}
         instanceName={currentInstanceName}
@@ -274,7 +308,7 @@ const WhatsAppConnection = () => {
           }
         }}
         pairCode={currentPairCode}
-        isLoading={connectMutation.isPending}
+        isLoading={connectMutation.isPending || isConfirming}
         onConfirm={handleConfirmConnection}
       />
     </div>

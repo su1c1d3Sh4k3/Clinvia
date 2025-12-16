@@ -149,8 +149,8 @@ export const ChatArea = ({
     }
   }, [externalMessage, clearExternalMessage]);
 
-  // Pass isTyping to pause subscriptions during typing
-  const { messages, isLoading } = useMessages(conversationId, isTyping);
+  // Get messages for this conversation
+  const { messages, isLoading } = useMessages(conversationId);
   const sendMessageMutation = useSendMessage();
   const resolveConversation = useResolveConversation();
   const updateStatus = useUpdateTicketStatus();

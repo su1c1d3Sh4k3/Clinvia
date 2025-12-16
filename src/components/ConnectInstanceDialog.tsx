@@ -112,8 +112,15 @@ export const ConnectInstanceDialog = ({
                                 </p>
                             </div>
 
-                            <Button onClick={onConfirm} className="w-full">
-                                Confirmar Conexão
+                            <Button onClick={onConfirm} className="w-full" disabled={isLoading}>
+                                {isLoading ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Configurando...
+                                    </>
+                                ) : (
+                                    "Confirmar Conexão"
+                                )}
                             </Button>
                         </div>
                     ) : (

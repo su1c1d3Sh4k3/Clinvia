@@ -141,8 +141,8 @@ serve(async (req) => {
         const instanceName = payload.instanceName;
         const { data: instance, error: instanceError } = await supabaseClient
             .from('instances')
-            .select('id, apikey, user_id, webhook_url, default_queue_id') // Fetch user_id, webhook_url and default_queue_id
-            .eq('name', instanceName)
+            .select('id, apikey, user_id, webhook_url, default_queue_id')
+            .eq('instance_name', instanceName)
             .single();
 
         if (instanceError || !instance) {
@@ -152,7 +152,11 @@ serve(async (req) => {
 
         const userId = instance.user_id;
         if (!userId) {
-            console.warn('[UZAPI WEHOOK REFACTOR] WARNING: Proceeding without user_id!');
+            console.error('[UZAPI WEHOOK REFACTOR] CRITICAL: Instance has no user_id configured! Aborting.');
+            return new Response(
+                JSON.stringify({ success: false, error: "Instance has no user_id configured" }),
+                { status: 400, headers: corsHeaders }
+            );
         }
 
         // 2. Check if it is a Group Message
@@ -190,7 +194,7 @@ serve(async (req) => {
                         remote_jid: waChatId,
                         group_name: groupName,
                         instance_id: instance.id,
-                        user_id: userId // Set user_id
+                        user_id: userId
                     })
                     .select()
                     .single();
@@ -216,7 +220,6 @@ serve(async (req) => {
             // 2.2 Sync Group Profile Picture
             if (group) {
                 const numberOnly = waChatId.replace(/\D/g, '');
-                // ... (Keep existing image sync logic) ...
                 try {
                     const detailsResponse = await fetch('https://clinvia.uazapi.com/chat/details', {
                         method: 'POST',
@@ -277,7 +280,7 @@ serve(async (req) => {
                             group_id: group.id,
                             push_name: senderNameRaw,
                             number: senderPn,
-                            user_id: userId // Set user_id
+                            user_id: userId
                         })
                         .select()
                         .single();
@@ -296,7 +299,6 @@ serve(async (req) => {
 
                 // 2.4 Sync Member Profile Picture
                 if (member) {
-                    // Set sender info for message
                     senderName = member.push_name || senderNameRaw;
                     senderJid = member.number;
                     senderProfilePicUrl = member.profile_pic_url;
@@ -334,7 +336,7 @@ serve(async (req) => {
                                             const newPicUrl = memPublicUrlData.publicUrl;
                                             await supabaseClient.from('group_members').update({ profile_pic_url: newPicUrl }).eq('id', member.id);
                                             console.log('[UZAPI WEHOOK REFACTOR] Member profile pic updated.');
-                                            senderProfilePicUrl = newPicUrl; // Update local variable
+                                            senderProfilePicUrl = newPicUrl;
                                         }
                                     }
                                 } catch (e) { console.error('[UZAPI WEHOOK REFACTOR] Error processing member image:', e); }
@@ -346,35 +348,47 @@ serve(async (req) => {
 
         } else {
             // 3. Existing Logic for Individual Contacts (Non-Group)
-            const chatid = payload.message?.chatid;
-            if (!chatid) {
-                console.error('[UZAPI WEHOOK REFACTOR] No chatid in message');
-                return new Response(JSON.stringify({ success: false, error: "No chatid" }), { status: 400, headers: corsHeaders });
+            // CORREÇÃO: Usar campos corretos do payload
+            const chatData = payload.body?.chat || {};
+            const waNumber = chatData.wa_chatid || payload.message?.chatid;
+            const contactName = chatData.name || payload.message?.senderName || 'Desconhecido';
+            const profilePicUrl = chatData.imagePreview || null;
+
+            if (!waNumber) {
+                console.error('[UZAPI WEHOOK REFACTOR] No wa_chatid in payload');
+                return new Response(JSON.stringify({ success: false, error: "No wa_chatid" }), { status: 400, headers: corsHeaders });
             }
+
+            console.log('[UZAPI WEHOOK REFACTOR] Looking for contact with number:', waNumber, 'and user_id:', userId);
 
             let { data: contact, error: contactError } = await supabaseClient
                 .from('contacts')
                 .select('*')
-                .eq('number', chatid)
-                .single();
+                .eq('user_id', userId)  // Filtrar por tenant
+                .eq('number', waNumber)
+                .maybeSingle();  // Evita erro se não encontrar
+
+            if (contactError) {
+                console.error('[UZAPI WEHOOK REFACTOR] Error querying contact:', contactError);
+            }
 
             if (contact) {
                 console.log('[UZAPI WEHOOK REFACTOR] Contact already exists:', contact.id);
-                // Update user_id if missing
-                if (!contact.user_id && userId) {
-                    await supabaseClient.from('contacts').update({ user_id: userId }).eq('id', contact.id);
+                // Atualizar profile_pic_url se mudou
+                if (profilePicUrl && profilePicUrl !== contact.profile_pic_url) {
+                    await supabaseClient.from('contacts').update({ profile_pic_url: profilePicUrl }).eq('id', contact.id);
                 }
             } else {
-                console.log('[UZAPI WEHOOK REFACTOR] Contact does not exist. Creating...');
-                const senderNameRaw = payload.message?.senderName || 'Unknown';
+                console.log('[UZAPI WEHOOK REFACTOR] Contact does not exist. Creating with:', { waNumber, contactName, profilePicUrl });
                 const { data: newContact, error: createError } = await supabaseClient
                     .from('contacts')
                     .insert({
-                        number: chatid,
-                        push_name: senderNameRaw,
+                        number: waNumber,
+                        push_name: contactName,
+                        profile_pic_url: profilePicUrl,
                         is_group: false,
                         instance_id: instance.id,
-                        user_id: userId // Set user_id
+                        user_id: userId
                     })
                     .select()
                     .single();
@@ -390,13 +404,11 @@ serve(async (req) => {
 
             // 4. Fetch Chat Details & Update Profile Picture (Individual)
             if (contact) {
-                // Set sender info for message
                 senderName = contact.push_name;
                 senderJid = contact.number;
                 senderProfilePicUrl = contact.profile_pic_url;
 
-                const numberOnly = chatid.replace(/\D/g, '');
-                // ... (Keep existing image sync logic) ...
+                const numberOnly = waNumber.replace(/\\D/g, '');
                 try {
                     const detailsResponse = await fetch('https://clinvia.uazapi.com/chat/details', {
                         method: 'POST',
@@ -428,7 +440,7 @@ serve(async (req) => {
                                         const { data: publicUrlData } = supabaseClient.storage.from('avatars').getPublicUrl(fileName);
                                         const newPicUrl = publicUrlData.publicUrl;
                                         await supabaseClient.from('contacts').update({ profile_pic_url: newPicUrl }).eq('id', contact.id);
-                                        senderProfilePicUrl = newPicUrl; // Update local variable
+                                        senderProfilePicUrl = newPicUrl;
                                     }
                                 }
                             } catch (imgError) { console.error('[UZAPI WEHOOK REFACTOR] Exception handling image:', imgError); }
@@ -442,10 +454,17 @@ serve(async (req) => {
         if (contactId || groupId) {
             console.log('[UZAPI WEHOOK REFACTOR] Processing Conversation Logic...');
 
+            // Extract message text EARLY so we can use it in conversation update
+            const messageType = mapMessageType(payload.message?.messageType || 'conversation');
+            const messageText = payload.message?.text || payload.message?.content?.text || payload.body?.message?.text || '';
+            const fromMe = payload.message?.fromMe === true;
+            const messageId = payload.message?.messageid || payload.message?.id || payload.body?.key?.id;
+
             let query = supabaseClient
                 .from('conversations')
                 .select('*')
                 .eq('instance_id', instance.id)
+                .eq('user_id', userId)
                 .in('status', ['pending', 'open'])
                 .order('created_at', { ascending: false })
                 .limit(1);
@@ -467,6 +486,7 @@ serve(async (req) => {
                 await supabaseClient
                     .from('conversations')
                     .update({
+                        last_message: messageText || 'Mídia',
                         unread_count: (conversation.unread_count || 0) + 1,
                         updated_at: new Date().toISOString(),
                         last_message_at: new Date().toISOString()
@@ -477,13 +497,13 @@ serve(async (req) => {
                 const { data: newConversation, error: createConvError } = await supabaseClient
                     .from('conversations')
                     .insert({
-                        contact_id: contactId, // Can be null if group
-                        group_id: groupId,     // Can be null if individual
+                        contact_id: contactId,
+                        group_id: groupId,
                         instance_id: instance.id,
                         user_id: userId,
                         status: 'pending',
                         unread_count: 1,
-                        queue_id: instance.default_queue_id, // Assign default queue if set
+                        queue_id: instance.default_queue_id,
                         last_message_at: new Date().toISOString()
                     })
                     .select()
@@ -499,10 +519,7 @@ serve(async (req) => {
 
             // 6. Save Message & Handle Media
             if (conversation) {
-                const messageType = mapMessageType(payload.message?.messageType || 'conversation');
-                const messageText = payload.message?.text || payload.message?.content?.text || payload.body?.message?.text || '';
-                const fromMe = payload.message?.fromMe === true;
-                const messageId = payload.message?.messageid || payload.message?.id || payload.body?.key?.id;
+                // messageType, messageText, fromMe, messageId already extracted above
 
                 let mediaUrl = null;
 
@@ -536,12 +553,12 @@ serve(async (req) => {
                                 if (messageType === 'image') { extension = 'jpg'; contentType = 'image/jpeg'; }
                                 else if (messageType === 'audio') { extension = 'ogg'; contentType = 'audio/ogg'; }
                                 else if (messageType === 'video') { extension = 'mp4'; contentType = 'video/mp4'; }
-                                else if (messageType === 'document') { extension = 'pdf'; contentType = 'application/pdf'; } // Simplification
+                                else if (messageType === 'document') { extension = 'pdf'; contentType = 'application/pdf'; }
 
                                 const fileName = `media/${conversation.id}/${Date.now()}_${messageId}.${extension}`;
 
                                 const { error: uploadError } = await supabaseClient.storage
-                                    .from('media') // Assuming 'media' bucket exists
+                                    .from('media')
                                     .upload(fileName, fileBytes, { contentType: contentType, upsert: true });
 
                                 if (uploadError) {
@@ -571,7 +588,6 @@ serve(async (req) => {
                     quotedBody = contextInfo.quotedMessage?.conversation ||
                         contextInfo.quotedMessage?.extendedTextMessage?.text ||
                         null;
-                    // Try to determine quoted sender from participant field
                     quotedSender = contextInfo.participant ?
                         (contextInfo.participant.includes('@lid') ? 'Atendente' : 'Cliente') :
                         null;
@@ -628,7 +644,6 @@ serve(async (req) => {
                     }
 
                     // --- SATISFACTION INDEX AUTOMATION ---
-                    // Check total message count to trigger AI Analysis every 20 messages
                     try {
                         const { count, error: countError } = await supabaseClient
                             .from('messages')
@@ -638,7 +653,6 @@ serve(async (req) => {
                         if (!countError && count !== null) {
                             console.log(`[UZAPI WEHOOK REFACTOR] Total messages for conversation ${conversation.id}: ${count}`);
 
-                            // Trigger every 20 messages (20, 40, 60...)
                             if (count > 0 && count % 20 === 0) {
                                 console.log('[UZAPI WEHOOK REFACTOR] Triggering AI Satisfaction Analysis (Count % 20 === 0)...');
                                 supabaseClient.functions.invoke('ai-analyze-conversation', {
@@ -655,12 +669,10 @@ serve(async (req) => {
                     }
 
                     // --- AUTO FOLLOW UP RESET ---
-                    // If this is an inbound message (from client), reset auto follow up
                     if (!fromMe && conversation.id) {
                         try {
                             console.log('[UZAPI WEHOOK REFACTOR] Checking auto follow up reset for conversation:', conversation.id);
 
-                            // Get follow up for this conversation
                             const { data: followUp } = await supabaseClient
                                 .from('conversation_follow_ups')
                                 .select('id, category_id, auto_send')
@@ -670,7 +682,6 @@ serve(async (req) => {
                             if (followUp && followUp.auto_send) {
                                 console.log('[UZAPI WEHOOK REFACTOR] Active auto follow up found. Resetting...');
 
-                                // Get first template's time_minutes
                                 const { data: templates } = await supabaseClient
                                     .from('follow_up_templates')
                                     .select('time_minutes')
@@ -682,7 +693,6 @@ serve(async (req) => {
                                     const firstTemplateMinutes = templates[0].time_minutes;
                                     const nextSendAt = new Date(Date.now() + firstTemplateMinutes * 60 * 1000);
 
-                                    // Reset to first template
                                     await supabaseClient
                                         .from('conversation_follow_ups')
                                         .update({
@@ -704,11 +714,9 @@ serve(async (req) => {
         }
 
         // 7. Forward to External Webhook (if configured)
-        // ONLY forward 'messages' type events, NOT 'messages_update' or other types
         if (instance.webhook_url && eventType === 'messages') {
             console.log('[UZAPI WEHOOK REFACTOR] Forwarding to external webhook:', instance.webhook_url);
             try {
-                // Forward the parsed payload (or rawBody if preferred, but payload is safer JSON)
                 await fetch(instance.webhook_url, {
                     method: 'POST',
                     headers: {

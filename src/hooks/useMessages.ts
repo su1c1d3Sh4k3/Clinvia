@@ -5,7 +5,7 @@ import type { Tables } from "@/integrations/supabase/types";
 
 type Message = Tables<"messages">;
 
-export const useMessages = (conversationId?: string, paused: boolean = false) => {
+export const useMessages = (conversationId?: string) => {
   const queryClient = useQueryClient();
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
@@ -60,39 +60,24 @@ export const useMessages = (conversationId?: string, paused: boolean = false) =>
       return data as Message[];
     },
     enabled: !!conversationId,
-    // Disable refetching when paused
-    refetchInterval: paused ? false : undefined,
-    refetchOnWindowFocus: !paused,
   });
 
-  // Set up realtime subscription for new messages - PAUSABLE
+  // Set up realtime subscription for new messages
   useEffect(() => {
     if (!conversationId) return;
 
-    // If paused, disconnect existing channel and don't create new one
-    if (paused) {
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
-        channelRef.current = null;
-      }
-      return;
-    }
-
-    // Create channel only if not paused
     const channel = supabase
       .channel(`messages-${conversationId}`)
       .on(
         "postgres_changes",
         {
-          event: "*", // Listen for INSERT, UPDATE, DELETE
+          event: "*",
           schema: "public",
           table: "messages",
           filter: `conversation_id=eq.${conversationId}`,
         },
         () => {
-          if (!paused) {
-            queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
-          }
+          queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
         }
       )
       .subscribe();
@@ -105,7 +90,7 @@ export const useMessages = (conversationId?: string, paused: boolean = false) =>
         channelRef.current = null;
       }
     };
-  }, [conversationId, queryClient, paused]);
+  }, [conversationId, queryClient]);
 
   return {
     messages: messages || [],
