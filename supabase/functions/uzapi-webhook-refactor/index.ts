@@ -351,8 +351,12 @@ serve(async (req) => {
             // CORREÇÃO: Usar campos corretos do payload
             const chatData = payload.body?.chat || {};
             const waNumber = chatData.wa_chatid || payload.message?.chatid;
-            const contactName = chatData.name || payload.message?.senderName || 'Desconhecido';
+            // IMPORTANTE: body.chat.name é o nome do CLIENTE
+            // payload.message.senderName é o nome de quem RECEBE (atendente) - NÃO usar!
+            const contactName = chatData.name || 'Desconhecido';
             const profilePicUrl = chatData.imagePreview || null;
+
+            console.log('[UZAPI WEHOOK REFACTOR] Contact name from body.chat.name:', chatData.name);
 
             if (!waNumber) {
                 console.error('[UZAPI WEHOOK REFACTOR] No wa_chatid in payload');

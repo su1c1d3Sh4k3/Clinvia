@@ -16,6 +16,7 @@ import {
 export default function Tasks() {
     const [selectedBoardId, setSelectedBoardId] = useState<string | null>(null);
     const [isConfigOpen, setIsConfigOpen] = useState(false);
+    const [editingBoardId, setEditingBoardId] = useState<string | null>(null); // null = create new, string = edit existing
     const [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
 
     const { data: boards, isLoading } = useQuery({
@@ -38,6 +39,18 @@ export default function Tasks() {
     }, [boards, selectedBoardId]);
 
     const currentBoard = boards?.find(b => b.id === selectedBoardId);
+
+    // Open modal to EDIT current board
+    const handleEditBoard = () => {
+        setEditingBoardId(selectedBoardId);
+        setIsConfigOpen(true);
+    };
+
+    // Open modal to CREATE new board
+    const handleNewBoard = () => {
+        setEditingBoardId(null);
+        setIsConfigOpen(true);
+    };
 
     return (
         <div className="h-screen flex flex-col bg-background">
@@ -72,14 +85,14 @@ export default function Tasks() {
                         variant="outline"
                         size="icon"
                         className="h-8 w-8 md:h-9 md:w-9"
-                        onClick={() => setIsConfigOpen(true)}
-                        disabled={!selectedBoardId && boards?.length > 0}
+                        onClick={handleEditBoard}
+                        disabled={!selectedBoardId}
                         title="Configurar Quadro"
                     >
                         <Settings className="h-3.5 w-3.5 md:h-4 md:w-4" />
                     </Button>
                     <Button
-                        onClick={() => setIsConfigOpen(true)}
+                        onClick={handleNewBoard}
                         variant={boards?.length === 0 ? "default" : "outline"}
                         size="sm"
                         className="h-8 md:h-9 text-xs md:text-sm"
@@ -106,7 +119,7 @@ export default function Tasks() {
                     <div className="h-full border rounded-lg bg-card/50 flex flex-col items-center justify-center text-muted-foreground gap-4">
                         <CalendarIcon className="h-12 w-12 opacity-20" />
                         <p>Selecione ou crie um quadro para começar</p>
-                        <Button onClick={() => setIsConfigOpen(true)}>
+                        <Button onClick={handleNewBoard}>
                             Criar Quadro
                         </Button>
                     </div>
@@ -116,7 +129,7 @@ export default function Tasks() {
             <TaskBoardConfigModal
                 open={isConfigOpen}
                 onOpenChange={setIsConfigOpen}
-                boardId={selectedBoardId} // If we want to edit the current board. Logic needs refinement if "New Board" button is clicked.
+                boardId={editingBoardId}
             />
         </div>
     );

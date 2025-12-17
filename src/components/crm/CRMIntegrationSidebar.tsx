@@ -32,24 +32,42 @@ export function CRMIntegrationSidebar({ contactId, contactName, contactPhone }: 
     const [showEditModal, setShowEditModal] = useState(false);
     const [showTaskModal, setShowTaskModal] = useState(false);
     const [selectedDeal, setSelectedDeal] = useState<CRMDeal | null>(null);
+    const [selectedPreviousDealId, setSelectedPreviousDealId] = useState<string | null>(null);
 
-    // Fetch active deal for this contact
-    const { data: deal, isLoading, refetch } = useQuery({
-        queryKey: ["crm-deal-contact", contactId],
+    // Fetch ALL deals for this contact (not just the most recent)
+    const { data: allDeals, isLoading, refetch } = useQuery({
+        queryKey: ["crm-deals-contact", contactId],
         queryFn: async () => {
             const { data, error } = await supabase
                 .from("crm_deals" as any)
-                .select("*, contacts(push_name, number, profile_pic_url, contact_tags(tags(id, name, color)))")
+                .select(`
+                    *, 
+                    contacts(push_name, number, profile_pic_url, contact_tags(tags(id, name, color))),
+                    stage:crm_stages(id, name, color)
+                `)
                 .eq("contact_id", contactId)
-                .order("created_at", { ascending: false })
-                .limit(1)
-                .single();
+                .order("created_at", { ascending: false });
 
             if (error && error.code !== 'PGRST116') throw error;
-            return data as unknown as CRMDeal;
+            return (data || []) as unknown as (CRMDeal & { stage?: { id: string; name: string; color: string } })[];
         },
         enabled: !!contactId,
     });
+
+    // Separate deals into active and finished (Ganho/Perdido)
+    const finishedDeals = allDeals?.filter(d =>
+        d.stage?.name === 'Ganho' || d.stage?.name === 'Perdido'
+    ) || [];
+
+    const activeDeals = allDeals?.filter(d =>
+        d.stage?.name !== 'Ganho' && d.stage?.name !== 'Perdido'
+    ) || [];
+
+    // Current deal: active deal if exists, otherwise null (show create option)
+    const deal = activeDeals[0] || null;
+
+    // Get the selected previous deal for display
+    const selectedPreviousDeal = finishedDeals.find(d => d.id === selectedPreviousDealId) || null;
 
     // Fetch stages for quick move
     const { data: stages } = useQuery({
@@ -161,6 +179,60 @@ export function CRMIntegrationSidebar({ contactId, contactName, contactPhone }: 
                                     </div>
                                 </div>
 
+                                {/* Previous Deals Select - When active deal exists */}
+                                {finishedDeals.length > 0 && (
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] text-muted-foreground uppercase font-bold">
+                                            Negociações Anteriores
+                                        </label>
+                                        <Select
+                                            value={selectedPreviousDealId || ""}
+                                            onValueChange={(val) => setSelectedPreviousDealId(val || null)}
+                                        >
+                                            <SelectTrigger className="h-8 text-xs">
+                                                <SelectValue placeholder="Selecionar negociação" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {finishedDeals.map(d => (
+                                                    <SelectItem key={d.id} value={d.id}>
+                                                        <div className="flex items-center gap-2">
+                                                            <div
+                                                                className="w-2 h-2 rounded-full"
+                                                                style={{ backgroundColor: d.stage?.color || '#888' }}
+                                                            />
+                                                            {d.title} - {formatCurrency(d.value)}
+                                                        </div>
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        {/* Display selected previous deal info (read-only) */}
+                                        {selectedPreviousDeal && (
+                                            <div className="mt-2 p-2 bg-muted/20 rounded-md border border-dashed space-y-2">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-xs font-medium">{selectedPreviousDeal.title}</span>
+                                                    <Badge variant="outline" className="text-[10px] h-5">
+                                                        {selectedPreviousDeal.stage?.name}
+                                                    </Badge>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                                                    <span>Valor: {formatCurrency(selectedPreviousDeal.value)}</span>
+                                                    <span>Prioridade: {selectedPreviousDeal.priority ? priorityLabel[selectedPreviousDeal.priority] : 'N/A'}</span>
+                                                </div>
+                                                <DealNotesModal
+                                                    deal={selectedPreviousDeal as CRMDeal}
+                                                    trigger={
+                                                        <Button variant="ghost" size="sm" className="w-full h-6 text-xs gap-1">
+                                                            <StickyNote className="h-3 w-3" />
+                                                            Ver Notas
+                                                        </Button>
+                                                    }
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
                                 {/* Key Details Grid */}
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="space-y-0.5">
@@ -249,6 +321,60 @@ export function CRMIntegrationSidebar({ contactId, contactName, contactPhone }: 
                                     <Plus className="h-3 w-3" />
                                     Criar Negociação
                                 </Button>
+
+                                {/* Previous Deals Select - When no active deal */}
+                                {finishedDeals.length > 0 && (
+                                    <div className="space-y-1 mt-3 w-full">
+                                        <label className="text-[10px] text-muted-foreground uppercase font-bold">
+                                            Negociações Anteriores
+                                        </label>
+                                        <Select
+                                            value={selectedPreviousDealId || ""}
+                                            onValueChange={(val) => setSelectedPreviousDealId(val || null)}
+                                        >
+                                            <SelectTrigger className="h-8 text-xs w-full">
+                                                <SelectValue placeholder="Selecionar negociação" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {finishedDeals.map(d => (
+                                                    <SelectItem key={d.id} value={d.id}>
+                                                        <div className="flex items-center gap-2">
+                                                            <div
+                                                                className="w-2 h-2 rounded-full"
+                                                                style={{ backgroundColor: d.stage?.color || '#888' }}
+                                                            />
+                                                            {d.title} - {formatCurrency(d.value)}
+                                                        </div>
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        {/* Display selected previous deal info (read-only) */}
+                                        {selectedPreviousDeal && (
+                                            <div className="mt-2 p-2 bg-muted/20 rounded-md border border-dashed space-y-2">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-xs font-medium">{selectedPreviousDeal.title}</span>
+                                                    <Badge variant="outline" className="text-[10px] h-5">
+                                                        {selectedPreviousDeal.stage?.name}
+                                                    </Badge>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                                                    <span>Valor: {formatCurrency(selectedPreviousDeal.value)}</span>
+                                                    <span>Prioridade: {selectedPreviousDeal.priority ? priorityLabel[selectedPreviousDeal.priority] : 'N/A'}</span>
+                                                </div>
+                                                <DealNotesModal
+                                                    deal={selectedPreviousDeal as CRMDeal}
+                                                    trigger={
+                                                        <Button variant="ghost" size="sm" className="w-full h-6 text-xs gap-1">
+                                                            <StickyNote className="h-3 w-3" />
+                                                            Ver Notas
+                                                        </Button>
+                                                    }
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         )}
                     </CardContent>

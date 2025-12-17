@@ -50,7 +50,7 @@ serve(async (req) => {
             },
             body: JSON.stringify({
                 enabled: true,
-                url: "https://swfshqvvbohnahdyndch.supabase.co/functions/v1/uzapi-webhook-refactor",
+                url: "https://swfshqvvbohnahdyndch.supabase.co/functions/v1/webhook-queue-receiver",
                 events: ["messages", "connection", "messages_update"],
                 excludeMessages: ["wasSentByApi"]
             })

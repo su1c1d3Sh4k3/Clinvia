@@ -39,3 +39,14 @@ verify_jwt = false
 [functions.transcribe-audio]
 verify_jwt = false
 
+[functions.webhook-queue-receiver]
+verify_jwt = false
+
+[functions.webhook-queue-processor]
+verify_jwt = false
+
+[functions.webhook-handle-message]
+verify_jwt = false
+
+[functions.webhook-handle-status]
+verify_jwt = false

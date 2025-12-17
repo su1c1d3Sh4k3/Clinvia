@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatPhoneNumber, unformatPhoneNumber } from "@/utils/formatters";
 import {
     Command,
     CommandEmpty,
@@ -93,13 +94,14 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone }: NewMessa
         }
 
         try {
-            // 1. Send Message via API
-            const response = await fetch(`${instance.server_url}/message/sendText/${instance.name}`, {
+            // 1. Send Message via UZAPI API
+            // UZAPI usa endpoint diferente do Evolution API
+            const response = await fetch(`https://clinvia.uazapi.com/send/text`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                     "Accept": "application/json",
-                    "apikey": instance.apikey || "6cbd4c9e-8862-49f9-918b-34bcce736948",
+                    "token": instance.apikey || "",
                 },
                 body: JSON.stringify({
                     number: number,
@@ -121,11 +123,23 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone }: NewMessa
             // 2. Handle Database Updates
             const remoteJid = `${number}@s.whatsapp.net`;
 
+            // Get current user's owner_id for multi-tenancy
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('id')
+                .single();
+
+            const userId = profile?.id;
+            if (!userId) {
+                throw new Error("Usuário não autenticado");
+            }
+
             // 2.1 Find or Create Contact
             let { data: contact } = await supabase
                 .from("contacts")
                 .select("*")
                 .eq("number", remoteJid)
+                .eq("user_id", userId)
                 .single();
 
             if (!contact) {
@@ -134,6 +148,8 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone }: NewMessa
                     .insert({
                         number: remoteJid,
                         push_name: number, // Use number as initial name
+                        user_id: userId,
+                        instance_id: instance.id,
                     })
                     .select()
                     .single();
@@ -149,6 +165,7 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone }: NewMessa
                 .from("conversations")
                 .select("*")
                 .eq("contact_id", contact.id)
+                .eq("user_id", userId)
                 .neq("status", "resolved")
                 .single();
 
@@ -160,6 +177,8 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone }: NewMessa
                         status: "pending",
                         unread_count: 0,
                         last_message_at: new Date().toISOString(),
+                        user_id: userId,
+                        instance_id: instance.id,
                     })
                     .select()
                     .single();
@@ -179,6 +198,7 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone }: NewMessa
                     direction: "outbound",
                     message_type: "text",
                     evolution_id: apiData?.key?.id || null,
+                    user_id: userId,
                 });
 
             if (messageError) throw messageError;
@@ -293,19 +313,18 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone }: NewMessa
                     </div>
 
                     <div className="space-y-2">
-                        <Label>Número (DDI+DDD+Número)</Label>
+                        <Label>Telefone</Label>
                         <Input
-                            value={number}
+                            value={formatPhoneNumber(number)}
                             onChange={(e) => {
-                                let value = e.target.value.replace(/\D/g, "");
-                                if (value.length > 13) value = value.slice(0, 13);
-                                setNumber(value);
+                                const value = unformatPhoneNumber(e.target.value);
+                                setNumber(value.slice(0, 13));
                             }}
-                            placeholder="5511999999999"
+                            placeholder="+55 (37) 9 9999-9999"
                             type="tel"
                         />
                         <p className="text-xs text-muted-foreground">
-                            Formato: 55 + DDD + Número (Ex: 5511999999999)
+                            Formato: +55 (DDD) 9 XXXX-XXXX
                         </p>
                     </div>
 

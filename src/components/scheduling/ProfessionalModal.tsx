@@ -247,7 +247,7 @@ export function ProfessionalModal({ open, onOpenChange, professionalToEdit }: Pr
                                 <FormItem>
                                     <FormLabel>Função</FormLabel>
                                     <FormControl>
-                                        <Input placeholder="Ex: Cabeleireiro" {...field} />
+                                        <Input placeholder="Ex: Biomédica" {...field} />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>
