@@ -78,6 +78,17 @@ export default function Settings() {
             setGroupNotificationsEnabled(tm.group_notifications_enabled ?? true);
             setSignMessagesEnabled(tm.sign_messages ?? true);
 
+            // Load push notification preferences
+            if (tm.push_notification_preferences) {
+                setPushPreferences({
+                    tasks: tm.push_notification_preferences.tasks ?? false,
+                    deals: tm.push_notification_preferences.deals ?? false,
+                    appointments: tm.push_notification_preferences.appointments ?? false,
+                    financial: tm.push_notification_preferences.financial ?? false,
+                    opportunities: tm.push_notification_preferences.opportunities ?? false
+                });
+            }
+
             // Buscar company_name e financial_access de profiles (dados da empresa)
             fetchCompanySettings(tm.user_id);
             // fetchCompanyName(tm.user_id); // Replaced by fetchCompanySettings
@@ -206,6 +217,7 @@ export default function Settings() {
             const updates = {
                 notifications_enabled: notificationsEnabled,
                 group_notifications_enabled: groupNotificationsEnabled,
+                push_notification_preferences: pushPreferences,
                 updated_at: new Date().toISOString(),
             };
 
