@@ -384,6 +384,9 @@ serve(async (req) => {
                 }
             } else {
                 console.log('[UZAPI WEHOOK REFACTOR] Contact does not exist. Creating with:', { waNumber, contactName, profilePicUrl });
+                // Verificar se o nome tem letras (nome real vs número)
+                const hasLetters = /[a-zA-Z]/.test(contactName);
+
                 const { data: newContact, error: createError } = await supabaseClient
                     .from('contacts')
                     .insert({
@@ -392,7 +395,8 @@ serve(async (req) => {
                         profile_pic_url: profilePicUrl,
                         is_group: false,
                         instance_id: instance.id,
-                        user_id: userId
+                        user_id: userId,
+                        edited: hasLetters // Se nome tem letras, já marcar como editado
                     })
                     .select()
                     .single();

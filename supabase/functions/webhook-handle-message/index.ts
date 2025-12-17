@@ -191,16 +191,24 @@ serve(async (req) => {
                 .maybeSingle();
 
             if (contact) {
-                // Contato existe - atualizar foto se mudou
+                // Contato existe - atualizar foto se mudou (sempre permitido)
                 if (profilePicUrl && profilePicUrl !== contact.profile_pic_url) {
                     await supabase.from('contacts').update({ profile_pic_url: profilePicUrl }).eq('id', contact.id);
                 }
-                // Atualizar nome se mudou e não está vazio
-                if (contactName && contactName !== 'Desconhecido' && contactName !== contact.push_name) {
-                    await supabase.from('contacts').update({ push_name: contactName }).eq('id', contact.id);
+                // Atualizar nome APENAS se não foi editado manualmente e não é grupo
+                if (!contact.edited && !contact.is_group && contactName && contactName !== 'Desconhecido' && contactName !== contact.push_name) {
+                    // Verificar se o novo nome tem letras (nome real) - se sim, marcar como edited
+                    const hasLetters = /[a-zA-Z]/.test(contactName);
+                    await supabase.from('contacts').update({
+                        push_name: contactName,
+                        edited: hasLetters // Se tem letras, marcar como editado para não sobrescrever
+                    }).eq('id', contact.id);
                 }
             } else {
                 // Criar novo contato
+                // Verificar se o nome tem letras (nome real vs número)
+                const hasLetters = /[a-zA-Z]/.test(contactName);
+
                 const { data: newContact, error: createError } = await supabase
                     .from('contacts')
                     .insert({
@@ -209,7 +217,8 @@ serve(async (req) => {
                         profile_pic_url: profilePicUrl,
                         is_group: false,
                         instance_id: instance.id,
-                        user_id: userId
+                        user_id: userId,
+                        edited: hasLetters // Se nome tem letras, já marcar como editado
                     })
                     .select()
                     .single();

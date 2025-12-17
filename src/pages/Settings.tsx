@@ -8,10 +8,12 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
-import { User, Building2, Lock, Camera, Loader2, Bell, BellRing, Users, Volume2, DollarSign, Settings as SettingsIcon, Pen } from "lucide-react";
+import { User, Building2, Lock, Camera, Loader2, Bell, BellRing, Users, Volume2, DollarSign, Settings as SettingsIcon, Pen, Download, Smartphone, Monitor, CheckCircle2, Calendar, ListTodo, TrendingUp, Lightbulb, ChevronDown, ChevronUp } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useCurrentTeamMember } from "@/hooks/useStaff";
+import { useInstallPWA } from "@/hooks/useInstallPWA";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 export default function Settings() {
     const { user } = useAuth();
@@ -40,6 +42,19 @@ export default function Settings() {
     const [groupNotificationsEnabled, setGroupNotificationsEnabled] = useState(true);
     const [financialAccessEnabled, setFinancialAccessEnabled] = useState(true);
     const [signMessagesEnabled, setSignMessagesEnabled] = useState(true);
+
+    // PWA install hook
+    const { isInstallable, isInstalled, isIOS, installApp, showIOSInstructions } = useInstallPWA();
+
+    // Push notification preferences (dashboard notifications)
+    const [pushNotificationsOpen, setPushNotificationsOpen] = useState(false);
+    const [pushPreferences, setPushPreferences] = useState({
+        tasks: false,
+        deals: false,
+        appointments: false,
+        financial: false,
+        opportunities: false
+    });
 
     // Carregar dados quando currentTeamMember estiver disponível
     useEffect(() => {
@@ -665,6 +680,128 @@ export default function Settings() {
                                     Testar
                                 </Button>
                             </div>
+
+                            {/* Separator */}
+                            <div className="border-t my-4" />
+
+                            {/* Download App Section */}
+                            <div className="flex items-center justify-between p-3 md:p-4 border rounded-lg bg-gradient-to-r from-primary/10 to-primary/5 border-primary/20 gap-3">
+                                <div className="flex items-center gap-3 md:gap-4">
+                                    <div className="p-1.5 md:p-2 bg-primary/20 rounded-full">
+                                        {isIOS ? <Smartphone className="h-4 w-4 md:h-5 md:w-5 text-primary" /> : <Monitor className="h-4 w-4 md:h-5 md:w-5 text-primary" />}
+                                    </div>
+                                    <div className="space-y-0.5">
+                                        <h4 className="font-medium text-sm md:text-base">Baixar App</h4>
+                                        <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">
+                                            {isInstalled ? "App já instalado!" : isIOS ? "Adicione à tela inicial" : "Instale para acesso rápido"}
+                                        </p>
+                                    </div>
+                                </div>
+                                {isInstalled ? (
+                                    <div className="flex items-center gap-2 text-green-600">
+                                        <CheckCircle2 className="h-4 w-4" />
+                                        <span className="text-xs md:text-sm font-medium">Instalado</span>
+                                    </div>
+                                ) : showIOSInstructions ? (
+                                    <Button variant="outline" size="sm" className="text-xs md:text-sm h-8 px-2 md:px-3" onClick={() => {
+                                        toast.info("Para instalar no iOS: Toque no ícone de compartilhamento e selecione 'Adicionar à Tela de Início'");
+                                    }}>
+                                        <Smartphone className="h-4 w-4 mr-1" />
+                                        Como instalar
+                                    </Button>
+                                ) : isInstallable ? (
+                                    <Button size="sm" className="text-xs md:text-sm h-8 px-2 md:px-3" onClick={async () => {
+                                        const result = await installApp();
+                                        if (result.success) {
+                                            toast.success("App instalado com sucesso!");
+                                        } else if (result.outcome === 'dismissed') {
+                                            toast.info("Instalação cancelada");
+                                        }
+                                    }}>
+                                        <Download className="h-4 w-4 mr-1" />
+                                        Instalar
+                                    </Button>
+                                ) : (
+                                    <span className="text-xs text-muted-foreground">Não disponível</span>
+                                )}
+                            </div>
+
+                            {/* Push Notifications Section - Collapsible */}
+                            <Collapsible open={pushNotificationsOpen} onOpenChange={setPushNotificationsOpen}>
+                                <CollapsibleTrigger asChild>
+                                    <div className="flex items-center justify-between p-3 md:p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors cursor-pointer gap-3">
+                                        <div className="flex items-center gap-3 md:gap-4">
+                                            <div className="p-1.5 md:p-2 bg-primary/10 rounded-full">
+                                                <Bell className="h-4 w-4 md:h-5 md:w-5 text-primary" />
+                                            </div>
+                                            <div className="space-y-0.5">
+                                                <h4 className="font-medium text-sm md:text-base">Notificações Push</h4>
+                                                <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">
+                                                    Alertas mesmo com app fechado
+                                                </p>
+                                            </div>
+                                        </div>
+                                        {pushNotificationsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                                    </div>
+                                </CollapsibleTrigger>
+                                <CollapsibleContent className="mt-2 space-y-2 pl-4 border-l-2 border-primary/20 ml-4">
+                                    {/* Tasks */}
+                                    <div className="flex items-center justify-between p-2 md:p-3 border rounded-lg bg-card/50">
+                                        <div className="flex items-center gap-2">
+                                            <ListTodo className="h-4 w-4 text-indigo-500" />
+                                            <span className="text-sm">Tarefas</span>
+                                        </div>
+                                        <Switch
+                                            checked={pushPreferences.tasks}
+                                            onCheckedChange={(v) => setPushPreferences(p => ({ ...p, tasks: v }))}
+                                        />
+                                    </div>
+                                    {/* Deals */}
+                                    <div className="flex items-center justify-between p-2 md:p-3 border rounded-lg bg-card/50">
+                                        <div className="flex items-center gap-2">
+                                            <TrendingUp className="h-4 w-4 text-green-500" />
+                                            <span className="text-sm">CRM / Negócios</span>
+                                        </div>
+                                        <Switch
+                                            checked={pushPreferences.deals}
+                                            onCheckedChange={(v) => setPushPreferences(p => ({ ...p, deals: v }))}
+                                        />
+                                    </div>
+                                    {/* Appointments */}
+                                    <div className="flex items-center justify-between p-2 md:p-3 border rounded-lg bg-card/50">
+                                        <div className="flex items-center gap-2">
+                                            <Calendar className="h-4 w-4 text-blue-500" />
+                                            <span className="text-sm">Agendamentos</span>
+                                        </div>
+                                        <Switch
+                                            checked={pushPreferences.appointments}
+                                            onCheckedChange={(v) => setPushPreferences(p => ({ ...p, appointments: v }))}
+                                        />
+                                    </div>
+                                    {/* Financial */}
+                                    <div className="flex items-center justify-between p-2 md:p-3 border rounded-lg bg-card/50">
+                                        <div className="flex items-center gap-2">
+                                            <DollarSign className="h-4 w-4 text-emerald-500" />
+                                            <span className="text-sm">Financeiro</span>
+                                        </div>
+                                        <Switch
+                                            checked={pushPreferences.financial}
+                                            onCheckedChange={(v) => setPushPreferences(p => ({ ...p, financial: v }))}
+                                        />
+                                    </div>
+                                    {/* Opportunities */}
+                                    <div className="flex items-center justify-between p-2 md:p-3 border rounded-lg bg-card/50">
+                                        <div className="flex items-center gap-2">
+                                            <Lightbulb className="h-4 w-4 text-purple-500" />
+                                            <span className="text-sm">Oportunidades</span>
+                                        </div>
+                                        <Switch
+                                            checked={pushPreferences.opportunities}
+                                            onCheckedChange={(v) => setPushPreferences(p => ({ ...p, opportunities: v }))}
+                                        />
+                                    </div>
+                                </CollapsibleContent>
+                            </Collapsible>
 
                         </CardContent>
                         <CardFooter>

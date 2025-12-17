@@ -103,6 +103,7 @@ export const ContactModal = ({ open, onOpenChange, contactToEdit }: ContactModal
                 cpf: cpf || null,
                 email: email || null,
                 instagram: instagram || null,
+                edited: true, // Marcar como editado manualmente - nome não será sobrescrito automaticamente
             };
 
             if (contactToEdit) {
