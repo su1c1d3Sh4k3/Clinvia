@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 // VAPID public key for push notifications
 // Generated at: https://vapidkeys.com/
-const VAPID_PUBLIC_KEY = 'BKsAHZT102txSawSVbg1MgGrfrTk7OuPgKbaeSz9JtBrqW6n7UjAV0jbVHgklZrn6-3Az1_QMtRO0Jt3DQ-jC74';
+const VAPID_PUBLIC_KEY = 'BEZGCrwPQ7Sqe17Gxa-HJowZ3zYSox-ZEApRyRCLoG72aLeQfQDOY-5vXcrD9URzLq3X6IL56BrWKNFWGh_CQqk';
 
 interface PushSubscriptionData {
     endpoint: string;

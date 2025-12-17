@@ -386,6 +386,96 @@ serve(async (req) => {
                 } else {
                     console.log('[webhook-handle-message] Message saved:', savedMessage.id);
 
+                    // ========================================
+                    // PUSH NOTIFICATION FOR INBOUND MESSAGES
+                    // ========================================
+                    if (!fromMe && savedMessage) {
+                        console.log('[webhook-handle-message] Triggering push notification for inbound message...');
+
+                        // Get team members who should receive the notification
+                        // Rules:
+                        // 1. If conversation.assigned_agent_id exists -> notify only that agent
+                        // 2. If conversation.queue_id exists -> notify only members in that queue
+                        // 3. Otherwise -> notify all team members of the company
+
+                        // Get ALL team members with role info for role-based filtering
+                        const { data: allTeamMembers } = await supabase
+                            .from('team_members')
+                            .select('id, auth_user_id, role, queue_ids')
+                            .eq('user_id', userId)
+                            .eq('notifications_enabled', true)
+                            .not('auth_user_id', 'is', null);
+
+                        let teamMembersToNotify: any[] = [];
+
+                        for (const tm of allTeamMembers || []) {
+                            const role = tm.role as string;
+
+                            // Admin/Supervisor: receive ALL inbound messages
+                            if (role === 'admin' || role === 'supervisor') {
+                                teamMembersToNotify.push(tm);
+                                continue;
+                            }
+
+                            // Agent: role-based filtering
+                            if (role === 'agent') {
+                                const agentQueues = tm.queue_ids || [];
+                                const hasQueues = agentQueues.length > 0;
+
+                                // Case 1: Conversation is assigned to this specific agent
+                                if (conversation.assigned_agent_id && conversation.assigned_agent_id === tm.id) {
+                                    teamMembersToNotify.push(tm);
+                                }
+                                // Case 2: Conversation is in a queue that this agent belongs to
+                                else if (conversation.queue_id && hasQueues && agentQueues.includes(conversation.queue_id)) {
+                                    teamMembersToNotify.push(tm);
+                                }
+                                // Case 3: Agent has no queues AND conversation is not assigned to anyone
+                                else if (!hasQueues && !conversation.assigned_agent_id) {
+                                    teamMembersToNotify.push(tm);
+                                }
+                            }
+                        }
+
+                        // Get contact name for notification
+                        const contactName = isGroup
+                            ? (payload.body?.chat?.name || 'Grupo')
+                            : (payload.body?.from?.name || payload.message?.pushName || 'Cliente');
+
+                        const messagePreview = (messageText || messageType || '').substring(0, 50) +
+                            ((messageText?.length || 0) > 50 ? '...' : '');
+
+                        // Send push to each team member using direct fetch (invoke doesn't work reliably from Edge Functions)
+                        const supabaseUrl = Deno.env.get('SUPABASE_URL');
+                        const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+                        for (const tm of teamMembersToNotify) {
+                            if (tm.auth_user_id && supabaseUrl && serviceKey) {
+                                console.log('[webhook-handle-message] Sending push to auth_user_id:', tm.auth_user_id);
+
+                                fetch(`${supabaseUrl}/functions/v1/send-push`, {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'Authorization': `Bearer ${serviceKey}`
+                                    },
+                                    body: JSON.stringify({
+                                        auth_user_id: tm.auth_user_id,
+                                        title: contactName,
+                                        body: messagePreview,
+                                        notification_type: 'messages',
+                                        url: '/inbox',
+                                        tag: `message-${conversation.id}`
+                                    })
+                                }).then(res => {
+                                    console.log('[webhook-handle-message] Push response status:', res.status);
+                                }).catch(err => console.error('[webhook-handle-message] Push fetch error:', err));
+                            }
+                        }
+
+                        console.log(`[webhook-handle-message] Push notifications sent to ${teamMembersToNotify.length} user(s)`);
+                    }
+
                     // Trigger Audio Transcription
                     if (messageType === 'audio' && mediaUrl && savedMessage) {
                         console.log('[webhook-handle-message] Triggering transcription...');
