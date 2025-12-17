@@ -50,3 +50,6 @@ verify_jwt = false
 
 [functions.webhook-handle-status]
 verify_jwt = false
+
+[functions.send-push]
+verify_jwt = false
