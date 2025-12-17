@@ -13,6 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useCurrentTeamMember } from "@/hooks/useStaff";
 import { useInstallPWA } from "@/hooks/useInstallPWA";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 export default function Settings() {
@@ -45,6 +46,9 @@ export default function Settings() {
 
     // PWA install hook
     const { isInstallable, isInstalled, isIOS, installApp, showIOSInstructions } = useInstallPWA();
+
+    // Push notifications hook
+    const { isSupported: pushSupported, isSubscribed: pushSubscribed, subscribe: subscribePush, loading: pushLoading } = usePushNotifications();
 
     // Push notification preferences (dashboard notifications)
     const [pushNotificationsOpen, setPushNotificationsOpen] = useState(false);
@@ -234,9 +238,22 @@ export default function Settings() {
 
             if (error) throw error;
 
-            // Request permission if enabled
-            if (notificationsEnabled && Notification.permission === 'default') {
-                await Notification.requestPermission();
+            // Register for push notifications if any preference is enabled
+            const hasPushPreference = notificationsEnabled ||
+                pushPreferences.tasks ||
+                pushPreferences.deals ||
+                pushPreferences.appointments ||
+                pushPreferences.financial ||
+                pushPreferences.opportunities;
+
+            if (hasPushPreference && pushSupported && !pushSubscribed) {
+                console.log('[Settings] Registering for push notifications...');
+                const subscribed = await subscribePush();
+                if (subscribed) {
+                    toast.success("Dispositivo registrado para notificações push!");
+                } else {
+                    console.warn('[Settings] Failed to subscribe to push notifications');
+                }
             }
 
             toast.success("Preferências de notificação atualizadas!");
