@@ -97,28 +97,37 @@ export function usePushNotifications() {
     }, [isSupported]);
 
     const subscribe = useCallback(async (): Promise<boolean> => {
-        if (!isSupported) return false;
+        if (!isSupported) {
+            alert('[DEBUG] Push not supported');
+            return false;
+        }
 
         setLoading(true);
+        alert('[DEBUG] Step 1: Starting...');
 
         try {
             // Request permission if not granted
             if (Notification.permission !== 'granted') {
+                alert('[DEBUG] Step 2: Requesting permission...');
                 const result = await requestPermission();
                 if (result !== 'granted') {
+                    alert('[DEBUG] Permission denied');
                     setLoading(false);
                     return false;
                 }
             }
+            alert('[DEBUG] Step 3: Permission OK');
 
             // Check if VAPID key is configured
             if (!VAPID_PUBLIC_KEY || VAPID_PUBLIC_KEY === 'YOUR_VAPID_PUBLIC_KEY') {
-                console.error('[Push] VAPID key not configured');
+                alert('[DEBUG] VAPID key not configured');
                 setLoading(false);
                 return false;
             }
+            alert('[DEBUG] Step 4: VAPID OK');
 
             // Get service worker registration with timeout
+            alert('[DEBUG] Step 5: Waiting for SW...');
             let registration: ServiceWorkerRegistration;
             try {
                 const timeoutPromise = new Promise<never>((_, reject) =>
@@ -128,24 +137,27 @@ export function usePushNotifications() {
                     navigator.serviceWorker.ready,
                     timeoutPromise
                 ]) as ServiceWorkerRegistration;
-            } catch (err) {
-                console.error('[Push] Service Worker not ready:', err);
+            } catch (err: any) {
+                alert('[DEBUG] SW Error: ' + (err?.message || err));
                 setLoading(false);
                 return false;
             }
+            alert('[DEBUG] Step 6: SW Ready');
 
             // Subscribe to push
+            alert('[DEBUG] Step 7: Subscribing to push...');
             let subscription;
             try {
                 subscription = await registration.pushManager.subscribe({
                     userVisibleOnly: true,
                     applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
                 });
-            } catch (err) {
-                console.error('[Push] Push subscribe failed:', err);
+            } catch (err: any) {
+                alert('[DEBUG] Push Error: ' + (err?.message || err));
                 setLoading(false);
                 return false;
             }
+            alert('[DEBUG] Step 8: Push subscribed!');
 
             // Get subscription details
             const json = subscription.toJSON();
