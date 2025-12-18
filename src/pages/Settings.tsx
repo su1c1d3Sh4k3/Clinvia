@@ -832,6 +832,52 @@ export default function Settings() {
                                 </CollapsibleContent>
                             </Collapsible>
 
+                            {/* Register This Device Button */}
+                            {pushSupported && (
+                                <div className="flex items-center justify-between p-3 md:p-4 border rounded-lg bg-gradient-to-r from-green-500/10 to-emerald-500/5 border-green-500/20 gap-3">
+                                    <div className="flex items-center gap-3 md:gap-4">
+                                        <div className="p-1.5 md:p-2 bg-green-500/20 rounded-full">
+                                            <Smartphone className="h-4 w-4 md:h-5 md:w-5 text-green-600" />
+                                        </div>
+                                        <div className="space-y-0.5">
+                                            <h4 className="font-medium text-sm md:text-base">Registrar Dispositivo</h4>
+                                            <p className="text-xs md:text-sm text-muted-foreground">
+                                                {pushSubscribed ? "Este dispositivo já está registrado" : "Ative notificações neste aparelho"}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    {pushSubscribed ? (
+                                        <div className="flex items-center gap-2 text-green-600">
+                                            <CheckCircle2 className="h-4 w-4" />
+                                            <span className="text-xs md:text-sm font-medium">Registrado</span>
+                                        </div>
+                                    ) : (
+                                        <Button
+                                            size="sm"
+                                            className="text-xs md:text-sm h-8 px-3 bg-green-600 hover:bg-green-700"
+                                            disabled={pushLoading}
+                                            onClick={async () => {
+                                                const result = await subscribePush();
+                                                if (result) {
+                                                    toast.success("Dispositivo registrado para notificações push!");
+                                                } else {
+                                                    toast.error("Falha ao registrar. Verifique as permissões do navegador.");
+                                                }
+                                            }}
+                                        >
+                                            {pushLoading ? (
+                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                            ) : (
+                                                <>
+                                                    <Bell className="h-4 w-4 mr-1" />
+                                                    Ativar
+                                                </>
+                                            )}
+                                        </Button>
+                                    )}
+                                </div>
+                            )}
+
                         </CardContent>
                         <CardFooter>
                             <Button onClick={updateNotifications} disabled={loading} className="ml-auto">

@@ -105,10 +105,17 @@ serve(async (req) => {
 
             } catch (error: any) {
                 console.error('[SEND-PUSH] Error:', error.message || error);
+                console.error('[SEND-PUSH] Status Code:', error.statusCode);
+                console.error('[SEND-PUSH] Body:', error.body);
 
-                // Check if subscription expired
+                // Check if subscription expired (410 Gone or 404 Not Found)
                 if (error.statusCode === 410 || error.statusCode === 404) {
                     results.expired.push(sub.id);
+                    console.log('[SEND-PUSH] Subscription expired, marking for deletion');
+                } else if (error.statusCode === 403) {
+                    console.error('[SEND-PUSH] 403 Forbidden - VAPID key mismatch or unauthorized');
+                    results.failed++;
+                    results.errors.push(`403: ${error.body || 'Forbidden'}`);
                 } else {
                     results.failed++;
                     results.errors.push(error.message || String(error));
