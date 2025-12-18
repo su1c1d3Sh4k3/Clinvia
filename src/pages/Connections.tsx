@@ -13,7 +13,11 @@ import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { FaWhatsapp, FaInstagram } from "react-icons/fa";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, CheckCircle2, RefreshCw, Trash2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { useSearchParams, useNavigate } from "react-router-dom";
+
+// Instagram App ID from Meta App Dashboard
+const INSTAGRAM_APP_ID = import.meta.env.VITE_INSTAGRAM_APP_ID || '746674508461826';
 
 const Connections = () => {
     const { user } = useAuth();
@@ -21,6 +25,8 @@ const Connections = () => {
     const isAgent = userRole === 'agent';
     const { toast } = useToast();
     const queryClient = useQueryClient();
+    const [searchParams] = useSearchParams();
+    const navigate = useNavigate();
 
     // WhatsApp State
     const [name, setName] = useState("");
@@ -30,6 +36,9 @@ const Connections = () => {
     const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
     const [pollingInstanceId, setPollingInstanceId] = useState<string | null>(null);
     const [isConfirming, setIsConfirming] = useState(false);
+
+    // Instagram OAuth State
+    const [isConnectingInstagram, setIsConnectingInstagram] = useState(false);
 
     // WhatsApp Instances Query
     const { data: instances, isLoading: loadingWhatsApp } = useQuery({
@@ -75,6 +84,85 @@ const Connections = () => {
             return data as any[];
         },
     });
+
+    // Handle Instagram OAuth callback
+    useEffect(() => {
+        const code = searchParams.get('code');
+        const error = searchParams.get('error');
+
+        if (error) {
+            toast({
+                title: "Erro na autorização",
+                description: searchParams.get('error_description') || "O usuário cancelou a autorização.",
+                variant: "destructive"
+            });
+            // Clean URL
+            navigate('/connections', { replace: true });
+            return;
+        }
+
+        if (code && user?.id && !isConnectingInstagram) {
+            handleInstagramOAuthCallback(code);
+        }
+    }, [searchParams, user?.id]);
+
+    const handleInstagramOAuthCallback = async (code: string) => {
+        setIsConnectingInstagram(true);
+        toast({
+            title: "Conectando Instagram...",
+            description: "Aguarde enquanto conectamos sua conta.",
+        });
+
+        try {
+            // Get the redirect URI (must match exactly what was used in the auth URL)
+            const redirectUri = `${window.location.origin}/connections`;
+
+            const { data, error } = await supabase.functions.invoke('instagram-oauth-callback', {
+                body: {
+                    code: code.replace('#_', ''), // Remove the #_ that Instagram appends
+                    redirect_uri: redirectUri,
+                    user_id: user?.id
+                }
+            });
+
+            if (error) throw error;
+
+            if (data.success) {
+                toast({
+                    title: "Instagram conectado!",
+                    description: `Conta @${data.account_name} conectada com sucesso.`,
+                });
+                queryClient.invalidateQueries({ queryKey: ["instagram-instances"] });
+            } else {
+                throw new Error(data.error || 'Falha na conexão');
+            }
+        } catch (error: any) {
+            console.error('[Instagram OAuth] Error:', error);
+            toast({
+                title: "Erro ao conectar Instagram",
+                description: error.message,
+                variant: "destructive"
+            });
+        } finally {
+            setIsConnectingInstagram(false);
+            // Clean URL
+            navigate('/connections', { replace: true });
+        }
+    };
+
+    const handleConnectInstagram = () => {
+        const redirectUri = `${window.location.origin}/connections`;
+        const scopes = [
+            'instagram_business_basic',
+            'instagram_business_manage_messages',
+            'instagram_business_manage_comments',
+            'instagram_business_content_publish'
+        ].join(',');
+
+        const authUrl = `https://www.instagram.com/oauth/authorize?client_id=${INSTAGRAM_APP_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${scopes}`;
+
+        window.location.href = authUrl;
+    };
 
     // WhatsApp Mutations
     const createMutation = useMutation({
@@ -425,21 +513,46 @@ const Connections = () => {
                             </CardContent>
                         </Card>
 
-                        {/* Instagram Setup Guide */}
-                        <Card>
-                            <CardHeader className="p-4 md:p-6">
-                                <CardTitle className="text-base md:text-lg">Como conectar o Instagram</CardTitle>
-                            </CardHeader>
-                            <CardContent className="p-4 md:p-6 pt-0 md:pt-0">
-                                <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
-                                    <li>Acesse o <a href="https://developers.facebook.com" target="_blank" rel="noopener noreferrer" className="text-primary underline">Facebook Developers</a></li>
-                                    <li>Crie ou selecione seu app com o produto "API do Instagram"</li>
-                                    <li>Configure o webhook com suas credenciais</li>
-                                    <li>Gere um token de acesso para sua conta</li>
-                                    <li>As mensagens começarão a chegar automaticamente</li>
-                                </ol>
-                            </CardContent>
-                        </Card>
+                        {/* Instagram Connect Card */}
+                        {!isAgent && (
+                            <Card>
+                                <CardHeader className="p-4 md:p-6">
+                                    <CardTitle className="text-base md:text-lg">Conectar nova conta</CardTitle>
+                                    <CardDescription className="text-xs md:text-sm">
+                                        Conecte sua conta do Instagram Business ou Creator
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent className="p-4 md:p-6 pt-0 md:pt-0">
+                                    <div className="space-y-4">
+                                        <div className="p-4 bg-muted/50 rounded-lg">
+                                            <h4 className="font-medium text-sm mb-2">Requisitos</h4>
+                                            <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
+                                                <li>Conta do Instagram Business ou Creator</li>
+                                                <li>Página do Facebook vinculada à conta</li>
+                                                <li>Permissão para gerenciar mensagens</li>
+                                            </ul>
+                                        </div>
+                                        <Button
+                                            onClick={handleConnectInstagram}
+                                            disabled={isConnectingInstagram}
+                                            className="w-full bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 hover:from-purple-700 hover:via-pink-700 hover:to-orange-600"
+                                        >
+                                            {isConnectingInstagram ? (
+                                                <>
+                                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                                    Conectando...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <FaInstagram className="h-4 w-4 mr-2" />
+                                                    Conectar Instagram
+                                                </>
+                                            )}
+                                        </Button>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )}
                     </TabsContent>
                 </Tabs>
             </div>
