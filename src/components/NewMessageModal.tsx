@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { checkActiveConversation } from "@/hooks/useActiveConversation";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatPhoneNumber, unformatPhoneNumber } from "@/utils/formatters";
@@ -160,16 +161,22 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone }: NewMessa
 
             if (!contact) throw new Error("Falha ao criar contato");
 
-            // 2.2 Find or Create Conversation
-            let { data: conversation } = await supabase
-                .from("conversations")
-                .select("*")
-                .eq("contact_id", contact.id)
-                .eq("user_id", userId)
-                .neq("status", "resolved")
-                .single();
+            // 2.2 Check for existing active conversation (BLOCKING)
+            const activeConv = await checkActiveConversation(contact.id);
 
-            if (!conversation) {
+            if (activeConv) {
+                // Use existing conversation - don't create new one
+                // If assigned to another agent, just inform (but still use the conversation)
+                if (activeConv.agent_name) {
+                    toast({
+                        title: "Cliente já em atendimento",
+                        description: `Este cliente já está sendo atendido por ${activeConv.agent_name}.`,
+                    });
+                }
+                // Use the existing conversation
+                var conversation = { id: activeConv.id } as any;
+            } else {
+                // No active conversation - create new one
                 const { data: newConversation, error: conversationError } = await supabase
                     .from("conversations")
                     .insert({
@@ -184,7 +191,7 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone }: NewMessa
                     .single();
 
                 if (conversationError) throw conversationError;
-                conversation = newConversation;
+                var conversation = newConversation as any;
             }
 
             if (!conversation) throw new Error("Falha ao criar conversa");

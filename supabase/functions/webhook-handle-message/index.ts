@@ -397,13 +397,16 @@ serve(async (req) => {
                         // 1. If conversation.assigned_agent_id exists -> notify only that agent
                         // 2. If conversation.queue_id exists -> notify only members in that queue
                         // 3. Otherwise -> notify all team members of the company
+                        // 
+                        // Notification preferences:
+                        // - notifications_enabled: true = receives notifications for individual contacts
+                        // - group_notifications_enabled: true = receives notifications for groups
 
-                        // Get ALL team members with role info for role-based filtering
+                        // Get ALL team members with role info and notification preferences
                         const { data: allTeamMembers } = await supabase
                             .from('team_members')
-                            .select('id, auth_user_id, role, queue_ids')
+                            .select('id, auth_user_id, role, queue_ids, notifications_enabled, group_notifications_enabled')
                             .eq('user_id', userId)
-                            .eq('notifications_enabled', true)
                             .not('auth_user_id', 'is', null);
 
                         let teamMembersToNotify: any[] = [];
@@ -411,7 +414,20 @@ serve(async (req) => {
                         for (const tm of allTeamMembers || []) {
                             const role = tm.role as string;
 
-                            // Admin/Supervisor: receive ALL inbound messages
+                            // Check notification preferences based on message type
+                            // For groups: check group_notifications_enabled
+                            // For contacts: check notifications_enabled
+                            if (isGroup) {
+                                if (tm.group_notifications_enabled !== true) {
+                                    continue; // Skip this member - group notifications disabled
+                                }
+                            } else {
+                                if (tm.notifications_enabled !== true) {
+                                    continue; // Skip this member - contact notifications disabled
+                                }
+                            }
+
+                            // Admin/Supervisor: receive ALL inbound messages (if notifications enabled for the type)
                             if (role === 'admin' || role === 'supervisor') {
                                 teamMembersToNotify.push(tm);
                                 continue;

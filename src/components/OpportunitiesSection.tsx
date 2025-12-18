@@ -16,6 +16,8 @@ import {
 } from "@/hooks/useOpportunities";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { checkActiveConversation } from "@/hooks/useActiveConversation";
+import { toast } from "sonner";
 
 interface OpportunitiesSectionProps {
     onOpportunityClick?: (contactId: string, message: string) => void;
@@ -117,8 +119,15 @@ export function OpportunitiesSection({ onOpportunityClick, onOpportunitySelect, 
                 conversationId = conv.id;
                 console.log('Found existing conversation:', conv.id);
 
-                // If no agent assigned, assign current user
-                if (!conv.assigned_agent_id) {
+                // Check if assigned to another agent - show info toast
+                if (conv.assigned_agent_id && conv.assigned_agent_id !== agentId) {
+                    // Get the agent's name
+                    const activeConv = await checkActiveConversation(opportunity.contact_id);
+                    if (activeConv?.agent_name) {
+                        toast.info(`Cliente já em atendimento por ${activeConv.agent_name}`);
+                    }
+                } else if (!conv.assigned_agent_id) {
+                    // If no agent assigned, assign current user
                     console.log('Assigning agent to conversation:', agentId);
                     await supabase
                         .from('conversations')

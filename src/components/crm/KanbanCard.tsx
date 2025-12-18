@@ -40,19 +40,19 @@ export function KanbanCard({ deal, index, stagnationLimitDays }: KanbanCardProps
 
     const responsibleName = staffMembers?.find(s => s.id === deal.responsible_id)?.name;
 
-    const { data: activeConversationId } = useQuery({
-        queryKey: ["active-conversation-id", deal.contact_id],
+    const { data: activeConversation } = useQuery({
+        queryKey: ["active-conversation", deal.contact_id],
         queryFn: async () => {
             if (!deal.contact_id) return null;
             const { data, error } = await supabase
                 .from("conversations")
-                .select("id")
+                .select("id, unread_count")
                 .eq("contact_id", deal.contact_id)
                 .in("status", ["open", "pending"])
                 .limit(1);
 
             if (error) return null;
-            return data && data.length > 0 ? data[0].id : null;
+            return data && data.length > 0 ? data[0] : null;
         },
         enabled: !!deal.contact_id,
     });
@@ -151,6 +151,11 @@ export function KanbanCard({ deal, index, stagnationLimitDays }: KanbanCardProps
                                         <span className="text-xs text-black dark:text-muted-foreground truncate max-w-[100px]" title={deal.contacts?.push_name}>
                                             {deal.contacts?.push_name || "Sem contato"}
                                         </span>
+                                        {activeConversation?.unread_count > 0 && (
+                                            <span className="ml-1 inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold">
+                                                {activeConversation.unread_count}
+                                            </span>
+                                        )}
                                     </div>
 
                                     <div className="flex items-center gap-1">
@@ -226,8 +231,8 @@ export function KanbanCard({ deal, index, stagnationLimitDays }: KanbanCardProps
                                                 size="icon"
                                                 className="h-6 w-6 text-black dark:text-muted-foreground"
                                                 title="Ir para Conversa"
-                                                onClick={() => navigate(`/?conversationId=${activeConversationId}`)}
-                                                disabled={!activeConversationId}
+                                                onClick={() => navigate(`/?conversationId=${activeConversation?.id}`)}
+                                                disabled={!activeConversation?.id}
                                             >
                                                 <MessageSquare className="h-3 w-3" />
                                             </Button>
