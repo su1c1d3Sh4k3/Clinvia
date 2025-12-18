@@ -59,6 +59,16 @@ const Index = () => {
     setHideFloatingButton(mobileView === "chat");
   }, [mobileView, setHideFloatingButton]);
 
+  // Handle Instagram OAuth redirect - if we have a code parameter, redirect to /connections
+  useEffect(() => {
+    const code = searchParams.get("code");
+    if (code) {
+      // This is an Instagram OAuth callback, redirect to connections page with the code
+      navigate(`/connections?code=${encodeURIComponent(code)}`, { replace: true });
+      return;
+    }
+  }, [searchParams, navigate]);
+
   useEffect(() => {
     if (!loading && !user) {
       navigate("/auth");

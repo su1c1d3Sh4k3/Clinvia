@@ -114,8 +114,9 @@ const Connections = () => {
         });
 
         try {
-            // Get the redirect URI (must match exactly what was used in the auth URL)
-            const redirectUri = `${window.location.origin}/connections`;
+            // IMPORTANT: redirect_uri must EXACTLY match what was used in the auth URL
+            // Meta Dashboard has: https://app.clinvia.ai/
+            const redirectUri = 'https://app.clinvia.ai/';
 
             const { data, error } = await supabase.functions.invoke('instagram-oauth-callback', {
                 body: {
@@ -151,7 +152,10 @@ const Connections = () => {
     };
 
     const handleConnectInstagram = () => {
-        const redirectUri = `${window.location.origin}/connections`;
+        // IMPORTANT: redirect_uri must EXACTLY match what's in Meta Dashboard
+        // Meta Dashboard has: https://app.clinvia.ai/
+        const redirectUri = 'https://app.clinvia.ai/';
+
         // Instagram Business Login permissions
         const scopes = [
             'instagram_business_basic',
