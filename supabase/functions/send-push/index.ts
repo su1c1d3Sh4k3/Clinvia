@@ -77,6 +77,44 @@ serve(async (req) => {
 
         console.log(`[SEND-PUSH] Found ${subscriptions.length} subscription(s)`);
 
+        // Check notification preferences based on type
+        if (payload.notification_type === 'instagram' || payload.notification_type === 'group') {
+            // Find team member by auth_user_id
+            const { data: teamMember } = await supabase
+                .from('team_members')
+                .select('notifications_enabled, group_notifications_enabled, instagram_notifications_enabled')
+                .eq('auth_user_id', targetUserId)
+                .single();
+
+            if (teamMember) {
+                // Check if master notifications are disabled
+                if (!teamMember.notifications_enabled) {
+                    console.log('[SEND-PUSH] Notifications disabled for user');
+                    return new Response(
+                        JSON.stringify({ success: false, reason: 'notifications_disabled' }),
+                        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                    );
+                }
+
+                // Check specific notification types
+                if (payload.notification_type === 'instagram' && teamMember.instagram_notifications_enabled === false) {
+                    console.log('[SEND-PUSH] Instagram notifications disabled for user');
+                    return new Response(
+                        JSON.stringify({ success: false, reason: 'instagram_notifications_disabled' }),
+                        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                    );
+                }
+
+                if (payload.notification_type === 'group' && teamMember.group_notifications_enabled === false) {
+                    console.log('[SEND-PUSH] Group notifications disabled for user');
+                    return new Response(
+                        JSON.stringify({ success: false, reason: 'group_notifications_disabled' }),
+                        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                    );
+                }
+            }
+        }
+
         const notificationPayload = JSON.stringify({
             title: payload.title,
             body: payload.body,

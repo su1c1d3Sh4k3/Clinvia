@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Search, Filter, Plus, MessageSquare, Send, Tag as TagIcon, Eye } from "lucide-react";
+import { FaWhatsapp, FaInstagram } from "react-icons/fa";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -135,13 +136,15 @@ export const ConversationsList = ({
   const [selectedContactForDetails, setSelectedContactForDetails] = useState<any>(null);
   const [editingContact, setEditingContact] = useState<any>(null);
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<"people" | "groups">("people");
+  const [selectedChannelFilter, setSelectedChannelFilter] = useState<"whatsapp" | "instagram">("whatsapp");
 
   // Passar role e teamMemberId para filtrar por agente
   const { conversations, isLoading } = useConversations({
     tab: selectedTypeFilter === "groups" ? "all" : tab,
     userId: user?.id,
     role: userRole,
-    teamMemberId: currentTeamMember?.id
+    teamMemberId: currentTeamMember?.id,
+    channel: selectedChannelFilter
   });
 
   // Buscar lista de membros da equipe para exibir nome do atendente atribuído
@@ -252,7 +255,29 @@ export const ConversationsList = ({
   return (
     <div className="w-full md:w-[300px] h-full md:h-screen border-r border-border flex flex-col bg-background overflow-hidden">
       <div className="p-4 border-b border-border space-y-4">
-        <h2 className="text-xl font-semibold">Inbox</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold">Inbox</h2>
+          <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
+            <Button
+              variant={selectedChannelFilter === 'whatsapp' ? 'secondary' : 'ghost'}
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => setSelectedChannelFilter('whatsapp')}
+              title="WhatsApp"
+            >
+              <FaWhatsapp className={`h-4 w-4 ${selectedChannelFilter === 'whatsapp' ? 'text-green-500' : 'text-muted-foreground'}`} />
+            </Button>
+            <Button
+              variant={selectedChannelFilter === 'instagram' ? 'secondary' : 'ghost'}
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => setSelectedChannelFilter('instagram')}
+              title="Instagram"
+            >
+              <FaInstagram className={`h-4 w-4 ${selectedChannelFilter === 'instagram' ? 'text-pink-500' : 'text-muted-foreground'}`} />
+            </Button>
+          </div>
+        </div>
 
         {/* Action Buttons */}
         <div className="flex gap-2">

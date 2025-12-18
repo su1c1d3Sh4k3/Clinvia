@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, Pencil, Trash2, Users, Search, Send, Instagram, CheckSquare, Square, Tag, AlertTriangle } from "lucide-react";
+import { FaWhatsapp, FaInstagram } from "react-icons/fa";
 import {
     Table,
     TableBody,
@@ -78,6 +79,7 @@ const Contacts = () => {
     const [selectedContactForMessage, setSelectedContactForMessage] = useState<Contact | null>(null);
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedTagFilter, setSelectedTagFilter] = useState<string>("all");
+    const [selectedChannelFilter, setSelectedChannelFilter] = useState<"all" | "whatsapp" | "instagram">("all");
 
     // Bulk Actions State
     const [selectedContactIds, setSelectedContactIds] = useState<Set<string>>(new Set());
@@ -218,7 +220,10 @@ const Contacts = () => {
 
         const matchesTag = selectedTagFilter === "all" || contact.contact_tags?.some((ct: any) => ct.tags.id === selectedTagFilter);
 
-        return matchesSearch && matchesTag;
+        const matchesChannel = selectedChannelFilter === "all" ||
+            (contact.channel || 'whatsapp') === selectedChannelFilter;
+
+        return matchesSearch && matchesTag && matchesChannel;
     });
 
     // Selection Logic
@@ -265,6 +270,36 @@ const Contacts = () => {
                         <Button onClick={handleAddNew} size="sm" className="h-8 md:h-9 text-xs md:text-sm w-fit">
                             <Plus className="w-4 h-4 mr-1 md:mr-2" />
                             <span className="hidden sm:inline">Novo </span>Contato
+                        </Button>
+                    </div>
+
+                    {/* Channel Tabs */}
+                    <div className="flex gap-2">
+                        <Button
+                            variant={selectedChannelFilter === 'all' ? 'secondary' : 'outline'}
+                            size="sm"
+                            onClick={() => setSelectedChannelFilter('all')}
+                            className="h-8"
+                        >
+                            Todos
+                        </Button>
+                        <Button
+                            variant={selectedChannelFilter === 'whatsapp' ? 'secondary' : 'outline'}
+                            size="sm"
+                            onClick={() => setSelectedChannelFilter('whatsapp')}
+                            className="h-8 gap-1"
+                        >
+                            <FaWhatsapp className="h-4 w-4 text-green-500" />
+                            WhatsApp
+                        </Button>
+                        <Button
+                            variant={selectedChannelFilter === 'instagram' ? 'secondary' : 'outline'}
+                            size="sm"
+                            onClick={() => setSelectedChannelFilter('instagram')}
+                            className="h-8 gap-1"
+                        >
+                            <FaInstagram className="h-4 w-4 text-pink-500" />
+                            Instagram
                         </Button>
                     </div>
 
@@ -412,10 +447,24 @@ const Contacts = () => {
                                             </TableCell>
                                             <TableCell className="py-2 md:py-4">
                                                 <div className="flex items-center gap-2 md:gap-3">
-                                                    <Avatar className="h-8 w-8 md:h-10 md:w-10">
-                                                        <AvatarImage src={contact.profile_pic_url} />
-                                                        <AvatarFallback className="text-xs md:text-sm">{contact.push_name?.[0] || "?"}</AvatarFallback>
-                                                    </Avatar>
+                                                    <div className="relative">
+                                                        <Avatar className="h-8 w-8 md:h-10 md:w-10">
+                                                            <AvatarImage src={contact.profile_pic_url} />
+                                                            <AvatarFallback className="text-xs md:text-sm">{contact.push_name?.[0] || "?"}</AvatarFallback>
+                                                        </Avatar>
+                                                        {/* Channel Badge */}
+                                                        <div className="absolute -bottom-1 -right-1">
+                                                            {(contact.channel || 'whatsapp') === 'instagram' ? (
+                                                                <div className="bg-gradient-to-br from-purple-500 via-pink-500 to-orange-500 rounded-full p-0.5">
+                                                                    <FaInstagram className="h-3 w-3 text-white" />
+                                                                </div>
+                                                            ) : (
+                                                                <div className="bg-green-500 rounded-full p-0.5">
+                                                                    <FaWhatsapp className="h-3 w-3 text-white" />
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
                                                     <div className="flex flex-col">
                                                         <span className="font-medium text-sm">{contact.push_name}</span>
                                                         <span className="text-xs text-muted-foreground sm:hidden">

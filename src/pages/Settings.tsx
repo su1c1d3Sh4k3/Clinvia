@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { User, Building2, Lock, Camera, Loader2, Bell, BellRing, Users, Volume2, DollarSign, Settings as SettingsIcon, Pen, Download, Smartphone, Monitor, CheckCircle2, Calendar, ListTodo, TrendingUp, Lightbulb, ChevronDown, ChevronUp } from "lucide-react";
+import { FaInstagram } from "react-icons/fa";
 import { Switch } from "@/components/ui/switch";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useCurrentTeamMember } from "@/hooks/useStaff";
@@ -38,9 +39,9 @@ export default function Settings() {
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
 
-    // Notification state
     const [notificationsEnabled, setNotificationsEnabled] = useState(true);
     const [groupNotificationsEnabled, setGroupNotificationsEnabled] = useState(true);
+    const [instagramNotificationsEnabled, setInstagramNotificationsEnabled] = useState(true);
     const [financialAccessEnabled, setFinancialAccessEnabled] = useState(true);
     const [signMessagesEnabled, setSignMessagesEnabled] = useState(true);
 
@@ -80,6 +81,7 @@ export default function Settings() {
             setInstagram(tm.instagram || "");
             setNotificationsEnabled(tm.notifications_enabled ?? true);
             setGroupNotificationsEnabled(tm.group_notifications_enabled ?? true);
+            setInstagramNotificationsEnabled(tm.instagram_notifications_enabled ?? true);
             setSignMessagesEnabled(tm.sign_messages ?? true);
 
             // Load push notification preferences
@@ -221,6 +223,7 @@ export default function Settings() {
             const updates = {
                 notifications_enabled: notificationsEnabled,
                 group_notifications_enabled: groupNotificationsEnabled,
+                instagram_notifications_enabled: instagramNotificationsEnabled,
                 push_notification_preferences: pushPreferences,
                 updated_at: new Date().toISOString(),
             };
@@ -644,6 +647,26 @@ export default function Settings() {
                                 <Switch
                                     checked={groupNotificationsEnabled}
                                     onCheckedChange={setGroupNotificationsEnabled}
+                                    disabled={!notificationsEnabled}
+                                />
+                            </div>
+
+                            {/* Instagram Notifications */}
+                            <div className="flex items-center justify-between p-3 md:p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors gap-3">
+                                <div className="flex items-center gap-3 md:gap-4">
+                                    <div className="p-1.5 md:p-2 bg-gradient-to-br from-purple-500 via-pink-500 to-orange-500 rounded-full">
+                                        <FaInstagram className="h-4 w-4 md:h-5 md:w-5 text-white" />
+                                    </div>
+                                    <div className="space-y-0.5">
+                                        <h4 className="font-medium text-sm md:text-base">Instagram</h4>
+                                        <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">
+                                            Alertas para mensagens do Instagram.
+                                        </p>
+                                    </div>
+                                </div>
+                                <Switch
+                                    checked={instagramNotificationsEnabled}
+                                    onCheckedChange={setInstagramNotificationsEnabled}
                                     disabled={!notificationsEnabled}
                                 />
                             </div>

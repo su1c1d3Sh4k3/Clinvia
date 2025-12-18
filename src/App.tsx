@@ -7,6 +7,7 @@ import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
 import Auth from "./pages/Auth";
 import WhatsAppConnection from "./pages/WhatsAppConnection";
+import Connections from "./pages/Connections";
 import NotFound from "./pages/NotFound";
 
 import Queues from "./pages/Queues";
@@ -46,7 +47,8 @@ const App = () => (
               <Route element={<Layout />}>
                 <Route path="/" element={<Index />} />
                 <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/whatsapp-connection" element={<WhatsAppConnection />} />
+                <Route path="/connections" element={<Connections />} />
+                <Route path="/whatsapp-connection" element={<Connections />} />
                 <Route path="/queues" element={<Queues />} />
                 <Route path="/tags" element={<Tags />} />
                 <Route path="/contacts" element={<Contacts />} />

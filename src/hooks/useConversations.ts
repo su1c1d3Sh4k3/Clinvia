@@ -21,10 +21,11 @@ interface UseConversationsOptions {
   userId?: string;
   role?: string;
   teamMemberId?: string;
+  channel?: 'whatsapp' | 'instagram';
 }
 
 export const useConversations = (options: UseConversationsOptions = {}) => {
-  const { tab = "open", userId, role, teamMemberId } = options;
+  const { tab = "open", userId, role, teamMemberId, channel } = options;
   const queryClient = useQueryClient();
   const isTyping = useIsTyping();
   const isTypingRef = useRef(isTyping);
@@ -35,7 +36,7 @@ export const useConversations = (options: UseConversationsOptions = {}) => {
   }, [isTyping]);
 
   const { data: conversations, isLoading } = useQuery({
-    queryKey: ["conversations", tab, userId, role, teamMemberId],
+    queryKey: ["conversations", tab, userId, role, teamMemberId, channel],
     queryFn: async () => {
       let query = supabase
         .from("conversations")
@@ -70,6 +71,13 @@ export const useConversations = (options: UseConversationsOptions = {}) => {
       if (error) throw error;
 
       let filteredData = data as Conversation[];
+
+      // Filter by channel if specified
+      if (channel) {
+        filteredData = filteredData.filter((conv: any) =>
+          (conv.channel || 'whatsapp') === channel
+        );
+      }
 
       // Para agentes, filtrar apenas conversas atribuídas a eles (quando abertas)
       // Agentes podem ver: conversas atribuídas a eles OU conversas pendentes
