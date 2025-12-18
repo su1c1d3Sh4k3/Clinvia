@@ -21,6 +21,17 @@ const updateSW = registerSW({
     }
 });
 
+// Listen for messages from Service Worker (e.g., notification clicks)
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', (event) => {
+        console.log('[App] Message from Service Worker:', event.data);
+        if (event.data?.type === 'NOTIFICATION_CLICK' && event.data?.url) {
+            console.log('[App] Navigating to:', event.data.url);
+            window.location.href = event.data.url;
+        }
+    });
+}
+
 createRoot(document.getElementById("root")!).render(
     <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
         <App />

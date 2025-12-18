@@ -78,7 +78,7 @@ self.addEventListener('push', (event) => {
  * Opens the app and navigates to the relevant page
  */
 self.addEventListener('notificationclick', (event) => {
-    console.log('[SW] Notification clicked:', event.action);
+    console.log('[SW] Notification clicked:', event.action, event.notification.data);
 
     event.notification.close();
 
@@ -87,24 +87,43 @@ self.addEventListener('notificationclick', (event) => {
         return;
     }
 
-    const targetUrl = event.notification.data?.url || '/inbox';
+    // Build the full URL
+    const targetPath = event.notification.data?.url || '/inbox';
+    const fullUrl = new URL(targetPath, self.location.origin).href;
+
+    console.log('[SW] Opening URL:', fullUrl);
 
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true })
             .then((windowClients) => {
-                // Check if app is already open
+                console.log('[SW] Found', windowClients.length, 'window clients');
+
+                // Try to find an existing app window
                 for (const client of windowClients) {
-                    if (client.url.includes(self.location.origin)) {
-                        // App is open, navigate and focus
-                        return client.navigate(targetUrl).then(() => client.focus());
+                    console.log('[SW] Checking client:', client.url);
+                    if (client.url.includes(self.location.origin) && 'focus' in client) {
+                        // Focus the existing window and navigate
+                        return client.focus().then((focusedClient) => {
+                            // Send message to navigate (more reliable than navigate())
+                            if (focusedClient) {
+                                focusedClient.postMessage({
+                                    type: 'NOTIFICATION_CLICK',
+                                    url: targetPath
+                                });
+                            }
+                            return focusedClient;
+                        });
                     }
                 }
-                // App is not open, open new window
-                return clients.openWindow(targetUrl);
+
+                // No existing window, open new one
+                console.log('[SW] Opening new window:', fullUrl);
+                return clients.openWindow(fullUrl);
             })
             .catch((error) => {
                 console.error('[SW] Error handling notification click:', error);
-                return clients.openWindow(targetUrl);
+                // Fallback: try to open new window
+                return clients.openWindow(fullUrl);
             })
     );
 });
