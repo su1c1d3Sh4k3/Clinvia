@@ -438,11 +438,12 @@ serve(async (req) => {
                         }
 
                         // Get contact name and profile picture for notification
+                        // Use senderName/senderProfilePicUrl which are set for both contacts and group members
                         const notificationTitle = isGroup
-                            ? (payload.body?.chat?.name || contact?.push_name || 'Grupo')
-                            : (contact?.push_name || payload.body?.from?.name || payload.message?.pushName || 'Cliente');
+                            ? (payload.body?.chat?.name || senderName || 'Grupo')
+                            : (senderName || payload.body?.from?.name || payload.message?.pushName || 'Cliente');
 
-                        const notificationIcon = contact?.profile_pic_url || undefined;
+                        const notificationIcon = senderProfilePicUrl || undefined;
 
                         const messagePreview = (messageText || messageType || '').substring(0, 50) +
                             ((messageText?.length || 0) > 50 ? '...' : '');
@@ -467,7 +468,7 @@ serve(async (req) => {
                                         body: messagePreview,
                                         icon: notificationIcon,
                                         notification_type: 'messages',
-                                        url: '/inbox',
+                                        url: `/inbox?conversationId=${conversation.id}`,
                                         tag: `message-${conversation.id}`
                                     })
                                 }).then(res => {
