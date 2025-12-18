@@ -98,58 +98,66 @@ export function usePushNotifications() {
 
     const subscribe = useCallback(async (): Promise<boolean> => {
         if (!isSupported) {
-            console.warn('[Push] Not supported');
+            alert('[Push] Not supported on this device');
             return false;
         }
 
         setLoading(true);
-        console.log('[Push] Starting subscription process...');
 
         try {
+            alert('[Push] Step 1: Checking permission...');
+
             // Request permission if not granted
             if (Notification.permission !== 'granted') {
-                console.log('[Push] Requesting notification permission...');
                 const result = await requestPermission();
                 if (result !== 'granted') {
-                    console.warn('[Push] Permission denied');
+                    alert('[Push] Permission denied by user');
                     setLoading(false);
                     return false;
                 }
             }
-            console.log('[Push] Permission granted');
+            alert('[Push] Step 2: Permission OK - ' + Notification.permission);
 
             // Check if VAPID key is configured
             if (!VAPID_PUBLIC_KEY || VAPID_PUBLIC_KEY === 'YOUR_VAPID_PUBLIC_KEY') {
-                console.error('[Push] VAPID key not configured');
+                alert('[Push] Error: VAPID key not configured');
                 setLoading(false);
                 return false;
             }
+            alert('[Push] Step 3: VAPID key OK');
 
             // Get service worker registration with timeout
-            console.log('[Push] Waiting for service worker...');
+            alert('[Push] Step 4: Waiting for Service Worker...');
             let registration: ServiceWorkerRegistration;
             try {
                 const timeoutPromise = new Promise<never>((_, reject) =>
-                    setTimeout(() => reject(new Error('Service Worker timeout')), 10000)
+                    setTimeout(() => reject(new Error('Service Worker timeout - 10s')), 10000)
                 );
                 registration = await Promise.race([
                     navigator.serviceWorker.ready,
                     timeoutPromise
                 ]) as ServiceWorkerRegistration;
-            } catch (err) {
-                console.error('[Push] Service Worker not ready:', err);
+            } catch (err: any) {
+                alert('[Push] Error: Service Worker failed - ' + (err?.message || err));
                 setLoading(false);
                 return false;
             }
-            console.log('[Push] Service worker ready');
+            alert('[Push] Step 5: Service Worker ready - ' + (registration.active?.state || 'unknown'));
 
             // Subscribe to push
-            console.log('[Push] Subscribing to push manager...');
-            const subscription = await registration.pushManager.subscribe({
-                userVisibleOnly: true,
-                applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
-            });
-            console.log('[Push] Push subscription created:', subscription.endpoint.substring(0, 50));
+            alert('[Push] Step 6: Subscribing to Push Manager...');
+            let subscription;
+            try {
+                subscription = await registration.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+                });
+            } catch (err: any) {
+                alert('[Push] Error: Push subscribe failed - ' + (err?.message || err));
+                setLoading(false);
+                return false;
+            }
+            alert('[Push] Step 7: Push subscription created');
 
             // Get subscription details
             const json = subscription.toJSON();
@@ -161,17 +169,17 @@ export function usePushNotifications() {
             };
 
             // Get current user
-            console.log('[Push] Getting current user...');
+            alert('[Push] Step 8: Getting user...');
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) {
-                console.error('[Push] User not authenticated');
+                alert('[Push] Error: User not authenticated');
                 setLoading(false);
                 return false;
             }
-            console.log('[Push] User:', user.id);
+            alert('[Push] Step 9: User OK - ' + user.id.substring(0, 8));
 
             // Save to database
-            console.log('[Push] Saving to database...');
+            alert('[Push] Step 10: Saving to database...');
             const { error } = await supabase
                 .from('push_subscriptions' as any)
                 .upsert({
@@ -185,17 +193,17 @@ export function usePushNotifications() {
                 });
 
             if (error) {
-                console.error('[Push] Error saving subscription:', error);
+                alert('[Push] Error: DB save failed - ' + error.message);
                 setLoading(false);
                 return false;
             }
 
-            console.log('[Push] Subscription saved successfully!');
+            alert('[Push] SUCCESS! Device registered!');
             setIsSubscribed(true);
             setLoading(false);
             return true;
-        } catch (error) {
-            console.error('[Push] Error subscribing:', error);
+        } catch (error: any) {
+            alert('[Push] Unexpected error: ' + (error?.message || error));
             setLoading(false);
             return false;
         }
