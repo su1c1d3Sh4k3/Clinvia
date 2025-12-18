@@ -41,7 +41,7 @@ export function usePushNotifications() {
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        // Check if push notifications are supported
+        // Check if push notifications are supported and if device is registered in DB
         const checkSupport = async () => {
             const supported = 'serviceWorker' in navigator &&
                 'PushManager' in window &&
@@ -51,11 +51,36 @@ export function usePushNotifications() {
             if (supported) {
                 setPermission(Notification.permission);
 
-                // Check if already subscribed
+                // Check if already subscribed in browser
                 if ('serviceWorker' in navigator) {
-                    const registration = await navigator.serviceWorker.ready;
-                    const subscription = await registration.pushManager.getSubscription();
-                    setIsSubscribed(!!subscription);
+                    try {
+                        const registration = await navigator.serviceWorker.ready;
+                        const subscription = await registration.pushManager.getSubscription();
+
+                        if (subscription) {
+                            // Check if this endpoint exists in the database
+                            const { data: { user } } = await supabase.auth.getUser();
+                            if (user) {
+                                const { data, error } = await supabase
+                                    .from('push_subscriptions' as any)
+                                    .select('id')
+                                    .eq('user_id', user.id)
+                                    .eq('endpoint', subscription.endpoint)
+                                    .maybeSingle();
+
+                                // Only mark as subscribed if exists in DB
+                                setIsSubscribed(!error && !!data);
+                                console.log('[Push] DB check:', !error && !!data ? 'Found' : 'Not found');
+                            } else {
+                                setIsSubscribed(false);
+                            }
+                        } else {
+                            setIsSubscribed(false);
+                        }
+                    } catch (err) {
+                        console.error('[Push] Error checking subscription:', err);
+                        setIsSubscribed(false);
+                    }
                 }
             }
         };
@@ -72,34 +97,59 @@ export function usePushNotifications() {
     }, [isSupported]);
 
     const subscribe = useCallback(async (): Promise<boolean> => {
-        if (!isSupported) return false;
+        if (!isSupported) {
+            console.warn('[Push] Not supported');
+            return false;
+        }
 
         setLoading(true);
+        console.log('[Push] Starting subscription process...');
+
         try {
             // Request permission if not granted
             if (Notification.permission !== 'granted') {
+                console.log('[Push] Requesting notification permission...');
                 const result = await requestPermission();
                 if (result !== 'granted') {
+                    console.warn('[Push] Permission denied');
                     setLoading(false);
                     return false;
                 }
             }
-
-            // Get service worker registration
-            const registration = await navigator.serviceWorker.ready;
+            console.log('[Push] Permission granted');
 
             // Check if VAPID key is configured
-            if (VAPID_PUBLIC_KEY === 'YOUR_VAPID_PUBLIC_KEY') {
-                console.warn('Push notifications not configured: VAPID key missing');
+            if (!VAPID_PUBLIC_KEY || VAPID_PUBLIC_KEY === 'YOUR_VAPID_PUBLIC_KEY') {
+                console.error('[Push] VAPID key not configured');
                 setLoading(false);
                 return false;
             }
 
+            // Get service worker registration with timeout
+            console.log('[Push] Waiting for service worker...');
+            let registration: ServiceWorkerRegistration;
+            try {
+                const timeoutPromise = new Promise<never>((_, reject) =>
+                    setTimeout(() => reject(new Error('Service Worker timeout')), 10000)
+                );
+                registration = await Promise.race([
+                    navigator.serviceWorker.ready,
+                    timeoutPromise
+                ]) as ServiceWorkerRegistration;
+            } catch (err) {
+                console.error('[Push] Service Worker not ready:', err);
+                setLoading(false);
+                return false;
+            }
+            console.log('[Push] Service worker ready');
+
             // Subscribe to push
+            console.log('[Push] Subscribing to push manager...');
             const subscription = await registration.pushManager.subscribe({
                 userVisibleOnly: true,
                 applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
             });
+            console.log('[Push] Push subscription created:', subscription.endpoint.substring(0, 50));
 
             // Get subscription details
             const json = subscription.toJSON();
@@ -111,14 +161,17 @@ export function usePushNotifications() {
             };
 
             // Get current user
+            console.log('[Push] Getting current user...');
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) {
-                console.error('User not authenticated');
+                console.error('[Push] User not authenticated');
                 setLoading(false);
                 return false;
             }
+            console.log('[Push] User:', user.id);
 
             // Save to database
+            console.log('[Push] Saving to database...');
             const { error } = await supabase
                 .from('push_subscriptions' as any)
                 .upsert({
@@ -132,16 +185,17 @@ export function usePushNotifications() {
                 });
 
             if (error) {
-                console.error('Error saving push subscription:', error);
+                console.error('[Push] Error saving subscription:', error);
                 setLoading(false);
                 return false;
             }
 
+            console.log('[Push] Subscription saved successfully!');
             setIsSubscribed(true);
             setLoading(false);
             return true;
         } catch (error) {
-            console.error('Error subscribing to push:', error);
+            console.error('[Push] Error subscribing:', error);
             setLoading(false);
             return false;
         }
