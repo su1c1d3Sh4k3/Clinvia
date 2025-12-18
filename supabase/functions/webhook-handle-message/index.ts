@@ -468,7 +468,7 @@ serve(async (req) => {
                                         body: messagePreview,
                                         icon: notificationIcon,
                                         notification_type: 'messages',
-                                        url: `/inbox?conversationId=${conversation.id}`,
+                                        url: `/?conversationId=${conversation.id}`,
                                         tag: `message-${conversation.id}`
                                     })
                                 }).then(res => {

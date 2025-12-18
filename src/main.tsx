@@ -27,7 +27,14 @@ if ('serviceWorker' in navigator) {
         console.log('[App] Message from Service Worker:', event.data);
         if (event.data?.type === 'NOTIFICATION_CLICK' && event.data?.url) {
             console.log('[App] Navigating to:', event.data.url);
-            window.location.href = event.data.url;
+            // Extract conversationId from URL and store in localStorage
+            const url = new URL(event.data.url, window.location.origin);
+            const conversationId = url.searchParams.get('conversationId');
+            if (conversationId) {
+                localStorage.setItem('pendingConversationId', conversationId);
+            }
+            // Navigate to / (React Router will handle the rest)
+            window.location.href = '/';
         }
     });
 }

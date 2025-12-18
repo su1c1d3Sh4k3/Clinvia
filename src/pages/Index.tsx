@@ -71,6 +71,15 @@ const Index = () => {
     const contactId = searchParams.get("contact");
     const messageParam = searchParams.get("message");
 
+    // Also check for pending conversation from notification click
+    const pendingConversationId = localStorage.getItem('pendingConversationId');
+    if (pendingConversationId) {
+      localStorage.removeItem('pendingConversationId');
+      setSelectedConversationId(pendingConversationId);
+      setMobileView("chat");
+      return;
+    }
+
     if (conversationId) {
       setSelectedConversationId(conversationId);
       setMobileView("chat");
