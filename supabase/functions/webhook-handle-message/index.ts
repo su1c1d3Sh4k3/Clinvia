@@ -437,10 +437,12 @@ serve(async (req) => {
                             }
                         }
 
-                        // Get contact name for notification
-                        const contactName = isGroup
-                            ? (payload.body?.chat?.name || 'Grupo')
-                            : (payload.body?.from?.name || payload.message?.pushName || 'Cliente');
+                        // Get contact name and profile picture for notification
+                        const notificationTitle = isGroup
+                            ? (payload.body?.chat?.name || contact?.push_name || 'Grupo')
+                            : (contact?.push_name || payload.body?.from?.name || payload.message?.pushName || 'Cliente');
+
+                        const notificationIcon = contact?.profile_pic_url || undefined;
 
                         const messagePreview = (messageText || messageType || '').substring(0, 50) +
                             ((messageText?.length || 0) > 50 ? '...' : '');
@@ -461,8 +463,9 @@ serve(async (req) => {
                                     },
                                     body: JSON.stringify({
                                         auth_user_id: tm.auth_user_id,
-                                        title: contactName,
+                                        title: notificationTitle,
                                         body: messagePreview,
+                                        icon: notificationIcon,
                                         notification_type: 'messages',
                                         url: '/inbox',
                                         tag: `message-${conversation.id}`
