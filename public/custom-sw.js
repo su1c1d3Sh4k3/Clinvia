@@ -11,9 +11,11 @@ clientsClaim();
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
 
-// Navigation route - serve index.html for all navigation requests
+// Navigation route - serve index.html for all navigation requests (SPA)
+// This allows React Router to handle all routes
 const navigationRoute = new NavigationRoute(createHandlerBoundToURL('index.html'), {
-    allowlist: [/^\/$/]
+    // Exclude API routes and static assets from being handled as navigation
+    denylist: [/^\/api\//, /\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2)$/]
 });
 registerRoute(navigationRoute);
 
