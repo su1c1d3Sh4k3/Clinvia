@@ -16,8 +16,8 @@ import { Badge } from "@/components/ui/badge";
 import { AlertCircle, CheckCircle2, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 
-// Facebook App ID from Meta App Dashboard (for Facebook Login for Business)
-const FACEBOOK_APP_ID = import.meta.env.VITE_FACEBOOK_APP_ID || '887067873839519';
+// Instagram App ID from Meta App Dashboard (Instagram Login)
+const INSTAGRAM_APP_ID = import.meta.env.VITE_INSTAGRAM_APP_ID || '746674508461826';
 
 const Connections = () => {
     const { user } = useAuth();
@@ -152,19 +152,16 @@ const Connections = () => {
 
     const handleConnectInstagram = () => {
         const redirectUri = `${window.location.origin}/connections`;
-        // Using Facebook Login for Business with Instagram permissions
+        // Instagram Business Login permissions
         const scopes = [
-            'instagram_basic',
-            'instagram_manage_messages',
-            'instagram_manage_comments',
-            'instagram_content_publish',
-            'pages_show_list',
-            'pages_manage_metadata',
-            'business_management'
+            'instagram_business_basic',
+            'instagram_business_manage_messages',
+            'instagram_business_manage_comments',
+            'instagram_business_content_publish'
         ].join(',');
 
-        // Facebook OAuth endpoint for Facebook Login for Business
-        const authUrl = `https://www.facebook.com/v21.0/dialog/oauth?client_id=${FACEBOOK_APP_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${scopes}`;
+        // Instagram OAuth endpoint
+        const authUrl = `https://www.instagram.com/oauth/authorize?client_id=${INSTAGRAM_APP_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${scopes}`;
 
         window.location.href = authUrl;
     };
