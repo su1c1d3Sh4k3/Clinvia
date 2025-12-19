@@ -118,13 +118,18 @@ const Connections = () => {
             // Try WITHOUT trailing slash
             const redirectUri = 'https://app.clinvia.ai';
 
+            // Clean the code - remove #_ suffix and any whitespace
+            const cleanCode = code.replace(/#_$/, '').trim();
+
             console.log('[Instagram OAuth] Exchanging code for token...');
             console.log('[Instagram OAuth] Using redirect_uri:', redirectUri);
-            console.log('[Instagram OAuth] Code (first 30 chars):', code.substring(0, 30));
+            console.log('[Instagram OAuth] Raw code:', code);
+            console.log('[Instagram OAuth] Clean code:', cleanCode);
+            console.log('[Instagram OAuth] Code length:', cleanCode.length);
 
             const { data, error } = await supabase.functions.invoke('instagram-oauth-callback', {
                 body: {
-                    code: code.replace('#_', ''), // Remove the #_ that Instagram appends
+                    code: cleanCode,
                     redirect_uri: redirectUri,
                     user_id: user?.id
                 }
