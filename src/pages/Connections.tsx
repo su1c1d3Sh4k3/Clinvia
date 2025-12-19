@@ -114,9 +114,9 @@ const Connections = () => {
         });
 
         try {
-            // IMPORTANT: redirect_uri must EXACTLY match what was used in the auth URL
-            // Try WITHOUT trailing slash
-            const redirectUri = 'https://app.clinvia.ai';
+            // IMPORTANT: redirect_uri must EXACTLY match Meta Dashboard
+            // Meta Dashboard forces trailing slash
+            const redirectUri = 'https://app.clinvia.ai/';
 
             // Clean the code - remove #_ suffix and any whitespace
             const cleanCode = code.replace(/#_$/, '').trim();
@@ -161,9 +161,9 @@ const Connections = () => {
     };
 
     const handleConnectInstagram = () => {
-        // IMPORTANT: redirect_uri must EXACTLY match what's in Meta Dashboard
-        // Try WITHOUT trailing slash
-        const redirectUri = 'https://app.clinvia.ai';
+        // IMPORTANT: redirect_uri must EXACTLY match Meta Dashboard
+        // Meta Dashboard forces trailing slash
+        const redirectUri = 'https://app.clinvia.ai/';
 
         // Instagram Business Login permissions
         const scopes = [
