@@ -115,8 +115,12 @@ const Connections = () => {
 
         try {
             // IMPORTANT: redirect_uri must EXACTLY match what was used in the auth URL
-            // Meta Dashboard has: https://app.clinvia.ai/
-            const redirectUri = 'https://app.clinvia.ai/';
+            // Try WITHOUT trailing slash
+            const redirectUri = 'https://app.clinvia.ai';
+
+            console.log('[Instagram OAuth] Exchanging code for token...');
+            console.log('[Instagram OAuth] Using redirect_uri:', redirectUri);
+            console.log('[Instagram OAuth] Code (first 30 chars):', code.substring(0, 30));
 
             const { data, error } = await supabase.functions.invoke('instagram-oauth-callback', {
                 body: {
@@ -153,8 +157,8 @@ const Connections = () => {
 
     const handleConnectInstagram = () => {
         // IMPORTANT: redirect_uri must EXACTLY match what's in Meta Dashboard
-        // Meta Dashboard has: https://app.clinvia.ai/
-        const redirectUri = 'https://app.clinvia.ai/';
+        // Try WITHOUT trailing slash
+        const redirectUri = 'https://app.clinvia.ai';
 
         // Instagram Business Login permissions
         const scopes = [
@@ -164,8 +168,10 @@ const Connections = () => {
             'instagram_business_content_publish'
         ].join(',');
 
-        // Instagram OAuth endpoint
-        const authUrl = `https://www.instagram.com/oauth/authorize?client_id=${INSTAGRAM_APP_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${scopes}`;
+        // Instagram OAuth endpoint - DO NOT use encodeURIComponent on redirect_uri
+        const authUrl = `https://www.instagram.com/oauth/authorize?client_id=${INSTAGRAM_APP_ID}&redirect_uri=${redirectUri}&response_type=code&scope=${scopes}`;
+
+        console.log('[Instagram OAuth] Redirecting to:', authUrl);
 
         window.location.href = authUrl;
     };
