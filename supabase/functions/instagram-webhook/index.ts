@@ -76,18 +76,76 @@ serve(async (req) => {
                 const entries = payload.entry || [];
 
                 for (const entry of entries) {
-                    const instagramAccountId = entry.id; // Page/Account ID receiving the message
-                    console.log('[INSTAGRAM WEBHOOK] Processing for Instagram Account:', instagramAccountId);
+                    const entryId = entry.id; // This could be Page ID or IGSID
+                    console.log('[INSTAGRAM WEBHOOK] Processing for entry ID:', entryId);
 
-                    // Find the Instagram instance in database
-                    const { data: instagramInstance, error: instanceError } = await supabase
+                    // Try to find the Instagram instance - it might be stored with different IDs
+                    let instagramInstance = null;
+
+                    // Method 1: Try entry.id
+                    let { data: instance1 } = await supabase
                         .from('instagram_instances')
-                        .select('id, user_id, access_token')
-                        .eq('instagram_account_id', instagramAccountId)
+                        .select('id, user_id, access_token, instagram_account_id')
+                        .eq('instagram_account_id', entryId)
                         .single();
 
-                    if (instanceError || !instagramInstance) {
-                        console.error('[INSTAGRAM WEBHOOK] Instagram instance not found:', instagramAccountId);
+                    if (instance1) {
+                        instagramInstance = instance1;
+                        console.log('[INSTAGRAM WEBHOOK] Found instance by entry.id');
+                    }
+
+                    // Method 2: Try recipient.id from first messaging event
+                    if (!instagramInstance && entry.messaging && entry.messaging.length > 0) {
+                        const recipientId = entry.messaging[0].recipient?.id;
+                        if (recipientId) {
+                            console.log('[INSTAGRAM WEBHOOK] Trying recipient.id:', recipientId);
+                            const { data: instance2 } = await supabase
+                                .from('instagram_instances')
+                                .select('id, user_id, access_token, instagram_account_id')
+                                .eq('instagram_account_id', recipientId)
+                                .single();
+
+                            if (instance2) {
+                                instagramInstance = instance2;
+                                console.log('[INSTAGRAM WEBHOOK] Found instance by recipient.id');
+                            }
+                        }
+                    }
+
+                    // Method 3: If still not found, try to find any connected instance and log for debugging
+                    if (!instagramInstance) {
+                        const { data: allInstances } = await supabase
+                            .from('instagram_instances')
+                            .select('id, user_id, instagram_account_id, account_name')
+                            .eq('status', 'connected');
+
+                        console.log('[INSTAGRAM WEBHOOK] No match found. Entry ID:', entryId);
+                        console.log('[INSTAGRAM WEBHOOK] Available instances:', JSON.stringify(allInstances));
+
+                        // For now, if we have only one instance, use it (temporary workaround)
+                        if (allInstances && allInstances.length === 1) {
+                            console.log('[INSTAGRAM WEBHOOK] Using single available instance as fallback');
+                            const { data: fallbackInstance } = await supabase
+                                .from('instagram_instances')
+                                .select('id, user_id, access_token, instagram_account_id')
+                                .eq('id', allInstances[0].id)
+                                .single();
+
+                            if (fallbackInstance) {
+                                instagramInstance = fallbackInstance;
+
+                                // Update the instagram_account_id to the correct one for future lookups
+                                await supabase
+                                    .from('instagram_instances')
+                                    .update({ instagram_account_id: entryId })
+                                    .eq('id', fallbackInstance.id);
+                                console.log('[INSTAGRAM WEBHOOK] Updated instance with correct entry.id:', entryId);
+                            }
+                        }
+                    }
+
+                    if (!instagramInstance) {
+                        console.error('[INSTAGRAM WEBHOOK] Instagram instance not found for any ID');
                         continue;
                     }
 
@@ -158,6 +216,7 @@ serve(async (req) => {
                                     .from('contacts')
                                     .insert({
                                         instagram_id: senderId,
+                                        number: `instagram:${senderId}`, // Use instagram ID as "number" since field is required
                                         push_name: senderName,
                                         profile_pic_url: profilePicUrl,
                                         channel: 'instagram',

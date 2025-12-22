@@ -381,17 +381,17 @@ export const ConversationsList = ({
           <TabsList className="grid w-full grid-cols-2 mb-2">
             <TabsTrigger value="people" onClick={() => setSelectedTypeFilter("people")} className="relative">
               Pessoas
-              {unreadCounts.people > 0 && (
+              {((unreadCounts as any)[selectedChannelFilter]?.people || 0) > 0 && (
                 <Badge className="ml-2 h-5 w-5 p-0 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px]">
-                  {unreadCounts.people}
+                  {(unreadCounts as any)[selectedChannelFilter]?.people || 0}
                 </Badge>
               )}
             </TabsTrigger>
             <TabsTrigger value="groups" onClick={() => setSelectedTypeFilter("groups")} className="relative">
               Grupos
-              {unreadCounts.groups > 0 && (
+              {((unreadCounts as any)[selectedChannelFilter]?.groups || 0) > 0 && (
                 <Badge className="ml-2 h-5 w-5 p-0 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px]">
-                  {unreadCounts.groups}
+                  {(unreadCounts as any)[selectedChannelFilter]?.groups || 0}
                 </Badge>
               )}
             </TabsTrigger>
@@ -405,9 +405,9 @@ export const ConversationsList = ({
               <TabsTrigger value="open" className="flex flex-col items-center gap-1 py-2 h-auto relative data-[state=active]:text-primary">
                 <div className="relative">
                   <MessageSquare className="h-5 w-5" />
-                  {(unreadCounts as any).open > 0 && (
+                  {((unreadCounts as any)[selectedChannelFilter]?.open || 0) > 0 && (
                     <Badge className="absolute -top-2 -right-3 h-5 min-w-[1.25rem] px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] border-2 border-background">
-                      {(unreadCounts as any).open}
+                      {(unreadCounts as any)[selectedChannelFilter]?.open || 0}
                     </Badge>
                   )}
                 </div>
@@ -433,9 +433,9 @@ export const ConversationsList = ({
                       <polyline points="12 6 12 12 16 14" />
                     </svg>
                   </div>
-                  {(unreadCounts as any).pending > 0 && (
+                  {((unreadCounts as any)[selectedChannelFilter]?.pending || 0) > 0 && (
                     <Badge className="absolute -top-2 -right-3 h-5 min-w-[1.25rem] px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] border-2 border-background">
-                      {(unreadCounts as any).pending}
+                      {(unreadCounts as any)[selectedChannelFilter]?.pending || 0}
                     </Badge>
                   )}
                 </div>
