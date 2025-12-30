@@ -63,6 +63,7 @@ serve(async (req) => {
         let senderName: string | null = null;
         let senderJid: string | null = null;
         let senderProfilePicUrl: string | null = null;
+        let conversation: any = null; // Declare in outer scope for webhook forwarding
 
         if (isGroup) {
             // ===== GROUP PROCESSING =====
@@ -266,7 +267,6 @@ serve(async (req) => {
 
             const { data: conversations } = await query;
 
-            let conversation;
             if (conversations && conversations.length > 0) {
                 conversation = conversations[0];
                 console.log('[webhook-handle-message] Found conversation:', conversation.id);
@@ -550,21 +550,112 @@ serve(async (req) => {
             }
         }
 
-        // 5. Forward to External Webhook
-        if (instance.webhook_url && eventType === 'messages') {
-            console.log('[webhook-handle-message] Forwarding to external webhook...');
-            try {
-                await fetch(instance.webhook_url, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'User-Agent': 'Supabase-Webhook-Proxy/1.0'
-                    },
-                    body: JSON.stringify(payload)
+        // 5. Forward to External Webhook (only for individual contacts, not groups)
+        // Additional filters: 
+        // - conversation.status must be 'pending'
+        // - contacts.ia_on must be TRUE
+        // - ia_config.ia_on must be TRUE
+        if (instance.webhook_url && eventType === 'messages' && !isGroup) {
+            console.log('[webhook-handle-message] Checking webhook filters...');
+
+            // Check filter 1: conversation.status === 'pending'
+            const conversationIsPending = conversation?.status === 'pending';
+            if (!conversationIsPending) {
+                console.log('[webhook-handle-message] Skipping webhook: conversation status is not pending (status:', conversation?.status || 'no conversation', ')');
+            }
+
+            // Check filter 2: contacts.ia_on === TRUE
+            let contactIaOn = true; // Default to true if not found
+            if (contactId) {
+                const { data: contactData } = await supabase
+                    .from('contacts')
+                    .select('ia_on')
+                    .eq('id', contactId)
+                    .single();
+                contactIaOn = contactData?.ia_on !== false; // Default to true if null/undefined
+            }
+            if (!contactIaOn) {
+                console.log('[webhook-handle-message] Skipping webhook: contact.ia_on is FALSE');
+            }
+
+            // Check filter 3: ia_config.ia_on === TRUE
+            let iaConfigOn = false; // Default to false
+            let crmAuto = false; // Flag for CRM auto
+            const { data: iaConfig } = await supabase
+                .from('ia_config')
+                .select('ia_on, crm_auto')
+                .eq('user_id', userId)
+                .single();
+            iaConfigOn = iaConfig?.ia_on === true;
+            crmAuto = iaConfig?.crm_auto === true;
+            if (!iaConfigOn) {
+                console.log('[webhook-handle-message] Skipping webhook: ia_config.ia_on is FALSE');
+            }
+
+            // Check filter 4: instances.ia_on_wpp === TRUE
+            const instanceIaOn = instance.ia_on_wpp !== false; // Default to true if null/undefined
+            if (!instanceIaOn) {
+                console.log('[webhook-handle-message] Skipping webhook: instance.ia_on_wpp is FALSE');
+            }
+
+            // Only forward webhook if ALL 4 filters pass
+            if (conversationIsPending && contactIaOn && iaConfigOn && instanceIaOn) {
+                console.log('[webhook-handle-message] All filters passed! Forwarding to external webhook...');
+
+                // Check if we need to include ia_funnel_id
+                let iaFunnelId: string | null = null;
+                if (crmAuto) {
+                    console.log('[webhook-handle-message] crm_auto is TRUE, looking for IA funnel...');
+                    const { data: iaFunnel } = await supabase
+                        .from('crm_funnels')
+                        .select('id')
+                        .eq('name', 'IA')
+                        .eq('user_id', userId)
+                        .single();
+
+                    if (iaFunnel?.id) {
+                        iaFunnelId = iaFunnel.id;
+                        console.log('[webhook-handle-message] Found IA funnel:', iaFunnelId);
+                    } else {
+                        console.log('[webhook-handle-message] IA funnel not found for user');
+                    }
+                }
+
+                try {
+                    // Build the forwarded payload with bd_data containing database IDs
+                    const forwardedPayload = {
+                        ...payload,
+                        bd_data: {
+                            user_id: userId,
+                            contact_id: contactId || null,
+                            conversation_id: conversation?.id || null,
+                            group_id: groupId || null,
+                            instance_id: instance.id,
+                            ia_funnel_id: iaFunnelId
+                        }
+                    };
+
+                    console.log('[webhook-handle-message] bd_data:', JSON.stringify(forwardedPayload.bd_data));
+
+                    await fetch(instance.webhook_url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'User-Agent': 'Supabase-Webhook-Proxy/1.0'
+                        },
+                        body: JSON.stringify(forwardedPayload)
+                    });
+                    console.log('[webhook-handle-message] Forwarded successfully with bd_data');
+                } catch (forwardError) {
+                    console.error('[webhook-handle-message] Forward error:', forwardError);
+                }
+            } else {
+                console.log('[webhook-handle-message] Webhook NOT sent - filters failed:', {
+                    conversationIsPending,
+                    contactIaOn,
+                    iaConfigOn,
+                    instanceIaOn
                 });
-                console.log('[webhook-handle-message] Forwarded successfully');
-            } catch (forwardError) {
-                console.error('[webhook-handle-message] Forward error:', forwardError);
             }
         }
 

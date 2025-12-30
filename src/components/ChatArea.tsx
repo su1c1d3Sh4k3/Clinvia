@@ -615,13 +615,81 @@ export const ChatArea = ({
   const handleSend = async () => {
     if ((!message.trim() && !selectedFile) || !conversationId) return;
 
-    // Check if conversation has an instance assigned
+    // Check if this is an Instagram conversation
+    const conversationChannel = (conversation as any)?.channel;
+
+    if (conversationChannel === 'instagram') {
+      // Send via Instagram API
+      await executeSendInstagramMessage();
+      return;
+    }
+
+    // For WhatsApp: Check if conversation has an instance assigned
     if (!(conversation as any)?.instance_id) {
       setIsInstanceModalOpen(true);
       return;
     }
 
     await executeSendMessage((conversation as any).instance_id);
+  };
+
+  const executeSendInstagramMessage = async () => {
+    const instagramInstanceId = (conversation as any)?.instagram_instance_id;
+    const contactInstagramId = (contact as any)?.instagram_id;
+
+    if (!instagramInstanceId || !contactInstagramId) {
+      toast.error("Configuração do Instagram incompleta");
+      console.error("Missing instagram_instance_id or instagram_id", { instagramInstanceId, contactInstagramId });
+      return;
+    }
+
+    let finalBody = message;
+
+    // For now, Instagram API only supports text messages
+    // TODO: Add media support when needed
+
+    if (!finalBody.trim()) {
+      toast.error("Digite uma mensagem");
+      return;
+    }
+
+    setIsUploading(true);
+
+    try {
+      // Send via Instagram Edge Function - it also saves the message to DB
+      const { data, error } = await supabase.functions.invoke('instagram-send-message', {
+        body: {
+          instagram_instance_id: instagramInstanceId,
+          recipient_id: contactInstagramId,
+          message_text: finalBody,
+          conversation_id: conversationId
+        }
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      // Update conversation status
+      await supabase
+        .from('conversations')
+        .update({
+          status: 'open',
+          assigned_agent_id: currentTeamMember?.id || (conversation as any)?.assigned_agent_id
+        })
+        .eq('id', conversationId);
+
+      setMessage("");
+      handleRemoveFile();
+      setIsUploading(false);
+      queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
+      queryClient.invalidateQueries({ queryKey: ["conversations"] });
+
+      toast.success("Mensagem enviada");
+    } catch (error: any) {
+      console.error("Error sending Instagram message:", error);
+      toast.error(error.message || "Erro ao enviar mensagem");
+      setIsUploading(false);
+    }
   };
 
   const executeSendMessage = async (instanceId: string, overrideBody?: string, overrideMediaUrl?: string, overrideType?: "text" | "image" | "audio" | "video" | "document") => {

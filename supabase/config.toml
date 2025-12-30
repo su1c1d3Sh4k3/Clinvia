@@ -1,9 +1,24 @@
 project_id = "swfshqvvbohnahdyndch"
 
+# =============================================
+# EDGE FUNCTIONS JWT CONFIGURATION
+# =============================================
+# verify_jwt = false allows external systems to call these functions
+# without a Supabase JWT token. Each function implements its own
+# authentication via x-api-key or other mechanisms.
+#
+# ⚠️ DO NOT REMOVE verify_jwt = false FROM FUNCTIONS THAT NEED
+# TO BE CALLED BY EXTERNAL SYSTEMS (webhooks, APIs, etc.)
+# =============================================
+
+# AI Functions
 [functions.ai-suggest-response]
 verify_jwt = false
 
 [functions.ai-copilot-chat]
+verify_jwt = false
+
+[functions.ai-copilot-new]
 verify_jwt = false
 
 [functions.ai-analyze-conversation]
@@ -12,9 +27,26 @@ verify_jwt = false
 [functions.ai-generate-summary]
 verify_jwt = false
 
-[functions.save-attendance-data]
-verify_jwt = true
+[functions.ai-sentiment-analysis]
+verify_jwt = false
 
+# API Functions (external access)
+[functions.api-contacts]
+verify_jwt = false
+
+[functions.api-crm]
+verify_jwt = false
+
+[functions.api-professionals]
+verify_jwt = false
+
+[functions.api-scheduling]
+verify_jwt = false
+
+[functions.api-services]
+verify_jwt = false
+
+# Evolution/WhatsApp Functions
 [functions.evolution-test-connection]
 verify_jwt = false
 
@@ -30,15 +62,48 @@ verify_jwt = false
 [functions.evolution-check-connection]
 verify_jwt = false
 
+# UZAPI Functions
 [functions.uzapi-webhook-refactor]
 verify_jwt = false
 
 [functions.uzapi-webhook]
 verify_jwt = false
 
-[functions.transcribe-audio]
+[functions.uzapi-check-connection]
 verify_jwt = false
 
+[functions.uzapi-check-status]
+verify_jwt = false
+
+[functions.uzapi-configure-webhook]
+verify_jwt = false
+
+[functions.uzapi-connect-instance]
+verify_jwt = false
+
+[functions.uzapi-create-instance]
+verify_jwt = false
+
+[functions.uzapi-delete-instance]
+verify_jwt = false
+
+[functions.uzapi-set-webhook]
+verify_jwt = false
+
+[functions.uzapi-setup-webhook]
+verify_jwt = false
+
+# Instagram Functions
+[functions.instagram-webhook]
+verify_jwt = false
+
+[functions.instagram-send-message]
+verify_jwt = false
+
+[functions.instagram-oauth-callback]
+verify_jwt = false
+
+# Webhook Functions
 [functions.webhook-queue-receiver]
 verify_jwt = false
 
@@ -51,5 +116,69 @@ verify_jwt = false
 [functions.webhook-handle-status]
 verify_jwt = false
 
+[functions.whatsapp-webhook]
+verify_jwt = false
+
+[functions.ia-workflow-webhook]
+verify_jwt = false
+
+# Utility Functions
+[functions.transcribe-audio]
+verify_jwt = false
+
 [functions.send-push]
+verify_jwt = false
+
+[functions.check-availability]
+verify_jwt = false
+
+[functions.cleanup-evolution-data]
+verify_jwt = false
+
+[functions.cleanup-storage]
+verify_jwt = false
+
+[functions.create-team-member]
+verify_jwt = false
+
+[functions.delete-team-member]
+verify_jwt = false
+
+[functions.debug-history]
+verify_jwt = false
+
+[functions.debug-messages]
+verify_jwt = false
+
+[functions.evaluate-agent]
+verify_jwt = false
+
+[functions.fix-data]
+verify_jwt = false
+
+[functions.generate-client-report]
+verify_jwt = false
+
+[functions.generate-financial-report]
+verify_jwt = false
+
+[functions.generate-opportunities]
+verify_jwt = false
+
+[functions.inspect-message]
+verify_jwt = false
+
+[functions.process-auto-follow-up]
+verify_jwt = false
+
+[functions.resolve-ticket]
+verify_jwt = false
+
+[functions.run-migration]
+verify_jwt = false
+
+[functions.save-attendance-data]
+verify_jwt = false
+
+[functions.scheduler-notifications]
 verify_jwt = false

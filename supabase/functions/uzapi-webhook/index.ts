@@ -215,23 +215,8 @@ serve(async (req) => {
                     console.log('[7] Message saved');
                 }
 
-                if (instance.webhook_url) {
-                    console.log('[8] Forwarding to external webhook:', instance.webhook_url);
-
-                    try {
-                        await fetch(instance.webhook_url, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'User-Agent': 'Supabase-Webhook-Proxy/1.0'
-                            },
-                            body: JSON.stringify(originalPayload)
-                        });
-                        console.log('[9] Successfully forwarded to external webhook');
-                    } catch (forwardError) {
-                        console.error('[9] Failed to forward to external webhook:', forwardError);
-                    }
-                }
+                // External webhook forwarding is now handled by webhook-handle-message
+                // This old function should not forward webhooks to avoid duplicates
             } else {
                 console.log('[2] Instance not found:', body.instanceName);
             }

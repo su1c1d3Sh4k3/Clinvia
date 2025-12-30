@@ -35,25 +35,33 @@ serve(async (req) => {
     );
 
     try {
-        // 1. Buscar jobs pendentes (mais antigos primeiro)
-        const { data: jobs, error: fetchError } = await supabase
+        // 1. ATOMIC: Claim jobs by updating status to 'processing' with a WHERE clause
+        // This prevents race conditions where multiple processors try to grab the same job
+        // The key is: only jobs with status='pending' will be updated
+        const { data: claimedJobs, error: claimError } = await supabase
             .from('webhook_queue')
-            .select('*')
+            .update({
+                status: 'processing',
+                started_at: new Date().toISOString()
+            })
             .eq('status', 'pending')
             .lt('attempts', MAX_ATTEMPTS)
             .order('created_at', { ascending: true })
-            .limit(BATCH_SIZE);
+            .limit(BATCH_SIZE)
+            .select();
 
-        if (fetchError) {
-            console.error('[webhook-queue-processor] Error fetching jobs:', fetchError);
-            return new Response(JSON.stringify({ success: false, error: fetchError.message }), {
+        if (claimError) {
+            console.error('[webhook-queue-processor] Error claiming jobs:', claimError);
+            return new Response(JSON.stringify({ success: false, error: claimError.message }), {
                 status: 500,
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' }
             });
         }
 
-        if (!jobs || jobs.length === 0) {
-            console.log('[webhook-queue-processor] No pending jobs');
+        const jobs = claimedJobs || [];
+
+        if (jobs.length === 0) {
+            console.log('[webhook-queue-processor] No pending jobs to claim');
             return new Response(JSON.stringify({
                 success: true,
                 processed: 0,
@@ -64,23 +72,13 @@ serve(async (req) => {
             });
         }
 
-        console.log(`[webhook-queue-processor] Found ${jobs.length} pending jobs`);
+        console.log(`[webhook-queue-processor] Claimed ${jobs.length} jobs atomically`);
 
         let processed = 0;
         let failed = 0;
 
         for (const job of jobs) {
-            console.log(`[webhook-queue-processor] Processing job ${job.id} (attempt ${job.attempts + 1})`);
-
-            // 2. Marcar como 'processing'
-            await supabase
-                .from('webhook_queue')
-                .update({
-                    status: 'processing',
-                    started_at: new Date().toISOString(),
-                    attempts: job.attempts + 1
-                })
-                .eq('id', job.id);
+            console.log(`[webhook-queue-processor] Processing job ${job.id} (attempt ${(job.attempts || 0) + 1})`);
 
             try {
                 // 3. Rotear por tipo de evento para funções especializadas

@@ -22,11 +22,12 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Building2, Ban, Target, HelpCircle, Settings, Plus, Trash2, Loader2 } from "lucide-react";
+import { Building2, Ban, Target, HelpCircle, Settings, Plus, Trash2, Loader2, Play } from "lucide-react";
 
 interface IAConfigData {
     id?: string;
     user_id?: string;
+    agent_name: string;
     name: string;
     address: string;
     link_google: string;
@@ -55,6 +56,8 @@ interface IAConfigData {
     crm_auto: boolean;
     scheduling_on: boolean;
     followup_business_hours: boolean;
+    voice: boolean;
+    genre: string;
 }
 
 interface QualifyItem {
@@ -69,6 +72,7 @@ interface RestrictionItem {
 }
 
 const defaultConfig: IAConfigData = {
+    agent_name: "",
     name: "",
     address: "",
     link_google: "",
@@ -97,6 +101,8 @@ const defaultConfig: IAConfigData = {
     crm_auto: false,
     scheduling_on: false,
     followup_business_hours: false,
+    voice: false,
+    genre: "female",
 };
 
 export default function IAConfig() {
@@ -122,6 +128,8 @@ export default function IAConfig() {
     const [companyFaq, setCompanyFaq] = useState<string>(""); // Dúvidas sobre a empresa
     const [showCreateFunnelModal, setShowCreateFunnelModal] = useState(false); // Modal de criação do funil IA
     const [creatingFunnel, setCreatingFunnel] = useState(false); // Loading da criação do funil
+    const [playingVoice, setPlayingVoice] = useState(false); // Loading do preview de voz
+    const [togglingIA, setTogglingIA] = useState(false); // Loading do toggle de IA
 
     // Buscar configuração existente
     const { data: existingConfig, isLoading: isLoadingConfig } = useQuery({
@@ -135,6 +143,38 @@ export default function IAConfig() {
 
             if (error && error.code !== "PGRST116") throw error;
             return data as IAConfigData | null;
+        },
+        enabled: !!ownerId,
+    });
+
+    // Buscar instâncias WhatsApp conectadas
+    const { data: whatsappInstances, refetch: refetchWhatsapp } = useQuery({
+        queryKey: ["whatsapp-instances-ia", ownerId],
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from("instances")
+                .select("id, name, instance_name, status, ia_on_wpp, apikey, client_number")
+                .eq("status", "connected")
+                .order("name");
+
+            if (error) throw error;
+            return data as { id: string; name: string; instance_name: string | null; status: string; ia_on_wpp: boolean | null; apikey: string | null; client_number: string | null }[];
+        },
+        enabled: !!ownerId,
+    });
+
+    // Buscar instâncias Instagram conectadas
+    const { data: instagramInstances, refetch: refetchInstagram } = useQuery({
+        queryKey: ["instagram-instances-ia", ownerId],
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from("instagram_instances" as any)
+                .select("id, account_name, status, ia_on_insta")
+                .eq("status", "connected")
+                .order("account_name");
+
+            if (error) throw error;
+            return data as { id: string; account_name: string; status: string; ia_on_insta: boolean | null }[];
         },
         enabled: !!ownerId,
     });
@@ -357,6 +397,138 @@ export default function IAConfig() {
         setFaqItems(faqItems.filter((_, i) => i !== index));
     };
 
+    // Handler do switch "Ligar IA" - apenas abre a lista de instâncias (não dispara webhook)
+    const handleIAToggle = async (checked: boolean) => {
+        // Verificar se pode desligar (nenhuma instância deve estar ligada)
+        if (!checked) {
+            const hasActiveWhatsapp = whatsappInstances?.some(i => i.ia_on_wpp === true);
+            const hasActiveInstagram = instagramInstances?.some((i: any) => i.ia_on_insta === true);
+
+            if (hasActiveWhatsapp || hasActiveInstagram) {
+                toast.error("Desative todas as instâncias antes de desligar a IA");
+                return;
+            }
+        }
+
+        // Apenas atualiza o estado local (não dispara webhook, não ativa instâncias)
+        setConfig({ ...config, ia_on: checked });
+        toast.success(checked ? "IA ativada! Agora ative as instâncias desejadas." : "IA desativada com sucesso!");
+    };
+
+    // Verificar se pode desligar a IA (nenhuma instância ativa)
+    const hasAnyActiveInstance = () => {
+        const hasActiveWhatsapp = whatsappInstances?.some(i => i.ia_on_wpp === true);
+        const hasActiveInstagram = instagramInstances?.some((i: any) => i.ia_on_insta === true);
+        return hasActiveWhatsapp || hasActiveInstagram;
+    };
+
+    // Handler para toggle individual de instância WhatsApp - DISPARA WEBHOOK
+    const handleWhatsappInstanceToggle = async (instanceId: string, checked: boolean) => {
+        const instance = whatsappInstances?.find(i => i.id === instanceId);
+        if (!instance) {
+            toast.error("Instância não encontrada");
+            return;
+        }
+
+        setTogglingIA(true);
+        try {
+            // Chamar webhook via Edge Function
+            const action = checked ? "create" : "delete";
+
+            console.log(`[IAConfig] Calling ia-workflow-webhook for instance ${instance.name} with action: ${action}`);
+
+            const { data: webhookResult, error: webhookError } = await supabase.functions.invoke(
+                "ia-workflow-webhook",
+                {
+                    body: {
+                        action,
+                        user_id: ownerId,
+                        instance_id: instanceId,
+                        instance_name: instance.instance_name || "",
+                        phone: instance.client_number || "",
+                        token: instance.apikey || "",
+                    },
+                }
+            );
+
+            if (webhookError) {
+                throw new Error(`Webhook failed: ${webhookError.message}`);
+            }
+
+            console.log(`[IAConfig] Webhook response for ${instance.name}:`, webhookResult);
+
+            // Atualizar status no banco
+            const { error } = await supabase
+                .from("instances")
+                .update({ ia_on_wpp: checked })
+                .eq("id", instanceId);
+
+            if (error) throw error;
+
+            refetchWhatsapp();
+            toast.success(checked ? `IA ativada para ${instance.name}` : `IA desativada para ${instance.name}`);
+        } catch (error) {
+            console.error("[IAConfig] Error toggling WhatsApp instance:", error);
+            toast.error("Erro ao atualizar instância. Tente novamente.");
+        } finally {
+            setTogglingIA(false);
+        }
+    };
+
+    // Handler para toggle individual de instância Instagram - DISPARA WEBHOOK
+    const handleInstagramInstanceToggle = async (instanceId: string, checked: boolean) => {
+        const instance = instagramInstances?.find((i: any) => i.id === instanceId);
+        if (!instance) {
+            toast.error("Instância não encontrada");
+            return;
+        }
+
+        setTogglingIA(true);
+        try {
+            // Chamar webhook via Edge Function
+            const action = checked ? "create" : "delete";
+
+            console.log(`[IAConfig] Calling ia-workflow-webhook for Instagram ${instance.account_name} with action: ${action}`);
+
+            const { data: webhookResult, error: webhookError } = await supabase.functions.invoke(
+                "ia-workflow-webhook",
+                {
+                    body: {
+                        action,
+                        user_id: ownerId,
+                        instance_id: instanceId,
+                        instance_name: instance.account_name || "",
+                        phone: "", // Instagram não tem phone
+                        token: "", // Instagram não tem token
+                        platform: "instagram",
+                    },
+                }
+            );
+
+            if (webhookError) {
+                throw new Error(`Webhook failed: ${webhookError.message}`);
+            }
+
+            console.log(`[IAConfig] Webhook response for ${instance.account_name}:`, webhookResult);
+
+            // Atualizar status no banco
+            const { error } = await supabase
+                .from("instagram_instances" as any)
+                .update({ ia_on_insta: checked })
+                .eq("id", instanceId);
+
+            if (error) throw error;
+
+            refetchInstagram();
+            toast.success(checked ? `IA ativada para ${instance.account_name}` : `IA desativada para ${instance.account_name}`);
+        } catch (error) {
+            console.error("[IAConfig] Error toggling Instagram instance:", error);
+            toast.error("Erro ao atualizar instância. Tente novamente.");
+        } finally {
+            setTogglingIA(false);
+        }
+    };
+
     // Handler do switch CRM Auto - verifica se precisa criar funil IA
     const handleCrmAutoChange = async (checked: boolean) => {
         if (checked) {
@@ -478,7 +650,17 @@ export default function IAConfig() {
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="p-4 md:p-6 pt-0 md:pt-0 space-y-4">
+                            {/* Linha 1: Nome do agente IA | Nome da empresa */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="agent_name">Nome do agente IA</Label>
+                                    <Input
+                                        id="agent_name"
+                                        value={config.agent_name}
+                                        onChange={(e) => setConfig({ ...config, agent_name: e.target.value })}
+                                        placeholder="Ex: Luna, Clara, Sofia..."
+                                    />
+                                </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="name">Nome da empresa</Label>
                                     <Input
@@ -488,15 +670,10 @@ export default function IAConfig() {
                                         placeholder="Nome da sua empresa"
                                     />
                                 </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="address">Endereço</Label>
-                                    <Input
-                                        id="address"
-                                        value={config.address}
-                                        onChange={(e) => setConfig({ ...config, address: e.target.value })}
-                                        placeholder="Endereço completo"
-                                    />
-                                </div>
+                            </div>
+
+                            {/* Linha 2: Link de localização do Google | Site */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <Label htmlFor="link_google">Link de localização do Google</Label>
                                     <Input
@@ -515,6 +692,10 @@ export default function IAConfig() {
                                         placeholder="https://www.seusite.com.br"
                                     />
                                 </div>
+                            </div>
+
+                            {/* Linha 3: Instagram | Facebook */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <Label htmlFor="instagram">Instagram</Label>
                                     <Input
@@ -533,6 +714,17 @@ export default function IAConfig() {
                                         placeholder="facebook.com/suapagina"
                                     />
                                 </div>
+                            </div>
+
+                            {/* Linha 4: Endereço (sozinho) */}
+                            <div className="space-y-2">
+                                <Label htmlFor="address">Endereço</Label>
+                                <Input
+                                    id="address"
+                                    value={config.address}
+                                    onChange={(e) => setConfig({ ...config, address: e.target.value })}
+                                    placeholder="Endereço completo"
+                                />
                             </div>
 
                             <div className="space-y-2">
@@ -799,17 +991,83 @@ export default function IAConfig() {
                         </CardHeader>
                         <CardContent className="p-4 md:p-6 pt-0 md:pt-0 space-y-3 md:space-y-6">
                             {/* Ligar IA */}
-                            <div className="flex items-center justify-between p-3 md:p-4 border rounded-lg gap-3">
-                                <div className="space-y-0.5">
-                                    <h4 className="font-medium text-sm md:text-base">Ligar IA</h4>
-                                    <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">
-                                        A IA responderá todos os clientes.
-                                    </p>
+                            <div className="p-3 md:p-4 border rounded-lg space-y-4">
+                                <div className="flex items-center justify-between gap-3">
+                                    <div className="space-y-0.5">
+                                        <h4 className="font-medium text-sm md:text-base">Ligar IA</h4>
+                                        <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">
+                                            {config.ia_on && hasAnyActiveInstance()
+                                                ? "Desative todas as instâncias antes de desligar"
+                                                : "A IA responderá todos os clientes."}
+                                        </p>
+                                    </div>
+                                    <Switch
+                                        checked={config.ia_on}
+                                        onCheckedChange={handleIAToggle}
+                                        disabled={togglingIA || (config.ia_on && hasAnyActiveInstance())}
+                                    />
                                 </div>
-                                <Switch
-                                    checked={config.ia_on}
-                                    onCheckedChange={(checked) => setConfig({ ...config, ia_on: checked })}
-                                />
+
+                                {/* Lista de instâncias quando IA está ligada */}
+                                {config.ia_on && (
+                                    <div className="space-y-3 pt-3 border-t">
+                                        <p className="text-xs text-muted-foreground">
+                                            Ative a IA para cada instância desejada:
+                                        </p>
+
+                                        {/* Instâncias WhatsApp */}
+                                        {whatsappInstances && whatsappInstances.length > 0 && (
+                                            <div className="space-y-2">
+                                                {whatsappInstances.map((instance) => (
+                                                    <div
+                                                        key={instance.id}
+                                                        className="flex items-center justify-between p-2 bg-muted/50 rounded-md"
+                                                    >
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-2 h-2 rounded-full bg-green-500" />
+                                                            <span className="text-sm">{instance.name}</span>
+                                                            <span className="text-xs text-muted-foreground">(WhatsApp)</span>
+                                                        </div>
+                                                        <Switch
+                                                            checked={instance.ia_on_wpp !== false}
+                                                            onCheckedChange={(checked) => handleWhatsappInstanceToggle(instance.id, checked)}
+                                                        />
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        {/* Instâncias Instagram */}
+                                        {instagramInstances && instagramInstances.length > 0 && (
+                                            <div className="space-y-2">
+                                                {instagramInstances.map((instance: any) => (
+                                                    <div
+                                                        key={instance.id}
+                                                        className="flex items-center justify-between p-2 bg-muted/50 rounded-md"
+                                                    >
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-2 h-2 rounded-full bg-pink-500" />
+                                                            <span className="text-sm">{instance.account_name}</span>
+                                                            <span className="text-xs text-muted-foreground">(Instagram)</span>
+                                                        </div>
+                                                        <Switch
+                                                            checked={instance.ia_on_insta !== false}
+                                                            onCheckedChange={(checked) => handleInstagramInstanceToggle(instance.id, checked)}
+                                                        />
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        {/* Mensagem se não houver instâncias */}
+                                        {(!whatsappInstances || whatsappInstances.length === 0) &&
+                                            (!instagramInstances || instagramInstances.length === 0) && (
+                                                <p className="text-xs text-muted-foreground italic">
+                                                    Nenhuma instância conectada.
+                                                </p>
+                                            )}
+                                    </div>
+                                )}
                             </div>
 
                             {/* Delay de Resposta */}
@@ -994,6 +1252,45 @@ export default function IAConfig() {
                                     checked={config.followup_business_hours}
                                     onCheckedChange={(checked) => setConfig({ ...config, followup_business_hours: checked })}
                                 />
+                            </div>
+
+                            {/* Responder Áudios por IA */}
+                            <div className="space-y-3 md:space-y-4 p-3 md:p-4 border rounded-lg">
+                                <div className="flex items-center justify-between gap-3">
+                                    <div className="space-y-0.5">
+                                        <h4 className="font-medium text-sm md:text-base">Responder áudios utilizando IA</h4>
+                                        <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">
+                                            A IA responderá com áudio gerado.
+                                        </p>
+                                    </div>
+                                    <Switch
+                                        checked={config.voice}
+                                        onCheckedChange={(checked) => setConfig({ ...config, voice: checked })}
+                                    />
+                                </div>
+
+                                {config.voice && (
+                                    <div className="space-y-4 pl-4 border-l-2 border-primary/30">
+                                        <div className="space-y-2">
+                                            <Label>Gênero da voz do seu agente de IA</Label>
+                                            <div className="flex items-center gap-2">
+                                                <Select
+                                                    value={config.genre}
+                                                    onValueChange={(value) => setConfig({ ...config, genre: value })}
+                                                >
+                                                    <SelectTrigger className="w-full md:w-48">
+                                                        <SelectValue placeholder="Selecione o gênero" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="female">Feminino</SelectItem>
+                                                        <SelectItem value="male">Masculino</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <p className="text-xs text-muted-foreground">Selecione o gênero da voz para o seu agente de IA.</p>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="flex justify-end pt-4">

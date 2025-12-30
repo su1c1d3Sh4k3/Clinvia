@@ -78,8 +78,32 @@ export const ConnectInstanceDialog = ({
     };
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-md">
+        <Dialog
+            open={open}
+            onOpenChange={(newOpen) => {
+                // BLOCK closing while pairCode is displayed - user MUST click "Confirmar Conexão"
+                if (pairCode && !newOpen) {
+                    console.log('[ConnectInstanceDialog] Blocking close - pairCode active, user must click Confirmar Conexão');
+                    return; // Prevent close
+                }
+                onOpenChange(newOpen);
+            }}
+        >
+            <DialogContent
+                className="sm:max-w-md"
+                onInteractOutside={(e) => {
+                    // Prevent closing on click outside when pairCode active
+                    if (pairCode) {
+                        e.preventDefault();
+                    }
+                }}
+                onEscapeKeyDown={(e) => {
+                    // Prevent closing on ESC when pairCode active
+                    if (pairCode) {
+                        e.preventDefault();
+                    }
+                }}
+            >
                 <DialogHeader>
                     <DialogTitle>Conectar {instanceName}</DialogTitle>
                     <DialogDescription>

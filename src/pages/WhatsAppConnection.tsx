@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,9 @@ const WhatsAppConnection = () => {
   const [pollingInstanceId, setPollingInstanceId] = useState<string | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
 
+  // Ref to track if dialog should be locked (prevents any close actions)
+  const dialogLockedRef = useRef(false);
+
   const { data: instances, isLoading } = useQuery({
     queryKey: ["instances"],
     queryFn: async () => {
@@ -36,22 +39,7 @@ const WhatsAppConnection = () => {
       if (error) throw error;
       return data;
     },
-    onSuccess: (data) => {
-      // Check if polling instance is connected
-      if (pollingInstanceId) {
-        const instance = data.find(i => i.id === pollingInstanceId);
-        if (instance && instance.status === 'connected') {
-          setConnectDialogOpen(false);
-          setPollingInstanceId(null);
-          setCurrentPairCode(null);
-          toast({
-            title: "WhatsApp conectado!",
-            description: "Sua instância está pronta para uso.",
-          });
-          queryClient.invalidateQueries({ queryKey: ["instances"] });
-        }
-      }
-    },
+    // Removed onSuccess auto-close logic - modal must only close when user clicks "Confirmar Conexão"
   });
 
   const createMutation = useMutation({
@@ -95,20 +83,42 @@ const WhatsAppConnection = () => {
 
   const connectMutation = useMutation({
     mutationFn: async ({ id, phone }: { id: string, phone: string }) => {
+      // Step 1: Get pair code
       const { data, error } = await supabase.functions.invoke("uzapi-connect-instance", {
         body: { instanceId: id, phoneNumber: phone },
       });
 
       if (error) throw error;
       if (!data.success) throw new Error(data.error || "Failed to generate pair code");
+
+      // Step 2: Configure webhook IMMEDIATELY (before returning)
+      console.log('[WhatsApp] Configuring webhook for instance:', id);
+      try {
+        const { data: webhookResult, error: webhookError } = await supabase.functions.invoke(
+          'uzapi-configure-webhook',
+          { body: { instanceId: id } }
+        );
+
+        if (webhookError) {
+          console.error('[WhatsApp] Webhook configuration error:', webhookError);
+        } else {
+          console.log('[WhatsApp] Webhook configured successfully:', webhookResult);
+        }
+      } catch (webhookError) {
+        console.error('[WhatsApp] Error configuring webhook:', webhookError);
+        // Don't throw - we still want to show the pair code even if webhook fails
+      }
+
       return data;
     },
     onSuccess: (data) => {
       setCurrentPairCode(data.pairCode);
       setPollingInstanceId(selectedInstanceId);
+      dialogLockedRef.current = true;
+
       toast({
-        title: "Código gerado!",
-        description: "Verifique seu WhatsApp.",
+        title: "Código gerado e webhook configurado!",
+        description: "Verifique seu WhatsApp e digite o código.",
       });
     },
     onError: (error: any) => {
@@ -130,7 +140,10 @@ const WhatsAppConnection = () => {
       return data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["instances"] });
+      // ONLY invalidate queries if dialog is NOT locked (not showing pairCode)
+      if (!dialogLockedRef.current) {
+        queryClient.invalidateQueries({ queryKey: ["instances"] });
+      }
     },
   });
 
@@ -153,6 +166,7 @@ const WhatsAppConnection = () => {
     setPollingInstanceId(null);
   };
 
+  // handleConfirmConnection - simplified, webhook already configured when pair code was generated
   const handleConfirmConnection = async () => {
     if (selectedInstanceId) {
       setIsConfirming(true);
@@ -165,34 +179,9 @@ const WhatsAppConnection = () => {
         const data = await checkConnectionMutation.mutateAsync(selectedInstanceId);
 
         if (data.status === 'connected') {
-          // Configure webhook via Edge Function (avoids CORS)
-          toast({
-            title: "Configurando...",
-            description: "Configurando webhook da instância.",
-          });
-
-          try {
-            console.log('[WhatsApp] Configuring global webhook via Edge Function...');
-
-            const { data: webhookResult, error: webhookError } = await supabase.functions.invoke(
-              'uzapi-configure-webhook',
-              { body: { instanceId: selectedInstanceId } }
-            );
-
-            if (webhookError) {
-              console.error('[WhatsApp] Webhook configuration error:', webhookError);
-              toast({
-                title: "Aviso",
-                description: "Webhook não configurado automaticamente. Configure manualmente se necessário.",
-                variant: "destructive"
-              });
-            } else {
-              console.log('[WhatsApp] Webhook configured successfully:', webhookResult);
-            }
-          } catch (webhookError) {
-            console.error('[WhatsApp] Error configuring webhook:', webhookError);
-          }
-
+          // Webhook already configured when pair code was generated
+          // Just close the dialog and show success
+          dialogLockedRef.current = false;
           setConnectDialogOpen(false);
           setPollingInstanceId(null);
           setCurrentPairCode(null);
@@ -293,12 +282,17 @@ const WhatsAppConnection = () => {
       <ConnectInstanceDialog
         open={connectDialogOpen}
         onOpenChange={(open) => {
-          if (!isConfirming) {
-            setConnectDialogOpen(open);
-            if (!open) {
-              setPollingInstanceId(null);
-              setCurrentPairCode(null);
-            }
+          // BLOCK closing while dialog is locked, pairCode is displayed, OR confirming
+          if (!open && (dialogLockedRef.current || isConfirming || currentPairCode)) {
+            console.log('[WhatsAppConnection] Blocking modal close - dialogLocked:', dialogLockedRef.current, 'isConfirming:', isConfirming, 'pairCode:', !!currentPairCode);
+            return; // Prevent close entirely
+          }
+          setConnectDialogOpen(open);
+          if (!open) {
+            // Also unlock ref when dialog closes (safety measure)
+            dialogLockedRef.current = false;
+            setPollingInstanceId(null);
+            setCurrentPairCode(null);
           }
         }}
         instanceName={currentInstanceName}

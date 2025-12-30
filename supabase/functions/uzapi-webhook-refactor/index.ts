@@ -721,25 +721,8 @@ serve(async (req) => {
             }
         }
 
-        // 7. Forward to External Webhook (if configured)
-        if (instance.webhook_url && eventType === 'messages') {
-            console.log('[UZAPI WEHOOK REFACTOR] Forwarding to external webhook:', instance.webhook_url);
-            try {
-                await fetch(instance.webhook_url, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'User-Agent': 'Supabase-Webhook-Proxy/1.0'
-                    },
-                    body: JSON.stringify(payload)
-                });
-                console.log('[UZAPI WEHOOK REFACTOR] Successfully forwarded to external webhook');
-            } catch (forwardError) {
-                console.error('[UZAPI WEHOOK REFACTOR] Failed to forward to external webhook:', forwardError);
-            }
-        } else if (instance.webhook_url && eventType !== 'messages') {
-            console.log('[UZAPI WEHOOK REFACTOR] Skipping external webhook for event type:', eventType);
-        }
+        // 7. External Webhook forwarding is now handled by webhook-handle-message
+        // This function (uzapi-webhook-refactor) should not send external webhooks to avoid duplicates
 
         return new Response(
             JSON.stringify({ success: true, message: "Processed" }),

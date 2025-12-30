@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useOwnerId } from "@/hooks/useOwnerId";
 import { checkActiveConversation } from "@/hooks/useActiveConversation";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -40,6 +41,7 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone }: NewMessa
     const [openCombobox, setOpenCombobox] = useState(false);
     const [selectedContact, setSelectedContact] = useState<string | null>(null);
     const { toast } = useToast();
+    const { data: ownerId } = useOwnerId();
 
     // Fetch contacts
     const { data: contacts } = useQuery({
@@ -124,14 +126,8 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone }: NewMessa
             // 2. Handle Database Updates
             const remoteJid = `${number}@s.whatsapp.net`;
 
-            // Get current user's owner_id for multi-tenancy
-            const { data: profile } = await supabase
-                .from('profiles')
-                .select('id')
-                .single();
-
-            const userId = profile?.id;
-            if (!userId) {
+            // Use ownerId from hook for multi-tenancy
+            if (!ownerId) {
                 throw new Error("Usuário não autenticado");
             }
 
@@ -140,7 +136,7 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone }: NewMessa
                 .from("contacts")
                 .select("*")
                 .eq("number", remoteJid)
-                .eq("user_id", userId)
+                .eq("user_id", ownerId)
                 .single();
 
             if (!contact) {
@@ -149,7 +145,7 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone }: NewMessa
                     .insert({
                         number: remoteJid,
                         push_name: number, // Use number as initial name
-                        user_id: userId,
+                        user_id: ownerId,
                         instance_id: instance.id,
                     })
                     .select()
@@ -184,7 +180,7 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone }: NewMessa
                         status: "pending",
                         unread_count: 0,
                         last_message_at: new Date().toISOString(),
-                        user_id: userId,
+                        user_id: ownerId,
                         instance_id: instance.id,
                     })
                     .select()
@@ -205,7 +201,7 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone }: NewMessa
                     direction: "outbound",
                     message_type: "text",
                     evolution_id: apiData?.key?.id || null,
-                    user_id: userId,
+                    user_id: ownerId,
                 });
 
             if (messageError) throw messageError;

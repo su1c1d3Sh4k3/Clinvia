@@ -133,6 +133,41 @@ serve(async (req) => {
 
         const accountName = profileData.username || profileData.name || `Instagram User ${instagramUserId}`;
 
+        // The ID from profile is the Instagram Business Account ID (IGSID) which is used in webhooks
+        // This may be different from the user_id returned in the token exchange
+        const igBusinessAccountId = profileData.id || instagramUserId;
+        console.log('[INSTAGRAM OAUTH] Instagram User ID from token:', instagramUserId);
+        console.log('[INSTAGRAM OAUTH] Instagram Business Account ID from profile:', igBusinessAccountId);
+
+        // =============================================
+        // Step 3b: Subscribe to webhooks via subscribed_apps API
+        // This is CRITICAL - without this, webhooks won't be delivered
+        // =============================================
+        console.log('[INSTAGRAM OAUTH] Step 3b: Subscribing to webhooks...');
+
+        try {
+            // For Instagram Business accounts, we need to subscribe to webhooks
+            // The subscription is made via the Instagram Graph API directly
+            // IMPORTANT: access_token and subscribed_fields must be query parameters!
+            const subscribedFields = 'messages,messaging_postbacks,messaging_optins';
+            const subscribeUrl = `https://graph.instagram.com/v21.0/${igBusinessAccountId}/subscribed_apps?access_token=${accessToken}&subscribed_fields=${subscribedFields}`;
+            const subscribeResponse = await fetch(subscribeUrl, {
+                method: 'POST'
+            });
+
+            const subscribeData = await subscribeResponse.json();
+            console.log('[INSTAGRAM OAUTH] Webhook subscription response:', JSON.stringify(subscribeData));
+
+            if (!subscribeResponse.ok) {
+                // Log but don't fail - the account might already be subscribed or use a different method
+                console.warn('[INSTAGRAM OAUTH] Webhook subscription warning:', subscribeData);
+            } else {
+                console.log('[INSTAGRAM OAUTH] ✅ Successfully subscribed to webhooks');
+            }
+        } catch (subError: any) {
+            console.warn('[INSTAGRAM OAUTH] Webhook subscription error (non-fatal):', subError.message);
+        }
+
         // =============================================
         // Step 4: Save to database
         // =============================================
@@ -140,20 +175,32 @@ serve(async (req) => {
 
         const tokenExpiresAt = new Date(Date.now() + (expiresIn * 1000)).toISOString();
 
-        // Check if this Instagram account is already connected
-        const { data: existingInstance } = await supabase
+        // Check if this Instagram account is already connected (check both IDs for backwards compat)
+        let { data: existingInstance } = await supabase
             .from('instagram_instances')
             .select('id')
-            .eq('instagram_account_id', instagramUserId)
+            .eq('instagram_account_id', igBusinessAccountId)
             .eq('user_id', user_id)
             .single();
 
+        // Also check with the old user ID in case it was saved before this fix
+        if (!existingInstance) {
+            const { data: existingByUserId } = await supabase
+                .from('instagram_instances')
+                .select('id')
+                .eq('instagram_account_id', instagramUserId)
+                .eq('user_id', user_id)
+                .single();
+            existingInstance = existingByUserId;
+        }
+
         let result;
         if (existingInstance) {
-            // Update existing
+            // Update existing - also update the instagram_account_id to the correct Business Account ID
             result = await supabase
                 .from('instagram_instances')
                 .update({
+                    instagram_account_id: igBusinessAccountId, // Update to correct ID
                     access_token: accessToken,
                     token_expires_at: tokenExpiresAt,
                     account_name: accountName,
@@ -163,14 +210,14 @@ serve(async (req) => {
                 .eq('id', existingInstance.id)
                 .select()
                 .single();
-            console.log('[INSTAGRAM OAUTH] Updated existing instance');
+            console.log('[INSTAGRAM OAUTH] Updated existing instance with Business Account ID:', igBusinessAccountId);
         } else {
-            // Create new
+            // Create new with correct Business Account ID
             result = await supabase
                 .from('instagram_instances')
                 .insert({
                     user_id: user_id,
-                    instagram_account_id: instagramUserId,
+                    instagram_account_id: igBusinessAccountId, // Use Business Account ID for webhooks
                     access_token: accessToken,
                     token_expires_at: tokenExpiresAt,
                     account_name: accountName,
@@ -178,7 +225,7 @@ serve(async (req) => {
                 })
                 .select()
                 .single();
-            console.log('[INSTAGRAM OAUTH] Created new instance');
+            console.log('[INSTAGRAM OAUTH] Created new instance with Business Account ID:', igBusinessAccountId);
         }
 
         if (result.error) {

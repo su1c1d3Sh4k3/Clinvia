@@ -197,6 +197,16 @@ serve(async (req) => {
             const startDate = addMinutes(parsedDate, 180); // Add 3 hours
             const endDate = addMinutes(startDate, duration);
 
+            // Validate that appointment is not in the past
+            const now = new Date();
+            if (startDate < now) {
+                return new Response(
+                    JSON.stringify({ error: "A data informada é anterior a data atual, verifique se a data ou o ano estão corretos e tente novamente." }),
+                    { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+                );
+            }
+
+
             const payload = {
                 user_id,
                 professional_id,

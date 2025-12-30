@@ -16,6 +16,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { ContactModal } from "@/components/ContactModal";
 import { NewMessageModal } from "@/components/NewMessageModal";
 import { useToast } from "@/hooks/use-toast";
@@ -66,6 +67,7 @@ interface Contact {
     quality?: number[];
     analysis?: { data: string; resumo: string }[];
     report?: string;
+    ia_on?: boolean;
 }
 
 
@@ -191,6 +193,26 @@ const Contacts = () => {
         onError: (error) => {
             toast({
                 title: "Erro ao atribuir tags",
+                description: error.message,
+                variant: "destructive",
+            });
+        },
+    });
+
+    const toggleIaMutation = useMutation({
+        mutationFn: async ({ id, ia_on }: { id: string; ia_on: boolean }) => {
+            const { error } = await supabase
+                .from("contacts")
+                .update({ ia_on } as any)
+                .eq("id", id);
+            if (error) throw error;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["contacts"] });
+        },
+        onError: (error) => {
+            toast({
+                title: "Erro ao atualizar IA",
                 description: error.message,
                 variant: "destructive",
             });
@@ -417,6 +439,7 @@ const Contacts = () => {
                                     <TableHead className="text-secondary dark:text-slate-400 font-semibold min-w-[120px]">Nome</TableHead>
                                     <TableHead className="text-secondary dark:text-slate-400 font-semibold hidden sm:table-cell">Telefone</TableHead>
                                     <TableHead className="text-secondary dark:text-slate-400 font-semibold hidden md:table-cell">Etiquetas</TableHead>
+                                    <TableHead className="text-secondary dark:text-slate-400 font-semibold text-center w-[60px] hidden sm:table-cell">IA</TableHead>
                                     {!isAgent && <TableHead className="text-secondary dark:text-slate-400 font-semibold text-center hidden lg:table-cell">Satisf.</TableHead>}
                                     {!isAgent && <TableHead className="text-secondary dark:text-slate-400 font-semibold text-center hidden lg:table-cell">Resumos</TableHead>}
                                     <TableHead className="w-[100px] md:w-[180px] text-secondary dark:text-slate-400 font-semibold">Ações</TableHead>
@@ -425,13 +448,13 @@ const Contacts = () => {
                             <TableBody>
                                 {isLoading ? (
                                     <TableRow>
-                                        <TableCell colSpan={7} className="text-center py-8">
+                                        <TableCell colSpan={8} className="text-center py-8">
                                             Carregando...
                                         </TableCell>
                                     </TableRow>
                                 ) : filteredContacts?.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                                        <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                                             Nenhum contato encontrado
                                         </TableCell>
                                     </TableRow>
@@ -499,6 +522,13 @@ const Contacts = () => {
                                                         <Badge variant="outline" className="text-[10px]">+{contact.contact_tags.length - 2}</Badge>
                                                     )}
                                                 </div>
+                                            </TableCell>
+                                            <TableCell className="text-center hidden sm:table-cell py-2 md:py-4">
+                                                <Switch
+                                                    checked={contact.ia_on !== false}
+                                                    onCheckedChange={(checked) => toggleIaMutation.mutate({ id: contact.id, ia_on: checked })}
+                                                    disabled={toggleIaMutation.isPending}
+                                                />
                                             </TableCell>
                                             {!isAgent && (
                                                 <TableCell className="text-center hidden lg:table-cell py-2 md:py-4">

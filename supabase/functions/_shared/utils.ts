@@ -56,7 +56,7 @@ export function createSupabaseClient(): SupabaseClient {
 export async function getInstanceByName(supabase: SupabaseClient, instanceName: string) {
     const { data: instance, error } = await supabase
         .from('instances')
-        .select('id, apikey, user_id, webhook_url, default_queue_id')
+        .select('id, apikey, user_id, webhook_url, default_queue_id, ia_on_wpp')
         .eq('instance_name', instanceName)
         .single();
 

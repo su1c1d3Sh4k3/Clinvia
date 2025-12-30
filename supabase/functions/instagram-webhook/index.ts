@@ -5,6 +5,20 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 // Instagram Webhook Handler
 // Handles Facebook/Instagram Messaging API webhooks
 // =============================================
+//
+// ⚠️⚠️⚠️ CRITICAL CONFIGURATION WARNING ⚠️⚠️⚠️
+// 
+// This function MUST be configured in supabase/config.toml with:
+//
+//   [functions.instagram-webhook]
+//   verify_jwt = false
+//
+// WITHOUT THIS, THE META WEBHOOK VERIFICATION WILL FAIL WITH 401 ERROR!
+// The Meta servers do not send Authorization headers, so JWT verification
+// must be disabled for this function to work.
+//
+// DO NOT REMOVE OR MODIFY THIS CONFIGURATION!
+// =============================================
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -12,7 +26,9 @@ const corsHeaders = {
 };
 
 // Token de verificação para o Facebook Developers
+// This MUST match the verify_token configured in Meta Developer Console
 const VERIFY_TOKEN = 'clinvia_instagram_webhook_verify_2024';
+
 
 serve(async (req) => {
     const url = new URL(req.url);
@@ -85,7 +101,7 @@ serve(async (req) => {
                     // Method 1: Try entry.id
                     let { data: instance1 } = await supabase
                         .from('instagram_instances')
-                        .select('id, user_id, access_token, instagram_account_id')
+                        .select('id, user_id, access_token, instagram_account_id, ia_on_insta')
                         .eq('instagram_account_id', entryId)
                         .single();
 
@@ -101,7 +117,7 @@ serve(async (req) => {
                             console.log('[INSTAGRAM WEBHOOK] Trying recipient.id:', recipientId);
                             const { data: instance2 } = await supabase
                                 .from('instagram_instances')
-                                .select('id, user_id, access_token, instagram_account_id')
+                                .select('id, user_id, access_token, instagram_account_id, ia_on_insta')
                                 .eq('instagram_account_id', recipientId)
                                 .single();
 
@@ -342,6 +358,84 @@ serve(async (req) => {
                                     });
                                 } catch (pushError) {
                                     console.error('[INSTAGRAM WEBHOOK] Push notification error:', pushError);
+                                }
+
+                                // =============================================
+                                // 5. Forward to IA Webhook (if enabled)
+                                // =============================================
+                                // Step 1: Check if ia_on_insta is TRUE for this Instagram instance
+                                if (instagramInstance.ia_on_insta === true) {
+                                    console.log('[INSTAGRAM WEBHOOK] ia_on_insta is TRUE, checking for WhatsApp instance...');
+
+                                    // Step 2: Find WhatsApp instance with same user_id and ia_on_wpp = TRUE
+                                    // IMPORTANT: If multiple instances match, take the first one
+                                    const { data: whatsappInstances } = await supabase
+                                        .from('instances')
+                                        .select('id, webhook_url, ia_on_wpp')
+                                        .eq('user_id', userId)
+                                        .eq('ia_on_wpp', true)
+                                        .limit(1);
+
+                                    if (whatsappInstances && whatsappInstances.length > 0) {
+                                        const whatsappInstance = whatsappInstances[0];
+                                        const webhookUrl = whatsappInstance.webhook_url;
+
+                                        if (webhookUrl) {
+                                            console.log('[INSTAGRAM WEBHOOK] Found WhatsApp instance with webhook_url:', webhookUrl);
+
+                                            // Check for IA funnel
+                                            let iaFunnelId: string | null = null;
+                                            const { data: iaConfig } = await supabase
+                                                .from('ia_config')
+                                                .select('crm_auto')
+                                                .eq('user_id', userId)
+                                                .single();
+
+                                            if (iaConfig?.crm_auto === true) {
+                                                const { data: iaFunnel } = await supabase
+                                                    .from('crm_funnels')
+                                                    .select('id')
+                                                    .eq('name', 'IA')
+                                                    .eq('user_id', userId)
+                                                    .single();
+                                                iaFunnelId = iaFunnel?.id || null;
+                                            }
+
+                                            // Step 3: Build payload with bd_data
+                                            const forwardedPayload = {
+                                                ...payload,
+                                                bd_data: {
+                                                    user_id: userId,
+                                                    contact_id: contact.id,
+                                                    conversation_id: conversation.id,
+                                                    instance_id: whatsappInstance.id,
+                                                    ia_funnel_id: iaFunnelId
+                                                }
+                                            };
+
+                                            console.log('[INSTAGRAM WEBHOOK] Forwarding to IA webhook with bd_data:', JSON.stringify(forwardedPayload.bd_data));
+
+                                            try {
+                                                const forwardResponse = await fetch(webhookUrl, {
+                                                    method: 'POST',
+                                                    headers: {
+                                                        'Content-Type': 'application/json',
+                                                        'User-Agent': 'Clinvia-Instagram-Webhook/1.0'
+                                                    },
+                                                    body: JSON.stringify(forwardedPayload)
+                                                });
+                                                console.log('[INSTAGRAM WEBHOOK] ✅ Webhook forwarded successfully to IA, status:', forwardResponse.status);
+                                            } catch (forwardError) {
+                                                console.error('[INSTAGRAM WEBHOOK] Error forwarding to IA webhook:', forwardError);
+                                            }
+                                        } else {
+                                            console.log('[INSTAGRAM WEBHOOK] WhatsApp instance found but no webhook_url configured');
+                                        }
+                                    } else {
+                                        console.log('[INSTAGRAM WEBHOOK] No WhatsApp instance found with ia_on_wpp = TRUE for user:', userId);
+                                    }
+                                } else {
+                                    console.log('[INSTAGRAM WEBHOOK] ia_on_insta is FALSE or not set, skipping IA webhook forwarding');
                                 }
                             }
                         }

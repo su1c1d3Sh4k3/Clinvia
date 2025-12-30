@@ -199,6 +199,9 @@ export const ConversationsList = ({
 
   const unreadCounts = useUnreadCounts(user?.id);
 
+  // DEBUG: Log unreadCounts to see if channel separation is working
+  console.log('[DEBUG] unreadCounts:', unreadCounts, 'selectedChannelFilter:', selectedChannelFilter);
+
   const filteredConversations = conversations.filter((conv) => {
     const contact = conv.contacts;
     const group = (conv as any).groups;
@@ -373,30 +376,32 @@ export const ConversationsList = ({
             <Search className="h-4 w-4 text-black dark:text-white" />
           </Button>
         </div>
-
-        <Tabs defaultValue="people" className="w-full" onValueChange={(v) => {
-          // Reset status tab when switching between people/groups if needed, or keep it independent.
-          // For now, we will keep the status tab independent but visually separated.
-        }}>
-          <TabsList className="grid w-full grid-cols-2 mb-2">
-            <TabsTrigger value="people" onClick={() => setSelectedTypeFilter("people")} className="relative">
-              Pessoas
-              {((unreadCounts as any)[selectedChannelFilter]?.people || 0) > 0 && (
-                <Badge className="ml-2 h-5 w-5 p-0 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px]">
-                  {(unreadCounts as any)[selectedChannelFilter]?.people || 0}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="groups" onClick={() => setSelectedTypeFilter("groups")} className="relative">
-              Grupos
-              {((unreadCounts as any)[selectedChannelFilter]?.groups || 0) > 0 && (
-                <Badge className="ml-2 h-5 w-5 p-0 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px]">
-                  {(unreadCounts as any)[selectedChannelFilter]?.groups || 0}
-                </Badge>
-              )}
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
+        {/* Pessoas/Grupos tabs - only show for WhatsApp, Instagram doesn't have groups */}
+        {selectedChannelFilter === "whatsapp" && (
+          <Tabs defaultValue="people" className="w-full" onValueChange={(v) => {
+            // Reset status tab when switching between people/groups if needed, or keep it independent.
+            // For now, we will keep the status tab independent but visually separated.
+          }}>
+            <TabsList className="grid w-full grid-cols-2 mb-2">
+              <TabsTrigger value="people" onClick={() => setSelectedTypeFilter("people")} className="relative">
+                Pessoas
+                {((unreadCounts as any)[selectedChannelFilter]?.people || 0) > 0 && (
+                  <Badge className="ml-2 h-5 w-5 p-0 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px]">
+                    {(unreadCounts as any)[selectedChannelFilter]?.people || 0}
+                  </Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="groups" onClick={() => setSelectedTypeFilter("groups")} className="relative">
+                Grupos
+                {((unreadCounts as any)[selectedChannelFilter]?.groups || 0) > 0 && (
+                  <Badge className="ml-2 h-5 w-5 p-0 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px]">
+                    {(unreadCounts as any)[selectedChannelFilter]?.groups || 0}
+                  </Badge>
+                )}
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        )}
 
         {/* Hide Status Tabs for Groups */}
         {selectedTypeFilter !== "groups" && (
