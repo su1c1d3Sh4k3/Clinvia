@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Plus, X, Edit2, Trash2, Zap, Image as ImageIcon, Mic, Video, FileText } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useOwnerId } from "@/hooks/useOwnerId";
 import { toast } from "sonner";
 
 interface QuickMessage {
@@ -21,6 +22,7 @@ interface QuickMessage {
 
 export function QuickMessagesMenu() {
     const { user } = useAuth();
+    const { data: ownerId } = useOwnerId();
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState<QuickMessage[]>([]);
     const [loading, setLoading] = useState(false);
@@ -35,19 +37,22 @@ export function QuickMessagesMenu() {
     const [existingMediaUrl, setExistingMediaUrl] = useState<string | null>(null);
 
     useEffect(() => {
-        if (isOpen && user) {
+        if (isOpen && ownerId) {
+            console.log('[QuickMessages] Fetching with ownerId:', ownerId);
             fetchMessages();
         }
-    }, [isOpen, user]);
+    }, [isOpen, ownerId]);
 
     const fetchMessages = async () => {
         setLoading(true);
+        console.log('[QuickMessages] Fetching messages for user_id:', ownerId);
         const { data, error } = await supabase
             .from('quick_messages')
             .select('*')
-            .eq('user_id', user?.id)
+            .eq('user_id', ownerId)
             .order('shortcut', { ascending: true });
 
+        console.log('[QuickMessages] Fetch result:', { data, error });
         if (error) {
             toast.error("Erro ao carregar mensagens rápidas");
             console.error(error);
@@ -68,6 +73,12 @@ export function QuickMessagesMenu() {
     };
 
     const handleSave = async () => {
+        if (!ownerId) {
+            toast.error("Aguarde carregar dados do usuário");
+            console.error("ownerId is null/undefined", { ownerId });
+            return;
+        }
+
         if (!shortcut) {
             toast.error("O atalho é obrigatório");
             return;
@@ -104,25 +115,33 @@ export function QuickMessagesMenu() {
             }
 
             const messageData = {
-                user_id: user?.id,
+                user_id: ownerId,
                 shortcut: shortcut.toLowerCase(),
                 message_type: messageType,
                 content: content,
                 media_url: mediaUrl
             };
 
+            console.log('[QuickMessages] Saving with data:', messageData);
+
             if (editingId) {
                 const { error } = await supabase
                     .from('quick_messages')
                     .update(messageData)
                     .eq('id', editingId);
-                if (error) throw error;
+                if (error) {
+                    console.error('[QuickMessages] Update error:', error);
+                    throw error;
+                }
                 toast.success("Mensagem atualizada!");
             } else {
                 const { error } = await supabase
                     .from('quick_messages')
                     .insert(messageData);
-                if (error) throw error;
+                if (error) {
+                    console.error('[QuickMessages] Insert error:', error);
+                    throw error;
+                }
                 toast.success("Mensagem criada!");
             }
 

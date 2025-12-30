@@ -14,6 +14,7 @@ import { useUpdateTicketStatus } from "@/hooks/useUpdateTicketStatus";
 import { useFetchProfilePictures } from "@/hooks/useFetchProfilePictures";
 import { useAuth } from "@/hooks/useAuth";
 import { useCurrentTeamMember } from "@/hooks/useStaff";
+import { useOwnerId } from "@/hooks/useOwnerId";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { QueueSelector } from "@/components/QueueSelector";
@@ -177,14 +178,16 @@ export const ChatArea = ({
     enabled: !!user?.id,
   });
 
-  // Fetch Quick Messages
+  // Fetch Quick Messages - using ownerId to share between team members
+  const { data: ownerId } = useOwnerId();
+
   useEffect(() => {
     const fetchQuickMessages = async () => {
-      if (!user?.id) return;
+      if (!ownerId) return;
       const { data } = await supabase
         .from('quick_messages')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', ownerId)
         .order('shortcut', { ascending: true });
 
       if (data) setQuickMessages(data as QuickMessage[]);
@@ -195,7 +198,7 @@ export const ChatArea = ({
     // Subscribe to changes
     const channel = supabase
       .channel('quick_messages_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'quick_messages', filter: `user_id=eq.${user?.id}` }, () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'quick_messages', filter: `user_id=eq.${ownerId}` }, () => {
         fetchQuickMessages();
       })
       .subscribe();
@@ -203,7 +206,7 @@ export const ChatArea = ({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user?.id]);
+  }, [ownerId]);
 
   // Handle Slash Command - with debounce for performance
   useEffect(() => {
@@ -811,22 +814,53 @@ export const ChatArea = ({
     }
   };
 
-  // Helper to highlight text
+  // Helper to highlight text and render links
   const HighlightText = ({ text, highlight }: { text: string, highlight: string }) => {
-    if (!highlight.trim()) return <>{text}</>;
+    // URL regex pattern
+    const urlRegex = /(https?:\/\/[^\s]+)/gi;
 
-    const parts = text.split(new RegExp(`(${highlight})`, 'gi'));
+    // First, split by URLs to identify link parts
+    const parts = text.split(urlRegex);
+
     return (
       <span>
-        {parts.map((part, i) =>
-          part.toLowerCase() === highlight.toLowerCase() ? (
-            <span key={i} className="bg-yellow-200 text-black font-medium px-0.5 rounded">
-              {part}
+        {parts.map((part, i) => {
+          // Check if this part is a URL
+          if (urlRegex.test(part)) {
+            // Reset regex lastIndex after test
+            urlRegex.lastIndex = 0;
+            return (
+              <a
+                key={i}
+                href={part}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-400 hover:text-blue-300 underline break-all"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {part}
+              </a>
+            );
+          }
+
+          // For non-URL parts, apply search highlighting if needed
+          if (!highlight.trim()) return <span key={i}>{part}</span>;
+
+          const highlightParts = part.split(new RegExp(`(${highlight})`, 'gi'));
+          return (
+            <span key={i}>
+              {highlightParts.map((hPart, j) =>
+                hPart.toLowerCase() === highlight.toLowerCase() ? (
+                  <span key={j} className="bg-yellow-200 text-black font-medium px-0.5 rounded">
+                    {hPart}
+                  </span>
+                ) : (
+                  hPart
+                )
+              )}
             </span>
-          ) : (
-            part
-          )
-        )}
+          );
+        })}
       </span>
     );
   };
@@ -891,7 +925,7 @@ export const ChatArea = ({
     <div className={cn("flex-1 flex flex-col bg-background relative w-full min-w-0", isMobile ? "h-full" : "h-screen")}>
       {/* Header - Hidden on mobile (Index.tsx provides its own header) */}
       {!isMobile && (
-        <div className="p-4 border-b border-border flex items-center justify-between">
+        <div className="p-4 border-b border-[#1E2229]/20 dark:border-border bg-white dark:bg-transparent flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Avatar>
               <AvatarImage src={profilePic || undefined} />
@@ -901,8 +935,17 @@ export const ChatArea = ({
               <h3 className="font-semibold">{displayName}</h3>
               <div className="flex items-center gap-2">
                 <Badge variant="outline" className="text-xs">
-                  <div className="w-2 h-2 rounded-full bg-green-500 mr-1" />
-                  WhatsApp
+                  {(contact as any)?.instagram_id ? (
+                    <>
+                      <div className="w-2 h-2 rounded-full mr-1" style={{ backgroundColor: '#F05D57' }} />
+                      Instagram
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-2 h-2 rounded-full mr-1" style={{ backgroundColor: '#22C55E' }} />
+                      WhatsApp
+                    </>
+                  )}
                 </Badge>
               </div>
             </div>
@@ -1052,7 +1095,7 @@ export const ChatArea = ({
                       className={cn(
                         "rounded-lg p-3 overflow-hidden min-w-0 break-words",
                         msg.direction === "outbound"
-                          ? "bg-[#044740] text-white"
+                          ? "bg-[#DCF7C5] text-gray-800 dark:bg-[#044740] dark:text-white"
                           : "bg-[hsl(var(--chat-customer))] text-foreground"
                       )}
                     >
@@ -1211,7 +1254,7 @@ export const ChatArea = ({
       )}
 
       {/* Input Area */}
-      <div className="p-4 border-t border-border">
+      <div className="p-4 border-t border-[#1E2229]/20 dark:border-border bg-white dark:bg-transparent">
         {selectedFile && (
           <div className="mb-2 p-2 bg-muted rounded-md flex items-center gap-3">
             {/* Show image preview if file is an image */}

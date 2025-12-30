@@ -30,17 +30,17 @@ interface MenuItem {
 const menuStructure: MenuItem[] = [
   { icon: LayoutDashboard, label: "Dashboard", id: "dashboard", path: "/dashboard" },
   { icon: MessageSquare, label: "Inbox", id: "inbox", path: "/" },
+  { icon: Briefcase, label: "CRM", id: "crm", path: "/crm" },
   {
-    icon: Wrench, label: "Ferramentas", id: "ferramentas",
+    icon: Wrench, label: "Automação", id: "automacao",
     children: [
-      { icon: Calendar, label: "Agendamento", id: "scheduling", path: "/scheduling" },
       { icon: Bot, label: "Definições da IA", id: "ia-config", path: "/ia-config" },
       { icon: Smartphone, label: "Conexões", id: "whatsapp", path: "/whatsapp-connection" },
       { icon: Settings, label: "Configurações", id: "settings", path: "/settings" },
     ]
   },
   {
-    icon: Grid3X3, label: "Plataforma", id: "plataforma",
+    icon: Grid3X3, label: "Operações", id: "operacoes",
     children: [
       { icon: Package, label: "Produtos e Serviços", id: "products-services", path: "/products-services" },
       { icon: BookUser, label: "Contatos", id: "contacts", path: "/contacts" },
@@ -50,9 +50,9 @@ const menuStructure: MenuItem[] = [
     ]
   },
   {
-    icon: PieChart, label: "Gestão", id: "gestao",
+    icon: PieChart, label: "Administrativo", id: "administrativo",
     children: [
-      { icon: Briefcase, label: "CRM", id: "crm", path: "/crm" },
+      { icon: Calendar, label: "Agendamentos", id: "scheduling", path: "/scheduling" },
       { icon: ClipboardList, label: "Tarefas", id: "tasks", path: "/tasks" },
       { icon: Wallet, label: "Financeiro", id: "financial", path: "/financial" },
       { icon: Users, label: "Equipe", id: "team", path: "/team" },
@@ -239,7 +239,7 @@ export const NavigationSidebar = () => {
         onClick={() => navigate(child.path!)}
         className={cn(
           "w-full flex items-center gap-3 py-3 transition-all duration-200 relative group/item",
-          "text-white/70 hover:text-white hover:bg-[#1E2229]",
+          "text-white/70 hover:text-white hover:bg-[#024a84] dark:hover:bg-[#1E2229]",
           "pl-6 pr-4"
         )}
       >
@@ -284,10 +284,10 @@ export const NavigationSidebar = () => {
     const isOpen = openSubmenus.has(item.id);
     const hasActiveInChildren = hasActiveChild(item);
 
-    // Badge counts - Dashboard gets its own, Gestão gets CRM's stagnated count
+    // Badge counts - Dashboard gets notifications, CRM gets stagnated count
     const dashboardBadge = item.id === "dashboard" ? (dashboardNotificationsCount || 0) : 0;
-    const gestaoBadge = item.id === "gestao" ? (stagnatedCount || 0) : 0;
-    const badgeCount = dashboardBadge || gestaoBadge;
+    const crmBadge = item.id === "crm" ? (stagnatedCount || 0) : 0;
+    const badgeCount = dashboardBadge || crmBadge;
 
     // Only show collapsed submenu icons for submenu with active item
     const showCollapsedSubmenu = hasChildren && hasActiveInChildren;
@@ -298,7 +298,7 @@ export const NavigationSidebar = () => {
           onClick={() => handleNavClick(item)}
           className={cn(
             "w-full flex items-center gap-3 py-3 transition-all duration-200 relative group/item",
-            "text-white/70 hover:text-white hover:bg-[#1E2229]",
+            "text-white/70 hover:text-white hover:bg-[#024a84] dark:hover:bg-[#1E2229]",
             hasChildren && (isOpen || hasActiveInChildren) && "bg-[#22262E]",
             "px-4"
           )}
@@ -355,7 +355,7 @@ export const NavigationSidebar = () => {
                 <button
                   key={child.id}
                   onClick={() => navigate(child.path!)}
-                  className="w-full flex items-center justify-center py-3 transition-all duration-200 hover:bg-[#1E2229]"
+                  className="w-full flex items-center justify-center py-3 transition-all duration-200 hover:bg-[#024a84] dark:hover:bg-[#1E2229]"
                 >
                   <div className="relative">
                     <ChildIcon className={cn(
@@ -439,7 +439,7 @@ export const NavigationSidebar = () => {
         <div className="flex flex-col py-4 border-t border-white/10">
           <button
             onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            className="flex items-center gap-3 py-3 px-4 transition-all duration-200 hover:bg-[#1E2229] text-white/70 hover:text-white"
+            className="flex items-center gap-3 py-3 px-4 transition-all duration-200 hover:bg-[#024a84] dark:hover:bg-[#1E2229] text-white/70 hover:text-white"
           >
             <div className="shrink-0">
               {theme === "dark" ? (
@@ -458,7 +458,7 @@ export const NavigationSidebar = () => {
 
           <button
             onClick={handleLogout}
-            className="flex items-center gap-3 py-3 px-4 transition-all duration-200 hover:bg-[#1E2229] text-red-500"
+            className="flex items-center gap-3 py-3 px-4 transition-all duration-200 hover:bg-[#024a84] dark:hover:bg-[#1E2229] text-red-500"
           >
             <div className="shrink-0">
               <LogOut className="w-[18px] h-[18px]" />

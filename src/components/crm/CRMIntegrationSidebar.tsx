@@ -141,7 +141,7 @@ export function CRMIntegrationSidebar({ contactId, contactName, contactPhone }: 
 
     return (
         <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-            <Card className="bg-background/80">
+            <Card className="bg-white dark:bg-background/80 border-[#1E2229]/20 dark:border-border">
                 <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
                         <CardTitle className="text-sm flex items-center gap-2">

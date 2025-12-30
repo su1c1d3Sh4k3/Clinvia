@@ -256,8 +256,8 @@ export const ConversationsList = ({
   };
 
   return (
-    <div className="w-full md:w-[300px] h-full md:h-screen border-r border-border flex flex-col bg-background overflow-hidden">
-      <div className="p-4 border-b border-border space-y-4">
+    <div className="w-full md:w-[300px] h-full md:h-screen border-r border-[#1E2229]/20 dark:border-border flex flex-col bg-white dark:bg-background overflow-hidden">
+      <div className="p-4 border-b border-[#1E2229]/20 dark:border-border space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold">Inbox</h2>
           <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
@@ -564,7 +564,7 @@ export const ConversationsList = ({
                     onSelectConversation(conversation.id);
                   }}
                   className={cn(
-                    "block w-full max-w-[260px] mx-auto overflow-hidden p-4 rounded-2xl border border-border/50 bg-card text-left transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 group relative",
+                    "block w-full max-w-[260px] mx-auto overflow-hidden p-4 rounded-2xl border border-[#1E2229]/20 dark:border-border/50 bg-white dark:bg-card text-left transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 group relative",
                     selectedId === conversation.id
                       ? "ring-2 ring-primary shadow-md z-10"
                       : "hover:border-primary/20"

@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MoreHorizontal, MessageSquare, Tag, Calendar, User, Clock, CalendarPlus, Package } from "lucide-react";
+import { FaInstagram, FaWhatsapp } from "react-icons/fa";
 import { differenceInCalendarDays } from "date-fns";
 import { useStaff } from "@/hooks/useStaff";
 import { DealConversationModal } from "./DealConversationModal";
@@ -151,6 +152,11 @@ export function KanbanCard({ deal, index, stagnationLimitDays }: KanbanCardProps
                                         <span className="text-xs text-black dark:text-muted-foreground truncate max-w-[100px]" title={deal.contacts?.push_name}>
                                             {deal.contacts?.push_name || "Sem contato"}
                                         </span>
+                                        {deal.contacts?.instagram_id ? (
+                                            <FaInstagram className="h-3.5 w-3.5 flex-shrink-0" style={{ color: '#F05D57' }} title="Instagram" />
+                                        ) : deal.contacts && (
+                                            <FaWhatsapp className="h-3.5 w-3.5 flex-shrink-0" style={{ color: '#22C55E' }} title="WhatsApp" />
+                                        )}
                                         {activeConversation?.unread_count > 0 && (
                                             <span className="ml-1 inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold">
                                                 {activeConversation.unread_count}

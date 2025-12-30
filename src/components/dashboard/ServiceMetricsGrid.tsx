@@ -54,7 +54,7 @@ const MetricRow = ({
         <div className="flex items-center justify-between py-5 border-b border-border/50 last:border-b-0">
             <div className="flex items-center gap-4">
                 {Icon && (
-                    <div className="p-3 rounded-xl bg-muted/50">
+                    <div className="p-3 rounded-xl bg-[#e5e5e5] dark:bg-muted/50">
                         <Icon className="w-6 h-6" style={{ color }} />
                     </div>
                 )}
@@ -582,12 +582,13 @@ export const ServiceMetricsGrid = () => {
                 avgQuality = qualityData || 0;
             }
 
-            // Buscar tempo de resposta
+            // Buscar tempo de resposta - JOIN com conversations para filtrar por tenant
             const { data: rtData } = await supabase
                 .from('response_times')
-                .select('response_duration_seconds')
+                .select('response_duration_seconds, conversations!inner(user_id)')
                 .not('response_duration_seconds', 'is', null)
-                .lt('response_duration_seconds', 86400);
+                .lt('response_duration_seconds', 86400)
+                .eq('conversations.user_id', userId);
 
             const avgResponseTime = rtData && rtData.length > 0
                 ? rtData.reduce((acc, r) => acc + (r.response_duration_seconds || 0), 0) / rtData.length

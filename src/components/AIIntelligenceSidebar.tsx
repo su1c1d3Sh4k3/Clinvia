@@ -250,7 +250,7 @@ export const AIIntelligenceSidebar = ({ conversationId, onFollowUpMessageClick, 
   const satisfactionScore = analysis?.sentiment_score ?? 5;
 
   return (
-    <div className="w-full md:w-[320px] md:h-screen md:border-l border-border bg-background/50 backdrop-blur-sm flex flex-col p-4 gap-4 overflow-y-auto">
+    <div className="w-full md:w-[320px] md:h-screen md:border-l border-[#1E2229]/20 dark:border-border bg-white dark:bg-background/50 backdrop-blur-sm flex flex-col p-4 gap-4 overflow-y-auto">
       <CopilotSettingsModal open={isSettingsOpen} onOpenChange={setIsSettingsOpen} />
 
       {/* CRM Integration - Hide for Groups */}
@@ -273,7 +273,7 @@ export const AIIntelligenceSidebar = ({ conversationId, onFollowUpMessageClick, 
       {/* Realizar Venda - Hide for Groups */}
       {!isGroup && conversationId && (
         <Collapsible open={isSaleOpen} onOpenChange={setIsSaleOpen}>
-          <Card className="bg-background/80">
+          <Card className="bg-white dark:bg-background/80 border-[#1E2229]/20 dark:border-border">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm flex items-center gap-2">
@@ -312,7 +312,7 @@ export const AIIntelligenceSidebar = ({ conversationId, onFollowUpMessageClick, 
       {/* Agendamento - Hide for Groups */}
       {!isGroup && conversationId && (
         <Collapsible open={isScheduleOpen} onOpenChange={setIsScheduleOpen}>
-          <Card className="bg-background/80">
+          <Card className="bg-white dark:bg-background/80 border-[#1E2229]/20 dark:border-border">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm flex items-center gap-2">
@@ -361,7 +361,7 @@ export const AIIntelligenceSidebar = ({ conversationId, onFollowUpMessageClick, 
       {/* Follow Up - Hide for Groups, Only for open tickets */}
       {!isGroup && conversationId && (
         <Collapsible open={isFollowUpOpen} onOpenChange={setIsFollowUpOpen}>
-          <Card className="bg-background/80">
+          <Card className="bg-white dark:bg-background/80 border-[#1E2229]/20 dark:border-border">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm flex items-center gap-2">
@@ -515,7 +515,7 @@ export const AIIntelligenceSidebar = ({ conversationId, onFollowUpMessageClick, 
       {/* Satisfaction Meter - Collapsible - Hide for Groups */}
       {!isGroup && (
         <Collapsible open={isSatisfactionOpen} onOpenChange={setIsSatisfactionOpen}>
-          <Card className="bg-background/80">
+          <Card className="bg-white dark:bg-background/80 border-[#1E2229]/20 dark:border-border">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm flex items-center gap-2">
@@ -578,7 +578,7 @@ export const AIIntelligenceSidebar = ({ conversationId, onFollowUpMessageClick, 
 
       {/* Resumo da Conversa - Collapsible */}
       <Collapsible open={isSummaryOpen} onOpenChange={setIsSummaryOpen}>
-        <Card className="bg-background/80">
+        <Card className="bg-white dark:bg-background/80 border-[#1E2229]/20 dark:border-border">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm flex items-center gap-2">
@@ -606,8 +606,8 @@ export const AIIntelligenceSidebar = ({ conversationId, onFollowUpMessageClick, 
                   {isGeneratingSummary ? "Gerando..." : "Gerar Resumo"}
                 </Button>
 
-                <ScrollArea className="h-[400px] w-full rounded-md border p-4">
-                  <div className="prose prose-sm dark:prose-invert max-w-none text-xs">
+                <ScrollArea className="h-[400px] w-full rounded-md border">
+                  <div className="prose prose-sm dark:prose-invert max-w-none text-xs p-4">
                     {summary ? (
                       <div className="whitespace-pre-wrap">{summary}</div>
                     ) : (
@@ -627,7 +627,7 @@ export const AIIntelligenceSidebar = ({ conversationId, onFollowUpMessageClick, 
         onOpenChange={setIsCopilotOpen}
         className={isCopilotOpen ? "flex-1 flex flex-col" : ""}
       >
-        <Card className={`bg-background/80 ${isCopilotOpen ? "flex-1 flex flex-col" : ""}`}>
+        <Card className={`bg-white dark:bg-background/80 border-[#1E2229]/20 dark:border-border ${isCopilotOpen ? "flex-1 flex flex-col" : ""}`}>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm flex items-center gap-2">

@@ -242,7 +242,8 @@ serve(async (req) => {
                     title: 'Novo Agendamento',
                     description: `Agendamento para ${contactName} com ${professionalName} em ${formattedDate}.`,
                     metadata: { appointment_id: data.id, professional_id, contact_id },
-                    related_user_id: user_id // Notify the account owner
+                    related_user_id: user_id,
+                    user_id: user_id  // SECURITY FIX: Tenant isolation
                 });
             } catch (notifError) {
                 console.error("Error creating notification:", notifError);

@@ -76,7 +76,8 @@ serve(async (req) => {
                         title: 'Agenda de Hoje',
                         description: `Você tem ${count} agendamento(s) hoje.`,
                         metadata: { count, appointment_ids: userAppointments.map(a => a.id) },
-                        related_user_id: userId
+                        related_user_id: userId,
+                        user_id: userId  // SECURITY FIX: Tenant isolation
                     });
                 }
             }
@@ -130,7 +131,8 @@ serve(async (req) => {
                         title: 'Próximo Agendamento',
                         description: `Agendamento de ${contactName} com ${professionalName} começa em 10 minutos (${timeStr}).`,
                         metadata: { appointment_id: apt.id },
-                        related_user_id: apt.user_id
+                        related_user_id: apt.user_id,
+                        user_id: apt.user_id  // SECURITY FIX: Tenant isolation
                     });
                 }
             }
