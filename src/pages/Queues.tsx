@@ -102,7 +102,7 @@ const Queues = () => {
                         )}
                     </div>
 
-                    <div className="rounded-md border overflow-x-auto">
+                    <div className="rounded-md border overflow-x-auto bg-white dark:bg-transparent border-[#D4D5D6] dark:border-border">
                         <Table>
                             <TableHeader>
                                 <TableRow>

@@ -223,8 +223,8 @@ export function DealConversationModal({ contactId, contactName }: DealConversati
                                 >
                                     <div
                                         className={`p-3 rounded-lg ${msg.direction === 'outbound'
-                                            ? 'bg-primary text-primary-foreground'
-                                            : 'bg-secondary'
+                                            ? 'bg-[#DCF7C5] text-gray-800 dark:bg-primary dark:text-primary-foreground'
+                                            : 'bg-white dark:bg-secondary text-gray-800 dark:text-foreground'
                                             }`}
                                     >
                                         <p className="text-sm">{msg.body}</p>

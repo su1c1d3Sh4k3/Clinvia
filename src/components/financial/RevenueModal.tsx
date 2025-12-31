@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -364,14 +365,10 @@ export function RevenueModal({ open, onOpenChange, revenue }: RevenueModalProps)
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="amount">Valor *</Label>
-                            <Input
+                            <CurrencyInput
                                 id="amount"
-                                type="number"
-                                step="0.01"
-                                min="0"
                                 value={formData.amount}
-                                onChange={(e) => setFormData({ ...formData, amount: parseFloat(e.target.value) || 0 })}
-                                required
+                                onChange={(value) => setFormData({ ...formData, amount: value })}
                             />
                         </div>
                         <div className="space-y-2">

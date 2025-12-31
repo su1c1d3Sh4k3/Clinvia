@@ -128,6 +128,18 @@ All colors MUST be HSL.
   }
 }
 
+/* Modal form fields - Dark border in light mode only */
+:root:not(.dark) [role="dialog"] input,
+:root:not(.dark) [role="dialog"] textarea,
+:root:not(.dark) [role="dialog"] select,
+:root:not(.dark) [role="dialog"] [role="combobox"],
+:root:not(.dark) [data-radix-popper-content-wrapper] input,
+:root:not(.dark) [data-radix-popper-content-wrapper] textarea,
+:root:not(.dark) [data-radix-popper-content-wrapper] select {
+  border-color: #1E2229 !important;
+}
+
+
 @layer utilities {
   .scrollbar-thin::-webkit-scrollbar {
     width: 6px;

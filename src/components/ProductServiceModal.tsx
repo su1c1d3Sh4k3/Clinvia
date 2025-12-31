@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -209,7 +210,10 @@ export function ProductServiceModal({ open, onOpenChange, itemToEdit }: ProductS
                                         <FormItem>
                                             <FormLabel>Valor (R$)</FormLabel>
                                             <FormControl>
-                                                <Input type="number" step="0.01" {...field} />
+                                                <CurrencyInput
+                                                    value={field.value}
+                                                    onChange={field.onChange}
+                                                />
                                             </FormControl>
                                             <FormDescription>
                                                 0 para "Sob Consulta"

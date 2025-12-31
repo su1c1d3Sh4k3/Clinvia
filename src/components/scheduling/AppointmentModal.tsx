@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -65,10 +66,10 @@ const formSchema = z.object({
                 path: ["contact_name"],
             });
         }
-        if (!data.duration || data.duration < 1) {
+        if (!data.duration || data.duration < 10) {
             ctx.addIssue({
                 code: z.ZodIssueCode.custom,
-                message: "Duração é obrigatória",
+                message: "Duração mínima é 10 minutos",
                 path: ["duration"],
             });
         }
@@ -559,7 +560,7 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                                             <FormItem>
                                                 <FormLabel>Duração (min)</FormLabel>
                                                 <FormControl>
-                                                    <Input type="number" {...field} disabled={!!form.watch('service_id') || isPast} />
+                                                    <Input type="number" min={10} {...field} disabled={!!form.watch('service_id') || isPast} />
                                                 </FormControl>
                                                 <FormMessage />
                                             </FormItem>
@@ -572,7 +573,11 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                                             <FormItem>
                                                 <FormLabel>Valor (R$)</FormLabel>
                                                 <FormControl>
-                                                    <Input type="number" step="0.01" {...field} disabled={!!form.watch('service_id') || isPast} />
+                                                    <CurrencyInput
+                                                        value={field.value || 0}
+                                                        onChange={field.onChange}
+                                                        disabled={!!form.watch('service_id') || isPast}
+                                                    />
                                                 </FormControl>
                                                 <FormMessage />
                                             </FormItem>

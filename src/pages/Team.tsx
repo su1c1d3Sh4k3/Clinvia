@@ -351,7 +351,7 @@ export default function Team() {
                 </Dialog>
             </div>
 
-            <div className="rounded-md border overflow-x-auto">
+            <div className="rounded-md border overflow-x-auto bg-white dark:bg-transparent border-[#D4D5D6] dark:border-border">
                 <Table>
                     <TableHeader>
                         <TableHead className="text-[#005AA8] dark:text-muted-foreground min-w-[120px]">Nome</TableHead>
@@ -505,7 +505,7 @@ export default function Team() {
                 </Button>
             </div>
 
-            <div className="rounded-md border overflow-x-auto">
+            <div className="rounded-md border overflow-x-auto bg-white dark:bg-transparent border-[#D4D5D6] dark:border-border">
                 <Table>
                     <TableHeader>
                         <TableHead className="text-[#005AA8] dark:text-muted-foreground min-w-[120px]">Nome</TableHead>

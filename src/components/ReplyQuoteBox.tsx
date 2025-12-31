@@ -62,28 +62,28 @@ interface QuotedMessageProps {
  */
 export function QuotedMessage({ quotedBody, quotedSender, isOutbound, className }: QuotedMessageProps) {
   if (!quotedBody) return null;
-  
+
   const displayText = quotedBody.length > 80 ? quotedBody.substring(0, 80) + "..." : quotedBody;
 
   return (
     <div
       className={cn(
         "p-2 mb-2 rounded border-l-4",
-        isOutbound 
-          ? "bg-white/10 border-white/50" 
+        isOutbound
+          ? "bg-gray-800/10 dark:bg-white/10 border-gray-800/50 dark:border-white/50"
           : "bg-primary/10 border-primary/50",
         className
       )}
     >
       <p className={cn(
         "text-xs font-semibold mb-0.5",
-        isOutbound ? "text-white/80" : "text-primary"
+        isOutbound ? "text-gray-800/80 dark:text-white/80" : "text-primary"
       )}>
         {quotedSender || "Mensagem"}
       </p>
       <p className={cn(
         "text-xs",
-        isOutbound ? "text-white/70" : "text-muted-foreground"
+        isOutbound ? "text-gray-800/70 dark:text-white/70" : "text-muted-foreground"
       )}>
         {displayText}
       </p>

@@ -299,7 +299,7 @@ export const NavigationSidebar = () => {
           className={cn(
             "w-full flex items-center gap-3 py-3 transition-all duration-200 relative group/item",
             "text-white/70 hover:text-white hover:bg-[#024a84] dark:hover:bg-[#1E2229]",
-            hasChildren && (isOpen || hasActiveInChildren) && "bg-[#22262E]",
+            hasChildren && (isOpen || hasActiveInChildren) && "bg-[#024a84] dark:bg-[#22262E]",
             "px-4"
           )}
         >

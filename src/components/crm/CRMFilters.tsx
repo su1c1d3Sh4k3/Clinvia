@@ -107,7 +107,7 @@ export function CRMFilters({ filters, onFiltersChange }: CRMFiltersProps) {
                 value={filters.tagId || "all"}
                 onValueChange={(val) => onFiltersChange({ ...filters, tagId: val === "all" ? null : val })}
             >
-                <SelectTrigger className="w-[140px] h-9 text-xs">
+                <SelectTrigger className="w-[140px] h-9 text-xs bg-white dark:bg-transparent">
                     <div className="flex items-center gap-2 truncate">
                         <Filter className="h-3 w-3 text-muted-foreground" />
                         <span className="truncate">
@@ -138,7 +138,7 @@ export function CRMFilters({ filters, onFiltersChange }: CRMFiltersProps) {
                 value={filters.responsibleId || "all"}
                 onValueChange={(val) => onFiltersChange({ ...filters, responsibleId: val === "all" ? null : val })}
             >
-                <SelectTrigger className="w-[140px] h-9 text-xs">
+                <SelectTrigger className="w-[140px] h-9 text-xs bg-white dark:bg-transparent">
                     <div className="flex items-center gap-2 truncate">
                         <Filter className="h-3 w-3 text-muted-foreground" />
                         <span className="truncate">
@@ -164,7 +164,7 @@ export function CRMFilters({ filters, onFiltersChange }: CRMFiltersProps) {
                     value={filters.dateFilterType}
                     onValueChange={handleDateFilterChange}
                 >
-                    <SelectTrigger className="w-[140px] h-9 text-xs">
+                    <SelectTrigger className="w-[140px] h-9 text-xs bg-white dark:bg-transparent">
                         <div className="flex items-center gap-2 truncate">
                             <CalendarIcon className="h-3 w-3 text-muted-foreground" />
                             <span className="truncate">

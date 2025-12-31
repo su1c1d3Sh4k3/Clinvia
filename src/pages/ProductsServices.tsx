@@ -303,11 +303,11 @@ service;Exemplo de Serviço;Descrição do serviço aqui;150.00;;60;7`;
                 </div>
                 {!isAgent && (
                     <div className="flex gap-2 flex-wrap">
-                        <Button variant="outline" size="sm" onClick={handleDownloadTemplate} className="h-8 md:h-9 text-xs md:text-sm px-2 md:px-3">
+                        <Button variant="outline" size="sm" onClick={handleDownloadTemplate} className="h-8 md:h-9 text-xs md:text-sm px-2 md:px-3 bg-white dark:bg-transparent border-0 dark:border">
                             <Download className="w-4 h-4 md:mr-2" />
                             <span className="hidden md:inline">Baixar Modelo</span>
                         </Button>
-                        <Button variant="outline" size="sm" onClick={handleImportClick} disabled={isImporting} className="h-8 md:h-9 text-xs md:text-sm px-2 md:px-3">
+                        <Button variant="outline" size="sm" onClick={handleImportClick} disabled={isImporting} className="h-8 md:h-9 text-xs md:text-sm px-2 md:px-3 bg-white dark:bg-transparent border-0 dark:border">
                             {isImporting ? (
                                 <Loader2 className="w-4 h-4 md:mr-2 animate-spin" />
                             ) : (
@@ -339,7 +339,7 @@ service;Exemplo de Serviço;Descrição do serviço aqui;150.00;;60;7`;
                         placeholder="Buscar..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-9 h-9"
+                        className="pl-9 h-9 bg-white dark:bg-background border-0 dark:border"
                     />
                 </div>
                 {selectedItems.length > 0 && !isAgent && !isSupervisor && (
@@ -357,7 +357,7 @@ service;Exemplo de Serviço;Descrição do serviço aqui;150.00;;60;7`;
                 </TabsList>
 
                 <TabsContent value="product" className="mt-4">
-                    <div className="border rounded-lg overflow-x-auto">
+                    <div className="border rounded-lg overflow-x-auto bg-white dark:bg-transparent border-[#D4D5D6] dark:border-border">
                         <Table>
                             <TableHeader>
                                 <TableRow>
@@ -437,7 +437,7 @@ service;Exemplo de Serviço;Descrição do serviço aqui;150.00;;60;7`;
                 </TabsContent>
 
                 <TabsContent value="service" className="mt-4">
-                    <div className="border rounded-lg overflow-x-auto">
+                    <div className="border rounded-lg overflow-x-auto bg-white dark:bg-transparent border-[#D4D5D6] dark:border-border">
                         <Table>
                             <TableHeader>
                                 <TableRow>

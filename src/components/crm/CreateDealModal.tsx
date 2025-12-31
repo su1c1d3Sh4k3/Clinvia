@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Textarea } from "@/components/ui/textarea";
 import {
     Form,
@@ -419,7 +420,10 @@ export function CreateDealModal({
                                     <FormItem>
                                         <FormLabel>Valor (R$)</FormLabel>
                                         <FormControl>
-                                            <Input type="number" step="0.01" {...field} />
+                                            <CurrencyInput
+                                                value={field.value}
+                                                onChange={field.onChange}
+                                            />
                                         </FormControl>
                                         <FormMessage />
                                     </FormItem>

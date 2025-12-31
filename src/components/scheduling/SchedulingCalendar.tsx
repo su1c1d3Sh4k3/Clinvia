@@ -129,7 +129,8 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
             {/* Body - Synced horizontal scroll on mobile */}
             <div
                 ref={bodyRef}
-                className="flex-1 overflow-x-auto overflow-y-auto relative [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']"
+                className="flex-1 overflow-x-auto overflow-y-auto relative scrollbar-none"
+                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
                 onScroll={handleBodyScroll}
             >
                 <div className="flex min-h-[660px]" style={{ height: (endHour - startHour + 1) * HOUR_HEIGHT }}>
@@ -173,8 +174,8 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                         key={hour}
                                         className={cn(
                                             "absolute w-full border-t border-dashed border-muted/50 transition-colors",
-                                            !isPast && !isBlocked && "hover:bg-accent/50 cursor-pointer",
-                                            isBlocked && "bg-muted/30",
+                                            !isPast && !isBlocked && "bg-white dark:bg-transparent hover:bg-accent/50 dark:hover:bg-[#353A44] cursor-pointer",
+                                            isBlocked && "bg-muted/30 dark:bg-muted/30",
                                             isPast && "bg-[#C6C8CA] dark:bg-[#22262E]"
                                         )}
                                         style={{
@@ -208,7 +209,7 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                         <div
                                             key={apt.id}
                                             className={cn(
-                                                "absolute left-1 right-1 rounded-md p-2 text-xs cursor-pointer border shadow-sm transition-all z-10 group/card",
+                                                "absolute left-1 right-1 rounded-md px-1.5 py-0.5 cursor-pointer border shadow-sm transition-all z-10 group/card",
                                                 apt.type === "absence" ? "bg-muted text-muted-foreground border-border" : getStatusColor(apt.status || 'pending')
                                             )}
                                             style={getEventStyle(apt)}
@@ -280,39 +281,43 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                                 const start = new Date(apt.start_time);
                                                 const end = new Date(apt.end_time);
                                                 const durationInMinutes = differenceInMinutes(end, start);
-                                                const isCompact = durationInMinutes <= 30;
+                                                const isCompact = durationInMinutes < 40;
+
+                                                // Adaptive font size: min 8px (10min), max 12px (60min+)
+                                                const fontSize = Math.max(8, Math.min(12, Math.floor(durationInMinutes / 5) + 4));
+
+                                                // Extract first name only
+                                                const fullName = apt.type === "absence" ? "Ausência" : (apt.contacts?.push_name || apt.contact_name || "Cliente");
+                                                const firstName = fullName.split(' ')[0];
+                                                const serviceName = apt.products_services?.name || "Serviço";
 
                                                 return (
-                                                    <div className="overflow-hidden h-full flex flex-col justify-center">
+                                                    <div
+                                                        className="overflow-hidden h-full flex flex-col justify-center"
+                                                        style={{ fontSize: `${fontSize}px`, lineHeight: 1.2 }}
+                                                    >
                                                         {isCompact ? (
-                                                            <div className="flex items-center gap-2 text-xs truncate">
-                                                                <span className="font-bold shrink-0">
-                                                                    {apt.type === "absence" ? "Ausência" : (apt.contacts?.push_name || apt.contact_name || "Cliente")}
-                                                                </span>
+                                                            // Compact mode (< 40 min): single line
+                                                            <div className="flex items-center gap-1 truncate">
+                                                                <span className="font-bold shrink-0">{firstName}</span>
                                                                 {apt.type === "appointment" && (
                                                                     <>
-                                                                        <span className="opacity-60 hidden sm:inline">-</span>
-                                                                        <span className="truncate opacity-80">
-                                                                            {apt.products_services?.name || "Serviço"}
-                                                                        </span>
-                                                                        <span className="opacity-60">-</span>
+                                                                        <span className="opacity-50">|</span>
+                                                                        <span className="truncate opacity-80">{serviceName}</span>
+                                                                        <span className="opacity-50">|</span>
                                                                         <span className="opacity-70 shrink-0">
-                                                                            {format(start, "HH:mm")} - {format(end, "HH:mm")}
+                                                                            {format(start, "HH:mm")}-{format(end, "HH:mm")}
                                                                         </span>
                                                                     </>
                                                                 )}
                                                             </div>
                                                         ) : (
-                                                            <div className="flex flex-col h-full">
+                                                            // Normal mode (>= 40 min): two lines
+                                                            <div className="flex flex-col justify-center h-full">
                                                                 <div className="font-bold truncate">
-                                                                    {apt.type === "absence" ? "Ausência" : (apt.contacts?.push_name || apt.contact_name || "Cliente")}
+                                                                    {firstName} {apt.type === "appointment" && `| ${serviceName}`}
                                                                 </div>
-                                                                {apt.type === "appointment" && (
-                                                                    <div className="truncate opacity-80 text-[11px]">
-                                                                        {apt.products_services?.name || "Serviço"}
-                                                                    </div>
-                                                                )}
-                                                                <div className="text-[10px] opacity-70 mt-auto">
+                                                                <div className="opacity-70">
                                                                     {format(start, "HH:mm")} - {format(end, "HH:mm")}
                                                                 </div>
                                                             </div>

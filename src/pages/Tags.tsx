@@ -106,7 +106,7 @@ const Tags = () => {
                         )}
                     </div>
 
-                    <div className="border rounded-lg overflow-x-auto">
+                    <div className="border rounded-lg overflow-x-auto bg-white dark:bg-transparent border-[#D4D5D6] dark:border-border">
                         <Table>
                             <TableHeader>
                                 <TableRow>

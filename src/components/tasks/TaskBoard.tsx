@@ -529,7 +529,7 @@ export function TaskBoard({ boardId }: TaskBoardProps) {
                                 <span className="text-xs text-muted-foreground capitalize">{format(day, "EEEE", { locale: ptBR })}</span>
                                 <span className={cn(
                                     "text-sm font-bold h-6 w-6 flex items-center justify-center rounded-full",
-                                    isSameDay(day, new Date()) && "bg-[#1E2229] text-white"
+                                    isSameDay(day, new Date()) && "bg-[#00B0F0] dark:bg-[#1E2229] text-white"
                                 )}>
                                     {format(day, "d")}
                                 </span>
@@ -547,7 +547,7 @@ export function TaskBoard({ boardId }: TaskBoardProps) {
                                         <div
                                             key={`${day.toISOString()}-${time}`}
                                             className={cn(
-                                                "h-[60px] border-b border-dashed transition-colors",
+                                                "h-[60px] border-b border-dashed border-[#b7b5b5] dark:border-border transition-colors",
                                                 isPast ? "bg-gray-100/50 cursor-not-allowed" : "hover:bg-muted/30 cursor-pointer"
                                             )}
                                             onClick={() => handleSlotClick(day, time)}

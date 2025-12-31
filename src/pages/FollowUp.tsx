@@ -89,7 +89,7 @@ export default function FollowUp() {
 
                 {/* Templates Tab */}
                 <TabsContent value="templates" className="space-y-4 mt-4">
-                    <div className="rounded-md border overflow-x-auto">
+                    <div className="rounded-md border overflow-x-auto bg-white dark:bg-transparent border-[#D4D5D6] dark:border-border">
                         <Table>
                             <TableHeader>
                                 <TableRow>
@@ -159,7 +159,7 @@ export default function FollowUp() {
                 {/* Categories Tab */}
                 <TabsContent value="categories" className="space-y-4 mt-4">
                     <div className="flex justify-end">
-                        <Button variant="outline" size="sm" className="h-8 md:h-9 text-xs md:text-sm" onClick={() => setIsCategoryModalOpen(true)}>
+                        <Button variant="outline" size="sm" className="h-8 md:h-9 text-xs md:text-sm bg-white dark:bg-transparent border-0 dark:border" onClick={() => setIsCategoryModalOpen(true)}>
                             <Plus className="w-4 h-4 mr-1 md:mr-2" />
                             <span className="hidden sm:inline">Nova </span>Categoria
                         </Button>

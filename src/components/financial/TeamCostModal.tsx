@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -240,24 +241,18 @@ export function TeamCostModal({ open, onOpenChange, teamCost }: TeamCostModalPro
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="base_salary">Salário Base</Label>
-                            <Input
+                            <CurrencyInput
                                 id="base_salary"
-                                type="number"
-                                step="0.01"
-                                min="0"
                                 value={formData.base_salary}
-                                onChange={(e) => setFormData({ ...formData, base_salary: parseFloat(e.target.value) || 0 })}
+                                onChange={(value) => setFormData({ ...formData, base_salary: value })}
                             />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="commission">Comissão</Label>
-                            <Input
+                            <CurrencyInput
                                 id="commission"
-                                type="number"
-                                step="0.01"
-                                min="0"
                                 value={formData.commission}
-                                onChange={(e) => setFormData({ ...formData, commission: parseFloat(e.target.value) || 0 })}
+                                onChange={(value) => setFormData({ ...formData, commission: value })}
                             />
                         </div>
                     </div>
@@ -265,24 +260,18 @@ export function TeamCostModal({ open, onOpenChange, teamCost }: TeamCostModalPro
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="bonus">Bônus</Label>
-                            <Input
+                            <CurrencyInput
                                 id="bonus"
-                                type="number"
-                                step="0.01"
-                                min="0"
                                 value={formData.bonus}
-                                onChange={(e) => setFormData({ ...formData, bonus: parseFloat(e.target.value) || 0 })}
+                                onChange={(value) => setFormData({ ...formData, bonus: value })}
                             />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="deductions">Descontos</Label>
-                            <Input
+                            <CurrencyInput
                                 id="deductions"
-                                type="number"
-                                step="0.01"
-                                min="0"
                                 value={formData.deductions}
-                                onChange={(e) => setFormData({ ...formData, deductions: parseFloat(e.target.value) || 0 })}
+                                onChange={(value) => setFormData({ ...formData, deductions: value })}
                             />
                         </div>
                     </div>

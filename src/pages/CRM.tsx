@@ -58,7 +58,7 @@ const CRM = () => {
                     {funnels && funnels.length > 0 && (
                         <div className="flex gap-2">
                             <Select value={selectedFunnelId || ""} onValueChange={setSelectedFunnelId}>
-                                <SelectTrigger className="w-full sm:w-[200px] md:w-[250px] h-8 md:h-9 text-sm">
+                                <SelectTrigger className="w-full sm:w-[200px] md:w-[250px] h-8 md:h-9 text-sm bg-white dark:bg-transparent">
                                     <SelectValue placeholder="Selecione funil" />
                                 </SelectTrigger>
                                 <SelectContent>

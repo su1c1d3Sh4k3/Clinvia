@@ -1096,7 +1096,7 @@ export const ChatArea = ({
                         "rounded-lg p-3 overflow-hidden min-w-0 break-words",
                         msg.direction === "outbound"
                           ? "bg-[#DCF7C5] text-gray-800 dark:bg-[#044740] dark:text-white"
-                          : "bg-[hsl(var(--chat-customer))] text-foreground"
+                          : "bg-white dark:bg-[hsl(var(--chat-customer))] text-gray-800 dark:text-foreground"
                       )}
                     >
                       {/* Show Sender Name in Group Chats */}
@@ -1171,7 +1171,7 @@ export const ChatArea = ({
 
                       <span className={cn(
                         "text-xs mt-1 flex items-center gap-1",
-                        msg.direction === "outbound" ? "text-white/70" : "text-muted-foreground"
+                        msg.direction === "outbound" ? "text-gray-800/70 dark:text-white/70" : "text-muted-foreground"
                       )}>
                         {new Date(msg.created_at || "").toLocaleTimeString("pt-BR", {
                           hour: "2-digit",

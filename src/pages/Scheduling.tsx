@@ -333,7 +333,7 @@ export default function Scheduling() {
                         <Button onClick={() => {
                             setProfessionalToEdit(null);
                             setIsProfessionalModalOpen(true);
-                        }} variant="outline" className="w-full justify-start">
+                        }} variant="outline" className="w-full justify-start bg-white dark:bg-transparent border-0 dark:border">
                             <Plus className="w-4 h-4 mr-2" />
                             Adicionar Profissional
                         </Button>
@@ -389,7 +389,7 @@ export default function Scheduling() {
                                 <Filter className="h-4 w-4" />
                             </Button>
 
-                            <div className="flex items-center border rounded-md bg-background">
+                            <div className="flex items-center border rounded-md bg-white dark:bg-background border-[#D4D5D6] dark:border-border">
                                 <Button variant="ghost" size="icon" onClick={handlePreviousDay} className="h-9 w-9 rounded-none rounded-l-md border-r">
                                     <ChevronLeft className="h-4 w-4" />
                                 </Button>
@@ -405,7 +405,7 @@ export default function Scheduling() {
                                     <ChevronRight className="h-4 w-4" />
                                 </Button>
                             </div>
-                            <Button variant="outline" onClick={handleToday} className="h-9 text-xs md:text-sm px-2 md:px-3">
+                            <Button variant="outline" onClick={handleToday} className="h-9 text-xs md:text-sm px-2 md:px-3 bg-white dark:bg-transparent border-0 dark:border">
                                 Hoje
                             </Button>
                             <Button variant="outline" size="icon" onClick={() => setIsSettingsModalOpen(true)} className="h-9 w-9">
@@ -420,7 +420,7 @@ export default function Scheduling() {
                                     placeholder="Buscar clientes agendados hoje"
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="pl-8"
+                                    className="pl-8 bg-white dark:bg-background border-0 dark:border"
                                 />
                             </div>
                         </div>
@@ -443,7 +443,7 @@ export default function Scheduling() {
                                 placeholder="Buscar clientes..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="pl-8 h-9 text-sm"
+                                className="pl-8 h-9 text-sm bg-white dark:bg-background border-0 dark:border"
                             />
                         </div>
                     </div>

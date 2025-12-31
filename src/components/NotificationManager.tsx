@@ -154,35 +154,49 @@ export function NotificationManager() {
                     // Custom Styled Toast (In-App)
                     toast.custom((t) => (
                         <div
-                            className="flex items-center gap-4 p-4 rounded-lg shadow-lg cursor-pointer transition-all hover:scale-105"
+                            className="flex items-center gap-4 p-4 pr-8 rounded-lg shadow-lg cursor-pointer transition-all hover:scale-105 relative bg-white dark:bg-[#272C35] text-gray-800 dark:text-gray-300"
                             style={{
-                                backgroundColor: "#272C35",
                                 border: "1px solid rgba(4, 162, 221, 0.3)",
                                 boxShadow: "0 0 15px rgba(4, 162, 221, 0.5)",
-                                minWidth: "300px"
+                                minWidth: "280px",
+                                maxWidth: "380px"
                             }}
                             onClick={() => {
                                 navigate(`/?conversationId=${msg.conversation_id}`);
                                 toast.dismiss(t);
                             }}
                         >
+                            {/* Close Button */}
+                            <button
+                                className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center rounded-full bg-red-500 hover:bg-red-600 text-white transition-colors z-10"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    toast.dismiss(t);
+                                }}
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                            </button>
+
                             {/* Avatar */}
-                            <div className="relative">
+                            <div className="relative shrink-0">
                                 <img
                                     src={profilePic}
                                     alt="Contact"
                                     className="w-12 h-12 rounded-full object-cover border-2 border-[#04A2DD]"
                                     onError={(e) => (e.currentTarget.src = "https://github.com/shadcn.png")}
                                 />
-                                <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-[#272C35]"></div>
+                                <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white dark:border-[#272C35]"></div>
                             </div>
 
                             {/* Content */}
-                            <div className="flex-1 overflow-hidden">
+                            <div className="flex-1 min-w-0 overflow-hidden">
                                 <h4 className="text-[#04A2DD] font-bold text-sm truncate">
                                     {title}
                                 </h4>
-                                <p className="text-gray-300 text-sm truncate mt-1">
+                                <p className="text-gray-700 dark:text-gray-300 text-sm truncate mt-1">
                                     {body}
                                 </p>
                             </div>
