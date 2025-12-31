@@ -174,8 +174,8 @@ const BalanceCardsSection = () => {
                 <Card
                     key={index}
                     className={`${card.borderColor} border-2 ${card.highlighted
-                        ? 'bg-gradient-to-br from-primary/5 via-transparent to-transparent shadow-lg'
-                        : ''
+                        ? 'bg-gradient-to-br from-primary/5 via-transparent to-transparent shadow-lg bg-white dark:bg-card'
+                        : 'bg-white dark:bg-card'
                         }`}
                 >
                     <CardContent className="p-4">
@@ -258,7 +258,7 @@ const OverviewChartSection = () => {
     const ChartComponent = chartType === 'line' ? LineChart : BarChart;
 
     return (
-        <Card>
+        <Card className="bg-white dark:bg-card">
             <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                     <div>
@@ -361,7 +361,7 @@ const SummaryTablesSection = () => {
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
             {/* Últimas Receitas */}
-            <Card>
+            <Card className="bg-white dark:bg-card">
                 <CardHeader className="pb-2">
                     <CardTitle className="flex items-center gap-2 text-base">
                         <Receipt className="w-4 h-4 text-green-500" />
@@ -403,7 +403,7 @@ const SummaryTablesSection = () => {
             </Card>
 
             {/* Últimas Despesas */}
-            <Card>
+            <Card className="bg-white dark:bg-card">
                 <CardHeader className="pb-2">
                     <CardTitle className="flex items-center gap-2 text-base">
                         <FileText className="w-4 h-4 text-red-500" />
@@ -445,7 +445,7 @@ const SummaryTablesSection = () => {
             </Card>
 
             {/* Receitas por Profissional */}
-            <Card>
+            <Card className="bg-white dark:bg-card">
                 <CardHeader className="pb-2">
                     <CardTitle className="flex items-center gap-2 text-base">
                         <Target className="w-4 h-4 text-fuchsia-500" />
@@ -502,7 +502,7 @@ const SummaryTablesSection = () => {
             </Card>
 
             {/* Receitas por Atendente */}
-            <Card>
+            <Card className="bg-white dark:bg-card">
                 <CardHeader className="pb-2">
                     <CardTitle className="flex items-center gap-2 text-base">
                         <Users className="w-4 h-4 text-cyan-500" />

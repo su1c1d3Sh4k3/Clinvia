@@ -254,7 +254,7 @@ export function DealsStageChart() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {/* Chart - 2/3 width */}
             <div className="lg:col-span-2">
-                <div className="rounded-2xl bg-card/50 backdrop-blur-sm border border-border/50 p-4 md:p-6 hover:border-border transition-all duration-300 min-h-[480px] md:min-h-0 md:h-[400px] overflow-visible md:overflow-hidden">
+                <div className="rounded-2xl bg-white dark:bg-card/50 backdrop-blur-sm border border-border/50 p-4 md:p-6 hover:border-border transition-all duration-300 min-h-[480px] md:min-h-0 md:h-[400px] overflow-visible md:overflow-hidden">
                     {/* Header */}
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
                         <h3 className="text-sm font-medium text-muted-foreground">Negócios por Etapa</h3>
@@ -448,7 +448,7 @@ export function DealsStageChart() {
             </div>
 
             {/* Table - 1/3 width */}
-            <div className="rounded-2xl bg-card/50 backdrop-blur-sm border border-border/50 p-6 hover:border-border transition-all duration-300 h-[400px] flex flex-col">
+            <div className="rounded-2xl bg-white dark:bg-card/50 backdrop-blur-sm border border-border/50 p-6 hover:border-border transition-all duration-300 h-[400px] flex flex-col">
                 <h3 className="text-sm font-medium text-muted-foreground mb-4">Negócios Ativos por Funil</h3>
 
                 <div className="flex-1 overflow-auto">

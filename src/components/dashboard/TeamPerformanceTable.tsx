@@ -30,7 +30,7 @@ const AgentCard = ({
             : 'bg-red-500/10';
 
     return (
-        <div className="relative rounded-2xl bg-card/50 backdrop-blur-sm border border-border/50 p-5 hover:border-border hover:shadow-lg transition-all duration-300 group">
+        <div className="relative rounded-2xl bg-white dark:bg-card/50 backdrop-blur-sm border border-border/50 p-5 hover:border-border hover:shadow-lg transition-all duration-300 group">
             {/* Rank Badge */}
             {rank <= 3 && (
                 <div className={`absolute -top-2 -left-2 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white ${rank === 1 ? 'bg-gradient-to-br from-yellow-400 to-yellow-600' :
@@ -201,7 +201,7 @@ export const TeamPerformanceTable = () => {
 
     if (!team || team.length === 0) {
         return (
-            <div className="rounded-2xl bg-card/50 backdrop-blur-sm border border-border/50 p-12 text-center">
+            <div className="rounded-2xl bg-white dark:bg-card/50 backdrop-blur-sm border border-border/50 p-12 text-center">
                 <Users className="w-12 h-12 mx-auto text-muted-foreground/50 mb-4" />
                 <p className="text-muted-foreground">Nenhum agente encontrado</p>
             </div>

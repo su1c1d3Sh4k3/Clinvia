@@ -142,7 +142,7 @@ export function LossReasonsChart() {
     return (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Bar Chart - Main (2/3 width on desktop) */}
-            <Card className="lg:col-span-2">
+            <Card className="lg:col-span-2 bg-white dark:bg-card">
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-lg">
                         <XCircle className="h-5 w-5 text-red-500" />
@@ -205,7 +205,7 @@ export function LossReasonsChart() {
             </Card>
 
             {/* Other Reasons Detail (1/3 width on desktop) */}
-            <Card>
+            <Card className="bg-white dark:bg-card">
                 <CardHeader className="pb-3">
                     <CardTitle className="flex items-center gap-2 text-base">
                         <MessageSquareText className="h-4 w-4 text-violet-500" />

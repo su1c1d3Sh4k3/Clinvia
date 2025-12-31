@@ -124,7 +124,7 @@ const CombinedMetricsCard = ({
     }));
 
     return (
-        <Card className="h-auto min-h-[480px]">
+        <Card className="h-auto min-h-[480px] bg-white dark:bg-card">
             <CardHeader className="pb-3">
                 <CardTitle className="text-lg font-semibold text-muted-foreground">
                     Resumo de Atendimentos
@@ -170,7 +170,7 @@ const MultiLineChartCard = ({
     const hasData = data && data.length > 0;
 
     return (
-        <Card className="h-auto min-h-[480px]">
+        <Card className="h-auto min-h-[480px] bg-white dark:bg-card">
             <CardHeader className="pb-3">
                 <CardTitle className="text-lg font-semibold text-muted-foreground">
                     {title}
@@ -248,7 +248,7 @@ const RadialChartCard = ({ title, data }: { title: string, data: any[] }) => {
     const total = data?.reduce((acc, item) => acc + (item.value || 0), 0) || 0;
 
     return (
-        <Card className="h-[340px]">
+        <Card className="h-[340px] bg-white dark:bg-card">
             <CardHeader className="pb-2">
                 <CardTitle className="text-lg font-semibold text-muted-foreground">
                     {title}
@@ -336,7 +336,7 @@ const DistributionCard = ({
     const hasData = items && items.length > 0;
 
     return (
-        <Card className="h-[340px]">
+        <Card className="h-[340px] bg-white dark:bg-card">
             <CardHeader className="pb-3">
                 <CardTitle className="text-lg font-semibold text-muted-foreground">
                     {title}
@@ -413,7 +413,7 @@ const DualGaugeCard = ({
     const timeScore = calcTimeScore(responseTime);
 
     return (
-        <Card className="h-[340px]">
+        <Card className="h-[340px] bg-white dark:bg-card">
             <CardHeader className="pb-2">
                 <CardTitle className="text-lg font-semibold text-muted-foreground">
                     Indicadores de Performance

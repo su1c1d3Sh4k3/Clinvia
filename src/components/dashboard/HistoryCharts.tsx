@@ -28,7 +28,7 @@ const ModernAreaChart = ({
     gradientId?: string
 }) => {
     return (
-        <div className="rounded-2xl bg-card/50 backdrop-blur-sm border border-border/50 p-6 hover:border-border transition-all duration-300 h-[320px]">
+        <div className="rounded-2xl bg-white dark:bg-card/50 backdrop-blur-sm border border-border/50 p-6 hover:border-border transition-all duration-300 h-[320px]">
             <h3 className="text-sm font-medium text-muted-foreground mb-4">{title}</h3>
             <ResponsiveContainer width="100%" height="85%">
                 <AreaChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -90,7 +90,7 @@ const CombinedChart = ({
     data: any[]
 }) => {
     return (
-        <div className="rounded-2xl bg-card/50 backdrop-blur-sm border border-border/50 p-6 hover:border-border transition-all duration-300 h-[400px]">
+        <div className="rounded-2xl bg-white dark:bg-card/50 backdrop-blur-sm border border-border/50 p-6 hover:border-border transition-all duration-300 h-[400px]">
             <h3 className="text-sm font-medium text-muted-foreground mb-4">{title}</h3>
             <ResponsiveContainer width="100%" height="90%">
                 <BarChart data={data} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}>
@@ -173,7 +173,7 @@ const QuickStatCard = ({
     color?: string
 }) => {
     return (
-        <div className="rounded-2xl bg-card/50 backdrop-blur-sm border border-border/50 p-5 hover:border-border transition-all duration-300">
+        <div className="rounded-2xl bg-white dark:bg-card/50 backdrop-blur-sm border border-border/50 p-5 hover:border-border transition-all duration-300">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">{label}</p>
             <p className="text-3xl font-bold" style={{ color }}>{value}</p>
             {subtext && <p className="text-xs text-muted-foreground mt-1">{subtext}</p>}

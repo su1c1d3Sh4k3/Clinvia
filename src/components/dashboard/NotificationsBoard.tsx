@@ -170,7 +170,7 @@ export const NotificationsBoard = () => {
     if (!notifications || notifications.length === 0) return null;
 
     return (
-        <Card className="w-full transition-all duration-300 ease-in-out border-l-4 border-l-primary mb-4 md:mb-6">
+        <Card className="w-full transition-all duration-300 ease-in-out border-l-4 border-l-primary mb-4 md:mb-6 bg-white dark:bg-card">
             <div className="flex items-center justify-between p-3 md:p-4 border-b gap-2">
                 <div className="flex items-center gap-2 min-w-0">
                     <Bell className="h-4 w-4 md:h-5 md:w-5 text-primary flex-shrink-0" />
@@ -211,7 +211,7 @@ export const NotificationsBoard = () => {
                             const Icon = style.icon;
 
                             return (
-                                <Card key={notification.id} className={cn("relative border-l-4 shadow-sm hover:shadow-md transition-shadow", style.color)}>
+                                <Card key={notification.id} className={cn("relative border-l-4 shadow-sm hover:shadow-md transition-shadow bg-white dark:bg-card", style.color)}>
                                     <Button
                                         variant="ghost"
                                         size="icon"

@@ -296,7 +296,7 @@ export function OpportunitiesSection({ onOpportunityClick, onOpportunitySelect, 
     if (compact) {
         // Dashboard view - similar to notifications board
         return (
-            <Card className="w-full transition-all duration-300 ease-in-out border-l-4 border-l-purple-500 mb-4 md:mb-6">
+            <Card className="w-full transition-all duration-300 ease-in-out border-l-4 border-l-purple-500 mb-4 md:mb-6 bg-white dark:bg-card">
                 <div className="flex items-center justify-between p-3 md:p-4 border-b gap-2">
                     <div className="flex items-center gap-2 min-w-0">
                         <Lightbulb className="h-4 w-4 md:h-5 md:w-5 text-purple-500 flex-shrink-0" />

@@ -258,7 +258,7 @@ export function LeadsFunnelPanel() {
                                                     : isGanho
                                                         ? 'hsl(142.1 76.2% 36.3%)'
                                                         : 'hsl(var(--muted))',
-                                                color: isFirst || isGanho ? 'white' : 'inherit',
+                                                color: 'white',
                                                 boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
                                                 minHeight: '100px',
                                                 display: 'flex',
@@ -272,8 +272,8 @@ export function LeadsFunnelPanel() {
                                             <span
                                                 className="text-xs uppercase tracking-wider font-medium mb-2"
                                                 style={{
-                                                    opacity: isFirst || isGanho ? 0.9 : 0.7,
-                                                    color: isFirst || isGanho ? 'white' : 'hsl(var(--muted-foreground))'
+                                                    opacity: 0.9,
+                                                    color: 'white'
                                                 }}
                                             >
                                                 {metric.stage.name}
@@ -281,8 +281,7 @@ export function LeadsFunnelPanel() {
 
                                             {/* Main Number */}
                                             <span
-                                                className="text-2xl sm:text-4xl font-bold tracking-tight"
-                                                style={{ color: isFirst || isGanho ? 'white' : 'hsl(var(--foreground))' }}
+                                                className="text-2xl sm:text-4xl font-bold tracking-tight text-white"
                                             >
                                                 {metric.historyCount.toLocaleString('pt-BR')}
                                             </span>
@@ -292,7 +291,7 @@ export function LeadsFunnelPanel() {
                                                 className="text-xs mt-2"
                                                 style={{
                                                     opacity: 0.7,
-                                                    color: isFirst || isGanho ? 'white' : 'hsl(var(--muted-foreground))'
+                                                    color: 'white'
                                                 }}
                                             >
                                                 ↑ {metric.dealsInStage} atuais
