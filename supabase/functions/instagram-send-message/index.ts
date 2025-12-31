@@ -25,17 +25,19 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 // PAYLOAD (JSON):
 // {
 //   "conversation_id": "uuid",           // REQUIRED - ID da conversa no banco de dados
-//   "message_type": "text" | "audio",    // REQUIRED - Tipo da mensagem
+//   "message_type": "text" | "audio" | "image",    // REQUIRED - Tipo da mensagem
 //   "message_text": "string",            // REQUIRED for text - Texto da mensagem
 //   "audio_url": "https://...",          // REQUIRED for audio - URL pública do arquivo de áudio
+//   "image_url": "https://...",          // REQUIRED for image - URL pública do arquivo de imagem
 // }
 //
 // ALTERNATIVE PAYLOAD (using contact_id instead of conversation_id):
 // {
 //   "contact_id": "uuid",                // ID do contato (busca a conversa ativa automaticamente)
-//   "message_type": "text" | "audio",
+//   "message_type": "text" | "audio" | "image",
 //   "message_text": "string",
-//   "audio_url": "https://..."
+//   "audio_url": "https://...",
+//   "image_url": "https://..."
 // }
 //
 // RESPONSE SUCCESS (200):
@@ -61,9 +63,12 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 //   - SEND_FAILED: Instagram API returned error
 //   - UPLOAD_FAILED: Failed to upload audio to storage
 //
-// AUDIO FORMATS SUPPORTED:
 //   - audio_url: URL pública do arquivo de áudio
 //   - audio_base64: Dados binários em Base64 (campo 'data' do n8n)
+//
+// IMAGE FORMATS SUPPORTED:
+//   - image_url: URL pública do arquivo de imagem (JPEG, PNG, ICO, BMP)
+//
 //
 // =============================================
 
@@ -78,9 +83,10 @@ interface SendMessagePayload {
     // Option 2: Contact reference (will find active conversation)
     contact_id?: string;
     // Message content
-    message_type: 'text' | 'audio';
+    message_type: 'text' | 'audio' | 'image';
     message_text?: string;
     audio_url?: string;
+    image_url?: string;
     // NEW: Audio as base64 binary data (from n8n/IA)
     audio_base64?: string;
     audio_mime_type?: string; // e.g. 'audio/mpeg', defaults to 'audio/mpeg'
@@ -108,6 +114,7 @@ serve(async (req) => {
             message_type = 'text',
             message_text,
             audio_url,
+            image_url,
             audio_base64,
             audio_mime_type = 'audio/mpeg',
             instagram_instance_id: legacyInstanceId,
@@ -128,6 +135,13 @@ serve(async (req) => {
         if (message_type === 'audio' && !audio_url && !audio_base64) {
             return new Response(
                 JSON.stringify({ success: false, error: 'Either audio_url or audio_base64 is required for audio messages', code: 'MISSING_FIELDS' }),
+                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
+
+        if (message_type === 'image' && !image_url) {
+            return new Response(
+                JSON.stringify({ success: false, error: 'image_url is required for image messages', code: 'MISSING_FIELDS' }),
                 { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
         }
@@ -333,6 +347,22 @@ serve(async (req) => {
             };
             messageBody = '[Áudio]';
             console.log('[INSTAGRAM SEND] Sending audio message');
+        } else if (message_type === 'image') {
+            // Image message via attachment
+            messagePayload = {
+                recipient: { id: recipientId },
+                message: {
+                    attachment: {
+                        type: 'image',
+                        payload: {
+                            url: image_url,
+                            is_reusable: false
+                        }
+                    }
+                }
+            };
+            messageBody = '[Imagem]';
+            console.log('[INSTAGRAM SEND] Sending image message');
         } else {
             // Text message
             messagePayload = {
@@ -395,7 +425,7 @@ serve(async (req) => {
                     evolution_id: messageId,
                     user_id: instance.user_id,
                     status: 'sent',
-                    media_url: message_type === 'audio' ? finalAudioUrl : null
+                    media_url: message_type === 'audio' ? finalAudioUrl : (message_type === 'image' ? image_url : null)
                 });
 
             if (dbError) {
