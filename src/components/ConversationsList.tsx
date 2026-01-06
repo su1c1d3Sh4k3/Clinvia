@@ -26,6 +26,7 @@ import { TagAssignment } from "@/components/TagAssignment";
 import { ContactDetailsDialog } from "@/components/ContactDetailsDialog";
 import { ContactModal } from "@/components/ContactModal";
 import { useFollowUpNotifications } from "@/hooks/useFollowUp";
+import { getProxiedImageUrl } from "@/lib/imageProxy";
 
 // Helper to mark follow up as seen on click (instant)
 const markFollowUpAsSeenOnClick = async (conversationId: string, queryClient: any) => {
@@ -540,12 +541,12 @@ export const ConversationsList = ({
 
               if (isGroup && group) {
                 displayName = group.group_name || "Grupo sem Nome";
-                profilePic = group.group_pic_url;
+                profilePic = getProxiedImageUrl(group.group_pic_url);
               } else if (contact) {
                 displayName = (contact.push_name && contact.push_name !== "Unknown")
                   ? contact.push_name
                   : (contact.phone || contact.number?.split("@")[0]);
-                profilePic = contact.profile_pic_url;
+                profilePic = getProxiedImageUrl(contact.profile_pic_url);
               }
 
               const queueName = (conversation as any).queues?.name;

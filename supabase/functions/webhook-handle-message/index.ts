@@ -161,17 +161,14 @@ serve(async (req) => {
 
             // ========== PUSH_NAME (Nome do contato) ==========
             // Prioridade:
-            // 1. chat.name (nome do cliente no WhatsApp)
-            // 2. chat.phone (número formatado como fallback)
-            // 3. 'Desconhecido' (último recurso)
-            const contactName = chatData.name || chatData.phone || 'Desconhecido';
+            // 1. chat.wa_name (nome definido pelo usuário no WhatsApp)
+            // 2. chat.name (nome salvo na lista de contatos do celular)
+            // 3. chat.phone (número formatado como fallback)
+            const contactName = chatData.wa_name || chatData.name || chatData.phone;
 
             // ========== PROFILE_PIC_URL (Foto do perfil) ==========
-            // Prioridade:
-            // 1. chat.image (URL completa/alta qualidade)
-            // 2. chat.imagePreview (URL de preview como fallback)
-            // 3. null
-            const profilePicUrl = chatData.image || chatData.imagePreview || null;
+            // Usar apenas imagePreview para foto de perfil
+            const profilePicUrl = chatData.imagePreview || null;
 
             if (!waNumber) {
                 console.error('[webhook-handle-message] No waNumber found in payload');
@@ -192,18 +189,43 @@ serve(async (req) => {
                 .maybeSingle();
 
             if (contact) {
+                console.log(`[webhook-handle-message] Contact found: ${contact.id}, current photo: ${contact.profile_pic_url}`);
+                console.log(`[webhook-handle-message] New photo from payload: ${profilePicUrl}`);
+
                 // Contato existe - atualizar foto se mudou (sempre permitido)
                 if (profilePicUrl && profilePicUrl !== contact.profile_pic_url) {
-                    await supabase.from('contacts').update({ profile_pic_url: profilePicUrl }).eq('id', contact.id);
+                    console.log(`[webhook-handle-message] Updating profile picture for contact ${contact.id}`);
+                    const { error: photoError } = await supabase
+                        .from('contacts')
+                        .update({ profile_pic_url: profilePicUrl })
+                        .eq('id', contact.id);
+
+                    if (photoError) {
+                        console.error('[webhook-handle-message] Error updating profile picture:', photoError);
+                    } else {
+                        console.log('[webhook-handle-message] Profile picture updated successfully');
+                    }
                 }
+
                 // Atualizar nome APENAS se não foi editado manualmente e não é grupo
                 if (!contact.edited && !contact.is_group && contactName && contactName !== 'Desconhecido' && contactName !== contact.push_name) {
+                    console.log(`[webhook-handle-message] Updating contact name from "${contact.push_name}" to "${contactName}"`);
                     // Verificar se o novo nome tem letras (nome real) - se sim, marcar como edited
                     const hasLetters = /[a-zA-Z]/.test(contactName);
-                    await supabase.from('contacts').update({
+                    const { error: nameError } = await supabase.from('contacts').update({
                         push_name: contactName,
                         edited: hasLetters // Se tem letras, marcar como editado para não sobrescrever
                     }).eq('id', contact.id);
+
+                    if (nameError) {
+                        console.error('[webhook-handle-message] Error updating contact name:', nameError);
+                    } else {
+                        console.log(`[webhook-handle-message] Contact name updated successfully, edited flag set to: ${hasLetters}`);
+                    }
+                } else if (contact.edited) {
+                    console.log(`[webhook-handle-message] Skipping name update - contact was manually edited`);
+                } else if (contact.is_group) {
+                    console.log(`[webhook-handle-message] Skipping name update - contact is a group`);
                 }
             } else {
                 // Criar novo contato

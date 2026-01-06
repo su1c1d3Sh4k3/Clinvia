@@ -421,7 +421,7 @@ export const NavigationSidebar = () => {
           />
           {/* Brand name - visible when expanded (desktop hover) or mobile */}
           <img
-            src="/logo-name.png"
+            src={theme === "dark" ? "/clinvia-text-dark.png" : "/clinvia-text-light.png"}
             alt="Clinvia"
             className={cn(
               "h-7 w-auto object-contain",

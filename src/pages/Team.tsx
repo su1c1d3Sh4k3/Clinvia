@@ -399,14 +399,14 @@ export default function Team() {
                                             >
                                                 <Pencil className="h-3.5 w-3.5 md:h-4 md:w-4" />
                                             </Button>
-                                            {userRole === "admin" && (
+                                            {userRole === "admin" && member.role !== "admin" && (
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
                                                     className="text-destructive hover:text-destructive h-7 w-7 md:h-8 md:w-8"
                                                     onClick={() => {
                                                         if (confirm("Tem certeza que deseja remover este membro?")) {
-                                                            deleteMemberMutation.mutate(member.user_id);
+                                                            deleteMemberMutation.mutate(member.auth_user_id);
                                                         }
                                                     }}
                                                 >

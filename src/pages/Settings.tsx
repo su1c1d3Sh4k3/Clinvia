@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -8,7 +9,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
-import { User, Building2, Lock, Camera, Loader2, Bell, BellRing, Users, Volume2, DollarSign, Settings as SettingsIcon, Pen, Download, Smartphone, Monitor, CheckCircle2, Calendar, ListTodo, TrendingUp, Lightbulb, ChevronDown, ChevronUp } from "lucide-react";
+import { User, Building2, Lock, Camera, Loader2, Bell, BellRing, Users, Volume2, DollarSign, Settings as SettingsIcon, Pen, Download, Smartphone, Monitor, CheckCircle2, Calendar, ListTodo, TrendingUp, Lightbulb, ChevronDown, ChevronUp, AlertCircle } from "lucide-react";
 import { FaInstagram } from "react-icons/fa";
 import { Switch } from "@/components/ui/switch";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -16,8 +17,22 @@ import { useCurrentTeamMember } from "@/hooks/useStaff";
 import { useInstallPWA } from "@/hooks/useInstallPWA";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { useNavigate } from "react-router-dom";
 
 export default function Settings() {
+    const navigate = useNavigate();
+    const queryClient = useQueryClient();
     const { user } = useAuth();
     const { data: userRole } = useUserRole();
     const { data: currentTeamMember } = useCurrentTeamMember();
@@ -44,6 +59,10 @@ export default function Settings() {
     const [instagramNotificationsEnabled, setInstagramNotificationsEnabled] = useState(true);
     const [financialAccessEnabled, setFinancialAccessEnabled] = useState(true);
     const [signMessagesEnabled, setSignMessagesEnabled] = useState(true);
+
+    // Delete account states
+    const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+    const [deleteLoading, setDeleteLoading] = useState(false);
 
     // PWA install hook
     const { isInstallable, isInstalled, isIOS, installApp, showIOSInstructions } = useInstallPWA();
@@ -144,6 +163,7 @@ export default function Settings() {
 
             if (error) throw error;
 
+            queryClient.invalidateQueries({ queryKey: ["current-team-member"] });
             toast.success("Perfil atualizado com sucesso!");
         } catch (error: any) {
             toast.error("Erro ao atualizar perfil");
@@ -259,6 +279,7 @@ export default function Settings() {
                 }
             }
 
+            queryClient.invalidateQueries({ queryKey: ["current-team-member"] });
             toast.success("Preferências de notificação atualizadas!");
         } catch (error: any) {
             toast.error("Erro ao atualizar notificações");
@@ -310,6 +331,7 @@ export default function Settings() {
 
             if (error) throw error;
 
+            queryClient.invalidateQueries({ queryKey: ["current-team-member"] });
             toast.success(newValue ? "Assinatura de mensagens ativada!" : "Assinatura de mensagens desativada!");
         } catch (error: any) {
             setSignMessagesEnabled(!newValue); // Revert
@@ -317,6 +339,55 @@ export default function Settings() {
             console.error(error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const deleteAccount = async () => {
+        try {
+            setDeleteLoading(true);
+
+            // Obter ID do usuário atual (admin)
+            const currentUserId = user?.id;
+
+            if (!currentUserId) {
+                toast.error("Erro: usuário não identificado");
+                return;
+            }
+
+            // Verificar se é admin
+            if (userRole !== 'admin') {
+                toast.error("Apenas administradores podem excluir a conta");
+                return;
+            }
+
+            // Chamar Edge Function para deletar conta
+            const { data, error } = await supabase.functions.invoke(
+                "delete-admin-account",
+                { body: { userId: currentUserId } }
+            );
+
+            if (error) {
+                throw error;
+            }
+
+            if (data?.error) {
+                throw new Error(data.error);
+            }
+
+            // Deslogar usuário
+            await supabase.auth.signOut();
+
+            toast.success("Conta excluída com sucesso");
+
+            // Redirecionar para página de login
+            navigate("/auth");
+
+        } catch (error: any) {
+            console.error("Erro ao deletar conta:", error);
+            toast.error("Erro ao deletar conta: " + error.message);
+        } finally {
+            setDeleteLoading(false);
+            setShowDeleteDialog(false);
         }
     };
 
@@ -679,7 +750,7 @@ export default function Settings() {
                                             <Pen className="h-4 w-4 md:h-5 md:w-5 text-primary" />
                                         </div>
                                         <div className="space-y-0.5">
-                                            <h4 className="font-medium text-sm md:text-base">Assinar msgs</h4>
+                                            <h4 className="font-medium text-sm md:text-base">Assinar mensagens</h4>
                                             <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">
                                                 Seu nome será enviado com as mensagens.
                                             </p>
@@ -899,6 +970,66 @@ export default function Settings() {
                                         </Button>
                                     )}
                                 </div>
+                            )}
+
+                            {/* Separator */}
+                            <div className="border-t my-4" />
+
+                            {/* Delete Account Section - APENAS ADMIN */}
+                            {userRole === 'admin' && (
+                                <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+                                    <AlertDialogTrigger asChild>
+                                        <div className="flex items-center justify-between p-3 md:p-4 border-2 border-destructive/50 rounded-lg bg-destructive/5 hover:bg-destructive/10 transition-colors cursor-pointer gap-3">
+                                            <div className="flex items-center gap-3 md:gap-4">
+                                                <div className="p-1.5 md:p-2 bg-destructive/20 rounded-full">
+                                                    <AlertCircle className="h-4 w-4 md:h-5 md:w-5 text-destructive" />
+                                                </div>
+                                                <div className="space-y-0.5">
+                                                    <h4 className="font-medium text-sm md:text-base text-destructive">Excluir conta</h4>
+                                                    <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">
+                                                        Deletar permanentemente todos os dados
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                            <AlertDialogTitle className="text-destructive flex items-center gap-2">
+                                                <AlertCircle className="h-5 w-5" />
+                                                Confirmar Exclusão de Conta
+                                            </AlertDialogTitle>
+                                            <AlertDialogDescription className="text-base leading-relaxed pt-2">
+                                                A exclusão deletará <strong className="text-foreground">TODOS</strong> os seus dados de forma <strong className="text-foreground">definitiva e irreversível</strong>, não sendo mais possível restaurá-los.
+                                                <br /><br />
+                                                Isso inclui:
+                                                <ul className="list-disc list-inside mt-2 space-y-1">
+                                                    <li>Todos os membros da equipe (supervisores e agentes)</li>
+                                                    <li>Todas as conversas e mensagens</li>
+                                                    <li>Todos os contatos</li>
+                                                    <li>Todos os dados financeiros (receitas, despesas)</li>
+                                                    <li>Todos os dados do CRM e agendamentos</li>
+                                                </ul>
+                                                <br />
+                                                <strong className="text-destructive">Tem certeza que deseja continuar?</strong>
+                                            </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                            <AlertDialogCancel disabled={deleteLoading}>Não</AlertDialogCancel>
+                                            <AlertDialogAction
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    deleteAccount();
+                                                }}
+                                                disabled={deleteLoading}
+                                                className="bg-destructive hover:bg-destructive/90"
+                                            >
+                                                {deleteLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                                Sim, excluir permanentemente
+                                            </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                </AlertDialog>
                             )}
 
                         </CardContent>

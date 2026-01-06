@@ -56,9 +56,9 @@ const Auth = () => {
         <CardHeader className="text-center space-y-2 pb-6">
           <div className="mx-auto mb-2">
             <img
-              src="/logo-dark.png"
+              src="/clinvia-logo-full.png"
               alt="Clinvia"
-              className="h-24 w-auto object-contain"
+              className="h-12 w-auto object-contain"
             />
           </div>
           <CardDescription className="text-white/70 text-base">

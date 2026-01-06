@@ -37,6 +37,7 @@ import { EmojiPickerStandalone } from "@/components/EmojiReactionPicker";
 import { ReplyQuoteBox, QuotedMessage } from "@/components/ReplyQuoteBox";
 import { LazyMedia } from "@/components/LazyMedia";
 import { uzapi } from "@/lib/uzapi";
+import { getProxiedImageUrl } from "@/lib/imageProxy";
 
 // Performance: Limit messages rendered at once
 const MESSAGES_PER_PAGE = 50;
@@ -1211,14 +1212,16 @@ export const ChatArea = ({
                         className="self-center"
                       />
                     )}
+
+                    {/* Avatar para mensagens enviadas */}
+                    {msg.direction === "outbound" && (
+                      <Avatar className="w-8 h-8">
+                        <AvatarImage src={instance?.profile_pic_url || undefined} />
+                        <AvatarFallback>EU</AvatarFallback>
+                      </Avatar>
+                    )}
                   </div>
 
-                  {msg.direction === "outbound" && (
-                    <Avatar className="w-8 h-8">
-                      <AvatarImage src={profile?.avatar_url || undefined} />
-                      <AvatarFallback>{profile?.first_name?.[0]?.toUpperCase() || 'EU'}</AvatarFallback>
-                    </Avatar>
-                  )}
                 </div>
               );
             })}

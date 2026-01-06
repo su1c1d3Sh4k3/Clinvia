@@ -12,15 +12,15 @@ export function NotificationManager() {
     const navigate = useNavigate();
     const audioContextRef = useRef<AudioContext | null>(null);
 
-    // Fetch user preferences
+    // Fetch user preferences from team_members (not profiles)
     const { data: preferences } = useQuery({
         queryKey: ["notification-preferences", user?.id],
         queryFn: async () => {
             if (!user) return null;
             const { data } = await supabase
-                .from("profiles")
+                .from("team_members")
                 .select("notifications_enabled, group_notifications_enabled")
-                .eq("id", user.id)
+                .eq("auth_user_id", user.id)
                 .single();
             return data;
         },

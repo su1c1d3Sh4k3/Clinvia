@@ -1,8 +1,8 @@
-import { useMemo, useRef, useEffect } from "react";
+import { useMemo, useRef, useEffect, useState } from "react";
 import { format, addMinutes, startOfDay, differenceInMinutes, parseISO, isSameDay } from "date-fns";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
-import { ThumbsUp, Clock, X, Check, Pen } from "lucide-react";
+import { ThumbsUp, Clock, X, Check, Pen, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface SchedulingCalendarProps {
@@ -25,6 +25,21 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
     const endHour = settings?.end_hour ?? 22;
     const workDays = settings?.work_days ?? [0, 1, 2, 3, 4, 5, 6];
     const isDayBlocked = !workDays.includes(date.getDay());
+
+    // Pagination state for 5+ professionals
+    const [startIndex, setStartIndex] = useState(0);
+    const MAX_VISIBLE = 4;
+    const needsPagination = professionals.length > MAX_VISIBLE;
+
+    // Calculate visible professionals window
+    const visibleProfessionals = needsPagination
+        ? professionals.slice(startIndex, startIndex + MAX_VISIBLE)
+        : professionals;
+
+    // Reset to first when date changes
+    useEffect(() => {
+        setStartIndex(0);
+    }, [date]);
 
     // Refs for syncing horizontal scroll between header and body on mobile
     const headerRef = useRef<HTMLDivElement>(null);
@@ -95,11 +110,11 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
             {/* Header - Synced horizontal scroll on mobile */}
             <div
                 ref={headerRef}
-                className="flex border-b overflow-x-auto [&::-webkit-scrollbar]:hidden"
+                className={cn("flex border-b", !needsPagination && "overflow-x-auto [&::-webkit-scrollbar]:hidden")}
                 onScroll={handleHeaderScroll}
             >
                 <div className="w-12 md:w-16 shrink-0 border-r bg-muted/50" /> {/* Time column header */}
-                {professionals.map((professional) => (
+                {visibleProfessionals.map((professional) => (
                     <div key={professional.id} className="flex-1 p-2 md:p-4 flex flex-row items-center justify-center gap-2 md:gap-3 border-r last:border-r-0 bg-muted/20 min-w-[120px] md:min-w-[150px] relative group/header">
                         <Avatar className="w-8 h-8 md:w-12 md:h-12">
                             <AvatarImage src={professional.photo_url} />
@@ -129,7 +144,7 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
             {/* Body - Synced horizontal scroll on mobile */}
             <div
                 ref={bodyRef}
-                className="flex-1 overflow-x-auto overflow-y-auto relative scrollbar-none"
+                className={cn("flex-1 overflow-y-auto relative scrollbar-none", !needsPagination && "overflow-x-auto")}
                 style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
                 onScroll={handleBodyScroll}
             >
@@ -144,7 +159,7 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                     </div>
 
                     {/* Columns */}
-                    {professionals.map((professional) => (
+                    {visibleProfessionals.map((professional) => (
                         <div key={professional.id} className="flex-1 border-r last:border-r-0 relative min-w-[120px] md:min-w-[150px] group">
                             {/* Grid Lines */}
                             {timeSlots.map((hour) => {
@@ -332,6 +347,30 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                     ))}
                 </div>
             </div>
+
+            {/* Pagination Controls */}
+            {needsPagination && (
+                <div className="flex items-center justify-end gap-2 p-2 border-t bg-muted/10">
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8"
+                        disabled={startIndex === 0}
+                        onClick={() => setStartIndex(prev => prev - 1)}
+                    >
+                        <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8"
+                        disabled={startIndex >= professionals.length - MAX_VISIBLE}
+                        onClick={() => setStartIndex(prev => prev + 1)}
+                    >
+                        <ChevronRight className="h-4 w-4" />
+                    </Button>
+                </div>
+            )}
         </div>
     );
 }
