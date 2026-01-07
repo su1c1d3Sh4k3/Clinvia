@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { trackTokenUsage, getOwnerFromConversation, makeOpenAIRequest } from "../_shared/token-tracker.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -15,18 +16,20 @@ serve(async (req) => {
     const { conversationId, conversationText } = await req.json();
     console.log('📝 Summary request received for conversation:', conversationId);
 
-    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
-    if (!OPENAI_API_KEY) {
-      throw new Error('OPENAI_API_KEY not configured in Edge Function secrets');
+    // Create supabase client early for token lookup
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Get owner ID early for custom token lookup
+    let ownerId: string | null = null;
+    if (conversationId) {
+      ownerId = await getOwnerFromConversation(supabase, conversationId);
     }
 
     // Se conversationText não foi enviado, buscar do banco
     let textToAnalyze = conversationText;
     if (!textToAnalyze && conversationId) {
-      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-      const supabase = createClient(supabaseUrl, supabaseKey);
-
       console.log(`Fetching messages for conversation: ${conversationId}`);
 
       const { data: messages, error: messagesError } = await supabase
@@ -86,13 +89,10 @@ serve(async (req) => {
 
     console.log('Sending request to OpenAI...');
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`
-      },
-      body: JSON.stringify({
+    // Use makeOpenAIRequest with custom token support
+    const { response, usedCustomToken } = await makeOpenAIRequest(supabase, ownerId, {
+      endpoint: 'https://api.openai.com/v1/chat/completions',
+      body: {
         model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: 'Você é um analista de qualidade de atendimento.' },
@@ -100,8 +100,10 @@ serve(async (req) => {
         ],
         temperature: 0.7,
         max_tokens: 1000
-      })
+      }
     });
+
+    console.log(`[ai-generate-summary] Used ${usedCustomToken ? 'custom' : 'default'} OpenAI token`);
 
     if (!response.ok) {
       const errorData = await response.json();
@@ -133,9 +135,16 @@ serve(async (req) => {
 
     console.log('Parsed analysis:', analysis);
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    // Track token usage (always track, regardless of which token was used)
+    if (data.usage && ownerId) {
+      await trackTokenUsage(supabase, {
+        ownerId,
+        teamMemberId: null,
+        functionName: 'ai-generate-summary',
+        model: 'gpt-4o-mini',
+        usage: data.usage
+      });
+    }
 
     // Save to database (ai_analysis)
     console.log('Saving to ai_analysis table...');

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { trackTokenUsage, getOwnerFromConversation } from "../_shared/token-tracker.ts";
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -132,6 +133,20 @@ Responda APENAS um número inteiro de 0 a 10.`;
             // We don't throw here to ensure the score is still returned to UI
         } else {
             console.log('Score saved to DB successfully');
+        }
+
+        // Track token usage
+        if (data.usage && conversationId) {
+            const ownerId = await getOwnerFromConversation(supabaseAdmin, conversationId);
+            if (ownerId) {
+                await trackTokenUsage(supabaseAdmin, {
+                    ownerId,
+                    teamMemberId: null,
+                    functionName: 'ai-sentiment-analysis',
+                    model: 'gpt-4o-mini',
+                    usage: data.usage
+                });
+            }
         }
 
         return new Response(

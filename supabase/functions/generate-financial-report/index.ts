@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { trackTokenUsage } from "../_shared/token-tracker.ts";
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -413,6 +414,17 @@ FORMATO DE RESPOSTA: Retorne APENAS o JSON válido, sem markdown ou texto adicio
         }
 
         console.log('[generate-financial-report] Report saved successfully:', savedReport.id);
+
+        // Track token usage
+        if (openaiData.usage) {
+            await trackTokenUsage(supabase, {
+                ownerId,
+                teamMemberId: null,
+                functionName: 'generate-financial-report',
+                model: 'gpt-4o',
+                usage: openaiData.usage
+            });
+        }
 
         return new Response(
             JSON.stringify({

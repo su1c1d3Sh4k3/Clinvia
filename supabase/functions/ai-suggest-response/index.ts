@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { trackTokenUsage, getOwnerFromConversation, makeOpenAIRequest } from "../_shared/token-tracker.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -13,10 +14,15 @@ serve(async (req) => {
 
   try {
     const { conversationId, mode = 'generate', text } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Get owner ID early for custom token lookup
+    let ownerId: string | null = null;
+    if (conversationId) {
+      ownerId = await getOwnerFromConversation(supabase, conversationId);
+    }
 
     let systemPrompt = "";
     let userPrompt = "";
@@ -60,23 +66,39 @@ serve(async (req) => {
       userPrompt = "Sugira uma resposta adequada para o momento atual da conversa.";
     }
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+    // Use makeOpenAIRequest with custom token support
+    const { response, usedCustomToken } = await makeOpenAIRequest(supabase, ownerId, {
+      endpoint: "https://api.openai.com/v1/chat/completions",
+      body: {
+        model: "gpt-4.1",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
         ],
-      }),
+      },
     });
+
+    console.log(`[ai-suggest-response] Used ${usedCustomToken ? 'custom' : 'default'} OpenAI token`);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("OpenAI API error:", response.status, errorText);
+      throw new Error(`OpenAI API error: ${response.status}`);
+    }
 
     const data = await response.json();
     const suggestion = data.choices[0].message.content;
+
+    // Track token usage (always track, regardless of which token was used)
+    if (data.usage && ownerId) {
+      await trackTokenUsage(supabase, {
+        ownerId,
+        teamMemberId: null,
+        functionName: 'ai-suggest-response',
+        model: 'gpt-4.1',
+        usage: data.usage
+      });
+    }
 
     return new Response(JSON.stringify({ suggestion }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

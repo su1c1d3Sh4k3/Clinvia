@@ -22,6 +22,8 @@ import IAConfig from "./pages/IAConfig";
 import Settings from "./pages/Settings";
 import Financial from "./pages/Financial";
 import FollowUp from "./pages/FollowUp";
+import Admin from "./pages/Admin";
+import AdminAuth from "./pages/AdminAuth";
 import { Layout } from "./components/Layout";
 import { NotificationManager } from "./components/NotificationManager";
 import { AutoFollowUpProcessor } from "./components/AutoFollowUpProcessor";
@@ -44,6 +46,8 @@ const App = () => (
 
               <Route path="/auth" element={<Auth />} />
               <Route path="/login" element={<Navigate to="/auth" replace />} />
+              <Route path="/admin-oath" element={<AdminAuth />} />
+              <Route path="/admin" element={<Admin />} />
               <Route element={<Layout />}>
                 <Route path="/" element={<Index />} />
                 <Route path="/dashboard" element={<Dashboard />} />

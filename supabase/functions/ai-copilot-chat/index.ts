@@ -1,4 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
+import { trackTokenUsage, getOwnerFromConversation, makeOpenAIRequest } from "../_shared/token-tracker.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,12 +14,19 @@ serve(async (req) => {
 
   try {
     const { message, conversationId, userId } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
+    // Create Supabase admin client for tracking
+    const supabaseAdmin = createClient(
+      SUPABASE_URL ?? "",
+      SUPABASE_SERVICE_ROLE_KEY ?? ""
+    );
+
     let context = "";
     let systemPrompt = "";
+    let ownerId: string | null = null;
+    let teamMemberId: string | null = null;
 
     // Fetch Copilot Settings if userId is provided
     if (userId && SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
@@ -43,9 +52,31 @@ serve(async (req) => {
             Ajudar o agente a resolver o problema do cliente da forma mais rápida e eficiente possível.`;
           }
         }
+
+        // Get owner_id from team_members table
+        const ownerUrl = `${SUPABASE_URL}/rest/v1/team_members?auth_user_id=eq.${userId}&select=id,user_id`;
+        const ownerResponse = await fetch(ownerUrl, {
+          headers: {
+            "apikey": SUPABASE_SERVICE_ROLE_KEY,
+            "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+          }
+        });
+
+        if (ownerResponse.ok) {
+          const ownerData = await ownerResponse.json();
+          if (ownerData && ownerData.length > 0) {
+            ownerId = ownerData[0].user_id;
+            teamMemberId = ownerData[0].id;
+          }
+        }
       } catch (err) {
         console.error("Error fetching copilot settings:", err);
       }
+    }
+
+    // Fallback: try to get owner from conversation
+    if (!ownerId && conversationId) {
+      ownerId = await getOwnerFromConversation(supabaseAdmin, conversationId);
     }
 
     // Default prompt if no settings found or fetch failed
@@ -79,14 +110,11 @@ serve(async (req) => {
       }
     }
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+    // Call OpenAI API with GPT-4.1 (with custom token support)
+    const { response, usedCustomToken } = await makeOpenAIRequest(supabaseAdmin, ownerId, {
+      endpoint: "https://api.openai.com/v1/chat/completions",
+      body: {
+        model: "gpt-4.1",
         messages: [
           {
             role: "system",
@@ -103,16 +131,39 @@ serve(async (req) => {
           },
           { role: "user", content: message }
         ],
-      }),
+      },
     });
+
+    console.log(`[ai-copilot-chat] Used ${usedCustomToken ? 'custom' : 'default'} OpenAI token`);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("OpenAI API error:", response.status, errorText);
+      throw new Error(`OpenAI API error: ${response.status}`);
+    }
 
     const data = await response.json();
     const aiResponse = data.choices[0].message.content;
 
-    return new Response(JSON.stringify({ response: aiResponse }), {
+    // Track token usage (always track, regardless of which token was used)
+    if (data.usage && ownerId) {
+      await trackTokenUsage(supabaseAdmin, {
+        ownerId,
+        teamMemberId,
+        functionName: 'ai-copilot-chat',
+        model: 'gpt-4.1',
+        usage: data.usage
+      });
+    }
+
+    return new Response(JSON.stringify({
+      response: aiResponse,
+      usage: data.usage
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error: any) {
+    console.error("Error in ai-copilot-chat:", error);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

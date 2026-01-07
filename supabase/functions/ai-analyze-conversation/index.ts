@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { trackTokenUsage } from "../_shared/token-tracker.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -138,6 +139,17 @@ Retorne APENAS um JSON no formato: { "score": number }`
 
     if (convUpdateError) {
       console.error('Error updating conversation sentiment_score:', convUpdateError);
+    }
+
+    // Track token usage
+    if (aiData.usage && targetUserId) {
+      await trackTokenUsage(supabase, {
+        ownerId: targetUserId,
+        teamMemberId: null,
+        functionName: 'ai-analyze-conversation',
+        model: 'gpt-4o-mini',
+        usage: aiData.usage
+      });
     }
 
     console.log(`Analyzed conversation ${conversationId}: score ${sentimentScore}`);

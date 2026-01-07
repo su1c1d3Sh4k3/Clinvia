@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { trackTokenUsage } from "../_shared/token-tracker.ts";
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -89,6 +90,17 @@ serve(async (req) => {
             .eq('id', contactId);
 
         if (updateError) throw updateError;
+
+        // Track token usage (use contact.user_id as owner)
+        if (data.usage && contact.user_id) {
+            await trackTokenUsage(supabase, {
+                ownerId: contact.user_id,
+                teamMemberId: null,
+                functionName: 'generate-client-report',
+                model: 'gpt-4-turbo',
+                usage: data.usage
+            });
+        }
 
         return new Response(
             JSON.stringify({ success: true, report: reportContent }),

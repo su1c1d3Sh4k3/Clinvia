@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { trackTokenUsage } from "../_shared/token-tracker.ts";
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -92,6 +93,17 @@ serve(async (req) => {
                 } catch (e) {
                     console.error("Error parsing AI response", e);
                 }
+            }
+
+            // Track token usage
+            if (data.usage && conversationUserId) {
+                await trackTokenUsage(supabase, {
+                    ownerId: conversationUserId,
+                    teamMemberId: null,
+                    functionName: 'resolve-ticket',
+                    model: 'gpt-4-turbo',
+                    usage: data.usage
+                });
             }
         }
 

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { trackTokenUsage } from "../_shared/token-tracker.ts";
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -81,6 +82,17 @@ serve(async (req) => {
 
         const data = await response.json();
         const evaluation = data.choices[0].message.content;
+
+        // Track token usage (copilot settings owner or first available)
+        if (data.usage && copilotSettings?.user_id) {
+            await trackTokenUsage(supabaseClient, {
+                ownerId: copilotSettings.user_id,
+                teamMemberId: null,
+                functionName: 'evaluate-agent',
+                model: 'gpt-4o-mini',
+                usage: data.usage
+            });
+        }
 
         return new Response(
             JSON.stringify({ evaluation }),
