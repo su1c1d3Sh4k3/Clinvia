@@ -52,12 +52,37 @@ serve(async (req) => {
         }
 
         const statusData = await statusResponse.json();
-        console.log('Connection state:', statusData);
+
+        // ===== DEBUG: Log full UzAPI response =====
+        console.log('========== UZAPI FULL RESPONSE DEBUG ==========');
+        console.log('Raw statusData type:', typeof statusData);
+        console.log('Raw statusData:', JSON.stringify(statusData, null, 2));
+        console.log('Is Array:', Array.isArray(statusData));
 
         // Handle Array Response
         const responseItem = Array.isArray(statusData) ? statusData[0] : statusData;
+        console.log('responseItem:', JSON.stringify(responseItem, null, 2));
+
         const instanceData = responseItem.instance || {};
         const statusInfo = responseItem.status || {};
+
+        console.log('instanceData:', JSON.stringify(instanceData, null, 2));
+        console.log('statusInfo:', JSON.stringify(statusInfo, null, 2));
+        console.log('All keys in responseItem:', Object.keys(responseItem));
+        console.log('All keys in instanceData:', Object.keys(instanceData));
+
+        // Check for profile picture in different possible locations
+        console.log('===== PROFILE PICTURE SEARCH =====');
+        console.log('instanceData.profilePicUrl:', instanceData.profilePicUrl);
+        console.log('instanceData.profilePictureUrl:', instanceData.profilePictureUrl);
+        console.log('instanceData.profilePic:', instanceData.profilePic);
+        console.log('instanceData.picture:', instanceData.picture);
+        console.log('instanceData.photo:', instanceData.photo);
+        console.log('instanceData.avatar:', instanceData.avatar);
+        console.log('responseItem.profilePicUrl:', responseItem.profilePicUrl);
+        console.log('responseItem.profilePictureUrl:', responseItem.profilePictureUrl);
+        console.log('statusInfo.profilePicUrl:', statusInfo.profilePicUrl);
+        console.log('========================================');
 
         // Map Status
         let uzapiStatus = instanceData.status;
@@ -87,7 +112,7 @@ serve(async (req) => {
 
                     const { data: uploadData, error: uploadError } = await supabaseClient
                         .storage
-                        .from('avatar')
+                        .from('avatars')
                         .upload(fileName, picBlob, {
                             contentType: 'image/jpeg',
                             upsert: true
@@ -98,7 +123,7 @@ serve(async (req) => {
                     } else {
                         const { data: publicUrlData } = supabaseClient
                             .storage
-                            .from('avatar')
+                            .from('avatars')
                             .getPublicUrl(fileName);
 
                         profilePicUrl = publicUrlData.publicUrl;
