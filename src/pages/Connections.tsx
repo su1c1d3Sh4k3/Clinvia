@@ -89,6 +89,7 @@ const Connections = () => {
     useEffect(() => {
         const code = searchParams.get('code');
         const error = searchParams.get('error');
+        const returnedState = searchParams.get('state');
 
         if (error) {
             toast({
@@ -96,12 +97,72 @@ const Connections = () => {
                 description: searchParams.get('error_description') || "O usuário cancelou a autorização.",
                 variant: "destructive"
             });
-            // Clean URL
+            // Clean URL and state
+            localStorage.removeItem('instagram_oauth_state');
             navigate('/connections', { replace: true });
             return;
         }
 
         if (code && user?.id && !isConnectingInstagram) {
+            // SECURITY: Validate state parameter to prevent cross-user credential leakage
+            const storedState = localStorage.getItem('instagram_oauth_state');
+
+            if (!storedState || !returnedState) {
+                console.error('[Instagram OAuth] SECURITY WARNING: Missing state parameter');
+                toast({
+                    title: "Erro de segurança",
+                    description: "Parâmetro de estado ausente. Por favor, tente conectar novamente.",
+                    variant: "destructive"
+                });
+                localStorage.removeItem('instagram_oauth_state');
+                navigate('/connections', { replace: true });
+                return;
+            }
+
+            if (storedState !== returnedState) {
+                console.error('[Instagram OAuth] SECURITY WARNING: State mismatch! Possible cross-user attack.');
+                console.error('[Instagram OAuth] Stored state:', storedState);
+                console.error('[Instagram OAuth] Returned state:', returnedState);
+                toast({
+                    title: "Erro de segurança",
+                    description: "Falha na validação de estado. Sessão pode ter sido comprometida. Tente novamente.",
+                    variant: "destructive"
+                });
+                localStorage.removeItem('instagram_oauth_state');
+                navigate('/connections', { replace: true });
+                return;
+            }
+
+            // Validate that the state contains the current user's ID
+            try {
+                const stateData = JSON.parse(atob(storedState));
+                if (stateData.user_id !== user.id) {
+                    console.error('[Instagram OAuth] SECURITY WARNING: User ID mismatch in state!');
+                    console.error('[Instagram OAuth] State user_id:', stateData.user_id);
+                    console.error('[Instagram OAuth] Current user_id:', user.id);
+                    toast({
+                        title: "Erro de segurança",
+                        description: "A sessão do Instagram não corresponde ao usuário atual. Faça login novamente e tente conectar.",
+                        variant: "destructive"
+                    });
+                    localStorage.removeItem('instagram_oauth_state');
+                    navigate('/connections', { replace: true });
+                    return;
+                }
+            } catch (e) {
+                console.error('[Instagram OAuth] Failed to parse state:', e);
+                toast({
+                    title: "Erro de segurança",
+                    description: "Estado de autenticação inválido. Tente conectar novamente.",
+                    variant: "destructive"
+                });
+                localStorage.removeItem('instagram_oauth_state');
+                navigate('/connections', { replace: true });
+                return;
+            }
+
+            // State validated successfully, proceed with callback
+            localStorage.removeItem('instagram_oauth_state');
             handleInstagramOAuthCallback(code);
         }
     }, [searchParams, user?.id]);
@@ -161,6 +222,15 @@ const Connections = () => {
     };
 
     const handleConnectInstagram = () => {
+        if (!user?.id) {
+            toast({
+                title: "Erro",
+                description: "Você precisa estar logado para conectar o Instagram",
+                variant: "destructive"
+            });
+            return;
+        }
+
         // IMPORTANT: redirect_uri must EXACTLY match Meta Dashboard
         // Meta Dashboard forces trailing slash
         const redirectUri = 'https://app.clinvia.ai/';
@@ -173,8 +243,24 @@ const Connections = () => {
             'instagram_business_content_publish'
         ].join(',');
 
-        // Instagram OAuth endpoint - DO NOT use encodeURIComponent on redirect_uri
-        const authUrl = `https://www.instagram.com/oauth/authorize?client_id=${INSTAGRAM_APP_ID}&redirect_uri=${redirectUri}&response_type=code&scope=${scopes}`;
+        // Generate state parameter with user_id for security
+        // This prevents cross-user credential leakage
+        const stateData = {
+            user_id: user.id,
+            timestamp: Date.now(),
+            nonce: Math.random().toString(36).substring(7)
+        };
+        const state = btoa(JSON.stringify(stateData));
+
+        // Store state in localStorage for validation on callback
+        localStorage.setItem('instagram_oauth_state', state);
+
+        console.log('[Instagram OAuth] Starting OAuth flow for user:', user.id);
+
+        // Instagram OAuth endpoint
+        // IMPORTANT: Adding state parameter to validate callback
+        // auth_type=reauthenticate forces a fresh login
+        const authUrl = `https://www.instagram.com/oauth/authorize?client_id=${INSTAGRAM_APP_ID}&redirect_uri=${redirectUri}&response_type=code&scope=${scopes}&auth_type=reauthenticate&state=${encodeURIComponent(state)}`;
 
         console.log('[Instagram OAuth] Redirecting to:', authUrl);
 

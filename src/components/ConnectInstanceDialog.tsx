@@ -13,7 +13,6 @@ interface ConnectInstanceDialogProps {
     onConnect: (phone: string) => Promise<void>;
     pairCode: string | null;
     isLoading: boolean;
-    onConfirm: () => void;
 }
 
 export const ConnectInstanceDialog = ({
@@ -22,8 +21,7 @@ export const ConnectInstanceDialog = ({
     instanceName,
     onConnect,
     pairCode,
-    isLoading,
-    onConfirm
+    isLoading
 }: ConnectInstanceDialogProps) => {
     const [phone, setPhone] = useState("");
     const { toast } = useToast();
@@ -78,32 +76,8 @@ export const ConnectInstanceDialog = ({
     };
 
     return (
-        <Dialog
-            open={open}
-            onOpenChange={(newOpen) => {
-                // BLOCK closing while pairCode is displayed - user MUST click "Confirmar Conexão"
-                if (pairCode && !newOpen) {
-                    console.log('[ConnectInstanceDialog] Blocking close - pairCode active, user must click Confirmar Conexão');
-                    return; // Prevent close
-                }
-                onOpenChange(newOpen);
-            }}
-        >
-            <DialogContent
-                className="sm:max-w-md"
-                onInteractOutside={(e) => {
-                    // Prevent closing on click outside when pairCode active
-                    if (pairCode) {
-                        e.preventDefault();
-                    }
-                }}
-                onEscapeKeyDown={(e) => {
-                    // Prevent closing on ESC when pairCode active
-                    if (pairCode) {
-                        e.preventDefault();
-                    }
-                }}
-            >
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-md">
                 <DialogHeader>
                     <DialogTitle>Conectar {instanceName}</DialogTitle>
                     <DialogDescription>
@@ -134,18 +108,10 @@ export const ConnectInstanceDialog = ({
                                 <p>
                                     Em instantes você receberá uma notificação no WhatsApp para realizar a conexão com a plataforma. Digite esse código e confirme.
                                 </p>
+                                <p className="text-xs text-muted-foreground/70">
+                                    O modal fechará automaticamente quando a conexão for estabelecida.
+                                </p>
                             </div>
-
-                            <Button onClick={onConfirm} className="w-full" disabled={isLoading}>
-                                {isLoading ? (
-                                    <>
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        Configurando...
-                                    </>
-                                ) : (
-                                    "Confirmar Conexão"
-                                )}
-                            </Button>
                         </div>
                     ) : (
                         <form onSubmit={handleSubmit} className="space-y-4">

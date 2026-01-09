@@ -103,6 +103,8 @@ serve(async (req) => {
         // =============================================
         console.log('[INSTAGRAM OAUTH] Step 2: Exchanging for long-lived token...');
 
+        // NOTE: The /access_token endpoint does NOT use version number per Instagram docs
+        // https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/business-login
         const longLivedUrl = `https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${INSTAGRAM_APP_SECRET}&access_token=${shortLivedToken}`;
 
         const longLivedResponse = await fetch(longLivedUrl);
@@ -147,10 +149,11 @@ serve(async (req) => {
 
         try {
             // For Instagram Business accounts, we need to subscribe to webhooks
-            // The subscription is made via the Instagram Graph API directly
-            // IMPORTANT: access_token and subscribed_fields must be query parameters!
-            const subscribedFields = 'messages,messaging_postbacks,messaging_optins';
-            const subscribeUrl = `https://graph.instagram.com/v21.0/${igBusinessAccountId}/subscribed_apps?access_token=${accessToken}&subscribed_fields=${subscribedFields}`;
+            // Use /me/subscribed_apps endpoint as per Meta documentation
+            // https://developers.facebook.com/docs/instagram-platform/instagram-graph-api/webhooks
+            const subscribedFields = 'messages,messaging_postbacks,messaging_optins,messaging_seen,messaging_referral';
+            // Using /me/ instead of hardcoded ID - /me/ represents the Instagram professional account
+            const subscribeUrl = `https://graph.instagram.com/v21.0/me/subscribed_apps?access_token=${accessToken}&subscribed_fields=${subscribedFields}`;
             const subscribeResponse = await fetch(subscribeUrl, {
                 method: 'POST'
             });

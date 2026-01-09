@@ -7,6 +7,7 @@ const corsHeaders = {
 };
 
 const UZAPI_URL = 'https://clinvia.uazapi.com';
+const SUPABASE_WEBHOOK_URL = 'https://swfshqvvbohnahdyndch.supabase.co/functions/v1/webhook-queue-receiver';
 
 serve(async (req) => {
     if (req.method === 'OPTIONS') {
@@ -31,12 +32,55 @@ serve(async (req) => {
             .single();
 
         if (fetchError || !instance) {
-            throw new Error('Instance not found');
+            console.error('[1.1] Instance not found:', fetchError);
+            return new Response(
+                JSON.stringify({ success: false, error: 'Instância não encontrada' }),
+                { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
         }
 
         const instanceToken = instance.apikey;
 
-        // Call Uzapi to connect instance with phone
+        if (!instanceToken) {
+            console.error('[1.2] Instance token missing');
+            return new Response(
+                JSON.stringify({ success: false, error: 'Token da instância não encontrado' }),
+                { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
+
+        // ===== STEP 1: CONFIGURE WEBHOOK FIRST =====
+        console.log('[2] Configuring webhook for instance BEFORE generating pair code...');
+
+        const webhookConfigResponse = await fetch(`${UZAPI_URL}/webhook`, {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'token': instanceToken
+            },
+            body: JSON.stringify({
+                enabled: true,
+                url: SUPABASE_WEBHOOK_URL,
+                events: ["messages", "connection", "messages_update"],
+                excludeMessages: ["wasSentByApi"]
+            })
+        });
+
+        const webhookResponseText = await webhookConfigResponse.text();
+        console.log('[2.1] Webhook config status:', webhookConfigResponse.status);
+        console.log('[2.2] Webhook config response:', webhookResponseText);
+
+        if (!webhookConfigResponse.ok) {
+            console.error('[2.3] WARNING: Webhook configuration failed, but continuing with pair code generation');
+            // Don't fail here, just log - we'll continue anyway
+        } else {
+            console.log('[2.4] ✅ Webhook configured successfully!');
+        }
+
+        // ===== STEP 2: GENERATE PAIR CODE =====
+        console.log('[3] Generating pair code for phone:', phoneNumber);
+
         const uzapiResponse = await fetch(`${UZAPI_URL}/instance/connect`, {
             method: 'POST',
             headers: {
@@ -51,12 +95,15 @@ serve(async (req) => {
 
         if (!uzapiResponse.ok) {
             const errorText = await uzapiResponse.text();
-            console.error('[2] Uzapi Connect Error:', errorText);
-            throw new Error(`Failed to connect: ${errorText}`);
+            console.error('[3.1] Uzapi Connect Error:', errorText);
+            return new Response(
+                JSON.stringify({ success: false, error: `Falha ao conectar: ${errorText}` }),
+                { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
         }
 
         const uzapiData = await uzapiResponse.json();
-        console.log('[3] Uzapi connect response:', uzapiData);
+        console.log('[3.2] Uzapi connect response:', JSON.stringify(uzapiData));
 
         // Handle Array Response
         const responseItem = Array.isArray(uzapiData) ? uzapiData[0] : uzapiData;
@@ -67,37 +114,47 @@ serve(async (req) => {
         const instanceName = instanceData.name || instance.name;
         const token = instanceData.token || instanceToken;
 
-        // Construct webhook URL
-        // 'webhook_url': https://webhooks.clinvia.com.br/webhook/<nome_da_instancia_criada_campo_name_do_payload>
-        const webhookUrl = `https://webhooks.clinvia.com.br/webhook/${instanceName}`;
+        if (!pairCode) {
+            console.error('[3.3] No pair code received:', uzapiData);
+            return new Response(
+                JSON.stringify({ success: false, error: 'Código de pareamento não recebido. Tente novamente.' }),
+                { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
 
-        // Update database with all fields
+        // External webhook URL for n8n
+        const externalWebhookUrl = `https://webhooks.clinvia.com.br/webhook/${instanceName}`;
+
+        // ===== STEP 3: UPDATE DATABASE =====
+        console.log('[4] Updating database with pair code and webhook info...');
+
         const { error: updateError } = await supabaseClient
             .from('instances')
             .update({
                 pin_code: pairCode,
-                client_number: phoneNumber, // Assuming this is client_number
-                user_name: phoneNumber, // User requested 'user_name' to be the phone number
+                client_number: phoneNumber,
+                user_name: phoneNumber,
                 status: connectionStatus,
                 instance_name: instanceName,
-                webhook_url: webhookUrl,
+                webhook_url: externalWebhookUrl,
                 server_url: UZAPI_URL,
                 apikey: token
             })
             .eq('id', instanceId);
 
         if (updateError) {
-            console.error('[4] Database Update Error:', updateError);
-            throw updateError;
+            console.error('[4.1] Database Update Error:', updateError);
+            // Don't fail, pair code was already generated
         }
 
-        console.log('[5] Instance updated with paircode:', pairCode);
+        console.log('[5] ✅ Instance connected successfully! Pair code:', pairCode);
 
         return new Response(
             JSON.stringify({
                 success: true,
                 pairCode: pairCode,
-                status: connectionStatus
+                status: connectionStatus,
+                webhookConfigured: webhookConfigResponse.ok
             }),
             {
                 status: 200,
@@ -110,7 +167,7 @@ serve(async (req) => {
         return new Response(
             JSON.stringify({
                 success: false,
-                error: error.message
+                error: error.message || 'Erro desconhecido ao conectar instância'
             }),
             {
                 status: 200,
