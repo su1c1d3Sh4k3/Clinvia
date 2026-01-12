@@ -3,8 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
 // =============================================
 // Instagram Send Message - API for IA Integration
-// Sends text and audio messages via Facebook Messenger Platform
-// CRITICAL: Uses graph.facebook.com with Page Access Token
+// Sends text and audio messages via Instagram Graph API
 // =============================================
 //
 // ⚠️⚠️⚠️ CRITICAL CONFIGURATION WARNING ⚠️⚠️⚠️
@@ -307,12 +306,11 @@ serve(async (req) => {
         }
 
         // =============================================
-        // Get Instagram instance with access token and Page ID
-        // The access_token is now a Facebook Page Access Token
+        // Get Instagram instance with access token
         // =============================================
         const { data: instance, error: instanceError } = await supabase
             .from('instagram_instances')
-            .select('*, facebook_page_id')
+            .select('*')
             .eq('id', instagramInstanceId)
             .single();
 
@@ -325,18 +323,15 @@ serve(async (req) => {
         }
 
         console.log('[INSTAGRAM SEND] Using instance:', instance.account_name);
-        console.log('[INSTAGRAM SEND] Facebook Page ID:', instance.facebook_page_id);
 
         // =============================================
         // Build message payload based on type
-        // CRITICAL: Use graph.facebook.com with Page ID for Messenger Platform
         // =============================================
-        // If we have a facebook_page_id, use the Messenger Platform endpoint
-        // Otherwise, fall back to the old Instagram endpoint for legacy instances
-        const pageId = instance.facebook_page_id || 'me';
-        const apiUrl = instance.facebook_page_id
-            ? `https://graph.facebook.com/v24.0/${pageId}/messages`
-            : `https://graph.instagram.com/v24.0/me/messages`;
+        // Using Instagram Graph API with Instagram Login
+        // Endpoint: https://graph.instagram.com/v21.0/{ig-user-id}/messages
+        // We can use 'me' if the token is for that user, or the stored instagram_account_id
+        const igUserId = instance.instagram_account_id || 'me';
+        const apiUrl = `https://graph.instagram.com/v21.0/${igUserId}/messages`;
 
         console.log('[INSTAGRAM SEND] Using API URL:', apiUrl);
 

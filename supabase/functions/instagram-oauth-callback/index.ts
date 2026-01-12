@@ -3,17 +3,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
 // =============================================
 // Instagram OAuth Callback Handler
+// Uses Instagram Business Login flow
 // 
-// CRITICAL: Uses Facebook Login flow for Instagram Messaging
-// Instagram Business Login DOES NOT work for Messaging API!
-// 
-// The correct flow is:
-// 1. User authorizes via Facebook Login
-// 2. We get User Access Token
-// 3. We fetch user's Facebook Pages
-// 4. We find Pages with linked Instagram accounts
-// 5. We get Page Access Token (required for Messaging)
-// 6. We save Page ID + Instagram ID + Page Access Token
+// Since July 2024, Instagram Messaging works without Facebook Page!
+// Uses graph.instagram.com with Instagram User Access Token
 // =============================================
 
 const corsHeaders = {
@@ -21,10 +14,9 @@ const corsHeaders = {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Facebook App credentials - The SAME app ID/secret used for Instagram
-// Set these in Supabase secrets
-const FACEBOOK_APP_ID = Deno.env.get('INSTAGRAM_APP_ID') || Deno.env.get('FACEBOOK_APP_ID') || '';
-const FACEBOOK_APP_SECRET = Deno.env.get('INSTAGRAM_APP_SECRET') || Deno.env.get('FACEBOOK_APP_SECRET') || '';
+// Instagram App credentials - set these in Supabase secrets
+const INSTAGRAM_APP_ID = Deno.env.get('INSTAGRAM_APP_ID') || '';
+const INSTAGRAM_APP_SECRET = Deno.env.get('INSTAGRAM_APP_SECRET') || '';
 
 interface OAuthRequest {
     code: string;
@@ -43,7 +35,7 @@ serve(async (req) => {
         const supabase = createClient(supabaseUrl, supabaseKey);
 
         const payload: OAuthRequest = await req.json();
-        console.log('[INSTAGRAM OAUTH] Processing Facebook OAuth callback for user:', payload.user_id);
+        console.log('[INSTAGRAM OAUTH] Processing callback for user:', payload.user_id);
 
         const { code, redirect_uri, user_id } = payload;
 
@@ -54,30 +46,39 @@ serve(async (req) => {
             );
         }
 
-        if (!FACEBOOK_APP_SECRET) {
-            console.error('[INSTAGRAM OAUTH] FACEBOOK_APP_SECRET/INSTAGRAM_APP_SECRET not configured');
+        if (!INSTAGRAM_APP_SECRET) {
+            console.error('[INSTAGRAM OAUTH] INSTAGRAM_APP_SECRET not configured');
             return new Response(
-                JSON.stringify({ success: false, error: 'Facebook app secret not configured. Set INSTAGRAM_APP_SECRET or FACEBOOK_APP_SECRET in Supabase secrets.' }),
+                JSON.stringify({ success: false, error: 'Instagram app secret not configured. Set INSTAGRAM_APP_SECRET in Supabase secrets.' }),
                 { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
         }
 
         // =============================================
-        // Step 1: Exchange code for Facebook User Access Token
-        // CRITICAL: Use graph.facebook.com, NOT api.instagram.com
+        // Step 1: Exchange code for short-lived access token
+        // Using api.instagram.com for Instagram Business Login
         // =============================================
-        console.log('[INSTAGRAM OAUTH] Step 1: Exchanging code for Facebook User Access Token...');
+        console.log('[INSTAGRAM OAUTH] Step 1: Exchanging code for short-lived token...');
         console.log('[INSTAGRAM OAUTH] Using redirect_uri:', redirect_uri);
 
-        const tokenUrl = `https://graph.facebook.com/v24.0/oauth/access_token?client_id=${FACEBOOK_APP_ID}&redirect_uri=${encodeURIComponent(redirect_uri)}&client_secret=${FACEBOOK_APP_SECRET}&code=${code}`;
+        const tokenFormData = new FormData();
+        tokenFormData.append('client_id', INSTAGRAM_APP_ID);
+        tokenFormData.append('client_secret', INSTAGRAM_APP_SECRET);
+        tokenFormData.append('grant_type', 'authorization_code');
+        tokenFormData.append('redirect_uri', redirect_uri);
+        tokenFormData.append('code', code);
 
-        const tokenResponse = await fetch(tokenUrl);
+        const tokenResponse = await fetch('https://api.instagram.com/oauth/access_token', {
+            method: 'POST',
+            body: tokenFormData
+        });
+
         const tokenData = await tokenResponse.json();
         console.log('[INSTAGRAM OAUTH] Token response status:', tokenResponse.status);
         console.log('[INSTAGRAM OAUTH] Token response:', JSON.stringify(tokenData));
 
         if (!tokenResponse.ok || tokenData.error) {
-            const errorMsg = tokenData.error?.message || tokenData.error_description || 'Failed to exchange code for token';
+            const errorMsg = tokenData.error_message || tokenData.error?.message || tokenData.error || 'Failed to exchange code for token';
             console.error('[INSTAGRAM OAUTH] Token exchange error:', errorMsg);
             return new Response(
                 JSON.stringify({ success: false, error: errorMsg }),
@@ -85,240 +86,175 @@ serve(async (req) => {
             );
         }
 
-        const userAccessToken = tokenData.access_token;
-        console.log('[INSTAGRAM OAUTH] ✅ Got Facebook User Access Token');
+        // Handle response format - Instagram Business Login returns { data: [...] }
+        let shortLivedToken: string;
+        let instagramUserId: string;
 
-        // =============================================
-        // Step 2: Get user's Facebook Pages
-        // These are the Pages the user can manage
-        // =============================================
-        console.log('[INSTAGRAM OAUTH] Step 2: Fetching user\'s Facebook Pages...');
-
-        const pagesResponse = await fetch(
-            `https://graph.facebook.com/v24.0/me/accounts?fields=id,name,access_token,instagram_business_account&access_token=${userAccessToken}`
-        );
-        const pagesData = await pagesResponse.json();
-        console.log('[INSTAGRAM OAUTH] Pages response status:', pagesResponse.status);
-        console.log('[INSTAGRAM OAUTH] Pages data:', JSON.stringify(pagesData));
-
-        if (!pagesResponse.ok || pagesData.error) {
-            const errorMsg = pagesData.error?.message || 'Failed to fetch Facebook Pages';
-            console.error('[INSTAGRAM OAUTH] Pages fetch error:', errorMsg);
+        if (tokenData.data && Array.isArray(tokenData.data) && tokenData.data.length > 0) {
+            // New format from Instagram Business Login: { data: [{ access_token, user_id, permissions }] }
+            shortLivedToken = tokenData.data[0].access_token;
+            instagramUserId = String(tokenData.data[0].user_id);
+            console.log('[INSTAGRAM OAUTH] Using new format - permissions:', tokenData.data[0].permissions);
+        } else if (tokenData.access_token) {
+            // Old format: { access_token, user_id }
+            shortLivedToken = tokenData.access_token;
+            instagramUserId = String(tokenData.user_id);
+        } else {
+            console.error('[INSTAGRAM OAUTH] Unexpected token response format:', JSON.stringify(tokenData));
             return new Response(
-                JSON.stringify({ success: false, error: errorMsg }),
+                JSON.stringify({ success: false, error: 'Unexpected token response format from Instagram' }),
                 { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
         }
 
-        const pages = pagesData.data || [];
-        console.log('[INSTAGRAM OAUTH] Found', pages.length, 'Facebook Pages');
+        console.log('[INSTAGRAM OAUTH] Got short-lived token for Instagram user ID:', instagramUserId);
 
-        if (pages.length === 0) {
-            console.error('[INSTAGRAM OAUTH] No Facebook Pages found');
-            return new Response(
-                JSON.stringify({
-                    success: false,
-                    error: 'Nenhuma Página do Facebook encontrada. O Instagram Business precisa estar conectado a uma Página do Facebook.'
-                }),
-                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        // =============================================
+        // Step 2: Exchange for long-lived access token (60 days)
+        // Using graph.instagram.com/access_token endpoint
+        // =============================================
+        console.log('[INSTAGRAM OAUTH] Step 2: Exchanging for long-lived token...');
+
+        let accessToken = shortLivedToken;
+        let expiresIn = 3600; // 1 hour for short-lived
+
+        try {
+            // For Instagram Business Login, use graph.instagram.com
+            const longLivedUrl = `https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${INSTAGRAM_APP_SECRET}&access_token=${shortLivedToken}`;
+
+            const longLivedResponse = await fetch(longLivedUrl);
+            const longLivedData = await longLivedResponse.json();
+            console.log('[INSTAGRAM OAUTH] Long-lived token response status:', longLivedResponse.status);
+            console.log('[INSTAGRAM OAUTH] Long-lived token response:', JSON.stringify(longLivedData));
+
+            if (longLivedResponse.ok && longLivedData.access_token) {
+                accessToken = longLivedData.access_token;
+                expiresIn = longLivedData.expires_in || 5184000; // 60 days
+                console.log('[INSTAGRAM OAUTH] ✅ Successfully got long-lived token, expires in:', expiresIn, 'seconds');
+            } else {
+                console.warn('[INSTAGRAM OAUTH] ⚠️ Could not get long-lived token:', longLivedData.error?.message || JSON.stringify(longLivedData));
+                console.warn('[INSTAGRAM OAUTH] Using short-lived token (valid for 1 hour)');
+            }
+        } catch (longLivedError: any) {
+            console.warn('[INSTAGRAM OAUTH] ⚠️ Long-lived token exchange failed:', longLivedError.message);
+            console.warn('[INSTAGRAM OAUTH] Using short-lived token (valid for 1 hour)');
+        }
+
+        // =============================================
+        // Step 3: Get Instagram account info
+        // Using graph.instagram.com/me endpoint
+        // =============================================
+        console.log('[INSTAGRAM OAUTH] Step 3: Fetching account info...');
+
+        let accountName = `Instagram User ${instagramUserId}`;
+        let igBusinessAccountId = instagramUserId;
+
+        try {
+            // For Instagram Business Login, use different fields
+            // user_id returns the IGSID (used in webhooks), username is the @handle
+            const profileResponse = await fetch(
+                `https://graph.instagram.com/v21.0/me?fields=user_id,username,name,profile_picture_url&access_token=${accessToken}`
             );
-        }
+            const profileData = await profileResponse.json();
+            console.log('[INSTAGRAM OAUTH] Profile response status:', profileResponse.status);
+            console.log('[INSTAGRAM OAUTH] Profile data:', JSON.stringify(profileData));
 
-        // =============================================
-        // Step 3: Find Pages with Instagram Business accounts
-        // =============================================
-        console.log('[INSTAGRAM OAUTH] Step 3: Finding Pages with Instagram accounts...');
-
-        const connectedAccounts: any[] = [];
-
-        for (const page of pages) {
-            console.log('[INSTAGRAM OAUTH] Checking Page:', page.name, 'ID:', page.id);
-
-            // If instagram_business_account is already in the response, use it
-            if (page.instagram_business_account) {
-                console.log('[INSTAGRAM OAUTH] Page has Instagram linked:', page.instagram_business_account.id);
-
-                // Get Instagram account details
-                const igResponse = await fetch(
-                    `https://graph.facebook.com/v24.0/${page.instagram_business_account.id}?fields=id,username,name,profile_picture_url,ig_id&access_token=${page.access_token}`
-                );
-                const igData = await igResponse.json();
-                console.log('[INSTAGRAM OAUTH] Instagram data:', JSON.stringify(igData));
-
-                if (igResponse.ok && !igData.error) {
-                    connectedAccounts.push({
-                        page_id: page.id,
-                        page_name: page.name,
-                        page_access_token: page.access_token,
-                        instagram_id: page.instagram_business_account.id, // IGSID - used for webhooks
-                        instagram_username: igData.username,
-                        instagram_name: igData.name || igData.username,
-                        instagram_ig_id: igData.ig_id // The numeric IG ID
-                    });
-                }
+            if (profileResponse.ok && !profileData.error) {
+                // Handle both nested data format and direct format
+                const profile = profileData.data?.[0] || profileData;
+                accountName = profile.username || profile.name || accountName;
+                // user_id field is the IGSID used for webhooks
+                igBusinessAccountId = profile.user_id || profile.id || instagramUserId;
+                console.log('[INSTAGRAM OAUTH] ✅ Profile fetched: username=', accountName, 'IGSID=', igBusinessAccountId);
+            } else {
+                console.warn('[INSTAGRAM OAUTH] ⚠️ Could not fetch profile:', profileData.error?.message || JSON.stringify(profileData));
+                console.warn('[INSTAGRAM OAUTH] Using user_id from token exchange');
             }
+        } catch (profileError: any) {
+            console.warn('[INSTAGRAM OAUTH] ⚠️ Profile fetch failed:', profileError.message);
+            console.warn('[INSTAGRAM OAUTH] Using user_id from token exchange');
         }
 
-        console.log('[INSTAGRAM OAUTH] Found', connectedAccounts.length, 'Instagram Business accounts');
-
-        if (connectedAccounts.length === 0) {
-            console.error('[INSTAGRAM OAUTH] No Instagram Business accounts linked to Pages');
-            return new Response(
-                JSON.stringify({
-                    success: false,
-                    error: 'Nenhuma conta de Instagram Business encontrada. Certifique-se de que seu Instagram é uma conta Business ou Creator e está conectado a uma Página do Facebook.'
-                }),
-                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
-        }
+        console.log('[INSTAGRAM OAUTH] Final Instagram User ID:', instagramUserId);
+        console.log('[INSTAGRAM OAUTH] Final Business Account ID (IGSID):', igBusinessAccountId);
+        console.log('[INSTAGRAM OAUTH] Final Account name:', accountName);
 
         // =============================================
-        // Step 4: Exchange Page Token for Long-Lived Token
-        // This is CRITICAL - short-lived Page tokens expire quickly
+        // Step 4: Save to database
         // =============================================
-        console.log('[INSTAGRAM OAUTH] Step 4: Getting long-lived Page Access Token...');
+        console.log('[INSTAGRAM OAUTH] Step 4: Saving to database...');
 
-        for (const account of connectedAccounts) {
-            try {
-                // First get long-lived user token
-                const longLivedUserTokenUrl = `https://graph.facebook.com/v24.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${FACEBOOK_APP_ID}&client_secret=${FACEBOOK_APP_SECRET}&fb_exchange_token=${userAccessToken}`;
-                const longLivedUserResponse = await fetch(longLivedUserTokenUrl);
-                const longLivedUserData = await longLivedUserResponse.json();
+        const tokenExpiresAt = new Date(Date.now() + (expiresIn * 1000)).toISOString();
 
-                if (longLivedUserResponse.ok && longLivedUserData.access_token) {
-                    // Now get the Page token using the long-lived user token
-                    const pageTokenResponse = await fetch(
-                        `https://graph.facebook.com/v24.0/${account.page_id}?fields=access_token&access_token=${longLivedUserData.access_token}`
-                    );
-                    const pageTokenData = await pageTokenResponse.json();
+        // Check if this Instagram account is already connected
+        let { data: existingInstance } = await supabase
+            .from('instagram_instances')
+            .select('id')
+            .eq('instagram_account_id', igBusinessAccountId)
+            .eq('user_id', user_id)
+            .single();
 
-                    if (pageTokenResponse.ok && pageTokenData.access_token) {
-                        account.page_access_token = pageTokenData.access_token;
-                        account.token_expires_in = 5184000; // Long-lived tokens: ~60 days
-                        console.log('[INSTAGRAM OAUTH] ✅ Got long-lived Page Access Token for:', account.page_name);
-                    }
-                }
-            } catch (err: any) {
-                console.warn('[INSTAGRAM OAUTH] ⚠️ Could not get long-lived token for page:', account.page_name, err.message);
-                // Continue with short-lived token
-            }
-        }
-
-        // =============================================
-        // Step 5: Subscribe to webhooks
-        // Using Page token and Page ID for Messenger Platform
-        // =============================================
-        console.log('[INSTAGRAM OAUTH] Step 5: Subscribing to webhooks...');
-
-        for (const account of connectedAccounts) {
-            try {
-                // Subscribe the Page to Instagram messaging webhooks
-                const subscribeUrl = `https://graph.facebook.com/v24.0/${account.page_id}/subscribed_apps`;
-                const subscribeBody = new URLSearchParams({
-                    access_token: account.page_access_token,
-                    subscribed_fields: 'messages,messaging_postbacks,messaging_optins,messaging_seen,messaging_referral'
-                });
-
-                const subscribeResponse = await fetch(subscribeUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: subscribeBody.toString()
-                });
-
-                const subscribeData = await subscribeResponse.json();
-                console.log('[INSTAGRAM OAUTH] Webhook subscription for', account.page_name, ':', JSON.stringify(subscribeData));
-
-                if (subscribeResponse.ok && subscribeData.success) {
-                    console.log('[INSTAGRAM OAUTH] ✅ Successfully subscribed to webhooks for:', account.page_name);
-                } else {
-                    console.warn('[INSTAGRAM OAUTH] ⚠️ Webhook subscription warning:', subscribeData.error?.message);
-                }
-            } catch (err: any) {
-                console.warn('[INSTAGRAM OAUTH] ⚠️ Webhook subscription error for:', account.page_name, err.message);
-            }
-        }
-
-        // =============================================
-        // Step 6: Save to database
-        // Save ALL connected Instagram accounts
-        // =============================================
-        console.log('[INSTAGRAM OAUTH] Step 6: Saving to database...');
-
-        const savedAccounts: any[] = [];
-        const tokenExpiresAt = new Date(Date.now() + (5184000 * 1000)).toISOString(); // 60 days
-
-        for (const account of connectedAccounts) {
-            // Check if this Instagram account already exists
-            const { data: existing } = await supabase
+        // Also check with the OAuth user ID
+        if (!existingInstance && igBusinessAccountId !== instagramUserId) {
+            const { data: existingByUserId } = await supabase
                 .from('instagram_instances')
                 .select('id')
-                .eq('instagram_account_id', account.instagram_id)
+                .eq('instagram_account_id', instagramUserId)
                 .eq('user_id', user_id)
                 .single();
-
-            let result;
-            if (existing) {
-                // Update existing
-                result = await supabase
-                    .from('instagram_instances')
-                    .update({
-                        access_token: account.page_access_token, // Using Page Access Token!
-                        token_expires_at: tokenExpiresAt,
-                        account_name: account.instagram_username || account.instagram_name,
-                        facebook_page_id: account.page_id,
-                        facebook_page_name: account.page_name,
-                        status: 'connected',
-                        updated_at: new Date().toISOString()
-                    })
-                    .eq('id', existing.id)
-                    .select()
-                    .single();
-                console.log('[INSTAGRAM OAUTH] Updated instance for:', account.instagram_username);
-            } else {
-                // Create new
-                result = await supabase
-                    .from('instagram_instances')
-                    .insert({
-                        user_id: user_id,
-                        instagram_account_id: account.instagram_id, // IGSID for webhooks
-                        access_token: account.page_access_token, // Using Page Access Token!
-                        token_expires_at: tokenExpiresAt,
-                        account_name: account.instagram_username || account.instagram_name,
-                        facebook_page_id: account.page_id,
-                        facebook_page_name: account.page_name,
-                        status: 'connected'
-                    })
-                    .select()
-                    .single();
-                console.log('[INSTAGRAM OAUTH] Created instance for:', account.instagram_username);
-            }
-
-            if (result.error) {
-                console.error('[INSTAGRAM OAUTH] Database error for', account.instagram_username, ':', result.error);
-            } else {
-                savedAccounts.push({
-                    id: result.data.id,
-                    account_name: account.instagram_username || account.instagram_name,
-                    page_name: account.page_name
-                });
-            }
+            existingInstance = existingByUserId;
         }
 
-        if (savedAccounts.length === 0) {
+        let result;
+        if (existingInstance) {
+            // Update existing
+            result = await supabase
+                .from('instagram_instances')
+                .update({
+                    instagram_account_id: igBusinessAccountId,
+                    access_token: accessToken,
+                    token_expires_at: tokenExpiresAt,
+                    account_name: accountName,
+                    status: 'connected',
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', existingInstance.id)
+                .select()
+                .single();
+            console.log('[INSTAGRAM OAUTH] Updated existing instance');
+        } else {
+            // Create new
+            result = await supabase
+                .from('instagram_instances')
+                .insert({
+                    user_id: user_id,
+                    instagram_account_id: igBusinessAccountId,
+                    access_token: accessToken,
+                    token_expires_at: tokenExpiresAt,
+                    account_name: accountName,
+                    status: 'connected'
+                })
+                .select()
+                .single();
+            console.log('[INSTAGRAM OAUTH] Created new instance');
+        }
+
+        if (result.error) {
+            console.error('[INSTAGRAM OAUTH] Database error:', result.error);
             return new Response(
-                JSON.stringify({ success: false, error: 'Failed to save any Instagram accounts' }),
+                JSON.stringify({ success: false, error: 'Failed to save Instagram account: ' + result.error.message }),
                 { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
         }
 
-        console.log('[INSTAGRAM OAUTH] ✅ Successfully connected', savedAccounts.length, 'Instagram account(s)');
+        console.log('[INSTAGRAM OAUTH] ✅ Successfully connected Instagram account:', accountName);
 
         return new Response(
             JSON.stringify({
                 success: true,
-                account_name: savedAccounts[0].account_name,
-                accounts_connected: savedAccounts.length,
-                accounts: savedAccounts
+                account_name: accountName,
+                instagram_account_id: igBusinessAccountId,
+                instance_id: result.data.id
             }),
             { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );

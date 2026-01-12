@@ -116,35 +116,21 @@ serve(async (req) => {
                     console.log('[INSTAGRAM WEBHOOK] All possible IDs to try:', Array.from(possibleIds));
 
                     // Try to find the Instagram instance - it might be stored with different IDs
-                    // With Messenger Platform, webhooks come from Facebook Page ID
                     let instagramInstance = null;
 
-                    // Method 1: Try all possible IDs against both instagram_account_id AND facebook_page_id
+                    // Method 1: Try all possible IDs
                     for (const tryId of possibleIds) {
                         if (instagramInstance) break;
 
-                        // Try instagram_account_id first
-                        const { data: foundByInsta } = await supabase
+                        const { data: foundInstance } = await supabase
                             .from('instagram_instances')
-                            .select('id, user_id, access_token, instagram_account_id, facebook_page_id, ia_on_insta')
+                            .select('id, user_id, access_token, instagram_account_id, ia_on_insta')
                             .eq('instagram_account_id', tryId)
                             .single();
 
-                        if (foundByInsta) {
-                            instagramInstance = foundByInsta;
-                            console.log('[INSTAGRAM WEBHOOK] Found instance by Instagram ID:', tryId);
-                        } else {
-                            // Try facebook_page_id (for Messenger Platform webhooks)
-                            const { data: foundByPage } = await supabase
-                                .from('instagram_instances')
-                                .select('id, user_id, access_token, instagram_account_id, facebook_page_id, ia_on_insta')
-                                .eq('facebook_page_id', tryId)
-                                .single();
-
-                            if (foundByPage) {
-                                instagramInstance = foundByPage;
-                                console.log('[INSTAGRAM WEBHOOK] Found instance by Facebook Page ID:', tryId);
-                            }
+                        if (foundInstance) {
+                            instagramInstance = foundInstance;
+                            console.log('[INSTAGRAM WEBHOOK] Found instance by ID:', tryId);
                         }
                     }
 
@@ -152,7 +138,7 @@ serve(async (req) => {
                     if (!instagramInstance) {
                         const { data: allInstances } = await supabase
                             .from('instagram_instances')
-                            .select('id, user_id, instagram_account_id, facebook_page_id, account_name, access_token')
+                            .select('id, user_id, instagram_account_id, account_name, access_token')
                             .eq('status', 'connected');
 
                         console.log('[INSTAGRAM WEBHOOK] No match found. Entry ID:', entryId);

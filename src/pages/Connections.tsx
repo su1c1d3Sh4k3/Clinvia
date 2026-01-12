@@ -16,13 +16,10 @@ import { Badge } from "@/components/ui/badge";
 import { AlertCircle, CheckCircle2, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 
-// Facebook App ID is used for Instagram Messaging via Messenger Platform
-// IMPORTANT: Instagram Messaging requires Facebook Login, NOT Instagram Login!
-// The app must have:
-// 1. Facebook Login configured
-// 2. Instagram Graph API product enabled
-// 3. Permissions: instagram_basic, instagram_manage_messages, pages_manage_metadata, pages_show_list
-const FACEBOOK_APP_ID = import.meta.env.VITE_FACEBOOK_APP_ID || import.meta.env.VITE_INSTAGRAM_APP_ID || '746674508461826';
+// Instagram App ID from Meta App Dashboard (Instagram Business Login)
+// Since July 2024, Instagram Messaging works WITHOUT Facebook Page
+// Uses Instagram Business Login with instagram_business_manage_messages permission
+const INSTAGRAM_APP_ID = import.meta.env.VITE_INSTAGRAM_APP_ID || '746674508461826';
 
 const Connections = () => {
     const { user } = useAuth();
@@ -253,22 +250,16 @@ const Connections = () => {
         // Meta Dashboard is configured for /connections
         const redirectUri = 'https://app.clinvia.ai/connections';
 
-        // CRITICAL: Instagram Messaging requires Facebook Login, NOT Instagram Login!
-        // We need Facebook Page Access Token to send/receive Instagram DMs
-        // Permissions required for Messenger Platform for Instagram:
-        // - instagram_basic: Access Instagram profile info
-        // - instagram_manage_messages: Send and receive Instagram DMs
-        // - pages_manage_metadata: Access Facebook Page linked to Instagram
-        // - pages_show_list: List user's Facebook Pages
-        // - pages_messaging: Required for Messenger Platform
-        // - pages_read_engagement: Required for reading Instagram business info
+        // Instagram Business Login permissions (works since July 2024 without Facebook Page)
+        // instagram_business_basic: Access profile info
+        // instagram_business_manage_messages: Send and receive DMs
+        // instagram_business_manage_comments: Manage comments
+        // instagram_business_content_publish: Publish content
         const scopes = [
-            'instagram_basic',
-            'instagram_manage_messages',
-            'pages_manage_metadata',
-            'pages_show_list',
-            'pages_messaging',
-            'pages_read_engagement'
+            'instagram_business_basic',
+            'instagram_business_manage_messages',
+            'instagram_business_manage_comments',
+            'instagram_business_content_publish'
         ].join(',');
 
         // Generate state parameter with user_id for security
@@ -283,16 +274,14 @@ const Connections = () => {
         // Store state in localStorage for validation on callback
         localStorage.setItem('instagram_oauth_state', state);
 
-        console.log('[Instagram OAuth] Starting Facebook OAuth flow for Instagram Messaging');
+        console.log('[Instagram OAuth] Starting Instagram Business Login');
         console.log('[Instagram OAuth] User ID:', user.id);
         console.log('[Instagram OAuth] Scopes:', scopes);
 
-        // CRITICAL: Use Facebook OAuth, NOT Instagram OAuth!
-        // Instagram Business Login tokens do NOT work for Messaging API
-        // We need Facebook Login to get Page Access Token for Messenger Platform
-        const authUrl = `https://www.facebook.com/v24.0/dialog/oauth?client_id=${FACEBOOK_APP_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scopes)}&state=${encodeURIComponent(state)}`;
+        // Instagram Business Login OAuth endpoint
+        const authUrl = `https://www.instagram.com/oauth/authorize?client_id=${INSTAGRAM_APP_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scopes)}&state=${encodeURIComponent(state)}`;
 
-        console.log('[Instagram OAuth] Redirecting to Facebook OAuth:', authUrl);
+        console.log('[Instagram OAuth] Redirecting to:', authUrl);
 
         window.location.href = authUrl;
     };
