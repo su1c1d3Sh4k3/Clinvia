@@ -91,6 +91,13 @@ const Connections = () => {
         const error = searchParams.get('error');
         const returnedState = searchParams.get('state');
 
+        // Debug: Log all URL parameters to trace OAuth callback
+        console.log('[Instagram OAuth - Connections] Current URL:', window.location.href);
+        console.log('[Instagram OAuth - Connections] searchParams entries:', [...searchParams.entries()]);
+        console.log('[Instagram OAuth - Connections] code:', code);
+        console.log('[Instagram OAuth - Connections] returnedState:', returnedState);
+        console.log('[Instagram OAuth - Connections] storedState in localStorage:', localStorage.getItem('instagram_oauth_state'));
+
         if (error) {
             toast({
                 title: "Erro na autorização",
@@ -107,8 +114,14 @@ const Connections = () => {
             // SECURITY: Validate state parameter to prevent cross-user credential leakage
             const storedState = localStorage.getItem('instagram_oauth_state');
 
+            console.log('[Instagram OAuth - Connections] Validating state...');
+            console.log('[Instagram OAuth - Connections] storedState:', storedState);
+            console.log('[Instagram OAuth - Connections] returnedState:', returnedState);
+
             if (!storedState || !returnedState) {
                 console.error('[Instagram OAuth] SECURITY WARNING: Missing state parameter');
+                console.error('[Instagram OAuth] storedState exists:', !!storedState);
+                console.error('[Instagram OAuth] returnedState exists:', !!returnedState);
                 toast({
                     title: "Erro de segurança",
                     description: "Parâmetro de estado ausente. Por favor, tente conectar novamente.",
@@ -176,8 +189,8 @@ const Connections = () => {
 
         try {
             // IMPORTANT: redirect_uri must EXACTLY match Meta Dashboard
-            // Meta Dashboard forces trailing slash
-            const redirectUri = 'https://app.clinvia.ai/';
+            // Meta Dashboard is configured for /connections
+            const redirectUri = 'https://app.clinvia.ai/connections';
 
             // Clean the code - remove #_ suffix and any whitespace
             const cleanCode = code.replace(/#_$/, '').trim();
@@ -232,8 +245,8 @@ const Connections = () => {
         }
 
         // IMPORTANT: redirect_uri must EXACTLY match Meta Dashboard
-        // Meta Dashboard forces trailing slash
-        const redirectUri = 'https://app.clinvia.ai/';
+        // Meta Dashboard is configured for /connections
+        const redirectUri = 'https://app.clinvia.ai/connections';
 
         // Instagram Business Login permissions
         const scopes = [
@@ -258,9 +271,9 @@ const Connections = () => {
         console.log('[Instagram OAuth] Starting OAuth flow for user:', user.id);
 
         // Instagram OAuth endpoint
-        // IMPORTANT: Adding state parameter to validate callback
-        // auth_type=reauthenticate forces a fresh login
-        const authUrl = `https://www.instagram.com/oauth/authorize?client_id=${INSTAGRAM_APP_ID}&redirect_uri=${redirectUri}&response_type=code&scope=${scopes}&auth_type=reauthenticate&state=${encodeURIComponent(state)}`;
+        // CRITICAL: redirect_uri MUST be URL-encoded
+        // CRITICAL: use force_reauth=true (not auth_type) per Meta docs
+        const authUrl = `https://www.instagram.com/oauth/authorize?client_id=${INSTAGRAM_APP_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${scopes}&force_reauth=true&state=${encodeURIComponent(state)}`;
 
         console.log('[Instagram OAuth] Redirecting to:', authUrl);
 

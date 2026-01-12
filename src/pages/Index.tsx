@@ -62,9 +62,25 @@ const Index = () => {
   // Handle Instagram OAuth redirect - if we have a code parameter, redirect to /connections
   useEffect(() => {
     const code = searchParams.get("code");
+    const state = searchParams.get("state");
+
+    // Debug: Log all URL parameters to trace OAuth callback
+    console.log('[Instagram OAuth - Index] Current URL:', window.location.href);
+    console.log('[Instagram OAuth - Index] searchParams entries:', [...searchParams.entries()]);
+    console.log('[Instagram OAuth - Index] code:', code);
+    console.log('[Instagram OAuth - Index] state:', state);
+
     if (code) {
-      // This is an Instagram OAuth callback, redirect to connections page with the code
-      navigate(`/connections?code=${encodeURIComponent(code)}`, { replace: true });
+      // This is an Instagram OAuth callback, redirect to connections page with code AND state
+      // IMPORTANT: Must preserve the state parameter for CSRF protection
+      let redirectUrl = `/connections?code=${encodeURIComponent(code)}`;
+      if (state) {
+        redirectUrl += `&state=${encodeURIComponent(state)}`;
+      } else {
+        console.warn('[Instagram OAuth - Index] WARNING: state parameter is missing from Instagram callback!');
+      }
+      console.log('[Instagram OAuth - Index] Redirecting to:', redirectUrl);
+      navigate(redirectUrl, { replace: true });
       return;
     }
   }, [searchParams, navigate]);
