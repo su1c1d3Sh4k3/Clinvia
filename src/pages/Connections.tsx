@@ -16,9 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { AlertCircle, CheckCircle2, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 
-// Instagram App ID from Meta App Dashboard (Instagram Business Login)
-// Since July 2024, Instagram Messaging works WITHOUT Facebook Page
-// Uses Instagram Business Login with instagram_business_manage_messages permission
+// Confirme se esse ID está correto. Às vezes o .env sobrescreve com um valor antigo de dev.
 const INSTAGRAM_APP_ID = import.meta.env.VITE_INSTAGRAM_APP_ID || '746674508461826';
 
 const Connections = () => {
