@@ -116,21 +116,35 @@ serve(async (req) => {
                     console.log('[INSTAGRAM WEBHOOK] All possible IDs to try:', Array.from(possibleIds));
 
                     // Try to find the Instagram instance - it might be stored with different IDs
+                    // With Messenger Platform, webhooks come from Facebook Page ID
                     let instagramInstance = null;
 
-                    // Method 1: Try all possible IDs
+                    // Method 1: Try all possible IDs against both instagram_account_id AND facebook_page_id
                     for (const tryId of possibleIds) {
                         if (instagramInstance) break;
 
-                        const { data: foundInstance } = await supabase
+                        // Try instagram_account_id first
+                        const { data: foundByInsta } = await supabase
                             .from('instagram_instances')
-                            .select('id, user_id, access_token, instagram_account_id, ia_on_insta')
+                            .select('id, user_id, access_token, instagram_account_id, facebook_page_id, ia_on_insta')
                             .eq('instagram_account_id', tryId)
                             .single();
 
-                        if (foundInstance) {
-                            instagramInstance = foundInstance;
-                            console.log('[INSTAGRAM WEBHOOK] Found instance by ID:', tryId);
+                        if (foundByInsta) {
+                            instagramInstance = foundByInsta;
+                            console.log('[INSTAGRAM WEBHOOK] Found instance by Instagram ID:', tryId);
+                        } else {
+                            // Try facebook_page_id (for Messenger Platform webhooks)
+                            const { data: foundByPage } = await supabase
+                                .from('instagram_instances')
+                                .select('id, user_id, access_token, instagram_account_id, facebook_page_id, ia_on_insta')
+                                .eq('facebook_page_id', tryId)
+                                .single();
+
+                            if (foundByPage) {
+                                instagramInstance = foundByPage;
+                                console.log('[INSTAGRAM WEBHOOK] Found instance by Facebook Page ID:', tryId);
+                            }
                         }
                     }
 
@@ -138,7 +152,7 @@ serve(async (req) => {
                     if (!instagramInstance) {
                         const { data: allInstances } = await supabase
                             .from('instagram_instances')
-                            .select('id, user_id, instagram_account_id, account_name, access_token')
+                            .select('id, user_id, instagram_account_id, facebook_page_id, account_name, access_token')
                             .eq('status', 'connected');
 
                         console.log('[INSTAGRAM WEBHOOK] No match found. Entry ID:', entryId);
@@ -153,7 +167,7 @@ serve(async (req) => {
 
                                     // Call Instagram API to get the account info with this token
                                     const verifyResponse = await fetch(
-                                        `https://graph.instagram.com/v21.0/me?fields=id,username&access_token=${inst.access_token}`
+                                        `https://graph.instagram.com/v24.0/me?fields=id,username&access_token=${inst.access_token}`
                                     );
                                     const verifyData = await verifyResponse.json();
 
@@ -286,7 +300,7 @@ serve(async (req) => {
                                 try {
                                     const accessToken = instagramInstance.access_token;
                                     const profileResponse = await fetch(
-                                        `https://graph.instagram.com/v21.0/${senderId}?fields=name,profile_pic&access_token=${accessToken}`
+                                        `https://graph.instagram.com/v24.0/${senderId}?fields=name,profile_pic&access_token=${accessToken}`
                                     );
                                     if (profileResponse.ok) {
                                         const profileData = await profileResponse.json();
