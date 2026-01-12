@@ -120,10 +120,19 @@ serve(async (req) => {
 
         try {
             // For Instagram Business Login, use graph.instagram.com
+            // We'll try GET first (standard), but fallback to POST if we get a method error
             const longLivedUrl = `https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${INSTAGRAM_APP_SECRET}&access_token=${shortLivedToken}`;
 
-            const longLivedResponse = await fetch(longLivedUrl);
-            const longLivedData = await longLivedResponse.json();
+            let longLivedResponse = await fetch(longLivedUrl);
+            let longLivedData = await longLivedResponse.json();
+
+            // Check for method error and retry with POST
+            if (!longLivedResponse.ok && longLivedData.error?.message?.includes('method type: get')) {
+                console.warn('[INSTAGRAM OAUTH] GET rejected (method type error), retrying with POST...');
+                longLivedResponse = await fetch(longLivedUrl, { method: 'POST' });
+                longLivedData = await longLivedResponse.json();
+            }
+
             console.log('[INSTAGRAM OAUTH] Long-lived token response status:', longLivedResponse.status);
             console.log('[INSTAGRAM OAUTH] Long-lived token response:', JSON.stringify(longLivedData));
 
@@ -151,11 +160,19 @@ serve(async (req) => {
 
         try {
             // For Instagram Business Login, use different fields
-            // user_id returns the IGSID (used in webhooks), username is the @handle
-            const profileResponse = await fetch(
-                `https://graph.instagram.com/v21.0/me?fields=user_id,username,name,profile_picture_url&access_token=${accessToken}`
-            );
-            const profileData = await profileResponse.json();
+            // Using v22.0 and handling method errors
+            const profileUrl = `https://graph.instagram.com/v22.0/me?fields=user_id,username,name,profile_picture_url&access_token=${accessToken}`;
+
+            let profileResponse = await fetch(profileUrl);
+            let profileData = await profileResponse.json();
+
+            // Check for method error
+            if (!profileResponse.ok && profileData.error?.message?.includes('method type: get')) {
+                console.warn('[INSTAGRAM OAUTH] GET rejected for profile (method type error), retrying with POST...');
+                profileResponse = await fetch(profileUrl, { method: 'POST' });
+                profileData = await profileResponse.json();
+            }
+
             console.log('[INSTAGRAM OAUTH] Profile response status:', profileResponse.status);
             console.log('[INSTAGRAM OAUTH] Profile data:', JSON.stringify(profileData));
 
