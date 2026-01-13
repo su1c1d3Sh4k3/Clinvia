@@ -248,16 +248,12 @@ const Connections = () => {
         // Meta Dashboard is configured for /connections
         const redirectUri = 'https://app.clinvia.ai/connections';
 
-        // Instagram Business Login permissions (works since July 2024 without Facebook Page)
+        // Instagram Business Login permissions (only approved ones)
         // instagram_business_basic: Access profile info
         // instagram_business_manage_messages: Send and receive DMs
-        // instagram_business_manage_comments: Manage comments
-        // instagram_business_content_publish: Publish content
         const scopes = [
             'instagram_business_basic',
-            'instagram_business_manage_messages',
-            'instagram_business_manage_comments',
-            'instagram_business_content_publish'
+            'instagram_business_manage_messages'
         ].join(',');
 
         // Generate state parameter with user_id for security
