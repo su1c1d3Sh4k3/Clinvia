@@ -251,10 +251,11 @@ const Connections = () => {
         // Instagram Business Login permissions (only approved ones)
         // instagram_business_basic: Access profile info
         // instagram_business_manage_messages: Send and receive DMs
+        // IMPORTANT: Use hyphen (-) as separator, NOT comma!
         const scopes = [
             'instagram_business_basic',
             'instagram_business_manage_messages'
-        ].join(',');
+        ].join('-');
 
         // Generate state parameter with user_id for security
         // This prevents cross-user credential leakage
