@@ -245,20 +245,13 @@ const Connections = () => {
         }
 
         // IMPORTANT: redirect_uri must EXACTLY match Meta Dashboard
-        // Meta Dashboard is configured for /connections
         const redirectUri = 'https://app.clinvia.ai/connections';
 
         // Instagram Business Login permissions (only approved ones)
-        // instagram_business_basic: Access profile info
-        // instagram_business_manage_messages: Send and receive DMs
         // IMPORTANT: Use hyphen (-) as separator, NOT comma!
-        const scopes = [
-            'instagram_business_basic',
-            'instagram_business_manage_messages'
-        ].join('-');
+        const scopes = 'instagram_business_basic-instagram_business_manage_messages';
 
         // Generate state parameter with user_id for security
-        // This prevents cross-user credential leakage
         const stateData = {
             user_id: user.id,
             timestamp: Date.now(),
@@ -269,12 +262,30 @@ const Connections = () => {
         // Store state in localStorage for validation on callback
         localStorage.setItem('instagram_oauth_state', state);
 
+        // Generate logger_id (UUID format like Dealism uses)
+        const loggerId = crypto.randomUUID();
+
         console.log('[Instagram OAuth] Starting Instagram Business Login');
         console.log('[Instagram OAuth] User ID:', user.id);
         console.log('[Instagram OAuth] Scopes:', scopes);
 
-        // Instagram Business Login OAuth endpoint
-        const authUrl = `https://www.instagram.com/oauth/authorize?client_id=${INSTAGRAM_APP_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scopes)}&state=${encodeURIComponent(state)}`;
+        // =====================================================
+        // USING SAME FORMAT AS DEALISM.AI (REVERSE ENGINEERED)
+        // URL: instagram.com/consent/?flow=ig_biz_login_oauth
+        // Format: params_json with all required fields
+        // =====================================================
+        const paramsJson = {
+            client_id: INSTAGRAM_APP_ID,
+            redirect_uri: redirectUri,
+            response_type: 'code',
+            state: state,
+            scope: scopes,
+            logger_id: loggerId,
+            app_id: INSTAGRAM_APP_ID,
+            platform_app_id: INSTAGRAM_APP_ID
+        };
+
+        const authUrl = `https://www.instagram.com/consent/?flow=ig_biz_login_oauth&params_json=${encodeURIComponent(JSON.stringify(paramsJson))}&source=oauth_permissions_page_www`;
 
         console.log('[Instagram OAuth] Redirecting to:', authUrl);
 
