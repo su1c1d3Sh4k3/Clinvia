@@ -3,23 +3,23 @@ import { ServiceMetricsGrid } from "@/components/dashboard/ServiceMetricsGrid";
 import { HistoryCharts } from "@/components/dashboard/HistoryCharts";
 import { TeamPerformanceTable } from "@/components/dashboard/TeamPerformanceTable";
 import { NotificationsBoard } from "@/components/dashboard/NotificationsBoard";
-import { FinancialDashboard } from "@/components/dashboard/FinancialDashboard";
+import { SalesDashboard } from "@/components/dashboard/SalesDashboard";
 import { LeadsFunnelPanel } from "@/components/dashboard/LeadsFunnelPanel";
 import { OpportunitiesSection } from "@/components/OpportunitiesSection";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Headphones, Users, DollarSign } from "lucide-react";
+import { Headphones, Users, ShoppingCart } from "lucide-react";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useFinancialAccess } from "@/hooks/useFinancialAccess";
 import { cn } from "@/lib/utils";
 
-type DashboardTab = "atendimentos" | "leads" | "financeiro";
+type DashboardTab = "atendimentos" | "leads" | "vendas";
 
 const Dashboard = () => {
     const { data: userRole } = useUserRole();
     const { data: financialAccess } = useFinancialAccess();
     const [activeTab, setActiveTab] = useState<DashboardTab>("leads");
 
-    const canViewFinancial = userRole === 'admin' || (userRole === 'supervisor' && financialAccess !== false);
+    const canViewSales = userRole === 'admin' || (userRole === 'supervisor' && financialAccess !== false);
 
     // Forçar aba "leads" para agentes
     useEffect(() => {
@@ -41,7 +41,7 @@ const Dashboard = () => {
                 <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as DashboardTab)} className="w-full">
                     <TabsList className={cn(
                         "grid w-full max-w-2xl mx-auto",
-                        userRole === 'agent' ? "grid-cols-1" : canViewFinancial ? "grid-cols-3" : "grid-cols-2"
+                        userRole === 'agent' ? "grid-cols-1" : canViewSales ? "grid-cols-3" : "grid-cols-2"
                     )}>
                         {userRole !== 'agent' && (
                             <TabsTrigger value="atendimentos" className="flex items-center gap-2">
@@ -53,10 +53,10 @@ const Dashboard = () => {
                             <Users className="h-4 w-4" />
                             <span className="hidden sm:inline">Negócios</span>
                         </TabsTrigger>
-                        {canViewFinancial && (
-                            <TabsTrigger value="financeiro" className="flex items-center gap-2">
-                                <DollarSign className="h-4 w-4" />
-                                <span className="hidden sm:inline">Financeiro</span>
+                        {canViewSales && (
+                            <TabsTrigger value="vendas" className="flex items-center gap-2">
+                                <ShoppingCart className="h-4 w-4" />
+                                <span className="hidden sm:inline">Vendas</span>
                             </TabsTrigger>
                         )}
                     </TabsList>
@@ -78,8 +78,8 @@ const Dashboard = () => {
                     </div>
                 )}
 
-                {activeTab === "financeiro" && canViewFinancial && (
-                    <FinancialDashboard />
+                {activeTab === "vendas" && canViewSales && (
+                    <SalesDashboard />
                 )}
             </div>
         </div>
@@ -87,3 +87,4 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
+

@@ -100,9 +100,6 @@ export const InstanceRow = ({ instance, onConnect }: InstanceRowProps) => {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between p-3 md:p-4 border rounded-lg gap-3 md:gap-4">
             <div className="space-y-0.5 md:space-y-1 min-w-0">
                 <h3 className="font-semibold text-sm md:text-base truncate">{instance.name}</h3>
-                <p className="text-xs md:text-sm text-muted-foreground truncate">
-                    {instance.server_url}
-                </p>
             </div>
 
             <div className="flex flex-col sm:flex-row sm:items-center gap-2 md:gap-4">

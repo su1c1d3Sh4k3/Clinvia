@@ -1,7 +1,8 @@
 import {
   LayoutDashboard, MessageSquare, Briefcase, ListOrdered, Users, Settings,
   Smartphone, LogOut, Tag as TagIcon, BookUser, Calendar, ClipboardList,
-  Package, Bot, Wallet, ChevronDown, MessageCircle, Wrench, Grid3X3, PieChart, Clock
+  Package, Bot, Wallet, ChevronDown, MessageCircle, Wrench, Grid3X3, PieChart, Clock,
+  ShoppingCart
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -54,7 +55,7 @@ const menuStructure: MenuItem[] = [
     children: [
       { icon: Calendar, label: "Agendamentos", id: "scheduling", path: "/scheduling" },
       { icon: ClipboardList, label: "Tarefas", id: "tasks", path: "/tasks" },
-      { icon: Wallet, label: "Financeiro", id: "financial", path: "/financial" },
+      { icon: ShoppingCart, label: "Vendas", id: "sales", path: "/sales" },
       { icon: Users, label: "Equipe", id: "team", path: "/team" },
     ]
   },
@@ -220,13 +221,13 @@ export const NavigationSidebar = () => {
 
     // Hide restricted items
     if (userRole === "agent") {
-      if (child.id === "team" || child.id === "ia-config" || child.id === "financial") {
+      if (child.id === "team" || child.id === "ia-config" || child.id === "sales") {
         return null;
       }
     }
 
-    // New: Hide financial for supervisors if access is revoked
-    if (userRole === "supervisor" && child.id === "financial" && financialAccess === false) {
+    // New: Hide sales for supervisors if access is revoked
+    if (userRole === "supervisor" && child.id === "sales" && financialAccess === false) {
       return null;
     }
 

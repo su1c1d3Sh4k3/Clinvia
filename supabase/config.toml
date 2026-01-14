@@ -103,6 +103,9 @@ verify_jwt = false
 [functions.instagram-oauth-callback]
 verify_jwt = false
 
+[functions.instagram-refresh-token]
+verify_jwt = false
+
 # Webhook Functions
 [functions.webhook-queue-receiver]
 verify_jwt = false

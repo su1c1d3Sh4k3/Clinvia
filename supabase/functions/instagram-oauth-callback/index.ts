@@ -150,6 +150,21 @@ serve(async (req) => {
         }
 
         // =============================================
+        // TOKEN TYPE LOG - Para diagnóstico
+        // =============================================
+        console.log('='.repeat(60));
+        console.log('[TOKEN DIAGNÓSTICO] Tipo de token obtido:');
+        console.log('[TOKEN DIAGNÓSTICO] expires_in =', expiresIn, 'segundos');
+        console.log('[TOKEN DIAGNÓSTICO] expires_in em horas =', (expiresIn / 3600).toFixed(2), 'horas');
+        console.log('[TOKEN DIAGNÓSTICO] expires_in em dias =', (expiresIn / 86400).toFixed(2), 'dias');
+        if (expiresIn > 86400) {
+            console.log('[TOKEN DIAGNÓSTICO] ✅ TOKEN LONG-LIVED (60 dias)');
+        } else {
+            console.log('[TOKEN DIAGNÓSTICO] ❌ TOKEN SHORT-LIVED (1 hora) - PROBLEMA!');
+        }
+        console.log('='.repeat(60));
+
+        // =============================================
         // Step 3: Get Instagram account info
         // Using graph.instagram.com/me endpoint
         // =============================================

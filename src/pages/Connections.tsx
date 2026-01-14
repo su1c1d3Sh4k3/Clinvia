@@ -397,6 +397,33 @@ const Connections = () => {
         }
     });
 
+    const refreshInstagramTokenMutation = useMutation({
+        mutationFn: async (instanceId: string) => {
+            const { data, error } = await supabase.functions.invoke('instagram-refresh-token', {
+                body: { instance_id: instanceId }
+            });
+
+            if (error) throw error;
+            if (data?.error) throw new Error(data.error);
+
+            return data;
+        },
+        onSuccess: (data) => {
+            queryClient.invalidateQueries({ queryKey: ["instagram-instances"] });
+            toast({
+                title: "Token atualizado",
+                description: `Token renovado! Expira em ${data.expires_in_days} dias.`,
+            });
+        },
+        onError: (error: any) => {
+            toast({
+                title: "Erro ao atualizar token",
+                description: error.message || "Não foi possível atualizar o token.",
+                variant: "destructive",
+            });
+        }
+    });
+
     useEffect(() => {
         if (!pollingInstanceId) return;
 
@@ -614,14 +641,26 @@ const Connections = () => {
                                                 <div className="flex items-center gap-2">
                                                     {getStatusBadge(instance.status)}
                                                     {!isAgent && (
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            onClick={() => deleteInstagramMutation.mutate(instance.id)}
-                                                            disabled={deleteInstagramMutation.isPending}
-                                                        >
-                                                            <Trash2 className="h-4 w-4 text-destructive" />
-                                                        </Button>
+                                                        <>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                onClick={() => refreshInstagramTokenMutation.mutate(instance.id)}
+                                                                disabled={refreshInstagramTokenMutation.isPending}
+                                                                title="Atualizar token"
+                                                            >
+                                                                <RefreshCw className={`h-4 w-4 text-green-500 ${refreshInstagramTokenMutation.isPending ? 'animate-spin' : ''}`} />
+                                                            </Button>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                onClick={() => deleteInstagramMutation.mutate(instance.id)}
+                                                                disabled={deleteInstagramMutation.isPending}
+                                                                title="Remover conta"
+                                                            >
+                                                                <Trash2 className="h-4 w-4 text-destructive" />
+                                                            </Button>
+                                                        </>
                                                     )}
                                                 </div>
                                             </div>

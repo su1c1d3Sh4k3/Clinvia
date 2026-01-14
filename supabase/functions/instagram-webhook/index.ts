@@ -432,6 +432,28 @@ serve(async (req) => {
                                 }
 
                                 // =============================================
+                                // 4.5 Trigger Audio Transcription (if audio message)
+                                // =============================================
+                                if (messageType === 'audio' && mediaUrl && savedMessage) {
+                                    console.log('[INSTAGRAM WEBHOOK] Triggering audio transcription...');
+                                    console.log('[INSTAGRAM WEBHOOK] Message ID:', savedMessage.id);
+                                    console.log('[INSTAGRAM WEBHOOK] Media URL:', mediaUrl);
+                                    try {
+                                        const { data: transcribeResult, error: transcribeError } = await supabase.functions.invoke('transcribe-audio', {
+                                            body: { messageId: savedMessage.id, mediaUrl: mediaUrl }
+                                        });
+
+                                        if (transcribeError) {
+                                            console.error('[INSTAGRAM WEBHOOK] Transcription function error:', transcribeError);
+                                        } else {
+                                            console.log('[INSTAGRAM WEBHOOK] Transcription result:', JSON.stringify(transcribeResult));
+                                        }
+                                    } catch (transcribeError) {
+                                        console.error('[INSTAGRAM WEBHOOK] Exception invoking transcription:', transcribeError);
+                                    }
+                                }
+
+                                // =============================================
                                 // 5. Forward to IA Webhook (if enabled)
                                 // =============================================
                                 // Step 1: Check if ia_on_insta is TRUE for this Instagram instance

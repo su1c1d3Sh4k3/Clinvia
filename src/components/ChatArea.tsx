@@ -427,9 +427,31 @@ export const ChatArea = ({
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm;codecs=opus'
-      });
+      // Prefer MP4/AAC for Instagram compatibility (supported in Chrome, Safari, Edge)
+      // Fallback to WebM for Firefox and others
+      let mimeType = 'audio/webm;codecs=opus';
+      let fileExtension = 'webm';
+
+      // Try MP4/AAC first (Instagram compatible)
+      if (MediaRecorder.isTypeSupported('audio/mp4;codecs=mp4a.40.2')) {
+        mimeType = 'audio/mp4;codecs=mp4a.40.2';
+        fileExtension = 'm4a';
+        console.log('[Audio Recording] Using MP4/AAC format (Instagram compatible)');
+      } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+        mimeType = 'audio/mp4';
+        fileExtension = 'm4a';
+        console.log('[Audio Recording] Using MP4 format (Instagram compatible)');
+      } else if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+        mimeType = 'audio/webm;codecs=opus';
+        fileExtension = 'webm';
+        console.log('[Audio Recording] Using WebM/Opus format (fallback)');
+      } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+        mimeType = 'audio/webm';
+        fileExtension = 'webm';
+        console.log('[Audio Recording] Using WebM format (fallback)');
+      }
+
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
 
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
@@ -441,9 +463,11 @@ export const ChatArea = ({
       };
 
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        const audioFile = new File([audioBlob], `audio_${Date.now()}.webm`, { type: 'audio/webm' });
+        const baseMimeType = mimeType.split(';')[0]; // Remove codec info
+        const audioBlob = new Blob(audioChunksRef.current, { type: baseMimeType });
+        const audioFile = new File([audioBlob], `audio_${Date.now()}.${fileExtension}`, { type: baseMimeType });
         setSelectedFile(audioFile);
+        console.log('[Audio Recording] Recording saved as:', audioFile.name, 'type:', baseMimeType);
 
         // Stop all tracks
         stream.getTracks().forEach(track => track.stop());
@@ -648,26 +672,59 @@ export const ChatArea = ({
     }
 
     let finalBody = message;
+    let mediaUrl: string | null = null;
+    let messageType: 'text' | 'audio' | 'image' = 'text';
 
-    // For now, Instagram API only supports text messages
-    // TODO: Add media support when needed
+    // Upload file if present (audio or image)
+    if (selectedFile) {
+      setIsUploading(true);
 
-    if (!finalBody.trim()) {
-      toast.error("Digite uma mensagem");
+      if (selectedFile.type.startsWith('image/')) {
+        messageType = 'image';
+      } else if (selectedFile.type.startsWith('audio/')) {
+        messageType = 'audio';
+      }
+
+      const url = await uploadFile(selectedFile);
+      if (!url) {
+        setIsUploading(false);
+        return;
+      }
+      mediaUrl = url;
+      console.log('[Instagram Send] Uploaded media:', { type: messageType, url: mediaUrl });
+    }
+
+    // Validation: need either text or media
+    if (!finalBody.trim() && !selectedFile) {
+      toast.error("Digite uma mensagem ou anexe um arquivo");
       return;
     }
 
     setIsUploading(true);
 
     try {
+      // Build payload - KEEP ALL existing fields + add new ones
+      const payload: any = {
+        instagram_instance_id: instagramInstanceId,
+        recipient_id: contactInstagramId,
+        conversation_id: conversationId,
+        message_type: messageType,
+      };
+
+      // Add type-specific field
+      if (messageType === 'text') {
+        payload.message_text = finalBody;
+      } else if (messageType === 'audio') {
+        payload.audio_url = mediaUrl;
+      } else if (messageType === 'image') {
+        payload.image_url = mediaUrl;
+      }
+
+      console.log('[Instagram Send] Sending payload:', payload);
+
       // Send via Instagram Edge Function - it also saves the message to DB
       const { data, error } = await supabase.functions.invoke('instagram-send-message', {
-        body: {
-          instagram_instance_id: instagramInstanceId,
-          recipient_id: contactInstagramId,
-          message_text: finalBody,
-          conversation_id: conversationId
-        }
+        body: payload
       });
 
       if (error) throw error;
@@ -688,7 +745,9 @@ export const ChatArea = ({
       queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
 
-      toast.success("Mensagem enviada");
+      const successMsg = messageType === 'audio' ? 'Áudio enviado' :
+        messageType === 'image' ? 'Imagem enviada' : 'Mensagem enviada';
+      toast.success(successMsg);
     } catch (error: any) {
       console.error("Error sending Instagram message:", error);
       toast.error(error.message || "Erro ao enviar mensagem");

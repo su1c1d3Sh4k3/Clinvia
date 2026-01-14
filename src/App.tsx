@@ -21,6 +21,7 @@ import Scheduling from "./pages/Scheduling";
 import IAConfig from "./pages/IAConfig";
 import Settings from "./pages/Settings";
 import Financial from "./pages/Financial";
+import Sales from "./pages/Sales";
 import FollowUp from "./pages/FollowUp";
 import Admin from "./pages/Admin";
 import AdminAuth from "./pages/AdminAuth";
@@ -63,6 +64,7 @@ const App = () => (
                 <Route path="/scheduling" element={<Scheduling />} />
                 <Route path="/ia-config" element={<IAConfig />} />
                 <Route path="/financial" element={<Financial />} />
+                <Route path="/sales" element={<Sales />} />
                 <Route path="/follow-up" element={<FollowUp />} />
                 <Route path="/settings" element={<Settings />} />
               </Route>
