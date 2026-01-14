@@ -682,8 +682,11 @@ export const ChatArea = ({
 
     try {
       // Build payload based on message type
+      // Include all required fields for the backend
       const payload: any = {
         conversation_id: conversationId,
+        instagram_instance_id: instagramInstanceId,
+        recipient_id: contactInstagramId,
         message_type: messageType,
       };
 
