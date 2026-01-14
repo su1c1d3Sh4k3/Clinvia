@@ -22,6 +22,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { ContactPicker } from "@/components/ui/contact-picker";
 import {
     Command,
     CommandEmpty,
@@ -73,7 +74,7 @@ interface TaskFormValues {
 export function TaskModal({ open, onOpenChange, boardId, taskId, initialDate, initialStartTime, initialDealId, initialContactId }: TaskModalProps) {
     const queryClient = useQueryClient();
     const [openDealCombo, setOpenDealCombo] = useState(false);
-    const [openContactCombo, setOpenContactCombo] = useState(false);
+
 
     // Staff/Team hooks para o campo Responsável
     const { data: staffMembers } = useStaff();
@@ -176,18 +177,7 @@ export function TaskModal({ open, onOpenChange, boardId, taskId, initialDate, in
         enabled: open,
     });
 
-    // Fetch contacts
-    const { data: contacts } = useQuery({
-        queryKey: ["contacts_select"],
-        queryFn: async () => {
-            const { data, error } = await supabase
-                .from("contacts")
-                .select("id, push_name, number");
-            if (error) throw error;
-            return data;
-        },
-        enabled: open,
-    });
+
 
     // Fetch task details if editing
     const { data: task } = useQuery({
@@ -208,7 +198,7 @@ export function TaskModal({ open, onOpenChange, boardId, taskId, initialDate, in
     useEffect(() => {
         if (task) {
             setValue("title", task.title);
-            setValue("urgency", task.urgency);
+            setValue("urgency", (task.urgency || "medium") as "low" | "medium" | "high");
             setValue("description", task.description || "");
             setValue("type", task.type);
             setValue("recurrence", task.recurrence);
@@ -480,53 +470,12 @@ export function TaskModal({ open, onOpenChange, boardId, taskId, initialDate, in
                         </div>
                         <div className="space-y-2">
                             <Label>Vincular Contato</Label>
-                            <Popover open={openContactCombo} onOpenChange={setOpenContactCombo}>
-                                <PopoverTrigger asChild>
-                                    <Button
-                                        variant="outline"
-                                        role="combobox"
-                                        aria-expanded={openContactCombo}
-                                        className="w-full justify-between px-3"
-                                        disabled={!!selectedDealId}
-                                    >
-                                        <span className="truncate">
-                                            {selectedContactId
-                                                ? contacts?.find((contact) => contact.id === selectedContactId)?.push_name || "Contato"
-                                                : "Selecione um contato..."}
-                                        </span>
-                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-[280px] p-0">
-                                    <Command>
-                                        <CommandInput placeholder="Buscar contato..." />
-                                        <CommandList>
-                                            <CommandEmpty>Nenhum contato encontrado.</CommandEmpty>
-                                            <CommandGroup>
-                                                {contacts?.map((contact) => (
-                                                    <CommandItem
-                                                        key={contact.id}
-                                                        value={contact.push_name}
-                                                        onSelect={() => {
-                                                            setValue("contact_id", contact.id === selectedContactId ? undefined : contact.id);
-                                                            setOpenContactCombo(false);
-                                                        }}
-                                                    >
-                                                        <Check
-                                                            className={cn(
-                                                                "mr-2 h-4 w-4",
-                                                                selectedContactId === contact.id ? "opacity-100" : "opacity-0"
-                                                            )}
-                                                        />
-                                                        {contact.push_name}
-                                                        <span className="ml-2 text-xs text-muted-foreground">{contact.number}</span>
-                                                    </CommandItem>
-                                                ))}
-                                            </CommandGroup>
-                                        </CommandList>
-                                    </Command>
-                                </PopoverContent>
-                            </Popover>
+                            <ContactPicker
+                                value={selectedContactId || ""}
+                                onChange={(val) => setValue("contact_id", val || undefined)}
+                                disabled={!!selectedDealId}
+                                className="w-full"
+                            />
                         </div>
                     </div>
 

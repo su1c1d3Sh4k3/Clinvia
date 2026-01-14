@@ -4,7 +4,7 @@
 
 // Enums
 export type SaleCategory = 'product' | 'service';
-export type PaymentType = 'cash' | 'installment';
+export type PaymentType = 'cash' | 'installment' | 'pending';
 export type InstallmentStatus = 'pending' | 'paid' | 'overdue';
 
 // Labels para display
@@ -16,6 +16,7 @@ export const SaleCategoryLabels: Record<SaleCategory, string> = {
 export const PaymentTypeLabels: Record<PaymentType, string> = {
     cash: 'À Vista',
     installment: 'Parcelado',
+    pending: 'Pendente',
 };
 
 export const InstallmentStatusLabels: Record<InstallmentStatus, string> = {
@@ -40,8 +41,15 @@ export interface Sale {
     team_member_id?: string;
     professional_id?: string;
     notes?: string;
+    contact_id?: string;
     created_at: string;
     updated_at: string;
+    // Joined fields
+    contact?: {
+        id: string;
+        push_name: string;
+        number?: string;
+    };
     // Joined fields
     product_service?: {
         id: string;
@@ -89,6 +97,7 @@ export interface SaleFormData {
     team_member_id?: string;
     professional_id?: string;
     notes?: string;
+    contact_id?: string;
 }
 
 // Interfaces para métricas

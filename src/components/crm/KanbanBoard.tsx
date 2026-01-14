@@ -5,9 +5,9 @@ import { CRMStage, CRMDeal } from "@/types/crm";
 import { DragDropContext, DropResult } from "@hello-pangea/dnd";
 import { KanbanColumn } from "./KanbanColumn";
 import { toast } from "sonner";
-import { RevenueModal } from "@/components/financial/RevenueModal";
+import { PaymentTypeModal } from "./PaymentTypeModal";
 import { LossReasonModal } from "./LossReasonModal"; // Loss Reason Modal
-import type { RevenueFormData, PaymentMethod, FinancialStatus } from "@/types/financial";
+
 
 import { CRMFiltersState } from "./CRMFilters";
 import { isWithinInterval, startOfDay, endOfDay } from "date-fns";
@@ -26,9 +26,15 @@ export function KanbanBoard({ funnelId, filters }: KanbanBoardProps) {
     const { data: userRole } = useUserRole();
     const { data: currentTeamMember } = useCurrentTeamMember();
 
-    // CRM-Financial integration state
-    const [revenueModalOpen, setRevenueModalOpen] = useState(false);
-    const [prefillRevenueData, setPrefillRevenueData] = useState<Partial<RevenueFormData> | null>(null);
+    // CRM-Sales integration state
+    const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+    const [pendingWonDeal, setPendingWonDeal] = useState<{
+        deal: any;
+        totalValue: number;
+        productsCount: number;
+        products: any[];
+    } | null>(null);
+    const [isCreatingSales, setIsCreatingSales] = useState(false);
 
     // Loss Reason Modal state
     const [lossReasonModalOpen, setLossReasonModalOpen] = useState(false);
@@ -61,8 +67,9 @@ export function KanbanBoard({ funnelId, filters }: KanbanBoardProps) {
                 .select(`
                     *, 
                     contacts(push_name, number, profile_pic_url, instagram_id, contact_tags(tags(id, name, color))),
-                    product_service:products_services(id, name, type),
-                    assigned_professional:professionals(id, name)
+                    product_service:products_services(id, name, type, price),
+                    assigned_professional:professionals(id, name),
+                    deal_products:crm_deal_products(*, product_service:products_services(id, name, type, price))
                 `)
                 .eq("funnel_id", funnelId);
 
@@ -152,7 +159,8 @@ export function KanbanBoard({ funnelId, filters }: KanbanBoardProps) {
                         *,
                         product_service:products_services(id, name, type, price),
                         assigned_professional:professionals(id, name, role),
-                        contact:contacts(id, push_name)
+                        contact:contacts(id, push_name),
+                        deal_products:crm_deal_products(*, product_service:products_services(id, name, type, price))
                     `)
                     .eq('id', dealId)
                     .single();
@@ -164,7 +172,7 @@ export function KanbanBoard({ funnelId, filters }: KanbanBoardProps) {
                 }
 
                 if (fullDeal) {
-                    await triggerRevenueCreation(fullDeal);
+                    await triggerSalesCreation(fullDeal);
                 }
             }
         },
@@ -270,62 +278,96 @@ export function KanbanBoard({ funnelId, filters }: KanbanBoardProps) {
         // Deal is not moved, stays in original position
     };
 
-    // NEW - CRM-Financial Integration: Revenue creation trigger
-    const triggerRevenueCreation = async (deal: any) => {
+    // NEW - CRM-Sales Integration: Sales creation trigger
+    const triggerSalesCreation = async (deal: any) => {
+        const totalValue = deal.value || 0;
+
+        const products = deal.deal_products?.length > 0
+            ? deal.deal_products
+            : (deal.product_service_id ? [{
+                product_service_id: deal.product_service_id,
+                quantity: deal.quantity || 1,
+                unit_price: deal.product_service?.price || deal.value,
+                product_service: deal.product_service
+            }] : []);
+
+        const productsCount = products.length;
+
+        if (productsCount === 0 && totalValue === 0) {
+            toast.warning('Negociação sem produto ou valor definido');
+            return;
+        }
+
+        setPendingWonDeal({ deal, totalValue, productsCount: productsCount || 1, products });
+        setPaymentModalOpen(true);
+    };
+
+    // Handle payment type selection
+    const handlePaymentConfirm = async (paymentType: 'cash' | 'installment', installments?: number, interestRate?: number) => {
+        if (!pendingWonDeal) return;
+        await createSalesFromDeal(paymentType, installments, interestRate);
+    };
+
+    // Handle cancel - creates as pending
+    const handlePaymentCancel = async () => {
+        if (!pendingWonDeal) return;
+        await createSalesFromDeal('pending');
+    };
+
+    // Create sales from deal
+    const createSalesFromDeal = async (paymentType: 'cash' | 'installment' | 'pending', installments?: number, interestRate?: number) => {
+        if (!pendingWonDeal) return;
+        setIsCreatingSales(true);
+
         try {
             const { data: userData } = await supabase.auth.getUser();
-            if (!userData.user) throw new Error('User not authenticated');
+            if (!userData.user) throw new Error('Usuário não autenticado');
 
-            // Get or create category based on product/service type
-            let categoryId: string | undefined;
+            const { deal, products } = pendingWonDeal;
+            const saleDate = new Date().toISOString().split('T')[0];
 
-            if (deal.product_service) {
-                // Category name: 'Produto' or 'Serviço'
-                const categoryName = deal.product_service.type === 'product' ? 'Produto' : 'Serviço';
+            // Filter out products without ID
+            const validProducts = products.filter((p: any) => p.product_service_id);
 
-                const { data: category } = await supabase
-                    .from('revenue_categories')
-                    .select('id')
-                    .eq('name', categoryName)
-                    .eq('user_id', userData.user.id)
-                    .single();
-
-                if (!category) {
-                    // Create category if doesn't exist
-                    const { data: newCategory } = await supabase
-                        .from('revenue_categories')
-                        .insert({ name: categoryName, user_id: userData.user.id })
-                        .select('id')
-                        .single();
-
-                    categoryId = newCategory?.id;
-                } else {
-                    categoryId = category.id;
-                }
+            if (validProducts.length === 0) {
+                toast.warning('Negociação sem produto/serviço vinculado');
+                setIsCreatingSales(false);
+                return;
             }
 
-            // Prepare pre-filled revenue data
-            setPrefillRevenueData({
-                category_id: categoryId,
-                item: deal.product_service?.name || deal.title,
-                product_service_id: deal.product_service?.id || '', // NEW - pass ID for select
-                description: deal.description || '',
-                amount: deal.value,
-                due_date: new Date().toISOString().split('T')[0],
-                team_member_id: deal.responsible_id || '',
-                professional_id: deal.assigned_professional_id || '',
-                contact_id: deal.contact_id || '',
-                payment_method: 'pix' as PaymentMethod,
-                status: 'pending' as FinancialStatus,
-                is_recurring: false,
-            });
+            const salesToCreate = validProducts.map((prod: any) => ({
+                user_id: userData.user.id,
+                category: prod.product_service?.type === 'service' ? 'service' : 'product',
+                product_service_id: prod.product_service_id,
+                quantity: prod.quantity || 1,
+                unit_price: prod.unit_price || prod.product_service?.price || 0,
+                // Total amount for this sale item
+                total_amount: (prod.unit_price || prod.product_service?.price || 0) * (prod.quantity || 1),
+                payment_type: paymentType,
+                installments: paymentType === 'installment' ? (installments || 1) : 1,
+                interest_rate: paymentType === 'installment' ? (interestRate || 0) : 0,
+                sale_date: saleDate,
+                team_member_id: deal.responsible_id || null,
+                professional_id: deal.assigned_professional_id || null,
+                contact_id: deal.contact_id || null,
+                notes: `Venda gerada automaticamente da negociação: ${deal.title}`,
+            }));
 
-            // Open modal for user review
-            setRevenueModalOpen(true);
+            const { error } = await supabase
+                .from('sales' as any)
+                .insert(salesToCreate);
 
-        } catch (error) {
-            console.error('Error preparing revenue data:', error);
-            toast.error('Erro ao preparar lançamento de receita');
+            if (error) throw error;
+
+            toast.success(paymentType === 'pending' ? 'Vendas criadas como pendente' : 'Vendas criadas com sucesso!');
+            queryClient.invalidateQueries({ queryKey: ['sales'] });
+        } catch (error: any) {
+            console.error('Error creating sales:', error);
+            toast.error('Erro ao criar venda: ' + error.message);
+        } finally {
+            setIsCreatingSales(false);
+            setPaymentModalOpen(false);
+            setPendingWonDeal(null);
         }
     };
 
@@ -354,11 +396,16 @@ export function KanbanBoard({ funnelId, filters }: KanbanBoardProps) {
                 </div>
             </DragDropContext>
 
-            {/* CRM-Financial Integration: Revenue Modal */}
-            <RevenueModal
-                open={revenueModalOpen}
-                onOpenChange={setRevenueModalOpen}
-                revenue={prefillRevenueData as any}
+            {/* CRM-Sales Integration: Payment Type Modal */}
+            <PaymentTypeModal
+                open={paymentModalOpen}
+                onOpenChange={setPaymentModalOpen}
+                dealTitle={pendingWonDeal?.deal?.title || ''}
+                totalValue={pendingWonDeal?.totalValue || 0}
+                productsCount={pendingWonDeal?.productsCount || 0}
+                onConfirm={handlePaymentConfirm}
+                onCancel={handlePaymentCancel}
+                isLoading={isCreatingSales}
             />
 
             {/* Loss Reason Modal */}

@@ -141,9 +141,31 @@ All colors MUST be HSL.
 
 
 @layer utilities {
-  .scrollbar-thin::-webkit-scrollbar {
+  .nav-scrollbar {
+    scrollbar-width: thin;
+  }
+
+  .nav-scrollbar::-webkit-scrollbar {
     width: 6px;
     height: 6px;
+  }
+
+  .nav-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .nav-scrollbar::-webkit-scrollbar-thumb {
+    background: hsl(var(--primary) / 0.2);
+    border-radius: 10px;
+  }
+
+  .nav-scrollbar:hover::-webkit-scrollbar-thumb {
+    background: hsl(var(--primary) / 0.4);
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 0px;
+    height: 0px;
   }
 
   .scrollbar-track-transparent::-webkit-scrollbar-track {

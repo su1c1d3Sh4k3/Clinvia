@@ -10,7 +10,9 @@ import type {
     TopProductService,
     SalesProjection,
     SalesByPerson,
+    SalesByPerson,
 } from "@/types/sales";
+import { useOwnerId } from "@/hooks/useOwnerId";
 
 // =============================================
 // HELPER: Get owner_id for RLS compatibility
@@ -66,6 +68,26 @@ export function useSales(startDate?: string, endDate?: string) {
     });
 }
 
+// Contatos do usuário (para select de cliente em vendas)
+export function useContacts() {
+    const { data: ownerId } = useOwnerId();
+    return useQuery({
+        queryKey: ['contacts-for-sales', ownerId],
+        queryFn: async () => {
+            if (!ownerId) return [];
+            const { data, error } = await supabase
+                .from('contacts' as any)
+                .select('id, push_name, number')
+                .eq('user_id', ownerId)
+                .not('number', 'ilike', '%@g.us')
+                .order('push_name', { ascending: true });
+            if (error) throw error;
+            return (data || []) as { id: string; push_name: string; number?: string }[];
+        },
+        enabled: !!ownerId,
+    });
+}
+
 // Resumo de Vendas do Mês
 export function useSalesSummary(month: number, year: number) {
     return useQuery({
@@ -92,9 +114,10 @@ export function useAnnualSales(year?: number) {
 
             const { data: sales, error } = await supabase
                 .from('sales' as any)
-                .select('sale_date, total_amount')
+                .select('sale_date, total_amount, payment_type')
                 .gte('sale_date', startDate)
-                .lte('sale_date', endDate);
+                .lte('sale_date', endDate)
+                .neq('payment_type', 'pending');
 
             if (error) throw error;
 
@@ -129,9 +152,10 @@ export function useMonthlySales(month: number, year: number) {
 
             const { data: sales, error } = await supabase
                 .from('sales' as any)
-                .select('sale_date, total_amount')
+                .select('sale_date, total_amount, payment_type')
                 .gte('sale_date', startDate.toISOString().split('T')[0])
-                .lte('sale_date', endDate.toISOString().split('T')[0]);
+                .lte('sale_date', endDate.toISOString().split('T')[0])
+                .neq('payment_type', 'pending');
 
             if (error) throw error;
 
@@ -293,9 +317,10 @@ export function useAnnualRevenue(year: number) {
 
             const { data, error } = await supabase
                 .from('sales' as any)
-                .select('total_amount')
+                .select('total_amount, payment_type')
                 .gte('sale_date', startDate)
-                .lte('sale_date', endDate);
+                .lte('sale_date', endDate)
+                .neq('payment_type', 'pending');
 
             if (error) throw error;
             return (data || []).reduce((sum: number, sale: any) => sum + Number(sale.total_amount), 0);
@@ -342,12 +367,13 @@ export function useCreateSale() {
                 unit_price: data.unit_price,
                 total_amount: data.total_amount,
                 payment_type: data.payment_type,
-                installments: data.payment_type === 'cash' ? 1 : data.installments,
-                interest_rate: data.payment_type === 'cash' ? 0 : data.interest_rate,
+                installments: data.payment_type === 'cash' || data.payment_type === 'pending' ? 1 : data.installments,
+                interest_rate: data.payment_type === 'cash' || data.payment_type === 'pending' ? 0 : data.interest_rate,
                 sale_date: data.sale_date,
                 team_member_id: data.team_member_id || null,
                 professional_id: data.professional_id || null,
                 notes: data.notes || null,
+                contact_id: data.contact_id || null,
             };
 
             const { data: result, error } = await supabase

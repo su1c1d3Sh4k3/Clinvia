@@ -10,22 +10,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { checkActiveConversation } from "@/hooks/useActiveConversation";
-import { Check, ChevronsUpDown } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { ContactPicker } from "@/components/ui/contact-picker";
 import { formatPhoneNumber, unformatPhoneNumber } from "@/utils/formatters";
-import {
-    Command,
-    CommandEmpty,
-    CommandGroup,
-    CommandInput,
-    CommandItem,
-    CommandList,
-} from "@/components/ui/command";
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from "@/components/ui/popover";
+
 
 interface NewMessageModalProps {
     open: boolean;
@@ -38,30 +25,12 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone }: NewMessa
     const [number, setNumber] = useState(prefilledPhone || "55");
     const [message, setMessage] = useState("");
     const [isLoading, setIsLoading] = useState(false);
-    const [openCombobox, setOpenCombobox] = useState(false);
     const [selectedContact, setSelectedContact] = useState<string | null>(null);
     const { toast } = useToast();
     const { data: ownerId } = useOwnerId();
 
     // Fetch contacts
-    const { data: contacts } = useQuery({
-        queryKey: ["contacts-select"],
-        queryFn: async () => {
-            const { data, error } = await supabase
-                .from("contacts")
-                .select("id, push_name, number")
-                .not('number', 'ilike', '%@g.us') // Filter out groups
-                .order("push_name");
 
-            if (error) throw error;
-
-            return data.map(contact => ({
-                ...contact,
-                // Extract phone from remote_jid (everything before @)
-                phone: contact.number ? contact.number.split('@')[0] : ''
-            }));
-        },
-    });
 
     // Fetch connected instances
     const { data: instances } = useQuery({
@@ -247,72 +216,19 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone }: NewMessa
 
                     <div className="space-y-2 flex flex-col">
                         <Label>Selecionar contato</Label>
-                        <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
-                            <PopoverTrigger asChild>
-                                <Button
-                                    variant="outline"
-                                    role="combobox"
-                                    aria-expanded={openCombobox}
-                                    className="w-full justify-between"
-                                >
-                                    {selectedContact
-                                        ? contacts?.find((contact) => contact.id === selectedContact)?.push_name ||
-                                        contacts?.find((contact) => contact.id === selectedContact)?.phone || "Contato selecionado"
-                                        : "Nenhum"}
-                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-[400px] p-0">
-                                <Command>
-                                    <CommandInput placeholder="Buscar contato..." />
-                                    <CommandList>
-                                        <CommandEmpty>Nenhum contato encontrado.</CommandEmpty>
-                                        <CommandGroup>
-                                            <CommandItem
-                                                value="nenhum"
-                                                onSelect={() => {
-                                                    setSelectedContact(null);
-                                                    setNumber("");
-                                                    setOpenCombobox(false);
-                                                }}
-                                            >
-                                                <Check
-                                                    className={cn(
-                                                        "mr-2 h-4 w-4",
-                                                        !selectedContact ? "opacity-100" : "opacity-0"
-                                                    )}
-                                                />
-                                                Nenhum
-                                            </CommandItem>
-                                            {contacts?.map((contact) => (
-                                                <CommandItem
-                                                    key={contact.id}
-                                                    value={contact.push_name || contact.phone || ""}
-                                                    onSelect={() => {
-                                                        setSelectedContact(contact.id);
-                                                        if (contact.phone) {
-                                                            setNumber(contact.phone);
-                                                        }
-                                                        setOpenCombobox(false);
-                                                    }}
-                                                >
-                                                    <Check
-                                                        className={cn(
-                                                            "mr-2 h-4 w-4",
-                                                            selectedContact === contact.id ? "opacity-100" : "opacity-0"
-                                                        )}
-                                                    />
-                                                    {contact.push_name || "Sem nome"}
-                                                    <span className="ml-2 text-xs text-muted-foreground">
-                                                        ({contact.phone})
-                                                    </span>
-                                                </CommandItem>
-                                            ))}
-                                        </CommandGroup>
-                                    </CommandList>
-                                </Command>
-                            </PopoverContent>
-                        </Popover>
+                        <ContactPicker
+                            value={selectedContact || ""}
+                            onChange={(val, contact) => {
+                                setSelectedContact(val || null);
+                                if (contact?.number) {
+                                    setNumber(contact.number.split('@')[0]);
+                                } else if (!val) {
+                                    setNumber("");
+                                }
+                            }}
+                            placeholder="Buscar contato..."
+                            className="w-full"
+                        />
                     </div>
 
                     <div className="space-y-2">

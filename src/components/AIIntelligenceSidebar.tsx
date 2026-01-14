@@ -15,7 +15,7 @@ import { useGenerateSummary } from "@/hooks/useGenerateSummary";
 import { supabase } from "@/integrations/supabase/client";
 import { CopilotSettingsModal } from "./CopilotSettingsModal";
 import { CRMIntegrationSidebar } from "@/components/crm/CRMIntegrationSidebar";
-import { QuickSaleModal } from "@/components/financial/QuickSaleModal";
+import { SaleModal } from "@/components/sales/SaleModal";
 import { AppointmentModal } from "@/components/scheduling/AppointmentModal";
 import { OpportunitiesSection } from "@/components/OpportunitiesSection";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -267,8 +267,12 @@ export const AIIntelligenceSidebar = ({ conversationId, onFollowUpMessageClick, 
         <OpportunitiesSection onOpportunitySelect={onOpportunitySelect} />
       )}
 
-      {/* Quick Sale Modal */}
-      <QuickSaleModal open={showSaleModal} onOpenChange={setShowSaleModal} />
+      {/* Sale Modal (novo sistema de vendas) */}
+      <SaleModal
+        open={showSaleModal}
+        onOpenChange={setShowSaleModal}
+        fixedContactId={!isGroup ? conversationData?.contact_id : undefined}
+      />
 
       {/* Realizar Venda - Hide for Groups */}
       {!isGroup && conversationId && (

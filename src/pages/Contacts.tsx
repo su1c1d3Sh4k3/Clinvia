@@ -46,6 +46,7 @@ import { AnalysisHistoryModal } from "@/components/AnalysisHistoryModal";
 import { ClientReportModal } from "@/components/ClientReportModal";
 import { Sparkles, FileText } from "lucide-react";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useOwnerId } from "@/hooks/useOwnerId";
 
 interface Contact {
     id: string;
@@ -99,17 +100,22 @@ const Contacts = () => {
     const queryClient = useQueryClient();
 
     // Fetch Contacts
+    const { data: ownerId } = useOwnerId();
     const { data: contacts, isLoading } = useQuery({
-        queryKey: ["contacts"],
+        queryKey: ["contacts", ownerId],
         queryFn: async () => {
+            if (!ownerId) return [];
             const { data, error } = await supabase
                 .from("contacts" as any)
                 .select("*, contact_tags(tags(*))")
+                .eq("user_id", ownerId)
+                .not("number", "ilike", "%@g.us")
                 .order("push_name");
 
             if (error) throw error;
             return data as any[]; // Type assertion needed due to complex join
         },
+        enabled: !!ownerId,
     });
 
     // Fetch Tags for Filter

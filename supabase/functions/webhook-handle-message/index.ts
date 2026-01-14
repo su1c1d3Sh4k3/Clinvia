@@ -183,7 +183,6 @@ serve(async (req) => {
             let { data: contact } = await supabase
                 .from('contacts')
                 .select('*')
-                .eq('instance_id', instance.id)  // FILTRO PRIMÁRIO - isolamento por instância
                 .eq('user_id', userId)
                 .eq('number', waNumber)
                 .maybeSingle();
@@ -229,468 +228,473 @@ serve(async (req) => {
                 }
             } else {
                 // Criar novo contato
-                // Verificar se o nome tem letras (nome real vs número)
-                const hasLetters = /[a-zA-Z]/.test(contactName);
-
-                const { data: newContact, error: createError } = await supabase
-                    .from('contacts')
-                    .insert({
-                        number: waNumber,
-                        push_name: contactName,
-                        profile_pic_url: profilePicUrl,
-                        is_group: false,
-                        instance_id: instance.id,
-                        user_id: userId,
-                        edited: hasLetters // Se nome tem letras, já marcar como editado
-                    })
-                    .select()
-                    .single();
-
-                if (createError) {
-                    console.error('[webhook-handle-message] Error creating contact:', createError);
+                // Validar se NÃO é grupo (segurança extra)
+                if (payload.message?.isGroup || waNumber.includes('@g.us')) {
+                    console.log('[webhook-handle-message] Skipping contact creation for group number:', waNumber);
+                    contact = null;
                 } else {
-                    contact = newContact;
-                }
-            }
+                    // Verificar se o nome tem letras (nome real vs número)
+                    const hasLetters = /[a-zA-Z]/.test(contactName);
 
-            contactId = contact?.id;
-
-            if (contact) {
-                senderName = contact.push_name;
-                senderJid = contact.number;
-                senderProfilePicUrl = contact.profile_pic_url;
-            }
-        }
-
-        // 3. Conversation Logic
-        if (contactId || groupId) {
-            console.log('[webhook-handle-message] Processing Conversation...');
-
-            const messageType = mapMessageType(payload.message?.messageType || 'conversation');
-            const messageText = payload.message?.text || payload.message?.content?.text || payload.body?.message?.text || '';
-            const fromMe = payload.message?.fromMe === true;
-            const messageId = payload.message?.messageid || payload.message?.id || payload.body?.key?.id;
-
-            // Find existing conversation
-            let query = supabase
-                .from('conversations')
-                .select('*')
-                .eq('instance_id', instance.id)
-                .eq('user_id', userId)
-                .in('status', ['pending', 'open'])
-                .order('created_at', { ascending: false })
-                .limit(1);
-
-            if (groupId) {
-                query = query.eq('group_id', groupId);
-            } else if (contactId) {
-                query = query.eq('contact_id', contactId);
-            }
-
-            const { data: conversations } = await query;
-
-            if (conversations && conversations.length > 0) {
-                conversation = conversations[0];
-                console.log('[webhook-handle-message] Found conversation:', conversation.id);
-
-                await supabase
-                    .from('conversations')
-                    .update({
-                        last_message: messageText || 'Mídia',
-                        unread_count: (conversation.unread_count || 0) + 1,
-                        updated_at: new Date().toISOString(),
-                        last_message_at: new Date().toISOString()
-                    })
-                    .eq('id', conversation.id);
-            } else {
-                console.log('[webhook-handle-message] Creating conversation...');
-
-                // Use INSERT with fallback - upsert doesn't work with partial indexes
-                const { data: newConv, error: convError } = await supabase
-                    .from('conversations')
-                    .insert({
-                        contact_id: contactId,
-                        group_id: groupId,
-                        instance_id: instance.id,
-                        user_id: userId,
-                        status: 'pending',
-                        unread_count: 1,
-                        queue_id: instance.default_queue_id,
-                        last_message_at: new Date().toISOString()
-                    })
-                    .select()
-                    .single();
-
-                if (convError) {
-                    console.error('[webhook-handle-message] Error creating conversation:', convError);
-                    // If insert failed (likely duplicate), fetch existing conversation
-                    let existingQuery = supabase
-                        .from('conversations')
-                        .select('*')
-                        .eq('instance_id', instance.id)
-                        .in('status', ['pending', 'open'])
-                        .order('created_at', { ascending: false })
-                        .limit(1);
-
-                    if (contactId) {
-                        existingQuery = existingQuery.eq('contact_id', contactId);
-                    } else if (groupId) {
-                        existingQuery = existingQuery.eq('group_id', groupId);
-                    }
-
-                    const { data: existingConvs } = await existingQuery;
-
-                    if (existingConvs && existingConvs.length > 0) {
-                        conversation = existingConvs[0];
-                        console.log('[webhook-handle-message] Using existing conversation after conflict:', conversation.id);
-                    }
-                } else {
-                    conversation = newConv;
-                }
-            }
-
-            // 4. Save Message & Handle Media
-            if (conversation) {
-                let mediaUrl = null;
-
-                // Download Media
-                if (['image', 'audio', 'video', 'document'].includes(messageType) && messageId) {
-                    console.log('[webhook-handle-message] Downloading media...');
-                    mediaUrl = await downloadMediaFromUzapi(
-                        instance.apikey,
-                        messageId,
-                        messageType,
-                        supabase,
-                        conversation.id
-                    );
-                    if (mediaUrl) {
-                        console.log('[webhook-handle-message] Media uploaded:', mediaUrl);
-                    }
-                }
-
-                // Extract Quote/Reply info
-                const contextInfo = payload.message?.content?.contextInfo;
-                let replyToId = null;
-                let quotedBody = null;
-                let quotedSender = null;
-
-                if (contextInfo) {
-                    replyToId = contextInfo.stanzaID || null;
-                    quotedBody = contextInfo.quotedMessage?.conversation ||
-                        contextInfo.quotedMessage?.extendedTextMessage?.text || null;
-                    quotedSender = contextInfo.participant ?
-                        (contextInfo.participant.includes('@lid') ? 'Atendente' : 'Cliente') : null;
-                }
-
-                // Save Message
-                const { data: savedMessage, error: msgError } = await supabase
-                    .from('messages')
-                    .insert({
-                        conversation_id: conversation.id,
-                        body: messageText,
-                        direction: fromMe ? 'outbound' : 'inbound',
-                        message_type: messageType,
-                        evolution_id: messageId,
-                        user_id: userId,
-                        sender_name: senderName,
-                        sender_jid: senderJid,
-                        sender_profile_pic_url: senderProfilePicUrl,
-                        media_url: mediaUrl,
-                        reply_to_id: replyToId,
-                        quoted_body: quotedBody,
-                        quoted_sender: quotedSender
-                    })
-                    .select()
-                    .single();
-
-                if (msgError) {
-                    console.error('[webhook-handle-message] Error saving message:', msgError);
-                } else {
-                    console.log('[webhook-handle-message] Message saved:', savedMessage.id);
-
-                    // ========================================
-                    // PUSH NOTIFICATION FOR INBOUND MESSAGES
-                    // ========================================
-                    if (!fromMe && savedMessage) {
-                        console.log('[webhook-handle-message] Triggering push notification for inbound message...');
-
-                        // Get team members who should receive the notification
-                        // Rules:
-                        // 1. If conversation.assigned_agent_id exists -> notify only that agent
-                        // 2. If conversation.queue_id exists -> notify only members in that queue
-                        // 3. Otherwise -> notify all team members of the company
-                        // 
-                        // Notification preferences:
-                        // - notifications_enabled: true = receives notifications for individual contacts
-                        // - group_notifications_enabled: true = receives notifications for groups
-
-                        // Get ALL team members with role info and notification preferences
-                        const { data: allTeamMembers } = await supabase
-                            .from('team_members')
-                            .select('id, auth_user_id, role, queue_ids, notifications_enabled, group_notifications_enabled')
-                            .eq('user_id', userId)
-                            .not('auth_user_id', 'is', null);
-
-                        let teamMembersToNotify: any[] = [];
-
-                        for (const tm of allTeamMembers || []) {
-                            const role = tm.role as string;
-
-                            // Check notification preferences based on message type
-                            // For groups: check group_notifications_enabled
-                            // For contacts: check notifications_enabled
-                            if (isGroup) {
-                                if (tm.group_notifications_enabled !== true) {
-                                    continue; // Skip this member - group notifications disabled
-                                }
-                            } else {
-                                if (tm.notifications_enabled !== true) {
-                                    continue; // Skip this member - contact notifications disabled
-                                }
-                            }
-
-                            // Admin/Supervisor: receive ALL inbound messages (if notifications enabled for the type)
-                            if (role === 'admin' || role === 'supervisor') {
-                                teamMembersToNotify.push(tm);
-                                continue;
-                            }
-
-                            // Agent: role-based filtering
-                            if (role === 'agent') {
-                                const agentQueues = tm.queue_ids || [];
-                                const hasQueues = agentQueues.length > 0;
-
-                                // Case 1: Conversation is assigned to this specific agent
-                                if (conversation.assigned_agent_id && conversation.assigned_agent_id === tm.id) {
-                                    teamMembersToNotify.push(tm);
-                                }
-                                // Case 2: Conversation is in a queue that this agent belongs to
-                                else if (conversation.queue_id && hasQueues && agentQueues.includes(conversation.queue_id)) {
-                                    teamMembersToNotify.push(tm);
-                                }
-                                // Case 3: Agent has no queues AND conversation is not assigned to anyone
-                                else if (!hasQueues && !conversation.assigned_agent_id) {
-                                    teamMembersToNotify.push(tm);
-                                }
-                            }
-                        }
-
-                        // Get contact name and profile picture for notification
-                        // Use senderName/senderProfilePicUrl which are set for both contacts and group members
-                        const notificationTitle = isGroup
-                            ? (payload.body?.chat?.name || senderName || 'Grupo')
-                            : (senderName || payload.body?.from?.name || payload.message?.pushName || 'Cliente');
-
-                        const notificationIcon = senderProfilePicUrl || undefined;
-
-                        const messagePreview = (messageText || messageType || '').substring(0, 50) +
-                            ((messageText?.length || 0) > 50 ? '...' : '');
-
-                        // Send push to each team member using direct fetch (invoke doesn't work reliably from Edge Functions)
-                        const supabaseUrl = Deno.env.get('SUPABASE_URL');
-                        const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-
-                        for (const tm of teamMembersToNotify) {
-                            if (tm.auth_user_id && supabaseUrl && serviceKey) {
-                                console.log('[webhook-handle-message] Sending push to auth_user_id:', tm.auth_user_id);
-
-                                fetch(`${supabaseUrl}/functions/v1/send-push`, {
-                                    method: 'POST',
-                                    headers: {
-                                        'Content-Type': 'application/json',
-                                        'Authorization': `Bearer ${serviceKey}`
-                                    },
-                                    body: JSON.stringify({
-                                        auth_user_id: tm.auth_user_id,
-                                        title: notificationTitle,
-                                        body: messagePreview,
-                                        icon: notificationIcon,
-                                        notification_type: 'messages',
-                                        url: `/?conversationId=${conversation.id}`,
-                                        tag: `message-${conversation.id}`
-                                    })
-                                }).then(res => {
-                                    console.log('[webhook-handle-message] Push response status:', res.status);
-                                }).catch(err => console.error('[webhook-handle-message] Push fetch error:', err));
-                            }
-                        }
-
-                        console.log(`[webhook-handle-message] Push notifications sent to ${teamMembersToNotify.length} user(s)`);
-                    }
-
-                    // Trigger Audio Transcription
-                    if (messageType === 'audio' && mediaUrl && savedMessage) {
-                        console.log('[webhook-handle-message] Triggering transcription...');
-                        supabase.functions.invoke('transcribe-audio', {
-                            body: { messageId: savedMessage.id, mediaUrl: mediaUrl }
-                        }).catch(err => console.error('[webhook-handle-message] Transcription error:', err));
-                    }
-
-                    // AI Satisfaction Analysis (every 20 messages)
-                    const { count } = await supabase
-                        .from('messages')
-                        .select('*', { count: 'exact', head: true })
-                        .eq('conversation_id', conversation.id);
-
-                    if (count && count > 0 && count % 20 === 0) {
-                        console.log('[webhook-handle-message] Triggering AI analysis...');
-                        supabase.functions.invoke('ai-analyze-conversation', {
-                            body: { conversationId: conversation.id }
-                        }).catch(err => console.error('[webhook-handle-message] AI analysis error:', err));
-                    }
-
-                    // Auto Follow Up Reset
-                    if (!fromMe && conversation.id) {
-                        const { data: followUp } = await supabase
-                            .from('conversation_follow_ups')
-                            .select('id, category_id, auto_send')
-                            .eq('conversation_id', conversation.id)
-                            .single();
-
-                        if (followUp?.auto_send) {
-                            const { data: templates } = await supabase
-                                .from('follow_up_templates')
-                                .select('time_minutes')
-                                .eq('category_id', followUp.category_id)
-                                .order('time_minutes', { ascending: true })
-                                .limit(1);
-
-                            if (templates?.length > 0) {
-                                const nextSendAt = new Date(Date.now() + templates[0].time_minutes * 60 * 1000);
-                                await supabase
-                                    .from('conversation_follow_ups')
-                                    .update({
-                                        current_template_index: 0,
-                                        next_send_at: nextSendAt.toISOString(),
-                                        completed: false
-                                    })
-                                    .eq('id', followUp.id);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // 5. Forward to External Webhook (only for individual contacts, not groups)
-        // Additional filters: 
-        // - conversation.status must be 'pending'
-        // - contacts.ia_on must be TRUE
-        // - ia_config.ia_on must be TRUE
-        if (instance.webhook_url && eventType === 'messages' && !isGroup) {
-            console.log('[webhook-handle-message] Checking webhook filters...');
-
-            // Check filter 1: conversation.status === 'pending'
-            const conversationIsPending = conversation?.status === 'pending';
-            if (!conversationIsPending) {
-                console.log('[webhook-handle-message] Skipping webhook: conversation status is not pending (status:', conversation?.status || 'no conversation', ')');
-            }
-
-            // Check filter 2: contacts.ia_on === TRUE
-            let contactIaOn = true; // Default to true if not found
-            if (contactId) {
-                const { data: contactData } = await supabase
-                    .from('contacts')
-                    .select('ia_on')
-                    .eq('id', contactId)
-                    .single();
-                contactIaOn = contactData?.ia_on !== false; // Default to true if null/undefined
-            }
-            if (!contactIaOn) {
-                console.log('[webhook-handle-message] Skipping webhook: contact.ia_on is FALSE');
-            }
-
-            // Check filter 3: ia_config.ia_on === TRUE
-            let iaConfigOn = false; // Default to false
-            let crmAuto = false; // Flag for CRM auto
-            const { data: iaConfig } = await supabase
-                .from('ia_config')
-                .select('ia_on, crm_auto')
-                .eq('user_id', userId)
-                .single();
-            iaConfigOn = iaConfig?.ia_on === true;
-            crmAuto = iaConfig?.crm_auto === true;
-            if (!iaConfigOn) {
-                console.log('[webhook-handle-message] Skipping webhook: ia_config.ia_on is FALSE');
-            }
-
-            // Check filter 4: instances.ia_on_wpp === TRUE
-            const instanceIaOn = instance.ia_on_wpp !== false; // Default to true if null/undefined
-            if (!instanceIaOn) {
-                console.log('[webhook-handle-message] Skipping webhook: instance.ia_on_wpp is FALSE');
-            }
-
-            // Only forward webhook if ALL 4 filters pass
-            if (conversationIsPending && contactIaOn && iaConfigOn && instanceIaOn) {
-                console.log('[webhook-handle-message] All filters passed! Forwarding to external webhook...');
-
-                // Check if we need to include ia_funnel_id
-                let iaFunnelId: string | null = null;
-                if (crmAuto) {
-                    console.log('[webhook-handle-message] crm_auto is TRUE, looking for IA funnel...');
-                    const { data: iaFunnel } = await supabase
-                        .from('crm_funnels')
-                        .select('id')
-                        .eq('name', 'IA')
-                        .eq('user_id', userId)
+                    const { data: newContact, error: createError } = await supabase
+                        .from('contacts')
+                        .insert({
+                            number: waNumber,
+                            push_name: contactName,
+                            profile_pic_url: profilePicUrl,
+                            is_group: false,
+                            instance_id: instance.id,
+                            user_id: userId,
+                            edited: hasLetters // Se nome tem letras, já marcar como editado
+                        })
+                        .select()
                         .single();
 
-                    if (iaFunnel?.id) {
-                        iaFunnelId = iaFunnel.id;
-                        console.log('[webhook-handle-message] Found IA funnel:', iaFunnelId);
+                    if (createError) {
+                        console.error('[webhook-handle-message] Error creating contact:', createError);
                     } else {
-                        console.log('[webhook-handle-message] IA funnel not found for user');
+                        contact = newContact;
                     }
                 }
 
-                try {
-                    // Build the forwarded payload with bd_data containing database IDs
-                    const forwardedPayload = {
-                        ...payload,
-                        bd_data: {
-                            user_id: userId,
-                            contact_id: contactId || null,
-                            conversation_id: conversation?.id || null,
-                            group_id: groupId || null,
-                            instance_id: instance.id,
-                            ia_funnel_id: iaFunnelId
-                        }
-                    };
+                contactId = contact?.id;
 
-                    console.log('[webhook-handle-message] bd_data:', JSON.stringify(forwardedPayload.bd_data));
-
-                    await fetch(instance.webhook_url, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'User-Agent': 'Supabase-Webhook-Proxy/1.0'
-                        },
-                        body: JSON.stringify(forwardedPayload)
-                    });
-                    console.log('[webhook-handle-message] Forwarded successfully with bd_data');
-                } catch (forwardError) {
-                    console.error('[webhook-handle-message] Forward error:', forwardError);
+                if (contact) {
+                    senderName = contact.push_name;
+                    senderJid = contact.number;
+                    senderProfilePicUrl = contact.profile_pic_url;
                 }
-            } else {
-                console.log('[webhook-handle-message] Webhook NOT sent - filters failed:', {
-                    conversationIsPending,
-                    contactIaOn,
-                    iaConfigOn,
-                    instanceIaOn
-                });
             }
+
+            // 3. Conversation Logic
+            if (contactId || groupId) {
+                console.log('[webhook-handle-message] Processing Conversation...');
+
+                const messageType = mapMessageType(payload.message?.messageType || 'conversation');
+                const messageText = payload.message?.text || payload.message?.content?.text || payload.body?.message?.text || '';
+                const fromMe = payload.message?.fromMe === true;
+                const messageId = payload.message?.messageid || payload.message?.id || payload.body?.key?.id;
+
+                // Find existing conversation
+                let query = supabase
+                    .from('conversations')
+                    .select('*')
+                    .eq('instance_id', instance.id)
+                    .eq('user_id', userId)
+                    .in('status', ['pending', 'open'])
+                    .order('created_at', { ascending: false })
+                    .limit(1);
+
+                if (groupId) {
+                    query = query.eq('group_id', groupId);
+                } else if (contactId) {
+                    query = query.eq('contact_id', contactId);
+                }
+
+                const { data: conversations } = await query;
+
+                if (conversations && conversations.length > 0) {
+                    conversation = conversations[0];
+                    console.log('[webhook-handle-message] Found conversation:', conversation.id);
+
+                    await supabase
+                        .from('conversations')
+                        .update({
+                            last_message: messageText || 'Mídia',
+                            unread_count: (conversation.unread_count || 0) + 1,
+                            updated_at: new Date().toISOString(),
+                            last_message_at: new Date().toISOString()
+                        })
+                        .eq('id', conversation.id);
+                } else {
+                    console.log('[webhook-handle-message] Creating conversation...');
+
+                    // Use INSERT with fallback - upsert doesn't work with partial indexes
+                    const { data: newConv, error: convError } = await supabase
+                        .from('conversations')
+                        .insert({
+                            contact_id: contactId,
+                            group_id: groupId,
+                            instance_id: instance.id,
+                            user_id: userId,
+                            status: 'pending',
+                            unread_count: 1,
+                            queue_id: instance.default_queue_id,
+                            last_message_at: new Date().toISOString()
+                        })
+                        .select()
+                        .single();
+
+                    if (convError) {
+                        console.error('[webhook-handle-message] Error creating conversation:', convError);
+                        // If insert failed (likely duplicate), fetch existing conversation
+                        let existingQuery = supabase
+                            .from('conversations')
+                            .select('*')
+                            .eq('instance_id', instance.id)
+                            .in('status', ['pending', 'open'])
+                            .order('created_at', { ascending: false })
+                            .limit(1);
+
+                        if (contactId) {
+                            existingQuery = existingQuery.eq('contact_id', contactId);
+                        } else if (groupId) {
+                            existingQuery = existingQuery.eq('group_id', groupId);
+                        }
+
+                        const { data: existingConvs } = await existingQuery;
+
+                        if (existingConvs && existingConvs.length > 0) {
+                            conversation = existingConvs[0];
+                            console.log('[webhook-handle-message] Using existing conversation after conflict:', conversation.id);
+                        }
+                    } else {
+                        conversation = newConv;
+                    }
+                }
+
+                // 4. Save Message & Handle Media
+                if (conversation) {
+                    let mediaUrl = null;
+
+                    // Download Media
+                    if (['image', 'audio', 'video', 'document'].includes(messageType) && messageId) {
+                        console.log('[webhook-handle-message] Downloading media...');
+                        mediaUrl = await downloadMediaFromUzapi(
+                            instance.apikey,
+                            messageId,
+                            messageType,
+                            supabase,
+                            conversation.id
+                        );
+                        if (mediaUrl) {
+                            console.log('[webhook-handle-message] Media uploaded:', mediaUrl);
+                        }
+                    }
+
+                    // Extract Quote/Reply info
+                    const contextInfo = payload.message?.content?.contextInfo;
+                    let replyToId = null;
+                    let quotedBody = null;
+                    let quotedSender = null;
+
+                    if (contextInfo) {
+                        replyToId = contextInfo.stanzaID || null;
+                        quotedBody = contextInfo.quotedMessage?.conversation ||
+                            contextInfo.quotedMessage?.extendedTextMessage?.text || null;
+                        quotedSender = contextInfo.participant ?
+                            (contextInfo.participant.includes('@lid') ? 'Atendente' : 'Cliente') : null;
+                    }
+
+                    // Save Message
+                    const { data: savedMessage, error: msgError } = await supabase
+                        .from('messages')
+                        .insert({
+                            conversation_id: conversation.id,
+                            body: messageText,
+                            direction: fromMe ? 'outbound' : 'inbound',
+                            message_type: messageType,
+                            evolution_id: messageId,
+                            user_id: userId,
+                            sender_name: senderName,
+                            sender_jid: senderJid,
+                            sender_profile_pic_url: senderProfilePicUrl,
+                            media_url: mediaUrl,
+                            reply_to_id: replyToId,
+                            quoted_body: quotedBody,
+                            quoted_sender: quotedSender
+                        })
+                        .select()
+                        .single();
+
+                    if (msgError) {
+                        console.error('[webhook-handle-message] Error saving message:', msgError);
+                    } else {
+                        console.log('[webhook-handle-message] Message saved:', savedMessage.id);
+
+                        // ========================================
+                        // PUSH NOTIFICATION FOR INBOUND MESSAGES
+                        // ========================================
+                        if (!fromMe && savedMessage) {
+                            console.log('[webhook-handle-message] Triggering push notification for inbound message...');
+
+                            // Get team members who should receive the notification
+                            // Rules:
+                            // 1. If conversation.assigned_agent_id exists -> notify only that agent
+                            // 2. If conversation.queue_id exists -> notify only members in that queue
+                            // 3. Otherwise -> notify all team members of the company
+                            // 
+                            // Notification preferences:
+                            // - notifications_enabled: true = receives notifications for individual contacts
+                            // - group_notifications_enabled: true = receives notifications for groups
+
+                            // Get ALL team members with role info and notification preferences
+                            const { data: allTeamMembers } = await supabase
+                                .from('team_members')
+                                .select('id, auth_user_id, role, queue_ids, notifications_enabled, group_notifications_enabled')
+                                .eq('user_id', userId)
+                                .not('auth_user_id', 'is', null);
+
+                            let teamMembersToNotify: any[] = [];
+
+                            for (const tm of allTeamMembers || []) {
+                                const role = tm.role as string;
+
+                                // Check notification preferences based on message type
+                                // For groups: check group_notifications_enabled
+                                // For contacts: check notifications_enabled
+                                if (isGroup) {
+                                    if (tm.group_notifications_enabled !== true) {
+                                        continue; // Skip this member - group notifications disabled
+                                    }
+                                } else {
+                                    if (tm.notifications_enabled !== true) {
+                                        continue; // Skip this member - contact notifications disabled
+                                    }
+                                }
+
+                                // Admin/Supervisor: receive ALL inbound messages (if notifications enabled for the type)
+                                if (role === 'admin' || role === 'supervisor') {
+                                    teamMembersToNotify.push(tm);
+                                    continue;
+                                }
+
+                                // Agent: role-based filtering
+                                if (role === 'agent') {
+                                    const agentQueues = tm.queue_ids || [];
+                                    const hasQueues = agentQueues.length > 0;
+
+                                    // Case 1: Conversation is assigned to this specific agent
+                                    if (conversation.assigned_agent_id && conversation.assigned_agent_id === tm.id) {
+                                        teamMembersToNotify.push(tm);
+                                    }
+                                    // Case 2: Conversation is in a queue that this agent belongs to
+                                    else if (conversation.queue_id && hasQueues && agentQueues.includes(conversation.queue_id)) {
+                                        teamMembersToNotify.push(tm);
+                                    }
+                                    // Case 3: Agent has no queues AND conversation is not assigned to anyone
+                                    else if (!hasQueues && !conversation.assigned_agent_id) {
+                                        teamMembersToNotify.push(tm);
+                                    }
+                                }
+                            }
+
+                            // Get contact name and profile picture for notification
+                            // Use senderName/senderProfilePicUrl which are set for both contacts and group members
+                            const notificationTitle = isGroup
+                                ? (payload.body?.chat?.name || senderName || 'Grupo')
+                                : (senderName || payload.body?.from?.name || payload.message?.pushName || 'Cliente');
+
+                            const notificationIcon = senderProfilePicUrl || undefined;
+
+                            const messagePreview = (messageText || messageType || '').substring(0, 50) +
+                                ((messageText?.length || 0) > 50 ? '...' : '');
+
+                            // Send push to each team member using direct fetch (invoke doesn't work reliably from Edge Functions)
+                            const supabaseUrl = Deno.env.get('SUPABASE_URL');
+                            const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+                            for (const tm of teamMembersToNotify) {
+                                if (tm.auth_user_id && supabaseUrl && serviceKey) {
+                                    console.log('[webhook-handle-message] Sending push to auth_user_id:', tm.auth_user_id);
+
+                                    fetch(`${supabaseUrl}/functions/v1/send-push`, {
+                                        method: 'POST',
+                                        headers: {
+                                            'Content-Type': 'application/json',
+                                            'Authorization': `Bearer ${serviceKey}`
+                                        },
+                                        body: JSON.stringify({
+                                            auth_user_id: tm.auth_user_id,
+                                            title: notificationTitle,
+                                            body: messagePreview,
+                                            icon: notificationIcon,
+                                            notification_type: 'messages',
+                                            url: `/?conversationId=${conversation.id}`,
+                                            tag: `message-${conversation.id}`
+                                        })
+                                    }).then(res => {
+                                        console.log('[webhook-handle-message] Push response status:', res.status);
+                                    }).catch(err => console.error('[webhook-handle-message] Push fetch error:', err));
+                                }
+                            }
+
+                            console.log(`[webhook-handle-message] Push notifications sent to ${teamMembersToNotify.length} user(s)`);
+                        }
+
+                        // Trigger Audio Transcription
+                        if (messageType === 'audio' && mediaUrl && savedMessage) {
+                            console.log('[webhook-handle-message] Triggering transcription...');
+                            supabase.functions.invoke('transcribe-audio', {
+                                body: { messageId: savedMessage.id, mediaUrl: mediaUrl }
+                            }).catch(err => console.error('[webhook-handle-message] Transcription error:', err));
+                        }
+
+                        // AI Satisfaction Analysis (every 20 messages)
+                        const { count } = await supabase
+                            .from('messages')
+                            .select('*', { count: 'exact', head: true })
+                            .eq('conversation_id', conversation.id);
+
+                        if (count && count > 0 && count % 20 === 0) {
+                            console.log('[webhook-handle-message] Triggering AI analysis...');
+                            supabase.functions.invoke('ai-analyze-conversation', {
+                                body: { conversationId: conversation.id }
+                            }).catch(err => console.error('[webhook-handle-message] AI analysis error:', err));
+                        }
+
+                        // Auto Follow Up Reset
+                        if (!fromMe && conversation.id) {
+                            const { data: followUp } = await supabase
+                                .from('conversation_follow_ups')
+                                .select('id, category_id, auto_send')
+                                .eq('conversation_id', conversation.id)
+                                .single();
+
+                            if (followUp?.auto_send) {
+                                const { data: templates } = await supabase
+                                    .from('follow_up_templates')
+                                    .select('time_minutes')
+                                    .eq('category_id', followUp.category_id)
+                                    .order('time_minutes', { ascending: true })
+                                    .limit(1);
+
+                                if (templates?.length > 0) {
+                                    const nextSendAt = new Date(Date.now() + templates[0].time_minutes * 60 * 1000);
+                                    await supabase
+                                        .from('conversation_follow_ups')
+                                        .update({
+                                            current_template_index: 0,
+                                            next_send_at: nextSendAt.toISOString(),
+                                            completed: false
+                                        })
+                                        .eq('id', followUp.id);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 5. Forward to External Webhook (only for individual contacts, not groups)
+            // Additional filters: 
+            // - conversation.status must be 'pending'
+            // - contacts.ia_on must be TRUE
+            // - ia_config.ia_on must be TRUE
+            if (instance.webhook_url && eventType === 'messages' && !isGroup) {
+                console.log('[webhook-handle-message] Checking webhook filters...');
+
+                // Check filter 1: conversation.status === 'pending'
+                const conversationIsPending = conversation?.status === 'pending';
+                if (!conversationIsPending) {
+                    console.log('[webhook-handle-message] Skipping webhook: conversation status is not pending (status:', conversation?.status || 'no conversation', ')');
+                }
+
+                // Check filter 2: contacts.ia_on === TRUE
+                let contactIaOn = true; // Default to true if not found
+                if (contactId) {
+                    const { data: contactData } = await supabase
+                        .from('contacts')
+                        .select('ia_on')
+                        .eq('id', contactId)
+                        .single();
+                    contactIaOn = contactData?.ia_on !== false; // Default to true if null/undefined
+                }
+                if (!contactIaOn) {
+                    console.log('[webhook-handle-message] Skipping webhook: contact.ia_on is FALSE');
+                }
+
+                // Check filter 3: ia_config.ia_on === TRUE
+                let iaConfigOn = false; // Default to false
+                let crmAuto = false; // Flag for CRM auto
+                const { data: iaConfig } = await supabase
+                    .from('ia_config')
+                    .select('ia_on, crm_auto')
+                    .eq('user_id', userId)
+                    .single();
+                iaConfigOn = iaConfig?.ia_on === true;
+                crmAuto = iaConfig?.crm_auto === true;
+                if (!iaConfigOn) {
+                    console.log('[webhook-handle-message] Skipping webhook: ia_config.ia_on is FALSE');
+                }
+
+                // Check filter 4: instances.ia_on_wpp === TRUE
+                const instanceIaOn = instance.ia_on_wpp !== false; // Default to true if null/undefined
+                if (!instanceIaOn) {
+                    console.log('[webhook-handle-message] Skipping webhook: instance.ia_on_wpp is FALSE');
+                }
+
+                // Only forward webhook if ALL 4 filters pass
+                if (conversationIsPending && contactIaOn && iaConfigOn && instanceIaOn) {
+                    console.log('[webhook-handle-message] All filters passed! Forwarding to external webhook...');
+
+                    // Check if we need to include ia_funnel_id
+                    let iaFunnelId: string | null = null;
+                    if (crmAuto) {
+                        console.log('[webhook-handle-message] crm_auto is TRUE, looking for IA funnel...');
+                        const { data: iaFunnel } = await supabase
+                            .from('crm_funnels')
+                            .select('id')
+                            .eq('name', 'IA')
+                            .eq('user_id', userId)
+                            .single();
+
+                        if (iaFunnel?.id) {
+                            iaFunnelId = iaFunnel.id;
+                            console.log('[webhook-handle-message] Found IA funnel:', iaFunnelId);
+                        } else {
+                            console.log('[webhook-handle-message] IA funnel not found for user');
+                        }
+                    }
+
+                    try {
+                        // Build the forwarded payload with bd_data containing database IDs
+                        const forwardedPayload = {
+                            ...payload,
+                            bd_data: {
+                                user_id: userId,
+                                contact_id: contactId || null,
+                                conversation_id: conversation?.id || null,
+                                group_id: groupId || null,
+                                instance_id: instance.id,
+                                ia_funnel_id: iaFunnelId
+                            }
+                        };
+
+                        console.log('[webhook-handle-message] bd_data:', JSON.stringify(forwardedPayload.bd_data));
+
+                        await fetch(instance.webhook_url, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'User-Agent': 'Supabase-Webhook-Proxy/1.0'
+                            },
+                            body: JSON.stringify(forwardedPayload)
+                        });
+                        console.log('[webhook-handle-message] Forwarded successfully with bd_data');
+                    } catch (forwardError) {
+                        console.error('[webhook-handle-message] Forward error:', forwardError);
+                    }
+                } else {
+                    console.log('[webhook-handle-message] Webhook NOT sent - filters failed:', {
+                        conversationIsPending,
+                        contactIaOn,
+                        iaConfigOn,
+                        instanceIaOn
+                    });
+                }
+            }
+
+            return new Response(
+                JSON.stringify({ success: true, message: "Processed" }),
+                { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+            );
+
+        } catch (error: any) {
+            console.error('[webhook-handle-message] Error:', error);
+            return new Response(
+                JSON.stringify({ success: false, error: error.message }),
+                { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+            );
         }
-
-        return new Response(
-            JSON.stringify({ success: true, message: "Processed" }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
-        );
-
-    } catch (error: any) {
-        console.error('[webhook-handle-message] Error:', error);
-        return new Response(
-            JSON.stringify({ success: false, error: error.message }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-        );
-    }
-});
+    });

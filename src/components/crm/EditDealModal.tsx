@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ContactPicker } from "@/components/ui/contact-picker";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -31,21 +32,23 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { CRMFunnel, CRMStage, CRMDeal } from "@/types/crm";
-
 import { useStaff } from "@/hooks/useStaff";
+import { DealProductsForm, ProductItem } from "./DealProductsForm";
+import { useDealProducts } from "@/hooks/useDealProducts";
 
 const formSchema = z.object({
     title: z.string().min(1, "O título é obrigatório"),
     contact_id: z.string().optional(),
-    product_service_id: z.string().optional(),
-    quantity: z.coerce.number().min(1, "Quantidade mínima é 1").default(1),
-    assigned_professional_id: z.string().optional(),
     funnel_id: z.string().min(1, "O funil é obrigatório"),
     stage_id: z.string().min(1, "A etapa é obrigatória"),
     value: z.coerce.number().min(0, "O valor deve ser positivo"),
     priority: z.enum(["low", "medium", "high"]),
     description: z.string().optional(),
     responsible_id: z.string().optional(),
+    // Legacy fields optional
+    product_service_id: z.string().optional(),
+    quantity: z.coerce.number().optional(),
+    assigned_professional_id: z.string().optional(),
 });
 
 interface EditDealModalProps {
@@ -58,41 +61,76 @@ export function EditDealModal({ deal, open, onOpenChange }: EditDealModalProps) 
     const queryClient = useQueryClient();
     const { data: staffMembers } = useStaff();
 
+    const [products, setProducts] = useState<ProductItem[]>([]);
+
+    // Fetch existing deal products
+    const { data: existingProducts } = useDealProducts(deal?.id);
+
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
         defaultValues: {
             title: deal.title,
-            quantity: deal.quantity || 1,
             value: deal.value,
             priority: deal.priority || "medium",
             funnel_id: deal.funnel_id,
             stage_id: deal.stage_id,
             description: deal.description || "",
-            product_service_id: deal.product_service_id || "",
-            assigned_professional_id: deal.assigned_professional_id || "",
-            contact_id: deal.contact_id || undefined,
             responsible_id: deal.responsible_id || "",
+            contact_id: deal.contact_id || undefined,
+            // Legacy
+            product_service_id: deal.product_service_id || "",
+            quantity: deal.quantity || 1,
+            assigned_professional_id: deal.assigned_professional_id || "",
         },
     });
 
-    // Reset form when deal changes
+    // Reset when deal changes and populate products
     useEffect(() => {
-        if (deal) {
+        if (deal && open) {
             form.reset({
                 title: deal.title,
-                quantity: deal.quantity || 1,
                 value: deal.value,
                 priority: deal.priority || "medium",
                 funnel_id: deal.funnel_id,
                 stage_id: deal.stage_id,
                 description: deal.description || "",
-                product_service_id: deal.product_service_id || "",
-                assigned_professional_id: deal.assigned_professional_id || "",
-                contact_id: deal.contact_id || undefined,
                 responsible_id: deal.responsible_id || "",
+                contact_id: deal.contact_id || undefined,
+                product_service_id: deal.product_service_id || "",
+                quantity: deal.quantity || 1,
+                assigned_professional_id: deal.assigned_professional_id || "",
             });
+
+            // Populate products from query
+            if (existingProducts && existingProducts.length > 0) {
+                setProducts(existingProducts.map(p => ({
+                    id: p.id,
+                    category: p.product_service?.type || 'product',
+                    productServiceId: p.product_service_id,
+                    quantity: p.quantity,
+                    unitPrice: p.unit_price,
+                    name: p.product_service?.name
+                })));
+            } else if (deal.product_service_id) {
+                // Se não tem deal_products mas tem product_service_id antigo, migrar visualmente
+                // Mas aqui não temos o preço/name do antigo sem query extra.
+                // O ideal é que o hook useDealProducts retorne vazio e o user adicione.
+                // Ou se quisermos ser gentis, buscar o produto antigo.
+                setProducts([]);
+            } else {
+                setProducts([]);
+            }
         }
-    }, [deal, form]);
+    }, [deal, open, form, existingProducts]);
+
+    // Update value when products change
+    useEffect(() => {
+        const total = products.reduce((sum, p) => sum + (p.quantity * p.unitPrice), 0);
+        if (total > 0) {
+            form.setValue("value", total);
+        }
+    }, [products, form]);
+
 
     // Fetch Funnels
     const { data: funnels } = useQuery({
@@ -107,7 +145,7 @@ export function EditDealModal({ deal, open, onOpenChange }: EditDealModalProps) 
         },
     });
 
-    // Fetch Stages for selected funnel
+    // Fetch Stages
     const selectedFunnelId = form.watch("funnel_id");
     const { data: stages } = useQuery({
         queryKey: ["crm-stages", selectedFunnelId],
@@ -124,23 +162,10 @@ export function EditDealModal({ deal, open, onOpenChange }: EditDealModalProps) 
         enabled: !!selectedFunnelId,
     });
 
-    // Fetch Contacts
-    const { data: contacts, isLoading: isLoadingContacts } = useQuery({
-        queryKey: ["contacts-list"],
-        queryFn: async () => {
-            const { data, error } = await supabase
-                .from("contacts" as any)
-                .select("id, push_name, remote_jid")
-                .limit(50)
-                .order("push_name", { ascending: true });
 
-            if (error) throw error;
-            return data as { id: string; push_name: string; remote_jid?: string }[];
-        },
-    });
 
-    // Fetch Products/Services  
-    const { data: productsServices } = useQuery({
+    // Fetch Products/Services for selection
+    const { data: productsServices = [] } = useQuery({
         queryKey: ['products-services'],
         queryFn: async () => {
             const { data, error } = await supabase
@@ -148,49 +173,27 @@ export function EditDealModal({ deal, open, onOpenChange }: EditDealModalProps) 
                 .select('*')
                 .order('name', { ascending: true });
             if (error) throw error;
-            return data as { id: string; name: string; type: 'product' | 'service'; price: number }[];
+            return data as unknown as { id: string; name: string; type: 'product' | 'service'; price: number }[];
         },
     });
 
-    // Watch selected product/service
-    const selectedProductServiceId = form.watch('product_service_id');
-    const selectedProductService = productsServices?.find(ps => ps.id === selectedProductServiceId);
-
-    // Fetch professionals for selected SERVICE
-    const { data: availableProfessionals } = useQuery({
-        queryKey: ['service-professionals', selectedProductServiceId],
-        queryFn: async () => {
-            if (!selectedProductServiceId || selectedProductService?.type !== 'service') return [];
-
-            const { data, error } = await supabase
-                .from('professionals' as any)
-                .select('id, name, role')
-                .contains('service_ids', [selectedProductServiceId]);
-
-            if (error) throw error;
-            return data as { id: string; name: string; role?: string }[];
-        },
-        enabled: !!selectedProductServiceId && selectedProductService?.type === 'service',
-    });
-
-    // Auto-fill value when product/service or quantity changes
-    useEffect(() => {
-        if (selectedProductService) {
-            const basePrice = Number(selectedProductService.price || 0);
-            const quantity = form.getValues('quantity') || 1;
-            form.setValue('value', basePrice * quantity);
-        }
-    }, [selectedProductServiceId, form.watch('quantity'), selectedProductService, form]);
 
     const onSubmit = async (values: z.infer<typeof formSchema>) => {
         try {
-            // Clean empty strings for UUID fields (convert to null)
+            // Update Deal
             const cleanedValues = {
-                ...values,
+                title: values.title,
                 contact_id: values.contact_id || null,
-                product_service_id: values.product_service_id || null,
-                assigned_professional_id: values.assigned_professional_id || null,
+                funnel_id: values.funnel_id,
+                stage_id: values.stage_id,
+                value: values.value,
+                priority: values.priority,
+                description: values.description,
                 responsible_id: values.responsible_id || null,
+                // Legacy fields sync
+                product_service_id: products[0]?.productServiceId || null,
+                quantity: products[0]?.quantity || null,
+                assigned_professional_id: values.assigned_professional_id || null, // UI removed but keep value if passed
             };
 
             const { error } = await supabase
@@ -203,8 +206,29 @@ export function EditDealModal({ deal, open, onOpenChange }: EditDealModalProps) 
 
             if (error) throw error;
 
+            // Update Products: Replace Strategy (simpler for now)
+            // 1. Delete existing
+            await supabase.from('crm_deal_products' as any).delete().eq('deal_id', deal.id);
+
+            // 2. Insert new
+            if (products.length > 0) {
+                const dealProductsData = products
+                    .filter(p => p.productServiceId)
+                    .map(p => ({
+                        deal_id: deal.id,
+                        product_service_id: p.productServiceId,
+                        quantity: p.quantity,
+                        unit_price: p.unitPrice
+                    }));
+
+                if (dealProductsData.length > 0) {
+                    await supabase.from('crm_deal_products' as any).insert(dealProductsData);
+                }
+            }
+
             toast.success("Negociação atualizada!");
             queryClient.invalidateQueries({ queryKey: ["crm-deals"] });
+            queryClient.invalidateQueries({ queryKey: ["deal-products", deal.id] });
             onOpenChange(false);
         } catch (error) {
             console.error("Erro ao atualizar negociação:", error);
@@ -214,12 +238,12 @@ export function EditDealModal({ deal, open, onOpenChange }: EditDealModalProps) 
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-lg">
-                <DialogHeader>
+            <DialogContent className="max-w-xl max-h-[90vh] flex flex-col overflow-hidden">
+                <DialogHeader className="shrink-0 px-1">
                     <DialogTitle>Editar Negociação</DialogTitle>
                 </DialogHeader>
                 <Form {...form}>
-                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 overflow-y-auto flex-1 px-1 pb-1 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
                         <FormField
                             control={form.control}
                             name="title"
@@ -234,59 +258,32 @@ export function EditDealModal({ deal, open, onOpenChange }: EditDealModalProps) 
                             )}
                         />
 
-                        {/* Row 2: Contato + Produto/Serviço */}
-                        <div className="grid grid-cols-2 gap-4">
-                            <FormField
-                                control={form.control}
-                                name="contact_id"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Contato</FormLabel>
-                                        <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoadingContacts}>
-                                            <FormControl>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder={isLoadingContacts ? "Carregando..." : "Selecione um contato"} />
-                                                </SelectTrigger>
-                                            </FormControl>
-                                            <SelectContent>
-                                                {contacts?.map((contact) => (
-                                                    <SelectItem key={contact.id} value={contact.id}>
-                                                        {contact.push_name || "Sem Nome"} ({contact.remote_jid?.split('@')[0] || "Sem número"})
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-                            <FormField
-                                control={form.control}
-                                name="product_service_id"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Produto/Serviço</FormLabel>
-                                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                            <FormControl>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Selecione" />
-                                                </SelectTrigger>
-                                            </FormControl>
-                                            <SelectContent>
-                                                {productsServices?.map((ps) => (
-                                                    <SelectItem key={ps.id} value={ps.id}>
-                                                        {ps.name} ({ps.type === 'product' ? 'Produto' : 'Serviço'}) - R$ {Number(ps.price || 0).toFixed(2)}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
+                        {/* Contato */}
+                        <FormField
+                            control={form.control}
+                            name="contact_id"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Contato</FormLabel>
+                                    <ContactPicker
+                                        value={field.value}
+                                        onChange={(val) => field.onChange(val)}
+                                    />
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+
+                        {/* Produtos/Serviços (Multi) */}
+                        <div className="border rounded-lg p-3 bg-muted/10">
+                            <DealProductsForm
+                                products={products}
+                                onChange={setProducts}
+                                availableProducts={productsServices}
                             />
                         </div>
 
-                        {/* Row 3: Funnel + Stage */}
+                        {/* Funnel + Stage */}
                         <div className="grid grid-cols-2 gap-4">
                             <FormField
                                 control={form.control}
@@ -338,27 +335,14 @@ export function EditDealModal({ deal, open, onOpenChange }: EditDealModalProps) 
                             />
                         </div>
 
-                        {/* Row 4: Quantidade + Valor + Prioridade */}
-                        <div className="grid grid-cols-3 gap-4">
-                            <FormField
-                                control={form.control}
-                                name="quantity"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Quantidade</FormLabel>
-                                        <FormControl>
-                                            <Input type="number" min="1" {...field} />
-                                        </FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
+                        {/* Valor Total + Prioridade + Responsável */}
+                        <div className="grid grid-cols-2 gap-4">
                             <FormField
                                 control={form.control}
                                 name="value"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>Valor (R$)</FormLabel>
+                                        <FormLabel>Valor Total (R$)</FormLabel>
                                         <FormControl>
                                             <CurrencyInput
                                                 value={field.value}
@@ -392,38 +376,6 @@ export function EditDealModal({ deal, open, onOpenChange }: EditDealModalProps) 
                                 )}
                             />
                         </div>
-
-                        {/* Conditional Professional Field */}
-                        {selectedProductService?.type === 'service' && (
-                            <FormField
-                                control={form.control}
-                                name="assigned_professional_id"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Profissional</FormLabel>
-                                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                            <FormControl>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Selecione o profissional" />
-                                                </SelectTrigger>
-                                            </FormControl>
-                                            <SelectContent>
-                                                {availableProfessionals?.length === 0 ? (
-                                                    <div className="p-2 text-sm text-muted-foreground text-center">Nenhum profissional vinculado a este serviço</div>
-                                                ) : (
-                                                    availableProfessionals?.map((prof) => (
-                                                        <SelectItem key={prof.id} value={prof.id}>
-                                                            {prof.name} {prof.role && `(${prof.role})`}
-                                                        </SelectItem>
-                                                    ))
-                                                )}
-                                            </SelectContent>
-                                        </Select>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-                        )}
 
                         <FormField
                             control={form.control}

@@ -260,9 +260,15 @@ export function SalesTable({ month, year }: SalesTableProps) {
                                         </TableRow>
                                     ) : (
                                         paginatedSales.map((sale) => (
-                                            <TableRow key={sale.id}>
+                                            <TableRow
+                                                key={sale.id}
+                                                className={sale.payment_type === 'pending' ? "bg-orange-50/50 hover:bg-orange-50 dark:bg-orange-950/20" : ""}
+                                            >
                                                 <TableCell>
-                                                    <Badge variant="outline">
+                                                    <Badge
+                                                        variant="outline"
+                                                        className={sale.payment_type === 'pending' ? "border-orange-500 text-orange-600 bg-orange-50" : ""}
+                                                    >
                                                         {SaleCategoryLabels[sale.category]}
                                                     </Badge>
                                                 </TableCell>
@@ -273,7 +279,13 @@ export function SalesTable({ month, year }: SalesTableProps) {
                                                     {formatCurrency(sale.total_amount)}
                                                 </TableCell>
                                                 <TableCell>
-                                                    {PaymentTypeLabels[sale.payment_type]}
+                                                    {sale.payment_type === 'pending' ? (
+                                                        <Badge variant="secondary" className="bg-orange-100 text-orange-700 hover:bg-orange-200">
+                                                            Pendente
+                                                        </Badge>
+                                                    ) : (
+                                                        PaymentTypeLabels[sale.payment_type]
+                                                    )}
                                                 </TableCell>
                                                 <TableCell>
                                                     {new Date(sale.sale_date).toLocaleDateString('pt-BR')}
@@ -319,11 +331,10 @@ export function SalesTable({ month, year }: SalesTableProps) {
                 </CardContent>
             </Card>
 
-            {/* Sale Modal */}
+            {/* Sale Modal - Edição desativada temporariamente para refatoração multi-produto */}
             <SaleModal
                 open={modalOpen}
                 onOpenChange={setModalOpen}
-                sale={editingSale}
             />
 
             {/* Delete Confirmation */}

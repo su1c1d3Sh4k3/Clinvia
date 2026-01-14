@@ -8,6 +8,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { Button } from "@/components/ui/button";
+
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
@@ -15,29 +16,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { format, addMinutes, parseISO, set } from "date-fns";
+import { ContactPicker } from "@/components/ui/contact-picker";
 
-// Helper to get owner_id for RLS compatibility (agents use auth_user_id, not user_id)
-async function getOwnerId(authUserId: string): Promise<string> {
-    // First try to find team_member by auth_user_id (for agents/supervisors)
-    let { data: teamMember } = await supabase
-        .from('team_members')
-        .select('user_id')
-        .eq('auth_user_id', authUserId)
-        .maybeSingle();
-
-    // Fallback: check if user is admin (user_id = auth.uid())
-    if (!teamMember) {
-        const { data: adminMember } = await supabase
-            .from('team_members')
-            .select('user_id')
-            .eq('user_id', authUserId)
-            .eq('role', 'admin')
-            .maybeSingle();
-        teamMember = adminMember;
-    }
-
-    return teamMember?.user_id || authUserId;
-}
+import { useOwnerId } from "@/hooks/useOwnerId";
 
 
 const formSchema = z.object({
@@ -103,6 +84,7 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
     const queryClient = useQueryClient();
     const [activeTab, setActiveTab] = useState<"appointment" | "absence">("appointment");
     const [isLoading, setIsLoading] = useState(false);
+    const { data: ownerId } = useOwnerId();
 
     const isPast = appointmentToEdit && new Date(appointmentToEdit.end_time) < new Date();
 
@@ -125,14 +107,7 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
         },
     });
 
-    const { data: contacts } = useQuery({
-        queryKey: ["contacts-list"],
-        queryFn: async () => {
-            const { data, error } = await supabase.from("contacts").select("id, push_name, number");
-            if (error) throw error;
-            return data;
-        },
-    });
+
 
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
@@ -281,23 +256,14 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
         }
     };
 
-    const handleContactChange = (contactId: string) => {
-        const contact = contacts?.find((c) => c.id === contactId);
-        if (contact) {
-            form.setValue("contact_name", contact.push_name);
-            const phone = contact.number ? contact.number.split('@')[0] : "";
-            form.setValue("contact_phone", phone);
-        }
-    };
+
 
     const onSubmit = async (values: z.infer<typeof formSchema>) => {
         setIsLoading(true);
         try {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error("Usuário não autenticado");
-
-            // Get owner_id for RLS compatibility (agents use auth_user_id, not user_id)
-            const ownerId = await getOwnerId(user.id);
+            if (!ownerId) throw new Error("ID da organização não encontrado");
 
             const startDateTime = parseISO(`${values.date}T${values.start_time}`);
             let endDateTime;
@@ -436,18 +402,18 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                                         render={({ field }) => (
                                             <FormItem>
                                                 <FormLabel>Contato</FormLabel>
-                                                <Select onValueChange={(val) => { field.onChange(val); handleContactChange(val); }} defaultValue={field.value} disabled={isPast || !!defaultContactId}>
-                                                    <FormControl>
-                                                        <SelectTrigger>
-                                                            <SelectValue placeholder="Selecione ou digite nome abaixo" />
-                                                        </SelectTrigger>
-                                                    </FormControl>
-                                                    <SelectContent>
-                                                        {contacts?.map((c) => (
-                                                            <SelectItem key={c.id} value={c.id}>{c.push_name}</SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
+                                                <ContactPicker
+                                                    value={field.value}
+                                                    onChange={(val, contact) => {
+                                                        field.onChange(val);
+                                                        if (contact) {
+                                                            form.setValue("contact_name", contact.push_name);
+                                                            const phone = contact.number ? contact.number.split('@')[0] : "";
+                                                            form.setValue("contact_phone", phone);
+                                                        }
+                                                    }}
+                                                    disabled={isPast || !!defaultContactId}
+                                                />
                                                 <FormMessage />
                                             </FormItem>
                                         )}

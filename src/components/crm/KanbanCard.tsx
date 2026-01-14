@@ -175,11 +175,24 @@ export function KanbanCard({ deal, index, stagnationLimitDays }: KanbanCardProps
 
                                 {/* Product and Professional Info */}
                                 <div className="flex flex-col gap-1 mb-3">
-                                    {deal.product_service && (
-                                        <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                            <Package className="h-3 w-3" />
-                                            {deal.product_service.name}
-                                        </span>
+                                    {/* Product and Professional Info */}
+                                    {((deal.deal_products && deal.deal_products.length > 0) || deal.product_service) && (
+                                        <div className="flex flex-col gap-1 mb-3">
+                                            {deal.deal_products && deal.deal_products.length > 1 ? (
+                                                <div className="flex flex-col gap-0.5">
+                                                    <span className="text-xs text-muted-foreground flex items-center gap-1 font-medium" title={deal.deal_products.map(p => p.product_service?.name).join(', ')}>
+                                                        <Package className="h-3 w-3" />
+                                                        {deal.deal_products.length} itens
+                                                    </span>
+                                                    {/* Optional: List first item or summary */}
+                                                </div>
+                                            ) : (
+                                                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                                    <Package className="h-3 w-3" />
+                                                    {deal.deal_products?.[0]?.product_service?.name || deal.product_service?.name}
+                                                </span>
+                                            )}
+                                        </div>
                                     )}
                                     {deal.assigned_professional && (
                                         <span className="text-xs text-muted-foreground flex items-center gap-1">

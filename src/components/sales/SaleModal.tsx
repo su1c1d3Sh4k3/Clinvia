@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
     Dialog,
     DialogContent,
@@ -7,6 +7,7 @@ import {
     DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { ContactPicker } from "@/components/ui/contact-picker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,29 +18,38 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
-import { useCreateSale, useUpdateSale } from "@/hooks/useSales";
+import { Loader2, Plus, X, User } from "lucide-react";
+import { useCreateSale } from "@/hooks/useSales";
 import { useProductsServices, useTeamMembers, useProfessionals } from "@/hooks/useFinancial";
-import type { Sale, SaleFormData, SaleCategory, PaymentType } from "@/types/sales";
+import type { SaleCategory, PaymentType } from "@/types/sales";
 import { SaleCategoryLabels, PaymentTypeLabels } from "@/types/sales";
+import { toast } from "sonner";
+
+// Interface para item da lista de produtos
+interface ProductItem {
+    id: string;
+    category: SaleCategory;
+    productServiceId: string;
+    quantity: number;
+    unitPrice: number;
+}
 
 interface SaleModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    sale?: Sale | null;
+    fixedContactId?: string; // New prop to lock client
 }
 
-export function SaleModal({ open, onOpenChange, sale }: SaleModalProps) {
-    const isEditing = !!sale;
+export function SaleModal({ open, onOpenChange, fixedContactId }: SaleModalProps) {
+    // Client selection
+    const [contactId, setContactId] = useState('');
 
-    // Form state
-    const [category, setCategory] = useState<SaleCategory>('product');
-    const [productServiceId, setProductServiceId] = useState('');
-    const [quantity, setQuantity] = useState(1);
-    const [unitPrice, setUnitPrice] = useState(0);
-    const [totalAmount, setTotalAmount] = useState(0);
+    // Multi-product list
+    const [products, setProducts] = useState<ProductItem[]>([]);
+
+    // Payment state
     const [paymentType, setPaymentType] = useState<PaymentType>('cash');
-    const [installments, setInstallments] = useState(1);
+    const [installments, setInstallments] = useState(2);
     const [interestRate, setInterestRate] = useState(0);
     const [saleDate, setSaleDate] = useState(new Date().toISOString().split('T')[0]);
     const [teamMemberId, setTeamMemberId] = useState('');
@@ -51,72 +61,70 @@ export function SaleModal({ open, onOpenChange, sale }: SaleModalProps) {
     const { data: teamMembers = [] } = useTeamMembers();
     const { data: professionals = [] } = useProfessionals();
 
+
     // Mutations
     const createSale = useCreateSale();
-    const updateSale = useUpdateSale();
 
-    // Filtrar produtos/serviços por categoria
-    const filteredItems = productsServices.filter(
-        (item: any) => item.type === category
-    );
-
-    // Reset form when modal opens/closes or sale changes
+    // Reset form when modal opens
     useEffect(() => {
         if (open) {
-            if (sale) {
-                setCategory(sale.category);
-                setProductServiceId(sale.product_service_id);
-                setQuantity(sale.quantity);
-                setUnitPrice(sale.unit_price);
-                setTotalAmount(sale.total_amount);
-                setPaymentType(sale.payment_type);
-                setInstallments(sale.installments);
-                setInterestRate(sale.interest_rate);
-                setSaleDate(sale.sale_date);
-                setTeamMemberId(sale.team_member_id || '');
-                setProfessionalId(sale.professional_id || '');
-                setNotes(sale.notes || '');
-            } else {
-                setCategory('product');
-                setProductServiceId('');
-                setQuantity(1);
-                setUnitPrice(0);
-                setTotalAmount(0);
-                setPaymentType('cash');
-                setInstallments(1);
-                setInterestRate(0);
-                setSaleDate(new Date().toISOString().split('T')[0]);
-                setTeamMemberId('');
-                setProfessionalId('');
-                setNotes('');
-            }
+            setContactId(fixedContactId || ''); // Use fixedContactId if provided
+            setProducts([]);
+            setPaymentType('cash');
+            setInstallments(2);
+            setInterestRate(0);
+            setSaleDate(new Date().toISOString().split('T')[0]);
+            setTeamMemberId('');
+            setProfessionalId('');
+            setNotes('');
         }
-    }, [open, sale]);
+    }, [open, fixedContactId]);
 
-    // Atualizar preço unitário quando seleciona item
-    useEffect(() => {
-        if (productServiceId) {
-            const selectedItem = productsServices.find((item: any) => item.id === productServiceId);
-            if (selectedItem) {
-                setUnitPrice(selectedItem.price);
+    // Add a new empty product
+    const addProduct = useCallback(() => {
+        const newId = `temp-${Date.now()}`;
+        setProducts(prev => [...prev, {
+            id: newId,
+            category: 'product',
+            productServiceId: '',
+            quantity: 1,
+            unitPrice: 0,
+        }]);
+    }, []);
+
+    // Remove product by id
+    const removeProduct = useCallback((id: string) => {
+        setProducts(prev => prev.filter(p => p.id !== id));
+    }, []);
+
+    // Update product field
+    const updateProduct = useCallback((id: string, field: keyof ProductItem, value: any) => {
+        setProducts(prev => prev.map(p => {
+            if (p.id !== id) return p;
+            const updated = { ...p, [field]: value };
+
+            // Auto-update unitPrice when productServiceId changes
+            if (field === 'productServiceId') {
+                const selectedItem = productsServices.find((item: any) => item.id === value);
+                if (selectedItem) {
+                    updated.unitPrice = selectedItem.price;
+                    updated.category = selectedItem.type;
+                }
             }
-        }
-    }, [productServiceId, productsServices]);
 
-    // Calcular valor total automaticamente
-    useEffect(() => {
-        const baseTotal = quantity * unitPrice;
-        setTotalAmount(baseTotal);
-    }, [quantity, unitPrice]);
+            return updated;
+        }));
+    }, [productsServices]);
 
-    // Calcular valor da parcela com juros simples
+    // Calculate total
+    const totalAmount = products.reduce((sum, p) => sum + (p.quantity * p.unitPrice), 0);
+
+    // Calculate installment value
     const calculateInstallmentValue = () => {
         if (paymentType === 'cash' || installments <= 1) {
             return totalAmount;
         }
-        // Juros simples: cada parcela tem juros proporcional ao tempo
-        // Total com juros = principal + (principal × taxa × tempo médio)
-        const avgTime = (installments + 1) / 2; // Tempo médio das parcelas
+        const avgTime = (installments + 1) / 2;
         const totalWithInterest = totalAmount * (1 + (interestRate / 100) * avgTime);
         return totalWithInterest / installments;
     };
@@ -126,34 +134,50 @@ export function SaleModal({ open, onOpenChange, sale }: SaleModalProps) {
         ? installmentValue * installments
         : totalAmount;
 
+    // Submit - create one sale per product
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        const formData: SaleFormData = {
-            category,
-            product_service_id: productServiceId,
-            quantity,
-            unit_price: unitPrice,
-            total_amount: totalAmount,
-            payment_type: paymentType,
-            installments: paymentType === 'cash' ? 1 : installments,
-            interest_rate: paymentType === 'cash' ? 0 : interestRate,
-            sale_date: saleDate,
-            team_member_id: teamMemberId || undefined,
-            professional_id: professionalId || undefined,
-            notes: notes || undefined,
-        };
-
-        if (isEditing && sale) {
-            await updateSale.mutateAsync({ id: sale.id, data: formData });
-        } else {
-            await createSale.mutateAsync(formData);
+        if (products.length === 0) {
+            toast.error('Adicione pelo menos um produto');
+            return;
         }
 
-        onOpenChange(false);
+        const validProducts = products.filter(p => p.productServiceId);
+        if (validProducts.length === 0) {
+            toast.error('Selecione ao menos um produto/serviço');
+            return;
+        }
+
+        try {
+            // Create one sale for each product
+            for (const product of validProducts) {
+                await createSale.mutateAsync({
+                    category: product.category,
+                    product_service_id: product.productServiceId,
+                    quantity: product.quantity,
+                    unit_price: product.unitPrice,
+                    total_amount: product.quantity * product.unitPrice,
+                    payment_type: paymentType,
+                    installments: paymentType === 'cash' ? 1 : installments,
+                    interest_rate: paymentType === 'cash' ? 0 : interestRate,
+                    sale_date: saleDate,
+                    team_member_id: teamMemberId || undefined,
+                    professional_id: professionalId || undefined,
+                    notes: notes || undefined,
+                    contact_id: contactId || undefined,
+                });
+            }
+
+            toast.success(`${validProducts.length} ${validProducts.length === 1 ? 'venda criada' : 'vendas criadas'} com sucesso!`);
+            onOpenChange(false);
+        } catch (error) {
+            console.error('Error creating sales:', error);
+            toast.error('Erro ao criar vendas');
+        }
     };
 
-    const isPending = createSale.isPending || updateSale.isPending;
+    const isPending = createSale.isPending;
 
     const formatCurrency = (value: number) => {
         return new Intl.NumberFormat('pt-BR', {
@@ -162,217 +186,268 @@ export function SaleModal({ open, onOpenChange, sale }: SaleModalProps) {
         }).format(value);
     };
 
+    // Filter items by category for a specific product row
+    const getFilteredItems = (category: SaleCategory) => {
+        return productsServices.filter((item: any) => item.type === category);
+    };
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
                 <DialogHeader>
-                    <DialogTitle>
-                        {isEditing ? 'Editar Venda' : 'Nova Venda'}
-                    </DialogTitle>
+                    <DialogTitle>Nova Venda</DialogTitle>
                 </DialogHeader>
 
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    {/* Categoria */}
-                    <div className="space-y-2">
-                        <Label>Categoria *</Label>
-                        <Select
-                            value={category}
-                            onValueChange={(value: SaleCategory) => {
-                                setCategory(value);
-                                setProductServiceId('');
-                            }}
-                        >
-                            <SelectTrigger>
-                                <SelectValue placeholder="Selecione a categoria" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {Object.entries(SaleCategoryLabels).map(([key, label]) => (
-                                    <SelectItem key={key} value={key}>{label}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
+                <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
+                    {/* Scrollable content */}
+                    <div className="flex-1 overflow-y-auto pr-2 space-y-4 scrollbar-thin">
+                        {/* Cliente */}
+                        <div className="space-y-2">
+                            <Label className="flex items-center gap-2">
+                                <User className="w-4 h-4" />
+                                Cliente
+                            </Label>
+                            <ContactPicker
+                                value={contactId}
+                                onChange={(val) => setContactId(val || "")}
+                                placeholder="Selecione o cliente (opcional)"
+                                disabled={!!fixedContactId}
+                            />
+                        </div>
 
-                    {/* Item (Produto/Serviço) */}
-                    <div className="space-y-2">
-                        <Label>Item *</Label>
-                        <Select
-                            value={productServiceId}
-                            onValueChange={setProductServiceId}
-                        >
-                            <SelectTrigger>
-                                <SelectValue placeholder={`Selecione o ${category === 'product' ? 'produto' : 'serviço'}`} />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {filteredItems.map((item: any) => (
-                                    <SelectItem key={item.id} value={item.id}>
-                                        {item.name} - {formatCurrency(item.price)}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
+                        {/* Products List */}
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <Label>Produtos/Serviços *</Label>
+                                <span className="text-xs text-muted-foreground">{products.length} {products.length === 1 ? 'item' : 'itens'}</span>
+                            </div>
 
-                    {/* Quantidade */}
-                    <div className="space-y-2">
-                        <Label>Quantidade *</Label>
-                        <Input
-                            type="number"
-                            min={1}
-                            value={quantity}
-                            onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
-                        />
-                    </div>
+                            {products.map((product, index) => (
+                                <div key={product.id} className="flex gap-2 items-start p-3 border rounded-lg bg-muted/30">
+                                    <div className="flex-1 grid grid-cols-3 gap-2">
+                                        {/* Category */}
+                                        <Select
+                                            value={product.category}
+                                            onValueChange={(val) => {
+                                                updateProduct(product.id, 'category', val);
+                                                updateProduct(product.id, 'productServiceId', '');
+                                            }}
+                                        >
+                                            <SelectTrigger className="h-9">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {Object.entries(SaleCategoryLabels).map(([key, label]) => (
+                                                    <SelectItem key={key} value={key}>{label}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
 
-                    {/* Valor Total (calculado) */}
-                    <div className="space-y-2">
-                        <Label>Valor Total</Label>
-                        <div className="p-3 bg-muted rounded-md">
-                            <span className="text-lg font-bold text-green-500">
-                                {formatCurrency(totalAmount)}
-                            </span>
-                            <span className="text-sm text-muted-foreground ml-2">
-                                ({quantity}x {formatCurrency(unitPrice)})
-                            </span>
+                                        {/* Item */}
+                                        <Select
+                                            value={product.productServiceId || "_empty"}
+                                            onValueChange={(val) => updateProduct(product.id, 'productServiceId', val === "_empty" ? "" : val)}
+                                        >
+                                            <SelectTrigger className="h-9">
+                                                <SelectValue placeholder="Selecione" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="_empty" disabled>Selecione</SelectItem>
+                                                {getFilteredItems(product.category).map((item: any) => (
+                                                    <SelectItem key={item.id} value={item.id}>
+                                                        {item.name} - {formatCurrency(item.price)}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+
+                                        {/* Quantity */}
+                                        <Input
+                                            type="number"
+                                            min={1}
+                                            value={product.quantity}
+                                            onChange={(e) => updateProduct(product.id, 'quantity', parseInt(e.target.value) || 1)}
+                                            className="h-9 w-20"
+                                            placeholder="Qtd"
+                                        />
+                                    </div>
+
+                                    {/* Subtotal + Remove */}
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm font-medium text-green-600 min-w-[80px] text-right">
+                                            {formatCurrency(product.quantity * product.unitPrice)}
+                                        </span>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                                            onClick={() => removeProduct(product.id)}
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            ))}
+
+                            {/* Add Product Button */}
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="w-full border-dashed"
+                                onClick={addProduct}
+                            >
+                                <Plus className="w-4 h-4 mr-2" />
+                                Adicionar Produto
+                            </Button>
+                        </div>
+
+                        {/* Total */}
+                        {products.length > 0 && (
+                            <div className="p-4 bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/30 rounded-lg">
+                                <div className="flex justify-between items-center">
+                                    <span className="font-medium">Valor Total</span>
+                                    <span className="text-2xl font-bold text-green-600">
+                                        {formatCurrency(totalAmount)}
+                                    </span>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Payment Type */}
+                        <div className="space-y-2">
+                            <Label>Forma de Pagamento *</Label>
+                            <Select
+                                value={paymentType}
+                                onValueChange={(value: PaymentType) => {
+                                    setPaymentType(value);
+                                    if (value === 'cash') {
+                                        setInstallments(2);
+                                        setInterestRate(0);
+                                    }
+                                }}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="cash">À Vista</SelectItem>
+                                    <SelectItem value="installment">Parcelado</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Installment fields */}
+                        {paymentType === 'installment' && (
+                            <>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label>Parcelas</Label>
+                                        <Select
+                                            value={String(installments)}
+                                            onValueChange={(val) => setInstallments(parseInt(val))}
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 18, 24].map((n) => (
+                                                    <SelectItem key={n} value={String(n)}>{n}x</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Juros % (a.m.)</Label>
+                                        <Input
+                                            type="number"
+                                            min={0}
+                                            max={10}
+                                            step={0.1}
+                                            value={interestRate}
+                                            onChange={(e) => setInterestRate(parseFloat(e.target.value) || 0)}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-md text-sm">
+                                    <p className="font-medium">{installments}x de {formatCurrency(installmentValue)}</p>
+                                    {interestRate > 0 && (
+                                        <p className="text-xs text-muted-foreground">
+                                            Total com juros: {formatCurrency(totalWithInterest)}
+                                        </p>
+                                    )}
+                                </div>
+                            </>
+                        )}
+
+                        {/* Date */}
+                        <div className="space-y-2">
+                            <Label>Data *</Label>
+                            <Input
+                                type="date"
+                                value={saleDate}
+                                onChange={(e) => setSaleDate(e.target.value)}
+                            />
+                        </div>
+
+                        {/* Team Member */}
+                        <div className="space-y-2">
+                            <Label>Atendente (opcional)</Label>
+                            <Select
+                                value={teamMemberId || "_none"}
+                                onValueChange={(val) => setTeamMemberId(val === "_none" ? "" : val)}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Selecione" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="_none">Nenhum</SelectItem>
+                                    {teamMembers.map((member: any) => (
+                                        <SelectItem key={member.id} value={member.id}>
+                                            {member.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Professional */}
+                        <div className="space-y-2">
+                            <Label>Profissional (opcional)</Label>
+                            <Select
+                                value={professionalId || "_none"}
+                                onValueChange={(val) => setProfessionalId(val === "_none" ? "" : val)}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Selecione" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="_none">Nenhum</SelectItem>
+                                    {professionals.map((prof: any) => (
+                                        <SelectItem key={prof.id} value={prof.id}>
+                                            {prof.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Notes */}
+                        <div className="space-y-2">
+                            <Label>Observações</Label>
+                            <Textarea
+                                value={notes}
+                                onChange={(e) => setNotes(e.target.value)}
+                                placeholder="Observações adicionais..."
+                                rows={2}
+                            />
                         </div>
                     </div>
 
-                    {/* Forma de Pagamento */}
-                    <div className="space-y-2">
-                        <Label>Forma de Pagamento *</Label>
-                        <Select
-                            value={paymentType}
-                            onValueChange={(value: PaymentType) => {
-                                setPaymentType(value);
-                                if (value === 'cash') {
-                                    setInstallments(1);
-                                    setInterestRate(0);
-                                }
-                            }}
-                        >
-                            <SelectTrigger>
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {Object.entries(PaymentTypeLabels).map(([key, label]) => (
-                                    <SelectItem key={key} value={key}>{label}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    {/* Campos de Parcelamento (visíveis apenas se parcelado) */}
-                    {paymentType === 'installment' && (
-                        <>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label>Número de Parcelas *</Label>
-                                    <Select
-                                        value={String(installments)}
-                                        onValueChange={(value) => setInstallments(parseInt(value))}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 18, 24].map((n) => (
-                                                <SelectItem key={n} value={String(n)}>{n}x</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label>Taxa de Juros (% a.m.)</Label>
-                                    <Input
-                                        type="number"
-                                        min={0}
-                                        max={100}
-                                        step={0.1}
-                                        value={interestRate}
-                                        onChange={(e) => setInterestRate(parseFloat(e.target.value) || 0)}
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Preview das Parcelas */}
-                            <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-md">
-                                <p className="text-sm font-medium">
-                                    {installments}x de {formatCurrency(installmentValue)}
-                                </p>
-                                {interestRate > 0 && (
-                                    <p className="text-xs text-muted-foreground">
-                                        Total com juros: {formatCurrency(totalWithInterest)}
-                                    </p>
-                                )}
-                            </div>
-                        </>
-                    )}
-
-                    {/* Data da Venda */}
-                    <div className="space-y-2">
-                        <Label>Data *</Label>
-                        <Input
-                            type="date"
-                            value={saleDate}
-                            onChange={(e) => setSaleDate(e.target.value)}
-                        />
-                    </div>
-
-                    {/* Atendente (opcional) */}
-                    <div className="space-y-2">
-                        <Label>Atendente (opcional)</Label>
-                        <Select
-                            value={teamMemberId || "_none"}
-                            onValueChange={(val) => setTeamMemberId(val === "_none" ? "" : val)}
-                        >
-                            <SelectTrigger>
-                                <SelectValue placeholder="Selecione o atendente" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="_none">Nenhum</SelectItem>
-                                {teamMembers.map((member: any) => (
-                                    <SelectItem key={member.id} value={member.id}>
-                                        {member.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    {/* Profissional (opcional) */}
-                    <div className="space-y-2">
-                        <Label>Profissional (opcional)</Label>
-                        <Select
-                            value={professionalId || "_none"}
-                            onValueChange={(val) => setProfessionalId(val === "_none" ? "" : val)}
-                        >
-                            <SelectTrigger>
-                                <SelectValue placeholder="Selecione o profissional" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="_none">Nenhum</SelectItem>
-                                {professionals.map((prof: any) => (
-                                    <SelectItem key={prof.id} value={prof.id}>
-                                        {prof.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    {/* Observações */}
-                    <div className="space-y-2">
-                        <Label>Observações</Label>
-                        <Textarea
-                            value={notes}
-                            onChange={(e) => setNotes(e.target.value)}
-                            placeholder="Observações adicionais..."
-                            rows={2}
-                        />
-                    </div>
-
-                    <DialogFooter>
+                    {/* Footer */}
+                    <DialogFooter className="pt-4 border-t mt-4">
                         <Button
                             type="button"
                             variant="outline"
@@ -382,10 +457,10 @@ export function SaleModal({ open, onOpenChange, sale }: SaleModalProps) {
                         </Button>
                         <Button
                             type="submit"
-                            disabled={isPending || !productServiceId}
+                            disabled={isPending || products.length === 0}
                         >
                             {isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                            {isEditing ? 'Salvar' : 'Registrar Venda'}
+                            Registrar {products.length > 1 ? `${products.length} Vendas` : 'Venda'}
                         </Button>
                     </DialogFooter>
                 </form>

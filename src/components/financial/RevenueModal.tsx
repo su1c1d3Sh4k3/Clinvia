@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { ContactPicker } from "@/components/ui/contact-picker";
 import {
     Select,
     SelectContent,
@@ -49,19 +50,7 @@ export function RevenueModal({ open, onOpenChange, revenue }: RevenueModalProps)
     const updateMutation = useUpdateRevenue();
     const createCategoryMutation = useCreateRevenueCategory();
 
-    // Contacts for product sales
-    const { data: contacts = [] } = useQuery({
-        queryKey: ["contacts-for-revenue"],
-        queryFn: async () => {
-            const { data, error } = await supabase
-                .from("contacts")
-                .select("id, push_name, profile_pic_url, number")
-                .not("number", "ilike", "%@g.us") // Exclude groups
-                .order("push_name", { ascending: true });
-            if (error) throw error;
-            return data || [];
-        },
-    });
+
 
     // NEW - Product/Service management
     const [selectedProductServiceId, setSelectedProductServiceId] = useState<string>("");
@@ -484,30 +473,10 @@ export function RevenueModal({ open, onOpenChange, revenue }: RevenueModalProps)
                         {isProductCategory && (
                             <div className="space-y-2">
                                 <Label htmlFor="contact">Cliente</Label>
-                                <Select
-                                    value={formData.contact_id || "none"}
-                                    onValueChange={(value) => setFormData({ ...formData, contact_id: value === "none" ? "" : value })}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Selecione um cliente" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="none">Nenhum</SelectItem>
-                                        {contacts.map((contact: any) => (
-                                            <SelectItem key={contact.id} value={contact.id}>
-                                                <div className="flex items-center gap-2">
-                                                    <Avatar className="h-5 w-5">
-                                                        <AvatarImage src={contact.profile_pic_url || undefined} />
-                                                        <AvatarFallback className="text-[10px]">
-                                                            {(contact.push_name || contact.number)?.charAt(0).toUpperCase()}
-                                                        </AvatarFallback>
-                                                    </Avatar>
-                                                    <span>{contact.push_name || contact.number}</span>
-                                                </div>
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                <ContactPicker
+                                    value={formData.contact_id || ""}
+                                    onChange={(val) => setFormData({ ...formData, contact_id: val || "" })}
+                                />
                             </div>
                         )}
                     </div>

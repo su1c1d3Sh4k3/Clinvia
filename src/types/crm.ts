@@ -21,6 +21,23 @@ export interface CRMStage {
     updated_at: string;
 }
 
+// Produto vinculado a uma negociação (tabela crm_deal_products)
+export interface CRMDealProduct {
+    id: string;
+    deal_id: string;
+    product_service_id: string;
+    quantity: number;
+    unit_price: number;
+    created_at?: string;
+    // Joined field
+    product_service?: {
+        id: string;
+        name: string;
+        type: 'product' | 'service';
+        price: number;
+    };
+}
+
 export interface CRMDeal {
     id: string;
     user_id: string;
@@ -30,8 +47,8 @@ export interface CRMDeal {
     title: string;
     description?: string;
     value: number;
-    product_service_id?: string; // NEW - replaces old product text field
-    quantity?: number; // NEW - default 1
+    product_service_id?: string; // DEPRECATED - usar deal_products
+    quantity?: number; // DEPRECATED - usar deal_products
     assigned_professional_id?: string; // NEW - only for services
     priority?: 'low' | 'medium' | 'high';
     loss_reason?: string; // Motivo da perda
@@ -74,4 +91,7 @@ export interface CRMDeal {
         usuario: string;
         nota: string;
     }[];
+    // Multi-produto
+    deal_products?: CRMDealProduct[];
 }
+
