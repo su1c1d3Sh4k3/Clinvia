@@ -648,61 +648,26 @@ export const ChatArea = ({
     }
 
     let finalBody = message;
-    let mediaUrl: string | null = null;
-    let messageType: 'text' | 'audio' | 'image' = 'text';
 
-    // Upload file if present (audio or image)
-    if (selectedFile) {
-      setIsUploading(true);
+    // For now, Instagram API only supports text messages
+    // TODO: Add media support when needed
 
-      // Determine message type based on file type
-      if (selectedFile.type.startsWith('image/')) {
-        messageType = 'image';
-      } else if (selectedFile.type.startsWith('audio/')) {
-        messageType = 'audio';
-      }
-
-      // Upload to Supabase Storage
-      const url = await uploadFile(selectedFile);
-      if (!url) {
-        setIsUploading(false);
-        return;
-      }
-      mediaUrl = url;
-      console.log('[Instagram Send] Uploaded media:', { type: messageType, url: mediaUrl });
-    }
-
-    // Validation: need either text or media
-    if (!finalBody.trim() && !selectedFile) {
-      toast.error("Digite uma mensagem ou anexe um arquivo");
+    if (!finalBody.trim()) {
+      toast.error("Digite uma mensagem");
       return;
     }
 
     setIsUploading(true);
 
     try {
-      // Build payload based on message type
-      // Include all required fields for the backend
-      const payload: any = {
-        conversation_id: conversationId,
-        instagram_instance_id: instagramInstanceId,
-        recipient_id: contactInstagramId,
-        message_type: messageType,
-      };
-
-      if (messageType === 'text') {
-        payload.message_text = finalBody;
-      } else if (messageType === 'audio') {
-        payload.audio_url = mediaUrl;
-      } else if (messageType === 'image') {
-        payload.image_url = mediaUrl;
-      }
-
-      console.log('[Instagram Send] Sending payload:', payload);
-
       // Send via Instagram Edge Function - it also saves the message to DB
       const { data, error } = await supabase.functions.invoke('instagram-send-message', {
-        body: payload
+        body: {
+          instagram_instance_id: instagramInstanceId,
+          recipient_id: contactInstagramId,
+          message_text: finalBody,
+          conversation_id: conversationId
+        }
       });
 
       if (error) throw error;
@@ -723,9 +688,7 @@ export const ChatArea = ({
       queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
 
-      const successMsg = messageType === 'audio' ? 'Áudio enviado' :
-        messageType === 'image' ? 'Imagem enviada' : 'Mensagem enviada';
-      toast.success(successMsg);
+      toast.success("Mensagem enviada");
     } catch (error: any) {
       console.error("Error sending Instagram message:", error);
       toast.error(error.message || "Erro ao enviar mensagem");
