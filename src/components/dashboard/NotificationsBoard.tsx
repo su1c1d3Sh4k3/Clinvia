@@ -3,11 +3,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Bell, ChevronLeft, ChevronRight, X, CheckCircle2, AlertCircle, Clock, ArrowRightLeft, DollarSign, TrendingUp, TrendingDown, Trash2 } from "lucide-react";
+import { Bell, ChevronLeft, ChevronRight, X, CheckCircle2, AlertCircle, Clock, ArrowRightLeft, ShoppingCart, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-type NotificationType = 'task_created' | 'task_open' | 'task_finished' | 'deal_stagnated' | 'deal_created' | 'deal_stage_changed' | 'queue_changed' | 'appointment_created' | 'appointments_today' | 'appointment_reminder' | 'appointment_updated' | 'revenue_due' | 'expense_due' | 'revenue_overdue' | 'expense_overdue' | 'revenue_created' | 'expense_created' | 'team_cost_created' | 'marketing_campaign_created';
+type NotificationType = 'task_created' | 'task_open' | 'task_finished' | 'deal_stagnated' | 'deal_created' | 'deal_stage_changed' | 'queue_changed' | 'appointment_created' | 'appointments_today' | 'appointment_reminder' | 'appointment_updated' | 'sale_cash' | 'sale_installment' | 'sale_pending';
 
 interface Notification {
     id: string;
@@ -38,24 +38,18 @@ const getNotificationStyle = (type: NotificationType) => {
             return { color: 'bg-purple-100 dark:bg-purple-900/30 border-purple-200 dark:border-purple-800', icon: ArrowRightLeft, iconColor: 'text-purple-600 dark:text-purple-400' };
         case 'appointments_today':
             return { color: 'bg-teal-100 dark:bg-teal-900/30 border-teal-200 dark:border-teal-800', icon: Clock, iconColor: 'text-teal-600 dark:text-teal-400' };
-        // Financial notification types
-        case 'revenue_created':
-        case 'revenue_due':
-            return { color: 'bg-emerald-100 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-800', icon: TrendingUp, iconColor: 'text-emerald-600 dark:text-emerald-400' };
-        case 'expense_created':
-        case 'expense_due':
-            return { color: 'bg-amber-100 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800', icon: TrendingDown, iconColor: 'text-amber-600 dark:text-amber-400' };
-        case 'revenue_overdue':
-        case 'expense_overdue':
-            return { color: 'bg-rose-100 dark:bg-rose-900/30 border-rose-200 dark:border-rose-800', icon: AlertCircle, iconColor: 'text-rose-600 dark:text-rose-400' };
-        case 'team_cost_created':
-            return { color: 'bg-cyan-100 dark:bg-cyan-900/30 border-cyan-200 dark:border-cyan-800', icon: DollarSign, iconColor: 'text-cyan-600 dark:text-cyan-400' };
-        case 'marketing_campaign_created':
-            return { color: 'bg-fuchsia-100 dark:bg-fuchsia-900/30 border-fuchsia-200 dark:border-fuchsia-800', icon: TrendingUp, iconColor: 'text-fuchsia-600 dark:text-fuchsia-400' };
+        // Sales notification types
+        case 'sale_cash':
+            return { color: 'bg-emerald-100 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-800', icon: ShoppingCart, iconColor: 'text-emerald-600 dark:text-emerald-400' };
+        case 'sale_installment':
+            return { color: 'bg-cyan-100 dark:bg-cyan-900/30 border-cyan-200 dark:border-cyan-800', icon: ShoppingCart, iconColor: 'text-cyan-600 dark:text-cyan-400' };
+        case 'sale_pending':
+            return { color: 'bg-amber-100 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800', icon: ShoppingCart, iconColor: 'text-amber-600 dark:text-amber-400' };
         default:
             return { color: 'bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700', icon: Bell, iconColor: 'text-gray-600 dark:text-gray-400' };
     }
 };
+
 
 export const NotificationsBoard = () => {
     const [isExpanded, setIsExpanded] = useState(false);

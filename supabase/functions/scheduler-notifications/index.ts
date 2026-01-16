@@ -184,12 +184,12 @@ serve(async (req) => {
 
             const userIds = usersWithAutoComplete.map(u => u.user_id);
             let appointmentsCompleted = 0;
-            let revenuesCreated = 0;
+            let salesCreated = 0;
 
             // Find confirmed appointments with end_time <= now for these users
             const { data: appointmentsToComplete, error: aptError } = await supabase
                 .from("appointments")
-                .select("*, products_services(name, price), professionals(id, name, commission)")
+                .select("*, products_services(id, name, type, price)")
                 .in("user_id", userIds)
                 .eq("status", "confirmed")
                 .eq("type", "appointment")
@@ -211,112 +211,47 @@ serve(async (req) => {
 
                 appointmentsCompleted++;
 
-                // Skip revenue creation if no price
-                if (!apt.price || apt.price <= 0) continue;
+                // Skip sale creation if no price or no service
+                if (!apt.price || apt.price <= 0 || !apt.service_id) continue;
 
-                // Get or create "Agendamento" revenue category for this user
-                let agendamentoCategoryId = null;
-                const { data: existingCategory } = await supabase
-                    .from("revenue_categories")
-                    .select("id")
-                    .eq("user_id", apt.user_id)
-                    .eq("name", "Agendamento")
-                    .single();
-
-                if (existingCategory) {
-                    agendamentoCategoryId = existingCategory.id;
-                } else {
-                    const { data: newCategory } = await supabase
-                        .from("revenue_categories")
-                        .insert({ user_id: apt.user_id, name: "Agendamento", description: "Receitas de agendamentos" })
-                        .select("id")
-                        .single();
-                    agendamentoCategoryId = newCategory?.id;
-                }
-
-                const serviceName = apt.products_services?.name || "Serviço";
+                const service = apt.products_services;
                 const appointmentDate = apt.start_time.split("T")[0];
 
-                // Create revenue
-                const revenuePayload = {
+                // Create sale entry (always as 'pending' payment type)
+                const salePayload = {
                     user_id: apt.user_id,
-                    category_id: agendamentoCategoryId,
-                    product_service_id: apt.service_id || null,
-                    item: serviceName,
-                    description: apt.description || "Receita de agendamento",
-                    amount: apt.price,
-                    payment_method: "other",
-                    due_date: appointmentDate,
-                    paid_date: appointmentDate,
-                    status: "paid",
+                    category: service?.type || 'service',
+                    product_service_id: apt.service_id,
+                    quantity: 1,
+                    unit_price: apt.price,
+                    total_amount: apt.price,
+                    payment_type: 'pending',
+                    installments: 1,
+                    interest_rate: 0,
+                    sale_date: appointmentDate,
                     professional_id: apt.professional_id || null,
                     contact_id: apt.contact_id || null,
-                    is_recurring: false,
+                    team_member_id: null,
+                    notes: apt.description || `Venda de agendamento - ${service?.name || 'Serviço'}`,
                 };
 
-                const { data: revenueResult, error: revenueError } = await supabase
-                    .from("revenues")
-                    .insert(revenuePayload)
-                    .select("id")
-                    .single();
+                const { error: saleError } = await supabase
+                    .from("sales")
+                    .insert(salePayload);
 
-                if (revenueError) {
-                    console.error(`Error creating revenue for appointment ${apt.id}:`, revenueError);
+                if (saleError) {
+                    console.error(`Error creating sale for appointment ${apt.id}:`, saleError);
                     continue;
                 }
 
-                revenuesCreated++;
-
-                // Create commission expense if professional has commission > 0
-                const professional = apt.professionals;
-                if (professional && professional.commission > 0 && revenueResult) {
-                    const commissionAmount = (apt.price * professional.commission) / 100;
-
-                    // Get or create "Comissão" expense category for this user
-                    let commissionCategoryId = null;
-                    const { data: existingCommissionCat } = await supabase
-                        .from("expense_categories")
-                        .select("id")
-                        .eq("user_id", apt.user_id)
-                        .eq("name", "Comissão")
-                        .single();
-
-                    if (existingCommissionCat) {
-                        commissionCategoryId = existingCommissionCat.id;
-                    } else {
-                        const { data: newCommissionCat } = await supabase
-                            .from("expense_categories")
-                            .insert({ user_id: apt.user_id, name: "Comissão", description: "Comissões de profissionais" })
-                            .select("id")
-                            .single();
-                        commissionCategoryId = newCommissionCat?.id;
-                    }
-
-                    const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-                    const lastDayStr = lastDayOfMonth.toISOString().split("T")[0];
-
-                    const commissionPayload = {
-                        user_id: apt.user_id,
-                        category_id: commissionCategoryId,
-                        item: `Comissão ${professional.name}`,
-                        description: "Comissionamento de profissional",
-                        amount: commissionAmount,
-                        payment_method: "other",
-                        due_date: lastDayStr,
-                        status: "pending",
-                        is_recurring: false,
-                        commission_revenue_id: revenueResult.id,
-                    };
-
-                    await supabase.from("expenses").insert(commissionPayload);
-                }
+                salesCreated++;
             }
 
             return new Response(
                 JSON.stringify({
                     success: true,
                     appointments_completed: appointmentsCompleted,
-                    revenues_created: revenuesCreated
+                    sales_created: salesCreated
                 }),
                 { headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );

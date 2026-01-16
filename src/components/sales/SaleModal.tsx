@@ -34,13 +34,28 @@ interface ProductItem {
     unitPrice: number;
 }
 
+// Data from completed appointment to pre-fill and lock
+export interface AppointmentSaleData {
+    contact_id?: string;
+    professional_id?: string;
+    service_id?: string;
+    service_type?: 'product' | 'service';
+    price?: number;
+    sale_date?: string;
+    notes?: string;
+}
+
 interface SaleModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    fixedContactId?: string; // New prop to lock client
+    fixedContactId?: string; // Lock client from conversation context
+    appointmentData?: AppointmentSaleData; // Pre-filled data from appointment completion
 }
 
-export function SaleModal({ open, onOpenChange, fixedContactId }: SaleModalProps) {
+export function SaleModal({ open, onOpenChange, fixedContactId, appointmentData }: SaleModalProps) {
+    // Track if this is an appointment-based sale (fields locked)
+    const isFromAppointment = !!appointmentData;
+
     // Client selection
     const [contactId, setContactId] = useState('');
 
@@ -68,17 +83,43 @@ export function SaleModal({ open, onOpenChange, fixedContactId }: SaleModalProps
     // Reset form when modal opens
     useEffect(() => {
         if (open) {
-            setContactId(fixedContactId || ''); // Use fixedContactId if provided
-            setProducts([]);
-            setPaymentType('cash');
-            setInstallments(2);
-            setInterestRate(0);
-            setSaleDate(new Date().toISOString().split('T')[0]);
-            setTeamMemberId('');
-            setProfessionalId('');
-            setNotes('');
+            // If appointmentData is provided, pre-fill the form with appointment data
+            if (appointmentData) {
+                setContactId(appointmentData.contact_id || '');
+                setProfessionalId(appointmentData.professional_id || '');
+                setSaleDate(appointmentData.sale_date || new Date().toISOString().split('T')[0]);
+                setNotes(appointmentData.notes || '');
+                setPaymentType('pending'); // Always pending for appointments
+                setInstallments(1);
+                setInterestRate(0);
+                setTeamMemberId('');
+
+                // Pre-fill product with service from appointment
+                if (appointmentData.service_id) {
+                    setProducts([{
+                        id: `apt-${Date.now()}`,
+                        category: appointmentData.service_type || 'service',
+                        productServiceId: appointmentData.service_id,
+                        quantity: 1,
+                        unitPrice: appointmentData.price || 0,
+                    }]);
+                } else {
+                    setProducts([]);
+                }
+            } else {
+                // Normal flow - reset to empty
+                setContactId(fixedContactId || '');
+                setProducts([]);
+                setPaymentType('cash');
+                setInstallments(2);
+                setInterestRate(0);
+                setSaleDate(new Date().toISOString().split('T')[0]);
+                setTeamMemberId('');
+                setProfessionalId('');
+                setNotes('');
+            }
         }
-    }, [open, fixedContactId]);
+    }, [open, fixedContactId, appointmentData]);
 
     // Add a new empty product
     const addProduct = useCallback(() => {
@@ -195,7 +236,7 @@ export function SaleModal({ open, onOpenChange, fixedContactId }: SaleModalProps
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
                 <DialogHeader>
-                    <DialogTitle>Nova Venda</DialogTitle>
+                    <DialogTitle>{isFromAppointment ? 'Venda de Agendamento' : 'Nova Venda'}</DialogTitle>
                 </DialogHeader>
 
                 <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
@@ -211,7 +252,7 @@ export function SaleModal({ open, onOpenChange, fixedContactId }: SaleModalProps
                                 value={contactId}
                                 onChange={(val) => setContactId(val || "")}
                                 placeholder="Selecione o cliente (opcional)"
-                                disabled={!!fixedContactId}
+                                disabled={!!fixedContactId || isFromAppointment}
                             />
                         </div>
 
@@ -232,6 +273,7 @@ export function SaleModal({ open, onOpenChange, fixedContactId }: SaleModalProps
                                                 updateProduct(product.id, 'category', val);
                                                 updateProduct(product.id, 'productServiceId', '');
                                             }}
+                                            disabled={isFromAppointment}
                                         >
                                             <SelectTrigger className="h-9">
                                                 <SelectValue />
@@ -247,6 +289,7 @@ export function SaleModal({ open, onOpenChange, fixedContactId }: SaleModalProps
                                         <Select
                                             value={product.productServiceId || "_empty"}
                                             onValueChange={(val) => updateProduct(product.id, 'productServiceId', val === "_empty" ? "" : val)}
+                                            disabled={isFromAppointment}
                                         >
                                             <SelectTrigger className="h-9">
                                                 <SelectValue placeholder="Selecione" />
@@ -290,17 +333,19 @@ export function SaleModal({ open, onOpenChange, fixedContactId }: SaleModalProps
                                 </div>
                             ))}
 
-                            {/* Add Product Button */}
-                            <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className="w-full border-dashed"
-                                onClick={addProduct}
-                            >
-                                <Plus className="w-4 h-4 mr-2" />
-                                Adicionar Produto
-                            </Button>
+                            {/* Add Product Button - Hidden when from appointment */}
+                            {!isFromAppointment && (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="w-full border-dashed"
+                                    onClick={addProduct}
+                                >
+                                    <Plus className="w-4 h-4 mr-2" />
+                                    Adicionar Produto
+                                </Button>
+                            )}
                         </div>
 
                         {/* Total */}
@@ -389,6 +434,7 @@ export function SaleModal({ open, onOpenChange, fixedContactId }: SaleModalProps
                                 type="date"
                                 value={saleDate}
                                 onChange={(e) => setSaleDate(e.target.value)}
+                                disabled={isFromAppointment}
                             />
                         </div>
 
@@ -419,6 +465,7 @@ export function SaleModal({ open, onOpenChange, fixedContactId }: SaleModalProps
                             <Select
                                 value={professionalId || "_none"}
                                 onValueChange={(val) => setProfessionalId(val === "_none" ? "" : val)}
+                                disabled={isFromAppointment}
                             >
                                 <SelectTrigger>
                                     <SelectValue placeholder="Selecione" />

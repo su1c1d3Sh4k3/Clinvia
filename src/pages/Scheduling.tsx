@@ -11,6 +11,7 @@ import { SchedulingCalendar } from "@/components/scheduling/SchedulingCalendar";
 import { ProfessionalModal } from "@/components/scheduling/ProfessionalModal";
 import { AppointmentModal } from "@/components/scheduling/AppointmentModal";
 import { SchedulingSettingsModal } from "@/components/scheduling/SchedulingSettingsModal";
+import { SaleModal, AppointmentSaleData } from "@/components/sales/SaleModal";
 import { format, addDays, subDays, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Input } from "@/components/ui/input";
@@ -28,6 +29,10 @@ export default function Scheduling() {
     const [selectedSlot, setSelectedSlot] = useState<{ professionalId: string, date: Date } | undefined>(undefined);
     const [appointmentToEdit, setAppointmentToEdit] = useState<any>(null);
     const [professionalToEdit, setProfessionalToEdit] = useState<any>(null);
+
+    // SaleModal state for appointment completion
+    const [isSaleModalOpen, setIsSaleModalOpen] = useState(false);
+    const [completedAppointmentData, setCompletedAppointmentData] = useState<AppointmentSaleData | undefined>(undefined);
 
     const handlePreviousDay = () => date && setDate(subDays(date, 1));
     const handleNextDay = () => date && setDate(addDays(date, 1));
@@ -133,16 +138,29 @@ export default function Scheduling() {
 
             if (error) throw error;
 
-            // If status is completed, create revenue and commission
+            // If status is completed, open SaleModal with pre-filled data
             if (newStatus === 'completed' && event) {
-                console.log('[DEBUG] Appointment marked as completed:', event);
-                console.log('[DEBUG] Appointment price:', event.price, 'type:', event.type);
-                const revenueCreated = await createRevenueFromAppointment(event);
-                if (revenueCreated) {
+                // Skip if no price or type is not 'appointment'
+                if (!event.price || event.price <= 0 || event.type === 'absence') {
                     toast({
-                        title: "Nova receita criada!",
-                        description: `Receita de R$ ${event.price?.toFixed(2) || '0,00'} registrada automaticamente.`,
+                        title: "Agendamento concluído",
+                        description: "Sem valor para registrar venda.",
                     });
+                } else {
+                    // Prepare appointment data for SaleModal
+                    const appointmentDate = new Date(event.start_time).toISOString().split('T')[0];
+                    const serviceType = event.products_services?.type || 'service';
+
+                    setCompletedAppointmentData({
+                        contact_id: event.contact_id || undefined,
+                        professional_id: event.professional_id || undefined,
+                        service_id: event.service_id || undefined,
+                        service_type: serviceType as 'product' | 'service',
+                        price: event.price,
+                        sale_date: appointmentDate,
+                        notes: event.description || `Venda de agendamento - ${event.products_services?.name || 'Serviço'}`,
+                    });
+                    setIsSaleModalOpen(true);
                 }
             }
 
@@ -151,148 +169,6 @@ export default function Scheduling() {
 
         } catch (error) {
             console.error("Error updating status:", error);
-        }
-    };
-
-    // Create revenue and commission expense from completed appointment
-    // Returns true if revenue was created, false otherwise
-    const createRevenueFromAppointment = async (appointment: any): Promise<boolean> => {
-        try {
-            console.log('[DEBUG] createRevenueFromAppointment called with:', appointment);
-
-            // Skip if no price or type is not 'appointment'
-            if (!appointment.price || appointment.price <= 0 || appointment.type === 'absence') {
-                console.log('[DEBUG] Skipping revenue creation - price:', appointment.price, 'type:', appointment.type);
-                return false;
-            }
-
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) {
-                console.log('[DEBUG] No user found');
-                return false;
-            }
-
-            // Get or create "Agendamento" revenue category
-            let { data: agendamentoCategory } = await supabase
-                .from('revenue_categories')
-                .select('id')
-                .eq('user_id', user.id)
-                .eq('name', 'Agendamento')
-                .single();
-
-            if (!agendamentoCategory) {
-                console.log('[DEBUG] Creating Agendamento category');
-                const { data: newCategory } = await supabase
-                    .from('revenue_categories')
-                    .insert({ user_id: user.id, name: 'Agendamento', description: 'Receitas de agendamentos' })
-                    .select('id')
-                    .single();
-                agendamentoCategory = newCategory;
-            }
-
-            // Get professional info for commission
-            let professional: any = null;
-            if (appointment.professional_id) {
-                const { data: profData } = await supabase
-                    .from('professionals')
-                    .select('id, name, commission')
-                    .eq('id', appointment.professional_id)
-                    .single();
-                professional = profData;
-                console.log('[DEBUG] Professional data:', profData);
-            }
-
-            // Get service name
-            const serviceName = appointment.products_services?.name || 'Serviço';
-            const appointmentDate = new Date(appointment.start_time).toISOString().split('T')[0];
-
-            // Create revenue
-            const revenuePayload = {
-                user_id: user.id,
-                category_id: agendamentoCategory?.id || null,
-                product_service_id: appointment.service_id || null,
-                item: serviceName,
-                description: appointment.description || 'Receita de agendamento',
-                amount: appointment.price,
-                payment_method: 'other',
-                due_date: appointmentDate,
-                paid_date: appointmentDate,
-                status: 'paid',
-                professional_id: appointment.professional_id || null,
-                contact_id: appointment.contact_id || null,
-                is_recurring: false,
-            };
-
-            console.log('[DEBUG] Creating revenue with payload:', revenuePayload);
-
-            const { data: revenueResult, error: revenueError } = await supabase
-                .from('revenues')
-                .insert(revenuePayload)
-                .select()
-                .single();
-
-            if (revenueError) {
-                console.error('[DEBUG] Revenue creation error:', revenueError);
-                return false;
-            }
-
-            console.log('[DEBUG] Revenue created successfully:', revenueResult?.id);
-
-            // Create commission expense if professional has commission > 0
-            if (professional && professional.commission > 0 && revenueResult) {
-                const commissionAmount = (appointment.price * professional.commission) / 100;
-
-                // Get or create "Comissão" expense category
-                let { data: commissionCategory } = await supabase
-                    .from('expense_categories')
-                    .select('id')
-                    .eq('user_id', user.id)
-                    .eq('name', 'Comissão')
-                    .single();
-
-                if (!commissionCategory) {
-                    const { data: newCategory } = await supabase
-                        .from('expense_categories')
-                        .insert({ user_id: user.id, name: 'Comissão', description: 'Comissões de profissionais' })
-                        .select('id')
-                        .single();
-                    commissionCategory = newCategory;
-                }
-
-                // Calculate last day of current month
-                const now = new Date();
-                const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-                const lastDayStr = lastDayOfMonth.toISOString().split('T')[0];
-
-                const commissionPayload = {
-                    user_id: user.id,
-                    category_id: commissionCategory?.id || null,
-                    item: `Comissão ${professional.name}`,
-                    description: 'Comissionamento de profissional',
-                    amount: commissionAmount,
-                    payment_method: 'other',
-                    due_date: lastDayStr,
-                    status: 'pending',
-                    is_recurring: false,
-                    commission_revenue_id: revenueResult.id,
-                };
-
-                const { error: commissionError } = await supabase
-                    .from('expenses')
-                    .insert(commissionPayload);
-
-                if (commissionError) {
-                    console.error('[DEBUG] Commission expense creation error:', commissionError);
-                } else {
-                    console.log('[DEBUG] Commission expense created:', commissionAmount);
-                }
-            }
-
-            return true;
-
-        } catch (error) {
-            console.error('[DEBUG] Error creating revenue from appointment:', error);
-            return false;
         }
     };
 
@@ -487,6 +363,12 @@ export default function Scheduling() {
                 open={isSettingsModalOpen}
                 onOpenChange={setIsSettingsModalOpen}
                 currentSettings={settings}
+            />
+
+            <SaleModal
+                open={isSaleModalOpen}
+                onOpenChange={setIsSaleModalOpen}
+                appointmentData={completedAppointmentData}
             />
         </div>
     );
