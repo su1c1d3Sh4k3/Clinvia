@@ -127,6 +127,92 @@ serve(async (req) => {
             3. **Foco na Ação**: Suas respostas devem ser orientadas para a resolução. Diga o que fazer, não apenas o que é o problema.
             4. **Tom de Voz**: Profissional, mas leve e parceiro. Use emojis com moderação.
             
+            ═══════════════════════════════════════════════════════════════
+            📚 GUIA DE MANUAIS DO SISTEMA
+            ═══════════════════════════════════════════════════════════════
+            
+            Para dúvidas sobre funcionalidades do sistema, consulte os manuais abaixo:
+            
+            📬 **INBOX / CONVERSAS** (inbox.md)
+            - Lista de conversas, filtros, status (abertos/pendentes/resolvidos)
+            - Área de chat, enviar mensagens, anexos, áudios
+            - Menu de ações (responder/editar/apagar/reagir)
+            - Botão IA no chat (gerar/corrigir/melhorar)
+            - Mensagens rápidas (comando /atalho)
+            - Painel lateral: CRM, Vendas, Agendamento, Follow Up, Copilot
+            - Índice de satisfação, Resumo da conversa
+            
+            📋 **TAREFAS** (tasks.md)
+            - Criar, editar, excluir tarefas
+            - Status, prioridades, responsáveis
+            - Filtros e ordenação
+            
+            📊 **CRM** (crm.md)
+            - Pipeline de vendas, Kanban
+            - Leads, Deals, Negócios
+            - Movimentação entre etapas
+            - Motivo de perda
+            
+            🤖 **DEFINIÇÕES DE IA** (ia-config.md)
+            - Configurar comportamento da IA
+            - Empresa, Restrições, Qualificação, FAQ
+            - Personalidade e tom de voz
+            
+            📱 **CONEXÕES WHATSAPP** (whatsapp-connection.md)
+            - Conectar/desconectar instâncias
+            - QR Code, status de conexão
+            - Configurar fila padrão
+            
+            ⚙️ **CONFIGURAÇÕES** (settings.md)
+            - Perfil, Empresa, Segurança, Sistema
+            - Notificações push, PWA
+            - Exclusão de conta
+            
+            📦 **PRODUTOS E SERVIÇOS** (products-services.md)
+            - Cadastrar produtos e serviços
+            - Preços, duração, alertas de oportunidade
+            - Importação CSV
+            
+            👥 **CONTATOS** (contacts.md)
+            - Lista de contatos, busca
+            - Tags, edição, exclusão em massa
+            - Toggle de IA por contato
+            
+            📂 **FILAS** (queues.md)
+            - Criar e gerenciar filas de atendimento
+            - Atribuir usuários às filas
+            
+            🏷️ **TAGS** (tags.md)
+            - Criar, editar, excluir tags
+            - Cores, status, tag especial "IA"
+            
+            ⏰ **FOLLOW UP** (follow-up.md)
+            - Mensagens de follow up por tempo
+            - Categorias, templates
+            - Envio automático
+            
+            📅 **AGENDAMENTOS** (scheduling.md)
+            - Calendário, criar agendamentos
+            - Profissionais, serviços, horários
+            - Ausências, status (concluído/cancelado)
+            
+            💰 **VENDAS** (sales.md)
+            - Registrar vendas
+            - Pagamento à vista/parcelado
+            - Relatórios de vendas
+            
+            👨‍💼 **EQUIPE** (team.md)
+            - Membros da equipe (atendentes, supervisores)
+            - Profissionais de agenda
+            - Permissões e comissões
+            
+            ═══════════════════════════════════════════════════════════════
+            INSTRUÇÕES DE USO:
+            - Quando o usuário perguntar sobre alguma funcionalidade, baseie sua resposta no manual correspondente
+            - Seja direto e objetivo nas explicações
+            - Forneça passos práticos quando possível
+            ═══════════════════════════════════════════════════════════════
+            
             ${context}`
           },
           { role: "user", content: message }

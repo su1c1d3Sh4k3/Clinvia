@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Outlet } from "react-router-dom";
 import { NavigationSidebar } from "./NavigationSidebar";
 import { ChangePasswordModal } from "./ChangePasswordModal";
+import { BiaSupport } from "./support/BiaSupport";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Layout = () => {
@@ -37,6 +38,9 @@ export const Layout = () => {
                 open={showPasswordModal}
                 onClose={() => setShowPasswordModal(false)}
             />
+
+            {/* Bia - Assistente de Suporte IA */}
+            <BiaSupport />
         </div>
     );
 };
