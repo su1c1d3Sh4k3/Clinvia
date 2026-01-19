@@ -76,38 +76,44 @@ const SLUG_TO_FILE: Record<string, string> = {
     'unknown': 'default.md',
 };
 
-// Buscar manual do Storage
-async function getManualContent(supabase: any, pageSlug: string): Promise<string> {
+// Buscar manual do Storage via URL pública
+async function getManualContent(pageSlug: string): Promise<string> {
     const fileName = SLUG_TO_FILE[pageSlug] || 'default.md';
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 
-    console.log(`[ai-support-chat] Buscando manual: ${fileName}`);
+    // URL pública do Storage
+    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/manuals/${fileName}`;
+
+    console.log(`[ai-support-chat] Buscando manual: ${publicUrl}`);
 
     try {
-        const { data, error } = await supabase.storage
-            .from('manuals')
-            .download(fileName);
+        const response = await fetch(publicUrl);
 
-        if (error) {
-            console.error(`[ai-support-chat] Erro ao buscar ${fileName}:`, error.message);
+        if (!response.ok) {
+            console.error(`[ai-support-chat] Erro ao buscar ${fileName}: ${response.status}`);
+
             // Tenta o default
             if (fileName !== 'default.md') {
-                const { data: defaultData, error: defaultError } = await supabase.storage
-                    .from('manuals')
-                    .download('default.md');
+                const defaultUrl = `${SUPABASE_URL}/storage/v1/object/public/manuals/default.md`;
+                const defaultResponse = await fetch(defaultUrl);
 
-                if (!defaultError && defaultData) {
-                    return await defaultData.text();
+                if (defaultResponse.ok) {
+                    const content = await defaultResponse.text();
+                    console.log(`[ai-support-chat] Usando default.md: ${content.length} chars`);
+                    return content;
                 }
             }
             return FALLBACK_MANUAL;
         }
 
-        if (!data) {
-            console.log(`[ai-support-chat] Arquivo ${fileName} vazio, usando fallback`);
+        const content = await response.text();
+
+        if (!content || content.length < 50) {
+            console.log(`[ai-support-chat] Arquivo ${fileName} vazio ou muito pequeno, usando fallback`);
             return FALLBACK_MANUAL;
         }
 
-        const content = await data.text();
+        console.log(`[ai-support-chat] Manual ${fileName} carregado: ${content.length} chars`);
 
         // Limitar tamanho para economizar tokens (máx 6000 caracteres)
         if (content.length > 6000) {
@@ -148,8 +154,8 @@ serve(async (req) => {
             SUPABASE_SERVICE_ROLE_KEY ?? ""
         );
 
-        // Buscar manual completo do Storage
-        const manualContent = await getManualContent(supabaseAdmin, pageSlug || 'default');
+        // Buscar manual completo do Storage via URL pública
+        const manualContent = await getManualContent(pageSlug || 'default');
 
         console.log(`[ai-support-chat] Manual carregado: ${manualContent.length} chars`);
 
