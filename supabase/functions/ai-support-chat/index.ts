@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { makeOpenAIRequest } from "../_shared/token-tracker.ts";
+import { allTools, executeTool, executeConfirmedAction, UserContext, UserRole } from "../_shared/bia-tools/index.ts";
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -42,41 +43,32 @@ const SYSTEM_PROMPT = `Você é a **Bia**, assistente virtual de suporte da plat
 - Fala de forma natural, como uma amiga que manja muito do sistema
 - Não é robótica - varia suas respostas e tem personalidade
 - Você ENTENDE O CONTEXTO da conversa anterior
+- Você tem acesso a FERRAMENTAS para consultar e manipular dados do sistema
 
-📚 VOCÊ TEM ACESSO AO MANUAL:
-O conteúdo do manual será fornecido abaixo. Use essas informações pra responder, mas de forma NATURAL.
+🛠️ SUAS FERRAMENTAS:
+Você pode executar ações reais no sistema! Quando o usuário pedir algo como:
+- "Quais agendamentos de hoje?" → Use appointments_get_today
+- "Cria uma tarefa para..." → Use tasks_create
+- "Quanto faturamos esse mês?" → Use sales_get_summary
+- "Me mostra os deals parados" → Use crm_get_stagnated_deals
+
+Quando usar ferramentas:
+1. Execute a ferramenta apropriada
+2. Apresente os resultados de forma amigável e humanizada
+3. Se precisar de mais informações, pergunte de forma natural
+4. Se a ferramenta retornar needs_confirmation, apresente os dados e peça confirmação
+
+📚 VOCÊ TAMBÉM TEM ACESSO AO MANUAL:
+Para dúvidas sobre navegação e como usar o sistema, use o manual que será fornecido.
 
 ⚠️ REGRAS IMPORTANTES:
-1. **LEIA O HISTÓRICO DA CONVERSA** - Se você já explicou algo antes, NÃO repita! Responda direto a pergunta nova.
-2. **Seja contextual** - Se o usuário já sabe onde fica a página (você explicou antes), foque na dúvida específica dele
-3. **Varie seus formatos** - Nem sempre precisa ser passo a passo numerado! Às vezes uma explicação natural é melhor
-4. **Personalidade** - Responda como gente, não como manual. Use "você", "a gente", expressões naturais
-5. **Seja concisa** - Não enrole, vá direto ao ponto
+1. **LEIA O HISTÓRICO** - Não repita informações já dadas
+2. **Use as ferramentas** - Para consultas e ações, use as tools disponíveis
+3. **Seja natural** - Não liste dados de forma robótica, apresente de forma conversacional
+4. **Peça confirmação** - Antes de criar/editar, sempre confirme com o usuário
+5. **Respeite permissões** - Se a ferramenta negar, explique gentilmente
 
-🎯 EXEMPLOS DE BOM COMPORTAMENTO:
-
-❌ RUIM (repetitivo e robótico):
-"Para saber sobre o botão, segue o passo a passo:
-1. No menu lateral, clique em **Administrativo**
-2. Clique em **Agendamentos**
-3. O botão está lá..."
-
-✅ BOM (contextual e humano):
-"Ah, esse botão! 🎯 Quando você marca ele, todo agendamento concluído já lança automaticamente uma receita no financeiro. Bem prático né? Assim você não precisa fazer manualmente"
-
-❌ RUIM (sempre mesmo formato):
-"Para criar um produto, segue o passo a passo..."
-
-✅ BOM (natural):
-"Pra criar um produto é bem simples: vai em Operações > Produtos e Serviços, clica em 'Novo Item' e preenche as infos. Se precisar de ajuda com algum campo específico, me fala! 😉"
-
-🚫 O QUE EVITAR:
-- Repetir caminho de navegação se já explicou antes na conversa
-- Começar toda resposta com "Para [X], segue o passo a passo"
-- Ignorar o que foi conversado antes
-- Ser formal demais ou parecer um robô
-
-💬 Se não souber algo: "Hmm, essa não sei te dizer com certeza 🤔 Melhor falar com suporte@clinvia.ai que eles te ajudam!"`;
+💬 Se não souber algo: "Hmm, essa não sei te dizer com certeza 🤔 Melhor falar com suporte@clinvia.ai"`;
 
 
 // Mapeamento de slugs para nomes de arquivo
@@ -97,7 +89,7 @@ const SLUG_TO_FILE: Record<string, string> = {
     'queues': 'queues.md',
     'tags': 'tags.md',
     'follow-up': 'follow-up.md',
-    'financial': 'sales.md', // Fallback para sales
+    'financial': 'sales.md',
     'default': 'default.md',
     'unknown': 'default.md',
 };
@@ -106,50 +98,33 @@ const SLUG_TO_FILE: Record<string, string> = {
 function detectTopicFromMessage(message: string): string | null {
     const lowerMsg = message.toLowerCase();
 
-    // Mapeamento de palavras-chave para slugs - ARRAY para manter ordem (mais específicos primeiro)
     const keywords: [string, string[]][] = [
-        // Scheduling PRIMEIRO antes de tasks (agendamentos são mais específicos)
         ['scheduling', ['agendamento', 'agendar', 'horário', 'horario', 'ausência', 'ausencia', 'calendário de profissional']],
-        // Produtos e Serviços
         ['products-services', ['produto', 'serviço', 'servico', 'catálogo', 'catalogo', 'estoque', 'preço', 'preco']],
-        // CRM
         ['crm', ['crm', 'funil', 'deal', 'negociação', 'negociacao', 'kanban', 'etapa', 'pipeline']],
-        // Tarefas (removido 'agenda' para não confundir)
         ['tasks', ['tarefa', 'atividade', 'quadro de tarefa', 'nova tarefa']],
-        // Contatos
         ['contacts', ['contato', 'lead', 'cliente', 'telefone']],
-        // Vendas
-        ['sales', ['venda', 'vendas', 'pagamento', 'parcelado']],
-        // Equipe
+        ['sales', ['venda', 'vendas', 'pagamento', 'parcelado', 'faturamento', 'faturou']],
         ['team', ['equipe', 'membro', 'atendente', 'supervisor', 'comissão', 'comissao']],
-        // IA Config
         ['ia-config', ['definições de ia', 'configurar ia', 'inteligência artificial', 'bot automático']],
-        // WhatsApp
         ['whatsapp-connection', ['whatsapp', 'conexão whatsapp', 'instância', 'instancia', 'qr code', 'pareamento']],
-        // Configurações
         ['settings', ['configuração geral', 'perfil', 'senha', 'notificação push', 'pwa']],
-        // Filas
         ['queues', ['fila', 'filas de atendimento', 'distribuição']],
-        // Tags
         ['tags', ['tag', 'etiqueta', 'marcador']],
-        // Follow Up
         ['follow-up', ['follow up', 'followup', 'follow-up', 'retomada', 'lembrete automático']],
-        // Inbox
         ['inbox', ['inbox', 'conversa', 'chat', 'mensagem']],
-        // Dashboard
         ['dashboard', ['dashboard', 'métrica', 'gráfico', 'relatório']],
     ];
 
     for (const [slug, words] of keywords) {
         for (const word of words) {
             if (lowerMsg.includes(word)) {
-                console.log(`[ai-support-chat] Detectou "${word}" -> ${slug}`);
                 return slug;
             }
         }
     }
 
-    return null; // Não detectou tópico específico
+    return null;
 }
 
 // Buscar manual do Storage via URL pública
@@ -157,25 +132,18 @@ async function getManualContent(pageSlug: string): Promise<string> {
     const fileName = SLUG_TO_FILE[pageSlug] || 'default.md';
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 
-    // URL pública do Storage
     const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/manuals/${fileName}`;
-
-    console.log(`[ai-support-chat] Buscando manual: ${publicUrl}`);
 
     try {
         const response = await fetch(publicUrl);
 
         if (!response.ok) {
-            console.error(`[ai-support-chat] Erro ao buscar ${fileName}: ${response.status}`);
-
-            // Tenta o default
             if (fileName !== 'default.md') {
                 const defaultUrl = `${SUPABASE_URL}/storage/v1/object/public/manuals/default.md`;
                 const defaultResponse = await fetch(defaultUrl);
 
                 if (defaultResponse.ok) {
                     const content = await defaultResponse.text();
-                    console.log(`[ai-support-chat] Usando default.md: ${content.length} chars`);
                     return content;
                 }
             }
@@ -185,16 +153,12 @@ async function getManualContent(pageSlug: string): Promise<string> {
         const content = await response.text();
 
         if (!content || content.length < 50) {
-            console.log(`[ai-support-chat] Arquivo ${fileName} vazio ou muito pequeno, usando fallback`);
             return FALLBACK_MANUAL;
         }
 
-        console.log(`[ai-support-chat] Manual ${fileName} carregado: ${content.length} chars`);
-
-        // Limitar tamanho para economizar tokens (máx 6000 caracteres)
-        if (content.length > 6000) {
-            console.log(`[ai-support-chat] Manual truncado de ${content.length} para 6000 chars`);
-            return content.substring(0, 6000) + "\n\n[... manual truncado ...]";
+        // Limitar tamanho para economizar tokens
+        if (content.length > 4000) {
+            return content.substring(0, 4000) + "\n\n[... manual truncado ...]";
         }
 
         return content;
@@ -204,6 +168,32 @@ async function getManualContent(pageSlug: string): Promise<string> {
     }
 }
 
+// Process tool calls from OpenAI response
+async function processToolCalls(
+    toolCalls: any[],
+    supabase: any,
+    context: UserContext
+): Promise<{ role: string; tool_call_id: string; content: string }[]> {
+    const results: { role: string; tool_call_id: string; content: string }[] = [];
+
+    for (const toolCall of toolCalls) {
+        const functionName = toolCall.function.name;
+        const args = JSON.parse(toolCall.function.arguments || '{}');
+
+        console.log(`[ai-support-chat] Tool call: ${functionName}`, args);
+
+        const result = await executeTool(functionName, args, supabase, context);
+
+        results.push({
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: JSON.stringify(result)
+        });
+    }
+
+    return results;
+}
+
 serve(async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response(null, { headers: corsHeaders });
@@ -211,9 +201,20 @@ serve(async (req) => {
 
     try {
         const body = await req.json();
-        const { message, pageSlug, pageName, userRole, conversationHistory } = body;
+        const {
+            message,
+            pageSlug,
+            pageName,
+            userRole,
+            conversationHistory,
+            userId,        // auth.uid() do usuário
+            ownerId,       // user_id da empresa (tenant)
+            teamMemberId,  // ID do team_member
+            confirmAction, // Se está confirmando uma ação
+            actionData     // Dados da ação a ser confirmada
+        } = body;
 
-        console.log("[ai-support-chat] Request:", { pageSlug, pageName, userRole });
+        console.log("[ai-support-chat] Request:", { pageSlug, userRole, userId: userId?.slice(0, 8) });
 
         if (!message) {
             return new Response(JSON.stringify({ error: "message é obrigatório" }), {
@@ -230,13 +231,37 @@ serve(async (req) => {
             SUPABASE_SERVICE_ROLE_KEY ?? ""
         );
 
+        // Build user context for tools
+        const userContext: UserContext = {
+            auth_user_id: userId || '',
+            owner_id: ownerId || userId || '',
+            role: (userRole as UserRole) || 'agent',
+            team_member_id: teamMemberId || ''
+        };
+
+        // Handle confirmation of pending action
+        if (confirmAction && actionData) {
+            const confirmResult = await executeConfirmedAction(
+                actionData.action,
+                actionData.params,
+                supabaseAdmin
+            );
+
+            return new Response(JSON.stringify({
+                response: confirmResult.success
+                    ? confirmResult.data?.message || 'Ação realizada com sucesso! ✅'
+                    : `Ops, algo deu errado: ${confirmResult.error}`,
+                usage: { total_tokens: 0 }
+            }), {
+                headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+        }
+
         // Detectar o tópico da pergunta para buscar o manual correto
         const topicSlug = detectTopicFromMessage(message) || pageSlug || 'default';
 
-        // Buscar manual completo do Storage via URL pública
+        // Buscar manual completo do Storage
         const manualContent = await getManualContent(topicSlug);
-
-        console.log(`[ai-support-chat] Tópico detectado: ${topicSlug}, Manual carregado: ${manualContent.length} chars`);
 
         // Contexto com página atual e manual
         const context = `
@@ -244,11 +269,10 @@ serve(async (req) => {
 📍 CONTEXTO
 ═══════════════════════════════════════════════════════════════
 Página atual: ${pageName || pageSlug || 'Desconhecida'}
-Tópico da pergunta: ${topicSlug}
 Cargo do usuário: ${userRole || 'agent'}
 
 ═══════════════════════════════════════════════════════════════
-📚 MANUAL DO SISTEMA - USE ESTAS INFORMAÇÕES PARA RESPONDER!
+📚 MANUAL DO SISTEMA
 ═══════════════════════════════════════════════════════════════
 ${manualContent}
 ═══════════════════════════════════════════════════════════════
@@ -259,7 +283,7 @@ ${manualContent}
             { role: "system", content: SYSTEM_PROMPT + "\n\n" + context }
         ];
 
-        // Adicionar últimas 6 mensagens do histórico para melhor contexto
+        // Adicionar histórico
         if (conversationHistory && Array.isArray(conversationHistory)) {
             for (const msg of conversationHistory.slice(-6)) {
                 if (msg.role && msg.content) {
@@ -271,20 +295,20 @@ ${manualContent}
         // Mensagem atual
         openaiMessages.push({ role: "user", content: message });
 
-        console.log("[ai-support-chat] Messages:", openaiMessages.length, "com histórico");
+        console.log("[ai-support-chat] Messages:", openaiMessages.length, "Tools:", allTools.length);
 
-        // Chamar OpenAI
+        // Primeira chamada à OpenAI (com tools)
         const { response, usedCustomToken } = await makeOpenAIRequest(supabaseAdmin, null, {
             endpoint: "https://api.openai.com/v1/chat/completions",
             body: {
                 model: "gpt-4.1",
                 messages: openaiMessages,
-                max_tokens: 500,
-                temperature: 0.7, // Mais criativo para respostas naturais
+                tools: allTools,
+                tool_choice: "auto",
+                max_tokens: 800,
+                temperature: 0.7,
             },
         });
-
-        console.log(`[ai-support-chat] Token: ${usedCustomToken ? 'custom' : 'default'}`);
 
         if (!response.ok) {
             const errorText = await response.text();
@@ -292,14 +316,58 @@ ${manualContent}
             throw new Error(`OpenAI API error: ${response.status}`);
         }
 
-        const data = await response.json();
-        const aiResponse = data.choices?.[0]?.message?.content || "Desculpa, não consegui processar 😅";
+        let data = await response.json();
+        let aiMessage = data.choices?.[0]?.message;
+        let totalTokens = data.usage?.total_tokens || 0;
 
-        console.log("[ai-support-chat] Tokens:", data.usage?.total_tokens);
+        // Process tool calls if any (up to 3 iterations)
+        let iterations = 0;
+        const maxIterations = 3;
+
+        while (aiMessage?.tool_calls && iterations < maxIterations) {
+            iterations++;
+            console.log(`[ai-support-chat] Processing ${aiMessage.tool_calls.length} tool calls (iteration ${iterations})`);
+
+            // Execute tools
+            const toolResults = await processToolCalls(aiMessage.tool_calls, supabaseAdmin, userContext);
+
+            // Add assistant message with tool calls
+            openaiMessages.push(aiMessage);
+
+            // Add tool results
+            for (const result of toolResults) {
+                openaiMessages.push(result);
+            }
+
+            // Call OpenAI again with tool results
+            const { response: followUpResponse } = await makeOpenAIRequest(supabaseAdmin, null, {
+                endpoint: "https://api.openai.com/v1/chat/completions",
+                body: {
+                    model: "gpt-4.1",
+                    messages: openaiMessages,
+                    tools: allTools,
+                    tool_choice: "auto",
+                    max_tokens: 800,
+                    temperature: 0.7,
+                },
+            });
+
+            if (!followUpResponse.ok) {
+                break;
+            }
+
+            data = await followUpResponse.json();
+            aiMessage = data.choices?.[0]?.message;
+            totalTokens += data.usage?.total_tokens || 0;
+        }
+
+        const aiResponse = aiMessage?.content || "Desculpa, não consegui processar 😅";
+
+        console.log("[ai-support-chat] Tokens:", totalTokens, "Iterations:", iterations);
 
         return new Response(JSON.stringify({
             response: aiResponse,
-            usage: data.usage,
+            usage: { total_tokens: totalTokens },
         }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
         });

@@ -10,6 +10,12 @@ interface ChatMessage {
     timestamp: Date;
 }
 
+interface UserContext {
+    userId: string;
+    ownerId: string;
+    teamMemberId: string;
+}
+
 interface UseBiaChatReturn {
     messages: ChatMessage[];
     isLoading: boolean;
@@ -25,17 +31,28 @@ export const useBiaChat = (): UseBiaChatReturn => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isOpen, setIsOpen] = useState(false);
-    const [userId, setUserId] = useState<string | null>(null);
+    const [userContext, setUserContext] = useState<UserContext | null>(null);
 
     const currentPage = useCurrentPage();
     const { data: userRole } = useUserRole();
 
-    // Carregar userId ao montar
+    // Carregar userId, ownerId e teamMemberId ao montar
     useEffect(() => {
         const loadUser = async () => {
             const { data: { user } } = await supabase.auth.getUser();
             if (user) {
-                setUserId(user.id);
+                // Buscar team_member para obter owner_id
+                const { data: teamMember } = await supabase
+                    .from('team_members')
+                    .select('id, user_id')
+                    .eq('auth_user_id', user.id)
+                    .single();
+
+                setUserContext({
+                    userId: user.id,
+                    ownerId: teamMember?.user_id || user.id, // owner_id é o user_id do tenant
+                    teamMemberId: teamMember?.id || ''
+                });
             }
         };
         loadUser();
@@ -43,14 +60,14 @@ export const useBiaChat = (): UseBiaChatReturn => {
 
     // Carregar histórico do banco para EXIBIÇÃO na UI (não para enviar à IA)
     useEffect(() => {
-        if (!userId) return;
+        if (!userContext?.userId) return;
 
         const loadHistory = async () => {
             try {
                 const { data, error } = await supabase
                     .from('bia_chat_history' as any)
                     .select('id, role, content, created_at')
-                    .eq('auth_user_id', userId)
+                    .eq('auth_user_id', userContext.userId)
                     .order('created_at', { ascending: true })
                     .limit(50);
 
@@ -74,17 +91,17 @@ export const useBiaChat = (): UseBiaChatReturn => {
         };
 
         loadHistory();
-    }, [userId]);
+    }, [userContext?.userId]);
 
     // Salvar mensagem no banco (apenas para persistência de UI)
     const saveMessage = useCallback(async (role: 'user' | 'assistant', content: string) => {
-        if (!userId) return;
+        if (!userContext?.userId) return;
 
         try {
             await supabase
                 .from('bia_chat_history' as any)
                 .insert({
-                    auth_user_id: userId,
+                    auth_user_id: userContext.userId,
                     role,
                     content,
                     page_slug: currentPage.slug,
@@ -93,7 +110,7 @@ export const useBiaChat = (): UseBiaChatReturn => {
         } catch (err) {
             console.error('Erro ao salvar mensagem:', err);
         }
-    }, [userId, currentPage]);
+    }, [userContext?.userId, currentPage]);
 
     const sendMessage = useCallback(async (message: string) => {
         if (!message.trim()) return;
@@ -121,7 +138,7 @@ export const useBiaChat = (): UseBiaChatReturn => {
                 content: m.content,
             }));
 
-            // Chamar Edge Function
+            // Chamar Edge Function com contexto completo do usuário
             const { data, error: fnError } = await supabase.functions.invoke('ai-support-chat', {
                 body: {
                     message,
@@ -129,6 +146,10 @@ export const useBiaChat = (): UseBiaChatReturn => {
                     pageName: currentPage.name,
                     userRole: userRole || 'agent',
                     conversationHistory,
+                    // Contexto do usuário para Function Calling
+                    userId: userContext?.userId,
+                    ownerId: userContext?.ownerId,
+                    teamMemberId: userContext?.teamMemberId,
                 },
             });
 
@@ -163,20 +184,20 @@ export const useBiaChat = (): UseBiaChatReturn => {
     }, [messages, currentPage, userRole, saveMessage]);
 
     const clearMessages = useCallback(async () => {
-        if (!userId) return;
+        if (!userContext?.userId) return;
 
         try {
             await supabase
                 .from('bia_chat_history' as any)
                 .delete()
-                .eq('auth_user_id', userId);
+                .eq('auth_user_id', userContext.userId);
 
             setMessages([]);
             setError(null);
         } catch (err) {
             console.error('Erro ao limpar histórico:', err);
         }
-    }, [userId]);
+    }, [userContext?.userId]);
 
     return {
         messages,
