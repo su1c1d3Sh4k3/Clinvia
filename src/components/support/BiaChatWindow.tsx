@@ -15,6 +15,7 @@ interface BiaChatWindowProps {
     messages: ChatMessage[];
     isLoading: boolean;
     onSendMessage: (message: string) => void;
+    onClearHistory: () => void;
 }
 
 export const BiaChatWindow = ({
@@ -22,7 +23,8 @@ export const BiaChatWindow = ({
     onClose,
     messages,
     isLoading,
-    onSendMessage
+    onSendMessage,
+    onClearHistory
 }: BiaChatWindowProps) => {
     const [input, setInput] = useState("");
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -79,15 +81,23 @@ export const BiaChatWindow = ({
                     </div>
                     <div>
                         <h3 className="font-bold text-base">Bia</h3>
-                        <p className="text-xs text-white/80">Assistente Clinvia</p>
+                        <p className="text-xs text-white/80">Assistente de suporte Clinbia</p>
                     </div>
                 </div>
-                <button
-                    onClick={onClose}
-                    className="p-2 hover:bg-white/20 rounded-full transition-colors"
-                >
-                    <X className="w-5 h-5" />
-                </button>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={onClearHistory}
+                        className="px-3 py-1.5 text-xs font-medium bg-white/20 hover:bg-white/30 rounded-full transition-colors"
+                    >
+                        LIMPAR
+                    </button>
+                    <button
+                        onClick={onClose}
+                        className="p-2 hover:bg-white/20 rounded-full transition-colors"
+                    >
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
             </div>
 
             {/* Messages Area */}

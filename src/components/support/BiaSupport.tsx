@@ -7,6 +7,7 @@ export const BiaSupport = () => {
         messages,
         isLoading,
         sendMessage,
+        clearMessages,
         isOpen,
         setIsOpen
     } = useBiaChat();
@@ -24,6 +25,7 @@ export const BiaSupport = () => {
                 messages={messages}
                 isLoading={isLoading}
                 onSendMessage={sendMessage}
+                onClearHistory={clearMessages}
             />
         </>
     );
