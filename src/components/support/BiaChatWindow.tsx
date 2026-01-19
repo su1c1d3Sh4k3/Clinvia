@@ -30,6 +30,23 @@ export const BiaChatWindow = ({
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
 
+    // Função para formatar markdown básico (negrito com **texto**)
+    const formatMessageContent = (content: string): string => {
+        // Escape HTML para segurança
+        let formatted = content
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+
+        // Converte **texto** para <strong>texto</strong>
+        formatted = formatted.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+        // Converte *texto* para <em>texto</em> (itálico)
+        formatted = formatted.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+        return formatted;
+    };
+
     // Auto-scroll to bottom when new messages arrive
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -131,7 +148,10 @@ export const BiaChatWindow = ({
                                             : "bg-white dark:bg-[hsl(var(--card))] text-gray-800 dark:text-gray-200 rounded-bl-md border border-gray-100 dark:border-gray-800 shadow-sm"
                                     )}
                                 >
-                                    <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
+                                    <p
+                                        className="whitespace-pre-wrap leading-relaxed"
+                                        dangerouslySetInnerHTML={{ __html: formatMessageContent(message.content) }}
+                                    />
                                     <span
                                         className={cn(
                                             "text-[10px] mt-1 block",
