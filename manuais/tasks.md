@@ -1,5 +1,11 @@
 # Manual: Página de Tarefas (/tasks)
 
+## 📍 Como Acessar
+
+No **menu lateral**, abra o submenu **"Administrativo"** (ícone de gráfico 📊) e clique em **"Tarefas"** (ícone de lista 📋).
+
+---
+
 ## Visão Geral
 
 A página de **Tarefas** é um sistema de gerenciamento de atividades no formato de agenda/calendário. Permite criar, visualizar e organizar tarefas por quadros, com visualização semanal e controle de horários.

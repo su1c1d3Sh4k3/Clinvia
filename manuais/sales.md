@@ -6,6 +6,12 @@ Página para registrar, visualizar e analisar vendas de produtos e serviços.
 
 ---
 
+## 📍 Como Acessar
+
+No **menu lateral**, abra o submenu **"Administrativo"** (ícone de gráfico 📊) e clique em **"Vendas"** (ícone de carrinho 🛒).
+
+---
+
 ## Conceitos
 
 ### Venda

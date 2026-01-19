@@ -6,6 +6,14 @@ Central de atendimento onde todas as conversas do WhatsApp e Instagram são gere
 
 ---
 
+## 📍 Como Acessar
+
+No **menu lateral**, clique em **"Inbox"** (ícone de mensagem 💬).
+
+Este é o item principal do menu, não está dentro de nenhum submenu.
+
+---
+
 ## Estrutura da Página
 
 A página é dividida em 3 áreas principais:

@@ -6,6 +6,12 @@ Página para gerenciar seu catálogo de produtos e serviços que podem ser vendi
 
 ---
 
+## 📍 Como Acessar
+
+No **menu lateral**, abra o submenu **"Operações"** (ícone de grade 📦) e clique em **"Produtos e Serviços"** (ícone de pacote 📦).
+
+---
+
 ## Conceitos
 
 ### Produto

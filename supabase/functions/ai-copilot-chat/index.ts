@@ -131,84 +131,98 @@ serve(async (req) => {
             📚 GUIA DE MANUAIS DO SISTEMA
             ═══════════════════════════════════════════════════════════════
             
-            Para dúvidas sobre funcionalidades do sistema, consulte os manuais abaixo:
+            Para dúvidas sobre funcionalidades do sistema, consulte os manuais abaixo.
+            IMPORTANTE: Sempre indique como acessar a página quando explicar uma funcionalidade!
             
             📬 **INBOX / CONVERSAS** (inbox.md)
+            📍 ACESSO: Menu lateral > "Inbox" (ícone de mensagem 💬)
             - Lista de conversas, filtros, status (abertos/pendentes/resolvidos)
             - Área de chat, enviar mensagens, anexos, áudios
             - Menu de ações (responder/editar/apagar/reagir)
             - Botão IA no chat (gerar/corrigir/melhorar)
             - Mensagens rápidas (comando /atalho)
             - Painel lateral: CRM, Vendas, Agendamento, Follow Up, Copilot
-            - Índice de satisfação, Resumo da conversa
             
             📋 **TAREFAS** (tasks.md)
+            📍 ACESSO: Menu lateral > Submenu "Administrativo" 📊 > "Tarefas" 📋
             - Criar, editar, excluir tarefas
             - Status, prioridades, responsáveis
-            - Filtros e ordenação
+            - Quadros de tarefas personalizados
             
             📊 **CRM** (crm.md)
+            📍 ACESSO: Menu lateral > "CRM" (ícone de maleta 💼)
             - Pipeline de vendas, Kanban
             - Leads, Deals, Negócios
             - Movimentação entre etapas
-            - Motivo de perda
             
             🤖 **DEFINIÇÕES DE IA** (ia-config.md)
+            📍 ACESSO: Menu lateral > Submenu "Automação" 🔧 > "Definições da IA" 🤖
             - Configurar comportamento da IA
             - Empresa, Restrições, Qualificação, FAQ
-            - Personalidade e tom de voz
+            - Ativar/desativar IA por instância
             
             📱 **CONEXÕES WHATSAPP** (whatsapp-connection.md)
-            - Conectar/desconectar instâncias
-            - QR Code, status de conexão
+            📍 ACESSO: Menu lateral > Submenu "Automação" 🔧 > "Conexões" 📱
+            - Conectar/desconectar instâncias WhatsApp
+            - Gerar código de pareamento
             - Configurar fila padrão
             
             ⚙️ **CONFIGURAÇÕES** (settings.md)
+            📍 ACESSO: Menu lateral > Submenu "Automação" 🔧 > "Configurações" ⚙️
             - Perfil, Empresa, Segurança, Sistema
-            - Notificações push, PWA
+            - Notificações push, instalar PWA
             - Exclusão de conta
             
             📦 **PRODUTOS E SERVIÇOS** (products-services.md)
+            📍 ACESSO: Menu lateral > Submenu "Operações" 📦 > "Produtos e Serviços" 📦
             - Cadastrar produtos e serviços
             - Preços, duração, alertas de oportunidade
-            - Importação CSV
+            - Importação via CSV
             
             👥 **CONTATOS** (contacts.md)
+            📍 ACESSO: Menu lateral > Submenu "Operações" 📦 > "Contatos" 📇
             - Lista de contatos, busca
             - Tags, edição, exclusão em massa
             - Toggle de IA por contato
             
             📂 **FILAS** (queues.md)
+            📍 ACESSO: Menu lateral > Submenu "Operações" 📦 > "Filas" 📋
             - Criar e gerenciar filas de atendimento
             - Atribuir usuários às filas
             
             🏷️ **TAGS** (tags.md)
+            📍 ACESSO: Menu lateral > Submenu "Operações" 📦 > "Tags" 🏷️
             - Criar, editar, excluir tags
             - Cores, status, tag especial "IA"
             
             ⏰ **FOLLOW UP** (follow-up.md)
+            📍 ACESSO: Menu lateral > Submenu "Operações" 📦 > "Follow Up" ⏰
             - Mensagens de follow up por tempo
             - Categorias, templates
             - Envio automático
             
             📅 **AGENDAMENTOS** (scheduling.md)
+            📍 ACESSO: Menu lateral > Submenu "Administrativo" 📊 > "Agendamentos" 📅
             - Calendário, criar agendamentos
             - Profissionais, serviços, horários
             - Ausências, status (concluído/cancelado)
             
             💰 **VENDAS** (sales.md)
+            📍 ACESSO: Menu lateral > Submenu "Administrativo" 📊 > "Vendas" 🛒
             - Registrar vendas
             - Pagamento à vista/parcelado
             - Relatórios de vendas
             
             👨‍💼 **EQUIPE** (team.md)
+            📍 ACESSO: Menu lateral > Submenu "Administrativo" 📊 > "Equipe" 👥
             - Membros da equipe (atendentes, supervisores)
             - Profissionais de agenda
             - Permissões e comissões
             
             ═══════════════════════════════════════════════════════════════
             INSTRUÇÕES DE USO:
-            - Quando o usuário perguntar sobre alguma funcionalidade, baseie sua resposta no manual correspondente
+            - Quando o usuário perguntar sobre uma funcionalidade, SEMPRE indique como acessar a página
+            - Exemplo: "Para adicionar um produto, acesse: Menu lateral > Operações > Produtos e Serviços"
             - Seja direto e objetivo nas explicações
             - Forneça passos práticos quando possível
             ═══════════════════════════════════════════════════════════════

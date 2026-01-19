@@ -6,6 +6,12 @@ Página para gerenciar suas conexões/instâncias do WhatsApp via API de integra
 
 ---
 
+## 📍 Como Acessar
+
+No **menu lateral**, abra o submenu **"Automação"** (ícone de chave inglesa 🔧) e clique em **"Conexões"** (ícone de celular 📱).
+
+---
+
 ## Conceitos
 
 ### Instância

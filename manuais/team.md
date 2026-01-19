@@ -6,6 +6,12 @@ Página para gerenciar membros da equipe (atendentes/supervisores) e profissiona
 
 ---
 
+## 📍 Como Acessar
+
+No **menu lateral**, abra o submenu **"Administrativo"** (ícone de gráfico 📊) e clique em **"Equipe"** (ícone de usuários 👥).
+
+---
+
 ## Conceitos
 
 ### Membro da Equipe

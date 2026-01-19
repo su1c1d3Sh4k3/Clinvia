@@ -6,6 +6,12 @@ Página para gerenciar filas de atendimento, organizando a distribuição de con
 
 ---
 
+## 📍 Como Acessar
+
+No **menu lateral**, abra o submenu **"Operações"** (ícone de grade 📦) e clique em **"Filas"** (ícone de lista ordenada 📋).
+
+---
+
 ## Conceitos
 
 ### Fila

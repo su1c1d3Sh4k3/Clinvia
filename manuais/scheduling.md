@@ -6,6 +6,12 @@ Página para gerenciar a agenda de profissionais, criar agendamentos de clientes
 
 ---
 
+## 📍 Como Acessar
+
+No **menu lateral**, abra o submenu **"Administrativo"** (ícone de gráfico 📊) e clique em **"Agendamentos"** (ícone de calendário 📅).
+
+---
+
 ## Conceitos
 
 ### Agendamento

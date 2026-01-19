@@ -6,6 +6,12 @@ Página para gerenciar tags/etiquetas que categorizam contatos e conversas.
 
 ---
 
+## 📍 Como Acessar
+
+No **menu lateral**, abra o submenu **"Operações"** (ícone de grade 📦) e clique em **"Tags"** (ícone de etiqueta 🏷️).
+
+---
+
 ## Conceitos
 
 ### Tag (Etiqueta)

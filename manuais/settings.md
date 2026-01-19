@@ -6,6 +6,12 @@ Página para gerenciar seu perfil, empresa, segurança e preferências de notifi
 
 ---
 
+## 📍 Como Acessar
+
+No **menu lateral**, abra o submenu **"Automação"** (ícone de chave inglesa 🔧) e clique em **"Configurações"** (ícone de engrenagem ⚙️).
+
+---
+
 ## Navegação
 
 A página possui 4 abas:

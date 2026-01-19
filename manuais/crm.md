@@ -1,5 +1,13 @@
 # Manual da Página CRM
 
+## 📍 Como Acessar
+
+No **menu lateral**, clique em **"CRM"** (ícone de maleta 💼).
+
+Este é um item principal do menu, não está dentro de nenhum submenu.
+
+---
+
 O CRM (Customer Relationship Management) é onde você gerencia suas vendas em formato de quadro Kanban, acompanhando negociações desde o primeiro contato até o fechamento.
 
 ---

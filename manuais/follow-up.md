@@ -6,6 +6,12 @@ Página para gerenciar templates de mensagens de acompanhamento enviadas automat
 
 ---
 
+## 📍 Como Acessar
+
+No **menu lateral**, abra o submenu **"Operações"** (ícone de grade 📦) e clique em **"Follow Up"** (ícone de relógio ⏰).
+
+---
+
 ## Conceitos
 
 ### Follow Up

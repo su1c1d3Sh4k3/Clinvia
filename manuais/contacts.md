@@ -6,6 +6,12 @@ Página para gerenciar todos os contatos/leads que entraram em contato via Whats
 
 ---
 
+## 📍 Como Acessar
+
+No **menu lateral**, abra o submenu **"Operações"** (ícone de grade 📦) e clique em **"Contatos"** (ícone de livro de contatos 📇).
+
+---
+
 ## Conceitos
 
 ### Contato / Lead

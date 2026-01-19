@@ -6,6 +6,12 @@ Página onde você configura a inteligência artificial que atende seus clientes
 
 ---
 
+## 📍 Como Acessar
+
+No **menu lateral**, abra o submenu **"Automação"** (ícone de chave inglesa 🔧) e clique em **"Definições da IA"** (ícone de robô 🤖).
+
+---
+
 ## Navegação
 
 A página possui 5 abas:
