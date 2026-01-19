@@ -231,12 +231,42 @@ serve(async (req) => {
             SUPABASE_SERVICE_ROLE_KEY ?? ""
         );
 
-        // Build user context for tools
+        // Build user context for tools - with server-side fallback
+        let effectiveOwnerId = ownerId;
+        let effectiveTeamMemberId = teamMemberId;
+
+        // If owner_id is not provided, try to fetch from team_members
+        if (!effectiveOwnerId && userId) {
+            console.log("[ai-support-chat] ownerId not provided, fetching from team_members...");
+            const { data: teamMember } = await supabaseAdmin
+                .from('team_members')
+                .select('id, user_id')
+                .eq('auth_user_id', userId)
+                .single();
+
+            if (teamMember) {
+                effectiveOwnerId = teamMember.user_id;
+                effectiveTeamMemberId = teamMember.id;
+                console.log("[ai-support-chat] Found team_member:", { ownerId: effectiveOwnerId?.slice(0, 8), teamMemberId: effectiveTeamMemberId?.slice(0, 8) });
+            } else {
+                // Fallback: user might be the owner themselves
+                effectiveOwnerId = userId;
+                console.log("[ai-support-chat] No team_member found, using userId as ownerId");
+            }
+        }
+
+        console.log("[ai-support-chat] User context:", {
+            userId: userId?.slice(0, 8),
+            ownerId: effectiveOwnerId?.slice(0, 8),
+            teamMemberId: effectiveTeamMemberId?.slice(0, 8),
+            role: userRole
+        });
+
         const userContext: UserContext = {
             auth_user_id: userId || '',
-            owner_id: ownerId || userId || '',
+            owner_id: effectiveOwnerId || '',
             role: (userRole as UserRole) || 'agent',
-            team_member_id: teamMemberId || ''
+            team_member_id: effectiveTeamMemberId || ''
         };
 
         // Handle confirmation of pending action

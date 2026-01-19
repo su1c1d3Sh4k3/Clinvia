@@ -112,12 +112,12 @@ async function contactsSearch(
 
     let query = supabase
         .from('contacts')
-        .select('id, name, phone, email, channel, created_at')
+        .select('id, push_name, phone, email, channel, created_at')
         .eq('user_id', context.owner_id);
 
     // Apply filters
     if (args.name) {
-        query = query.ilike('name', `%${args.name}%`);
+        query = query.ilike('push_name', `%${args.name}%`);
     }
     if (args.phone) {
         query = query.ilike('phone', `%${args.phone}%`);
@@ -132,7 +132,7 @@ async function contactsSearch(
         // For now, allow basic search but limit results
     }
 
-    const { data, error } = await query.limit(10).order('name');
+    const { data, error } = await query.limit(10).order('push_name');
 
     if (error) {
         return { success: false, error: `Erro ao buscar contatos: ${error.message}` };
@@ -154,7 +154,7 @@ async function contactsSearch(
             found: true,
             count: data.length,
             contacts: data.map((c: any) => ({
-                name: c.name,
+                name: c.push_name,
                 phone: c.phone || 'Não informado',
                 email: c.email || 'Não informado',
                 channel: c.channel === 'whatsapp' ? 'WhatsApp' : 'Instagram',
@@ -173,7 +173,7 @@ async function contactsGetDetails(
     let query = supabase
         .from('contacts')
         .select(`
-            id, name, phone, email, channel, created_at,
+            id, push_name, phone, email, channel, created_at,
             contact_tags (
                 tags (name, color)
             )
@@ -208,7 +208,7 @@ async function contactsGetDetails(
         data: {
             found: true,
             contact: {
-                name: data.name,
+                name: data.push_name,
                 phone: data.phone || 'Não informado',
                 email: data.email || 'Não informado',
                 channel: data.channel === 'whatsapp' ? 'WhatsApp' : 'Instagram',

@@ -170,7 +170,7 @@ async function tasksGetByDate(
         .select(`
             id, title, urgency, type, status, start_time, end_time, description,
             task_boards (name),
-            contacts (name)
+            contacts (push_name)
         `)
         .eq('user_id', context.owner_id)
         .gte('start_time', startOfDay)
@@ -224,7 +224,7 @@ async function tasksGetByDate(
                 urgency: urgencyLabels[t.urgency] || t.urgency,
                 status: statusLabels[t.status] || t.status,
                 type: t.type,
-                contact: t.contacts?.name || null,
+                contact: t.contacts?.push_name || null,
                 description: t.description || null
             }))
         }

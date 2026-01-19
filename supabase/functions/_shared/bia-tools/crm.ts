@@ -252,7 +252,7 @@ async function crmGetDealsByFunnel(
         .from('crm_deals')
         .select(`
             id, title, value, stage_changed_at,
-            contacts (name),
+            contacts (push_name),
             crm_stages (name, order_index),
             crm_funnels (name)
         `)
@@ -298,7 +298,7 @@ async function crmGetDealsByFunnel(
             total_value: formatCurrency(totalValue),
             deals: filteredData.map((d: any) => ({
                 title: d.title || `Negociação #${d.id.slice(0, 8)}`,
-                contact: d.contacts?.name || 'Sem contato',
+                contact: d.contacts?.push_name || 'Sem contato',
                 funnel: d.crm_funnels?.name || 'Sem funil',
                 stage: d.crm_stages?.name || 'Sem etapa',
                 value: formatCurrency(d.value || 0),
@@ -319,7 +319,7 @@ async function crmGetStagnatedDeals(
         .from('crm_deals')
         .select(`
             id, title, value, stage_changed_at,
-            contacts (name),
+            contacts (push_name),
             crm_stages (name, stagnation_limit_days),
             crm_funnels (name)
         `)
@@ -362,7 +362,7 @@ async function crmGetStagnatedDeals(
                 const daysInStage = Math.floor((now - new Date(d.stage_changed_at).getTime()) / (1000 * 60 * 60 * 24));
                 return {
                     title: d.title || `Negociação #${d.id.slice(0, 8)}`,
-                    contact: d.contacts?.name || 'Sem contato',
+                    contact: d.contacts?.push_name || 'Sem contato',
                     stage: d.crm_stages?.name || 'Sem etapa',
                     days_stagnated: daysInStage,
                     value: formatCurrency(d.value || 0)

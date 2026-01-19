@@ -100,10 +100,13 @@ export function resolveTime(input: string): string {
 }
 
 /**
- * Format date as YYYY-MM-DD
+ * Format date as YYYY-MM-DD (local timezone, not UTC)
  */
 export function formatDateISO(date: Date): string {
-    return date.toISOString().split('T')[0];
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
 }
 
 /**
@@ -224,16 +227,16 @@ export async function lookupContact(
 ): Promise<LookupResult<Contact>> {
     const { data, error } = await supabase
         .from('contacts')
-        .select('id, name, phone, email, channel')
+        .select('id, push_name, phone, email, channel')
         .eq('user_id', ownerId)
-        .ilike('name', `%${name}%`)
+        .ilike('push_name', `%${name}%`)
         .limit(10);
 
     if (error || !data) {
         return { found: false, exact_match: false, single: false, items: [] };
     }
 
-    const exactMatch = data.find((c: any) => c.name.toLowerCase() === name.toLowerCase());
+    const exactMatch = data.find((c: any) => c.push_name?.toLowerCase() === name.toLowerCase());
 
     return {
         found: data.length > 0,
@@ -241,7 +244,7 @@ export async function lookupContact(
         single: data.length === 1,
         items: exactMatch ? [exactMatch] : data,
         message: data.length > 1 && !exactMatch ?
-            `Encontrei ${data.length} contatos: ${data.map((c: any) => c.name).join(', ')}. Qual deles?` :
+            `Encontrei ${data.length} contatos: ${data.map((c: any) => c.push_name).join(', ')}. Qual deles?` :
             undefined
     };
 }

@@ -233,18 +233,25 @@ async function appointmentsGetByDate(
     const startOfDay = `${dateStr}T00:00:00`;
     const endOfDay = `${dateStr}T23:59:59`;
 
+    console.log('[appointments] Query params:', {
+        owner_id: context.owner_id,
+        dateStr,
+        startOfDay,
+        endOfDay,
+        inputDate: args.date
+    });
+
     let query = supabase
         .from('appointments')
         .select(`
             id, start_time, end_time, price, description, type,
             professionals (name),
-            contacts (name, phone),
+            contacts (push_name, phone),
             products_services (name)
         `)
         .eq('user_id', context.owner_id)
         .gte('start_time', startOfDay)
         .lte('start_time', endOfDay)
-        .eq('type', 'appointment')
         .order('start_time');
 
     // Filter by professional if specified
@@ -260,6 +267,12 @@ async function appointmentsGetByDate(
     }
 
     const { data, error } = await query;
+
+    console.log('[appointments] Query result:', {
+        count: data?.length || 0,
+        error: error?.message,
+        firstItem: data?.[0]?.start_time
+    });
 
     if (error) {
         return { success: false, error: `Erro ao buscar agendamentos: ${error.message}` };
@@ -288,7 +301,7 @@ async function appointmentsGetByDate(
                 time: new Date(a.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
                 end_time: new Date(a.end_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
                 professional: a.professionals?.name || 'Não definido',
-                client: a.contacts?.name || 'Cliente não informado',
+                client: a.contacts?.push_name || 'Cliente não informado',
                 service: a.products_services?.name || 'Serviço não especificado',
                 price: formatCurrency(a.price || 0),
                 description: a.description || null
@@ -323,7 +336,7 @@ async function appointmentsGetByProfessional(
         .from('appointments')
         .select(`
             id, start_time, end_time, price, description, type,
-            contacts (name, phone),
+            contacts (push_name, phone),
             products_services (name)
         `)
         .eq('user_id', context.owner_id)
@@ -369,7 +382,7 @@ async function appointmentsGetByProfessional(
                 count: appointments.length,
                 appointments: appointments.map((a: any) => ({
                     time: new Date(a.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-                    client: a.contacts?.name || 'Cliente não informado',
+                    client: a.contacts?.push_name || 'Cliente não informado',
                     service: a.products_services?.name || 'Serviço não especificado'
                 }))
             }))
@@ -404,7 +417,7 @@ async function appointmentsGetByService(
         .select(`
             id, start_time, end_time, price,
             professionals (name),
-            contacts (name)
+            contacts (push_name)
         `)
         .eq('user_id', context.owner_id)
         .eq('service_id', service.id)
@@ -427,7 +440,7 @@ async function appointmentsGetByService(
                 date: formatDateBR(a.start_time),
                 time: new Date(a.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
                 professional: a.professionals?.name || 'Não definido',
-                client: a.contacts?.name || 'Cliente não informado'
+                client: a.contacts?.push_name || 'Cliente não informado'
             }))
         }
     };
@@ -541,7 +554,7 @@ async function appointmentsUpdateStatus(
     // Find appointment within 30 min window
     const { data: appointments, error } = await supabase
         .from('appointments')
-        .select('id, start_time, contacts (name)')
+        .select('id, start_time, contacts (push_name)')
         .eq('user_id', context.owner_id)
         .eq('professional_id', profLookup.items[0].id)
         .gte('start_time', `${dateStr}T00:00:00`)
@@ -570,7 +583,7 @@ async function appointmentsUpdateStatus(
     return {
         success: true,
         needs_confirmation: true,
-        confirmation_message: `Quer marcar o agendamento de **${closest.contacts?.name || 'Cliente'}** às **${new Date(closest.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}** como **${statusLabel}**?`,
+        confirmation_message: `Quer marcar o agendamento de **${closest.contacts?.push_name || 'Cliente'}** às **${new Date(closest.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}** como **${statusLabel}**?`,
         data: {
             action: 'update_appointment_status',
             params: {
