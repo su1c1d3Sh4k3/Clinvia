@@ -7,19 +7,134 @@ const corsHeaders = {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Manuais das páginas (compactos para economizar tokens)
+// Manuais das páginas com caminhos de navegação corretos
 const PAGE_MANUALS: Record<string, string> = {
-    'tasks': `Tarefas: Agenda/calendário. Quadros = agendas personalizadas. Criar tarefa: botão "+ Nova Tarefa" ou clique no slot. Tipos: Atividade(verde), Agendamento(azul), Ausência(amarelo), Ocupado(laranja), Lembrete(roxo).`,
-    'default': `Clinvia: Inbox(chat), Dashboard(métricas), CRM(funis), Tarefas(agenda), Agendamentos(calendário), Contatos, Financeiro, Vendas, Conexões(WhatsApp/Instagram), Configurações.`
+    'inbox': `📬 INBOX: Menu lateral > "Inbox" 💬
+    - Lista de conversas: filtros por fila, tag, instância
+    - Abas: Abertos, Pendentes, Resolvidos
+    - Enviar mensagens: texto, emoji, áudio, anexos
+    - Mensagens rápidas: digite / + atalho
+    - Painel direito: CRM, Vendas, Agendamento, Follow Up`,
+
+    'tasks': `📋 TAREFAS: Menu lateral > Administrativo 📊 > Tarefas 📋
+    - Quadros = agendas personalizadas com horários
+    - Criar tarefa: "+ Nova Tarefa" ou clique no slot vazio
+    - Tipos: Atividade(verde), Agendamento(azul), Ausência(amarelo)
+    - Arrastar para mover horário`,
+
+    'crm': `📊 CRM: Menu lateral > "CRM" 💼
+    - Funis de vendas no formato Kanban
+    - Arrastar cards entre etapas
+    - Ao mover para "Ganho": registra venda
+    - Ao mover para "Perdido": pede motivo`,
+
+    'scheduling': `📅 AGENDAMENTOS: Menu lateral > Administrativo 📊 > Agendamentos 📅
+    - Calendário de profissionais
+    - Criar: botão "+ Novo Agendamento"
+    - Tipos: Agendamento ou Ausência
+    - Ver disponibilidade por profissional`,
+
+    'sales': `💰 VENDAS: Menu lateral > Administrativo 📊 > Vendas 🛒
+    - Registrar vendas de produtos/serviços
+    - Pagamento à vista ou parcelado
+    - Relatórios mensais`,
+
+    'team': `👥 EQUIPE: Menu lateral > Administrativo 📊 > Equipe 👥
+    - Membros: gerenciar atendentes e supervisores
+    - Profissionais: cadastrar para agenda
+    - Comissões e permissões`,
+
+    'ia-config': `🤖 DEFINIÇÕES DE IA: Menu lateral > Automação 🔧 > Definições da IA 🤖
+    - Aba Empresa: dados que a IA usa
+    - Aba Restrições: o que IA NÃO pode fazer
+    - Aba Qualificação: fluxos por produto
+    - Aba Config: ligar/desligar IA por instância`,
+
+    'whatsapp-connection': `📱 CONEXÕES: Menu lateral > Automação 🔧 > Conexões 📱
+    - Criar instância: nome + criar
+    - Conectar: gerar código + digitar no WhatsApp
+    - Definir fila padrão por instância`,
+
+    'settings': `⚙️ CONFIGURAÇÕES: Menu lateral > Automação 🔧 > Configurações ⚙️
+    - Perfil: foto, nome, dados pessoais
+    - Empresa: nome da organização
+    - Segurança: email e senha
+    - Sistema: notificações, instalar app`,
+
+    'products-services': `📦 PRODUTOS E SERVIÇOS: Menu lateral > Operações 📦 > Produtos e Serviços 📦
+    - Aba Produtos: itens físicos com estoque
+    - Aba Serviços: prestações com duração
+    - Criar: botão "Novo Item"
+    - Importar: botão "Importar" (arquivo CSV)`,
+
+    'contacts': `📇 CONTATOS: Menu lateral > Operações 📦 > Contatos 📇
+    - Lista de todos os contatos
+    - Filtrar por canal: WhatsApp/Instagram
+    - Switch IA: liga/desliga IA por contato
+    - Atribuir tags em massa`,
+
+    'queues': `📋 FILAS: Menu lateral > Operações 📦 > Filas 📋
+    - Criar filas de atendimento
+    - Atribuir usuários às filas
+    - Vincular nas instâncias WhatsApp`,
+
+    'tags': `🏷️ TAGS: Menu lateral > Operações 📦 > Tags 🏷️
+    - Criar etiquetas coloridas
+    - Usar para categorizar contatos
+    - Tag "IA" é do sistema`,
+
+    'follow-up': `⏰ FOLLOW UP: Menu lateral > Operações 📦 > Follow Up ⏰
+    - Mensagens automáticas por tempo
+    - Criar categorias e templates
+    - Tempo em minutos após última msg do cliente`,
+
+    'dashboard': `📊 DASHBOARD: Menu lateral > Dashboard 📊
+    - Métricas de atendimento
+    - Gráficos de vendas
+    - Alertas de oportunidades`,
+
+    'default': `🏠 CLINVIA - Sistema de Atendimento
+
+MENU PRINCIPAL (itens soltos):
+- Dashboard 📊: métricas e gráficos
+- Inbox 💬: conversas WhatsApp/Instagram
+- CRM 💼: funis de vendas
+
+SUBMENU "AUTOMAÇÃO" 🔧:
+- Definições da IA 🤖
+- Conexões 📱 (WhatsApp)
+- Configurações ⚙️
+
+SUBMENU "OPERAÇÕES" 📦:
+- Produtos e Serviços 📦
+- Contatos 📇
+- Filas 📋
+- Tags 🏷️
+- Follow Up ⏰
+
+SUBMENU "ADMINISTRATIVO" 📊:
+- Agendamentos 📅
+- Tarefas 📋
+- Vendas 🛒
+- Equipe 👥`
 };
 
 const SYSTEM_PROMPT = `Você é a Bia, assistente de suporte da Clinvia. 25 anos, descontraída, informal mas profissional. Use emojis com moderação.
 
-Diretrizes:
-1. Descomplicar termos técnicos com analogias
-2. Respostas curtas e objetivas
-3. Passo a passo numerado para instruções
-4. NÃO mencione a página atual, exceto para orientar navegação
+REGRAS IMPORTANTES:
+1. SEMPRE indique o caminho completo de navegação quando explicar funcionalidades
+2. Formato: "Menu lateral > Submenu > Página"
+3. Descomplicar termos técnicos com analogias
+4. Respostas curtas e objetivas
+5. Passo a passo numerado para instruções
+
+Exemplo de resposta:
+"Para adicionar um produto:
+1. No menu lateral, clique em **Operações** 📦
+2. Depois clique em **Produtos e Serviços**
+3. Clique no botão **Novo Item**
+4. Preencha nome, preço, etc
+5. Salva!"
 
 Se não souber: "Hmm, não sei 😅 Fala com suporte@clinvia.ai"`;
 
