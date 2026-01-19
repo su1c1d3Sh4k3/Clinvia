@@ -35,23 +35,49 @@ SUBMENU "ADMINISTRATIVO" 📊:
 - Equipe 👥
 `;
 
-const SYSTEM_PROMPT = `Você é a Bia, assistente de suporte da Clinbia. 25 anos, descontraída, informal mas profissional. Use emojis com moderação.
+const SYSTEM_PROMPT = `Você é a **Bia**, assistente virtual de suporte da plataforma Clinbia. Você tem 25 anos, é descontraída, usa linguagem informal mas profissional. Use emojis com moderação pra dar aquele toque 😊
 
-REGRAS OBRIGATÓRIAS:
-1. SEMPRE use as informações do MANUAL fornecido para responder
-2. SEMPRE indique o caminho completo de navegação: "Menu lateral > Submenu > Página"
-3. Se a informação estiver no manual, use ela - NÃO invente
-4. Respostas curtas e objetivas com passo a passo numerado
-5. Descomplicar termos técnicos
+🧠 SOBRE VOCÊ:
+- Você é simpática, paciente e adora ajudar
+- Fala de forma natural, como uma amiga que manja muito do sistema
+- Não é robótica - varia suas respostas e tem personalidade
+- Você ENTENDE O CONTEXTO da conversa anterior
 
-FORMATO DE RESPOSTA:
-"Para [ação], faça assim:
-1. No menu lateral, clique em **[Submenu]** [emoji]
-2. Depois clique em **[Página]**
-3. [próximo passo]
-..."
+📚 VOCÊ TEM ACESSO AO MANUAL:
+O conteúdo do manual será fornecido abaixo. Use essas informações pra responder, mas de forma NATURAL.
 
-Se a informação NÃO estiver no manual: "Hmm, não encontrei essa info 😅 Fala com suporte@clinvia.ai"`;
+⚠️ REGRAS IMPORTANTES:
+1. **LEIA O HISTÓRICO DA CONVERSA** - Se você já explicou algo antes, NÃO repita! Responda direto a pergunta nova.
+2. **Seja contextual** - Se o usuário já sabe onde fica a página (você explicou antes), foque na dúvida específica dele
+3. **Varie seus formatos** - Nem sempre precisa ser passo a passo numerado! Às vezes uma explicação natural é melhor
+4. **Personalidade** - Responda como gente, não como manual. Use "você", "a gente", expressões naturais
+5. **Seja concisa** - Não enrole, vá direto ao ponto
+
+🎯 EXEMPLOS DE BOM COMPORTAMENTO:
+
+❌ RUIM (repetitivo e robótico):
+"Para saber sobre o botão, segue o passo a passo:
+1. No menu lateral, clique em **Administrativo**
+2. Clique em **Agendamentos**
+3. O botão está lá..."
+
+✅ BOM (contextual e humano):
+"Ah, esse botão! 🎯 Quando você marca ele, todo agendamento concluído já lança automaticamente uma receita no financeiro. Bem prático né? Assim você não precisa fazer manualmente"
+
+❌ RUIM (sempre mesmo formato):
+"Para criar um produto, segue o passo a passo..."
+
+✅ BOM (natural):
+"Pra criar um produto é bem simples: vai em Operações > Produtos e Serviços, clica em 'Novo Item' e preenche as infos. Se precisar de ajuda com algum campo específico, me fala! 😉"
+
+🚫 O QUE EVITAR:
+- Repetir caminho de navegação se já explicou antes na conversa
+- Começar toda resposta com "Para [X], segue o passo a passo"
+- Ignorar o que foi conversado antes
+- Ser formal demais ou parecer um robô
+
+💬 Se não souber algo: "Hmm, essa não sei te dizer com certeza 🤔 Melhor falar com suporte@clinvia.ai que eles te ajudam!"`;
+
 
 // Mapeamento de slugs para nomes de arquivo
 const SLUG_TO_FILE: Record<string, string> = {
@@ -75,6 +101,56 @@ const SLUG_TO_FILE: Record<string, string> = {
     'default': 'default.md',
     'unknown': 'default.md',
 };
+
+// Detectar o tópico da mensagem com base em palavras-chave
+function detectTopicFromMessage(message: string): string | null {
+    const lowerMsg = message.toLowerCase();
+
+    // Mapeamento de palavras-chave para slugs - ARRAY para manter ordem (mais específicos primeiro)
+    const keywords: [string, string[]][] = [
+        // Scheduling PRIMEIRO antes de tasks (agendamentos são mais específicos)
+        ['scheduling', ['agendamento', 'agendar', 'horário', 'horario', 'ausência', 'ausencia', 'calendário de profissional']],
+        // Produtos e Serviços
+        ['products-services', ['produto', 'serviço', 'servico', 'catálogo', 'catalogo', 'estoque', 'preço', 'preco']],
+        // CRM
+        ['crm', ['crm', 'funil', 'deal', 'negociação', 'negociacao', 'kanban', 'etapa', 'pipeline']],
+        // Tarefas (removido 'agenda' para não confundir)
+        ['tasks', ['tarefa', 'atividade', 'quadro de tarefa', 'nova tarefa']],
+        // Contatos
+        ['contacts', ['contato', 'lead', 'cliente', 'telefone']],
+        // Vendas
+        ['sales', ['venda', 'vendas', 'pagamento', 'parcelado']],
+        // Equipe
+        ['team', ['equipe', 'membro', 'atendente', 'supervisor', 'comissão', 'comissao']],
+        // IA Config
+        ['ia-config', ['definições de ia', 'configurar ia', 'inteligência artificial', 'bot automático']],
+        // WhatsApp
+        ['whatsapp-connection', ['whatsapp', 'conexão whatsapp', 'instância', 'instancia', 'qr code', 'pareamento']],
+        // Configurações
+        ['settings', ['configuração geral', 'perfil', 'senha', 'notificação push', 'pwa']],
+        // Filas
+        ['queues', ['fila', 'filas de atendimento', 'distribuição']],
+        // Tags
+        ['tags', ['tag', 'etiqueta', 'marcador']],
+        // Follow Up
+        ['follow-up', ['follow up', 'followup', 'follow-up', 'retomada', 'lembrete automático']],
+        // Inbox
+        ['inbox', ['inbox', 'conversa', 'chat', 'mensagem']],
+        // Dashboard
+        ['dashboard', ['dashboard', 'métrica', 'gráfico', 'relatório']],
+    ];
+
+    for (const [slug, words] of keywords) {
+        for (const word of words) {
+            if (lowerMsg.includes(word)) {
+                console.log(`[ai-support-chat] Detectou "${word}" -> ${slug}`);
+                return slug;
+            }
+        }
+    }
+
+    return null; // Não detectou tópico específico
+}
 
 // Buscar manual do Storage via URL pública
 async function getManualContent(pageSlug: string): Promise<string> {
@@ -154,21 +230,25 @@ serve(async (req) => {
             SUPABASE_SERVICE_ROLE_KEY ?? ""
         );
 
-        // Buscar manual completo do Storage via URL pública
-        const manualContent = await getManualContent(pageSlug || 'default');
+        // Detectar o tópico da pergunta para buscar o manual correto
+        const topicSlug = detectTopicFromMessage(message) || pageSlug || 'default';
 
-        console.log(`[ai-support-chat] Manual carregado: ${manualContent.length} chars`);
+        // Buscar manual completo do Storage via URL pública
+        const manualContent = await getManualContent(topicSlug);
+
+        console.log(`[ai-support-chat] Tópico detectado: ${topicSlug}, Manual carregado: ${manualContent.length} chars`);
 
         // Contexto com página atual e manual
         const context = `
 ═══════════════════════════════════════════════════════════════
-📍 CONTEXTO ATUAL
+📍 CONTEXTO
 ═══════════════════════════════════════════════════════════════
-Página: ${pageName || pageSlug || 'Desconhecida'}
+Página atual: ${pageName || pageSlug || 'Desconhecida'}
+Tópico da pergunta: ${topicSlug}
 Cargo do usuário: ${userRole || 'agent'}
 
 ═══════════════════════════════════════════════════════════════
-📚 MANUAL DA PÁGINA (USE ESTAS INFORMAÇÕES PARA RESPONDER)
+📚 MANUAL DO SISTEMA - USE ESTAS INFORMAÇÕES PARA RESPONDER!
 ═══════════════════════════════════════════════════════════════
 ${manualContent}
 ═══════════════════════════════════════════════════════════════
@@ -179,9 +259,9 @@ ${manualContent}
             { role: "system", content: SYSTEM_PROMPT + "\n\n" + context }
         ];
 
-        // Adicionar últimas 3 mensagens do histórico
+        // Adicionar últimas 6 mensagens do histórico para melhor contexto
         if (conversationHistory && Array.isArray(conversationHistory)) {
-            for (const msg of conversationHistory.slice(-3)) {
+            for (const msg of conversationHistory.slice(-6)) {
                 if (msg.role && msg.content) {
                     openaiMessages.push({ role: msg.role, content: msg.content });
                 }
@@ -191,7 +271,7 @@ ${manualContent}
         // Mensagem atual
         openaiMessages.push({ role: "user", content: message });
 
-        console.log("[ai-support-chat] Messages:", openaiMessages.length);
+        console.log("[ai-support-chat] Messages:", openaiMessages.length, "com histórico");
 
         // Chamar OpenAI
         const { response, usedCustomToken } = await makeOpenAIRequest(supabaseAdmin, null, {
@@ -199,8 +279,8 @@ ${manualContent}
             body: {
                 model: "gpt-4.1",
                 messages: openaiMessages,
-                max_tokens: 600,
-                temperature: 0.5, // Mais determinístico para seguir o manual
+                max_tokens: 500,
+                temperature: 0.7, // Mais criativo para respostas naturais
             },
         });
 
