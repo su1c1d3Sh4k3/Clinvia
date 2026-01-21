@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Pencil, Trash2, Users, Search, Send, Instagram, CheckSquare, Square, Tag, AlertTriangle } from "lucide-react";
+import { Plus, Pencil, Trash2, Users, Search, Send, Instagram, CheckSquare, Square, Tag, AlertTriangle, Star } from "lucide-react";
 import { FaWhatsapp, FaInstagram } from "react-icons/fa";
 import {
     Table,
@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/popover";
 import { AnalysisHistoryModal } from "@/components/AnalysisHistoryModal";
 import { ClientReportModal } from "@/components/ClientReportModal";
+import { NpsFeedbackModal } from "@/components/NpsFeedbackModal";
 import { Sparkles, FileText } from "lucide-react";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useOwnerId } from "@/hooks/useOwnerId";
@@ -69,6 +70,7 @@ interface Contact {
     analysis?: { data: string; resumo: string }[];
     report?: string;
     ia_on?: boolean;
+    nps?: { id?: string; dataPesquisa: string; nota: number; feedback: string }[];
 }
 
 
@@ -95,6 +97,10 @@ const Contacts = () => {
     const [isClientReportOpen, setIsClientReportOpen] = useState(false);
     const [selectedContactForAnalysis, setSelectedContactForAnalysis] = useState<Contact | null>(null);
     const [selectedContactForReport, setSelectedContactForReport] = useState<Contact | null>(null);
+
+    // NPS Feedback Modal state
+    const [isNpsFeedbackOpen, setIsNpsFeedbackOpen] = useState(false);
+    const [selectedContactForNps, setSelectedContactForNps] = useState<Contact | null>(null);
 
     const { toast } = useToast();
     const queryClient = useQueryClient();
@@ -448,19 +454,21 @@ const Contacts = () => {
                                     <TableHead className="text-secondary dark:text-slate-400 font-semibold text-center w-[60px] hidden sm:table-cell">IA</TableHead>
                                     {!isAgent && <TableHead className="text-secondary dark:text-slate-400 font-semibold text-center hidden lg:table-cell">Satisf.</TableHead>}
                                     {!isAgent && <TableHead className="text-secondary dark:text-slate-400 font-semibold text-center hidden lg:table-cell">Resumos</TableHead>}
+                                    {!isAgent && <TableHead className="text-secondary dark:text-slate-400 font-semibold text-center hidden lg:table-cell">Avaliação</TableHead>}
+                                    {!isAgent && <TableHead className="text-secondary dark:text-slate-400 font-semibold text-center hidden lg:table-cell">Feedbacks</TableHead>}
                                     <TableHead className="w-[100px] md:w-[180px] text-secondary dark:text-slate-400 font-semibold">Ações</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {isLoading ? (
                                     <TableRow>
-                                        <TableCell colSpan={8} className="text-center py-8">
+                                        <TableCell colSpan={10} className="text-center py-8">
                                             Carregando...
                                         </TableCell>
                                     </TableRow>
                                 ) : filteredContacts?.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                                        <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                                             Nenhum contato encontrado
                                         </TableCell>
                                     </TableRow>
@@ -565,6 +573,47 @@ const Contacts = () => {
                                                         >
                                                             <FileText className="w-3 h-3 mr-1" />
                                                             {contact.analysis.length}
+                                                        </Button>
+                                                    ) : (
+                                                        <span className="text-muted-foreground text-xs">0</span>
+                                                    )}
+                                                </TableCell>
+                                            )}
+                                            {/* Avaliação NPS (última nota) */}
+                                            {!isAgent && (
+                                                <TableCell className="text-center hidden lg:table-cell py-2 md:py-4">
+                                                    {contact.nps && contact.nps.length > 0 ? (() => {
+                                                        const lastNota = contact.nps[contact.nps.length - 1].nota;
+                                                        const isGreen = lastNota === 'Excelente' || lastNota === 'Muito Bom';
+                                                        const isYellow = lastNota === 'Bom' || lastNota === 'Regular';
+                                                        const colorClass = isGreen ? "bg-green-500/10 text-green-500 border-green-500/20" :
+                                                            isYellow ? "bg-yellow-500/10 text-yellow-500 border-yellow-500/20" :
+                                                                "bg-red-500/10 text-red-500 border-red-500/20";
+                                                        return (
+                                                            <Badge variant="outline" className={`text-[10px] ${colorClass}`}>
+                                                                {lastNota} <Star className="w-2.5 h-2.5 ml-0.5 inline fill-current" />
+                                                            </Badge>
+                                                        );
+                                                    })() : (
+                                                        <span className="text-muted-foreground text-xs">-</span>
+                                                    )}
+                                                </TableCell>
+                                            )}
+                                            {/* Feedbacks NPS (contador + botão modal) */}
+                                            {!isAgent && (
+                                                <TableCell className="text-center hidden lg:table-cell py-2 md:py-4">
+                                                    {contact.nps && contact.nps.length > 0 ? (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="text-[10px] h-6 px-2"
+                                                            onClick={() => {
+                                                                setSelectedContactForNps(contact);
+                                                                setIsNpsFeedbackOpen(true);
+                                                            }}
+                                                        >
+                                                            <FileText className="w-3 h-3 mr-1" />
+                                                            {contact.nps.length}
                                                         </Button>
                                                     ) : (
                                                         <span className="text-muted-foreground text-xs">0</span>
@@ -721,6 +770,16 @@ const Contacts = () => {
                     />
                 )
             }
+
+            {/* NPS Feedback Modal */}
+            {selectedContactForNps && (
+                <NpsFeedbackModal
+                    isOpen={isNpsFeedbackOpen}
+                    onClose={() => setIsNpsFeedbackOpen(false)}
+                    contactName={selectedContactForNps.push_name}
+                    npsEntries={selectedContactForNps.nps || []}
+                />
+            )}
         </div >
 
     );

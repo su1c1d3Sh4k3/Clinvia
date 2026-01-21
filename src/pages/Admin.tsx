@@ -8,13 +8,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { ChevronDown, ChevronUp, Search, LogOut, ShieldAlert, Users, Briefcase, Calendar, MessageSquare, UserCheck, UserX, Clock, Check, X, Phone, Instagram, MapPin, Mail, Coins } from "lucide-react";
+import { ChevronDown, ChevronUp, Search, LogOut, ShieldAlert, Users, Briefcase, Calendar, MessageSquare, UserCheck, UserX, Clock, Check, X, Phone, Instagram, MapPin, Mail, Coins, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import TokenUsageCharts from "@/components/admin/TokenUsageCharts";
 import OpenAITokenManager from "@/components/admin/OpenAITokenManager";
 import { useExchangeRate } from "@/hooks/useExchangeRate";
+import { useAdminImpersonate } from "@/hooks/useAdminImpersonate";
 
 interface Profile {
     id: string;
@@ -85,6 +86,7 @@ const Admin = () => {
     const [expandedProfileData, setExpandedProfileData] = useState<{ openai_token: string | null; openai_token_invalid: boolean } | null>(null);
 
     const { convertToReal } = useExchangeRate();
+    const { impersonate, isLoading: impersonateLoading } = useAdminImpersonate();
 
     const ITEMS_PER_PAGE = 10;
 
@@ -397,6 +399,21 @@ const Admin = () => {
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-3">
+                                                {profile.role !== "super-admin" && (
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="border-orange-500/50 text-orange-400 hover:bg-orange-500/20 hover:text-orange-300"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            impersonate(profile.id);
+                                                        }}
+                                                        disabled={impersonateLoading}
+                                                    >
+                                                        <Eye className="w-4 h-4 mr-2" />
+                                                        Acessar
+                                                    </Button>
+                                                )}
                                                 {profile.role && (
                                                     <Badge variant={profile.role === "super-admin" ? "destructive" : "secondary"}>
                                                         {profile.role}

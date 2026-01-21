@@ -30,6 +30,7 @@ import { NotificationManager } from "./components/NotificationManager";
 import { AutoFollowUpProcessor } from "./components/AutoFollowUpProcessor";
 import { MobileMenuProvider } from "./contexts/MobileMenuContext";
 import { TypingProvider } from "./contexts/TypingContext";
+import { ImpersonationBanner } from "./components/ImpersonationBanner";
 
 const queryClient = new QueryClient();
 
@@ -41,6 +42,7 @@ const App = () => (
           <Toaster />
           <Sonner />
           <BrowserRouter>
+            <ImpersonationBanner />
             <NotificationManager />
             <AutoFollowUpProcessor />
             <Routes>

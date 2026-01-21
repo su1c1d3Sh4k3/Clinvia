@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { Headphones } from "lucide-react";
 
 interface BiaButtonProps {
     onClick: () => void;
@@ -22,12 +23,8 @@ export const BiaButton = ({ onClick, isOpen, hasNewMessage }: BiaButtonProps) =>
             }}
             title="Falar com a Bia"
         >
-            {/* Logo da empresa */}
-            <img
-                src="/logo-icon.png"
-                alt="Bia"
-                className="h-8 w-8 object-contain"
-            />
+            {/* Ícone de suporte */}
+            <Headphones className="h-7 w-7 text-white" />
 
             {/* Indicador de nova mensagem */}
             {hasNewMessage && (

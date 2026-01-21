@@ -1,5 +1,5 @@
 import React, { useRef, useCallback, memo } from "react";
-import { Send, Paperclip, Smile, Mic, Sparkles, Plus, MoreVertical, MessageSquare, StopCircle, CheckCircle, X } from "lucide-react";
+import { Send, Paperclip, Smile, Mic, Sparkles, Plus, MoreVertical, MessageSquare, StopCircle, CheckCircle, X, ClipboardList } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -29,6 +29,7 @@ interface ChatInputProps {
     selectedFile: File | null;
     onRemoveFile: () => void;
     onPaste: (e: React.ClipboardEvent) => void;
+    onSendSurvey?: () => void;
 }
 
 /**
@@ -51,6 +52,7 @@ const ChatInput = memo(function ChatInput({
     selectedFile,
     onRemoveFile,
     onPaste,
+    onSendSurvey,
 }: ChatInputProps) {
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -261,6 +263,19 @@ const ChatInput = memo(function ChatInput({
                                     </DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
+                        )}
+
+                        {/* NPS Survey Button */}
+                        {onSendSurvey && (
+                            <Button
+                                variant="outline"
+                                size="icon"
+                                onClick={onSendSurvey}
+                                className="bg-gradient-to-r from-green-500 to-emerald-500 text-white border-0 hover:opacity-90 transition-all duration-300"
+                                title="Enviar pesquisa de satisfação"
+                            >
+                                <ClipboardList className="w-5 h-5" />
+                            </Button>
                         )}
                     </>
                 )}

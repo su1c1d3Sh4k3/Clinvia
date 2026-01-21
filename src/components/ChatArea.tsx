@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useDeferredValue, useCallback } from "react";
 import { useTypingContext, useIsTyping } from "@/contexts/TypingContext";
-import { Send, Paperclip, Smile, Mic, Sparkles, CheckCircle, X, FileText, Image as ImageIcon, Video, ArrowDown, StopCircle, Check, CheckCheck, Plus, MoreVertical, MessageSquare } from "lucide-react";
+import { Send, Paperclip, Smile, Mic, Sparkles, CheckCircle, X, FileText, Image as ImageIcon, Video, ArrowDown, StopCircle, Check, CheckCheck, Plus, MoreVertical, MessageSquare, ClipboardList } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -38,6 +38,14 @@ import { ReplyQuoteBox, QuotedMessage } from "@/components/ReplyQuoteBox";
 import { LazyMedia } from "@/components/LazyMedia";
 import { uzapi } from "@/lib/uzapi";
 import { getProxiedImageUrl } from "@/lib/imageProxy";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 // Performance: Limit messages rendered at once
 const MESSAGES_PER_PAGE = 50;
@@ -124,6 +132,8 @@ export const ChatArea = ({
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showSurveyModal, setShowSurveyModal] = useState(false);
+  const [isSendingSurvey, setIsSendingSurvey] = useState(false);
 
   // Auto-resize textarea - moved to handleMessageChange for better performance
   const handleMessageChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -359,6 +369,32 @@ export const ChatArea = ({
       toast.error("Erro ao processar solicitação da IA");
     } finally {
       toast.dismiss(loadingToast);
+    }
+  };
+
+  // Handler para enviar pesquisa de satisfação
+  const handleSendSurvey = async () => {
+    if (!contact || !conversationId) return;
+
+    setIsSendingSurvey(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('send-satisfaction-survey', {
+        body: {
+          contact_id: contact.id,
+          contact_number: contact.number,
+          conversation_id: conversationId
+        }
+      });
+
+      if (error) throw error;
+
+      toast.success('Pesquisa de satisfação enviada!');
+      setShowSurveyModal(false);
+    } catch (error) {
+      console.error('Error sending survey:', error);
+      toast.error('Erro ao enviar pesquisa de satisfação');
+    } finally {
+      setIsSendingSurvey(false);
     }
   };
 
@@ -1512,6 +1548,17 @@ export const ChatArea = ({
                       </DropdownMenuContent>
                     </DropdownMenu>
                   )}
+
+                  {/* NPS Survey Button */}
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setShowSurveyModal(true)}
+                    className="bg-gradient-to-r from-green-500 to-emerald-500 text-white border-0 hover:opacity-90 transition-all duration-300"
+                    title="Enviar pesquisa de satisfação"
+                  >
+                    <ClipboardList className="w-5 h-5" />
+                  </Button>
                 </>
               )}
 
@@ -1584,6 +1631,26 @@ export const ChatArea = ({
           </div>
         </div>
       )}
+
+      {/* NPS Survey Confirmation Modal */}
+      <Dialog open={showSurveyModal} onOpenChange={setShowSurveyModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Pesquisa de Satisfação</DialogTitle>
+            <DialogDescription>
+              Deseja enviar a pesquisa de satisfação?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setShowSurveyModal(false)} disabled={isSendingSurvey}>
+              Não
+            </Button>
+            <Button onClick={handleSendSurvey} disabled={isSendingSurvey}>
+              {isSendingSurvey ? "Enviando..." : "Sim"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div >
   );
 };

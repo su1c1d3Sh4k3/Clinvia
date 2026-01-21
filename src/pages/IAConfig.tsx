@@ -22,7 +22,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Building2, Ban, Target, HelpCircle, Settings, Plus, Trash2, Loader2, Play } from "lucide-react";
+import { Building2, Ban, Target, HelpCircle, Settings, Plus, Trash2, Loader2, Play, Heart } from "lucide-react";
 
 interface IAConfigData {
     id?: string;
@@ -58,6 +58,7 @@ interface IAConfigData {
     followup_business_hours: boolean;
     voice: boolean;
     genre: string;
+    convenio: string;
 }
 
 interface QualifyItem {
@@ -69,6 +70,14 @@ interface QualifyItem {
 interface RestrictionItem {
     id: string;
     text: string;
+}
+
+interface ConvenioItem {
+    id: string;
+    nome: string;
+    valorPrimeira: string;
+    valorDemais: string;
+    previsaoDias: number;
 }
 
 const defaultConfig: IAConfigData = {
@@ -103,6 +112,7 @@ const defaultConfig: IAConfigData = {
     followup_business_hours: false,
     voice: false,
     genre: "female",
+    convenio: "",
 };
 
 export default function IAConfig() {
@@ -126,6 +136,7 @@ export default function IAConfig() {
     const [qualifyItems, setQualifyItems] = useState<QualifyItem[]>([]);
     const [faqItems, setFaqItems] = useState<QualifyItem[]>([]);
     const [companyFaq, setCompanyFaq] = useState<string>(""); // Dúvidas sobre a empresa
+    const [convenioItems, setConvenioItems] = useState<ConvenioItem[]>([]); // Convênios
     const [showCreateFunnelModal, setShowCreateFunnelModal] = useState(false); // Modal de criação do funil IA
     const [creatingFunnel, setCreatingFunnel] = useState(false); // Loading da criação do funil
     const [playingVoice, setPlayingVoice] = useState(false); // Loading do preview de voz
@@ -229,6 +240,12 @@ export default function IAConfig() {
                 }
                 setFaqItems(productItems);
             }
+
+            // Parse convenios
+            if (existingConfig.convenio) {
+                const items = parseConvenioText(existingConfig.convenio);
+                setConvenioItems(items);
+            }
         }
     }, [existingConfig, productsServices]);
 
@@ -307,6 +324,59 @@ export default function IAConfig() {
         return allItems.join("\n\n");
     };
 
+    // Parser para convênios
+    // Formato: "1. Nome\n- Valor da Primeira Consulta: R$ X\n- Valor das Demais Consultas: R$ X\n- Previsão de agendamento para X dias"
+    const parseConvenioText = (text: string): ConvenioItem[] => {
+        if (!text?.trim()) return [];
+
+        const items: ConvenioItem[] = [];
+        const blocks = text.split(/\n\n+/);
+
+        for (const block of blocks) {
+            const lines = block.trim().split('\n');
+            if (lines.length < 1) continue;
+
+            // Primeira linha: "1. Nome do Convênio"
+            const nomeMatch = lines[0].match(/^\d+\.\s*(.+)$/);
+            if (!nomeMatch) continue;
+
+            const nome = nomeMatch[1].trim();
+            let valorPrimeira = "R$ 0,00";
+            let valorDemais = "R$ 0,00";
+            let previsaoDias = 0;
+
+            for (const line of lines.slice(1)) {
+                const valorPrimeiraMatch = line.match(/Valor da Primeira Consulta:\s*(R\$\s*[\d.,]+)/i);
+                const valorDemaisMatch = line.match(/Valor das Demais Consultas:\s*(R\$\s*[\d.,]+)/i);
+                const previsaoMatch = line.match(/Previsão de agendamento para\s*(\d+)\s*dias?/i);
+
+                if (valorPrimeiraMatch) valorPrimeira = valorPrimeiraMatch[1];
+                if (valorDemaisMatch) valorDemais = valorDemaisMatch[1];
+                if (previsaoMatch) previsaoDias = parseInt(previsaoMatch[1]) || 0;
+            }
+
+            items.push({
+                id: `convenio-${items.length}`,
+                nome,
+                valorPrimeira,
+                valorDemais,
+                previsaoDias,
+            });
+        }
+
+        return items;
+    };
+
+    // Formatar convênios para salvar
+    const formatConvenioItems = (): string => {
+        return convenioItems
+            .filter((c) => c.nome.trim())
+            .map((c, index) => {
+                return `${index + 1}. ${c.nome}\n- Valor da Primeira Consulta: ${c.valorPrimeira || "R$ 0,00"}\n- Valor das Demais Consultas: ${c.valorDemais || "R$ 0,00"}\n- Previsão de agendamento para ${c.previsaoDias || 0} dias`;
+            })
+            .join("\n\n");
+    };
+
     // Salvar configuração
     const saveMutation = useMutation({
         mutationFn: async (data: Partial<IAConfigData>) => {
@@ -316,6 +386,7 @@ export default function IAConfig() {
                 restrictions: formatRestrictions(),
                 qualify: formatProductItems(qualifyItems),
                 frequent_questions: formatProductItems(faqItems, companyFaq),
+                convenio: formatConvenioItems(),
             };
 
             const { data: result, error } = await supabase
@@ -395,6 +466,43 @@ export default function IAConfig() {
 
     const removeFaqItem = (index: number) => {
         setFaqItems(faqItems.filter((_, i) => i !== index));
+    };
+
+    // Handlers para Convênios
+    const addConvenioItem = () => {
+        setConvenioItems([...convenioItems, {
+            id: `convenio-${Date.now()}`,
+            nome: "",
+            valorPrimeira: "R$ 0,00",
+            valorDemais: "R$ 0,00",
+            previsaoDias: 0
+        }]);
+    };
+
+    const updateConvenioItem = (index: number, field: keyof ConvenioItem, value: string | number) => {
+        const updated = [...convenioItems];
+        updated[index] = { ...updated[index], [field]: value };
+        setConvenioItems(updated);
+    };
+
+    const removeConvenioItem = (index: number) => {
+        setConvenioItems(convenioItems.filter((_, i) => i !== index));
+    };
+
+    // Formatar valor como moeda brasileira
+    const formatCurrency = (value: string): string => {
+        // Remove tudo exceto números
+        const numbers = value.replace(/\D/g, "");
+        // Converte para centavos
+        const cents = parseInt(numbers || "0", 10);
+        // Formata como moeda
+        const reais = (cents / 100).toFixed(2);
+        return `R$ ${reais.replace(".", ",")}`;
+    };
+
+    const handleCurrencyChange = (index: number, field: "valorPrimeira" | "valorDemais", value: string) => {
+        const formatted = formatCurrency(value);
+        updateConvenioItem(index, field, formatted);
     };
 
     // Handler do switch "Ligar IA" - apenas abre a lista de instâncias (não dispara webhook)
@@ -617,7 +725,7 @@ export default function IAConfig() {
             <h1 className="text-2xl md:text-3xl font-bold mb-4 md:mb-8 text-foreground">Definições de IA</h1>
 
             <Tabs defaultValue="company" className="w-full">
-                <TabsList className="grid w-full grid-cols-5 mb-4 md:mb-8 h-auto">
+                <TabsList className="grid w-full grid-cols-6 mb-4 md:mb-8 h-auto">
                     <TabsTrigger value="company" className="flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
                         <Building2 className="h-4 w-4" />
                         <span className="hidden sm:inline">Empresa</span>
@@ -633,6 +741,10 @@ export default function IAConfig() {
                     <TabsTrigger value="faq" className="flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
                         <HelpCircle className="h-4 w-4" />
                         <span className="hidden sm:inline">F.A.Q</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="convenio" className="flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
+                        <Heart className="h-4 w-4" />
+                        <span className="hidden sm:inline">Convênio</span>
                     </TabsTrigger>
                     <TabsTrigger value="settings" className="flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
                         <Settings className="h-4 w-4" />
@@ -968,6 +1080,90 @@ export default function IAConfig() {
                                 {faqItems.length === 0
                                     ? "Adicionar F.A.Q sobre um Produto/Serviço"
                                     : "Adicionar outro F.A.Q sobre um Produto/Serviço"}
+                            </Button>
+
+                            <div className="flex justify-end pt-4">
+                                <Button onClick={handleSave} disabled={saveMutation.isPending}>
+                                    {saveMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    Salvar
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                {/* Aba: Convênio */}
+                <TabsContent value="convenio">
+                    <Card>
+                        <CardHeader className="p-4 md:p-6">
+                            <CardTitle className="text-base md:text-lg">Convênios</CardTitle>
+                            <CardDescription className="text-xs md:text-sm">
+                                Cadastre os convênios aceitos e seus valores.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="p-4 md:p-6 pt-0 md:pt-0 space-y-4 md:space-y-6">
+                            {convenioItems.map((item, index) => (
+                                <div key={item.id} className="relative border rounded-lg p-4 space-y-4">
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => removeConvenioItem(index)}
+                                        className="absolute top-2 right-2 text-destructive hover:text-destructive"
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                    </Button>
+
+                                    {/* Nome do Convênio */}
+                                    <div className="space-y-2 pr-10">
+                                        <Label>Nome do Convênio</Label>
+                                        <Input
+                                            value={item.nome}
+                                            onChange={(e) => updateConvenioItem(index, "nome", e.target.value)}
+                                            placeholder="Ex: Unimed, Bradesco Saúde..."
+                                        />
+                                    </div>
+
+                                    {/* Valores */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label>Valor da Primeira Consulta</Label>
+                                            <Input
+                                                value={item.valorPrimeira}
+                                                onChange={(e) => handleCurrencyChange(index, "valorPrimeira", e.target.value)}
+                                                placeholder="R$ 0,00"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>Valor das Demais Consultas</Label>
+                                            <Input
+                                                value={item.valorDemais}
+                                                onChange={(e) => handleCurrencyChange(index, "valorDemais", e.target.value)}
+                                                placeholder="R$ 0,00"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Previsão de Vaga */}
+                                    <div className="space-y-2">
+                                        <Label>Previsão de Vaga (em dias)</Label>
+                                        <Input
+                                            type="number"
+                                            min={1}
+                                            max={365}
+                                            value={item.previsaoDias || ""}
+                                            onChange={(e) => updateConvenioItem(index, "previsaoDias", parseInt(e.target.value) || 0)}
+                                            placeholder="Ex: 15"
+                                            className="w-full md:w-32"
+                                        />
+                                    </div>
+                                </div>
+                            ))}
+
+                            <Button variant="outline" onClick={addConvenioItem} className="w-full">
+                                <Plus className="mr-2 h-4 w-4" />
+                                {convenioItems.length === 0
+                                    ? "Adicionar Convênio"
+                                    : "Adicionar outro Convênio"}
                             </Button>
 
                             <div className="flex justify-end pt-4">

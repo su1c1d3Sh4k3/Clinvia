@@ -8,6 +8,7 @@ import {
     downloadMediaFromUzapi,
     fetchChatDetails
 } from "../_shared/utils.ts";
+import { makeOpenAIRequest, trackTokenUsage } from "../_shared/token-tracker.ts";
 
 /**
  * webhook-handle-message
@@ -285,6 +286,48 @@ serve(async (req) => {
             const fromMe = payload.message?.fromMe === true;
             const messageId = payload.message?.messageid || payload.message?.id || payload.body?.key?.id;
 
+            // ========================================
+            // DETAILED LOGGING FOR BUTTON RESPONSES
+            // ========================================
+            console.log('[webhook-handle-message] messageType:', payload.message?.messageType);
+            console.log('[webhook-handle-message] messageText:', messageText);
+            console.log('[webhook-handle-message] fromMe:', fromMe);
+
+            // Extract vote field (UzAPI sends button response text here)
+            const voteText = payload.message?.vote || '';
+            console.log('[webhook-handle-message] voteText:', voteText);
+
+            // Log button response specific fields
+            const buttonResponseId = payload.message?.buttonsResponseMessage?.selectedButtonId ||
+                payload.body?.buttonsResponseMessage?.selectedButtonId ||
+                payload.message?.content?.buttonsResponseMessage?.selectedButtonId;
+            const selectedDisplayText = payload.message?.selectedDisplayText ||
+                payload.message?.buttonsResponseMessage?.selectedDisplayText ||
+                payload.message?.content?.buttonsResponseMessage?.selectedDisplayText ||
+                payload.message?.content?.contextInfo?.selectedDisplayText ||
+                payload.body?.buttonsResponseMessage?.selectedDisplayText ||
+                '';
+
+            // Extract NPS button ID from content (nps_1 to nps_5)
+            const npsButtonId = payload.message?.content?.selectedID ||
+                payload.message?.content?.buttonOrListid ||
+                '';
+
+            console.log('[webhook-handle-message] buttonResponseId:', buttonResponseId);
+            console.log('[webhook-handle-message] selectedDisplayText:', selectedDisplayText);
+            console.log('[webhook-handle-message] npsButtonId:', npsButtonId);
+
+            // Use vote or selectedDisplayText as message body for button responses
+            const effectiveMessageBody = voteText || selectedDisplayText || messageText;
+            console.log('[webhook-handle-message] effectiveMessageBody:', effectiveMessageBody);
+
+            // Log full message structure for debugging
+            if (payload.message?.messageType?.toLowerCase().includes('button') ||
+                payload.message?.messageType?.toLowerCase().includes('template') ||
+                npsButtonId || buttonResponseId || voteText) {
+                console.log('[webhook-handle-message] BUTTON RESPONSE DETECTED - Full message:', JSON.stringify(payload.message));
+            }
+
             // Find existing conversation in CURRENT instance
             let query = supabase
                 .from('conversations')
@@ -441,7 +484,7 @@ serve(async (req) => {
                     .from('messages')
                     .insert({
                         conversation_id: conversation.id,
-                        body: messageText,
+                        body: effectiveMessageBody,
                         direction: fromMe ? 'outbound' : 'inbound',
                         message_type: messageType,
                         evolution_id: messageId,
@@ -461,6 +504,128 @@ serve(async (req) => {
                     console.error('[webhook-handle-message] Error saving message:', msgError);
                 } else {
                     console.log('[webhook-handle-message] Message saved:', savedMessage.id);
+
+                    // ========================================
+                    // NPS RESPONSE DETECTION WITH AI FEEDBACK
+                    // ========================================
+                    // Detect NPS response via npsButtonId (nps_1 to nps_5) or text match
+                    const isNpsResponse = (npsButtonId && npsButtonId.startsWith('nps_')) ||
+                        (voteText && (voteText.includes('Excelente') || voteText.includes('Muito Bom') ||
+                            voteText.includes('Bom') || voteText.includes('Regular') || voteText.includes('Ruim')));
+
+                    if (isNpsResponse && contactId && !fromMe) {
+                        console.log('[webhook-handle-message] NPS response detected!');
+                        console.log('[webhook-handle-message] npsButtonId:', npsButtonId);
+                        console.log('[webhook-handle-message] voteText:', voteText);
+
+                        // Extract nota text (e.g., "Excelente", "Muito Bom", etc.)
+                        let notaText = '';
+                        if (voteText) {
+                            // Extract just the rating name from vote (remove stars)
+                            if (voteText.includes('Excelente')) notaText = 'Excelente';
+                            else if (voteText.includes('Muito Bom')) notaText = 'Muito Bom';
+                            else if (voteText.includes('Bom')) notaText = 'Bom';
+                            else if (voteText.includes('Regular')) notaText = 'Regular';
+                            else if (voteText.includes('Ruim')) notaText = 'Ruim';
+                            else notaText = voteText.trim();
+                        } else if (npsButtonId) {
+                            // Map npsButtonId to text
+                            const npsIdToText: Record<string, string> = {
+                                'nps_5': 'Excelente',
+                                'nps_4': 'Muito Bom',
+                                'nps_3': 'Bom',
+                                'nps_2': 'Regular',
+                                'nps_1': 'Ruim'
+                            };
+                            notaText = npsIdToText[npsButtonId] || npsButtonId;
+                        }
+
+                        console.log('[webhook-handle-message] notaText extracted:', notaText);
+
+                        // Generate AI feedback from conversation context
+                        let feedback = '';
+                        try {
+                            // Get recent messages for context (last 10)
+                            const { data: recentMsgs } = await supabase
+                                .from('messages')
+                                .select('body, direction, created_at')
+                                .eq('conversation_id', conversation.id)
+                                .order('created_at', { ascending: false })
+                                .limit(10);
+
+                            if (recentMsgs && recentMsgs.length > 0) {
+                                // Format conversation text for AI
+                                const conversationText = recentMsgs.reverse().map((m: any) =>
+                                    `${m.direction === 'inbound' ? 'Cliente' : 'Agente'}: ${m.body || '[mídia]'}`
+                                ).join('\n');
+
+                                console.log('[webhook-handle-message] Generating AI feedback...');
+
+                                // Prepare prompt for AI feedback generation
+                                const feedbackPrompt = `Analise esta conversa e gere um breve feedback do cliente (1-2 frases):
+
+Conversa:
+${conversationText}
+
+O cliente avaliou o atendimento como "${notaText}".
+Gere um resumo MUITO breve focado na experiência e satisfação do cliente.
+Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
+
+                                // Call OpenAI for feedback generation
+                                const { response } = await makeOpenAIRequest(supabase, userId, {
+                                    endpoint: 'https://api.openai.com/v1/chat/completions',
+                                    body: {
+                                        model: 'gpt-4o-mini',
+                                        messages: [
+                                            { role: 'system', content: 'Você é um analista de feedback de clientes. Seja conciso.' },
+                                            { role: 'user', content: feedbackPrompt }
+                                        ],
+                                        temperature: 0.7,
+                                        max_tokens: 150
+                                    }
+                                });
+
+                                if (response.ok) {
+                                    const aiData = await response.json();
+                                    feedback = aiData.choices?.[0]?.message?.content?.trim() || '';
+                                    console.log('[webhook-handle-message] AI feedback generated:', feedback);
+
+                                    // Track token usage
+                                    if (aiData.usage && userId) {
+                                        await trackTokenUsage(supabase, {
+                                            ownerId: userId,
+                                            teamMemberId: null,
+                                            functionName: 'webhook-nps-feedback',
+                                            model: 'gpt-4o-mini',
+                                            usage: aiData.usage
+                                        });
+                                    }
+                                } else {
+                                    console.error('[webhook-handle-message] AI feedback error:', await response.text());
+                                    // Fallback to simple feedback
+                                    const clientMsgs = recentMsgs.filter((m: any) => m.direction === 'inbound').length;
+                                    const agentMsgs = recentMsgs.filter((m: any) => m.direction === 'outbound').length;
+                                    feedback = `Conversa com ${clientMsgs} mensagens do cliente e ${agentMsgs} do atendente.`;
+                                }
+                            }
+                        } catch (feedbackError) {
+                            console.error('[webhook-handle-message] Error generating AI feedback:', feedbackError);
+                        }
+
+                        // Save to contacts.nps using RPC (nota as TEXT now)
+                        console.log('[webhook-handle-message] Saving NPS entry:', { contactId, notaText, feedback });
+                        const { error: npsError } = await supabase.rpc('add_nps_entry', {
+                            p_contact_id: contactId,
+                            p_nota: notaText,  // Now sending text like "Excelente"
+                            p_feedback: feedback
+                        });
+
+                        if (npsError) {
+                            console.error('[webhook-handle-message] Error saving NPS:', npsError);
+                        } else {
+                            console.log('[webhook-handle-message] NPS saved successfully for contact:', contactId);
+                        }
+                    }
 
                     // ========================================
                     // PUSH NOTIFICATION FOR INBOUND MESSAGES
