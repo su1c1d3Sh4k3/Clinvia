@@ -437,8 +437,8 @@ const Contacts = () => {
                         )}
                     </div>
 
-                    <div className="rounded-md border overflow-x-auto bg-white dark:bg-transparent border-[#D4D5D6] dark:border-border">
-                        <Table>
+                    <div className="rounded-md border overflow-x-auto bg-white dark:bg-transparent border-[#D4D5D6] dark:border-border min-w-0">
+                        <Table className="table-fixed w-full">
                             <TableHeader>
                                 <TableRow>
                                     <TableHead className="w-[40px] md:w-[50px]">
@@ -448,15 +448,15 @@ const Contacts = () => {
                                             aria-label="Select all"
                                         />
                                     </TableHead>
-                                    <TableHead className="text-secondary dark:text-slate-400 font-semibold min-w-[120px]">Nome</TableHead>
-                                    <TableHead className="text-secondary dark:text-slate-400 font-semibold hidden sm:table-cell">Telefone</TableHead>
-                                    <TableHead className="text-secondary dark:text-slate-400 font-semibold hidden md:table-cell">Etiquetas</TableHead>
-                                    <TableHead className="text-secondary dark:text-slate-400 font-semibold text-center w-[60px] hidden sm:table-cell">IA</TableHead>
-                                    {!isAgent && <TableHead className="text-secondary dark:text-slate-400 font-semibold text-center hidden lg:table-cell">Satisf.</TableHead>}
-                                    {!isAgent && <TableHead className="text-secondary dark:text-slate-400 font-semibold text-center hidden lg:table-cell">Resumos</TableHead>}
-                                    {!isAgent && <TableHead className="text-secondary dark:text-slate-400 font-semibold text-center hidden lg:table-cell">Avaliação</TableHead>}
-                                    {!isAgent && <TableHead className="text-secondary dark:text-slate-400 font-semibold text-center hidden lg:table-cell">Feedbacks</TableHead>}
-                                    <TableHead className="w-[100px] md:w-[180px] text-secondary dark:text-slate-400 font-semibold">Ações</TableHead>
+                                    <TableHead className="text-secondary dark:text-slate-400 font-semibold w-[25%] md:w-[20%]">Nome</TableHead>
+                                    <TableHead className="text-secondary dark:text-slate-400 font-semibold hidden sm:table-cell w-[15%]">Telefone</TableHead>
+                                    <TableHead className="text-secondary dark:text-slate-400 font-semibold hidden md:table-cell w-[12%]">Etiquetas</TableHead>
+                                    <TableHead className="text-secondary dark:text-slate-400 font-semibold text-center w-[8%] hidden sm:table-cell">IA</TableHead>
+                                    {!isAgent && <TableHead className="text-secondary dark:text-slate-400 font-semibold text-center hidden lg:table-cell w-[8%]">Satisf.</TableHead>}
+                                    {!isAgent && <TableHead className="text-secondary dark:text-slate-400 font-semibold text-center hidden lg:table-cell w-[8%]">Resumos</TableHead>}
+                                    {!isAgent && <TableHead className="text-secondary dark:text-slate-400 font-semibold text-center hidden lg:table-cell w-[10%]">Avaliação</TableHead>}
+                                    {!isAgent && <TableHead className="text-secondary dark:text-slate-400 font-semibold text-center hidden lg:table-cell w-[8%]">Feedbacks</TableHead>}
+                                    <TableHead className="w-[100px] md:w-[140px] text-secondary dark:text-slate-400 font-semibold">Ações</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -502,22 +502,22 @@ const Contacts = () => {
                                                             )}
                                                         </div>
                                                     </div>
-                                                    <div className="flex flex-col">
-                                                        <span className="font-medium text-sm">{contact.push_name}</span>
-                                                        <span className="text-xs text-muted-foreground sm:hidden">
+                                                    <div className="flex flex-col min-w-0 flex-1">
+                                                        <span className="font-medium text-sm truncate">{contact.push_name}</span>
+                                                        <span className="text-xs text-muted-foreground sm:hidden truncate">
                                                             {contact.phone || contact.number?.split('@')[0]}
                                                         </span>
                                                         {contact.company && (
-                                                            <span className="text-xs text-muted-foreground hidden md:inline">{contact.company}</span>
+                                                            <span className="text-xs text-muted-foreground hidden md:inline truncate">{contact.company}</span>
                                                         )}
                                                     </div>
                                                 </div>
                                             </TableCell>
-                                            <TableCell className="hidden sm:table-cell py-2 md:py-4 text-sm">
-                                                {contact.phone || contact.number?.split('@')[0]}
+                                            <TableCell className="hidden sm:table-cell py-2 md:py-4 text-sm truncate">
+                                                <span className="truncate block">{contact.phone || contact.number?.split('@')[0]}</span>
                                             </TableCell>
-                                            <TableCell className="hidden md:table-cell py-2 md:py-4">
-                                                <div className="flex flex-wrap gap-1">
+                                            <TableCell className="hidden md:table-cell py-2 md:py-4 overflow-hidden">
+                                                <div className="flex flex-wrap gap-1 max-w-full overflow-hidden">
                                                     {contact.contact_tags?.slice(0, 2).map((ct: any) => (
                                                         <Badge
                                                             key={ct.tags.id}
@@ -621,7 +621,7 @@ const Contacts = () => {
                                                 </TableCell>
                                             )}
                                             <TableCell className="py-2 md:py-4">
-                                                <div className="flex items-center gap-0.5 md:gap-1">
+                                                <div className="flex items-center gap-0.5 md:gap-1 flex-nowrap">
                                                     {!isAgent && (
                                                         <Button
                                                             variant="ghost"

@@ -878,7 +878,14 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
 
                     console.log('[webhook-handle-message] bd_data:', JSON.stringify(forwardedPayload.bd_data));
 
-                    await fetch(instance.webhook_url, {
+                    // ========================================
+                    // DETAILED WEBHOOK LOGGING
+                    // ========================================
+                    console.log('[webhook-handle-message] SENDING TO EXTERNAL WEBHOOK:');
+                    console.log('[webhook-handle-message] Webhook URL:', instance.webhook_url);
+                    console.log('[webhook-handle-message] Instance ID:', instance.id);
+
+                    const webhookResponse = await fetch(instance.webhook_url, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -886,7 +893,16 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                         },
                         body: JSON.stringify(forwardedPayload)
                     });
-                    console.log('[webhook-handle-message] Forwarded successfully with bd_data');
+
+                    console.log('[webhook-handle-message] Webhook Response Status:', webhookResponse.status);
+                    console.log('[webhook-handle-message] Webhook Response OK:', webhookResponse.ok);
+
+                    if (!webhookResponse.ok) {
+                        const errorText = await webhookResponse.text();
+                        console.error('[webhook-handle-message] Webhook Error Response:', errorText);
+                    } else {
+                        console.log('[webhook-handle-message] Forwarded successfully with bd_data');
+                    }
                 } catch (forwardError) {
                     console.error('[webhook-handle-message] Forward error:', forwardError);
                 }

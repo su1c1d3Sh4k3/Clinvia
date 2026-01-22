@@ -7,12 +7,14 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Lock, Mail, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
+import TurnstileWidget from "@/components/TurnstileWidget";
 
 const AdminAuth = () => {
     const navigate = useNavigate();
     const [isLoading, setIsLoading] = useState(false);
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [captchaToken, setCaptchaToken] = useState<string | null>(null);
 
     // Check if already logged in as super-admin
     useEffect(() => {
@@ -38,6 +40,23 @@ const AdminAuth = () => {
         setIsLoading(true);
 
         try {
+            if (!captchaToken) {
+                toast.error("Por favor, complete a verificação de segurança (Captcha)");
+                setIsLoading(false);
+                return;
+            }
+
+            // Verify Captcha
+            const { data: verifyData, error: verifyError } = await supabase.functions.invoke('verify-turnstile', {
+                body: { token: captchaToken }
+            });
+
+            if (verifyError || !verifyData?.success) {
+                toast.error("Falha na verificação de segurança");
+                setIsLoading(false);
+                return;
+            }
+
             // Sign in
             const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
                 email,
@@ -123,6 +142,9 @@ const AdminAuth = () => {
                                     className="pl-9 bg-gray-800/50 border-gray-700 text-white placeholder:text-gray-500 focus:border-red-500/50 focus:ring-red-500/50"
                                 />
                             </div>
+                        </div>
+                        <div className="flex justify-center">
+                            <TurnstileWidget onVerify={setCaptchaToken} />
                         </div>
                         <Button
                             type="submit"

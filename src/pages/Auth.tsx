@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Lock, Mail, User, Building, Phone, Instagram, MapPin, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
+import TurnstileWidget from "@/components/TurnstileWidget";
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -39,6 +40,10 @@ const Auth = () => {
   // Validation states
   const [phoneValid, setPhoneValid] = useState(false);
   const [cepValid, setCepValid] = useState(false);
+
+  // Captcha states
+  const [loginCaptchaToken, setLoginCaptchaToken] = useState<string | null>(null);
+  const [signupCaptchaToken, setSignupCaptchaToken] = useState<string | null>(null);
 
   // Phone mask: +55 (XX) 9 XXXX-XXXX
   const formatPhone = (value: string) => {
@@ -84,9 +89,35 @@ const Auth = () => {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!loginCaptchaToken) {
+      toast.error("Por favor, complete a verificação de segurança (Captcha)");
+      return;
+    }
+
     setIsLoading(true);
-    await signIn(loginEmail, loginPassword);
-    setIsLoading(false);
+
+    try {
+      // Verify Captcha
+      const { data: verifyData, error: verifyError } = await supabase.functions.invoke('verify-turnstile', {
+        body: { token: loginCaptchaToken }
+      });
+
+      if (verifyError || !verifyData?.success) {
+        toast.error("Falha na verificação de segurança. Tente novamente.");
+        setIsLoading(false);
+        setLoginCaptchaToken(null); // Reset to force re-verification if needed, or handle effectively
+        // Note: In a real widget reset, we might need a ref to the widget to reset it.
+        return;
+      }
+
+      await signIn(loginEmail, loginPassword);
+    } catch (error) {
+      console.error("Login Error:", error);
+      toast.error("Erro ao realizar login");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSignup = async (e: React.FormEvent) => {
@@ -97,9 +128,23 @@ const Auth = () => {
       return;
     }
 
+    if (!signupCaptchaToken) {
+      toast.error("Por favor, complete a verificação de segurança (Captcha)");
+      return;
+    }
+
     setIsLoading(true);
 
     try {
+      // Verify Captcha
+      const { data: verifyData, error: verifyError } = await supabase.functions.invoke('verify-turnstile', {
+        body: { token: signupCaptchaToken }
+      });
+
+      if (verifyError || !verifyData?.success) {
+        throw new Error("Falha na verificação de segurança. Tente novamente.");
+      }
+
       // Insert into pending_signups table (not profiles - to avoid FK constraint)
       const { error } = await supabase
         .from("pending_signups")
@@ -115,11 +160,10 @@ const Auth = () => {
 
       if (error) {
         if (error.code === "23505") {
-          toast.error("Email já cadastrado no sistema");
+          throw new Error("Email já cadastrado no sistema");
         } else {
           throw error;
         }
-        return;
       }
 
       setSignupSuccess(true);
@@ -233,6 +277,9 @@ const Auth = () => {
                       className="pl-9 bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-primary/50 focus:ring-primary/50"
                     />
                   </div>
+                </div>
+                <div className="flex justify-center">
+                  <TurnstileWidget onVerify={setLoginCaptchaToken} />
                 </div>
                 <Button
                   type="submit"
@@ -362,6 +409,10 @@ const Auth = () => {
                     className={`h-9 bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-primary/50 ${signupCep && !cepValid ? "border-red-500/50" : ""
                       } ${cepValid ? "border-green-500/50" : ""}`}
                   />
+                </div>
+
+                <div className="flex justify-center">
+                  <TurnstileWidget onVerify={setSignupCaptchaToken} />
                 </div>
 
                 <Button
