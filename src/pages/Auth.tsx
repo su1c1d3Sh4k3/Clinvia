@@ -98,17 +98,18 @@ const Auth = () => {
     setIsLoading(true);
 
     try {
-      // Verify Captcha
-      const { data: verifyData, error: verifyError } = await supabase.functions.invoke('verify-turnstile', {
-        body: { token: loginCaptchaToken }
-      });
+      // Verify Captcha (Skip on Dev/Localhost to avoid secret key mismatch with test token)
+      if (!import.meta.env.DEV) {
+        const { data: verifyData, error: verifyError } = await supabase.functions.invoke('verify-turnstile', {
+          body: { token: loginCaptchaToken }
+        });
 
-      if (verifyError || !verifyData?.success) {
-        toast.error("Falha na verificação de segurança. Tente novamente.");
-        setIsLoading(false);
-        setLoginCaptchaToken(null); // Reset to force re-verification if needed, or handle effectively
-        // Note: In a real widget reset, we might need a ref to the widget to reset it.
-        return;
+        if (verifyError || !verifyData?.success) {
+          toast.error("Falha na verificação de segurança. Tente novamente.");
+          setIsLoading(false);
+          setLoginCaptchaToken(null);
+          return;
+        }
       }
 
       await signIn(loginEmail, loginPassword);
@@ -136,13 +137,15 @@ const Auth = () => {
     setIsLoading(true);
 
     try {
-      // Verify Captcha
-      const { data: verifyData, error: verifyError } = await supabase.functions.invoke('verify-turnstile', {
-        body: { token: signupCaptchaToken }
-      });
+      // Verify Captcha (Skip on Dev/Localhost)
+      if (!import.meta.env.DEV) {
+        const { data: verifyData, error: verifyError } = await supabase.functions.invoke('verify-turnstile', {
+          body: { token: signupCaptchaToken }
+        });
 
-      if (verifyError || !verifyData?.success) {
-        throw new Error("Falha na verificação de segurança. Tente novamente.");
+        if (verifyError || !verifyData?.success) {
+          throw new Error("Falha na verificação de segurança. Tente novamente.");
+        }
       }
 
       // Insert into pending_signups table (not profiles - to avoid FK constraint)

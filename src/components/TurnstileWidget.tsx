@@ -11,7 +11,9 @@ declare global {
     }
 }
 
-const TurnstileWidget = ({ onVerify, siteKey = "0x4AAAAAACOK66PvxkZuZTup" }: TurnstileWidgetProps) => {
+const TurnstileWidget = ({ onVerify, siteKey }: TurnstileWidgetProps) => {
+    // Automatically switch to Test Key in Development to avoid "Invalid Domain" error
+    const activeSiteKey = siteKey || (import.meta.env.DEV ? "1x00000000000000000000AA" : "0x4AAAAAACOK66PvxkZuZTup");
     const containerRef = useRef<HTMLDivElement>(null);
     const widgetId = useRef<string | null>(null);
 
@@ -42,7 +44,7 @@ const TurnstileWidget = ({ onVerify, siteKey = "0x4AAAAAACOK66PvxkZuZTup" }: Tur
         try {
             if (!widgetId.current && window.turnstile) {
                 widgetId.current = window.turnstile.render(containerRef.current, {
-                    sitekey: siteKey,
+                    sitekey: activeSiteKey,
                     theme: 'auto',
                     callback: (token: string) => {
                         onVerify(token);
