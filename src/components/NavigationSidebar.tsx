@@ -2,7 +2,7 @@ import {
   LayoutDashboard, MessageSquare, Briefcase, ListOrdered, Users, Settings,
   Smartphone, LogOut, Tag as TagIcon, BookUser, Calendar, ClipboardList,
   Package, Bot, Wallet, ChevronDown, MessageCircle, Wrench, Grid3X3, PieChart, Clock,
-  ShoppingCart, Headphones
+  ShoppingCart, Headphones, UserRound
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -45,6 +45,7 @@ const menuStructure: MenuItem[] = [
     children: [
       { icon: Package, label: "Produtos e Serviços", id: "products-services", path: "/products-services" },
       { icon: BookUser, label: "Contatos", id: "contacts", path: "/contacts" },
+      { icon: UserRound, label: "Pacientes", id: "patients", path: "/patients" },
       { icon: ListOrdered, label: "Filas", id: "queues", path: "/queues" },
       { icon: TagIcon, label: "Tags", id: "tags", path: "/tags" },
       { icon: Clock, label: "Follow Up", id: "follow-up", path: "/follow-up" },

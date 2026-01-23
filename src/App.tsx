@@ -13,6 +13,7 @@ import NotFound from "./pages/NotFound";
 import Queues from "./pages/Queues";
 import Tags from "./pages/Tags";
 import Contacts from "./pages/Contacts";
+import Patients from "./pages/Patients";
 import Team from "./pages/Team";
 import CRM from "./pages/CRM";
 import Tasks from "./pages/Tasks";
@@ -59,6 +60,7 @@ const App = () => (
                 <Route path="/queues" element={<Queues />} />
                 <Route path="/tags" element={<Tags />} />
                 <Route path="/contacts" element={<Contacts />} />
+                <Route path="/patients" element={<Patients />} />
                 <Route path="/team" element={<Team />} />
                 <Route path="/crm" element={<CRM />} />
                 <Route path="/tasks" element={<Tasks />} />
