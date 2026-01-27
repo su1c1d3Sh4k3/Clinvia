@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useDeferredValue, useCallback } from "react";
 import { useTypingContext, useIsTyping } from "@/contexts/TypingContext";
-import { Send, Paperclip, Smile, Mic, Sparkles, CheckCircle, X, FileText, Image as ImageIcon, Video, ArrowDown, StopCircle, Check, CheckCheck, Plus, MoreVertical, MessageSquare, ClipboardList } from "lucide-react";
+import { Send, Paperclip, Smile, Mic, Sparkles, CheckCircle, X, FileText, Image as ImageIcon, Video, ArrowDown, StopCircle, Check, CheckCheck, Plus, MoreVertical, MessageSquare, ClipboardList, Download } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -1250,17 +1250,56 @@ export const ChatArea = ({
                       )}
 
                       {/* Renderizar documento */}
-                      {msg.message_type === 'document' && msg.media_url && (
-                        <a
-                          href={msg.media_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-2 text-sm underline mb-2"
-                        >
-                          <Paperclip className="w-4 h-4" />
-                          {msg.body || 'Documento'}
-                        </a>
-                      )}
+                      {msg.message_type === 'document' && msg.media_url && (() => {
+                        const fileName = msg.body || 'Documento';
+                        const fileExt = fileName.toLowerCase().split('.').pop() || '';
+
+                        // Determinar ícone e cor baseado na extensão
+                        let FileIcon = Paperclip;
+                        let iconColor = 'text-gray-500 dark:text-gray-400';
+
+                        if (fileExt === 'pdf') {
+                          FileIcon = FileText;
+                          iconColor = 'text-red-500 dark:text-red-400';
+                        } else if (['doc', 'docx'].includes(fileExt)) {
+                          FileIcon = FileText;
+                          iconColor = 'text-blue-500 dark:text-blue-400';
+                        } else if (['xls', 'xlsx', 'csv'].includes(fileExt)) {
+                          FileIcon = FileText;
+                          iconColor = 'text-green-500 dark:text-green-400';
+                        } else if (['ppt', 'pptx'].includes(fileExt)) {
+                          FileIcon = FileText;
+                          iconColor = 'text-orange-500 dark:text-orange-400';
+                        } else if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileExt)) {
+                          FileIcon = ImageIcon;
+                          iconColor = 'text-purple-500 dark:text-purple-400';
+                        }
+
+                        return (
+                          <div className="flex items-center gap-2 mb-2">
+                            {/* Link para abrir inline */}
+                            <a
+                              href={msg.media_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-2 text-sm underline flex-1 min-w-0 hover:opacity-80 transition-opacity"
+                            >
+                              <FileIcon className={`w-4 h-4 shrink-0 ${iconColor}`} />
+                              <span className="truncate">{fileName}</span>
+                            </a>
+
+                            {/* Botão de Download */}
+                            <a
+                              href={`${msg.media_url}?download=${encodeURIComponent(fileName)}`}
+                              className="shrink-0 p-1.5 hover:bg-black/10 dark:hover:bg-white/10 rounded transition-colors"
+                              title="Baixar arquivo"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Download className="w-4 h-4" />
+                            </a>
+                          </div>
+                        );
+                      })()}
 
                       {/* Texto da mensagem */}
                       {msg.body && msg.message_type !== 'document' && msg.message_type !== 'audio' && msg.body !== '[Áudio]' && (
