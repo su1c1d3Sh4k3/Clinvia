@@ -59,6 +59,8 @@ serve(async (req) => {
         const eventType = payload.EventType || payload.event || payload.type || 'unknown';
         console.log('[UZAPI WEHOOK REFACTOR] ========================================');
         console.log('[UZAPI WEHOOK REFACTOR] EVENT TYPE:', eventType);
+        // LOG FULL PAYLOAD FOR DEBUGGING GROUPS
+        console.log('[UZAPI WEHOOK REFACTOR] FULL PAYLOAD:', JSON.stringify(payload, null, 2));
         console.log('[UZAPI WEHOOK REFACTOR] ========================================');
 
         // Special handling for specific event types
@@ -173,6 +175,13 @@ serve(async (req) => {
             console.log('[UZAPI WEHOOK REFACTOR] Processing Group Message...');
             const waChatId = payload.body?.chat?.wa_chatid || payload.message?.chatid;
             const groupName = payload.body?.chat?.name || payload.message?.groupName || "Grupo Desconhecido";
+
+            console.log('[UZAPI WEHOOK REFACTOR] Group Data Extracted:', {
+                waChatId,
+                groupName,
+                bodyChat: payload.body?.chat,
+                messageGroupName: payload.message?.groupName
+            });
 
             if (!waChatId) {
                 console.error('[UZAPI WEHOOK REFACTOR] Group message without chatid/wa_chatid');

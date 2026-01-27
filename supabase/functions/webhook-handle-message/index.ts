@@ -36,6 +36,7 @@ serve(async (req) => {
 
         console.log('[webhook-handle-message] Event Type:', eventType);
         console.log('[webhook-handle-message] Instance:', instanceName);
+        console.log('[webhook-handle-message] FULL PAYLOAD:', JSON.stringify(payload, null, 2));
 
         const supabase = createSupabaseClient();
 
@@ -69,8 +70,21 @@ serve(async (req) => {
         if (isGroup) {
             // ===== GROUP PROCESSING =====
             console.log('[webhook-handle-message] Processing Group Message...');
-            const waChatId = payload.body?.chat?.wa_chatid || payload.message?.chatid;
-            const groupName = payload.body?.chat?.name || payload.message?.groupName || "Grupo Desconhecido";
+
+            // Extract Group Data from Payload
+            // Priority: chat.wa_name (User requested) > chat.name > message.groupName
+            const chatData = payload.chat || payload.body?.chat || {};
+            const waChatId = chatData.wa_chatid || payload.message?.chatid;
+            const groupName = chatData.wa_name || chatData.name || payload.message?.groupName || "Grupo Desconhecido";
+            // Support both imagePreview and image fields
+            const groupImagePreview = chatData.imagePreview || chatData.image;
+
+            console.log('[webhook-handle-message] Group Data Extracted:', {
+                waChatId,
+                groupName,
+                groupImagePreview,
+                source: 'payload.chat'
+            });
 
             if (!waChatId) {
                 return new Response(
@@ -79,7 +93,7 @@ serve(async (req) => {
                 );
             }
 
-            // Check/Create Group
+            // Check/Create or Update Group
             let { data: group } = await supabase
                 .from('groups')
                 .select('*')
@@ -87,14 +101,16 @@ serve(async (req) => {
                 .single();
 
             if (!group) {
-                console.log('[webhook-handle-message] Creating group...');
+                console.log('[webhook-handle-message] Creating NEW group:', groupName);
                 const { data: newGroup, error: createError } = await supabase
                     .from('groups')
                     .insert({
                         remote_jid: waChatId,
                         group_name: groupName,
                         instance_id: instance.id,
-                        user_id: userId
+                        user_id: userId,
+                        // If we have an image URL, we'll update it momentarily, but initially null is fine 
+                        // or we could try to download before insert, but better to do it after to have the ID for naming
                     })
                     .select()
                     .single();
@@ -105,16 +121,76 @@ serve(async (req) => {
                     group = newGroup;
                 }
             } else {
-                // Update missing fields
+                // Group Exists - ALWAYS UPDATE Name and references as requested
+                console.log('[webhook-handle-message] Updating EXISTING group:', group.id);
                 const updates: any = {};
+
+                // Update Name if changed
+                if (group.group_name !== groupName) {
+                    updates.group_name = groupName;
+                    console.log(`[webhook-handle-message] Updating group name: ${group.group_name} -> ${groupName}`);
+                }
+
+                // Update instance/user if missing
                 if (!group.instance_id) updates.instance_id = instance.id;
                 if (!group.user_id) updates.user_id = userId;
+
                 if (Object.keys(updates).length > 0) {
                     await supabase.from('groups').update(updates).eq('id', group.id);
                 }
             }
 
             groupId = group?.id;
+
+            // Handle Group Image Update (ALWAYS CHECK if provided)
+            if (group && groupImagePreview && groupImagePreview.startsWith('http')) {
+                // Check if we need to update:
+                // 1. If group has no pic URL
+                // 2. OR if the new preview URL is different? 
+                //    Hard to check if "new preview" is different from "our stored public url".
+                //    Process: Download -> Upload -> Compare? Too expensive.
+                //    User said "SEMPRE que for um grupo... atualizar a foto".
+                //    We'll do it, but maybe add a small check to avoid spamming storage if not needed?
+                //    For now, we will execute the update logic. To optimize, we could store the hash or original URL.
+                //    Let's just proceed with download/upload.
+
+                console.log('[webhook-handle-message] Processing Group Image Update...');
+                try {
+                    const imageResponse = await fetch(groupImagePreview);
+                    if (imageResponse.ok) {
+                        const imageBlob = await imageResponse.blob();
+                        // Use a consistent filename strategy or timestamped?
+                        // If timestamped, we fill storage. If consistent, we overwrite.
+                        // Overwriting is better for storage space, but browser caching might be an issue.
+                        // Adding a timestamp query param to the URL usually fixes caching.
+                        const fileName = `group_${group.id}.jpg`;
+
+                        const { error: uploadError } = await supabase.storage
+                            .from('avatars')
+                            .upload(fileName, imageBlob, { contentType: 'image/jpeg', upsert: true });
+
+                        if (!uploadError) {
+                            // Get Public URL
+                            const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(fileName);
+                            // Add a random query param to bust cache if we overwrote the file
+                            const publicUrl = `${publicUrlData.publicUrl}?t=${Date.now()}`;
+
+                            await supabase.from('groups')
+                                .update({ group_pic_url: publicUrl })
+                                .eq('id', group.id);
+
+                            console.log('[webhook-handle-message] Group image updated successfully:', publicUrl);
+                        } else {
+                            console.error('[webhook-handle-message] Error uploading group image:', uploadError);
+                        }
+                    } else {
+                        console.error('[webhook-handle-message] Failed to download group image:', groupImagePreview);
+                    }
+                } catch (imgErr) {
+                    console.error('[webhook-handle-message] Exception processing group image:', imgErr);
+                }
+            }
+
 
             // Handle Group Member (Sender)
             const senderPn = payload.message?.sender_pn;

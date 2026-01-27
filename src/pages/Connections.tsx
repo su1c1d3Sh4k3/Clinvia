@@ -190,7 +190,7 @@ const Connections = () => {
         try {
             // IMPORTANT: redirect_uri must EXACTLY match Meta Dashboard
             // Meta Dashboard is configured for /connections
-            const redirectUri = 'https://app.clinvia.ai/connections';
+            const redirectUri = 'https://app.clinbia.ai/connections';
 
             // Clean the code - remove #_ suffix and any whitespace
             const cleanCode = code.replace(/#_$/, '').trim();
@@ -245,7 +245,7 @@ const Connections = () => {
         }
 
         // IMPORTANT: redirect_uri must EXACTLY match Meta Dashboard
-        const redirectUri = 'https://app.clinvia.ai/connections';
+        const redirectUri = 'https://app.clinbia.ai/connections';
 
         // Instagram Business Login permissions (only approved ones)
         // IMPORTANT: Use hyphen (-) as separator, NOT comma!
