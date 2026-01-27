@@ -560,17 +560,55 @@ serve(async (req) => {
 
                         if (downloadResponse.ok) {
                             const downloadData = await downloadResponse.json();
-                            const base64Data = downloadData[0]?.base64Data || downloadData.base64Data;
+                            const rawBase64 = downloadData[0]?.base64Data || downloadData.base64Data;
 
-                            if (base64Data) {
-                                const fileBytes = base64ToUint8Array(base64Data);
+                            if (rawBase64) {
+                                // SANITIZATION: Clean up base64 string
+                                const cleanBase64 = rawBase64.replace(/^data:.*?;base64,/, '').replace(/[\r\n]/g, '');
+                                const fileBytes = base64ToUint8Array(cleanBase64);
+
                                 let extension = 'bin';
                                 let contentType = 'application/octet-stream';
 
-                                if (messageType === 'image') { extension = 'jpg'; contentType = 'image/jpeg'; }
-                                else if (messageType === 'audio') { extension = 'ogg'; contentType = 'audio/ogg'; }
-                                else if (messageType === 'video') { extension = 'mp4'; contentType = 'video/mp4'; }
-                                else if (messageType === 'document') { extension = 'pdf'; contentType = 'application/pdf'; }
+                                // Try to detect accurate MIME type from payload
+                                let detectedMime = null;
+                                // Various locations where mime/filename might be hidden in payload
+                                if (messageType === 'document') {
+                                    detectedMime = payload.message?.documentMessage?.mimetype ||
+                                        payload.message?.content?.documentMessage?.mimetype ||
+                                        payload.body?.message?.documentMessage?.mimetype;
+                                }
+
+                                if (detectedMime) {
+                                    contentType = detectedMime;
+                                    console.log('[UZAPI WEHOOK REFACTOR] Detected Document MIME:', detectedMime);
+
+                                    // Smart extension mapping
+                                    if (detectedMime === 'application/pdf') extension = 'pdf';
+                                    else if (detectedMime.includes('wordprocessed') || detectedMime.includes('msword')) extension = 'docx';
+                                    else if (detectedMime.includes('spreadsheet') || detectedMime.includes('excel')) extension = 'xlsx';
+                                    else if (detectedMime.includes('presentation') || detectedMime.includes('powerpoint')) extension = 'pptx';
+                                    else if (detectedMime.includes('text/plain')) extension = 'txt';
+                                    else if (detectedMime.includes('csv')) extension = 'csv';
+                                    else if (detectedMime.includes('image/jpeg')) extension = 'jpg';
+                                    else if (detectedMime.includes('image/png')) extension = 'png';
+                                    else {
+                                        // Fallback: try to look at original filename
+                                        const originalName = payload.message?.documentMessage?.fileName;
+                                        if (originalName && originalName.includes('.')) {
+                                            const parts = originalName.split('.');
+                                            extension = parts[parts.length - 1];
+                                        } else {
+                                            extension = detectedMime.split('/')[1] || 'doc';
+                                        }
+                                    }
+                                } else {
+                                    // Fallback to legacy logic if no mime detected
+                                    if (messageType === 'image') { extension = 'jpg'; contentType = 'image/jpeg'; }
+                                    else if (messageType === 'audio') { extension = 'ogg'; contentType = 'audio/ogg'; }
+                                    else if (messageType === 'video') { extension = 'mp4'; contentType = 'video/mp4'; }
+                                    else if (messageType === 'document') { extension = 'pdf'; contentType = 'application/pdf'; }
+                                }
 
                                 const fileName = `media/${conversation.id}/${Date.now()}_${messageId}.${extension}`;
 

@@ -99,14 +99,17 @@ export async function downloadMediaFromUzapi(
         }
 
         const downloadData = await downloadResponse.json();
-        const base64Data = downloadData[0]?.base64Data || downloadData.base64Data;
+        const rawBase64 = downloadData[0]?.base64Data || downloadData.base64Data;
 
-        if (!base64Data) {
+        if (!rawBase64) {
             console.error('[SHARED] No base64 data in response');
             return null;
         }
 
-        const fileBytes = base64ToUint8Array(base64Data);
+        // SANITIZATION: Clean up base64 string
+        const cleanBase64 = rawBase64.replace(/^data:.*?;base64,/, '').replace(/[\r\n]/g, '');
+        const fileBytes = base64ToUint8Array(cleanBase64);
+
         let extension = 'bin';
         let contentType = 'application/octet-stream';
 
