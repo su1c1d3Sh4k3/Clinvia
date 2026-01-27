@@ -610,11 +610,40 @@ serve(async (req) => {
                                     else if (messageType === 'document') { extension = 'pdf'; contentType = 'application/pdf'; }
                                 }
 
-                                const fileName = `media/${conversation.id}/${Date.now()}_${messageId}.${extension}`;
+                                // FILENAME GENERATION
+                                let finalFileName = `${Date.now()}_${messageId}.${extension}`;
+
+                                // Try to use original filename if available (especially for documents)
+                                const originalPayloadName = payload.message?.documentMessage?.fileName ||
+                                    payload.message?.content?.documentMessage?.fileName ||
+                                    payload.body?.message?.documentMessage?.fileName;
+
+                                if (originalPayloadName) {
+                                    // Sanitize: replace spaces with _ and remove non-safe chars, but keep utf8 (accents) if possible?
+                                    // Safer to stick to ASCII for URLs
+                                    const safeName = originalPayloadName
+                                        .normalize('NFD').replace(/[\u0300-\u036f]/g, "") // Remove accents
+                                        .replace(/[^a-zA-Z0-9.-]/g, '_'); // Replace non-alphanumeric with _
+
+                                    finalFileName = `${Date.now()}_${safeName}`;
+                                    // Ensure it has the extension, if safeName already has it, good. 
+                                    // If detected extension is different, maybe append? 
+                                    // Usually original name has extension.
+                                    if (!finalFileName.toLowerCase().endsWith('.' + extension) && !originalPayloadName.includes('.')) {
+                                        finalFileName += `.${extension}`;
+                                    }
+                                }
+
+                                const fileName = `media/${conversation.id}/${finalFileName}`;
 
                                 const { error: uploadError } = await supabaseClient.storage
                                     .from('media')
-                                    .upload(fileName, fileBytes, { contentType: contentType, upsert: true });
+                                    .upload(fileName, fileBytes, {
+                                        contentType: contentType,
+                                        upsert: true
+                                        // contentDisposition: 'inline' // Supabase-js upload options don't support this directly in all versions, 
+                                        // but Content-Type usually handles inline.
+                                    });
 
                                 if (uploadError) {
                                     console.error('[UZAPI WEHOOK REFACTOR] Error uploading media:', uploadError);

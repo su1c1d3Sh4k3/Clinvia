@@ -76,7 +76,8 @@ export async function downloadMediaFromUzapi(
     messageId: string,
     messageType: string,
     supabase: SupabaseClient,
-    conversationId: string
+    conversationId: string,
+    originalFileName?: string
 ): Promise<string | null> {
     try {
         const downloadResponse = await fetch('https://clinvia.uazapi.com/message/download', {
@@ -118,7 +119,18 @@ export async function downloadMediaFromUzapi(
         else if (messageType === 'video') { extension = 'mp4'; contentType = 'video/mp4'; }
         else if (messageType === 'document') { extension = 'pdf'; contentType = 'application/pdf'; }
 
-        const fileName = `media/${conversationId}/${Date.now()}_${messageId}.${extension}`;
+        // FILENAME LOGIC
+        let finalName = `${Date.now()}_${messageId}.${extension}`;
+        if (originalFileName) {
+            const safeName = originalFileName.normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9.-]/g, '_');
+            finalName = `${Date.now()}_${safeName}`;
+            // Append extension if missing (heuristic)
+            if (!finalName.toLowerCase().endsWith('.' + extension) && !originalFileName.includes('.')) {
+                finalName += `.${extension}`;
+            }
+        }
+
+        const fileName = `media/${conversationId}/${finalName}`;
 
         const { error: uploadError } = await supabase.storage
             .from('media')
