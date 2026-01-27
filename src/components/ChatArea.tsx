@@ -1280,7 +1280,12 @@ export const ChatArea = ({
                           <div className="flex items-center gap-2 mb-2">
                             {/* Link para abrir inline via proxy */}
                             <a
-                              href={`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/serve-media?path=${encodeURIComponent(msg.media_url.split('/media/')[1] || '')}`}
+                              href={(() => {
+                                // Extract path from URL: .../public/media/{conv_id}/{file} -> {conv_id}/{file}
+                                const urlParts = msg.media_url.split('/public/media/');
+                                const filePath = urlParts.length > 1 ? urlParts[1] : msg.media_url.split('/media/').pop() || '';
+                                return `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/serve-media?path=${encodeURIComponent(filePath)}`;
+                              })()}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="flex items-center gap-2 text-sm underline flex-1 min-w-0 hover:opacity-80 transition-opacity"
