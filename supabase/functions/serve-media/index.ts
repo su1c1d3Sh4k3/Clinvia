@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -23,31 +22,32 @@ serve(async (req) => {
             });
         }
 
-        // Initialize Supabase client
+        // Build public URL to the file
         const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-        const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-        const supabase = createClient(supabaseUrl, supabaseKey);
+        const publicUrl = `${supabaseUrl}/storage/v1/object/public/media/${filePath}`;
 
-        // Download file from storage
-        const { data, error } = await supabase.storage
-            .from('media')
-            .download(filePath);
+        // Fetch the file from public storage
+        const fileResponse = await fetch(publicUrl);
 
-        if (error || !data) {
-            console.error('Error downloading file:', error);
+        if (!fileResponse.ok) {
+            console.error('Error fetching file:', fileResponse.status, fileResponse.statusText);
             return new Response(JSON.stringify({ error: 'File not found' }), {
                 status: 404,
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' }
             });
         }
 
+        // Get the blob
+        const blob = await fileResponse.blob();
+
         // Extract filename from path
         const fileName = filePath.split('/').pop() || 'file';
 
         // Detect content type from filename
-        let contentType = 'application/octet-stream';
+        let contentType = fileResponse.headers.get('Content-Type') || 'application/octet-stream';
         const ext = fileName.toLowerCase().split('.').pop();
 
+        // Override content type if we can detect it better
         if (ext === 'pdf') contentType = 'application/pdf';
         else if (['jpg', 'jpeg'].includes(ext)) contentType = 'image/jpeg';
         else if (ext === 'png') contentType = 'image/png';
@@ -58,7 +58,7 @@ serve(async (req) => {
         else if (['ppt', 'pptx'].includes(ext)) contentType = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 
         // Return file with inline Content-Disposition
-        return new Response(data, {
+        return new Response(blob, {
             headers: {
                 ...corsHeaders,
                 'Content-Type': contentType,
@@ -69,7 +69,7 @@ serve(async (req) => {
 
     } catch (error) {
         console.error('Error in serve-media function:', error);
-        return new Response(JSON.stringify({ error: 'Internal server error' }), {
+        return new Response(JSON.stringify({ error: 'Internal server error', details: error.message }), {
             status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
