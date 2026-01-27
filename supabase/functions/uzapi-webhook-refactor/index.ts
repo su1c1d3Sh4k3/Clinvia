@@ -640,9 +640,8 @@ serve(async (req) => {
                                     .from('media')
                                     .upload(fileName, fileBytes, {
                                         contentType: contentType,
+                                        cacheControl: '3600',
                                         upsert: true
-                                        // contentDisposition: 'inline' // Supabase-js upload options don't support this directly in all versions, 
-                                        // but Content-Type usually handles inline.
                                     });
 
                                 if (uploadError) {

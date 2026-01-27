@@ -551,6 +551,7 @@ export const ChatArea = ({
         .from('media')
         .upload(filePath, file, {
           contentType: file.type,
+          cacheControl: '3600',
           upsert: true
         });
 
@@ -1277,9 +1278,9 @@ export const ChatArea = ({
 
                         return (
                           <div className="flex items-center gap-2 mb-2">
-                            {/* Link para abrir inline */}
+                            {/* Link para abrir inline via proxy */}
                             <a
-                              href={msg.media_url}
+                              href={`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/serve-media?path=${encodeURIComponent(msg.media_url.split('/media/')[1] || '')}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="flex items-center gap-2 text-sm underline flex-1 min-w-0 hover:opacity-80 transition-opacity"

@@ -134,7 +134,11 @@ export async function downloadMediaFromUzapi(
 
         const { error: uploadError } = await supabase.storage
             .from('media')
-            .upload(fileName, fileBytes, { contentType: contentType, upsert: true });
+            .upload(fileName, fileBytes, {
+                contentType: contentType,
+                cacheControl: '3600',
+                upsert: true
+            });
 
         if (uploadError) {
             console.error('[SHARED] Error uploading media:', uploadError);
