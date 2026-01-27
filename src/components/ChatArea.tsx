@@ -1278,14 +1278,9 @@ export const ChatArea = ({
 
                         return (
                           <div className="flex items-center gap-2 mb-2">
-                            {/* Link para abrir inline via proxy */}
+                            {/* Link para abrir inline - URL direta sem ?download */}
                             <a
-                              href={(() => {
-                                // Extract path from URL: .../public/media/{conv_id}/{file} -> {conv_id}/{file}
-                                const urlParts = msg.media_url.split('/public/media/');
-                                const filePath = urlParts.length > 1 ? urlParts[1] : msg.media_url.split('/media/').pop() || '';
-                                return `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/serve-media?path=${encodeURIComponent(filePath)}`;
-                              })()}
+                              href={msg.media_url}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="flex items-center gap-2 text-sm underline flex-1 min-w-0 hover:opacity-80 transition-opacity"
@@ -1294,7 +1289,7 @@ export const ChatArea = ({
                               <span className="truncate">{fileName}</span>
                             </a>
 
-                            {/* Botão de Download */}
+                            {/* Botão de Download - força download com nome correto */}
                             <a
                               href={`${msg.media_url}?download=${encodeURIComponent(fileName)}`}
                               className="shrink-0 p-1.5 hover:bg-black/10 dark:hover:bg-white/10 rounded transition-colors"
