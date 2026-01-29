@@ -150,49 +150,44 @@ const Auth = () => {
       }
 
       // Insert into pending_signups table (not profiles - to avoid FK constraint)
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from("pending_signups")
         .insert({
           full_name: signupFullName.trim(),
           company_name: signupCompanyName.trim(),
-          email: signupEmail.trim().toLowerCase(),
+          email: signupEmail.toLowerCase().trim(),
           phone: signupPhone,
           instagram: signupInstagram.trim(),
           address: `${signupAddress.trim()} - CEP: ${signupCep}`,
           status: "pendente"
-        })
-        .select()
-        .single();
+        });
 
       if (error) {
         if (error.code === "23505") {
-          throw new Error("Email já cadastrado no sistema");
+          toast.error("Este email já está cadastrado");
         } else {
-          throw error;
+          toast.error("Erro ao criar cadastro: " + error.message);
         }
+        return;
       }
 
-      // Successfully inserted - now send webhook
-      if (data) {
-        // Send webhook asynchronously (don't block signup flow if it fails)
-        // Wrap in try-catch to prevent any errors from appearing in console
-        try {
-          sendClientSignupWebhook({
-            id: data.id,
-            full_name: data.full_name,
-            company_name: data.company_name,
-            email: data.email,
-            phone: data.phone,
-            instagram: data.instagram,
-            address: data.address,
-            status: data.status,
-            created_at: data.created_at,
-          }).catch(() => {
-            // Silently catch webhook errors - signup was successful
-          });
-        } catch {
-          // Silently catch any synchronous errors
-        }
+      // Successfully inserted - send webhook with form data
+      try {
+        sendClientSignupWebhook({
+          id: "pending", // Will be assigned by database
+          full_name: signupFullName.trim(),
+          company_name: signupCompanyName.trim(),
+          email: signupEmail.toLowerCase().trim(),
+          phone: signupPhone,
+          instagram: signupInstagram.trim(),
+          address: `${signupAddress.trim()} - CEP: ${signupCep}`,
+          status: "pendente",
+          created_at: new Date().toISOString(),
+        }).catch(() => {
+          // Silently fail - signup was successful
+        });
+      } catch {
+        // Ignore any sync errors
       }
 
       setSignupSuccess(true);
