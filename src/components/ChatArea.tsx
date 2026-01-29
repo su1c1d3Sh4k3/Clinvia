@@ -463,28 +463,67 @@ export const ChatArea = ({
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-      // Prefer MP4/AAC for Instagram compatibility (supported in Chrome, Safari, Edge)
-      // Fallback to WebM for Firefox and others
-      let mimeType = 'audio/webm;codecs=opus';
+      // Detect if this is an Instagram conversation
+      const conversationChannel = (conversation as any)?.channel;
+      const isInstagram = conversationChannel === 'instagram';
+
+      // Smart format selection based on platform and browser capabilities
+      let mimeType = 'audio/webm;codecs=opus'; // Default fallback
       let fileExtension = 'webm';
 
-      // Try MP4/AAC first (Instagram compatible)
-      if (MediaRecorder.isTypeSupported('audio/mp4;codecs=mp4a.40.2')) {
-        mimeType = 'audio/mp4;codecs=mp4a.40.2';
-        fileExtension = 'm4a';
-        console.log('[Audio Recording] Using MP4/AAC format (Instagram compatible)');
-      } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
-        mimeType = 'audio/mp4';
-        fileExtension = 'm4a';
-        console.log('[Audio Recording] Using MP4 format (Instagram compatible)');
-      } else if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
-        mimeType = 'audio/webm;codecs=opus';
-        fileExtension = 'webm';
-        console.log('[Audio Recording] Using WebM/Opus format (fallback)');
-      } else if (MediaRecorder.isTypeSupported('audio/webm')) {
-        mimeType = 'audio/webm';
-        fileExtension = 'webm';
-        console.log('[Audio Recording] Using WebM format (fallback)');
+      if (isInstagram) {
+        // INSTAGRAM: Prioritize MP4/AAC (natively supported by Instagram API)
+        // This works on Chrome, Edge, Opera, Brave, Safari (94% of users)
+        console.log('[Audio Recording] Instagram detected, prioritizing MP4/AAC format');
+
+        if (MediaRecorder.isTypeSupported('audio/mp4;codecs=mp4a.40.2')) {
+          mimeType = 'audio/mp4;codecs=mp4a.40.2'; // AAC-LC
+          fileExtension = 'm4a';
+          console.log('[Audio Recording] ✅ Using MP4/AAC format (Instagram native, no conversion needed)');
+        }
+        else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+          mimeType = 'audio/mp4';
+          fileExtension = 'm4a';
+          console.log('[Audio Recording] ✅ Using MP4 format (Instagram native, no conversion needed)');
+        }
+        else if (MediaRecorder.isTypeSupported('audio/wav')) {
+          // Firefox fallback: WAV (Instagram accepts natively, no codec conversion needed)
+          // Trade-off: larger files (~10x) but works immediately without backend processing
+          mimeType = 'audio/wav';
+          fileExtension = 'wav';
+          console.log('[Audio Recording] ⚠️ Using WAV format (Firefox - larger file but Instagram compatible)');
+        }
+        else if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+          // Last resort: WebM (will be converted on backend, but CODEC issue may persist)
+          mimeType = 'audio/webm;codecs=opus';
+          fileExtension = 'webm';
+          console.log('[Audio Recording] ⚠️ Using WebM/Opus format (Firefox - may have codec issues on Instagram)');
+        }
+        else if (MediaRecorder.isTypeSupported('audio/webm')) {
+          mimeType = 'audio/webm';
+          fileExtension = 'webm';
+          console.log('[Audio Recording] ⚠️ Using WebM format (will convert to M4A on backend)');
+        }
+      } else {
+        // WHATSAPP or OTHER: Use most compatible format
+        // Prefer MP4/AAC if available, otherwise WebM
+        if (MediaRecorder.isTypeSupported('audio/mp4;codecs=mp4a.40.2')) {
+          mimeType = 'audio/mp4;codecs=mp4a.40.2';
+          fileExtension = 'm4a';
+          console.log('[Audio Recording] Using MP4/AAC format (WhatsApp compatible)');
+        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+          mimeType = 'audio/mp4';
+          fileExtension = 'm4a';
+          console.log('[Audio Recording] Using MP4 format (WhatsApp compatible)');
+        } else if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+          mimeType = 'audio/webm;codecs=opus';
+          fileExtension = 'webm';
+          console.log('[Audio Recording] Using WebM/Opus format (fallback)');
+        } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+          mimeType = 'audio/webm';
+          fileExtension = 'webm';
+          console.log('[Audio Recording] Using WebM format (fallback)');
+        }
       }
 
       const mediaRecorder = new MediaRecorder(stream, { mimeType });

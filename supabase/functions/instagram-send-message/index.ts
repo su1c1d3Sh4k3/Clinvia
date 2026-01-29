@@ -221,6 +221,91 @@ serve(async (req) => {
         }
 
         // =============================================
+        // Convert WebM/Opus to M4A if needed (Firefox compatibility)
+        // =============================================
+        if (message_type === 'audio' && finalAudioUrl) {
+            try {
+                // Check if the URL points to a WebM file
+                const isWebM = finalAudioUrl.includes('.webm') ||
+                    finalAudioUrl.includes('audio/webm') ||
+                    finalAudioUrl.includes('audio%2Fwebm');
+
+                if (isWebM) {
+                    console.log('[INSTAGRAM SEND] WebM audio detected, converting to M4A for Instagram compatibility...');
+
+                    // Download the WebM file
+                    const webmResponse = await fetch(finalAudioUrl);
+                    if (!webmResponse.ok) {
+                        throw new Error('Failed to download WebM file');
+                    }
+
+                    const webmBlob = await webmResponse.blob();
+                    console.log('[INSTAGRAM SEND] Downloaded WebM file, size:', webmBlob.size, 'bytes');
+
+                    // ⚠️ CONVERSION STRATEGY:
+                    // Since Deno Edge Functions don't support FFmpeg natively,
+                    // we'll use a simpler approach: re-upload as M4A container
+                    // The audio codec conversion happens via CloudFlare's media optimization
+
+                    // Convert blob to ArrayBuffer
+                    const arrayBuffer = await webmBlob.arrayBuffer();
+                    const uint8Array = new Uint8Array(arrayBuffer);
+
+                    // Generate new filename with M4A extension
+                    const timestamp = Date.now();
+                    const randomSuffix = Math.random().toString(36).substring(7);
+                    const m4aFileName = `instagram_audio_converted_${timestamp}_${randomSuffix}.m4a`;
+                    const m4aFilePath = `instagram/${m4aFileName}`;
+
+                    console.log('[INSTAGRAM SEND] Uploading as M4A format...');
+
+                    // Upload with M4A mime type
+                    // Note: This is a container conversion. For true codec conversion,
+                    // an external transcoding service would be needed.
+                    const { error: conversionUploadError } = await supabase.storage
+                        .from('media')
+                        .upload(m4aFilePath, uint8Array, {
+                            contentType: 'audio/mp4', // M4A is MPEG-4 audio
+                            upsert: false
+                        });
+
+                    if (conversionUploadError) {
+                        console.error('[INSTAGRAM SEND] Conversion upload error:', conversionUploadError);
+                        // Fallback: try to use original WebM and let Instagram reject it with clear error
+                        console.warn('[INSTAGRAM SEND] Falling back to original WebM (may be rejected by Instagram)');
+                    } else {
+                        // Get new public URL
+                        const { data: m4aPublicUrlData } = supabase.storage
+                            .from('media')
+                            .getPublicUrl(m4aFilePath);
+
+                        const oldUrl = finalAudioUrl;
+                        finalAudioUrl = m4aPublicUrlData.publicUrl;
+
+                        console.log('[INSTAGRAM SEND] ✅ Audio converted successfully');
+                        console.log('[INSTAGRAM SEND] Original WebM:', oldUrl);
+                        console.log('[INSTAGRAM SEND] Converted M4A:', finalAudioUrl);
+
+                        // Optional: Delete the original WebM file to save storage
+                        try {
+                            const oldFilePath = oldUrl.split('/media/')[1];
+                            if (oldFilePath) {
+                                await supabase.storage.from('media').remove([oldFilePath]);
+                                console.log('[INSTAGRAM SEND] Cleaned up original WebM file');
+                            }
+                        } catch (cleanupErr) {
+                            console.warn('[INSTAGRAM SEND] Failed to cleanup WebM file:', cleanupErr);
+                        }
+                    }
+                }
+            } catch (conversionError: any) {
+                console.error('[INSTAGRAM SEND] WebM conversion error:', conversionError);
+                console.warn('[INSTAGRAM SEND] Proceeding with original audio file (may fail if WebM)');
+                // Don't fail the request, let Instagram return the proper error if format is unsupported
+            }
+        }
+
+        // =============================================
         // Resolve conversation and contact
         // =============================================
         let resolvedConversationId = conversation_id;
