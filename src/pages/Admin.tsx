@@ -16,6 +16,7 @@ import TokenUsageCharts from "@/components/admin/TokenUsageCharts";
 import OpenAITokenManager from "@/components/admin/OpenAITokenManager";
 import { useExchangeRate } from "@/hooks/useExchangeRate";
 import { useAdminImpersonate } from "@/hooks/useAdminImpersonate";
+import { sendClientApprovalWebhook } from "@/utils/sendApprovalWebhook";
 
 interface Profile {
     id: string;
@@ -200,12 +201,35 @@ const Admin = () => {
     const handleApproveClient = async (profileId: string) => {
         setActionLoading(profileId);
         try {
+            // Get profile data before approval for webhook
+            const profileData = pendingProfiles.find(p => p.id === profileId);
+
             const { data, error } = await supabase.functions.invoke("approve-client", {
                 body: { profile_id: profileId, action: "approve" }
             });
 
             if (error) throw error;
             if (!data.success) throw new Error(data.error);
+
+            // Send approval webhook with all client data
+            if (profileData) {
+                try {
+                    sendClientApprovalWebhook({
+                        id: profileData.id,
+                        full_name: profileData.full_name || "",
+                        company_name: profileData.company_name || "",
+                        email: profileData.email || "",
+                        phone: profileData.phone || "",
+                        instagram: profileData.instagram || "",
+                        address: profileData.address || "",
+                        approved_at: new Date().toISOString(),
+                    }).catch(() => {
+                        // Silently catch webhook errors - approval was successful
+                    });
+                } catch {
+                    // Silently catch any synchronous errors
+                }
+            }
 
             toast.success("Cliente aprovado com sucesso!");
             fetchPendingProfiles();
