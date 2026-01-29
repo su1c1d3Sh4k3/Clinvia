@@ -362,9 +362,13 @@ export function CreateDealModal({
                                     <FormItem>
                                         <FormLabel>Valor Total (R$)</FormLabel>
                                         <FormControl>
-                                            <CurrencyInput
-                                                value={field.value}
-                                                onChange={field.onChange}
+                                            <Input
+                                                value={new Intl.NumberFormat('pt-BR', {
+                                                    style: 'currency',
+                                                    currency: 'BRL'
+                                                }).format(field.value)}
+                                                disabled
+                                                className="bg-muted cursor-not-allowed"
                                             />
                                         </FormControl>
                                         <FormMessage />

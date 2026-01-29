@@ -274,12 +274,13 @@ export function EditDealModal({ deal, open, onOpenChange }: EditDealModalProps) 
                             )}
                         />
 
-                        {/* Produtos/Serviços (Multi) */}
+                        {/* Produtos/Serviços (Multi) - Read-Only */}
                         <div className="border rounded-lg p-3 bg-muted/10">
                             <DealProductsForm
                                 products={products}
                                 onChange={setProducts}
                                 availableProducts={productsServices}
+                                readOnly={true}
                             />
                         </div>
 
@@ -344,9 +345,13 @@ export function EditDealModal({ deal, open, onOpenChange }: EditDealModalProps) 
                                     <FormItem>
                                         <FormLabel>Valor Total (R$)</FormLabel>
                                         <FormControl>
-                                            <CurrencyInput
-                                                value={field.value}
-                                                onChange={field.onChange}
+                                            <Input
+                                                value={new Intl.NumberFormat('pt-BR', {
+                                                    style: 'currency',
+                                                    currency: 'BRL'
+                                                }).format(field.value)}
+                                                disabled
+                                                className="bg-muted cursor-not-allowed"
                                             />
                                         </FormControl>
                                         <FormMessage />

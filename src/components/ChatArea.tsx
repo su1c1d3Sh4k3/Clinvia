@@ -1277,28 +1277,15 @@ export const ChatArea = ({
                         }
 
                         return (
-                          <div className="flex items-center gap-2 mb-2">
-                            {/* Link para abrir inline - URL direta sem ?download */}
-                            <a
-                              href={msg.media_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-2 text-sm underline flex-1 min-w-0 hover:opacity-80 transition-opacity"
-                            >
-                              <FileIcon className={`w-4 h-4 shrink-0 ${iconColor}`} />
-                              <span className="truncate">{fileName}</span>
-                            </a>
-
-                            {/* Botão de Download - força download com nome correto */}
-                            <a
-                              href={`${msg.media_url}?download=${encodeURIComponent(fileName)}`}
-                              className="shrink-0 p-1.5 hover:bg-black/10 dark:hover:bg-white/10 rounded transition-colors"
-                              title="Baixar arquivo"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <Download className="w-4 h-4" />
-                            </a>
-                          </div>
+                          <a
+                            href={msg.media_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 text-sm underline mb-2 hover:opacity-80 transition-opacity"
+                          >
+                            <FileIcon className={`w-4 h-4 shrink-0 ${iconColor}`} />
+                            <span className="truncate">{fileName}</span>
+                          </a>
                         );
                       })()}
 

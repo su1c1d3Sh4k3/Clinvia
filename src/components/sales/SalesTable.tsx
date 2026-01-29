@@ -54,6 +54,17 @@ const formatCurrency = (value: number) => {
     }).format(value);
 };
 
+const calculatePriceAdjustment = (soldPrice: number, basePrice: number): string | null => {
+    if (!basePrice || basePrice === 0) return null;
+
+    const diff = soldPrice - basePrice;
+    if (Math.abs(diff) < 0.01) return null; // No significant difference
+
+    const percentage = (diff / basePrice) * 100;
+    const sign = percentage > 0 ? '+' : '';
+    return `${sign}${percentage.toFixed(0)}%`;
+};
+
 export function SalesTable({ month, year }: SalesTableProps) {
     const { data: userRole } = useUserRole();
     const isSupervisor = userRole === 'supervisor';
@@ -273,7 +284,34 @@ export function SalesTable({ month, year }: SalesTableProps) {
                                                     </Badge>
                                                 </TableCell>
                                                 <TableCell className="font-medium">
-                                                    {sale.product_service?.name || '-'}
+                                                    {(() => {
+                                                        const productName = sale.product_service?.name || '-';
+
+                                                        if (!sale.product_service?.price) {
+                                                            return productName;
+                                                        }
+
+                                                        const adjustment = calculatePriceAdjustment(
+                                                            sale.unit_price,
+                                                            sale.product_service.price
+                                                        );
+
+                                                        if (!adjustment) {
+                                                            return productName;
+                                                        }
+
+                                                        return (
+                                                            <>
+                                                                {productName}
+                                                                <span className={`ml-1 text-xs font-semibold ${adjustment.startsWith('+')
+                                                                        ? 'text-green-600'
+                                                                        : 'text-red-600'
+                                                                    }`}>
+                                                                    ({adjustment})
+                                                                </span>
+                                                            </>
+                                                        );
+                                                    })()}
                                                 </TableCell>
                                                 <TableCell className="text-green-500 font-semibold">
                                                     {formatCurrency(sale.total_amount)}

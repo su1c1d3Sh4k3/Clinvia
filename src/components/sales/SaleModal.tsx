@@ -144,11 +144,14 @@ export function SaleModal({ open, onOpenChange, fixedContactId, appointmentData 
             if (p.id !== id) return p;
             const updated = { ...p, [field]: value };
 
-            // Auto-update unitPrice when productServiceId changes
+            // Auto-update unitPrice when productServiceId changes, but only if price is currently 0
             if (field === 'productServiceId') {
                 const selectedItem = productsServices.find((item: any) => item.id === value);
                 if (selectedItem) {
-                    updated.unitPrice = selectedItem.price;
+                    // Only auto-fill if current price is 0 (new selection)
+                    if (updated.unitPrice === 0) {
+                        updated.unitPrice = selectedItem.price;
+                    }
                     updated.category = selectedItem.type;
                 }
             }
@@ -265,7 +268,7 @@ export function SaleModal({ open, onOpenChange, fixedContactId, appointmentData 
 
                             {products.map((product, index) => (
                                 <div key={product.id} className="flex gap-2 items-start p-3 border rounded-lg bg-muted/30">
-                                    <div className="flex-1 grid grid-cols-3 gap-2">
+                                    <div className="flex-1 grid grid-cols-4 gap-2">
                                         {/* Category */}
                                         <Select
                                             value={product.category}
@@ -298,7 +301,7 @@ export function SaleModal({ open, onOpenChange, fixedContactId, appointmentData 
                                                 <SelectItem value="_empty" disabled>Selecione</SelectItem>
                                                 {getFilteredItems(product.category).map((item: any) => (
                                                     <SelectItem key={item.id} value={item.id}>
-                                                        {item.name} - {formatCurrency(item.price)}
+                                                        {item.name}
                                                     </SelectItem>
                                                 ))}
                                             </SelectContent>
@@ -310,8 +313,19 @@ export function SaleModal({ open, onOpenChange, fixedContactId, appointmentData 
                                             min={1}
                                             value={product.quantity}
                                             onChange={(e) => updateProduct(product.id, 'quantity', parseInt(e.target.value) || 1)}
-                                            className="h-9 w-20"
+                                            className="h-9"
                                             placeholder="Qtd"
+                                        />
+
+                                        {/* Unit Price - NOVO */}
+                                        <Input
+                                            type="number"
+                                            step="0.01"
+                                            min={0}
+                                            value={product.unitPrice}
+                                            onChange={(e) => updateProduct(product.id, 'unitPrice', parseFloat(e.target.value) || 0)}
+                                            className="h-9"
+                                            placeholder="R$ 0,00"
                                         />
                                     </div>
 

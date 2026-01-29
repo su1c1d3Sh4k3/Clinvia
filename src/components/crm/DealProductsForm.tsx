@@ -51,11 +51,14 @@ export function DealProductsForm({ products, onChange, availableProducts, readOn
             if (p.id !== id) return p;
             const updated = { ...p, [field]: value };
 
-            // Auto-update unitPrice and category when productServiceId changes
+            // Auto-update unitPrice and category when productServiceId changes, but only if price is currently 0
             if (field === 'productServiceId') {
                 const selectedItem = availableProducts.find(item => item.id === value);
                 if (selectedItem) {
-                    updated.unitPrice = selectedItem.price;
+                    // Only auto-fill if current price is 0 (new selection)
+                    if (updated.unitPrice === 0) {
+                        updated.unitPrice = selectedItem.price;
+                    }
                     updated.category = selectedItem.type;
                     updated.name = selectedItem.name;
                 }
@@ -97,65 +100,66 @@ export function DealProductsForm({ products, onChange, availableProducts, readOn
             <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1 scrollbar-thin">
                 {products.map((product) => (
                     <div key={product.id} className="flex gap-2 items-start p-2 border rounded-lg bg-card">
-                        <div className="flex-1 grid grid-cols-12 gap-2">
-                            {/* Category - col-span-3 */}
-                            <div className="col-span-3">
-                                <Select
-                                    value={product.category}
-                                    onValueChange={(val: 'product' | 'service') => {
-                                        updateProduct(product.id, 'category', val);
-                                        updateProduct(product.id, 'productServiceId', '');
-                                    }}
-                                    disabled={readOnly}
-                                >
-                                    <SelectTrigger className="h-8 text-xs">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="product">Produto</SelectItem>
-                                        <SelectItem value="service">Serviço</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
+                        <div className="flex-1 grid grid-cols-4 gap-2">
+                            {/* Category - 1 coluna */}
+                            <Select
+                                value={product.category}
+                                onValueChange={(val: 'product' | 'service') => {
+                                    updateProduct(product.id, 'category', val);
+                                    updateProduct(product.id, 'productServiceId', '');
+                                }}
+                                disabled={readOnly}
+                            >
+                                <SelectTrigger className="h-8 text-xs">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="product">Produto</SelectItem>
+                                    <SelectItem value="service">Serviço</SelectItem>
+                                </SelectContent>
+                            </Select>
 
-                            {/* Item - col-span-5 */}
-                            <div className="col-span-5">
-                                <Select
-                                    value={product.productServiceId || "_empty"}
-                                    onValueChange={(val) => updateProduct(product.id, 'productServiceId', val === "_empty" ? "" : val)}
-                                    disabled={readOnly}
-                                >
-                                    <SelectTrigger className="h-8 text-xs">
-                                        <SelectValue placeholder="Selecione" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="_empty" disabled>Selecione</SelectItem>
-                                        {getFilteredItems(product.category).map((item) => (
-                                            <SelectItem key={item.id} value={item.id}>
-                                                {item.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
+                            {/* Item - 1 coluna */}
+                            <Select
+                                value={product.productServiceId || "_empty"}
+                                onValueChange={(val) => updateProduct(product.id, 'productServiceId', val === "_empty" ? "" : val)}
+                                disabled={readOnly}
+                            >
+                                <SelectTrigger className="h-8 text-xs">
+                                    <SelectValue placeholder="Selecione" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="_empty" disabled>Selecione</SelectItem>
+                                    {getFilteredItems(product.category).map((item) => (
+                                        <SelectItem key={item.id} value={item.id}>
+                                            {item.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
 
-                            {/* Qtd - col-span-2 */}
-                            <div className="col-span-2">
-                                <Input
-                                    type="number"
-                                    min={1}
-                                    value={product.quantity}
-                                    onChange={(e) => updateProduct(product.id, 'quantity', parseInt(e.target.value) || 1)}
-                                    className="h-8 text-xs px-2"
-                                    placeholder="Qtd"
-                                    disabled={readOnly}
-                                />
-                            </div>
+                            {/* Quantity - 1 coluna */}
+                            <Input
+                                type="number"
+                                min={1}
+                                value={product.quantity}
+                                onChange={(e) => updateProduct(product.id, 'quantity', parseInt(e.target.value) || 1)}
+                                className="h-8 text-xs px-2"
+                                placeholder="Qtd"
+                                disabled={readOnly}
+                            />
 
-                            {/* Price (Display Only mostly) - col-span-2 */}
-                            <div className="col-span-2 flex items-center justify-end text-xs font-medium text-green-600">
-                                {formatCurrency(product.quantity * product.unitPrice)}
-                            </div>
+                            {/* Unit Price - 1 coluna (EDITÁVEL) */}
+                            <Input
+                                type="number"
+                                step="0.01"
+                                min={0}
+                                value={product.unitPrice}
+                                onChange={(e) => updateProduct(product.id, 'unitPrice', parseFloat(e.target.value) || 0)}
+                                className="h-8 text-xs px-2"
+                                placeholder="R$ 0,00"
+                                disabled={readOnly}
+                            />
                         </div>
 
                         {!readOnly && (
