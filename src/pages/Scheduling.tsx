@@ -6,7 +6,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { Plus, Filter, ChevronLeft, ChevronRight, Search, PanelLeftClose, PanelLeftOpen, Settings } from "lucide-react";
+import { Plus, Filter, ChevronLeft, ChevronRight, Search, PanelLeftClose, PanelLeftOpen, Settings, FileText } from "lucide-react";
 import { SchedulingCalendar } from "@/components/scheduling/SchedulingCalendar";
 import { ProfessionalModal } from "@/components/scheduling/ProfessionalModal";
 import { AppointmentModal } from "@/components/scheduling/AppointmentModal";
@@ -16,6 +16,7 @@ import { format, addDays, subDays, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { generateDailyReport } from "@/utils/generateDailyReport";
 
 export default function Scheduling() {
     const { toast } = useToast();
@@ -172,6 +173,48 @@ export default function Scheduling() {
         }
     };
 
+    const handleGenerateDailyReport = async () => {
+        if (!date) {
+            toast({
+                title: "Data não selecionada",
+                description: "Por favor, selecione uma data para gerar o relatório.",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        try {
+            // Show loading toast
+            toast({
+                title: "Gerando relatório...",
+                description: "Aguarde enquanto o PDF está sendo criado.",
+            });
+
+            // Debug: log the date and appointments
+            console.log('Generating report for date:', date);
+            console.log('Appointments:', appointments);
+            console.log('Professionals:', filteredProfessionals);
+
+            await generateDailyReport(
+                date,
+                filteredProfessionals,
+                appointments || []
+            );
+
+            toast({
+                title: "Relatório gerado!",
+                description: "O PDF foi baixado com sucesso.",
+            });
+        } catch (error) {
+            console.error("Error generating report:", error);
+            toast({
+                title: "Erro ao gerar relatório",
+                description: "Não foi possível gerar o PDF. Tente novamente.",
+                variant: "destructive",
+            });
+        }
+    };
+
     return (
         <div className="container mx-auto py-4 md:py-6 px-3 md:px-6 h-[calc(100vh-4rem)] flex flex-col md:flex-row gap-4 md:gap-6 animate-fade-in">
             {/* Sidebar - Hidden on mobile by default, toggleable */}
@@ -212,6 +255,15 @@ export default function Scheduling() {
                         }} variant="outline" className="w-full justify-start bg-white dark:bg-transparent border-0 dark:border">
                             <Plus className="w-4 h-4 mr-2" />
                             Adicionar Profissional
+                        </Button>
+
+                        <Button
+                            onClick={handleGenerateDailyReport}
+                            variant="outline"
+                            className="w-full justify-start bg-white dark:bg-transparent border-0 dark:border"
+                        >
+                            <FileText className="w-4 h-4 mr-2" />
+                            Relatório Diário
                         </Button>
 
                         <Card className="w-full">
