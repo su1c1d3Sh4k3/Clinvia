@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Lock, Mail, User, Building, Phone, Instagram, MapPin, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 import TurnstileWidget from "@/components/TurnstileWidget";
+import { sendClientSignupWebhook } from "@/utils/sendWebhook";
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -149,7 +150,7 @@ const Auth = () => {
       }
 
       // Insert into pending_signups table (not profiles - to avoid FK constraint)
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("pending_signups")
         .insert({
           full_name: signupFullName.trim(),
@@ -159,13 +160,38 @@ const Auth = () => {
           instagram: signupInstagram.trim(),
           address: `${signupAddress.trim()} - CEP: ${signupCep}`,
           status: "pendente"
-        });
+        })
+        .select()
+        .single();
 
       if (error) {
         if (error.code === "23505") {
           throw new Error("Email já cadastrado no sistema");
         } else {
           throw error;
+        }
+      }
+
+      // Successfully inserted - now send webhook
+      if (data) {
+        // Send webhook asynchronously (don't block signup flow if it fails)
+        // Wrap in try-catch to prevent any errors from appearing in console
+        try {
+          sendClientSignupWebhook({
+            id: data.id,
+            full_name: data.full_name,
+            company_name: data.company_name,
+            email: data.email,
+            phone: data.phone,
+            instagram: data.instagram,
+            address: data.address,
+            status: data.status,
+            created_at: data.created_at,
+          }).catch(() => {
+            // Silently catch webhook errors - signup was successful
+          });
+        } catch {
+          // Silently catch any synchronous errors
         }
       }
 
