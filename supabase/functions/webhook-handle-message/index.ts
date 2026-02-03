@@ -353,13 +353,32 @@ serve(async (req) => {
             }
         }
 
+
         // 3. Conversation Logic
         if (contactId || groupId) {
             console.log('[webhook-handle-message] Processing Conversation...');
 
             const messageType = mapMessageType(payload.message?.messageType || 'conversation');
             const messageText = payload.message?.text || payload.message?.content?.text || payload.body?.message?.text || '';
-            const fromMe = payload.message?.fromMe === true;
+
+            // ==== DEBUG: EXTENSIVE FROMMEN LOGGING ====
+            console.log('[webhook-handle-message] 🔍 === PAYLOAD STRUCTURE DEBUG ===');
+            console.log('[webhook-handle-message] 🔍 payload.fromMe:', payload.fromMe);
+            console.log('[webhook-handle-message] 🔍 payload.message?.fromMe:', payload.message?.fromMe);
+            console.log('[webhook-handle-message] 🔍 payload.data?.fromMe:', payload.data?.fromMe);
+            console.log('[webhook-handle-message] 🔍 payload.body?.fromMe:', payload.body?.fromMe);
+            console.log('[webhook-handle-message] 🔍 payload.content?.fromMe:', payload.content?.fromMe);
+            console.log('[webhook-handle-message] 🔍 payload.owner:', payload.owner);
+            console.log('[webhook-handle-message] 🔍 payload.sender:', payload.sender);
+            console.log('[webhook-handle-message] 🔍 instance.phone:', (instance as any).phone);
+            console.log('[webhook-handle-message] 🔍 FULL PAYLOAD KEYS:', Object.keys(payload));
+            if (payload.message) {
+                console.log('[webhook-handle-message] 🔍 FULL payload.message KEYS:', Object.keys(payload.message));
+            }
+
+            const fromMe =
+                payload.message?.fromMe === true ||  // UzAPI/WhatsApp format
+                payload.fromMe === true;              // N8N API format (root level)
             const messageId = payload.message?.messageid || payload.message?.id || payload.body?.key?.id;
 
             // ========================================
@@ -367,11 +386,18 @@ serve(async (req) => {
             // ========================================
             console.log('[webhook-handle-message] messageType:', payload.message?.messageType);
             console.log('[webhook-handle-message] messageText:', messageText);
-            console.log('[webhook-handle-message] fromMe:', fromMe);
+            console.log('[webhook-handle-message] ⚠️ FINAL fromMe VALUE:', fromMe);
+            console.log('[webhook-handle-message] fromMe source:',
+                payload.message?.fromMe ? 'payload.message.fromMe' :
+                    payload.fromMe ? 'payload.fromMe' : '❌ NOT FOUND');
+            console.log('[webhook-handle-message] Raw payload.fromMe:', payload.fromMe);
+            console.log('[webhook-handle-message] Raw payload.message?.fromMe:', payload.message?.fromMe);
 
             // Extract vote field (UzAPI sends button response text here)
             const voteText = payload.message?.vote || '';
             console.log('[webhook-handle-message] voteText:', voteText);
+
+
 
             // Log button response specific fields
             const buttonResponseId = payload.message?.buttonsResponseMessage?.selectedButtonId ||

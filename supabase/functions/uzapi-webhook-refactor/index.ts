@@ -477,19 +477,27 @@ serve(async (req) => {
             const fromMe = payload.message?.fromMe === true;
             const messageId = payload.message?.messageid || payload.message?.id || payload.body?.key?.id;
 
+            // CORREÇÃO: Garantir isolamento por instância e contact específico
+            console.log('[UZAPI WEHOOK REFACTOR] ===== CONVERSATION QUERY =====');
+            console.log('[UZAPI WEHOOK REFACTOR] instance_id:', instance.id);
+            console.log('[UZAPI WEHOOK REFACTOR] user_id:', userId);
+            console.log('[UZAPI WEHOOK REFACTOR] contact_id:', contactId);
+            console.log('[UZAPI WEHOOK REFACTOR] group_id:', groupId);
+            console.log('[UZAPI WEHOOK REFACTOR] fromMe:', fromMe);
+
             let query = supabaseClient
                 .from('conversations')
                 .select('*')
-                .eq('instance_id', instance.id)
-                .eq('user_id', userId)
+                .eq('instance_id', instance.id)  // ✅ Obrigatório: filtrar por instância
+                .eq('user_id', userId)            // ✅ Obrigatório: filtrar por tenant
                 .in('status', ['pending', 'open'])
                 .order('created_at', { ascending: false })
                 .limit(1);
 
             if (groupId) {
-                query = query.eq('group_id', groupId);
+                query = query.eq('group_id', groupId);  // ✅ Filtro adicional por grupo
             } else if (contactId) {
-                query = query.eq('contact_id', contactId);
+                query = query.eq('contact_id', contactId);  // ✅ Filtro adicional por contato
             }
 
             const { data: conversations, error: convError } = await query;
@@ -500,26 +508,44 @@ serve(async (req) => {
                 console.log('[UZAPI WEHOOK REFACTOR] Found existing conversation:', conversation.id);
 
                 // Update conversation
+                // ✅ CORREÇÃO: Só incrementar unread_count se mensagem NÃO for do atendente (fromMe=false)
+                console.log('[UZAPI WEHOOK REFACTOR] Updating conversation:', conversation.id);
+                console.log('[UZAPI WEHOOK REFACTOR] Current unread_count:', conversation.unread_count);
+                console.log('[UZAPI WEHOOK REFACTOR] fromMe (will NOT increment if true):', fromMe);
+
+                const newUnreadCount = fromMe
+                    ? conversation.unread_count  // Não incrementa se mensagem enviada pelo atendente
+                    : ((conversation.unread_count || 0) + 1);  // Incrementa apenas mensagens recebidas
+
+                console.log('[UZAPI WEHOOK REFACTOR] New unread_count:', newUnreadCount);
+
                 await supabaseClient
                     .from('conversations')
                     .update({
                         last_message: messageText || 'Mídia',
-                        unread_count: (conversation.unread_count || 0) + 1,
+                        unread_count: newUnreadCount,
                         updated_at: new Date().toISOString(),
                         last_message_at: new Date().toISOString()
                     })
                     .eq('id', conversation.id);
             } else {
                 console.log('[UZAPI WEHOOK REFACTOR] No active conversation found. Creating new...');
+                // ✅ CORREÇÃO: Só setar unread_count=1 se mensagem NÃO for do atendente
+                console.log('[UZAPI WEHOOK REFACTOR] Creating new conversation');
+                console.log('[UZAPI WEHOOK REFACTOR] fromMe (will set unread=0 if true):', fromMe);
+
+                const initialUnreadCount = fromMe ? 0 : 1;
+                console.log('[UZAPI WEHOOK REFACTOR] Initial unread_count:', initialUnreadCount);
+
                 const { data: newConversation, error: createConvError } = await supabaseClient
                     .from('conversations')
                     .insert({
                         contact_id: contactId,
                         group_id: groupId,
-                        instance_id: instance.id,
-                        user_id: userId,
+                        instance_id: instance.id,  // ✅ NUNCA NULL
+                        user_id: userId,            // ✅ NUNCA NULL
                         status: 'pending',
-                        unread_count: 1,
+                        unread_count: initialUnreadCount,  // ✅ 0 se fromMe, 1 se recebida
                         queue_id: instance.default_queue_id,
                         last_message_at: new Date().toISOString()
                     })

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useDeferredValue, useCallback } from "react";
 import { useTypingContext, useIsTyping } from "@/contexts/TypingContext";
-import { Send, Paperclip, Smile, Mic, Sparkles, CheckCircle, X, FileText, Image as ImageIcon, Video, ArrowDown, StopCircle, Check, CheckCheck, Plus, MoreVertical, MessageSquare, ClipboardList, Download } from "lucide-react";
+import { Send, Paperclip, Smile, Mic, Sparkles, CheckCircle, X, FileText, Image as ImageIcon, Video, ArrowDown, StopCircle, Check, CheckCheck, Plus, MoreVertical, MessageSquare, ClipboardList, Download, Clock, AlertCircle } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -835,45 +835,147 @@ export const ChatArea = ({
     }
   };
 
+  // ✅ FIX: Função para download correto de arquivos
+  const handleDownloadFile = async (url: string, filename: string) => {
+    try {
+      // Primeira tentativa: download direto
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      link.target = '_blank';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      // Fallback: se o download direto não funcionar, tentar via fetch + blob
+      // (útil para URLs do Supabase Storage que podem ter problemas)
+      setTimeout(async () => {
+        try {
+          const response = await fetch(url);
+          if (!response.ok) throw new Error('Fetch failed');
+
+          const blob = await response.blob();
+          const blobUrl = URL.createObjectURL(blob);
+
+          const blobLink = document.createElement('a');
+          blobLink.href = blobUrl;
+          blobLink.download = filename;
+          document.body.appendChild(blobLink);
+          blobLink.click();
+          document.body.removeChild(blobLink);
+
+          URL.revokeObjectURL(blobUrl);
+        } catch (fetchError) {
+          console.error('Fallback download failed:', fetchError);
+        }
+      }, 1000);
+    } catch (error) {
+      console.error('Download error:', error);
+      toast.error('Erro ao baixar arquivo');
+    }
+  };
+
   const executeSendMessage = async (instanceId: string, overrideBody?: string, overrideMediaUrl?: string, overrideType?: "text" | "image" | "audio" | "video" | "document") => {
     let finalBody = overrideBody !== undefined ? overrideBody : message;
     let mediaUrl = overrideMediaUrl;
     let messageType: "text" | "image" | "audio" | "video" | "document" = overrideType || "text";
 
+    // ✅ CRÍTICO: Aguardar upload completar ANTES de enviar
+    // ANTES: Enviava URL local (localhost) que Uzapi não consegue acessar
+    // DEPOIS: Upload completo, URL real do Supabase
     if (selectedFile && !overrideMediaUrl) {
       setIsUploading(true);
-      const url = await uploadFile(selectedFile);
-      if (!url) {
+
+      try {
+        // ✅ AGUARDAR upload terminar e obter URL real
+        const finalMediaUrl = await uploadFile(selectedFile);
+
+        if (!finalMediaUrl) {
+          throw new Error('Upload falhou - nenhuma URL retornada');
+        }
+
+        // Determinar tipo de mensagem baseado no arquivo
+        if (selectedFile.type.startsWith('image/')) messageType = 'image';
+        else if (selectedFile.type.startsWith('audio/')) messageType = 'audio';
+        else if (selectedFile.type.startsWith('video/')) messageType = 'video';
+        else messageType = 'document';
+
+        // ✅ FIX: Separar filename de caption para documentos
+        let documentBody = selectedFile.name;
+        let documentCaption = undefined;
+
+        if (messageType === 'document') {
+          documentCaption = finalBody.trim() || undefined;
+        } else {
+          documentCaption = finalBody.trim() || undefined;
+        }
+
+        // ✅ Limpar campo ANTES de enviar
+        setMessage("");
+        handleRemoveFile();
+        setReplyingTo(null);
+
+        // ✅ ENVIAR mensagem com URL REAL do Supabase
+        sendMessageMutation.mutate({
+          conversationId: conversationId!,
+          body: messageType === 'document' ? documentBody : (finalBody || documentBody),
+          direction: "outbound",
+          messageType,
+          mediaUrl: finalMediaUrl, // ✅ URL REAL, não localhost!
+          caption: documentCaption,
+          replyId: replyingTo?.evolution_id || undefined,
+          quotedBody: replyingTo?.body || undefined,
+          quotedSender: replyingTo?.sender_name || undefined
+        }, {
+          onSuccess: async (data) => {
+            setIsUploading(false);
+
+            // Atribuir agente automaticamente se necessário
+            if (conversation && conversation.assigned_agent_id === null && conversation.status === "pending") {
+              const { data: userData, error: userError } = await supabase.auth.getUser();
+              if (!userError && userData.user) {
+                const userId = userData.user.id;
+                const now = new Date().toISOString();
+                await supabase
+                  .from("conversations")
+                  .update({
+                    assigned_agent_id: userId,
+                    status: "open",
+                    assigned_at: now
+                  })
+                  .eq("id", conversationId);
+              }
+            }
+          },
+          onError: () => {
+            setIsUploading(false);
+          }
+        });
+
+        return; // Não continua para o fluxo normal de envio
+      } catch (uploadError) {
+        console.error('Upload failed:', uploadError);
+        toast.error('Falha no upload do arquivo');
         setIsUploading(false);
         return;
       }
-      mediaUrl = url;
-
-      // Determine message type based on file type
-      if (selectedFile.type.startsWith('image/')) messageType = 'image';
-      else if (selectedFile.type.startsWith('audio/')) messageType = 'audio';
-      else if (selectedFile.type.startsWith('video/')) messageType = 'video';
-      else messageType = 'document';
-
-      // If it's a document, use the filename as body if message is empty
-      if (messageType === 'document' && !finalBody) {
-        finalBody = selectedFile.name;
-      }
     }
 
-    // Se o ticket estiver aberto, verificar se deve adicionar assinatura
-    const tm = currentTeamMember as any;
-    // sign_messages: true (ligado) = envia assinatura / false (desligado) = não envia
-    // Se undefined, assume true (default)
-    const signMessagesValue = tm?.sign_messages;
-    const shouldSignMessages = signMessagesValue === true || signMessagesValue === undefined;
-
-
-
-    if ((conversation?.status as string) === 'open' && messageType === 'text' && shouldSignMessages) {
-      const senderName = tm?.full_name || tm?.name || "Atendente";
-      finalBody = `*${senderName}:*\n${finalBody}`;
+    // Fluxo normal para mensagens de texto (sem arquivo)
+    if (!finalBody.trim() && !mediaUrl) {
+      toast.error("Por favor, digite uma mensagem");
+      return;
     }
+
+    // ✅ OTIMIZAÇÃO: Assinatura do agente agora é adicionada no BACKEND
+    // Ver: evolution-send-message/index.ts (linhas 100-127)
+    // Removida lógica duplicada do frontend para melhor arquitetura
+
+    // ✅ UX OPTIMIZATION: Limpar campo IMEDIATAMENTE para feedback instantâneo
+    // Campo limpa antes do envio, não depois - usuário pode digitar nova mensagem imediatamente
+    setMessage("");
+    handleRemoveFile();
+    setReplyingTo(null);
 
     sendMessageMutation.mutate({
       conversationId: conversationId!,
@@ -887,27 +989,20 @@ export const ChatArea = ({
       quotedSender: replyingTo?.sender_name || undefined
     }, {
       onSuccess: async () => {
-        if (!overrideBody) setMessage(""); // Only clear input if manual send
-        setReplyingTo(null); // Clear reply state
-        handleRemoveFile();
-        setIsUploading(false);
-
-        // Atribuir conversa ao agente que enviou a mensagem (se não estiver já aberta)
-        if (currentTeamMember?.id && conversation?.status !== 'open') {
-          const { error: assignError } = await supabase
-            .from('conversations')
-            .update({
-              status: 'open',
-              assigned_agent_id: currentTeamMember.id
-            })
-            .eq('id', conversationId);
-
-          if (assignError) {
-            console.error("Error assigning conversation:", assignError);
-          } else {
-            // Invalidar cache para atualizar lista
-            queryClient.invalidateQueries({ queryKey: ["conversations"] });
-            queryClient.invalidateQueries({ queryKey: ["conversation", conversationId] });
+        // Atribuir agente automaticamente se necessário
+        if (conversation && conversation.assigned_agent_id === null && conversation.status === "pending") {
+          const { data: userData, error: userError } = await supabase.auth.getUser();
+          if (!userError && userData.user) {
+            const userId = userData.user.id;
+            const now = new Date().toISOString();
+            await supabase
+              .from("conversations")
+              .update({
+                assigned_agent_id: userId,
+                status: "open",
+                assigned_at: now
+              })
+              .eq("id", conversationId);
           }
         }
       },
@@ -1289,42 +1384,161 @@ export const ChatArea = ({
                         <LazyMedia type="video" src={msg.media_url} />
                       )}
 
-                      {/* Renderizar documento */}
+                      {/* ✅ IMPROVED: Renderizar documento com design melhorado */}
                       {msg.message_type === 'document' && msg.media_url && (() => {
-                        const fileName = msg.body || 'Documento';
-                        const fileExt = fileName.toLowerCase().split('.').pop() || '';
+                        const filename = msg.body || 'documento';
+                        const fileExt = filename.split('.').pop()?.toLowerCase() || '';
+                        const caption = (msg as any).caption; // Mensagem do usuário
 
-                        // Determinar ícone e cor baseado na extensão
-                        let FileIcon = Paperclip;
-                        let iconColor = 'text-gray-500 dark:text-gray-400';
+                        // Configuração de ícones por tipo de arquivo
+                        const FILE_CONFIG: Record<string, { icon?: any; iconUrl?: string; color: string; bgColor: string; label: string }> = {
+                          pdf: {
+                            iconUrl: '/assets/file-icons/pdf.png',
+                            color: '',
+                            bgColor: 'bg-white dark:bg-gray-800',
+                            label: 'PDF'
+                          },
+                          doc: {
+                            iconUrl: '/assets/file-icons/doc.png',
+                            color: '',
+                            bgColor: 'bg-white dark:bg-gray-800',
+                            label: 'Word'
+                          },
+                          docx: {
+                            iconUrl: '/assets/file-icons/doc.png',
+                            color: '',
+                            bgColor: 'bg-white dark:bg-gray-800',
+                            label: 'Word'
+                          },
+                          xls: {
+                            iconUrl: '/assets/file-icons/xls.png',
+                            color: '',
+                            bgColor: 'bg-white dark:bg-gray-800',
+                            label: 'Excel'
+                          },
+                          xlsx: {
+                            iconUrl: '/assets/file-icons/xls.png',
+                            color: '',
+                            bgColor: 'bg-white dark:bg-gray-800',
+                            label: 'Excel'
+                          },
+                          ppt: {
+                            iconUrl: '/assets/file-icons/ppt.png',
+                            color: '',
+                            bgColor: 'bg-white dark:bg-gray-800',
+                            label: 'PowerPoint'
+                          },
+                          pptx: {
+                            iconUrl: '/assets/file-icons/ppt.png',
+                            color: '',
+                            bgColor: 'bg-white dark:bg-gray-800',
+                            label: 'PowerPoint'
+                          },
+                          zip: {
+                            iconUrl: '/assets/file-icons/zip.png',
+                            color: '',
+                            bgColor: 'bg-white dark:bg-gray-800',
+                            label: 'ZIP'
+                          },
+                          txt: {
+                            iconUrl: '/assets/file-icons/txt.png',
+                            color: '',
+                            bgColor: 'bg-white dark:bg-gray-800',
+                            label: 'Texto'
+                          },
+                          jpg: {
+                            iconUrl: '/assets/file-icons/jpg.png',
+                            color: '',
+                            bgColor: 'bg-white dark:bg-gray-800',
+                            label: 'JPG'
+                          },
+                          jpeg: {
+                            iconUrl: '/assets/file-icons/jpg.png',
+                            color: '',
+                            bgColor: 'bg-white dark:bg-gray-800',
+                            label: 'JPEG'
+                          },
+                          png: {
+                            iconUrl: '/assets/file-icons/png.png',
+                            color: '',
+                            bgColor: 'bg-white dark:bg-gray-800',
+                            label: 'PNG'
+                          },
+                          gif: {
+                            iconUrl: '/assets/file-icons/gif.png',
+                            color: '',
+                            bgColor: 'bg-white dark:bg-gray-800',
+                            label: 'GIF'
+                          },
+                          mp3: {
+                            iconUrl: '/assets/file-icons/mp3.png',
+                            color: '',
+                            bgColor: 'bg-white dark:bg-gray-800',
+                            label: 'MP3'
+                          },
+                          mpg: {
+                            iconUrl: '/assets/file-icons/mpg.png',
+                            color: '',
+                            bgColor: 'bg-white dark:bg-gray-800',
+                            label: 'MPG'
+                          },
+                          mpeg: {
+                            iconUrl: '/assets/file-icons/mpg.png',
+                            color: '',
+                            bgColor: 'bg-white dark:bg-gray-800',
+                            label: 'MPEG'
+                          }
+                        };
 
-                        if (fileExt === 'pdf') {
-                          FileIcon = FileText;
-                          iconColor = 'text-red-500 dark:text-red-400';
-                        } else if (['doc', 'docx'].includes(fileExt)) {
-                          FileIcon = FileText;
-                          iconColor = 'text-blue-500 dark:text-blue-400';
-                        } else if (['xls', 'xlsx', 'csv'].includes(fileExt)) {
-                          FileIcon = FileText;
-                          iconColor = 'text-green-500 dark:text-green-400';
-                        } else if (['ppt', 'pptx'].includes(fileExt)) {
-                          FileIcon = FileText;
-                          iconColor = 'text-orange-500 dark:text-orange-400';
-                        } else if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileExt)) {
-                          FileIcon = ImageIcon;
-                          iconColor = 'text-purple-500 dark:text-purple-400';
-                        }
+                        const config = FILE_CONFIG[fileExt] || {
+                          iconUrl: '/assets/file-icons/default.png',
+                          color: '',
+                          bgColor: 'bg-white dark:bg-gray-800',
+                          label: 'Arquivo'
+                        };
+
+                        const FileIcon = config.icon;
 
                         return (
-                          <a
-                            href={msg.media_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-2 text-sm underline mb-2 hover:opacity-80 transition-opacity"
-                          >
-                            <FileIcon className={`w-4 h-4 shrink-0 ${iconColor}`} />
-                            <span className="truncate">{fileName}</span>
-                          </a>
+                          <div className="flex flex-col gap-2 max-w-xs mb-2">
+                            {/* Ícone do arquivo */}
+                            <div className={cn(
+                              "flex items-center justify-center p-6 rounded-t-lg",
+                              config.bgColor
+                            )}>
+                              {config.iconUrl ? (
+                                <img src={config.iconUrl} alt={config.label} className="w-16 h-16 object-contain" />
+                              ) : FileIcon ? (
+                                <FileIcon className={cn("w-12 h-12", config.color)} />
+                              ) : null}
+                            </div>
+
+                            {/* Nome truncado */}
+                            <p className="text-sm font-medium truncate px-2">
+                              {filename}
+                            </p>
+
+                            {/* Botão de download */}
+                            <button
+                              onClick={() => handleDownloadFile(msg.media_url!, filename)}
+                              className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white px-4 py-2.5 rounded-lg transition-colors font-medium"
+                            >
+                              <Download className="w-4 h-4 shrink-0" />
+                              <span className="truncate text-sm">{filename}</span>
+                            </button>
+
+                            {/* Nome completo do arquivo (abaixo do botão) */}
+                            <p className="text-xs text-gray-600 dark:text-gray-400 px-2 break-all leading-relaxed">
+                              {filename}
+                            </p>
+
+                            {/* Mensagem/caption do usuário (se houver) */}
+                            {caption && (
+                              <p className="text-sm text-gray-800 dark:text-gray-200 px-2 mt-1 break-words whitespace-pre-wrap">
+                                <HighlightText text={caption} highlight={searchTerm} />
+                              </p>
+                            )}
+                          </div>
                         );
                       })()}
 
@@ -1343,24 +1557,38 @@ export const ChatArea = ({
                           hour: "2-digit",
                           minute: "2-digit",
                         })}
-                        {/* Read Receipt Icons - Show on all messages */}
+                        {/* ✅ UX: Status Indicators - Clock (sending), Check (sent), Error */}
                         <span className="ml-1">
                           {(() => {
                             const status = (msg as any).status;
-                            if (status === 'read') {
-                              // Double check green = read
-                              return <CheckCheck className="w-4 h-4 text-green-400" />;
-                            } else if (status === 'delivered') {
-                              // Single check green = delivered
-                              return <Check className="w-4 h-4 text-green-400" />;
-                            } else {
-                              // Single check gray = sent/pending
-                              if (msg.direction === "outbound") {
-                                return <Check className="w-4 h-4 text-gray-400" />;
-                              }
-                              // For inbound messages, show double check gray (we received it)
-                              return <CheckCheck className="w-4 h-4 text-gray-500" />;
+
+                            // ⏱️ Enviando - relógio animado
+                            if (status === 'sending') {
+                              return <Clock className="w-3.5 h-3.5 text-gray-400 animate-pulse" />;
                             }
+
+                            // ❌ Erro - ícone vermelho de alerta
+                            if (status === 'error') {
+                              return <AlertCircle className="w-3.5 h-3.5 text-red-500" />;
+                            }
+
+                            // ✓✓ Lido - double check verde
+                            if (status === 'read') {
+                              return <CheckCheck className="w-4 h-4 text-green-400" />;
+                            }
+
+                            // ✓ Entregue - single check verde
+                            if (status === 'delivered') {
+                              return <Check className="w-4 h-4 text-green-400" />;
+                            }
+
+                            // ✓ Enviado/padrão
+                            if (msg.direction === "outbound") {
+                              return <Check className="w-4 h-4 text-gray-400" />;
+                            }
+
+                            // Mensagem recebida (inbound)
+                            return <CheckCheck className="w-4 h-4 text-gray-500" />;
                           })()}
                         </span>
                       </span>

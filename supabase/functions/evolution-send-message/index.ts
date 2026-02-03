@@ -97,6 +97,22 @@ serve(async (req) => {
 
     const userId = instance.user_id;
 
+    // ✅ OTIMIZAÇÃO: Adicionar assinatura do agente no BACKEND (movido do frontend)
+    let finalBody = body;
+
+    if (conversation.status === 'open' && messageType === 'text' && conversation.assigned_agent_id) {
+      const { data: teamMember } = await supabaseClient
+        .from('team_members')
+        .select('full_name, name, sign_messages')
+        .eq('id', conversation.assigned_agent_id)
+        .single();
+
+      if (teamMember && teamMember.sign_messages !== false) {
+        const senderName = teamMember.full_name || teamMember.name || "Atendente";
+        finalBody = `*${senderName}:*\n${body}`;
+      }
+    }
+
     // Tratamento do JID para Uzapi
     // Uzapi seems to expect just the number for individuals, and likely the same for groups (stripping suffix)
     // or maybe full JID. The user example showed "number": "<numero_do_remetente>"
@@ -114,7 +130,7 @@ serve(async (req) => {
       sendUrl = `https://clinvia.uazapi.com/send/text`;
       payload = {
         number: targetNumber,
-        text: body
+        text: finalBody
       };
       // Add replyid if present
       if (replyId) {
@@ -134,81 +150,144 @@ serve(async (req) => {
         type: uzapiType,
         file: mediaUrl
       };
-      // Note: Uzapi example didn't show caption for media, but if supported it would be added here.
-      // The user request didn't explicitly show caption in the media example.
+
+      // ✅ FIX: Adicionar caption se existir (mensagem do usuário)
+      if (caption) {
+        payload.caption = caption;
+        console.log('Adding caption to media payload:', caption);
+      }
     }
 
     console.log('Uzapi URL:', sendUrl);
     console.log('Payload:', JSON.stringify(payload));
 
-    const sendResponse = await fetch(sendUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'token': instance.apikey
-      },
-      body: JSON.stringify(payload)
-    });
+    // ✅ OTIMIZAÇÃO: Timeout de 10s
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-    console.log('Uzapi response status:', sendResponse.status);
+    try {
+      const sendResponse = await fetch(sendUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'token': instance.apikey
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
 
-    if (!sendResponse.ok) {
-      const errorText = await sendResponse.text();
-      console.error('Uzapi error:', errorText);
-      throw new Error(`Failed to send message via Uzapi: ${errorText}`);
-    }
+      clearTimeout(timeoutId);
 
-    const sendData = await sendResponse.json();
-    console.log('Uzapi response:', sendData);
+      console.log('Uzapi response status:', sendResponse.status);
 
-    // Salvar mensagem no banco
-    const { data: message, error: messageError } = await supabaseClient
-      .from('messages')
-      .insert({
-        conversation_id: conversationId,
-        body: body || caption || (messageType === 'text' ? '' : `[${messageType}]`),
-        direction: 'outbound',
-        message_type: messageType,
-        media_url: mediaUrl,
-        evolution_id: sendData.messageid || sendData.id || null,
-        user_id: userId,
-        reply_to_id: replyId || null,
-        quoted_body: quotedBody || null,
-        quoted_sender: quotedSender || null,
-        status: 'sent'
-      })
-      .select('id, conversation_id, body, direction, message_type, created_at')
-      .single();
-
-    if (messageError) {
-      console.error('Message insert error:', messageError);
-      throw new Error(`Failed to save message: ${messageError.message}`);
-    }
-
-    console.log('Message saved to database:', message.id);
-
-    // Atualizar conversation
-    await supabaseClient
-      .from('conversations')
-      .update({
-        updated_at: new Date().toISOString(),
-        last_message_at: new Date().toISOString()
-      })
-      .eq('id', conversationId);
-
-    console.log('=== [UZAPI SEND MESSAGE] SUCCESS ===');
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        messageId: message.id,
-        providerId: sendData.messageid
-      }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      if (!sendResponse.ok) {
+        const errorText = await sendResponse.text();
+        console.error('Uzapi error:', errorText);
+        throw new Error(`Failed to send message via Uzapi: ${errorText}`);
       }
-    );
+
+      const sendData = await sendResponse.json();
+      console.log('Uzapi response:', sendData);
+
+      console.log('=== DEBUG: Database Insert Preparation ===');
+      console.log('body (original):', body);
+      console.log('caption (original):', caption);
+      console.log('messageType:', messageType);
+      console.log('finalBody:', finalBody);
+      console.log('conversation.assigned_agent_id:', conversation.assigned_agent_id);
+
+      // ✅ FIX: Para documentos, preservar filename no body SEMPRE
+      // caption = mensagem do usuário (com ou sem assinatura)
+      // body = nome do arquivo SEMPRE (para documentos)
+      let insertBody = body; // Padrão: usar body original
+      let insertCaption = caption || null;
+
+      if (messageType === 'document') {
+        // 📄 DOCUMENTOS: body = filename, caption = mensagem do usuário
+        insertBody = body; // Nome do arquivo (NUNCA modificar!)
+
+        // ✅ FIX CRÍTICO: usar caption (não finalBody!)
+        // Se houver caption E agente atribuído, adicionar assinatura
+        if (caption && conversation.assigned_agent_id) {
+          const { data: teamMember } = await supabaseClient
+            .from('team_members')
+            .select('full_name, name, sign_messages')
+            .eq('id', conversation.assigned_agent_id)
+            .single();
+
+          if (teamMember && teamMember.sign_messages !== false) {
+            const senderName = teamMember.full_name || teamMember.name || "Atendente";
+            insertCaption = `*${senderName}:*\n${caption}`;
+          } else {
+            insertCaption = caption;
+          }
+        } else {
+          insertCaption = caption || null;
+        }
+      } else if (messageType === 'text') {
+        // 💬 TEXTO: usar finalBody (já tem assinatura)
+        insertBody = finalBody;
+        insertCaption = null;
+      } else {
+        // 🖼️ IMAGEM/VÍDEO/ÁUDIO: caption opcional
+        insertBody = finalBody || `[${messageType}]`;
+        insertCaption = caption || null;
+      }
+
+      console.log('=== DEBUG: Final Insert Values ===');
+      console.log('insertBody:', insertBody);
+      console.log('insertCaption:', insertCaption);
+
+      // Salvar mensagem no banco
+      const { data: message, error: messageError } = await supabaseClient
+        .from('messages')
+        .insert({
+          conversation_id: conversationId,
+          body: insertBody,
+          direction: 'outbound',
+          message_type: messageType,
+          media_url: mediaUrl,
+          evolution_id: sendData.messageid || sendData.id || null,
+          user_id: userId,
+          reply_to_id: replyId || null,
+          quoted_body: quotedBody || null,
+          quoted_sender: quotedSender || null,
+          caption: insertCaption, // ✅ Caption separado (mensagemcom assinatura para docs)
+          status: 'sent'
+        })
+        .select('id, conversation_id, body, direction, message_type, created_at')
+        .single();
+
+      if (messageError) {
+        console.error('Message insert error:', messageError);
+        throw new Error(`Failed to save message: ${messageError.message}`);
+      }
+
+      console.log('Message saved to database:', message.id);
+
+      // ✅ OTIMIZAÇÃO: Conversation update automático via trigger
+      // Ver: 20250203_auto_update_conversation_timestamp.sql
+
+      console.log('=== [UZAPI SEND MESSAGE] SUCCESS ===');
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          messageId: message.id,
+          providerId: sendData.messageid
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    } catch (fetchError: any) {
+      clearTimeout(timeoutId);
+      if (fetchError.name === 'AbortError') {
+        throw new Error('Uzapi timeout: Request aborted after 10 seconds');
+      }
+      throw fetchError;
+    }
   } catch (error: any) {
     console.error('=== [UZAPI SEND MESSAGE] ERROR ===');
     console.error('Error:', error.message);
