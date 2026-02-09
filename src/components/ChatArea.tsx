@@ -931,20 +931,17 @@ export const ChatArea = ({
             setIsUploading(false);
 
             // Atribuir agente automaticamente se necessário
-            if (conversation && conversation.assigned_agent_id === null && conversation.status === "pending") {
-              const { data: userData, error: userError } = await supabase.auth.getUser();
-              if (!userError && userData.user) {
-                const userId = userData.user.id;
-                const now = new Date().toISOString();
-                await supabase
-                  .from("conversations")
-                  .update({
-                    assigned_agent_id: userId,
-                    status: "open",
-                    assigned_at: now
-                  })
-                  .eq("id", conversationId);
-              }
+            // ✅ FIX: Usar currentTeamMember.id (team_members.id) em vez de auth.users.id
+            if (conversation && conversation.assigned_agent_id === null && conversation.status === "pending" && currentTeamMember?.id) {
+              const now = new Date().toISOString();
+              await supabase
+                .from("conversations")
+                .update({
+                  assigned_agent_id: currentTeamMember.id,
+                  status: "open",
+                  assigned_at: now
+                })
+                .eq("id", conversationId);
             }
           },
           onError: () => {
@@ -990,20 +987,17 @@ export const ChatArea = ({
     }, {
       onSuccess: async () => {
         // Atribuir agente automaticamente se necessário
-        if (conversation && conversation.assigned_agent_id === null && conversation.status === "pending") {
-          const { data: userData, error: userError } = await supabase.auth.getUser();
-          if (!userError && userData.user) {
-            const userId = userData.user.id;
-            const now = new Date().toISOString();
-            await supabase
-              .from("conversations")
-              .update({
-                assigned_agent_id: userId,
-                status: "open",
-                assigned_at: now
-              })
-              .eq("id", conversationId);
-          }
+        // ✅ FIX: Usar currentTeamMember.id (team_members.id) em vez de auth.users.id
+        if (conversation && conversation.assigned_agent_id === null && conversation.status === "pending" && currentTeamMember?.id) {
+          const now = new Date().toISOString();
+          await supabase
+            .from("conversations")
+            .update({
+              assigned_agent_id: currentTeamMember.id,
+              status: "open",
+              assigned_at: now
+            })
+            .eq("id", conversationId);
         }
       },
       onError: () => {
