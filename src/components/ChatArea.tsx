@@ -925,8 +925,7 @@ export const ChatArea = ({
           caption: documentCaption,
           replyId: replyingTo?.evolution_id || undefined,
           quotedBody: replyingTo?.body || undefined,
-          quotedSender: replyingTo?.sender_name || undefined,
-          agentId: currentTeamMember?.id // ✅ Enviar ID do agente para auto-atribuição no backend
+          quotedSender: replyingTo?.sender_name || undefined
         }, {
           onSuccess: async (data) => {
             setIsUploading(false);
@@ -964,9 +963,6 @@ export const ChatArea = ({
     handleRemoveFile();
     setReplyingTo(null);
 
-    console.log("[DEBUG] Sending text message. Agent ID:", currentTeamMember?.id);
-    console.log("[DEBUG] Conversation Status (from hook):", conversation?.status);
-
     sendMessageMutation.mutate({
       conversationId: conversationId!,
       body: finalBody,
@@ -976,13 +972,10 @@ export const ChatArea = ({
       caption: messageType !== 'text' ? finalBody : undefined,
       replyId: replyingTo?.evolution_id || undefined,
       quotedBody: replyingTo?.body || undefined,
-      quotedSender: replyingTo?.sender_name || undefined,
-      agentId: currentTeamMember?.id // ✅ Enviar ID do agente para auto-atribuição no backend
+      quotedSender: replyingTo?.sender_name || undefined
     }, {
       onSuccess: async () => {
-        // ✅ O backend agora cuida da atribuição de agente e mudança de status
         // Apenas invalidar queries para refletir mudanças na UI
-        console.log("[DEBUG] Message sent successfully. Invalidating queries.");
         queryClient.invalidateQueries({ queryKey: ["conversations"] });
         queryClient.invalidateQueries({ queryKey: ["conversation", conversationId] });
       },

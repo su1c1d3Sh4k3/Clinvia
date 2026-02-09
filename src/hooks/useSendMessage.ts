@@ -12,7 +12,6 @@ interface SendMessageParams {
   replyId?: string;
   quotedBody?: string;
   quotedSender?: string;
-  agentId?: string; // ID do team_member para auto-atribuição
 }
 
 export const useSendMessage = () => {
@@ -20,7 +19,7 @@ export const useSendMessage = () => {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ conversationId, body, direction, messageType = "text", mediaUrl, caption, replyId, quotedBody, quotedSender, agentId }: SendMessageParams) => {
+    mutationFn: async ({ conversationId, body, direction, messageType = "text", mediaUrl, caption, replyId, quotedBody, quotedSender }: SendMessageParams) => {
       // Se for mensagem outbound, enviar via Edge Function (que chama Evolution API)
       if (direction === "outbound") {
         // ✨ OTIMIZAÇÃO: Criar mensagem otimista ANTES de enviar ao servidor
@@ -65,8 +64,7 @@ export const useSendMessage = () => {
               caption,
               replyId,
               quotedBody,
-              quotedSender,
-              agentId // ✅ Enviar ID do agente para auto-atribuição no backend
+              quotedSender
             },
           });
 

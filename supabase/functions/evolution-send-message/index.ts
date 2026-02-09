@@ -17,11 +17,10 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { conversationId, body, messageType = 'text', mediaUrl, caption, replyId, quotedBody, quotedSender, agentId } = await req.json();
+    const { conversationId, body, messageType = 'text', mediaUrl, caption, replyId, quotedBody, quotedSender } = await req.json();
     console.log('=== [UZAPI SEND MESSAGE] START ===');
     console.log('Conversation ID:', conversationId);
     console.log('Message Type:', messageType);
-    console.log('Agent ID:', agentId);
     console.log('Reply ID:', replyId);
 
     // Buscar conversation
@@ -59,14 +58,13 @@ serve(async (req) => {
         .single();
 
       if (contactError || !contact) throw new Error('Contact not found');
-      remoteJid = contact.number; // Changed from remote_jid to number as per schema update
+      remoteJid = contact.number;
     } else {
       throw new Error('Invalid conversation: missing group_id and contact_id');
     }
 
     let instance;
 
-    // 1. Strict Priority: Use conversation.instance_id
     if (conversation.instance_id) {
       const { data: specificInstance, error: instanceError } = await supabaseClient
         .from('instances')
@@ -79,11 +77,8 @@ serve(async (req) => {
       }
     }
 
-    // 2. Fallback: Try to get from contact
     if (!instance && conversation.contact_id) {
-      // ... (Keep existing fallback logic if needed, but instance_id should be on conversation now)
-      // For brevity and since we enforced instance_id in conversation logic, we might skip complex fallback
-      // but let's keep it simple: if no instance, fail.
+      // Fallback logic could go here
     }
 
     if (!instance) {
@@ -91,57 +86,10 @@ serve(async (req) => {
     }
 
     if (instance.status !== 'connected') {
-      // throw new Error(`Instance ${instance.name} is not connected.`);
-      // Proceeding anyway as status might be out of sync
       console.warn(`Instance ${instance.name} status is ${instance.status}, attempting to send anyway.`);
     }
 
     const userId = instance.user_id;
-
-    // ✅ FIX: Atribuir agente e mudar status para 'open' se conversa estiver 'pending'
-    // ✅ FIX: Atribuir agente e mudar status para 'open' se conversa estiver 'pending'
-    // ✅ FIX: Atribuir agente e mudar status para 'open' se conversa estiver 'pending'
-    // ⚠️ CRÍTICO: SOMENTE SE FOR MENSAGEM DE HUMANO (agentId presente)
-    if (conversation.status === 'pending') {
-      if (agentId) { // <--- RESTRIÇÃO: Apenas se tiver ID do agente
-        try {
-          const updates: any = {
-            status: 'open',
-            assigned_at: new Date().toISOString()
-          };
-
-          // Se não tiver agente e receber agentId, atribui
-          if (!conversation.assigned_agent_id) {
-            updates.assigned_agent_id = agentId;
-            console.log('[AUTO-ASSIGN] Assigning agent:', agentId);
-          } else {
-            console.log('[AUTO-UPDATE] Agent already assigned:', conversation.assigned_agent_id);
-          }
-
-          console.log('[AUTO-UPDATE] Updating conversation status to open (Human Message)...');
-
-          const { error: updateError } = await supabaseClient
-            .from('conversations')
-            .update(updates)
-            .eq('id', conversationId);
-
-          if (updateError) {
-            console.error('[AUTO-UPDATE] Error updating conversation:', updateError);
-          } else {
-            console.log('[AUTO-UPDATE] Conversation updated successfully!');
-            // Atualizar objeto local
-            conversation.status = 'open';
-            if (updates.assigned_agent_id) {
-              conversation.assigned_agent_id = updates.assigned_agent_id;
-            }
-          }
-        } catch (statusError) {
-          console.error('[AUTO-UPDATE] Exception updating status:', statusError);
-        }
-      } else {
-        console.log('[AUTO-UPDATE] Skipping status update: No agentId provided (Assuming AI/System message).');
-      }
-    }
 
     // ✅ OTIMIZAÇÃO: Adicionar assinatura do agente no BACKEND (movido do frontend)
     let finalBody = body;
@@ -160,8 +108,6 @@ serve(async (req) => {
     }
 
     // Tratamento do JID para Uzapi
-    // Uzapi seems to expect just the number for individuals, and likely the same for groups (stripping suffix)
-    // or maybe full JID. The user example showed "number": "<numero_do_remetente>"
     let targetNumber = remoteJid;
     if (remoteJid.includes('@')) {
       targetNumber = remoteJid.split('@')[0];
@@ -178,18 +124,14 @@ serve(async (req) => {
         number: targetNumber,
         text: finalBody
       };
-      // Add replyid if present
       if (replyId) {
         payload.replyid = replyId;
         console.log('Adding replyid to payload:', replyId);
       }
     } else {
       sendUrl = `https://clinvia.uazapi.com/send/media`;
-      // Map internal types to Uzapi types if necessary
-      // Internal: text, image, audio, video, document
-      // Uzapi: image, video, document, audio, myaudio, ptt, sticker
       let uzapiType = messageType;
-      if (messageType === 'audio') uzapiType = 'ptt'; // Sending as PTT (voice note) usually preferred
+      if (messageType === 'audio') uzapiType = 'ptt';
 
       payload = {
         number: targetNumber,
@@ -197,7 +139,6 @@ serve(async (req) => {
         file: mediaUrl
       };
 
-      // ✅ FIX: Adicionar caption se existir (mensagem do usuário)
       if (caption) {
         payload.caption = caption;
         console.log('Adding caption to media payload:', caption);
@@ -205,9 +146,8 @@ serve(async (req) => {
     }
 
     console.log('Uzapi URL:', sendUrl);
-    console.log('Payload:', JSON.stringify(payload));
+    // console.log('Payload:', JSON.stringify(payload));
 
-    // ✅ OTIMIZAÇÃO: Timeout de 10s
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
 
@@ -236,25 +176,11 @@ serve(async (req) => {
       const sendData = await sendResponse.json();
       console.log('Uzapi response:', sendData);
 
-      console.log('=== DEBUG: Database Insert Preparation ===');
-      console.log('body (original):', body);
-      console.log('caption (original):', caption);
-      console.log('messageType:', messageType);
-      console.log('finalBody:', finalBody);
-      console.log('conversation.assigned_agent_id:', conversation.assigned_agent_id);
-
-      // ✅ FIX: Para documentos, preservar filename no body SEMPRE
-      // caption = mensagem do usuário (com ou sem assinatura)
-      // body = nome do arquivo SEMPRE (para documentos)
-      let insertBody = body; // Padrão: usar body original
+      let insertBody = body;
       let insertCaption = caption || null;
 
       if (messageType === 'document') {
-        // 📄 DOCUMENTOS: body = filename, caption = mensagem do usuário
-        insertBody = body; // Nome do arquivo (NUNCA modificar!)
-
-        // ✅ FIX CRÍTICO: usar caption (não finalBody!)
-        // Se houver caption E agente atribuído, adicionar assinatura
+        insertBody = body;
         if (caption && conversation.assigned_agent_id) {
           const { data: teamMember } = await supabaseClient
             .from('team_members')
@@ -272,18 +198,12 @@ serve(async (req) => {
           insertCaption = caption || null;
         }
       } else if (messageType === 'text') {
-        // 💬 TEXTO: usar finalBody (já tem assinatura)
         insertBody = finalBody;
         insertCaption = null;
       } else {
-        // 🖼️ IMAGEM/VÍDEO/ÁUDIO: caption opcional
         insertBody = finalBody || `[${messageType}]`;
         insertCaption = caption || null;
       }
-
-      console.log('=== DEBUG: Final Insert Values ===');
-      console.log('insertBody:', insertBody);
-      console.log('insertCaption:', insertCaption);
 
       // Salvar mensagem no banco
       const { data: message, error: messageError } = await supabaseClient
@@ -299,9 +219,8 @@ serve(async (req) => {
           reply_to_id: replyId || null,
           quoted_body: quotedBody || null,
           quoted_sender: quotedSender || null,
-          caption: insertCaption, // ✅ Caption separado (mensagemcom assinatura para docs)
-          status: 'sent',
-          sender_agent_id: agentId || null // ✅ NOVA COLUNA: Identifica quem mandou
+          caption: insertCaption,
+          status: 'sent'
         })
         .select('id, conversation_id, body, direction, message_type, created_at')
         .single();
