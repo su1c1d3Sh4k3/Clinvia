@@ -964,6 +964,9 @@ export const ChatArea = ({
     handleRemoveFile();
     setReplyingTo(null);
 
+    console.log("[DEBUG] Sending text message. Agent ID:", currentTeamMember?.id);
+    console.log("[DEBUG] Conversation Status (from hook):", conversation?.status);
+
     sendMessageMutation.mutate({
       conversationId: conversationId!,
       body: finalBody,
@@ -979,6 +982,7 @@ export const ChatArea = ({
       onSuccess: async () => {
         // ✅ O backend agora cuida da atribuição de agente e mudança de status
         // Apenas invalidar queries para refletir mudanças na UI
+        console.log("[DEBUG] Message sent successfully. Invalidating queries.");
         queryClient.invalidateQueries({ queryKey: ["conversations"] });
         queryClient.invalidateQueries({ queryKey: ["conversation", conversationId] });
       },

@@ -99,25 +99,44 @@ serve(async (req) => {
     const userId = instance.user_id;
 
     // ✅ FIX: Atribuir agente e mudar status para 'open' se conversa estiver 'pending'
-    if (conversation.status === 'pending' && conversation.assigned_agent_id === null && agentId) {
-      console.log('[AUTO-ASSIGN] Conversation is pending with no agent. Assigning agent:', agentId);
-
-      const { error: updateError } = await supabaseClient
-        .from('conversations')
-        .update({
+    // ✅ FIX: Atribuir agente e mudar status para 'open' se conversa estiver 'pending'
+    if (conversation.status === 'pending') {
+      try {
+        const updates: any = {
           status: 'open',
-          assigned_agent_id: agentId,
           assigned_at: new Date().toISOString()
-        })
-        .eq('id', conversationId);
+        };
 
-      if (updateError) {
-        console.error('[AUTO-ASSIGN] Error updating conversation:', updateError);
-      } else {
-        console.log('[AUTO-ASSIGN] Conversation updated to open, agent assigned!');
-        // Atualizar objeto local para assinatura funcionar corretamente
-        conversation.status = 'open';
-        conversation.assigned_agent_id = agentId;
+        // Se não tiver agente e receber agentId, atribui
+        if (!conversation.assigned_agent_id && agentId) {
+          updates.assigned_agent_id = agentId;
+          console.log('[AUTO-ASSIGN] Assigning agent:', agentId);
+        } else if (conversation.assigned_agent_id) {
+          console.log('[AUTO-UPDATE] Agent already assigned:', conversation.assigned_agent_id);
+        } else {
+          console.warn('[AUTO-UPDATE] No agentId provided, status updated to open without agent assignment.');
+        }
+
+        console.log('[AUTO-UPDATE] Updating conversation status to open...');
+
+        const { error: updateError } = await supabaseClient
+          .from('conversations')
+          .update(updates)
+          .eq('id', conversationId);
+
+        if (updateError) {
+          console.error('[AUTO-UPDATE] Error updating conversation:', updateError);
+        } else {
+          console.log('[AUTO-UPDATE] Conversation updated successfully!');
+          // Atualizar objeto local
+          conversation.status = 'open';
+          if (updates.assigned_agent_id) {
+            conversation.assigned_agent_id = updates.assigned_agent_id;
+          }
+        }
+      } catch (statusError) {
+        console.error('[AUTO-UPDATE] Exception updating status:', statusError);
+        // Não falhar o envio da mensagem se o update do status falhar
       }
     }
 
