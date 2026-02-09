@@ -925,59 +925,14 @@ export const ChatArea = ({
           caption: documentCaption,
           replyId: replyingTo?.evolution_id || undefined,
           quotedBody: replyingTo?.body || undefined,
-          quotedSender: replyingTo?.sender_name || undefined
+          quotedSender: replyingTo?.sender_name || undefined,
+          agentId: currentTeamMember?.id // ✅ Enviar ID do agente para auto-atribuição no backend
         }, {
           onSuccess: async (data) => {
             setIsUploading(false);
-
-            // ✅ FIX: Buscar dados frescos da conversa para evitar stale closure
-            const { data: freshConversation, error: fetchError } = await supabase
-              .from("conversations")
-              .select("id, status, assigned_agent_id")
-              .eq("id", conversationId)
-              .single();
-
-            console.log("[DEBUG] Upload onSuccess - freshConversation:", freshConversation);
-            console.log("[DEBUG] Upload onSuccess - currentTeamMember?.id:", currentTeamMember?.id);
-
-            if (fetchError) {
-              console.error("[DEBUG] Error fetching conversation:", fetchError);
-              return;
-            }
-
-            // Atribuir agente automaticamente se necessário
-            if (freshConversation &&
-              freshConversation.assigned_agent_id === null &&
-              freshConversation.status === "pending" &&
-              currentTeamMember?.id) {
-
-              console.log("[DEBUG] Updating conversation to open, assigning agent:", currentTeamMember.id);
-
-              const now = new Date().toISOString();
-              const { error: updateError } = await supabase
-                .from("conversations")
-                .update({
-                  assigned_agent_id: currentTeamMember.id,
-                  status: "open",
-                  assigned_at: now
-                })
-                .eq("id", conversationId);
-
-              if (updateError) {
-                console.error("[DEBUG] Error updating conversation:", updateError);
-              } else {
-                console.log("[DEBUG] Conversation updated successfully!");
-                queryClient.invalidateQueries({ queryKey: ["conversations"] });
-                queryClient.invalidateQueries({ queryKey: ["conversation", conversationId] });
-              }
-            } else {
-              console.log("[DEBUG] Upload conditions not met:", {
-                hasConversation: !!freshConversation,
-                assignedAgentId: freshConversation?.assigned_agent_id,
-                status: freshConversation?.status,
-                teamMemberId: currentTeamMember?.id
-              });
-            }
+            // ✅ O backend agora cuida da atribuição de agente e mudança de status
+            queryClient.invalidateQueries({ queryKey: ["conversations"] });
+            queryClient.invalidateQueries({ queryKey: ["conversation", conversationId] });
           },
           onError: () => {
             setIsUploading(false);
@@ -1018,59 +973,14 @@ export const ChatArea = ({
       caption: messageType !== 'text' ? finalBody : undefined,
       replyId: replyingTo?.evolution_id || undefined,
       quotedBody: replyingTo?.body || undefined,
-      quotedSender: replyingTo?.sender_name || undefined
+      quotedSender: replyingTo?.sender_name || undefined,
+      agentId: currentTeamMember?.id // ✅ Enviar ID do agente para auto-atribuição no backend
     }, {
       onSuccess: async () => {
-        // ✅ FIX: Buscar dados frescos da conversa para evitar stale closure
-        // O estado 'conversation' pode estar desatualizado quando o callback executa
-        const { data: freshConversation, error: fetchError } = await supabase
-          .from("conversations")
-          .select("id, status, assigned_agent_id")
-          .eq("id", conversationId)
-          .single();
-
-        console.log("[DEBUG] onSuccess - freshConversation:", freshConversation);
-        console.log("[DEBUG] onSuccess - currentTeamMember?.id:", currentTeamMember?.id);
-
-        if (fetchError) {
-          console.error("[DEBUG] Error fetching conversation:", fetchError);
-          return;
-        }
-
-        // Atribuir agente automaticamente se necessário
-        if (freshConversation &&
-          freshConversation.assigned_agent_id === null &&
-          freshConversation.status === "pending" &&
-          currentTeamMember?.id) {
-
-          console.log("[DEBUG] Updating conversation to open, assigning agent:", currentTeamMember.id);
-
-          const now = new Date().toISOString();
-          const { error: updateError } = await supabase
-            .from("conversations")
-            .update({
-              assigned_agent_id: currentTeamMember.id,
-              status: "open",
-              assigned_at: now
-            })
-            .eq("id", conversationId);
-
-          if (updateError) {
-            console.error("[DEBUG] Error updating conversation:", updateError);
-          } else {
-            console.log("[DEBUG] Conversation updated successfully!");
-            // Invalidar queries para refletir mudança na UI
-            queryClient.invalidateQueries({ queryKey: ["conversations"] });
-            queryClient.invalidateQueries({ queryKey: ["conversation", conversationId] });
-          }
-        } else {
-          console.log("[DEBUG] Conditions not met:", {
-            hasConversation: !!freshConversation,
-            assignedAgentId: freshConversation?.assigned_agent_id,
-            status: freshConversation?.status,
-            teamMemberId: currentTeamMember?.id
-          });
-        }
+        // ✅ O backend agora cuida da atribuição de agente e mudança de status
+        // Apenas invalidar queries para refletir mudanças na UI
+        queryClient.invalidateQueries({ queryKey: ["conversations"] });
+        queryClient.invalidateQueries({ queryKey: ["conversation", conversationId] });
       },
       onError: () => {
         setIsUploading(false);

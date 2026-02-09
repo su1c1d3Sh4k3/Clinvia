@@ -17,10 +17,11 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { conversationId, body, messageType = 'text', mediaUrl, caption, replyId, quotedBody, quotedSender } = await req.json();
+    const { conversationId, body, messageType = 'text', mediaUrl, caption, replyId, quotedBody, quotedSender, agentId } = await req.json();
     console.log('=== [UZAPI SEND MESSAGE] START ===');
     console.log('Conversation ID:', conversationId);
     console.log('Message Type:', messageType);
+    console.log('Agent ID:', agentId);
     console.log('Reply ID:', replyId);
 
     // Buscar conversation
@@ -96,6 +97,29 @@ serve(async (req) => {
     }
 
     const userId = instance.user_id;
+
+    // ✅ FIX: Atribuir agente e mudar status para 'open' se conversa estiver 'pending'
+    if (conversation.status === 'pending' && conversation.assigned_agent_id === null && agentId) {
+      console.log('[AUTO-ASSIGN] Conversation is pending with no agent. Assigning agent:', agentId);
+
+      const { error: updateError } = await supabaseClient
+        .from('conversations')
+        .update({
+          status: 'open',
+          assigned_agent_id: agentId,
+          assigned_at: new Date().toISOString()
+        })
+        .eq('id', conversationId);
+
+      if (updateError) {
+        console.error('[AUTO-ASSIGN] Error updating conversation:', updateError);
+      } else {
+        console.log('[AUTO-ASSIGN] Conversation updated to open, agent assigned!');
+        // Atualizar objeto local para assinatura funcionar corretamente
+        conversation.status = 'open';
+        conversation.assigned_agent_id = agentId;
+      }
+    }
 
     // ✅ OTIMIZAÇÃO: Adicionar assinatura do agente no BACKEND (movido do frontend)
     let finalBody = body;
