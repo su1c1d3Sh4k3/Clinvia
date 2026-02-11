@@ -95,9 +95,33 @@ serve(async (req) => {
 
                 console.log(`[webhook-queue-processor] Routing to ${targetFunction} for event: ${eventType}`);
 
+                // ========================================
+                // 📎 SPECIAL LOGGING FOR FILE MESSAGES
+                // ========================================
+                const messageType = job.payload?.message?.messageType;
+                if (messageType && ['documentMessage', 'imageMessage', 'videoMessage', 'audioMessage'].includes(messageType)) {
+                    console.log('[webhook-queue-processor] ==========================================');
+                    console.log('[webhook-queue-processor] 📎 FILE/MEDIA MESSAGE FROM QUEUE');
+                    console.log('[webhook-queue-processor] ==========================================');
+                    console.log('[webhook-queue-processor] Job ID:', job.id);
+                    console.log('[webhook-queue-processor] messageType:', messageType);
+                    console.log('[webhook-queue-processor] Payload size:', JSON.stringify(job.payload).length, 'bytes');
+                    console.log('[webhook-queue-processor] Payload keys:', Object.keys(job.payload));
+                    console.log('[webhook-queue-processor] payload.message keys:', job.payload.message ? Object.keys(job.payload.message) : 'N/A');
+                    console.log('[webhook-queue-processor] ==========================================');
+                }
+
+
+
+
+                console.log(`[webhook-queue-processor] ========== INVOKING ${targetFunction} ==========`);
+                console.log(`[webhook-queue-processor] Job ID: ${job.id}`);
+                console.log(`[webhook-queue-processor] Payload being sent:`, JSON.stringify(job.payload).substring(0, 500));
+
                 const { data, error: invokeError } = await supabase.functions.invoke(targetFunction, {
                     body: job.payload
                 });
+
 
                 if (invokeError) {
                     throw new Error(invokeError.message);

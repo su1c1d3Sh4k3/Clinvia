@@ -129,14 +129,46 @@ const Index = () => {
           // No open/pending conversation - create a new one
           console.log("No open/pending conversation found, creating new one...");
 
+          // Get current authenticated user
           const { data: { user: currentUser } } = await supabase.auth.getUser();
+
+          if (!currentUser) {
+            console.error("No authenticated user found");
+            return;
+          }
+
+          // Get team_member to use correct ID
+          const { data: teamMember } = await supabase
+            .from("team_members")
+            .select("id, user_id")
+            .eq("auth_user_id", currentUser.id)
+            .single();
+
+          if (!teamMember) {
+            console.error("Team member not found for user:", currentUser.id);
+            return;
+          }
+
+          // Get contact details (instance_id and user_id)
+          const { data: contact } = await supabase
+            .from("contacts")
+            .select("instance_id, user_id")
+            .eq("id", contactId)
+            .single();
+
+          if (!contact) {
+            console.error("Contact not found:", contactId);
+            return;
+          }
 
           const { data: newConv, error: createError } = await supabase
             .from("conversations")
             .insert({
               contact_id: contactId,
+              instance_id: contact.instance_id,
+              user_id: contact.user_id, // Owner user_id
               status: "open",
-              assigned_agent_id: currentUser?.id || null,
+              assigned_agent_id: teamMember.id, // Team member ID, not auth user ID
               unread_count: 0,
               last_message_at: new Date().toISOString()
             })
@@ -146,7 +178,7 @@ const Index = () => {
           if (createError) {
             console.error("Error creating conversation:", createError);
           } else if (newConv) {
-            console.log("Created new conversation:", newConv.id);
+            console.log("Created new conversation:", newConv.id, "- Status: open, Assigned to:", teamMember.id);
             setSelectedConversationId(newConv.id);
             setMobileView("chat");
           }

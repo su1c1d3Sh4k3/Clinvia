@@ -918,6 +918,8 @@ export const ChatArea = ({
         // ✅ ENVIAR mensagem com URL REAL do Supabase
         sendMessageMutation.mutate({
           conversationId: conversationId!,
+          contactId: conversation?.contact_id || undefined,
+          groupId: conversation?.group_id || undefined,
           body: messageType === 'document' ? documentBody : (finalBody || documentBody),
           direction: "outbound",
           messageType,
@@ -965,6 +967,8 @@ export const ChatArea = ({
 
     sendMessageMutation.mutate({
       conversationId: conversationId!,
+      contactId: conversation?.contact_id || undefined,
+      groupId: conversation?.group_id || undefined,
       body: finalBody,
       direction: "outbound",
       messageType,
@@ -1359,8 +1363,42 @@ export const ChatArea = ({
 
                       {/* ✅ IMPROVED: Renderizar documento com design melhorado */}
                       {msg.message_type === 'document' && msg.media_url && (() => {
-                        const filename = msg.body || 'documento';
-                        const fileExt = filename.split('.').pop()?.toLowerCase() || '';
+                        // DEBUG: Inspect message properties
+                        console.log('📄 Rendering Document Msg:', {
+                          id: msg.id,
+                          media_filename: (msg as any).media_filename,
+                          media_mimetype: (msg as any).media_mimetype,
+                          body: msg.body,
+                          full_msg: msg
+                        });
+
+                        // Use media_filename if available, otherwise fallback to body
+                        const filename = (msg as any).media_filename || msg.body || 'documento';
+                        const fileMimetype = (msg as any).media_mimetype;
+
+                        // Extract extension from filename or map from mimetype
+                        let fileExt = filename.split('.').pop()?.toLowerCase() || '';
+
+                        // If no extension but have mimetype, map to extension
+                        if (!fileExt && fileMimetype) {
+                          const mimeToExt: Record<string, string> = {
+                            'application/pdf': 'pdf',
+                            'application/msword': 'doc',
+                            'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+                            'application/vnd.ms-excel': 'xls',
+                            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+                            'application/vnd.ms-powerpoint': 'ppt',
+                            'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+                            'text/plain': 'txt',
+                            'text/markdown': 'md',
+                            'text/csv': 'csv',
+                            'application/zip': 'zip',
+                            'application/x-rar-compressed': 'rar',
+                            'application/x-7z-compressed': '7z'
+                          };
+                          fileExt = mimeToExt[fileMimetype] || '';
+                        }
+
                         const caption = (msg as any).caption; // Mensagem do usuário
 
                         // Configuração de ícones por tipo de arquivo

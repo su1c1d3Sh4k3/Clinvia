@@ -6,15 +6,13 @@ import {
     DialogContent,
     DialogHeader,
     DialogTitle,
-    DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Eye, MessageSquare, ExternalLink } from "lucide-react";
+import { MessageSquare, X, Send, Paperclip, Smile, Sparkles, CheckCircle } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { useState, useRef, useEffect } from "react";
-import { Send, Paperclip, Smile, Mic, Sparkles, CheckCircle, X } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { useSendMessage } from "@/hooks/useSendMessage";
 import EmojiPicker, { EmojiClickData } from "emoji-picker-react";
@@ -27,12 +25,22 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 
-interface DealConversationModalProps {
+interface ConversationChatModalProps {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
     contactId: string;
     contactName: string;
 }
 
-export function DealConversationModal({ contactId, contactName }: DealConversationModalProps) {
+/**
+ * Controlled modal for viewing and sending messages in queue conversations
+ */
+export function ConversationChatModal({
+    open,
+    onOpenChange,
+    contactId,
+    contactName,
+}: ConversationChatModalProps) {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const [message, setMessage] = useState("");
@@ -41,24 +49,15 @@ export function DealConversationModal({ contactId, contactName }: DealConversati
     const [isUploading, setIsUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
     const sendMessageMutation = useSendMessage();
     const { data: ownerId } = useOwnerId();
 
-    // Debug logging
-    useEffect(() => {
-        console.log("[DealModal] Component mounted/updated:", { contactId, contactName, ownerId });
-    }, [contactId, contactName, ownerId]);
-
-    // Check for active tickets to enable/disable button and get conversation ID
+    // Get active conversation ID
     const { data: activeConversationId } = useQuery({
         queryKey: ["active-conversation-id", contactId, ownerId],
         queryFn: async () => {
-            console.log("[DealModal] Fetching conversation ID:", { contactId, ownerId });
-
-            if (!ownerId) {
-                console.log("[DealModal] No ownerId for conversation query");
-                return null;
-            }
+            if (!ownerId) return null;
 
             const { data, error } = await supabase
                 .from("conversations")
@@ -68,16 +67,28 @@ export function DealConversationModal({ contactId, contactName }: DealConversati
                 .in("status", ["open", "pending"])
                 .limit(1);
 
-            if (error) {
-                console.error("[DealModal] Conversation query error:", error);
-                return null;
-            }
-
-            const conversationId = data && data.length > 0 ? data[0].id : null;
-            console.log("[DealModal] Found conversation ID:", conversationId);
-            return conversationId;
+            if (error) return null;
+            return data && data.length > 0 ? data[0].id : null;
         },
-        enabled: !!contactId && !!ownerId,
+        enabled: !!contactId && !!ownerId && open,
+    });
+
+    // Fetch messages
+    const { data: messages, isLoading } = useQuery({
+        queryKey: ["deal-messages", activeConversationId],
+        queryFn: async () => {
+            if (!activeConversationId) return [];
+
+            const { data, error } = await supabase
+                .from("messages")
+                .select("*")
+                .eq("conversation_id", activeConversationId)
+                .order("created_at", { ascending: true });
+
+            if (error) throw error;
+            return data;
+        },
+        enabled: !!activeConversationId && open,
     });
 
     // Auto-resize textarea
@@ -87,6 +98,54 @@ export function DealConversationModal({ contactId, contactName }: DealConversati
             textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
         }
     }, [message]);
+
+    // Track modal opens to force scroll every time
+    const [modalOpenCount, setModalOpenCount] = useState(0);
+
+    useEffect(() => {
+        if (open) {
+            setModalOpenCount(prev => prev + 1);
+        }
+    }, [open]);
+
+    // Auto-scroll to bottom when messages change or modal opens
+    useEffect(() => {
+        if (scrollContainerRef.current && messages && messages.length > 0 && open) {
+            setTimeout(() => {
+                if (scrollContainerRef.current) {
+                    const scrollElement = scrollContainerRef.current.querySelector('[data-radix-scroll-area-viewport]');
+                    if (scrollElement) {
+                        scrollElement.scrollTop = scrollElement.scrollHeight;
+                    }
+                }
+            }, 100);
+        }
+    }, [messages, open, modalOpenCount]);
+
+    // Real-time subscription
+    useEffect(() => {
+        if (!activeConversationId || !open) return;
+
+        const channel = supabase
+            .channel(`queue-modal-${activeConversationId}`)
+            .on(
+                "postgres_changes",
+                {
+                    event: "INSERT",
+                    schema: "public",
+                    table: "messages",
+                    filter: `conversation_id=eq.${activeConversationId}`,
+                },
+                () => {
+                    queryClient.invalidateQueries({ queryKey: ["deal-messages", activeConversationId] });
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [activeConversationId, open, queryClient]);
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
@@ -106,126 +165,40 @@ export function DealConversationModal({ contactId, contactName }: DealConversati
         setIsEmojiOpen(false);
     };
 
-    const handleAiAction = async (action: 'fix' | 'improve' | 'generate') => {
-        toast.info("Funcionalidade de IA em desenvolvimento");
-    };
-
     const handleSend = async () => {
-        if ((!message.trim() && !selectedFile) || !activeConversationId) return;
+        if (!message.trim() && !selectedFile) return;
+        if (!activeConversationId) {
+            toast.error("Nenhuma conversa ativa encontrada");
+            return;
+        }
 
         try {
-            setIsUploading(true);
-            let mediaUrl = undefined;
-            let messageType: "text" | "image" | "audio" | "video" | "document" = "text";
-
             if (selectedFile) {
-                const fileExt = selectedFile.name.split(".").pop();
-                const fileName = `${Math.random()}.${fileExt}`;
-                const { error: uploadError, data } = await supabase.storage
-                    .from("chat-media")
-                    .upload(fileName, selectedFile);
-
-                if (uploadError) throw uploadError;
-
-                const { data: { publicUrl } } = supabase.storage
-                    .from("chat-media")
-                    .getPublicUrl(fileName);
-
-                mediaUrl = publicUrl;
-
-                if (selectedFile.type.startsWith("image/")) messageType = "image";
-                else if (selectedFile.type.startsWith("audio/")) messageType = "audio";
-                else if (selectedFile.type.startsWith("video/")) messageType = "video";
-                else messageType = "document";
+                setIsUploading(true);
+                // Handle file upload logic here if needed
+                setIsUploading(false);
             }
 
             await sendMessageMutation.mutateAsync({
                 conversationId: activeConversationId,
-                body: message,
-                mediaUrl,
-                messageType,
-                direction: "outbound",
+                message: message.trim(),
             });
 
             setMessage("");
             setSelectedFile(null);
-            if (fileInputRef.current) fileInputRef.current.value = "";
-            toast.success("Mensagem enviada!");
             queryClient.invalidateQueries({ queryKey: ["deal-messages", activeConversationId] });
         } catch (error) {
-            console.error("Erro ao enviar mensagem:", error);
+            console.error("Error sending message:", error);
             toast.error("Erro ao enviar mensagem");
-        } finally {
-            setIsUploading(false);
         }
     };
 
-    const { data: messages, isLoading } = useQuery({
-        queryKey: ["deal-messages", activeConversationId],
-        queryFn: async () => {
-            console.log("[DealModal] Starting messages query with conversation ID:", activeConversationId);
-
-            if (!activeConversationId) {
-                console.log("[DealModal] No conversation ID, returning empty array");
-                return [];
-            }
-
-            // Fetch messages directly by conversation_id (much faster than join)
-            console.log("[DealModal] Executing query...");
-            const { data, error } = await supabase
-                .from("messages")
-                .select("*")
-                .eq("conversation_id", activeConversationId)
-                .order("created_at", { ascending: false })
-                .limit(50);
-
-            if (error) {
-                console.error("[DealModal] Query error:", error);
-                throw error;
-            }
-
-            console.log("[DealModal] Query successful, messages count:", data?.length || 0);
-            console.log("[DealModal] Sample message data:", data?.[0]);
-            return data.reverse(); // Show oldest first
-        },
-        enabled: !!activeConversationId,
-    });
-
-    // Real-time subscription
-    useEffect(() => {
-        if (!activeConversationId) return;
-
-        const channel = supabase
-            .channel(`deal-messages-${activeConversationId}`)
-            .on(
-                "postgres_changes",
-                {
-                    event: "INSERT",
-                    schema: "public",
-                    table: "messages",
-                    filter: `conversation_id=eq.${activeConversationId}`,
-                },
-                (payload) => {
-                    console.log("New message received in deal modal:", payload);
-                    queryClient.invalidateQueries({ queryKey: ["deal-messages", activeConversationId] });
-                }
-            )
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [activeConversationId, contactId, queryClient]);
-
-
+    const handleAiAction = async (action: 'generate' | 'fix' | 'improve') => {
+        toast.info(`Ação de IA: ${action} (em desenvolvimento)`);
+    };
 
     return (
-        <Dialog>
-            <DialogTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-6 w-6 text-black dark:text-muted-foreground" title="Ver Conversa" disabled={!activeConversationId}>
-                    <Eye className="h-3 w-3" />
-                </Button>
-            </DialogTrigger>
+        <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-2xl h-[80vh] flex flex-col">
                 <DialogHeader>
                     <DialogTitle className="flex justify-between items-center">
@@ -233,8 +206,10 @@ export function DealConversationModal({ contactId, contactName }: DealConversati
                         <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => navigate(`/?conversationId=${activeConversationId}`)}
-                            className="ml-4"
+                            onClick={() => {
+                                navigate(`/?conversationId=${activeConversationId}`);
+                                onOpenChange(false);
+                            }}
                             disabled={!activeConversationId}
                         >
                             <MessageSquare className="mr-2 h-4 w-4" />
@@ -243,7 +218,7 @@ export function DealConversationModal({ contactId, contactName }: DealConversati
                     </DialogTitle>
                 </DialogHeader>
 
-                <ScrollArea className="flex-1 p-4 border rounded-md bg-muted/10">
+                <ScrollArea ref={scrollContainerRef} className="flex-1 p-4 border rounded-md bg-muted/10">
                     {isLoading ? (
                         <div className="flex justify-center p-4">Carregando mensagens...</div>
                     ) : messages && messages.length > 0 ? (
@@ -257,12 +232,13 @@ export function DealConversationModal({ contactId, contactName }: DealConversati
                                         }`}
                                 >
                                     <div
-                                        className={`p-3 rounded-lg ${msg.direction === 'outbound'
+                                        className={`p-3 rounded-lg break-words overflow-hidden ${msg.direction === 'outbound'
                                             ? 'bg-[#DCF7C5] text-gray-800 dark:bg-primary dark:text-primary-foreground'
                                             : 'bg-white dark:bg-secondary text-gray-800 dark:text-foreground'
                                             }`}
+                                        style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
                                     >
-                                        <p className="text-sm">{msg.body}</p>
+                                        <p className="text-sm break-words whitespace-pre-wrap">{msg.body}</p>
                                     </div>
                                     <span className="text-[10px] text-muted-foreground mt-1">
                                         {format(new Date(msg.created_at), "dd/MM HH:mm")}
@@ -272,7 +248,7 @@ export function DealConversationModal({ contactId, contactName }: DealConversati
                         </div>
                     ) : (
                         <div className="text-center text-muted-foreground p-4">
-                            Nenhuma mensagem recente encontrada.
+                            Nenhuma mensagem encontrada.
                         </div>
                     )}
                 </ScrollArea>
@@ -322,21 +298,16 @@ export function DealConversationModal({ contactId, contactName }: DealConversati
                                 }
                             }}
                             rows={1}
-                            className="flex-1 min-h-[40px] max-h-[200px] resize-none py-3 scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent"
+                            className="flex-1 min-h-[40px] max-h-[200px] resize-none py-3"
                             disabled={isUploading || !activeConversationId}
                         />
-
-                        <Button variant="ghost" size="icon" disabled={!activeConversationId}>
-                            <Mic className="w-5 h-5" />
-                        </Button>
 
                         {!message.trim() ? (
                             <Button
                                 variant="outline"
                                 size="icon"
                                 onClick={() => handleAiAction('generate')}
-                                className="bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0 hover:opacity-90 transition-all duration-300"
-                                title="Gerar resposta com IA"
+                                className="bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0 hover:opacity-90"
                                 disabled={!activeConversationId}
                             >
                                 <Sparkles className="w-5 h-5" />
@@ -347,8 +318,7 @@ export function DealConversationModal({ contactId, contactName }: DealConversati
                                     <Button
                                         variant="outline"
                                         size="icon"
-                                        className="bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0 hover:opacity-90 transition-all duration-300"
-                                        title="Opções de IA"
+                                        className="bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0 hover:opacity-90"
                                         disabled={!activeConversationId}
                                     >
                                         <Sparkles className="w-5 h-5" />
@@ -376,6 +346,6 @@ export function DealConversationModal({ contactId, contactName }: DealConversati
                     </div>
                 </div>
             </DialogContent>
-        </Dialog >
+        </Dialog>
     );
 }

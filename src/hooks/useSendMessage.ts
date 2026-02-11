@@ -3,7 +3,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 interface SendMessageParams {
-  conversationId: string;
+  conversationId?: string; // Now optional - can be created from contactId/groupId
+  contactId?: string; // Optional - for creating conversations
+  groupId?: string; // Optional - for creating conversations
   body: string;
   direction: "inbound" | "outbound";
   messageType?: "text" | "image" | "audio" | "video" | "document";
@@ -19,7 +21,7 @@ export const useSendMessage = () => {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ conversationId, body, direction, messageType = "text", mediaUrl, caption, replyId, quotedBody, quotedSender }: SendMessageParams) => {
+    mutationFn: async ({ conversationId, contactId, groupId, body, direction, messageType = "text", mediaUrl, caption, replyId, quotedBody, quotedSender }: SendMessageParams) => {
       // Se for mensagem outbound, enviar via Edge Function (que chama Evolution API)
       if (direction === "outbound") {
         // ✨ OTIMIZAÇÃO: Criar mensagem otimista ANTES de enviar ao servidor
@@ -45,26 +47,44 @@ export const useSendMessage = () => {
         };
 
         // ✨ ADICIONAR mensagem à UI IMEDIATAMENTE (antes de enviar ao servidor)
-        queryClient.setQueryData(
-          ["messages", conversationId],
-          (old: any) => {
-            if (!old) return [optimisticMessage];
-            return [...old, optimisticMessage];
-          }
-        );
+        // Só se tivermos conversationId (se não tiver, será criado no backend)
+        if (conversationId) {
+          queryClient.setQueryData(
+            ["messages", conversationId],
+            (old: any) => {
+              if (!old) return [optimisticMessage];
+              return [...old, optimisticMessage];
+            }
+          );
+        }
 
         try {
-          // Enviar ao servidor
+          // ✅ Obter sessão atual para garantir envio do token
+          const { data: { session } } = await supabase.auth.getSession();
+
+          if (!session) {
+            console.warn('[SEND MESSAGE] Warning: No active session found!');
+          } else {
+            console.log('[SEND MESSAGE] Session found, sending with auth token');
+          }
+
+          // Enviar ao servidor COM header Authorization explícito
           const { data, error } = await supabase.functions.invoke("evolution-send-message", {
+            headers: session ? {
+              Authorization: `Bearer ${session.access_token}`
+            } : {},
             body: {
               conversationId,
+              contactId,
+              groupId,
               body,
               messageType,
               mediaUrl,
               caption,
               replyId,
               quotedBody,
-              quotedSender
+              quotedSender,
+              message: { wasSentByApi: false } // ✅ Flag para identificar envio humano (frontend)
             },
           });
 

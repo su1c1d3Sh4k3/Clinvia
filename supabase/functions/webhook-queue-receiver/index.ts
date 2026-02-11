@@ -56,11 +56,26 @@ serve(async (req) => {
             });
         }
 
+        // ============================================================
+        // 🚨🚨🚨 WEBHOOK RECEIVED - LOGGING EVERYTHING 🚨🚨🚨
+        // ============================================================
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log('🔔 [WEBHOOK-QUEUE-RECEIVER] WEBHOOK RECEIVED!');
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log('📦 RAW BODY LENGTH:', rawBody.length, 'bytes');
+        console.log('📋 PAYLOAD KEYS:', Object.keys(payload));
+        console.log('🔍 PAYLOAD.MESSAGE:', JSON.stringify(payload.message, null, 2));
+        console.log('🔍 PAYLOAD.MESSAGE.MESSAGETYPE:', payload.message?.messageType);
+        console.log('📄 COMPLETE PAYLOAD:');
+        console.log(JSON.stringify(payload, null, 2));
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
         // Extrair informações básicas
         const instanceName = payload.instanceName || payload.body?.instanceName || 'unknown';
         const eventType = payload.EventType || payload.event || payload.type || 'messages';
 
-        console.log(`[webhook-queue-receiver] Receiving ${eventType} from ${instanceName}`);
+        console.log(`[webhook-queue-receiver] Instance: ${instanceName}, Event: ${eventType}`);
+
 
         const supabase = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',

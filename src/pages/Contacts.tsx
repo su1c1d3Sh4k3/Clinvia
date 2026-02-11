@@ -102,6 +102,10 @@ const Contacts = () => {
     const [isNpsFeedbackOpen, setIsNpsFeedbackOpen] = useState(false);
     const [selectedContactForNps, setSelectedContactForNps] = useState<Contact | null>(null);
 
+    // Pagination state
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(20);
+
     const { toast } = useToast();
     const queryClient = useQueryClient();
 
@@ -260,6 +264,17 @@ const Contacts = () => {
         return matchesSearch && matchesTag && matchesChannel;
     });
 
+    // Calculate pagination
+    const totalPages = Math.ceil((filteredContacts?.length || 0) / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginatedContacts = filteredContacts?.slice(startIndex, endIndex);
+
+    // Reset to page 1 when filters change
+    const handleFilterChange = () => {
+        setCurrentPage(1);
+    };
+
     // Selection Logic
     const toggleSelectAll = () => {
         if (!filteredContacts) return;
@@ -312,7 +327,10 @@ const Contacts = () => {
                         <Button
                             variant={selectedChannelFilter === 'all' ? 'secondary' : 'outline'}
                             size="sm"
-                            onClick={() => setSelectedChannelFilter('all')}
+                            onClick={() => {
+                                setSelectedChannelFilter('all');
+                                setCurrentPage(1);
+                            }}
                             className={`h-8 ${selectedChannelFilter !== 'all' ? 'bg-white dark:bg-transparent border-0 dark:border' : ''}`}
                         >
                             Todos
@@ -320,7 +338,10 @@ const Contacts = () => {
                         <Button
                             variant={selectedChannelFilter === 'whatsapp' ? 'secondary' : 'outline'}
                             size="sm"
-                            onClick={() => setSelectedChannelFilter('whatsapp')}
+                            onClick={() => {
+                                setSelectedChannelFilter('whatsapp');
+                                setCurrentPage(1);
+                            }}
                             className={`h-8 gap-1 ${selectedChannelFilter !== 'whatsapp' ? 'bg-white dark:bg-transparent border-0 dark:border' : ''}`}
                         >
                             <FaWhatsapp className="h-4 w-4 text-green-500" />
@@ -329,7 +350,10 @@ const Contacts = () => {
                         <Button
                             variant={selectedChannelFilter === 'instagram' ? 'secondary' : 'outline'}
                             size="sm"
-                            onClick={() => setSelectedChannelFilter('instagram')}
+                            onClick={() => {
+                                setSelectedChannelFilter('instagram');
+                                setCurrentPage(1);
+                            }}
                             className={`h-8 gap-1 ${selectedChannelFilter !== 'instagram' ? 'bg-white dark:bg-transparent border-0 dark:border' : ''}`}
                         >
                             <FaInstagram className="h-4 w-4 text-pink-500" />
@@ -344,11 +368,17 @@ const Contacts = () => {
                                 <Input
                                     placeholder="Buscar..."
                                     value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    onChange={(e) => {
+                                        setSearchTerm(e.target.value);
+                                        setCurrentPage(1);
+                                    }}
                                     className="pl-8 h-9 bg-white dark:bg-background border-0 dark:border"
                                 />
                             </div>
-                            <Select value={selectedTagFilter} onValueChange={setSelectedTagFilter}>
+                            <Select value={selectedTagFilter} onValueChange={(value) => {
+                                setSelectedTagFilter(value);
+                                setCurrentPage(1);
+                            }}>
                                 <SelectTrigger className="w-full sm:w-[180px] h-9 text-sm bg-white dark:bg-background border-0 dark:border">
                                     <SelectValue placeholder="Filtrar Tag" />
                                 </SelectTrigger>
@@ -473,7 +503,7 @@ const Contacts = () => {
                                         </TableCell>
                                     </TableRow>
                                 ) : (
-                                    filteredContacts?.map((contact) => (
+                                    paginatedContacts?.map((contact) => (
                                         <TableRow key={contact.id} data-state={selectedContactIds.has(contact.id) && "selected"}>
                                             <TableCell className="py-2 md:py-4">
                                                 <Checkbox
@@ -685,6 +715,67 @@ const Contacts = () => {
                             </TableBody>
                         </Table>
                     </div>
+
+                    {/* Pagination Controls */}
+                    {filteredContacts && filteredContacts.length > 0 && (
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4">
+                            <div className="flex items-center gap-2">
+                                <span className="text-sm text-muted-foreground">
+                                    Mostrando {startIndex + 1}-{Math.min(endIndex, filteredContacts.length)} de {filteredContacts.length} contatos
+                                </span>
+                            </div>
+
+                            <div className="flex items-center gap-4">
+                                {/* Items per page selector */}
+                                <div className="flex items-center gap-2">
+                                    <span className="text-sm text-muted-foreground">Por página:</span>
+                                    <Select
+                                        value={itemsPerPage.toString()}
+                                        onValueChange={(value) => {
+                                            setItemsPerPage(Number(value));
+                                            setCurrentPage(1);
+                                        }}
+                                    >
+                                        <SelectTrigger className="w-[70px] h-8 text-sm">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="20">20</SelectItem>
+                                            <SelectItem value="50">50</SelectItem>
+                                            <SelectItem value="100">100</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                {/* Page navigation */}
+                                <div className="flex items-center gap-1">
+                                    <Button
+                                        variant="outline"
+                                        size="icon"
+                                        className="h-8 w-8"
+                                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                        disabled={currentPage === 1}
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6" /></svg>
+                                    </Button>
+
+                                    <span className="text-sm text-muted-foreground px-2">
+                                        Página {currentPage} de {totalPages}
+                                    </span>
+
+                                    <Button
+                                        variant="outline"
+                                        size="icon"
+                                        className="h-8 w-8"
+                                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                        disabled={currentPage === totalPages}
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 

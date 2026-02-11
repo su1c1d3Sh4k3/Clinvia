@@ -11,6 +11,7 @@ import Connections from "./pages/Connections";
 import NotFound from "./pages/NotFound";
 
 import Queues from "./pages/Queues";
+import QueuesManager from "./pages/QueuesManager";
 import Tags from "./pages/Tags";
 import Contacts from "./pages/Contacts";
 import Patients from "./pages/Patients";
@@ -58,6 +59,7 @@ const App = () => (
                 <Route path="/connections" element={<Connections />} />
                 <Route path="/whatsapp-connection" element={<Connections />} />
                 <Route path="/queues" element={<Queues />} />
+                <Route path="/queues_manager" element={<QueuesManager />} />
                 <Route path="/tags" element={<Tags />} />
                 <Route path="/contacts" element={<Contacts />} />
                 <Route path="/patients" element={<Patients />} />

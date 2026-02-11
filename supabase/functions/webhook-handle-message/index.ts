@@ -29,14 +29,55 @@ serve(async (req) => {
 
     console.log('[webhook-handle-message] Starting...');
 
+    // ========================================
+    // PRE-PARSE DIAGNOSTICS
+    // ========================================
+    console.log('[webhook-handle-message] 🔍 REQUEST METHOD:', req.method);
+    console.log('[webhook-handle-message] 🔍 REQUEST URL:', req.url);
+    console.log('[webhook-handle-message] 🔍 CONTENT-TYPE:', req.headers.get('content-type'));
+    console.log('[webhook-handle-message] 🔍 ALL HEADERS:');
+    req.headers.forEach((value, key) => {
+        console.log(`  ${key}: ${value}`);
+    });
+
     try {
+        // Clone request to read body as text first
+        const clonedReq = req.clone();
+        const rawBody = await clonedReq.text();
+        console.log('[webhook-handle-message] 🔍 RAW BODY LENGTH:', rawBody.length);
+        console.log('[webhook-handle-message] 🔍 RAW BODY FIRST 5000 CHARS:', rawBody.substring(0, 5000));
+        console.log('[webhook-handle-message] 🔍 RAW BODY COMPLETE:', rawBody);
+
+
         const payload = await req.json();
+
+        // ========================================
+        // -- RECEIVED WEBHOOK LOG --
+        // ========================================
+        console.log('==========================================');
+        console.log('-- RECEIVED WEBHOOK LOG --');
+        console.log('==========================================');
+        console.log('PAYLOAD TYPE:', typeof payload);
+        console.log('PAYLOAD IS NULL/UNDEFINED:', payload === null || payload === undefined);
+        console.log('PAYLOAD KEYS:', payload ? Object.keys(payload) : 'N/A');
+        console.log('FULL PAYLOAD:');
+        console.log(JSON.stringify(payload, null, 2));
+        console.log('==========================================');
+        console.log('-- END WEBHOOK LOG --');
+        console.log('==========================================');
+
         const eventType = payload.EventType || payload.event || payload.type || 'messages';
         const instanceName = payload.instanceName;
 
         console.log('[webhook-handle-message] Event Type:', eventType);
         console.log('[webhook-handle-message] Instance:', instanceName);
-        console.log('[webhook-handle-message] FULL PAYLOAD:', JSON.stringify(payload, null, 2));
+
+        // 🔥🔥🔥 ALWAYS LOG FULL PAYLOAD - FOR DEBUGGING 🔥🔥🔥
+        console.log('[webhook-handle-message] ═══════════════════════════════════════');
+        console.log('[webhook-handle-message] 📦 FULL WEBHOOK PAYLOAD RECEIVED:');
+        console.log('[webhook-handle-message] ═══════════════════════════════════════');
+        console.log(JSON.stringify(payload, null, 2));
+        console.log('[webhook-handle-message] ═══════════════════════════════════════');
 
         const supabase = createSupabaseClient();
 
@@ -358,8 +399,70 @@ serve(async (req) => {
         if (contactId || groupId) {
             console.log('[webhook-handle-message] Processing Conversation...');
 
+            // 🔍 DEBUG: Log raw messageType BEFORE mapping
+            console.log('[webhook-handle-message] 🔍 RAW payload.message?.messageType:', payload.message?.messageType);
+            console.log('[webhook-handle-message] 🔍 payload.message?.type:', payload.message?.type);
+
             const messageType = mapMessageType(payload.message?.messageType || 'conversation');
+
+            // 🔍 DEBUG: Log AFTER mapping - FOR ALL MESSAGES
+            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            console.log('📨 [webhook-handle-message] MESSAGE TYPE AFTER MAPPING:', messageType);
+            console.log('📝 RAW uzapi type:', payload.message?.messageType);
+            console.log('📑 Message text preview:', (payload.message?.text || payload.message?.content?.text || '').substring(0, 50));
+            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+
             const messageText = payload.message?.text || payload.message?.content?.text || payload.body?.message?.text || '';
+
+            // ========================================
+            // EXTRACT FILE METADATA FOR MEDIA MESSAGES
+            // ========================================
+            let mediaFilename: string | null = null;
+            let mediaMimetype: string | null = null;
+
+            if (['document', 'image', 'video', 'audio'].includes(messageType)) {
+                // Try multiple payload structures for filename
+                const content = payload.message?.content || {};
+
+                // 🔍 DEBUG: Log full content structure for documents
+                if (messageType === 'document') {
+                    console.log('[webhook-handle-message] 🔍🔍🔍 ===== DOCUMENT RECEIVED ===== 🔍🔍🔍');
+                    console.log('[webhook-handle-message] 🔍 messageType:', messageType);
+                    console.log('[webhook-handle-message] 🔍 payload.message FULL:', JSON.stringify(payload.message, null, 2));
+                    console.log('[webhook-handle-message] 🔍 payload.message.content:', JSON.stringify(content, null, 2));
+                    console.log('[webhook-handle-message] 🔍 payload.documentMessage:', JSON.stringify(payload.documentMessage, null, 2));
+                }
+
+                mediaFilename =
+                    content.fileName ||           // UzAPI format
+                    content.filename ||           // Alternative format  
+                    payload.message?.fileName ||  // Root level
+                    payload.documentMessage?.fileName ||
+                    null;
+
+                // Try multiple payload structures for mimetype
+                mediaMimetype =
+                    content.mimetype ||           // UzAPI format
+                    content.mimeType ||           // Alternative format
+                    payload.message?.mimetype ||  // Root level
+                    payload.documentMessage?.mimetype ||
+                    null;
+
+                console.log('[webhook-handle-message] 📎 Media Metadata:', {
+                    messageType,
+                    mediaFilename,
+                    mediaMimetype
+                });
+
+                // 🔍 Extra logging for documents
+                if (messageType === 'document') {
+                    console.log('[webhook-handle-message] 🔍 EXTRACTED VALUES:');
+                    console.log('[webhook-handle-message] 🔍   → mediaFilename:', mediaFilename);
+                    console.log('[webhook-handle-message] 🔍   → mediaMimetype:', mediaMimetype);
+                    console.log('[webhook-handle-message] 🔍 ===== END DOCUMENT DEBUG =====');
+                }
+            }
 
             // ==== DEBUG: EXTENSIVE FROMMEN LOGGING ====
             console.log('[webhook-handle-message] 🔍 === PAYLOAD STRUCTURE DEBUG ===');
@@ -554,13 +657,14 @@ serve(async (req) => {
 
                 // Download Media
                 if (['image', 'audio', 'video', 'document'].includes(messageType) && messageId) {
-                    console.log('[webhook-handle-message] Downloading media...');
+                    console.log('[webhook-handle-message] Downloading media with filename:', mediaFilename);
                     mediaUrl = await downloadMediaFromUzapi(
                         instance.apikey,
                         messageId,
                         messageType,
                         supabase,
-                        conversation.id
+                        conversation.id,
+                        mediaFilename || undefined  // Pass filename to download function
                     );
                     if (mediaUrl) {
                         console.log('[webhook-handle-message] Media uploaded:', mediaUrl);
@@ -595,6 +699,8 @@ serve(async (req) => {
                         sender_jid: senderJid,
                         sender_profile_pic_url: senderProfilePicUrl,
                         media_url: mediaUrl,
+                        media_filename: mediaFilename,      // NEW: Original filename
+                        media_mimetype: mediaMimetype,      // NEW: MIME type
                         reply_to_id: replyToId,
                         quoted_body: quotedBody,
                         quoted_sender: quotedSender

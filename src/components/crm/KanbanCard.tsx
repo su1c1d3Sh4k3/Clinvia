@@ -7,6 +7,7 @@ import { MoreHorizontal, MessageSquare, Tag, Calendar, User, Clock, CalendarPlus
 import { FaInstagram, FaWhatsapp } from "react-icons/fa";
 import { differenceInCalendarDays } from "date-fns";
 import { useStaff } from "@/hooks/useStaff";
+import { useOwnerId } from "@/hooks/useOwnerId";
 import { DealConversationModal } from "./DealConversationModal";
 import {
     DropdownMenu,
@@ -38,24 +39,26 @@ export function KanbanCard({ deal, index, stagnationLimitDays }: KanbanCardProps
     const [showTaskModal, setShowTaskModal] = useState(false);
     const queryClient = useQueryClient();
     const { data: staffMembers } = useStaff();
+    const { data: ownerId } = useOwnerId();
 
     const responsibleName = staffMembers?.find(s => s.id === deal.responsible_id)?.name;
 
     const { data: activeConversation } = useQuery({
-        queryKey: ["active-conversation", deal.contact_id],
+        queryKey: ["active-conversation", deal.contact_id, ownerId],
         queryFn: async () => {
-            if (!deal.contact_id) return null;
+            if (!deal.contact_id || !ownerId) return null;
             const { data, error } = await supabase
                 .from("conversations")
                 .select("id, unread_count")
                 .eq("contact_id", deal.contact_id)
+                .eq("user_id", ownerId)
                 .in("status", ["open", "pending"])
                 .limit(1);
 
             if (error) return null;
             return data && data.length > 0 ? data[0] : null;
         },
-        enabled: !!deal.contact_id,
+        enabled: !!deal.contact_id && !!ownerId,
     });
 
     const deleteDealMutation = useMutation({

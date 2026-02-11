@@ -141,12 +141,31 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone }: NewMessa
                 // Use the existing conversation
                 var conversation = { id: activeConv.id } as any;
             } else {
-                // No active conversation - create new one
+                // No active conversation - create new one as OPEN + assigned to current agent
+                // Get current authenticated user
+                const { data: { user: currentUser } } = await supabase.auth.getUser();
+
+                if (!currentUser) {
+                    throw new Error("Usuário não autenticado");
+                }
+
+                // Get team_member to use correct ID
+                const { data: teamMember } = await supabase
+                    .from("team_members")
+                    .select("id")
+                    .eq("auth_user_id", currentUser.id)
+                    .single();
+
+                if (!teamMember) {
+                    throw new Error("Team member não encontrado");
+                }
+
                 const { data: newConversation, error: conversationError } = await supabase
                     .from("conversations")
                     .insert({
                         contact_id: contact.id,
-                        status: "pending",
+                        status: "open", // Agent-initiated = open
+                        assigned_agent_id: teamMember.id, // Assign to current agent
                         unread_count: 0,
                         last_message_at: new Date().toISOString(),
                         user_id: ownerId,
@@ -156,6 +175,7 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone }: NewMessa
                     .single();
 
                 if (conversationError) throw conversationError;
+                console.log("Created new conversation as 'open':", newConversation.id, "- Assigned to:", teamMember.id);
                 var conversation = newConversation as any;
             }
 

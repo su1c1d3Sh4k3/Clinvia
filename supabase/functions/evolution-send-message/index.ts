@@ -17,13 +17,135 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { conversationId, body, messageType = 'text', mediaUrl, caption, replyId, quotedBody, quotedSender } = await req.json();
+    const reqData = await req.json();
+    let { conversationId, body, messageType = 'text', mediaUrl, caption, replyId, quotedBody, quotedSender, contactId, groupId } = reqData;
     console.log('=== [UZAPI SEND MESSAGE] START ===');
     console.log('Conversation ID:', conversationId);
+    console.log('Contact ID:', contactId);
+    console.log('Group ID:', groupId);
     console.log('Message Type:', messageType);
     console.log('Reply ID:', replyId);
 
-    // Buscar conversation
+    // ✅ CONVERSATION CREATION LOGIC (Agent-initiated conversations)
+    // Se não temos conversationId, mas temos contactId ou groupId, buscar/criar conversa
+    if (!conversationId && (contactId || groupId)) {
+      console.log('[CONV-CREATE] No conversationId provided, searching for existing conversation...');
+
+      // 1. Identificar agente autenticado
+      const authHeader = req.headers.get('Authorization');
+      let authenticatedAgentId = null;
+      let userId = null;
+
+      if (authHeader) {
+        try {
+          const token = authHeader.replace('Bearer ', '');
+          const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token);
+
+          if (user && !userError) {
+            userId = user.id;
+            console.log('[CONV-CREATE] ✅ User authenticated:', user.id);
+
+            const { data: teamMember } = await supabaseClient
+              .from('team_members')
+              .select('id, user_id')
+              .eq('auth_user_id', user.id)
+              .single();
+
+            if (teamMember) {
+              authenticatedAgentId = teamMember.id;
+              userId = teamMember.user_id; // Owner user_id
+              console.log('[CONV-CREATE] ✅ Agent ID:', authenticatedAgentId, 'Owner ID:', userId);
+            }
+          }
+        } catch (authError) {
+          console.error('[CONV-CREATE] ❌ Auth error:', authError);
+        }
+      }
+
+      if (!userId) {
+        throw new Error('Cannot create conversation: User not authenticated');
+      }
+
+      // 2. Buscar instância a partir do contactId ou groupId
+      let instanceId = null;
+
+      if (contactId) {
+        const { data: contact } = await supabaseClient
+          .from('contacts')
+          .select('instance_id')
+          .eq('id', contactId)
+          .single();
+        instanceId = contact?.instance_id;
+      } else if (groupId) {
+        const { data: group } = await supabaseClient
+          .from('groups')
+          .select('instance_id')
+          .eq('id', groupId)
+          .single();
+        instanceId = group?.instance_id;
+      }
+
+      if (!instanceId) {
+        throw new Error('Cannot create conversation: Instance not found for contact/group');
+      }
+
+      // 3. Buscar conversa existente
+      let searchQuery = supabaseClient
+        .from('conversations')
+        .select('*')
+        .eq('instance_id', instanceId)
+        .eq('user_id', userId)
+        .in('status', ['pending', 'open'])
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (contactId) {
+        searchQuery = searchQuery.eq('contact_id', contactId);
+      } else if (groupId) {
+        searchQuery = searchQuery.eq('group_id', groupId);
+      }
+
+      const { data: existingConvs } = await searchQuery;
+
+      if (existingConvs && existingConvs.length > 0) {
+        conversationId = existingConvs[0].id;
+        console.log('[CONV-CREATE] ✅ Found existing conversation:', conversationId);
+      } else if (authenticatedAgentId) {
+        // 4. Criar nova conversa como 'open' + assigned to agent
+        console.log('[CONV-CREATE] Creating NEW conversation as OPEN + assigned to agent...');
+
+        const { data: newConv, error: createError } = await supabaseClient
+          .from('conversations')
+          .insert({
+            contact_id: contactId || null,
+            group_id: groupId || null,
+            instance_id: instanceId,
+            user_id: userId,
+            status: 'open',
+            assigned_agent_id: authenticatedAgentId,
+            unread_count: 0,
+            last_message_at: new Date().toISOString()
+          })
+          .select('id')
+          .single();
+
+        if (createError) {
+          console.error('[CONV-CREATE] ❌ Error creating conversation:', createError);
+          throw new Error(`Failed to create conversation: ${createError.message}`);
+        }
+
+        conversationId = newConv.id;
+        console.log('[CONV-CREATE] ✅ Created conversation:', conversationId, 'Status: open, Assigned to:', authenticatedAgentId);
+      } else {
+        throw new Error('Cannot create conversation: Agent not authenticated');
+      }
+    }
+
+    // Buscar conversation (agora com conversationId garantido)
+    if (!conversationId) {
+      throw new Error('Conversation ID is required');
+    }
+
     const { data: conversation, error: convError } = await supabaseClient
       .from('conversations')
       .select('*')
@@ -90,6 +212,92 @@ serve(async (req) => {
     }
 
     const userId = instance.user_id;
+
+    // ✅ Lógica de Auth e Status Update (Human vs API)
+    // SOLUÇÃO: Passar JWT diretamente para getUser(jwt)
+    const authHeader = req.headers.get('Authorization');
+    let authenticatedAgentId = null;
+
+    if (authHeader) {
+      try {
+        // Extrair token do header
+        const token = authHeader.replace('Bearer ', '');
+        console.log('🔐 Token received, attempting validation...');
+
+        // ✅ CORRETO: Usar getUser(jwt) passando o token diretamente
+        // Funciona com qualquer cliente (SERVICE_ROLE ou ANON_KEY)
+        const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token);
+
+        if (user && !userError) {
+          console.log('✅ User authenticated:', user.id);
+
+          // Buscar team_member usando o cliente SERVICE_ROLE (bypass RLS)
+          const { data: teamMember, error: teamError } = await supabaseClient
+            .from('team_members')
+            .select('id')
+            .eq('auth_user_id', user.id)
+            .single();
+
+          if (teamMember && !teamError) {
+            authenticatedAgentId = teamMember.id;
+            console.log('✅ Authenticated Agent ID:', authenticatedAgentId);
+          } else {
+            console.log('⚠️ Team member not found for user:', user.id, teamError);
+          }
+        } else {
+          console.log('⚠️ Auth validation failed:', userError);
+        }
+      } catch (authError) {
+        console.error('❌ Auth error:', authError);
+      }
+    } else {
+      console.log('⚠️ No Authorization header present');
+    }
+
+    // 3. Verificar flag wasSentByApi e Status
+    // Se NÃO foi enviado pela API (ou flag não existe/false) -> É Humano
+    const isApiMessage = reqData?.message?.wasSentByApi === true;
+
+    if (!isApiMessage) {
+      if (conversation.status === 'pending') {
+        try {
+          const updates: any = {
+            status: 'open'
+          };
+
+          // Se identificamos o agente logado, atribuir a ele
+          if (authenticatedAgentId) {
+            updates.assigned_agent_id = authenticatedAgentId;
+            console.log('[AUTO-ASSIGN] Assigning authenticated agent:', authenticatedAgentId);
+          } else if (conversation.assigned_agent_id) {
+            console.log('[AUTO-UPDATE] Agent already assigned:', conversation.assigned_agent_id);
+            // Mantém o agente atual
+          } else {
+            console.log('[AUTO-UPDATE] No authenticated agent found, opening without assignment.');
+          }
+
+          console.log('[AUTO-UPDATE] Updating conversation status to open (Human Activity)...');
+
+          const { error: updateError } = await supabaseClient
+            .from('conversations')
+            .update(updates)
+            .eq('id', conversationId);
+
+          if (updateError) {
+            console.error('[AUTO-UPDATE] Error updating conversation:', updateError);
+          } else {
+            console.log('[AUTO-UPDATE] Conversation updated successfully!');
+            conversation.status = 'open'; // Atualizar local
+            if (updates.assigned_agent_id) conversation.assigned_agent_id = updates.assigned_agent_id;
+          }
+
+        } catch (statusError) {
+          console.error('[AUTO-UPDATE] Exception updating status:', statusError);
+        }
+      }
+    } else {
+      console.log('[AUTO-UPDATE] Skipping status update: Message sent by API (wasSentByApi = true)');
+    }
 
     // ✅ OTIMIZAÇÃO: Adicionar assinatura do agente no BACKEND (movido do frontend)
     let finalBody = body;

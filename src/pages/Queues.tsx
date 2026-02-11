@@ -132,7 +132,14 @@ const Queues = () => {
                                             <TableCell className="font-mono text-xs hidden sm:table-cell py-2 md:py-4">
                                                 {queue.id.substring(0, 8)}
                                             </TableCell>
-                                            <TableCell className="font-medium text-sm py-2 md:py-4">{queue.name}</TableCell>
+                                            <TableCell className="font-medium text-sm py-2 md:py-4">
+                                                <div className="flex items-center gap-2">
+                                                    {queue.name}
+                                                    {queue.is_system && (
+                                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">Sistema</Badge>
+                                                    )}
+                                                </div>
+                                            </TableCell>
                                             <TableCell className="py-2 md:py-4">
                                                 {queue.is_active ? (
                                                     <div className="flex items-center text-green-600">
@@ -159,17 +166,18 @@ const Queues = () => {
                                                             size="icon"
                                                             className="h-7 w-7 md:h-8 md:w-8"
                                                             onClick={() => handleEdit(queue)}
+                                                            disabled={queue.is_system}
                                                         >
                                                             <Pencil className="w-3.5 h-3.5 md:w-4 md:h-4" />
                                                         </Button>
                                                     )}
-                                                    {userRole === "admin" && (
+                                                    {isAdminOrSupervisor && (
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
-                                                            className={`h-7 w-7 md:h-8 md:w-8 ${queue.is_default ? "opacity-50 cursor-not-allowed" : "text-red-500 hover:text-red-600"}`}
+                                                            className="h-7 w-7 md:h-8 md:w-8 text-destructive"
                                                             onClick={() => setDeleteId(queue.id)}
-                                                            disabled={queue.is_default}
+                                                            disabled={queue.is_system}
                                                         >
                                                             <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
                                                         </Button>

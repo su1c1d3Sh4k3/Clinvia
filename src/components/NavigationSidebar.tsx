@@ -31,6 +31,7 @@ interface MenuItem {
 const menuStructure: MenuItem[] = [
   { icon: LayoutDashboard, label: "Dashboard", id: "dashboard", path: "/dashboard" },
   { icon: MessageSquare, label: "Inbox", id: "inbox", path: "/" },
+  { icon: ListOrdered, label: "Gestão de Filas", id: "queues-manager", path: "/queues_manager" },
   { icon: Briefcase, label: "CRM", id: "crm", path: "/crm" },
   {
     icon: Wrench, label: "Automação", id: "automacao",

@@ -22,13 +22,19 @@ import { useToast } from "@/hooks/use-toast";
 
 interface TagAssignmentProps {
     contactId?: string;
+    open?: boolean;
+    onClose?: () => void;
 }
 
-export const TagAssignment = ({ contactId }: TagAssignmentProps) => {
-    const [open, setOpen] = useState(false);
+export const TagAssignment = ({ contactId, open: externalOpen, onClose }: TagAssignmentProps) => {
+    const [internalOpen, setInternalOpen] = useState(false);
     const { user } = useAuth();
     const { toast } = useToast();
     const queryClient = useQueryClient();
+
+    // Use external open state if provided, otherwise use internal
+    const open = externalOpen !== undefined ? externalOpen : internalOpen;
+    const setOpen = onClose ? onClose : setInternalOpen;
 
     // Fetch all available tags for the user
     const { data: allTags } = useQuery({
@@ -112,7 +118,13 @@ export const TagAssignment = ({ contactId }: TagAssignmentProps) => {
     ) || [];
 
     return (
-        <Popover open={open} onOpenChange={setOpen}>
+        <Popover open={open} onOpenChange={(isOpen) => {
+            if (!isOpen && onClose) {
+                onClose();
+            } else if (!onClose) {
+                setInternalOpen(isOpen);
+            }
+        }}>
             <PopoverTrigger asChild>
                 <Button
                     variant="outline"
