@@ -111,13 +111,13 @@ export function TaskDetailsModal({ taskId, open, onOpenChange, onEdit }: TaskDet
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="absolute right-4 top-4 text-[#1E2229] hover:bg-muted"
+                            className="absolute right-12 top-4 rounded-sm ring-offset-background transition-opacity focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                             onClick={() => {
                                 onOpenChange(false);
                                 onEdit(taskId);
                             }}
                         >
-                            <Pencil className="h-5 w-5" />
+                            <Pencil className="h-4 w-4" />
                         </Button>
                     )}
                 </DialogHeader>

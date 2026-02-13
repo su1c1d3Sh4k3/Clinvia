@@ -120,8 +120,44 @@ serve(async (req) => {
     // Webhook externo que receberá os dados APÓS processamento
     const externalWebhook = `https://webhooks.clinvia.com.br/webhook/${finalName}`;
 
+    // ===== STEP 2.5: GET/CREATE DEFAULT QUEUE =====
+    console.log('[6] Getting default queue for user...');
+    let defaultQueueId = null;
+
+    // Try to find "Atendimento Humano" queue
+    const { data: queueData, error: queueError } = await supabaseClient
+      .from('queues')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('name', 'Atendimento Humano')
+      .maybeSingle();
+
+    if (queueData) {
+      defaultQueueId = queueData.id;
+      console.log('[6.1] Found existing default queue:', defaultQueueId);
+    } else {
+      console.log('[6.2] Default queue not found, creating...');
+      const { data: newQueue, error: createQueueError } = await supabaseClient
+        .from('queues')
+        .insert({
+          user_id: userId,
+          name: 'Atendimento Humano',
+          is_active: true,
+          is_default: true
+        })
+        .select('id')
+        .single();
+
+      if (!createQueueError && newQueue) {
+        defaultQueueId = newQueue.id;
+        console.log('[6.3] Created new default queue:', defaultQueueId);
+      } else {
+        console.error('[6.4] Error creating default queue:', createQueueError);
+      }
+    }
+
     // ===== STEP 3: SAVE TO DATABASE =====
-    console.log('[6] Saving instance to database...');
+    console.log('[7] Saving instance to database...');
     const { data: newInstance, error: insertError } = await supabaseClient
       .from('instances')
       .insert({
@@ -132,13 +168,14 @@ serve(async (req) => {
         status: instanceStatus,
         qr_code: uzapiData.qrcode || uzapiData.qr || uzapiData.base64 || null,
         webhook_url: externalWebhook,
-        user_id: userId
+        user_id: userId,
+        default_queue_id: defaultQueueId // ✅ Assign default queue
       })
       .select()
       .single();
 
     if (insertError) {
-      console.error('[7] Database Insert Error:', insertError);
+      console.error('[8] Database Insert Error:', insertError);
       return new Response(
         JSON.stringify({
           success: false,
@@ -148,7 +185,7 @@ serve(async (req) => {
       );
     }
 
-    console.log('[8] Instance saved to database successfully');
+    console.log('[9] Instance saved to database successfully');
 
     return new Response(
       JSON.stringify({

@@ -63,6 +63,7 @@ export interface CRMDeal {
         remote_jid?: string;
         email?: string;
         profile_pic_url?: string;
+        number?: string;
         instagram_id?: string;  // Para determinar origem do contato (Instagram vs WhatsApp)
         contact_tags?: {
             tags: {

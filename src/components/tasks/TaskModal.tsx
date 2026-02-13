@@ -53,6 +53,8 @@ interface TaskModalProps {
     initialStartTime?: string; // HH:mm
     initialDealId?: string;
     initialContactId?: string;
+    taskToEdit?: { id: string };
+    onSuccess?: () => void;
 }
 
 interface TaskFormValues {
@@ -71,10 +73,12 @@ interface TaskFormValues {
     responsible_id: string; // NOVO - Obrigatório
 }
 
-export function TaskModal({ open, onOpenChange, boardId, taskId, initialDate, initialStartTime, initialDealId, initialContactId }: TaskModalProps) {
+export function TaskModal({ open, onOpenChange, boardId, taskId: propTaskId, initialDate, initialStartTime, initialDealId, initialContactId, taskToEdit, onSuccess }: TaskModalProps) {
     const queryClient = useQueryClient();
     const [openDealCombo, setOpenDealCombo] = useState(false);
 
+    // Determine effective taskId
+    const taskId = propTaskId || taskToEdit?.id;
 
     // Staff/Team hooks para o campo Responsável
     const { data: staffMembers } = useStaff();
@@ -316,6 +320,7 @@ export function TaskModal({ open, onOpenChange, boardId, taskId, initialDate, in
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["tasks"] });
             toast.success(taskId ? "Tarefa atualizada!" : "Tarefa criada!");
+            if (onSuccess) onSuccess();
             onOpenChange(false);
         },
         onError: (error) => {

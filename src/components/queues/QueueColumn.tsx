@@ -17,6 +17,16 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { ViewDealModal } from '@/components/crm/ViewDealModal';
+import { EditDealModal } from '@/components/crm/EditDealModal';
+import { DealSelectorModal } from '@/components/crm/DealSelectorModal';
+import { AppointmentModal } from '@/components/scheduling/AppointmentModal';
+import { ViewAppointmentModal } from '@/components/scheduling/ViewAppointmentModal';
+import { TaskDetailsModal } from '@/components/tasks/TaskDetailsModal';
+import { CRMDeal } from '@/types/crm';
+import { TaskModal } from '@/components/tasks/TaskModal';
+import { AppointmentSelectorModal } from '@/components/scheduling/AppointmentSelectorModal';
+import { TaskSelectorModal } from '@/components/tasks/TaskSelectorModal';
 
 interface QueueColumnProps {
     queueId: string;
@@ -31,6 +41,27 @@ export function QueueColumn({ queueId, queueName, conversations, index }: QueueC
     const [transferModalOpen, setTransferModalOpen] = useState(false);
     const [tagModalOpen, setTagModalOpen] = useState(false);
     const [resolveDialogOpen, setResolveDialogOpen] = useState(false);
+
+    // DEALS STATE
+    const [selectedDeals, setSelectedDeals] = useState<CRMDeal[]>([]); // List of deals to select from
+    const [selectedDeal, setSelectedDeal] = useState<CRMDeal | null>(null); // Single deal to view/edit
+    const [dealSelectorOpen, setDealSelectorOpen] = useState(false);
+    const [viewDealOpen, setViewDealOpen] = useState(false);
+    const [editDealOpen, setEditDealOpen] = useState(false);
+
+    // APPOINTMENTS STATE
+    const [selectedAppointments, setSelectedAppointments] = useState<any[]>([]); // List of appointments
+    const [selectedAppointment, setSelectedAppointment] = useState<any | null>(null);
+    const [appointmentSelectorOpen, setAppointmentSelectorOpen] = useState(false);
+    const [viewAppointmentOpen, setViewAppointmentOpen] = useState(false);
+    const [editAppointmentOpen, setEditAppointmentOpen] = useState(false);
+
+    // TASKS STATE
+    const [selectedTasks, setSelectedTasks] = useState<any[]>([]); // List of tasks
+    const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+    const [taskSelectorOpen, setTaskSelectorOpen] = useState(false);
+    const [taskDetailsOpen, setTaskDetailsOpen] = useState(false);
+    const [editTaskOpen, setEditTaskOpen] = useState(false);
 
     const { transferQueue, resolveConversation } = useConversationActions();
 
@@ -52,6 +83,70 @@ export function QueueColumn({ queueId, queueName, conversations, index }: QueueC
     const handleResolve = (conversation: QueueConversation) => {
         setSelectedConversation(conversation);
         setResolveDialogOpen(true);
+    };
+
+    // --- HANDLERS ---
+
+    const handleViewDeals = (deals: CRMDeal[]) => {
+        if (deals.length === 1) {
+            setSelectedDeal(deals[0]);
+            setViewDealOpen(true);
+        } else if (deals.length > 1) {
+            setSelectedDeals(deals);
+            setDealSelectorOpen(true);
+        }
+    };
+
+    const handleSelectDeal = (deal: CRMDeal) => {
+        setSelectedDeal(deal);
+        setViewDealOpen(true);
+    };
+
+    const handleEditDeal = (deal: CRMDeal) => {
+        // setSelectedDeal já deve estar setado, mas garantimos
+        setSelectedDeal(deal);
+        // Pequeno delay para transição suave entre modais
+        setTimeout(() => setEditDealOpen(true), 100);
+    };
+
+    const handleViewAppointment = (appointments: any[]) => {
+        if (appointments.length === 1) {
+            setSelectedAppointment(appointments[0]);
+            setViewAppointmentOpen(true);
+        } else if (appointments.length > 1) {
+            setSelectedAppointments(appointments);
+            setAppointmentSelectorOpen(true);
+        }
+    };
+
+    const handleSelectAppointment = (appointment: any) => {
+        setSelectedAppointment(appointment);
+        setViewAppointmentOpen(true);
+    };
+
+    const handleEditAppointment = (appointment: any) => {
+        // setSelectedAppointment já setado
+        setTimeout(() => setEditAppointmentOpen(true), 100);
+    };
+
+    const handleViewTask = (tasks: any[]) => {
+        if (tasks.length === 1) {
+            setSelectedTaskId(tasks[0].id);
+            setTaskDetailsOpen(true);
+        } else if (tasks.length > 1) {
+            setSelectedTasks(tasks);
+            setTaskSelectorOpen(true);
+        }
+    };
+
+    const handleSelectTask = (taskId: string) => {
+        setSelectedTaskId(taskId);
+        setTaskDetailsOpen(true);
+    };
+
+    const handleEditTask = (taskId: string) => {
+        setTaskDetailsOpen(false);
+        setTimeout(() => setEditTaskOpen(true), 100);
     };
 
     const confirmResolve = () => {
@@ -121,6 +216,9 @@ export function QueueColumn({ queueId, queueName, conversations, index }: QueueC
                                                             onTransfer={() => handleTransfer(conversation)}
                                                             onTag={() => handleTag(conversation)}
                                                             onResolve={() => handleResolve(conversation)}
+                                                            onViewDeal={handleViewDeals}
+                                                            onViewAppointment={handleViewAppointment}
+                                                            onViewTask={handleViewTask}
                                                         />
                                                     </div>
                                                 )}
@@ -182,6 +280,92 @@ export function QueueColumn({ queueId, queueName, conversations, index }: QueueC
                         </AlertDialogContent>
                     </AlertDialog>
                 </>
+            )}
+
+            {/* --- DEALS MODALS --- */}
+
+            {/* Selector */}
+            <DealSelectorModal
+                deals={selectedDeals}
+                open={dealSelectorOpen}
+                onOpenChange={setDealSelectorOpen}
+                onSelect={handleSelectDeal}
+            />
+
+            {/* View */}
+            {selectedDeal && (
+                <ViewDealModal
+                    deal={selectedDeal}
+                    open={viewDealOpen}
+                    onOpenChange={setViewDealOpen}
+                    onEdit={handleEditDeal}
+                />
+            )}
+
+            {/* Edit */}
+            {selectedDeal && (
+                <EditDealModal
+                    deal={selectedDeal}
+                    open={editDealOpen}
+                    onOpenChange={setEditDealOpen}
+                />
+            )}
+
+
+            {/* --- APPOINTMENT MODALS --- */}
+
+            {/* Selector */}
+            <AppointmentSelectorModal
+                appointments={selectedAppointments}
+                open={appointmentSelectorOpen}
+                onOpenChange={setAppointmentSelectorOpen}
+                onSelect={handleSelectAppointment}
+            />
+
+            {/* View */}
+            <ViewAppointmentModal
+                appointment={selectedAppointment}
+                open={viewAppointmentOpen}
+                onOpenChange={setViewAppointmentOpen}
+                onEdit={handleEditAppointment}
+            />
+
+            {/* Edit/Create */}
+            <AppointmentModal
+                open={editAppointmentOpen}
+                onOpenChange={setEditAppointmentOpen}
+                appointmentToEdit={selectedAppointment}
+            />
+
+
+            {/* --- TASK MODALS --- */}
+
+            {/* Selector */}
+            <TaskSelectorModal
+                tasks={selectedTasks}
+                open={taskSelectorOpen}
+                onOpenChange={setTaskSelectorOpen}
+                onSelect={handleSelectTask}
+            />
+
+            {/* Details (View) */}
+            <TaskDetailsModal
+                taskId={selectedTaskId}
+                open={taskDetailsOpen}
+                onOpenChange={setTaskDetailsOpen}
+                onEdit={handleEditTask}
+            />
+
+            {/* Edit */}
+            {selectedTaskId && (
+                <TaskModal
+                    open={editTaskOpen}
+                    onOpenChange={setEditTaskOpen}
+                    taskToEdit={{ id: selectedTaskId }}
+                    onSuccess={() => {
+                        setEditTaskOpen(false);
+                    }}
+                />
             )}
         </>
     );

@@ -105,8 +105,10 @@ export function DealProductsForm({ products, onChange, availableProducts, readOn
                             <Select
                                 value={product.category}
                                 onValueChange={(val: 'product' | 'service') => {
-                                    updateProduct(product.id, 'category', val);
-                                    updateProduct(product.id, 'productServiceId', '');
+                                    onChange(products.map(p => {
+                                        if (p.id !== product.id) return p;
+                                        return { ...p, category: val, productServiceId: '' };
+                                    }));
                                 }}
                                 disabled={readOnly}
                             >

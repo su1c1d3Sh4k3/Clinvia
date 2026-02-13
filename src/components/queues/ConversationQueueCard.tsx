@@ -11,7 +11,7 @@ import {
 import { MessageCircle, MoreVertical, Briefcase, Calendar, CheckSquare } from 'lucide-react';
 import { FaWhatsapp, FaInstagram } from 'react-icons/fa';
 import { useConversationTimer } from '@/hooks/useConversationTimer';
-import { useHasAppointment, useHasDeal, useHasTask } from '@/hooks/useQueueConversations';
+import { useClientDeals, useClientAppointment, useClientTask } from '@/hooks/useQueueConversations';
 import type { QueueConversation } from '@/hooks/useQueueConversations';
 import { cn } from '@/lib/utils';
 
@@ -21,9 +21,9 @@ interface ConversationQueueCardProps {
     onTransfer: () => void;
     onTag: () => void;
     onResolve: () => void;
-    onViewDeal?: () => void;
-    onViewAppointment?: () => void;
-    onViewTask?: () => void;
+    onViewDeal?: (deals: any[]) => void;
+    onViewAppointment?: (appointments: any[]) => void;
+    onViewTask?: (tasks: any[]) => void;
 }
 
 export function ConversationQueueCard({
@@ -41,9 +41,9 @@ export function ConversationQueueCard({
         conversation.last_message?.direction || 'inbound'
     );
 
-    const { data: hasAppointment } = useHasAppointment(conversation.contact_id);
-    const { data: hasDeal } = useHasDeal(conversation.contact_id);
-    const { data: hasTask } = useHasTask(conversation.contact_id);
+    const { data: deals = [] } = useClientDeals(conversation.contact_id);
+    const { data: appointment } = useClientAppointment(conversation.contact_id);
+    const { data: taskId } = useClientTask(conversation.contact_id);
 
     // Color mapping for timer
     const colorClasses = {
@@ -139,50 +139,64 @@ export function ConversationQueueCard({
 
             {/* Action Icons */}
             <div className="flex items-center gap-2 mb-2">
-                {hasDeal && (
+                {deals && deals.length > 0 && (
                     <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 w-7 p-0"
+                        className="h-7 w-7 p-0 relative"
                         onClick={(e) => {
                             e.stopPropagation();
-                            onViewDeal?.();
+                            onViewDeal?.(deals);
                         }}
-                        title="Ver negociação"
+                        title={`Ver ${deals.length} negociaç${deals.length > 1 ? 'ões' : 'ão'}`}
                     >
                         <Briefcase className="w-4 h-4 text-blue-600" />
+                        {deals.length > 1 && (
+                            <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-[9px] w-3.5 h-3.5 flex items-center justify-center rounded-full">
+                                {deals.length}
+                            </span>
+                        )}
                     </Button>
                 )}
-                {hasAppointment && (
+                {appointment && appointment.length > 0 && (
                     <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 w-7 p-0"
+                        className="h-7 w-7 p-0 relative"
                         onClick={(e) => {
                             e.stopPropagation();
-                            onViewAppointment?.();
+                            onViewAppointment?.(appointment);
                         }}
-                        title="Ver agendamento"
+                        title={`Ver ${appointment.length} agendamento${appointment.length > 1 ? 's' : ''}`}
                     >
                         <Calendar className="w-4 h-4 text-purple-600" />
+                        {appointment.length > 1 && (
+                            <span className="absolute -top-1 -right-1 bg-purple-600 text-white text-[9px] w-3.5 h-3.5 flex items-center justify-center rounded-full">
+                                {appointment.length}
+                            </span>
+                        )}
                     </Button>
                 )}
-                {hasTask && (
+                {taskId && taskId.length > 0 && (
                     <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 w-7 p-0"
+                        className="h-7 w-7 p-0 relative"
                         onClick={(e) => {
                             e.stopPropagation();
-                            onViewTask?.();
+                            onViewTask?.(taskId);
                         }}
-                        title="Ver tarefa"
+                        title={`Ver ${taskId.length} tarefa${taskId.length > 1 ? 's' : ''}`}
                     >
                         <CheckSquare className="w-4 h-4 text-orange-600" />
+                        {taskId.length > 1 && (
+                            <span className="absolute -top-1 -right-1 bg-orange-600 text-white text-[9px] w-3.5 h-3.5 flex items-center justify-center rounded-full">
+                                {taskId.length}
+                            </span>
+                        )}
                     </Button>
                 )}
             </div>
-
             {/* Divider */}
             <div className="border-t border-gray-100 dark:border-slate-700 my-2" />
 

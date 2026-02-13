@@ -8,11 +8,31 @@ export default function QueuesManager() {
     const [selectedStatus, setSelectedStatus] = useState<'all' | 'open' | 'pending'>('all');
     const [selectedAgentId, setSelectedAgentId] = useState<string>('all');
 
+    // Channel Filters State (Both active by default)
+    const [channelFilters, setChannelFilters] = useState({
+        whatsapp: true,
+        instagram: true
+    });
+
+    const handleChannelToggle = (channel: 'whatsapp' | 'instagram') => {
+        setChannelFilters(prev => {
+            // Prevent disabling both (at least one must remain active)
+            if (prev[channel] && !prev[channel === 'whatsapp' ? 'instagram' : 'whatsapp']) {
+                return prev;
+            }
+            return {
+                ...prev,
+                [channel]: !prev[channel]
+            };
+        });
+    };
+
     const handleClearFilters = () => {
         setSearchTerm('');
         setSelectedTagId('all');
         setSelectedStatus('all');
         setSelectedAgentId('all');
+        setChannelFilters({ whatsapp: true, instagram: true });
     };
 
     return (
@@ -36,6 +56,8 @@ export default function QueuesManager() {
                     selectedAgentId={selectedAgentId}
                     onAgentChange={setSelectedAgentId}
                     onClearFilters={handleClearFilters}
+                    channelFilters={channelFilters}
+                    onChannelToggle={handleChannelToggle}
                 />
             </div>
 
@@ -46,6 +68,7 @@ export default function QueuesManager() {
                     selectedTagId={selectedTagId}
                     selectedStatus={selectedStatus}
                     selectedAgentId={selectedAgentId}
+                    channelFilters={channelFilters}
                 />
             </div>
         </div>

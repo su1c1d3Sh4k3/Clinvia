@@ -129,60 +129,86 @@ export function useQueueConversations() {
     });
 }
 
-/**
- * Hook to check if contact has future appointments
- */
-export function useHasAppointment(contactId: string) {
-    return useQuery({
-        queryKey: ['has-appointment', contactId],
-        queryFn: async () => {
-            const { data } = await supabase
-                .from('appointments')
-                .select('id')
-                .eq('contact_id', contactId)
-                .gt('scheduled_date', new Date().toISOString())
-                .limit(1);
-
-            return (data?.length ?? 0) > 0;
-        },
-        enabled: !!contactId
-    });
-}
+import { CRMDeal } from '@/types/crm';
 
 /**
- * Hook to check if contact has active deals
+ * Hook to check if contact has deals and return them
  */
-export function useHasDeal(contactId: string) {
+export function useClientDeals(contactId: string) {
     return useQuery({
-        queryKey: ['has-deal', contactId],
+        queryKey: ['client-deals', contactId],
         queryFn: async () => {
             const { data } = await supabase
                 .from('crm_deals')
-                .select('id')
+                .select('id, title, created_at, value, priority, stage_id')
                 .eq('contact_id', contactId)
-                .limit(1);
+                .order('created_at', { ascending: false })
+                .limit(5); // Fetch up to 5 deals to allow selection
 
-            return (data?.length ?? 0) > 0;
+            return (data as unknown as CRMDeal[]) || [];
         },
         enabled: !!contactId
     });
 }
 
 /**
- * Hook to check if contact has future tasks
+ * Hook to check if contact has future appointments
  */
-export function useHasTask(contactId: string) {
+// ... imports ...
+
+/**
+ * Hook to check if contact has future appointments
+ */
+export function useClientAppointment(contactId: string) {
     return useQuery({
-        queryKey: ['has-task', contactId],
+        queryKey: ['client-appointment', contactId],
+        queryFn: async () => {
+            const { data } = await supabase
+                .from('appointments')
+                .select(`
+                    *,
+                    contacts (
+                        push_name,
+                        number,
+                        profile_pic_url
+                    ),
+                    professional:professionals (
+                        id,
+                        name
+                    ),
+                    services:products_services (
+                        id,
+                        name
+                    )
+                `)
+                .eq('contact_id', contactId)
+                .gt('start_time', new Date().toISOString()) // Only future appointments
+                .order('start_time', { ascending: true }) // Rising order (soonest first)
+                .limit(5);
+
+            return data || [];
+        },
+        enabled: !!contactId
+    });
+}
+
+/**
+ * Hook to check if contact has tasks
+ */
+export function useClientTask(contactId: string) {
+    return useQuery({
+        queryKey: ['client-task', contactId],
         queryFn: async () => {
             const { data } = await supabase
                 .from('tasks')
-                .select('id')
+                .select('id, title, start_time, end_time, due_date, urgency, type, status') // Select needed fields for selector
                 .eq('contact_id', contactId)
-                .gt('due_date', new Date().toISOString())
-                .limit(1);
+                .neq('status', 'completed')
+                .gt('start_time', new Date().toISOString()) // Only future tasks
+                .order('start_time', { ascending: true })
+                .limit(5);
 
-            return (data?.length ?? 0) > 0;
+            return data || [];
         },
         enabled: !!contactId
     });

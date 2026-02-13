@@ -4,10 +4,11 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { CRMDeal } from "@/types/crm";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
-import { Calendar, User, DollarSign, Tag, AlertCircle, FileText } from "lucide-react";
+import { Calendar, User, DollarSign, Tag, AlertCircle, FileText, Pencil } from "lucide-react";
 import { DealNotesModal } from "./DealNotesModal";
 import { format } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
@@ -19,9 +20,10 @@ interface ViewDealModalProps {
     deal: CRMDeal;
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    onEdit?: (deal: CRMDeal) => void;
 }
 
-export function ViewDealModal({ deal, open, onOpenChange }: ViewDealModalProps) {
+export function ViewDealModal({ deal, open, onOpenChange, onEdit }: ViewDealModalProps) {
     const priorityColor = {
         low: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
         medium: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300",
@@ -37,8 +39,21 @@ export function ViewDealModal({ deal, open, onOpenChange }: ViewDealModalProps) 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-md">
-                <DialogHeader>
-                    <DialogTitle className="text-xl font-bold">{deal.title}</DialogTitle>
+                <DialogHeader className="flex flex-row items-center justify-between pr-8">
+                    <DialogTitle className="text-xl font-bold truncate pr-4">{deal.title}</DialogTitle>
+                    {onEdit && (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-12 top-4 rounded-sm ring-offset-background transition-opacity focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                            onClick={() => {
+                                onOpenChange(false);
+                                onEdit(deal);
+                            }}
+                        >
+                            <Pencil className="h-4 w-4" />
+                        </Button>
+                    )}
                 </DialogHeader>
 
                 <div className="space-y-6 mt-4">

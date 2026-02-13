@@ -13,6 +13,7 @@ interface QueueKanbanBoardProps {
     selectedTagId?: string;
     selectedStatus?: 'all' | 'open' | 'pending';
     selectedAgentId?: string;
+    channelFilters: { whatsapp: boolean; instagram: boolean };
 }
 
 export function QueueKanbanBoard({
@@ -20,6 +21,7 @@ export function QueueKanbanBoard({
     selectedTagId = 'all',
     selectedStatus = 'all',
     selectedAgentId = 'all',
+    channelFilters,
 }: QueueKanbanBoardProps) {
     const { data: ownerId } = useOwnerId();
     const { data: conversations, isLoading: conversationsLoading } = useQueueConversations();
@@ -102,7 +104,22 @@ export function QueueKanbanBoard({
             selectedAgentId === 'all' ||
             conv.assigned_agent_id === selectedAgentId;
 
-        return matchesSearch && matchesTag && matchesStatus && matchesAgent;
+        // Channel filter
+        const matchesChannel =
+            (channelFilters.whatsapp && conv.contact.channel === 'whatsapp') ||
+            (channelFilters.instagram && (conv.contact.channel === 'instagram' || !conv.contact.channel)); // Include null/undefined as Instagram if needed, or strictly check. Usually existing contacts might be null if old.
+        // Actually, better to stick to strict check if data is clean.
+        // Let's assume 'whatsapp' is default or explicit.
+
+        // Refined Channel Logic:
+        const isWhatsapp = conv.contact.channel === 'whatsapp';
+        const isInstagram = conv.contact.channel === 'instagram';
+
+        const matchesChannelRefined =
+            (channelFilters.whatsapp && isWhatsapp) ||
+            (channelFilters.instagram && isInstagram);
+
+        return matchesSearch && matchesTag && matchesStatus && matchesAgent && matchesChannelRefined;
     }) || [];
 
     // Group conversations by queue

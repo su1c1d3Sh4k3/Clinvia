@@ -8,10 +8,11 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { MessageSquare, X, Send, Paperclip, Smile, Sparkles, CheckCircle } from "lucide-react";
+import { MessageSquare, X, Send, Paperclip, Smile, Sparkles, CheckCircle, Mic, StopCircle, Trash2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
+import { MessageBubble } from "@/components/MessageBubble";
 import { useState, useRef, useEffect } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { useSendMessage } from "@/hooks/useSendMessage";
@@ -47,6 +48,14 @@ export function ConversationChatModal({
     const [isEmojiOpen, setIsEmojiOpen] = useState(false);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [isUploading, setIsUploading] = useState(false);
+
+    // Audio Recording State
+    const [isRecording, setIsRecording] = useState(false);
+    const [recordingTime, setRecordingTime] = useState(0);
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const audioChunksRef = useRef<Blob[]>([]);
+    const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
     const fileInputRef = useRef<HTMLInputElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -71,6 +80,22 @@ export function ConversationChatModal({
             return data && data.length > 0 ? data[0].id : null;
         },
         enabled: !!contactId && !!ownerId && open,
+    });
+
+    // Fetch conversation details (to check for Instagram/WhatsApp channel)
+    const { data: conversation } = useQuery({
+        queryKey: ["conversation-details", activeConversationId],
+        queryFn: async () => {
+            if (!activeConversationId) return null;
+            const { data, error } = await supabase
+                .from("conversations")
+                .select("*")
+                .eq("id", activeConversationId)
+                .single();
+            if (error) return null;
+            return data;
+        },
+        enabled: !!activeConversationId
     });
 
     // Fetch messages
@@ -165,6 +190,133 @@ export function ConversationChatModal({
         setIsEmojiOpen(false);
     };
 
+    const uploadFile = async (file: File): Promise<string | null> => {
+        try {
+            const safeName = file.name.normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9.-]/g, '_');
+            const fileName = `${Date.now()}_${safeName}`;
+            const filePath = fileName;
+
+            const { error: uploadError } = await supabase.storage
+                .from('media')
+                .upload(filePath, file, {
+                    contentType: file.type,
+                    cacheControl: '3600',
+                    upsert: true
+                });
+
+            if (uploadError) throw uploadError;
+
+            const { data } = supabase.storage
+                .from('media')
+                .getPublicUrl(filePath);
+
+            return data.publicUrl;
+        } catch (error) {
+            console.error('Error uploading file:', error);
+            toast.error("Erro ao fazer upload do arquivo");
+            return null;
+        }
+    };
+
+    // Start audio recording
+    const handleStartRecording = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+            // Detect if this is an Instagram conversation
+            const conversationChannel = (conversation as any)?.channel;
+            const isInstagram = conversationChannel === 'instagram';
+
+            let mimeType = 'audio/webm;codecs=opus';
+            let fileExtension = 'webm';
+
+            if (isInstagram) {
+                if (MediaRecorder.isTypeSupported('audio/mp4;codecs=mp4a.40.2')) {
+                    mimeType = 'audio/mp4;codecs=mp4a.40.2';
+                    fileExtension = 'm4a';
+                } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+                    mimeType = 'audio/mp4';
+                    fileExtension = 'm4a';
+                } else if (MediaRecorder.isTypeSupported('audio/wav')) {
+                    mimeType = 'audio/wav';
+                    fileExtension = 'wav';
+                }
+            } else {
+                if (MediaRecorder.isTypeSupported('audio/mp4;codecs=mp4a.40.2')) {
+                    mimeType = 'audio/mp4;codecs=mp4a.40.2';
+                    fileExtension = 'm4a';
+                } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+                    mimeType = 'audio/mp4';
+                    fileExtension = 'm4a';
+                }
+            }
+
+            const mediaRecorder = new MediaRecorder(stream, { mimeType });
+            mediaRecorderRef.current = mediaRecorder;
+            audioChunksRef.current = [];
+
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    audioChunksRef.current.push(event.data);
+                }
+            };
+
+            mediaRecorder.onstop = () => {
+                const baseMimeType = mimeType.split(';')[0];
+                const audioBlob = new Blob(audioChunksRef.current, { type: baseMimeType });
+                const audioFile = new File([audioBlob], `audio_${Date.now()}.${fileExtension}`, { type: baseMimeType });
+                setSelectedFile(audioFile);
+
+                stream.getTracks().forEach(track => track.stop());
+
+                if (recordingIntervalRef.current) {
+                    clearInterval(recordingIntervalRef.current);
+                    recordingIntervalRef.current = null;
+                }
+                setRecordingTime(0);
+            };
+
+            mediaRecorder.start(100);
+            setIsRecording(true);
+            recordingIntervalRef.current = setInterval(() => {
+                setRecordingTime(prev => prev + 1);
+            }, 1000);
+
+            toast.success("Gravação iniciada");
+        } catch (error) {
+            console.error("Error starting recording:", error);
+            toast.error("Erro ao acessar microfone. Verifique as permissões.");
+        }
+    };
+
+    const handleStopRecording = () => {
+        if (mediaRecorderRef.current && isRecording) {
+            mediaRecorderRef.current.stop();
+            setIsRecording(false);
+            // toast.success("Áudio gravado!"); // Optional feedback
+        }
+    };
+
+    const handleCancelRecording = () => {
+        if (mediaRecorderRef.current && isRecording) {
+            mediaRecorderRef.current.stop();
+            setIsRecording(false);
+            setSelectedFile(null); // Ensure no file is selected
+            if (recordingIntervalRef.current) {
+                clearInterval(recordingIntervalRef.current);
+                recordingIntervalRef.current = null;
+            }
+            setRecordingTime(0);
+            toast.info("Gravação cancelada");
+        }
+    };
+
+    const formatTime = (seconds: number) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    };
+
     const handleSend = async () => {
         if (!message.trim() && !selectedFile) return;
         if (!activeConversationId) {
@@ -173,15 +325,39 @@ export function ConversationChatModal({
         }
 
         try {
+            let mediaUrl: string | undefined = undefined;
+            let messageType: "text" | "image" | "audio" | "video" | "document" = "text";
+
             if (selectedFile) {
                 setIsUploading(true);
-                // Handle file upload logic here if needed
+                const url = await uploadFile(selectedFile);
+                if (!url) {
+                    setIsUploading(false);
+                    return;
+                }
+                mediaUrl = url;
+
+                if (selectedFile.type.startsWith('image/')) messageType = 'image';
+                else if (selectedFile.type.startsWith('audio/')) messageType = 'audio';
+                else if (selectedFile.type.startsWith('video/')) messageType = 'video';
+                else messageType = 'document';
+
                 setIsUploading(false);
+            }
+
+            // Determine if caption is needed (for docs/images/video with text)
+            let caption = undefined;
+            if (mediaUrl && message.trim()) {
+                caption = message.trim();
             }
 
             await sendMessageMutation.mutateAsync({
                 conversationId: activeConversationId,
-                message: message.trim(),
+                body: messageType === 'text' ? message.trim() : (selectedFile?.name || "Arquivo"), // Fallback body
+                messageType,
+                mediaUrl,
+                caption,
+                direction: 'outbound'
             });
 
             setMessage("");
@@ -190,6 +366,7 @@ export function ConversationChatModal({
         } catch (error) {
             console.error("Error sending message:", error);
             toast.error("Erro ao enviar mensagem");
+            setIsUploading(false);
         }
     };
 
@@ -226,23 +403,15 @@ export function ConversationChatModal({
                             {messages.map((msg) => (
                                 <div
                                     key={msg.id}
-                                    className={`flex flex-col max-w-[80%] ${msg.direction === 'outbound'
-                                        ? 'ml-auto items-end'
-                                        : 'mr-auto items-start'
+                                    className={`flex max-w-[80%] ${msg.direction === 'outbound'
+                                        ? 'ml-auto justify-end'
+                                        : 'mr-auto justify-start'
                                         }`}
                                 >
-                                    <div
-                                        className={`p-3 rounded-lg break-words overflow-hidden ${msg.direction === 'outbound'
-                                            ? 'bg-[#DCF7C5] text-gray-800 dark:bg-primary dark:text-primary-foreground'
-                                            : 'bg-white dark:bg-secondary text-gray-800 dark:text-foreground'
-                                            }`}
-                                        style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
-                                    >
-                                        <p className="text-sm break-words whitespace-pre-wrap">{msg.body}</p>
-                                    </div>
-                                    <span className="text-[10px] text-muted-foreground mt-1">
-                                        {format(new Date(msg.created_at), "dd/MM HH:mm")}
-                                    </span>
+                                    <MessageBubble
+                                        message={msg}
+                                    // searchTerm="" // Modal doesn't have search yet
+                                    />
                                 </div>
                             ))}
                         </div>
@@ -265,84 +434,126 @@ export function ConversationChatModal({
                     )}
 
                     <div className="flex gap-2 items-center">
-                        <input
-                            type="file"
-                            ref={fileInputRef}
-                            className="hidden"
-                            onChange={handleFileSelect}
-                        />
-                        <Button variant="ghost" size="icon" onClick={() => fileInputRef.current?.click()} disabled={!activeConversationId}>
-                            <Paperclip className="w-5 h-5" />
-                        </Button>
-
-                        <Popover open={isEmojiOpen} onOpenChange={setIsEmojiOpen}>
-                            <PopoverTrigger asChild>
-                                <Button variant="ghost" size="icon" disabled={!activeConversationId}>
-                                    <Smile className="w-5 h-5" />
+                        {isRecording ? (
+                            <div className="flex-1 flex items-center gap-2 bg-red-50 dark:bg-red-900/20 p-2 rounded-md animate-pulse">
+                                <span className="text-red-500 font-bold animate-pulse">● Gravando</span>
+                                <span className="text-sm font-mono ml-2">{formatTime(recordingTime)}</span>
+                                <div className="flex-1" />
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={handleCancelRecording}
+                                    className="text-red-500 hover:text-red-700 hover:bg-red-100"
+                                >
+                                    <Trash2 className="w-5 h-5" />
                                 </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-full p-0 border-none">
-                                <EmojiPicker onEmojiClick={handleEmojiClick} />
-                            </PopoverContent>
-                        </Popover>
-
-                        <Textarea
-                            ref={textareaRef}
-                            placeholder={activeConversationId ? "Digite sua mensagem..." : "Nenhuma conversa ativa"}
-                            value={message}
-                            onChange={(e) => setMessage(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === "Enter" && !e.shiftKey) {
-                                    e.preventDefault();
-                                    handleSend();
-                                }
-                            }}
-                            rows={1}
-                            className="flex-1 min-h-[40px] max-h-[200px] resize-none py-3"
-                            disabled={isUploading || !activeConversationId}
-                        />
-
-                        {!message.trim() ? (
-                            <Button
-                                variant="outline"
-                                size="icon"
-                                onClick={() => handleAiAction('generate')}
-                                className="bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0 hover:opacity-90"
-                                disabled={!activeConversationId}
-                            >
-                                <Sparkles className="w-5 h-5" />
-                            </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={handleStopRecording}
+                                    className="text-green-600 hover:text-green-700 hover:bg-green-100"
+                                >
+                                    <CheckCircle className="w-5 h-5" />
+                                </Button>
+                            </div>
                         ) : (
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
+                            <>
+                                <input
+                                    type="file"
+                                    ref={fileInputRef}
+                                    className="hidden"
+                                    onChange={handleFileSelect}
+                                />
+                                <Button variant="ghost" size="icon" onClick={() => fileInputRef.current?.click()} disabled={!activeConversationId}>
+                                    <Paperclip className="w-5 h-5" />
+                                </Button>
+
+                                <Popover open={isEmojiOpen} onOpenChange={setIsEmojiOpen}>
+                                    <PopoverTrigger asChild>
+                                        <Button variant="ghost" size="icon" disabled={!activeConversationId}>
+                                            <Smile className="w-5 h-5" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-full p-0 border-none">
+                                        <EmojiPicker onEmojiClick={handleEmojiClick} />
+                                    </PopoverContent>
+                                </Popover>
+
+                                <Textarea
+                                    ref={textareaRef}
+                                    placeholder={activeConversationId ? "Digite sua mensagem..." : "Nenhuma conversa ativa"}
+                                    value={message}
+                                    onChange={(e) => setMessage(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter" && !e.shiftKey) {
+                                            e.preventDefault();
+                                            handleSend();
+                                        }
+                                    }}
+                                    rows={1}
+                                    className="flex-1 min-h-[40px] max-h-[200px] resize-none py-3"
+                                    disabled={isUploading || !activeConversationId}
+                                />
+
+                                {!message.trim() && (
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={handleStartRecording}
+                                        disabled={!activeConversationId || isUploading}
+                                        className="text-muted-foreground hover:text-foreground"
+                                    >
+                                        <Mic className="w-5 h-5" />
+                                    </Button>
+                                )}
+
+                                {!message.trim() && !selectedFile ? (
                                     <Button
                                         variant="outline"
                                         size="icon"
+                                        onClick={() => handleAiAction('generate')}
                                         className="bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0 hover:opacity-90"
                                         disabled={!activeConversationId}
                                     >
                                         <Sparkles className="w-5 h-5" />
                                     </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                    <DropdownMenuItem onClick={() => handleAiAction('fix')}>
-                                        <CheckCircle className="w-4 h-4 mr-2" />
-                                        Correção ortográfica
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleAiAction('improve')}>
-                                        <Sparkles className="w-4 h-4 mr-2" />
-                                        Melhorar a frase
-                                    </DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                        )}
+                                ) : (
+                                    !selectedFile && (
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button
+                                                    variant="outline"
+                                                    size="icon"
+                                                    className="bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0 hover:opacity-90"
+                                                    disabled={!activeConversationId}
+                                                >
+                                                    <Sparkles className="w-5 h-5" />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                                <DropdownMenuItem onClick={() => handleAiAction('fix')}>
+                                                    <CheckCircle className="w-4 h-4 mr-2" />
+                                                    Correção ortográfica
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => handleAiAction('improve')}>
+                                                    <Sparkles className="w-4 h-4 mr-2" />
+                                                    Melhorar a frase
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    )
+                                )}
 
-                        <Button
-                            onClick={handleSend}
-                            disabled={(!message.trim() && !selectedFile) || sendMessageMutation.isPending || isUploading || !activeConversationId}
-                        >
-                            {isUploading ? "..." : <Send className="w-4 h-4" />}
-                        </Button>
+                                {(message.trim() || selectedFile) && (
+                                    <Button
+                                        onClick={handleSend}
+                                        disabled={sendMessageMutation.isPending || isUploading || !activeConversationId}
+                                    >
+                                        {isUploading ? "..." : <Send className="w-4 h-4" />}
+                                    </Button>
+                                )}
+                            </>
+                        )}
                     </div>
                 </div>
             </DialogContent>
