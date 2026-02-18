@@ -11,6 +11,7 @@ import { Lock, Mail, User, Building, Phone, Instagram, MapPin, CheckCircle } fro
 import { toast } from "sonner";
 import TurnstileWidget from "@/components/TurnstileWidget";
 import { sendClientSignupWebhook } from "@/utils/sendWebhook";
+import { ForgotPasswordDialog } from "@/components/auth/ForgotPasswordDialog";
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -301,6 +302,9 @@ const Auth = () => {
                       className="pl-9 bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-primary/50 focus:ring-primary/50"
                     />
                   </div>
+                </div>
+                <div className="flex justify-end">
+                  <ForgotPasswordDialog />
                 </div>
                 <div className="flex justify-center">
                   <TurnstileWidget onVerify={setLoginCaptchaToken} />

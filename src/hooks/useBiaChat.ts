@@ -131,9 +131,8 @@ export const useBiaChat = (): UseBiaChatReturn => {
         await saveMessage('user', message);
 
         try {
-            // CONTEXTO MÍNIMO: Apenas últimas 3 mensagens para a IA
-            // Isso mantém contexto básico sem consumir muitos tokens
-            const conversationHistory = messages.slice(-3).map(m => ({
+            // Contexto: últimas 6 mensagens para manter contexto adequado
+            const conversationHistory = messages.slice(-6).map(m => ({
                 role: m.role,
                 content: m.content,
             }));

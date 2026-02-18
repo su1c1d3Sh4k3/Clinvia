@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ConversationsList } from "@/components/ConversationsList";
 import { ChatArea } from "@/components/ChatArea";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AIIntelligenceSidebar } from "@/components/AIIntelligenceSidebar";
 import { NewMessageModal } from "@/components/NewMessageModal";
 import { useAuth } from "@/hooks/useAuth";
@@ -231,9 +232,9 @@ const Index = () => {
   }
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-background">
+    <div className="flex h-full w-full overflow-hidden bg-background">
       {/* Desktop Layout - Original */}
-      <div className="hidden md:flex h-screen w-full min-w-0">
+      <div className="hidden md:flex h-full w-full min-w-0">
         <ConversationsList
           onSelectConversation={setSelectedConversationId}
           selectedId={selectedConversationId}
@@ -244,15 +245,17 @@ const Index = () => {
           totalMatches={totalMatches}
           onOpenNewMessage={handleOpenNewMessage}
         />
-        <ChatArea
-          conversationId={selectedConversationId}
-          searchTerm={searchTerm}
-          currentMatchIndex={currentMatchIndex}
-          setTotalMatches={setTotalMatches}
-          onOpenNewMessage={handleOpenNewMessage}
-          externalMessage={followUpMessage}
-          clearExternalMessage={() => setFollowUpMessage("")}
-        />
+        <ErrorBoundary name="ChatArea">
+          <ChatArea
+            conversationId={selectedConversationId}
+            searchTerm={searchTerm}
+            currentMatchIndex={currentMatchIndex}
+            setTotalMatches={setTotalMatches}
+            onOpenNewMessage={handleOpenNewMessage}
+            externalMessage={followUpMessage}
+            clearExternalMessage={() => setFollowUpMessage("")}
+          />
+        </ErrorBoundary>
         <AIIntelligenceSidebar
           conversationId={selectedConversationId}
           onFollowUpMessageClick={setFollowUpMessage}
@@ -312,16 +315,18 @@ const Index = () => {
 
             {/* Chat Area - Container sem scroll (scroll é interno no ChatArea) */}
             <div className="flex-1 overflow-hidden min-w-0">
-              <ChatArea
-                conversationId={selectedConversationId}
-                searchTerm={searchTerm}
-                currentMatchIndex={currentMatchIndex}
-                setTotalMatches={setTotalMatches}
-                onOpenNewMessage={handleOpenNewMessage}
-                externalMessage={followUpMessage}
-                clearExternalMessage={() => setFollowUpMessage("")}
-                isMobile={true}
-              />
+              <ErrorBoundary name="MobileChatArea">
+                <ChatArea
+                  conversationId={selectedConversationId}
+                  searchTerm={searchTerm}
+                  currentMatchIndex={currentMatchIndex}
+                  setTotalMatches={setTotalMatches}
+                  onOpenNewMessage={handleOpenNewMessage}
+                  externalMessage={followUpMessage}
+                  clearExternalMessage={() => setFollowUpMessage("")}
+                  isMobile={true}
+                />
+              </ErrorBoundary>
             </div>
           </div>
         )}

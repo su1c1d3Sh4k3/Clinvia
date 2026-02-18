@@ -22,8 +22,8 @@ export const InstanceRow = ({ instance, onConnect }: InstanceRowProps) => {
 
     const checkConnectionMutation = useMutation({
         mutationFn: async (id: string) => {
-            const { data, error } = await supabase.functions.invoke("uzapi-check-connection", {
-                body: { instanceId: id },
+            const { data, error } = await supabase.functions.invoke("uzapi-manager", {
+                body: { action: 'check_connection', instanceId: id },
             });
 
             if (error) throw error;

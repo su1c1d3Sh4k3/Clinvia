@@ -5,6 +5,18 @@ import type { Tables } from "@/integrations/supabase/types";
 
 type Message = Tables<"messages">;
 
+/**
+ * Custom hook to fetch and subscribe to messages for a specific conversation.
+ * 
+ * @param conversationId - The ID of the conversation to fetch messages for.
+ * @returns An object containing:
+ * - `messages`: Array of Message objects (sorted by creation time).
+ * - `isLoading`: Boolean indicating if the initial fetch is in progress.
+ * 
+ * @remarks
+ * This hook handles both active conversations (fetching from `messages` table with realtime subscription)
+ * and resolved conversations (parsing JSON `messages_history` from `conversations` table).
+ */
 export const useMessages = (conversationId?: string) => {
   const queryClient = useQueryClient();
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);

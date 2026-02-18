@@ -30,19 +30,34 @@ export const BiaChatWindow = ({
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
 
-    // Função para formatar markdown básico (negrito com **texto**)
+    // Markdown rendering seguro — escapa HTML primeiro, depois processa markdown
     const formatMessageContent = (content: string): string => {
-        // Escape HTML para segurança
+        // 1. Escape HTML para segurança (anti-XSS)
         let formatted = content
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;');
 
-        // Converte **texto** para <strong>texto</strong>
+        // 2. Inline code `código`
+        formatted = formatted.replace(/`([^`]+)`/g, '<code style="background:rgba(0,0,0,0.06);padding:1px 4px;border-radius:3px;font-size:0.85em">$1</code>');
+
+        // 3. Negrito **texto**
         formatted = formatted.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 
-        // Converte *texto* para <em>texto</em> (itálico)
+        // 4. Itálico *texto*
         formatted = formatted.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+        // 5. Headers ### → bold (simplificado para chat)
+        formatted = formatted.replace(/^#{1,3}\s+(.+)$/gm, '<strong>$1</strong>');
+
+        // 6. Bullet lists (- item ou • item)
+        formatted = formatted.replace(/^[-•]\s+(.+)$/gm, '  • $1');
+
+        // 7. Numbered lists (1. item)
+        formatted = formatted.replace(/^\d+\.\s+(.+)$/gm, (match) => `  ${match}`);
+
+        // 8. Links [texto](url) (abre em nova aba)
+        formatted = formatted.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" style="color:#0175EC;text-decoration:underline">$1</a>');
 
         return formatted;
     };

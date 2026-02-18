@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useOwnerId } from '@/hooks/useOwnerId';
 import { useQueueConversations } from '@/hooks/useQueueConversations';
+import { useConversationActions } from '@/hooks/useConversationActions';
 import { QueueColumn } from './QueueColumn';
 import { Loader2 } from 'lucide-react';
 import type { QueueConversation } from '@/hooks/useQueueConversations';
@@ -25,6 +26,7 @@ export function QueueKanbanBoard({
 }: QueueKanbanBoardProps) {
     const { data: ownerId } = useOwnerId();
     const { data: conversations, isLoading: conversationsLoading } = useQueueConversations();
+    const { transferQueue } = useConversationActions();
     const queryClient = useQueryClient();
 
     // Fetch queues
@@ -148,9 +150,11 @@ export function QueueKanbanBoard({
         const newQueue = queues?.find(q => q.id === newQueueId);
         if (!newQueue) return;
 
-        // Show confirmation modal via optimistic update
-        // The confirmation is handled in QueueColumn via TransferQueueModal
-        // This just triggers the visual drag
+        // Optimistically update the UI or just wait for the mutation
+        transferQueue.mutate({
+            conversationId: draggableId,
+            newQueueId: destination.droppableId
+        });
     };
 
     if (queuesLoading || conversationsLoading) {

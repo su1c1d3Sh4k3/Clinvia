@@ -30,7 +30,8 @@ export interface Sale {
     id: string;
     user_id: string;
     category: SaleCategory;
-    product_service_id: string;
+    product_service_id?: string | null;  // Made nullable
+    product_name: string;            // Added
     quantity: number;
     unit_price: number;
     total_amount: number;
@@ -86,7 +87,8 @@ export interface SaleInstallment {
 // Interface para formulário
 export interface SaleFormData {
     category: SaleCategory;
-    product_service_id: string;
+    product_service_id?: string; // Optional/Nullable locally
+    product_name: string;       // Added
     quantity: number;
     unit_price: number;
     total_amount: number;

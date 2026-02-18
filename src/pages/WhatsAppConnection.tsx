@@ -166,8 +166,8 @@ const WhatsAppConnection = () => {
     mutationFn: async (id: string) => {
       console.log('[DEBUG] 🔍 Checking connection status for:', id, 'poll #', pollCount + 1);
 
-      const { data, error } = await supabase.functions.invoke("uzapi-check-connection", {
-        body: { instanceId: id },
+      const { data, error } = await supabase.functions.invoke("uzapi-manager", {
+        body: { action: 'check_connection', instanceId: id },
       });
 
       console.log('[DEBUG] 📤 uzapi-check-connection response:', data, error);

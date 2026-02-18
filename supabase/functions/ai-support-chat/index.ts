@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
-import { makeOpenAIRequest } from "../_shared/token-tracker.ts";
+import { makeOpenAIRequest, trackTokenUsage } from "../_shared/token-tracker.ts";
 import { allTools, executeTool, executeConfirmedAction, UserContext, UserRole } from "../_shared/bia-tools/index.ts";
 
 const corsHeaders = {
@@ -51,6 +51,7 @@ Você pode executar ações reais no sistema! Quando o usuário pedir algo como:
 - "Cria uma tarefa para..." → Use tasks_create
 - "Quanto faturamos esse mês?" → Use sales_get_summary
 - "Me mostra os deals parados" → Use crm_get_stagnated_deals
+- "Meus tickets de suporte" → Use support_list_tickets
 
 Quando usar ferramentas:
 1. Execute a ferramenta apropriada
@@ -61,12 +62,37 @@ Quando usar ferramentas:
 📚 VOCÊ TAMBÉM TEM ACESSO AO MANUAL:
 Para dúvidas sobre navegação e como usar o sistema, use o manual que será fornecido.
 
+🔍 FERRAMENTAS DE DIAGNÓSTICO:
+Quando o usuário reportar PROBLEMAS TÉCNICOS, use as ferramentas de diagnóstico ANTES de tentar ajudar:
+- diagnostics_check_connections → Status das conexões WhatsApp/Instagram
+- diagnostics_check_conversations → Últimas conversas e status
+- diagnostics_check_team → Membros da equipe
+- diagnostics_get_financial → Dados financeiros
+- diagnostics_check_queues → Filas de atendimento
+- diagnostics_check_ai_config → Configuração da IA
+
+🎫 REGRA DE ABERTURA DE TICKET:
+Se depois de **3 tentativas** de ajudar o usuário (incluindo usar diagnósticos e consultar manual) você NÃO conseguir resolver o problema:
+1. Informe o usuário que vai escalar para o suporte técnico
+2. Use support_create_ticket com:
+   - title: resumo curto do problema
+   - description: detalhes técnicos + diagnósticos realizados + resultados
+   - client_summary: o que o cliente relatou, na perspectiva dele
+   - priority: classifique conforme:
+     * urgent = impede acesso ao sistema
+     * high = funcionalidade principal quebrada
+     * medium = bug com workaround
+     * low = melhoria ou dúvida complexa
+3. Após criar, informe o número/título do ticket e que pode acompanhar na página Suporte
+
 ⚠️ REGRAS IMPORTANTES:
 1. **LEIA O HISTÓRICO** - Não repita informações já dadas
 2. **Use as ferramentas** - Para consultas e ações, use as tools disponíveis
 3. **Seja natural** - Não liste dados de forma robótica, apresente de forma conversacional
 4. **Peça confirmação** - Antes de criar/editar, sempre confirme com o usuário
 5. **Respeite permissões** - Se a ferramenta negar, explique gentilmente
+6. **NUNCA crie ticket sem tentar ajudar 3 vezes** - Sempre tente resolver antes de escalar
+7. **Use diagnósticos** - Para problemas técnicos, sempre cheque o status do sistema primeiro
 
 💬 Se não souber algo: "Hmm, essa não sei te dizer com certeza 🤔 Melhor falar com suporte@clinvia.ai"`;
 
@@ -87,9 +113,11 @@ const SLUG_TO_FILE: Record<string, string> = {
     'products-services': 'products-services.md',
     'contacts': 'contacts.md',
     'queues': 'queues.md',
+    'queues_manager': 'queues_manager.md',
     'tags': 'tags.md',
     'follow-up': 'follow-up.md',
-    'financial': 'sales.md',
+    'financial': 'financial.md',
+    'support': 'support.md',
     'default': 'default.md',
     'unknown': 'default.md',
 };
@@ -104,14 +132,17 @@ function detectTopicFromMessage(message: string): string | null {
         ['crm', ['crm', 'funil', 'deal', 'negociação', 'negociacao', 'kanban', 'etapa', 'pipeline']],
         ['tasks', ['tarefa', 'atividade', 'quadro de tarefa', 'nova tarefa']],
         ['contacts', ['contato', 'lead', 'cliente', 'telefone']],
-        ['sales', ['venda', 'vendas', 'pagamento', 'parcelado', 'faturamento', 'faturou']],
+        ['financial', ['financeiro', 'faturamento', 'faturou', 'receita', 'custo', 'despesa', 'lucro', 'balanço', 'caixa']],
+        ['sales', ['venda', 'vendas', 'pagamento', 'parcelado']],
         ['team', ['equipe', 'membro', 'atendente', 'supervisor', 'comissão', 'comissao']],
         ['ia-config', ['definições de ia', 'configurar ia', 'inteligência artificial', 'bot automático']],
         ['whatsapp-connection', ['whatsapp', 'conexão whatsapp', 'instância', 'instancia', 'qr code', 'pareamento']],
         ['settings', ['configuração geral', 'perfil', 'senha', 'notificação push', 'pwa']],
+        ['queues_manager', ['gestão de fila', 'gestao de fila', 'board de fila', 'kanban de conversa', 'atendimentos na fila']],
         ['queues', ['fila', 'filas de atendimento', 'distribuição']],
         ['tags', ['tag', 'etiqueta', 'marcador']],
         ['follow-up', ['follow up', 'followup', 'follow-up', 'retomada', 'lembrete automático']],
+        ['support', ['ticket', 'chamado', 'suporte técnico', 'meus tickets', 'abrir chamado']],
         ['inbox', ['inbox', 'conversa', 'chat', 'mensagem']],
         ['dashboard', ['dashboard', 'métrica', 'gráfico', 'relatório']],
     ];
@@ -328,7 +359,7 @@ ${manualContent}
         console.log("[ai-support-chat] Messages:", openaiMessages.length, "Tools:", allTools.length);
 
         // Primeira chamada à OpenAI (com tools)
-        const { response, usedCustomToken } = await makeOpenAIRequest(supabaseAdmin, null, {
+        const { response, usedCustomToken } = await makeOpenAIRequest(supabaseAdmin, effectiveOwnerId, {
             endpoint: "https://api.openai.com/v1/chat/completions",
             body: {
                 model: "gpt-4.1",
@@ -370,7 +401,7 @@ ${manualContent}
             }
 
             // Call OpenAI again with tool results
-            const { response: followUpResponse } = await makeOpenAIRequest(supabaseAdmin, null, {
+            const { response: followUpResponse } = await makeOpenAIRequest(supabaseAdmin, effectiveOwnerId, {
                 endpoint: "https://api.openai.com/v1/chat/completions",
                 body: {
                     model: "gpt-4.1",
@@ -394,6 +425,21 @@ ${manualContent}
         const aiResponse = aiMessage?.content || "Desculpa, não consegui processar 😅";
 
         console.log("[ai-support-chat] Tokens:", totalTokens, "Iterations:", iterations);
+
+        // Track token usage
+        if (totalTokens > 0 && effectiveOwnerId) {
+            trackTokenUsage(supabaseAdmin, {
+                ownerId: effectiveOwnerId,
+                teamMemberId: effectiveTeamMemberId || null,
+                functionName: 'ai-support-chat',
+                model: 'gpt-4.1',
+                usage: {
+                    prompt_tokens: Math.round(totalTokens * 0.7),
+                    completion_tokens: Math.round(totalTokens * 0.3),
+                    total_tokens: totalTokens
+                }
+            }).catch(err => console.error('[ai-support-chat] Token tracking error:', err));
+        }
 
         return new Response(JSON.stringify({
             response: aiResponse,

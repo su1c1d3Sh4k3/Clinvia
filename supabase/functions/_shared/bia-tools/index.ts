@@ -10,6 +10,8 @@ import { tasksTools, handleTasksFunction } from './tasks.ts';
 import { salesTools, handleSalesFunction } from './sales.ts';
 import { crmTools, handleCrmFunction } from './crm.ts';
 import { productsTools, handleProductsFunction } from './products.ts';
+import { supportTools, handleSupportFunction } from './support.ts';
+import { diagnosticsTools, handleDiagnosticsFunction } from './diagnostics.ts';
 
 // ============================================
 // COMBINED TOOLS
@@ -22,6 +24,8 @@ export const allTools: ToolFunction[] = [
     ...salesTools,
     ...crmTools,
     ...productsTools,
+    ...supportTools,
+    ...diagnosticsTools,
 ];
 
 // ============================================
@@ -59,6 +63,12 @@ export async function executeTool(
         }
         if (functionName.startsWith('products_')) {
             return await handleProductsFunction(functionName, args, supabase, context);
+        }
+        if (functionName.startsWith('support_')) {
+            return await handleSupportFunction(functionName, args, supabase, context);
+        }
+        if (functionName.startsWith('diagnostics_')) {
+            return await handleDiagnosticsFunction(functionName, args, supabase, context);
         }
 
         return { success: false, error: `Função desconhecida: ${functionName}` };

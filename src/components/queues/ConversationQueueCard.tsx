@@ -63,7 +63,7 @@ export function ConversationQueueCard({
     const statusBorderColor = conversation.status === 'open' ? 'bg-green-500' : 'bg-yellow-500';
 
     return (
-        <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-3 hover:shadow-md transition-shadow overflow-hidden relative border-l-4" style={{ borderLeftColor: 'transparent' }}>
+        <div className="w-full bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-3 hover:shadow-md transition-shadow overflow-hidden relative border-l-4" style={{ borderLeftColor: 'transparent' }}>
             {/* Status color border */}
             <div className={`absolute left-0 top-0 bottom-0 w-1 ${statusBorderColor}`} />
             {/* Header: Avatar + Name + Unread */}

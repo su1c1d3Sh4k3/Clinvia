@@ -1,0 +1,1037 @@
+{
+  "project": "vite_react_shadcn_ts",
+  "mappedAt": "2026-02-16T20:30:32.686Z",
+  "version": "1.0",
+  "structure": {
+    "type": "directory",
+    "files": [
+      ".env",
+      ".env.example",
+      ".gitignore",
+      ".nvmrc",
+      "analyze_schema.js",
+      "bun.lockb",
+      "check_latest_messages.js",
+      "check_products.sql",
+      "check_rls.sql",
+      "components.json",
+      "crm_migration.sql",
+      "crm_notes_migration.sql",
+      "crm_responsible_migration.sql",
+      "debug_image.jpg",
+      "Dockerfile",
+      "eslint.config.js",
+      "fetch_instances.js",
+      "fetch_instances.ts",
+      "index.html",
+      "invoke_fix.js",
+      "... and 20 more"
+    ],
+    "filesCount": 40,
+    "children": {
+      "dev-dist": {
+        "type": "directory",
+        "files": [
+          "registerSW.js",
+          "sw.js",
+          "workbox-6fc00345.js"
+        ]
+      },
+      "manuais": {
+        "type": "directory",
+        "files": [
+          "contacts.md",
+          "crm.md",
+          "dashboard.md",
+          "default.md",
+          "follow-up.md",
+          "ia-config.md",
+          "inbox.md",
+          "products-services.md",
+          "queues.md",
+          "sales.md",
+          "scheduling.md",
+          "settings.md",
+          "system-prompt.md",
+          "tags.md",
+          "tasks.md",
+          "team.md",
+          "whatsapp-connection.md"
+        ]
+      },
+      "public": {
+        "type": "directory",
+        "purpose": "Static assets",
+        "files": [
+          "clinvia-logo-full.png",
+          "clinvia-text-dark.png",
+          "custom-sw.js",
+          "favicon.ico",
+          "favicon.png",
+          "logo-dark.png",
+          "logo-icon.png",
+          "logo-light.png",
+          "logo-name.png",
+          "manifest.json",
+          "placeholder.svg",
+          "pwa-icon.png",
+          "robots.txt"
+        ],
+        "children": {
+          "assets": {
+            "type": "directory",
+            "purpose": "Media/static files",
+            "children": {
+              "file-icons": {
+                "type": "directory",
+                "files": [
+                  "default.png",
+                  "doc.png",
+                  "gif.png",
+                  "jpg.png",
+                  "mp3.png",
+                  "mpg.png",
+                  "pdf.png",
+                  "png.png",
+                  "ppt.png",
+                  "txt.png",
+                  "xls.png",
+                  "zip.png"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "scripts": {
+        "type": "directory",
+        "purpose": "Build/utility scripts",
+        "files": [
+          "generate-webhook-function.js",
+          "WEBHOOK_GENERATOR_README.md"
+        ],
+        "children": {
+          "sql": {
+            "type": "directory",
+            "files": [
+              "20260123_demo_data_seed.sql",
+              "20260127_cleanup_demo_data.sql"
+            ]
+          }
+        }
+      },
+      "src": {
+        "type": "directory",
+        "purpose": "Application source code",
+        "files": [
+          "App.css",
+          "App.tsx",
+          "index.css",
+          "main.tsx",
+          "vite-env.d.ts"
+        ],
+        "children": {
+          "components": {
+            "type": "directory",
+            "purpose": "UI components",
+            "files": [
+              "AIIntelligenceSidebar.tsx",
+              "AnalysisHistoryModal.tsx",
+              "AutoFollowUpProcessor.tsx",
+              "ChangePasswordModal.tsx",
+              "ChatArea.tsx",
+              "ChatInput.tsx",
+              "ClientReportModal.tsx",
+              "ConnectInstanceDialog.tsx",
+              "ConnectInstanceModal.tsx",
+              "ContactDetailsDialog.tsx",
+              "ContactModal.tsx",
+              "ConversationsList.tsx",
+              "CopilotSettingsModal.tsx",
+              "DeleteMessageModal.tsx",
+              "EditMessageModal.tsx",
+              "EmojiReactionPicker.tsx",
+              "ImpersonationBanner.tsx",
+              "InstanceRow.tsx",
+              "InstanceSelectorModal.tsx",
+              "Layout.tsx",
+              "... and 20 more"
+            ],
+            "filesCount": 40,
+            "children": {
+              "admin": {
+                "type": "directory",
+                "files": [
+                  "OpenAITokenManager.tsx",
+                  "TokenUsageCharts.tsx"
+                ]
+              },
+              "crm": {
+                "type": "directory",
+                "files": [
+                  "CreateDealModal.tsx",
+                  "CreateFunnelModal.tsx",
+                  "CRMFilters.tsx",
+                  "CRMIntegrationSidebar.tsx",
+                  "DealConversationModal.tsx",
+                  "DealNotesModal.tsx",
+                  "DealProductsForm.tsx",
+                  "DealSelectorModal.tsx",
+                  "EditDealModal.tsx",
+                  "KanbanBoard.tsx",
+                  "KanbanCard.tsx",
+                  "KanbanColumn.tsx",
+                  "LossReasonModal.tsx",
+                  "ManageStagesModal.tsx",
+                  "PaymentTypeModal.tsx",
+                  "ViewDealModal.tsx"
+                ]
+              },
+              "dashboard": {
+                "type": "directory",
+                "files": [
+                  "CRMStagesChart.tsx",
+                  "DealsStageChart.tsx",
+                  "FinancialDashboard.tsx",
+                  "HistoryCharts.tsx",
+                  "LeadsFunnelPanel.tsx",
+                  "LossReasonsChart.tsx",
+                  "NotificationsBoard.tsx",
+                  "SalesDashboard.tsx",
+                  "ServiceMetricsGrid.tsx",
+                  "TeamPerformanceTable.tsx"
+                ]
+              },
+              "financial": {
+                "type": "directory",
+                "files": [
+                  "ExpenseModal.tsx",
+                  "FinancialReportsModal.tsx",
+                  "FinancialReportViewer.tsx",
+                  "index.ts",
+                  "MarketingCampaignModal.tsx",
+                  "PeriodSelector.tsx",
+                  "QuickSaleModal.tsx",
+                  "RevenueModal.tsx",
+                  "TeamCostModal.tsx"
+                ]
+              },
+              "followup": {
+                "type": "directory",
+                "files": [
+                  "CategoryModal.tsx",
+                  "FollowUpModal.tsx"
+                ]
+              },
+              "patients": {
+                "type": "directory",
+                "files": [
+                  "PatientDetailsCard.tsx",
+                  "PatientModal.tsx",
+                  "PatientNoteModal.tsx"
+                ]
+              },
+              "queues": {
+                "type": "directory",
+                "files": [
+                  "ConversationChatModal.tsx",
+                  "ConversationQueueCard.tsx",
+                  "QueueColumn.tsx",
+                  "QueueFilters.tsx",
+                  "QueueKanbanBoard.tsx",
+                  "TransferQueueModal.tsx"
+                ]
+              },
+              "sales": {
+                "type": "directory",
+                "files": [
+                  "index.ts",
+                  "SaleModal.tsx",
+                  "SalesByPersonTables.tsx",
+                  "SalesCards.tsx",
+                  "SalesCharts.tsx",
+                  "SalesReportsModal.tsx",
+                  "SalesTable.tsx"
+                ]
+              },
+              "scheduling": {
+                "type": "directory",
+                "files": [
+                  "AppointmentModal.tsx",
+                  "AppointmentSelectorModal.tsx",
+                  "ProfessionalModal.tsx",
+                  "SchedulingCalendar.tsx",
+                  "SchedulingSettingsModal.tsx",
+                  "ViewAppointmentModal.tsx"
+                ]
+              },
+              "support": {
+                "type": "directory",
+                "files": [
+                  "BiaButton.tsx",
+                  "BiaChatWindow.tsx",
+                  "BiaSupport.tsx"
+                ]
+              },
+              "tasks": {
+                "type": "directory",
+                "files": [
+                  "TaskBoard.tsx",
+                  "TaskBoardConfigModal.tsx",
+                  "TaskDetailsModal.tsx",
+                  "TaskModal.tsx",
+                  "TaskSelectorModal.tsx"
+                ]
+              },
+              "ui": {
+                "type": "directory",
+                "files": [
+                  "accordion.tsx",
+                  "alert-dialog.tsx",
+                  "alert.tsx",
+                  "aspect-ratio.tsx",
+                  "avatar.tsx",
+                  "badge.tsx",
+                  "breadcrumb.tsx",
+                  "button.tsx",
+                  "calendar.tsx",
+                  "card.tsx",
+                  "carousel.tsx",
+                  "chart.tsx",
+                  "checkbox.tsx",
+                  "collapsible.tsx",
+                  "command.tsx",
+                  "contact-picker.tsx",
+                  "context-menu.tsx",
+                  "currency-input.tsx",
+                  "dialog.tsx",
+                  "drawer.tsx",
+                  "... and 31 more"
+                ],
+                "filesCount": 51
+              }
+            }
+          },
+          "contexts": {
+            "type": "directory",
+            "files": [
+              "MobileMenuContext.tsx",
+              "TypingContext.tsx"
+            ]
+          },
+          "hooks": {
+            "type": "directory",
+            "purpose": "Custom React/Vue hooks",
+            "files": [
+              "use-mobile.tsx",
+              "use-toast.ts",
+              "useActiveConversation.ts",
+              "useAdminImpersonate.ts",
+              "useAIAnalysis.ts",
+              "useAuth.ts",
+              "useAutoAnalysis.ts",
+              "useBiaChat.ts",
+              "useConversationActions.ts",
+              "useConversations.ts",
+              "useConversationTimer.ts",
+              "useCurrentPage.ts",
+              "useDealProducts.ts",
+              "useExchangeRate.ts",
+              "useFetchProfilePictures.ts",
+              "useFinancial.ts",
+              "useFinancialAccess.ts",
+              "useFinancialReports.ts",
+              "useFollowUp.ts",
+              "useGenerateSummary.ts",
+              "... and 14 more"
+            ],
+            "filesCount": 34
+          },
+          "integrations": {
+            "type": "directory",
+            "children": {
+              "supabase": {
+                "type": "directory",
+                "files": [
+                  "client.ts",
+                  "types.ts"
+                ]
+              }
+            }
+          },
+          "lib": {
+            "type": "directory",
+            "purpose": "Library/utility code",
+            "files": [
+              "evolution.ts",
+              "imageProxy.ts",
+              "openai.ts",
+              "utils.ts",
+              "uzapi.ts"
+            ]
+          },
+          "pages": {
+            "type": "directory",
+            "purpose": "Page components/routes",
+            "files": [
+              "Admin.tsx",
+              "AdminAuth.tsx",
+              "Auth.tsx",
+              "Connections.tsx",
+              "Contacts.tsx",
+              "CRM.tsx",
+              "Dashboard.tsx",
+              "Financial.tsx",
+              "FollowUp.tsx",
+              "IAConfig.tsx",
+              "Index.tsx",
+              "NotFound.tsx",
+              "Patients.tsx",
+              "ProductsServices.tsx",
+              "Queues.tsx",
+              "QueuesManager.tsx",
+              "Sales.tsx",
+              "Scheduling.tsx",
+              "Settings.tsx",
+              "Tags.tsx",
+              "... and 3 more"
+            ],
+            "filesCount": 23
+          },
+          "types": {
+            "type": "directory",
+            "purpose": "TypeScript type definitions",
+            "files": [
+              "crm.ts",
+              "financial.ts",
+              "sales.ts"
+            ]
+          },
+          "utils": {
+            "type": "directory",
+            "purpose": "Utility functions",
+            "files": [
+              "formatters.ts",
+              "generateDailyReport.ts",
+              "sendApprovalWebhook.ts",
+              "sendWebhook.ts"
+            ]
+          }
+        }
+      },
+      "supabase": {
+        "type": "directory",
+        "files": [
+          "config.toml"
+        ],
+        "children": {
+          "functions": {
+            "type": "directory",
+            "files": [
+              "inspect-message.ts"
+            ],
+            "children": {
+              "admin-2fa-proxy": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "admin-get-avatars": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "admin-impersonate": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "admin-update-profile": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "ai-analyze-conversation": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "ai-copilot-chat": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "ai-copilot-new": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "ai-generate-summary": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "ai-sentiment-analysis": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "ai-suggest-response": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "ai-support-chat": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "api-contacts": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "api-crm": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "api-professionals": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "api-scheduling": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "api-services": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "approve-client": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "check-availability": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "cleanup-evolution-data": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "cleanup-storage": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "create-team-member": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "debug-history": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "debug-messages": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "delete-admin-account": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "delete-team-member": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "evaluate-agent": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "evolution-check-connection": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "evolution-create-instance": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "evolution-send-message": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "evolution-test-connection": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "evolution-webhook.disabled": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "fix-data": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "generate-client-report": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "generate-financial-report": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "generate-opportunities": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "generate-sales-report": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "ia-workflow-webhook": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "inspect-message": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "instagram-oauth-callback": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "instagram-refresh-token": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "instagram-send-message": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "instagram-subscribe": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "instagram-webhook": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "process-auto-follow-up": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "proxy-whatsapp-image": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "resolve-ticket": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "run-migration": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "save-attendance-data": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "scheduler-notifications": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "send-push": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "send-satisfaction-survey": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "serve-media": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "test-openai-token": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "transcribe-audio": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "uzapi-check-connection": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "uzapi-check-status": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "uzapi-configure-webhook": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "uzapi-connect-instance": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "uzapi-create-instance": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "uzapi-delete-instance": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "uzapi-set-webhook": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "uzapi-setup-webhook": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "uzapi-webhook": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "uzapi-webhook-refactor": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "verify-turnstile": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "webhook-handle-message": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "webhook-handle-status": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "webhook-queue-processor": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "webhook-queue-receiver": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "whatsapp-webhook": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              },
+              "_shared": {
+                "type": "directory",
+                "files": [
+                  "token-tracker.ts",
+                  "utils.ts"
+                ],
+                "children": {
+                  "bia-tools": {
+                    "type": "directory",
+                    "truncated": true
+                  }
+                }
+              },
+              "_webhook-template": {
+                "type": "directory",
+                "files": [
+                  "index.ts"
+                ]
+              }
+            }
+          },
+          "migrations": {
+            "type": "directory",
+            "purpose": "Database migrations",
+            "files": [
+              "20241214_add_sign_messages_column.sql",
+              "20250203143000_add_caption_to_messages.sql",
+              "20250203_add_message_indexes.sql",
+              "20250203_auto_update_conversation_timestamp.sql",
+              "20251119231211_ca00453c-abc3-40c5-8069-a275942b9d39.sql",
+              "20251119232109_b0e24f6f-756e-4c50-897c-9131f5190f0b.sql",
+              "20251121132742_947aa37b-e4bc-4af6-b55e-8b639b95b6c3.sql",
+              "20251121140219_7d1eff4e-bf1c-4cf4-8687-2927b1dd828a.sql",
+              "20251122003933_e45a977a-3a24-4b86-8de7-75a7c1b6db85.sql",
+              "20251122004217_f318da85-a66e-4d8d-af20-bb8769e39c6e.sql",
+              "20251122153612_add_profile_pic_to_instances.sql",
+              "20251126190000_add_profile_pic_to_contacts.sql",
+              "20251126193000_ticket_system_update.sql",
+              "20251126212400_add_messages_history.sql.old",
+              "20251126214000_simplify_json_format.sql",
+              "20251126215000_delete_messages_on_resolve.sql",
+              "20251126221500_create_queues_table.sql",
+              "20251126224000_add_queue_id_to_conversations.sql",
+              "20251127200000_create_tags_table.sql",
+              "20251127201000_add_user_id_to_tags.sql",
+              "... and 220 more"
+            ],
+            "filesCount": 240
+          }
+        }
+      }
+    }
+  },
+  "services": [],
+  "patterns": {
+    "stateManagement": null,
+    "apiCalls": "fetch-wrapper",
+    "errorHandling": "try-catch-toast",
+    "testing": null
+  },
+  "conventions": {
+    "fileNaming": "PascalCase (136 files)",
+    "componentNaming": "mostly PascalCase",
+    "imports": "absolute via @/ alias",
+    "exports": "named exports preferred",
+    "indentation": null,
+    "quotes": null,
+    "language": "TypeScript",
+    "typeChecking": "strict"
+  },
+  "dependencies": {
+    "runtime": [
+      "@hello-pangea/dnd",
+      "@hookform/resolvers",
+      "@radix-ui/react-accordion",
+      "@radix-ui/react-alert-dialog",
+      "@radix-ui/react-aspect-ratio",
+      "@radix-ui/react-avatar",
+      "@radix-ui/react-checkbox",
+      "@radix-ui/react-collapsible",
+      "@radix-ui/react-context-menu",
+      "@radix-ui/react-dialog",
+      "@radix-ui/react-dropdown-menu",
+      "@radix-ui/react-hover-card",
+      "@radix-ui/react-label",
+      "@radix-ui/react-menubar",
+      "@radix-ui/react-navigation-menu",
+      "@radix-ui/react-popover",
+      "@radix-ui/react-progress",
+      "@radix-ui/react-radio-group",
+      "@radix-ui/react-scroll-area",
+      "@radix-ui/react-select",
+      "@radix-ui/react-separator",
+      "@radix-ui/react-slider",
+      "@radix-ui/react-slot",
+      "@radix-ui/react-switch",
+      "@radix-ui/react-tabs",
+      "@radix-ui/react-toast",
+      "@radix-ui/react-toggle",
+      "@radix-ui/react-toggle-group",
+      "@radix-ui/react-tooltip",
+      "@supabase/supabase-js",
+      "@tanstack/react-query",
+      "class-variance-authority",
+      "clsx",
+      "cmdk",
+      "date-fns",
+      "date-fns-tz",
+      "embla-carousel-react",
+      "emoji-picker-react",
+      "html2pdf.js",
+      "input-otp",
+      "lucide-react",
+      "next-themes",
+      "react",
+      "react-day-picker",
+      "react-dom",
+      "react-hook-form",
+      "react-icons",
+      "react-markdown",
+      "react-resizable-panels",
+      "react-router-dom",
+      "recharts",
+      "sonner",
+      "tailwind-merge",
+      "tailwindcss-animate",
+      "vaul",
+      "zod"
+    ],
+    "dev": [
+      "@eslint/js",
+      "@tailwindcss/typography",
+      "@types/node",
+      "@types/react",
+      "@types/react-dom",
+      "@vitejs/plugin-react-swc",
+      "autoprefixer",
+      "eslint",
+      "eslint-plugin-react-hooks",
+      "eslint-plugin-react-refresh",
+      "globals",
+      "lovable-tagger",
+      "postcss",
+      "tailwindcss",
+      "typescript",
+      "typescript-eslint",
+      "vite",
+      "vite-plugin-pwa"
+    ],
+    "peer": [],
+    "optional": [],
+    "packageManager": "npm",
+    "nodeVersion": ">=18.0.0"
+  },
+  "stats": {
+    "totalFiles": 652,
+    "codeFiles": 340,
+    "testFiles": 0,
+    "components": 185,
+    "configFiles": 5
+  },
+  "configFiles": [
+    {
+      "name": ".env.example",
+      "path": ".env.example"
+    },
+    {
+      "name": "Dockerfile",
+      "path": "Dockerfile"
+    },
+    {
+      "name": "package.json",
+      "path": "package.json"
+    },
+    {
+      "name": "tsconfig.json",
+      "path": "tsconfig.json"
+    },
+    {
+      "name": "vite.config.ts",
+      "path": "vite.config.ts"
+    }
+  ]
+}

@@ -359,8 +359,8 @@ const Connections = () => {
 
     const checkConnectionMutation = useMutation({
         mutationFn: async (id: string) => {
-            const { data, error } = await supabase.functions.invoke("uzapi-check-connection", {
-                body: { instanceId: id },
+            const { data, error } = await supabase.functions.invoke("uzapi-manager", {
+                body: { action: 'check_connection', instanceId: id },
             });
 
             if (error) throw error;
@@ -463,8 +463,8 @@ const Connections = () => {
                         console.log('[WhatsApp] Configuring global webhook via Edge Function...');
 
                         const { data: webhookResult, error: webhookError } = await supabase.functions.invoke(
-                            'uzapi-configure-webhook',
-                            { body: { instanceId: selectedInstanceId } }
+                            'uzapi-manager',
+                            { body: { action: 'configure_webhook', instanceId: selectedInstanceId } }
                         );
 
                         if (webhookError) {

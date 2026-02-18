@@ -2,6 +2,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
+/**
+ * Parameters for sending a message.
+ */
 interface SendMessageParams {
   conversationId?: string; // Now optional - can be created from contactId/groupId
   contactId?: string; // Optional - for creating conversations
@@ -16,6 +19,17 @@ interface SendMessageParams {
   quotedSender?: string;
 }
 
+/**
+ * Custom hook to send messages using React Query Mutation.
+ * 
+ * This hook handles:
+ * - Optimistic UI updates (adding the message to the list immediately).
+ * - Sending the message via Supabase Edge Function (`evolution-send-message`).
+ * - Error handling (marking message as error in UI).
+ * - Updating the conversation's timestamp and last message.
+ * 
+ * @returns A React Query mutation object.
+ */
 export const useSendMessage = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();

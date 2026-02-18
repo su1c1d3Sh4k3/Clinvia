@@ -22,7 +22,9 @@ const PAGE_MAP: Record<string, PageInfo> = {
     '/financial': { route: '/financial', name: 'Financeiro', slug: 'financial' },
     '/sales': { route: '/sales', name: 'Vendas', slug: 'sales' },
     '/follow-up': { route: '/follow-up', name: 'Follow-Up', slug: 'follow-up' },
+    '/queues_manager': { route: '/queues_manager', name: 'Gestão de Filas', slug: 'queues_manager' },
     '/settings': { route: '/settings', name: 'Configurações', slug: 'settings' },
+    '/support': { route: '/support', name: 'Suporte', slug: 'support' },
 };
 
 export const useCurrentPage = (): PageInfo => {

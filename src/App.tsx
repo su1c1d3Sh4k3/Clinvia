@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { ChangePasswordModal } from "@/components/auth/ChangePasswordModal";
 import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
 import Auth from "./pages/Auth";
@@ -25,6 +26,7 @@ import Settings from "./pages/Settings";
 import Financial from "./pages/Financial";
 import Sales from "./pages/Sales";
 import FollowUp from "./pages/FollowUp";
+import Support from "./pages/Support";
 import Admin from "./pages/Admin";
 import AdminAuth from "./pages/AdminAuth";
 import { Layout } from "./components/Layout";
@@ -33,6 +35,7 @@ import { AutoFollowUpProcessor } from "./components/AutoFollowUpProcessor";
 import { MobileMenuProvider } from "./contexts/MobileMenuContext";
 import { TypingProvider } from "./contexts/TypingContext";
 import { ImpersonationBanner } from "./components/ImpersonationBanner";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 
 const queryClient = new QueryClient();
 
@@ -44,6 +47,7 @@ const App = () => (
           <Toaster />
           <Sonner />
           <BrowserRouter>
+            <ChangePasswordModal />
             <ImpersonationBanner />
             <NotificationManager />
             <AutoFollowUpProcessor />
@@ -53,7 +57,7 @@ const App = () => (
               <Route path="/login" element={<Navigate to="/auth" replace />} />
               <Route path="/admin-oath" element={<AdminAuth />} />
               <Route path="/admin" element={<Admin />} />
-              <Route element={<Layout />}>
+              <Route element={<ErrorBoundary name="MainLayout"><Layout /></ErrorBoundary>}>
                 <Route path="/" element={<Index />} />
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/connections" element={<Connections />} />
@@ -73,6 +77,7 @@ const App = () => (
                 <Route path="/sales" element={<Sales />} />
                 <Route path="/follow-up" element={<FollowUp />} />
                 <Route path="/settings" element={<Settings />} />
+                <Route path="/support" element={<Support />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>

@@ -58,6 +58,7 @@ const menuStructure: MenuItem[] = [
       { icon: Calendar, label: "Agendamentos", id: "scheduling", path: "/scheduling" },
       { icon: ClipboardList, label: "Tarefas", id: "tasks", path: "/tasks" },
       { icon: ShoppingCart, label: "Vendas", id: "sales", path: "/sales" },
+      { icon: Headphones, label: "Suporte", id: "support", path: "/support" },
       { icon: Users, label: "Equipe", id: "team", path: "/team" },
     ]
   },

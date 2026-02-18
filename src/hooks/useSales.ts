@@ -10,7 +10,6 @@ import type {
     TopProductService,
     SalesProjection,
     SalesByPerson,
-    SalesByPerson,
 } from "@/types/sales";
 import { useOwnerId } from "@/hooks/useOwnerId";
 
@@ -270,6 +269,10 @@ export function useTopSellers(month?: number, year?: number) {
                     product_service_id,
                     quantity,
                     total_amount,
+                    product_service_id,
+                    product_name,
+                    quantity,
+                    total_amount,
                     product_service:products_services(id, name, type)
                 `);
 
@@ -288,8 +291,8 @@ export function useTopSellers(month?: number, year?: number) {
 
                 if (!productMap[prodId]) {
                     productMap[prodId] = {
-                        product_id: prodId,
-                        product_name: sale.product_service?.name || 'Produto desconhecido',
+                        product_id: prodId || 'unknown',
+                        product_name: sale.product_name || sale.product_service?.name || 'Produto desconhecido',
                         product_type: sale.product_service?.type || 'product',
                         total_quantity: 0,
                         total_value: 0,
@@ -362,7 +365,8 @@ export function useCreateSale() {
             const dbData = {
                 user_id: ownerId,
                 category: data.category,
-                product_service_id: data.product_service_id,
+                product_service_id: data.product_service_id || null, // Allow null
+                product_name: data.product_name, // Save snapshot name
                 quantity: data.quantity,
                 unit_price: data.unit_price,
                 total_amount: data.total_amount,

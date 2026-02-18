@@ -257,6 +257,7 @@ export default function IAConfig() {
 
         // Split por dupla quebra de linha para separar blocos
         const blocks = text.split("\n\n");
+        let currentItem: QualifyItem | null = null;
 
         for (const block of blocks) {
             const trimmedBlock = block.trim();
@@ -266,28 +267,38 @@ export default function IAConfig() {
             const lines = trimmedBlock.split("\n");
             const firstLine = lines[0] || "";
 
-            // Extrair nome do produto: pode ser "1. - NomeProduto:" ou "- NomeProduto:"
+            // Extrair nome do produto
             let productName = "";
+            let isNewItem = false;
 
             // Tentar formato numerado: "1. - NomeProduto:"
             if (firstLine.match(/^\d+\.\s*-\s*.+:$/)) {
                 productName = firstLine.replace(/^\d+\.\s*-\s*/, "").replace(/:$/, "").trim();
+                isNewItem = true;
             }
             // Tentar formato sem número: "- NomeProduto:"
             else if (firstLine.match(/^-\s*.+:$/)) {
                 productName = firstLine.replace(/^-\s*/, "").replace(/:$/, "").trim();
+                isNewItem = true;
             }
 
-            if (productName) {
+            if (isNewItem && productName) {
                 // Conteúdo é tudo depois da primeira linha
                 const content = lines.slice(1).join("\n").trim();
                 const product = productsServices?.find((p) => p.name === productName);
 
-                items.push({
+                currentItem = {
                     productId: product?.id || "",
                     productName,
                     text: content,
-                });
+                };
+                items.push(currentItem);
+            } else {
+                // Se não é um novo item (não tem cabeçalho), considera continuação do item anterior
+                // Isso resolve o problema de parágrafos separados por quebra de linha dupla
+                if (currentItem) {
+                    currentItem.text += "\n\n" + trimmedBlock;
+                }
             }
         }
 

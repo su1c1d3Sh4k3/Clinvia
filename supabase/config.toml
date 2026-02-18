@@ -47,24 +47,15 @@ verify_jwt = false
 verify_jwt = false
 
 # Evolution/WhatsApp Functions
-[functions.evolution-test-connection]
-verify_jwt = false
 
-[functions.evolution-create-instance]
-verify_jwt = false
-
-[functions.evolution-webhook]
-verify_jwt = false
 
 [functions.evolution-send-message]
 verify_jwt = false
 
-[functions.evolution-check-connection]
-verify_jwt = false
+
 
 # UZAPI Functions
-[functions.uzapi-webhook-refactor]
-verify_jwt = false
+
 
 [functions.uzapi-webhook]
 verify_jwt = false
@@ -119,8 +110,7 @@ verify_jwt = false
 [functions.webhook-handle-status]
 verify_jwt = false
 
-[functions.whatsapp-webhook]
-verify_jwt = false
+
 
 [functions.ia-workflow-webhook]
 verify_jwt = false

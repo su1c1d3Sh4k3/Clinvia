@@ -12,7 +12,7 @@ interface ConnectInstanceDialogProps {
     instanceName: string;
     onConnect: (phone: string) => Promise<void>;
     pairCode: string | null;
-    isLoading: boolean;
+    onConfirm?: () => void;
 }
 
 export const ConnectInstanceDialog = ({
@@ -21,7 +21,8 @@ export const ConnectInstanceDialog = ({
     instanceName,
     onConnect,
     pairCode,
-    isLoading
+    isLoading,
+    onConfirm
 }: ConnectInstanceDialogProps) => {
     const [phone, setPhone] = useState("");
     const { toast } = useToast();
@@ -112,6 +113,24 @@ export const ConnectInstanceDialog = ({
                                     O modal fechará automaticamente quando a conexão for estabelecida.
                                 </p>
                             </div>
+
+                            {onConfirm && (
+                                <Button
+                                    onClick={onConfirm}
+                                    className="w-full"
+                                    variant="secondary"
+                                    disabled={isLoading}
+                                >
+                                    {isLoading ? (
+                                        <>
+                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            Verificando...
+                                        </>
+                                    ) : (
+                                        "Já conectei (Verificar Conexão)"
+                                    )}
+                                </Button>
+                            )}
                         </div>
                     ) : (
                         <form onSubmit={handleSubmit} className="space-y-4">

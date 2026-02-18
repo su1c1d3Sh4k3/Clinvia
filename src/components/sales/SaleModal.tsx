@@ -30,6 +30,7 @@ interface ProductItem {
     id: string;
     category: SaleCategory;
     productServiceId: string;
+    productName?: string; // Opt
     quantity: number;
     unitPrice: number;
 }
@@ -153,6 +154,7 @@ export function SaleModal({ open, onOpenChange, fixedContactId, appointmentData 
                         updated.unitPrice = selectedItem.price;
                     }
                     updated.category = selectedItem.type;
+                    updated.productName = selectedItem.name; // Save name snapshot
                 }
             }
 
@@ -199,6 +201,7 @@ export function SaleModal({ open, onOpenChange, fixedContactId, appointmentData 
                 await createSale.mutateAsync({
                     category: product.category,
                     product_service_id: product.productServiceId,
+                    product_name: product.productName || 'Item Personalizado', // Pass name
                     quantity: product.quantity,
                     unit_price: product.unitPrice,
                     total_amount: product.quantity * product.unitPrice,
