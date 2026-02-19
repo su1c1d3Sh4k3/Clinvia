@@ -12,8 +12,9 @@ declare global {
 }
 
 const TurnstileWidget = ({ onVerify, siteKey }: TurnstileWidgetProps) => {
-    // Automatically switch to Test Key in Development to avoid "Invalid Domain" error
-    const activeSiteKey = siteKey || (import.meta.env.DEV ? "1x00000000000000000000AA" : "0x4AAAAAACOK66PvxkZuZTup");
+    // Use Test Key only on localhost to avoid "Invalid Domain". On production (even dev build), use Real Key.
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const activeSiteKey = siteKey || (isLocalhost ? "1x00000000000000000000AA" : "0x4AAAAAACOK66PvxkZuZTup");
     const containerRef = useRef<HTMLDivElement>(null);
     const widgetId = useRef<string | null>(null);
 
