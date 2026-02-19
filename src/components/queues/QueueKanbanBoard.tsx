@@ -43,7 +43,13 @@ export function QueueKanbanBoard({
                 .order('created_at');
 
             if (error) throw error;
-            return data;
+
+            // Sort queues: "Atendimento IA" first, then by creation date
+            return data.sort((a, b) => {
+                if (a.name === 'Atendimento IA') return -1;
+                if (b.name === 'Atendimento IA') return 1;
+                return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+            });
         },
         enabled: !!ownerId,
     });

@@ -234,8 +234,21 @@ serve(async (req) => {
 
 
             // Handle Group Member (Sender)
-            const senderPn = payload.message?.sender_pn;
-            const senderNameRaw = payload.message?.senderName || 'Membro Desconhecido';
+            const senderPn = payload.message?.sender_pn ||
+                payload.message?.participant?.split('@')[0] ||
+                payload.key?.participant?.split('@')[0] ||
+                payload.participant?.split('@')[0] ||
+                (payload.message?.fromMe ? instance?.phone : null); // Fallback for own messages
+
+            const senderNameRaw = payload.message?.senderName ||
+                payload.pushName ||
+                payload.message?.pushName ||
+                'Membro Desconhecido';
+
+            const senderProfilePic = payload.message?.senderProfilePic ||
+                payload.sender?.profilePicUrl ||
+                payload.sender?.image ||
+                null;
 
             if (senderPn && group) {
                 let { data: member } = await supabase
@@ -252,11 +265,43 @@ serve(async (req) => {
                             group_id: group.id,
                             push_name: senderNameRaw,
                             number: senderPn,
-                            user_id: userId
+                            user_id: userId,
+                            profile_pic_url: senderProfilePic, // Initial picture
+                            lid: payload.message?.sender_lid || payload.sender_lid || null // Save LID
                         })
                         .select()
                         .single();
                     member = newMember;
+                } else {
+                    // UPDATE EXISTING MEMBER
+                    // If name or picture changed, update it.
+                    const currentPic = member.profile_pic_url;
+                    const newPic = senderProfilePic;
+
+                    const updates: any = {};
+                    if (senderNameRaw && senderNameRaw !== 'Membro Desconhecido' && member.push_name !== senderNameRaw) {
+                        updates.push_name = senderNameRaw;
+                    }
+                    if (newPic && newPic !== currentPic) {
+                        updates.profile_pic_url = newPic;
+                    }
+
+                    const newLid = payload.message?.sender_lid || payload.sender_lid;
+                    if (newLid && member.lid !== newLid) {
+                        updates.lid = newLid;
+                    }
+
+                    if (Object.keys(updates).length > 0) {
+                        console.log(`[webhook-handle-message] Updating member ${member.number} details:`, updates);
+                        await supabase
+                            .from('group_members')
+                            .update(updates)
+                            .eq('id', member.id);
+
+                        // Update local object for this execution
+                        if (updates.push_name) member.push_name = updates.push_name;
+                        if (updates.profile_pic_url) member.profile_pic_url = updates.profile_pic_url;
+                    }
                 }
 
                 if (member) {
@@ -416,18 +461,37 @@ serve(async (req) => {
             const messageText = payload.message?.text || payload.message?.content?.text || payload.body?.message?.text || '';
 
             // ========================================
+            // EXTRACT REACTION DATA (if reactionMessage)
+            // Real UzAPI payload structure:
+            //   emoji  → payload.message.text OR payload.message.content.text
+            //   target → payload.message.reaction (string ID)  OR payload.message.content.key.ID (uppercase!)
+            // ========================================
+            const reactionEmoji = messageType === 'reaction'
+                ? (payload.message?.text || payload.message?.content?.text || '')
+                : '';
+            const reactionTargetId = messageType === 'reaction'
+                ? (payload.message?.reaction ||
+                    payload.message?.content?.key?.ID ||
+                    payload.message?.content?.key?.id ||
+                    null)
+                : null;
+            if (messageType === 'reaction') {
+                console.log('[webhook-handle-message] 💬 REACTION detected:', reactionEmoji, '→ target:', reactionTargetId);
+            }
+
+            // ========================================
             // EXTRACT FILE METADATA FOR MEDIA MESSAGES
             // ========================================
             let mediaFilename: string | null = null;
             let mediaMimetype: string | null = null;
 
-            if (['document', 'image', 'video', 'audio'].includes(messageType)) {
+            if (['document', 'image', 'video', 'audio', 'sticker'].includes(messageType)) {
                 // Try multiple payload structures for filename
                 const content = payload.message?.content || {};
 
-                // 🔍 DEBUG: Log full content structure for documents
-                if (messageType === 'document') {
-                    console.log('[webhook-handle-message] 🔍🔍🔍 ===== DOCUMENT RECEIVED ===== 🔍🔍🔍');
+                // 🔍 DEBUG: Log full content structure for documents or stickers
+                if (messageType === 'document' || messageType === 'sticker') {
+                    console.log(`[webhook-handle-message] 🔍🔍🔍 ===== ${messageType.toUpperCase()} RECEIVED ===== 🔍🔍🔍`);
                     console.log('[webhook-handle-message] 🔍 messageType:', messageType);
                     console.log('[webhook-handle-message] 🔍 payload.message FULL:', JSON.stringify(payload.message, null, 2));
                     console.log('[webhook-handle-message] 🔍 payload.message.content:', JSON.stringify(content, null, 2));
@@ -523,7 +587,10 @@ serve(async (req) => {
             console.log('[webhook-handle-message] npsButtonId:', npsButtonId);
 
             // Use vote or selectedDisplayText as message body for button responses
-            const effectiveMessageBody = voteText || selectedDisplayText || messageText;
+            // For reactions, use the emoji directly
+            const effectiveMessageBody = messageType === 'reaction'
+                ? reactionEmoji
+                : (voteText || selectedDisplayText || messageText);
             console.log('[webhook-handle-message] effectiveMessageBody:', effectiveMessageBody);
 
             // Log full message structure for debugging
@@ -656,7 +723,7 @@ serve(async (req) => {
                 let mediaUrl = null;
 
                 // Download Media
-                if (['image', 'audio', 'video', 'document'].includes(messageType) && messageId) {
+                if (['image', 'audio', 'video', 'document', 'sticker'].includes(messageType) && messageId) {
                     console.log('[webhook-handle-message] Downloading media with filename:', mediaFilename);
                     mediaUrl = await downloadMediaFromUzapi(
                         instance.apikey,
@@ -677,7 +744,10 @@ serve(async (req) => {
                 let quotedBody = null;
                 let quotedSender = null;
 
-                if (contextInfo) {
+                if (messageType === 'reaction') {
+                    // For reactions: link to the reacted message via evolution_id match
+                    replyToId = reactionTargetId;
+                } else if (contextInfo) {
                     replyToId = contextInfo.stanzaID || null;
                     quotedBody = contextInfo.quotedMessage?.conversation ||
                         contextInfo.quotedMessage?.extendedTextMessage?.text || null;
@@ -1047,8 +1117,26 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                 console.log('[webhook-handle-message] Skipping webhook: instance.ia_on_wpp is FALSE');
             }
 
-            // Only forward webhook if ALL 4 filters pass
-            if (conversationIsPending && contactIaOn && iaConfigOn && instanceIaOn) {
+            // Check filter 5: Queue must be "Atendimento IA"
+            let queueIsIa = false;
+            if (conversation?.queue_id) {
+                const { data: queueData } = await supabase
+                    .from('queues')
+                    .select('name, user_id')
+                    .eq('id', conversation.queue_id)
+                    .single();
+
+                if (queueData && queueData.name === 'Atendimento IA' && queueData.user_id === userId) {
+                    queueIsIa = true;
+                } else {
+                    console.log(`[webhook-handle-message] Skipping webhook: queue is "${queueData?.name}" (expected "Atendimento IA")`);
+                }
+            } else {
+                console.log('[webhook-handle-message] Skipping webhook: conversation has no queue_id');
+            }
+
+            // Only forward webhook if ALL 5 filters pass
+            if (conversationIsPending && contactIaOn && iaConfigOn && instanceIaOn && queueIsIa) {
                 console.log('[webhook-handle-message] All filters passed! Forwarding to external webhook...');
 
                 // Check if we need to include ia_funnel_id
@@ -1119,7 +1207,8 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                     conversationIsPending,
                     contactIaOn,
                     iaConfigOn,
-                    instanceIaOn
+                    instanceIaOn,
+                    queueIsIa
                 });
             }
         }

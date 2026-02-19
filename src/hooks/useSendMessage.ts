@@ -17,6 +17,7 @@ interface SendMessageParams {
   replyId?: string;
   quotedBody?: string;
   quotedSender?: string;
+  mentions?: string[]; // Array of JIDs to mention
 }
 
 /**
@@ -35,7 +36,7 @@ export const useSendMessage = () => {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ conversationId, contactId, groupId, body, direction, messageType = "text", mediaUrl, caption, replyId, quotedBody, quotedSender }: SendMessageParams) => {
+    mutationFn: async ({ conversationId, contactId, groupId, body, direction, messageType = "text", mediaUrl, caption, replyId, quotedBody, quotedSender, mentions }: SendMessageParams) => {
       // Se for mensagem outbound, enviar via Edge Function (que chama Evolution API)
       if (direction === "outbound") {
         // ✨ OTIMIZAÇÃO: Criar mensagem otimista ANTES de enviar ao servidor
@@ -98,6 +99,7 @@ export const useSendMessage = () => {
               replyId,
               quotedBody,
               quotedSender,
+              mentions: mentions ? mentions.join(',') : undefined, // Convert array to comma-separated string for API
               message: { wasSentByApi: false } // ✅ Flag para identificar envio humano (frontend)
             },
           });

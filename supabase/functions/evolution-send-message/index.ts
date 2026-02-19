@@ -18,13 +18,14 @@ serve(async (req) => {
     );
 
     const reqData = await req.json();
-    let { conversationId, body, messageType = 'text', mediaUrl, caption, replyId, quotedBody, quotedSender, contactId, groupId } = reqData;
+    let { conversationId, body, messageType = 'text', mediaUrl, caption, replyId, quotedBody, quotedSender, contactId, groupId, mentions } = reqData;
     console.log('=== [UZAPI SEND MESSAGE] START ===');
     console.log('Conversation ID:', conversationId);
     console.log('Contact ID:', contactId);
     console.log('Group ID:', groupId);
     console.log('Message Type:', messageType);
     console.log('Reply ID:', replyId);
+    if (mentions) console.log('Mentions:', mentions);
 
     // ✅ CONVERSATION CREATION LOGIC (Agent-initiated conversations)
     // Se não temos conversationId, mas temos contactId ou groupId, buscar/criar conversa
@@ -99,11 +100,8 @@ serve(async (req) => {
         .order('created_at', { ascending: false })
         .limit(1);
 
-      if (contactId) {
-        searchQuery = searchQuery.eq('contact_id', contactId);
-      } else if (groupId) {
-        searchQuery = searchQuery.eq('group_id', groupId);
-      }
+      if (contactId) searchQuery = searchQuery.eq('contact_id', contactId);
+      if (groupId) searchQuery = searchQuery.eq('group_id', groupId);
 
       const { data: existingConvs } = await searchQuery;
 
@@ -122,20 +120,15 @@ serve(async (req) => {
             instance_id: instanceId,
             user_id: userId,
             status: 'open',
-            assigned_agent_id: authenticatedAgentId,
-            unread_count: 0,
-            last_message_at: new Date().toISOString()
+            source: 'panel', // Criado pelo painel
+            assigned_agent_id: authenticatedAgentId
           })
-          .select('id')
+          .select()
           .single();
 
-        if (createError) {
-          console.error('[CONV-CREATE] ❌ Error creating conversation:', createError);
-          throw new Error(`Failed to create conversation: ${createError.message}`);
-        }
-
+        if (createError) throw createError;
         conversationId = newConv.id;
-        console.log('[CONV-CREATE] ✅ Created conversation:', conversationId, 'Status: open, Assigned to:', authenticatedAgentId);
+        console.log('[CONV-CREATE] ✅ Created new conversation:', conversationId);
       } else {
         throw new Error('Cannot create conversation: Agent not authenticated');
       }
@@ -148,13 +141,17 @@ serve(async (req) => {
 
     const { data: conversation, error: convError } = await supabaseClient
       .from('conversations')
-      .select('*')
+      .select('*, instance:instances(*)')
       .eq('id', conversationId)
       .single();
 
-    if (convError) {
-      console.error('Conversation error:', convError);
-      throw new Error(`Conversation not found: ${convError.message}`);
+    if (convError || !conversation) {
+      throw new Error(`Conversation not found: ${convError?.message}`);
+    }
+
+    const instance = conversation.instance;
+    if (!instance || !instance.apikey) {
+      throw new Error('Instance configuration missing');
     }
 
     let remoteJid = '';
@@ -164,47 +161,25 @@ serve(async (req) => {
       console.log('Processing as Group Conversation. Group ID:', conversation.group_id);
       const { data: group, error: groupError } = await supabaseClient
         .from('groups')
-        .select('*')
+        .select('remote_jid')
         .eq('id', conversation.group_id)
         .single();
 
-      if (groupError || !group) throw new Error('Group not found');
+      if (groupError || !group?.remote_jid) throw new Error('Group JID not found');
       remoteJid = group.remote_jid;
       isGroup = true;
     } else if (conversation.contact_id) {
       console.log('Processing as Contact Conversation. Contact ID:', conversation.contact_id);
       const { data: contact, error: contactError } = await supabaseClient
         .from('contacts')
-        .select('*')
+        .select('number')
         .eq('id', conversation.contact_id)
         .single();
 
-      if (contactError || !contact) throw new Error('Contact not found');
+      if (contactError || !contact?.number) throw new Error('Contact number not found');
       remoteJid = contact.number;
     } else {
       throw new Error('Invalid conversation: missing group_id and contact_id');
-    }
-
-    let instance;
-
-    if (conversation.instance_id) {
-      const { data: specificInstance, error: instanceError } = await supabaseClient
-        .from('instances')
-        .select('*')
-        .eq('id', conversation.instance_id)
-        .single();
-
-      if (!instanceError && specificInstance) {
-        instance = specificInstance;
-      }
-    }
-
-    if (!instance && conversation.contact_id) {
-      // Fallback logic could go here
-    }
-
-    if (!instance) {
-      throw new Error('No instance associated with this conversation.');
     }
 
     if (instance.status !== 'connected') {

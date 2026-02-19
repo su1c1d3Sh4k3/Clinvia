@@ -2,10 +2,12 @@ import { useRef, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Send, Paperclip, Smile, Mic, Sparkles, X, StopCircle, Image as ImageIcon, Video, FileText, Zap, ClipboardList } from "lucide-react";
+import { Send, Paperclip, Smile, Mic, Sparkles, X, StopCircle, Image as ImageIcon, Video, FileText, Zap, ClipboardList, CheckCircle, AtSign } from "lucide-react";
 import { cn } from "@/lib/utils";
 import EmojiPicker, { EmojiClickData } from "emoji-picker-react";
 import { QuickMessagesMenu } from "@/components/QuickMessagesMenu";
+import { useGroupMembers, GroupMember } from "@/hooks/useGroupMembers";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface QuickMessage {
     id: string;
@@ -24,7 +26,7 @@ interface MessageInputProps {
     /** Function to update the message input value */
     setMessage: (msg: string) => void;
     /** Function to handle sending the message */
-    handleSend: () => void;
+    handleSend: (options?: { mentions?: string[], body?: string }) => void;
     /** Function to handle file selection from the attachment menu */
     handleFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
     /** The currently selected file, if any */
@@ -59,6 +61,10 @@ interface MessageInputProps {
     onSendSurvey?: () => void;
     /** Whether the survey is currently being sent */
     isSendingSurvey?: boolean;
+    /** Conversation ID for fetching group members */
+    conversationId?: string;
+    /** Whether the current chat is a group */
+    isGroup?: boolean;
 }
 
 /**
@@ -71,6 +77,7 @@ interface MessageInputProps {
  * - Audio recording
  * - Quick messages (via slash command or menu)
  * - AI integration
+ * - Group Member Mentions (@)
  */
 export const MessageInput = ({
     message,
@@ -92,7 +99,9 @@ export const MessageInput = ({
     quickMessages = [],
     onQuickMessageSelect,
     onSendSurvey,
-    isSendingSurvey
+    isSendingSurvey,
+    conversationId,
+    isGroup = false
 }: MessageInputProps) => {
 
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -103,29 +112,129 @@ export const MessageInput = ({
     const [showQuickMessagePopup, setShowQuickMessagePopup] = useState(false);
     const [filteredQuickMessages, setFilteredQuickMessages] = useState<QuickMessage[]>([]);
 
+    // Mention Popup State
+    const [showMentionPopup, setShowMentionPopup] = useState(false);
+    const [filteredMembers, setFilteredMembers] = useState<GroupMember[]>([]);
+    const [mentionQuery, setMentionQuery] = useState("");
+    const [cursorPosition, setCursorPosition] = useState(0);
+
+    const { data: groupMembers } = useGroupMembers(conversationId, isGroup);
+
     const onEmojiClick = (emojiData: EmojiClickData) => {
         setMessage(message + emojiData.emoji);
         setIsEmojiOpen(false);
     };
 
-    // Auto-resize textarea
+    // Auto-resize textarea and Handle Mentions/QuickMessages
     const handleMessageChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-        setMessage(e.target.value);
+        const newValue = e.target.value;
+        const newCursorPosition = e.target.selectionStart;
+        setMessage(newValue);
+        setCursorPosition(newCursorPosition);
+
         e.target.style.height = "auto";
         e.target.style.height = `${e.target.scrollHeight}px`;
     }
 
-    // Handle Slash Command
+    // Effect to handle popup filtering based on cursor position and content
     useEffect(() => {
+        // Quick Messages (starts with /)
         if (message.startsWith('/')) {
             const query = message.slice(1).toLowerCase();
             const matches = quickMessages.filter(qm => qm.shortcut.toLowerCase().includes(query));
             setFilteredQuickMessages(matches);
             setShowQuickMessagePopup(matches.length > 0);
+            setShowMentionPopup(false);
+            return;
         } else {
             setShowQuickMessagePopup(false);
         }
-    }, [message, quickMessages]);
+
+        // Mentions (contains @) - logic to find the active word being typed
+        if (isGroup && groupMembers && groupMembers.length > 0) {
+            const textBeforeCursor = message.slice(0, cursorPosition);
+            const lastAtSymbolIndex = textBeforeCursor.lastIndexOf('@');
+
+            if (lastAtSymbolIndex !== -1) {
+                // Check if the @ is at the start or preceded by a space
+                const isStartOrSpace = lastAtSymbolIndex === 0 || textBeforeCursor[lastAtSymbolIndex - 1] === ' ';
+
+                if (isStartOrSpace) {
+                    const query = textBeforeCursor.slice(lastAtSymbolIndex + 1).toLowerCase();
+                    // Don't show if the query contains a space (end of mention)
+                    if (!query.includes(' ')) {
+                        setMentionQuery(query);
+                        const matches = groupMembers.filter(member =>
+                        (member.push_name?.toLowerCase().includes(query) ||
+                            member.number.includes(query))
+                        );
+                        setFilteredMembers(matches);
+                        setShowMentionPopup(matches.length > 0);
+                        return;
+                    }
+                }
+            }
+        }
+        setShowMentionPopup(false);
+    }, [message, cursorPosition, quickMessages, isGroup, groupMembers]);
+
+    const handleMentionSelect = (member: GroupMember) => {
+        const textBeforeCursor = message.slice(0, cursorPosition);
+        const lastAtSymbolIndex = textBeforeCursor.lastIndexOf('@');
+
+        // Use push_name or number if name is missing
+        const mentionName = member.push_name || member.number;
+
+        const prefix = message.slice(0, lastAtSymbolIndex);
+        const suffix = message.slice(cursorPosition);
+
+        // We will insert "@Name "
+        const insertedText = `@${mentionName} `;
+        setMessage(`${prefix}${insertedText}${suffix}`);
+        setShowMentionPopup(false);
+
+        // Reset focus
+        setTimeout(() => {
+            if (textareaRef.current) {
+                textareaRef.current.focus();
+                const newPos = prefix.length + insertedText.length;
+                textareaRef.current.setSelectionRange(newPos, newPos);
+            }
+        }, 10);
+    };
+
+    const onSendClick = () => {
+        if (isGroup && groupMembers) {
+            let processedMessage = message;
+            const mentions: string[] = [];
+
+            // Sort members by name length descending to avoid partial matches on substrings
+            const sortedMembers = [...groupMembers].sort((a, b) => (b.push_name?.length || 0) - (a.push_name?.length || 0));
+
+            sortedMembers.forEach(member => {
+                const name = member.push_name || member.number;
+                // Escape special regex chars in name
+                const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const mentionPattern = new RegExp(`@${escapedName}`, 'g');
+
+                if (mentionPattern.test(processedMessage)) {
+                    mentions.push(member.number); // Keep full JID/number for API metadata if needed.
+
+                    // Replace @Name with @LID or @CleanNumber in the body for sending
+                    // If member has LID, use it! Otherwise fallback to cleanNumber.
+                    const replacementId = member.lid || member.cleanNumber || member.number.split('@')[0];
+                    processedMessage = processedMessage.replace(mentionPattern, `@${replacementId}`);
+                }
+            });
+
+            if (mentions.length > 0) {
+                handleSend({ mentions, body: processedMessage });
+                return;
+            }
+        }
+
+        handleSend();
+    };
 
     const formatTime = (seconds: number) => {
         const mins = Math.floor(seconds / 60);
@@ -158,6 +267,32 @@ export const MessageInput = ({
                             {qm.message_type === 'image' && <ImageIcon className="w-3 h-3 text-muted-foreground" />}
                             {qm.message_type === 'audio' && <Mic className="w-3 h-3 text-muted-foreground" />}
                             {qm.message_type === 'video' && <Video className="w-3 h-3 text-muted-foreground" />}
+                        </button>
+                    ))}
+                </div>
+            )}
+
+            {/* Mention Popup */}
+            {showMentionPopup && (
+                <div className="absolute bottom-[80px] left-4 bg-popover border rounded-lg shadow-lg w-[300px] max-h-[300px] overflow-y-auto z-50 animate-in fade-in slide-in-from-bottom-2">
+                    <div className="p-2 text-xs font-semibold text-muted-foreground border-b flex items-center gap-2">
+                        <AtSign className="w-3 h-3" />
+                        Mencionar Membro
+                    </div>
+                    {filteredMembers.map((member) => (
+                        <button
+                            key={member.id}
+                            className="w-full text-left p-2 hover:bg-accent flex items-center gap-3 text-sm transition-colors"
+                            onClick={() => handleMentionSelect(member)}
+                        >
+                            <Avatar className="w-8 h-8">
+                                <AvatarImage src={member.profile_pic_url || undefined} />
+                                <AvatarFallback>{(member.push_name || "?")[0]}</AvatarFallback>
+                            </Avatar>
+                            <div className="flex flex-col overflow-hidden text-left">
+                                <span className="font-medium text-foreground truncate">{member.push_name || "Desconhecido"}</span>
+                                <span className="text-xs text-muted-foreground truncate">{member.cleanNumber || member.number}</span>
+                            </div>
                         </button>
                     ))}
                 </div>
@@ -237,7 +372,7 @@ export const MessageInput = ({
                         onKeyDown={(e) => {
                             if (e.key === "Enter" && !e.shiftKey) {
                                 e.preventDefault();
-                                handleSend();
+                                onSendClick();
                             }
                         }}
                         placeholder="Digite uma mensagem"
@@ -247,9 +382,37 @@ export const MessageInput = ({
                 </div>
 
                 {message.trim() || selectedFile ? (
-                    <Button onClick={handleSend} disabled={isUploading} size="icon" className="h-11 w-11 rounded-full shrink-0 shadow-sm transition-all duration-200 hover:scale-105 active:scale-95 bg-primary hover:bg-primary/90">
-                        <Send className="w-5 h-5 text-primary-foreground ml-0.5" />
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        {message.trim().length > 0 && (
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-11 w-11 rounded-full bg-yellow-400 hover:bg-yellow-500 text-white shrink-0 shadow-sm transition-all duration-200 hover:scale-105 active:scale-95"
+                                        title="Opções de IA"
+                                    >
+                                        <Sparkles className="w-5 h-5 text-white" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-56 p-2" align="end" side="top">
+                                    <div className="flex flex-col gap-1">
+                                        <Button variant="ghost" size="sm" className="justify-start gap-2" onClick={() => handleAiAction("fix")}>
+                                            <CheckCircle className="w-4 h-4 text-purple-500" />
+                                            Corrigir ortografia
+                                        </Button>
+                                        <Button variant="ghost" size="sm" className="justify-start gap-2" onClick={() => handleAiAction("improve")}>
+                                            <Sparkles className="w-4 h-4 text-purple-500" />
+                                            Melhorar resposta
+                                        </Button>
+                                    </div>
+                                </PopoverContent>
+                            </Popover>
+                        )}
+                        <Button onClick={onSendClick} disabled={isUploading} size="icon" className="h-11 w-11 rounded-full shrink-0 shadow-sm transition-all duration-200 hover:scale-105 active:scale-95 bg-primary hover:bg-primary/90">
+                            <Send className="w-5 h-5 text-primary-foreground ml-0.5" />
+                        </Button>
+                    </div>
                 ) : (
                     <div className="flex gap-2 items-center pb-1">
                         {!isMobile && (

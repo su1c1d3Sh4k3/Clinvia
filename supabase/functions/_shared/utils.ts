@@ -23,6 +23,10 @@ export const mapMessageType = (uzapiType: string): string => {
         'audiomessage': 'audio',
         'videomessage': 'video',
         'documentmessage': 'document',
+        'stickermessage': 'sticker',
+        'sticker': 'sticker',
+        'reactionmessage': 'reaction',
+        'reaction': 'reaction',
     };
     return typeMap[uzapiType?.toLowerCase()] || 'text';
 };
@@ -178,6 +182,7 @@ export async function downloadMediaFromUzapi(
             else if (messageType === 'audio') { extension = 'ogg'; contentType = 'audio/ogg'; }
             else if (messageType === 'video') { extension = 'mp4'; contentType = 'video/mp4'; }
             else if (messageType === 'document') { extension = 'pdf'; contentType = 'application/pdf'; }
+            else if (messageType === 'sticker') { extension = 'webp'; contentType = 'image/webp'; }
 
             console.log(`[SHARED] Using fallback: ext=${extension}, type=${contentType}`);
         }

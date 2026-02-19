@@ -375,14 +375,24 @@ export const ChatArea = ({
     if (!reactingToMessage?.evolution_id || !instance?.apikey || !reactingToMessage.clientNumber) return;
     try {
       await uzapi.reactToMessage(instance.apikey, reactingToMessage.clientNumber, reactingToMessage.evolution_id, emoji);
+      // Save reaction to DB so it renders as an emoji badge on the message
+      await supabase.from("messages").insert({
+        conversation_id: conversationId,
+        body: emoji,
+        direction: "outbound",
+        message_type: "reaction" as any,
+        reply_to_id: reactingToMessage.evolution_id,
+        user_id: (await supabase.auth.getSession()).data.session?.user?.id,
+      });
+      queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
       toast.success(`Reagiu com ${emoji}`);
       setShowEmojiPicker(false);
       setReactingToMessage(null);
     } catch (e) { toast.error("Erro ao reagir"); }
   };
 
-  const executeSendMessage = async (instanceId: string) => {
-    let finalBody = message;
+  const executeSendMessage = async (instanceId: string, options?: { mentions?: string[], body?: string }) => {
+    let finalBody = options?.body || message;
     let mediaUrl = null;
     let messageType: any = "text";
 
@@ -413,7 +423,8 @@ export const ChatArea = ({
       caption: messageType === 'document' ? finalBody : undefined,
       replyId: replyingTo?.evolution_id || undefined,
       quotedBody: replyingTo?.body || undefined,
-      quotedSender: replyingTo?.sender_name || undefined
+      quotedSender: replyingTo?.sender_name || undefined,
+      mentions: options?.mentions
     }, {
       onSuccess: () => {
         setIsUploading(false);
@@ -424,13 +435,13 @@ export const ChatArea = ({
     });
   };
 
-  const handleSend = async () => {
+  const handleSend = async (options?: { mentions?: string[], body?: string }) => {
     if ((!message.trim() && !selectedFile) || !conversationId) return;
     if (!(conversation as any)?.instance_id) {
       setIsInstanceModalOpen(true);
       return;
     }
-    await executeSendMessage((conversation as any).instance_id);
+    await executeSendMessage((conversation as any).instance_id, options);
   };
 
   const handleInstanceSelect = async (instanceId: string) => {
@@ -589,6 +600,8 @@ export const ChatArea = ({
         onQuickMessageSelect={handleQuickMessageSelect}
         onSendSurvey={() => setShowSurveyModal(true)}
         isSendingSurvey={isSendingSurvey}
+        conversationId={conversationId}
+        isGroup={isGroup}
       />
 
       {/* Modals */}

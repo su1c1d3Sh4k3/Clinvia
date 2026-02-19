@@ -230,7 +230,21 @@ const ChatInput = memo(function ChatInput({
                             </Button>
                         )}
 
-                        {!message.trim() ? (
+                        {/* AI Fix - Always visible when typing */}
+                        {message.trim().length > 0 && (
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => onAiAction('fix')}
+                                className="bg-yellow-400 hover:bg-yellow-500 text-white rounded-full w-10 h-10 border-0 transition-all duration-300 shadow-sm"
+                                title="Correção ortográfica com IA"
+                            >
+                                <Sparkles className="w-5 h-5 text-white" />
+                            </Button>
+                        )}
+
+                        {/* General AI Options (Generate/Improve) - When empty */}
+                        {!message.trim() && (
                             <Button
                                 variant="outline"
                                 size="icon"
@@ -240,29 +254,6 @@ const ChatInput = memo(function ChatInput({
                             >
                                 <Sparkles className="w-5 h-5" />
                             </Button>
-                        ) : (
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button
-                                        variant="outline"
-                                        size="icon"
-                                        className="bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0 hover:opacity-90 transition-all duration-300"
-                                        title="Opções de IA"
-                                    >
-                                        <Sparkles className="w-5 h-5" />
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                    <DropdownMenuItem onClick={() => onAiAction('fix')}>
-                                        <CheckCircle className="w-4 h-4 mr-2" />
-                                        Correção ortográfica
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => onAiAction('improve')}>
-                                        <Sparkles className="w-4 h-4 mr-2" />
-                                        Melhorar a frase
-                                    </DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
                         )}
 
                         {/* NPS Survey Button */}
