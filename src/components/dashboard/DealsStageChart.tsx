@@ -253,8 +253,9 @@ export function DealsStageChart() {
     return (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {/* Chart - 2/3 width */}
-            <div className="lg:col-span-2">
-                <div className="rounded-2xl bg-white dark:bg-card/50 backdrop-blur-sm border border-border/50 p-4 md:p-6 hover:border-border transition-all duration-300 min-h-[480px] md:min-h-0 md:h-[400px] overflow-visible md:overflow-hidden">
+            <div className="lg:col-span-2 relative group">
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-background/5 rounded-2xl opacity-50 group-hover:opacity-100 transition-opacity pointer-events-none blur-xl" />
+                <div className="relative z-10 rounded-2xl bg-background/80 backdrop-blur-xl border border-border/50 p-4 md:p-6 shadow-sm hover:shadow-md hover:border-border/80 transition-all duration-300 min-h-[480px] md:min-h-0 md:h-[400px] overflow-visible md:overflow-hidden">
                     {/* Header */}
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
                         <h3 className="text-sm font-medium text-muted-foreground">Negócios por Etapa</h3>
@@ -448,58 +449,61 @@ export function DealsStageChart() {
             </div>
 
             {/* Table - 1/3 width */}
-            <div className="rounded-2xl bg-white dark:bg-card/50 backdrop-blur-sm border border-border/50 p-6 hover:border-border transition-all duration-300 h-[400px] flex flex-col">
-                <h3 className="text-sm font-medium text-muted-foreground mb-4">Negócios Ativos por Funil</h3>
+            <div className="relative group min-h-[400px]">
+                <div className="absolute inset-0 bg-gradient-to-bl from-primary/5 via-transparent to-background/5 rounded-2xl opacity-50 group-hover:opacity-100 transition-opacity pointer-events-none blur-xl" />
+                <div className="relative z-10 rounded-2xl bg-background/80 backdrop-blur-xl border border-border/50 p-6 shadow-sm hover:shadow-md hover:border-border/80 transition-all duration-300 h-full flex flex-col">
+                    <h3 className="text-sm font-medium text-muted-foreground mb-4">Negócios Ativos por Funil</h3>
 
-                <div className="flex-1 overflow-auto">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead className="text-xs">Funil</TableHead>
-                                <TableHead className="text-xs text-center">Ativos</TableHead>
-                                <TableHead className="text-xs text-center">Finalizados</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {tableData.map((row) => (
-                                <TableRow key={row.id}>
-                                    <TableCell className="font-medium text-sm py-3">{row.name}</TableCell>
-                                    <TableCell className="text-center">
-                                        <span className="inline-flex items-center justify-center min-w-[32px] h-7 px-2 rounded-full bg-primary/10 text-primary font-semibold text-sm">
-                                            {row.activeDeals}
-                                        </span>
-                                    </TableCell>
-                                    <TableCell className="text-center">
-                                        <span className="inline-flex items-center justify-center min-w-[32px] h-7 px-2 rounded-full bg-muted text-muted-foreground font-semibold text-sm">
-                                            {row.finishedDeals}
-                                        </span>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                            {tableData.length === 0 && (
+                    <div className="flex-1 overflow-auto">
+                        <Table>
+                            <TableHeader>
                                 <TableRow>
-                                    <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
-                                        Nenhum funil encontrado
-                                    </TableCell>
+                                    <TableHead className="text-xs">Funil</TableHead>
+                                    <TableHead className="text-xs text-center">Ativos</TableHead>
+                                    <TableHead className="text-xs text-center">Finalizados</TableHead>
                                 </TableRow>
-                            )}
-                        </TableBody>
-                    </Table>
-                </div>
-
-                {/* Summary */}
-                <div className="border-t pt-3 mt-3">
-                    <div className="flex justify-between items-center text-sm">
-                        <span className="text-muted-foreground">Total Ativos</span>
-                        <span className="font-bold text-primary">
-                            {tableData.reduce((acc, row) => acc + row.activeDeals, 0)}
-                        </span>
+                            </TableHeader>
+                            <TableBody>
+                                {tableData.map((row) => (
+                                    <TableRow key={row.id}>
+                                        <TableCell className="font-medium text-sm py-3">{row.name}</TableCell>
+                                        <TableCell className="text-center">
+                                            <span className="inline-flex items-center justify-center min-w-[32px] h-7 px-2 rounded-full bg-primary/10 text-primary font-semibold text-sm">
+                                                {row.activeDeals}
+                                            </span>
+                                        </TableCell>
+                                        <TableCell className="text-center">
+                                            <span className="inline-flex items-center justify-center min-w-[32px] h-7 px-2 rounded-full bg-muted text-muted-foreground font-semibold text-sm">
+                                                {row.finishedDeals}
+                                            </span>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                                {tableData.length === 0 && (
+                                    <TableRow>
+                                        <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
+                                            Nenhum funil encontrado
+                                        </TableCell>
+                                    </TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
                     </div>
-                    <div className="flex justify-between items-center text-sm mt-1">
-                        <span className="text-muted-foreground">Total Finalizados</span>
-                        <span className="font-bold">
-                            {tableData.reduce((acc, row) => acc + row.finishedDeals, 0)}
-                        </span>
+
+                    {/* Summary */}
+                    <div className="border-t pt-3 mt-3">
+                        <div className="flex justify-between items-center text-sm">
+                            <span className="text-muted-foreground">Total Ativos</span>
+                            <span className="font-bold text-primary">
+                                {tableData.reduce((acc, row) => acc + row.activeDeals, 0)}
+                            </span>
+                        </div>
+                        <div className="flex justify-between items-center text-sm mt-1">
+                            <span className="text-muted-foreground">Total Finalizados</span>
+                            <span className="font-bold">
+                                {tableData.reduce((acc, row) => acc + row.finishedDeals, 0)}
+                            </span>
+                        </div>
                     </div>
                 </div>
             </div>

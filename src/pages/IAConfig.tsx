@@ -651,16 +651,16 @@ export default function IAConfig() {
     // Handler do switch CRM Auto - verifica se precisa criar funil IA
     const handleCrmAutoChange = async (checked: boolean) => {
         if (checked) {
-            // Verificar se já existe funil "IA" para este usuário
+            // Verificar se já existe funil "Atendimento IA" ou antigo "IA" para este usuário
             const { data: existingFunnel } = await supabase
                 .from("crm_funnels" as any)
                 .select("id")
                 .eq("user_id", ownerId)
-                .ilike("name", "IA")
+                .or('name.eq.Atendimento IA,name.eq.IA')
                 .maybeSingle();
 
             if (!existingFunnel) {
-                // Não tem funil IA, mostrar modal de confirmação
+                // Não tem funil IA (caso de gap no trigger), disparar a sinc manual
                 setShowCreateFunnelModal(true);
                 return; // Não muda o switch ainda
             }
@@ -670,54 +670,23 @@ export default function IAConfig() {
         setConfig({ ...config, crm_auto: checked });
     };
 
-    // Criar funil IA com etapas padrão
+    // Resgatar os fluxos inalteráveis do sistema batendo na Function do Banco de Dados
     const createIAFunnel = async () => {
         setCreatingFunnel(true);
         try {
-            // Criar o funil
-            const { data: funnel, error: funnelError } = await supabase
-                .from("crm_funnels" as any)
-                .insert({
-                    user_id: ownerId,
-                    name: "IA",
-                    description: "Funil dedicado ao atendimento da IA"
-                })
-                .select()
-                .single();
+            // Acionar Function para provisionar os default funnels garantindo is_system=true
+            const { error: rpcError } = await supabase.rpc('create_default_crm_funnels', { p_user_id: ownerId });
 
-            if (funnelError) throw funnelError;
-
-            // Criar as etapas do funil IA
-            const stages = [
-                { name: "Cliente Novo (IA)", position: 0, color: "#3b82f6", is_system: false },
-                { name: "Qualificado (IA)", position: 1, color: "#22c55e", is_system: false },
-                { name: "Agendado (IA)", position: 2, color: "#a855f7", is_system: false },
-                { name: "Atendimento Humano (IA)", position: 3, color: "#f97316", is_system: false },
-                { name: "Follow Up (IA)", position: 4, color: "#eab308", is_system: false },
-                { name: "Sem Contato (IA)", position: 997, color: "#6b7280", is_system: true },
-                { name: "Sem Interesse (IA)", position: 998, color: "#ef4444", is_system: true },
-            ];
-
-            const { error: stagesError } = await supabase
-                .from("crm_stages" as any)
-                .insert(
-                    stages.map(s => ({
-                        ...s,
-                        funnel_id: funnel.id,
-                        user_id: ownerId
-                    }))
-                );
-
-            if (stagesError) throw stagesError;
+            if (rpcError) throw rpcError;
 
             // Atualiza o config e fecha o modal
             setConfig({ ...config, crm_auto: true });
             setShowCreateFunnelModal(false);
-            toast.success("Funil IA criado com sucesso!");
+            toast.success("Funis de inteligência artificial habilitados!");
             queryClient.invalidateQueries({ queryKey: ["crm-funnels"] });
         } catch (error) {
-            console.error("Erro ao criar funil IA:", error);
-            toast.error("Erro ao criar funil IA");
+            console.error("Erro ao sincronizar funis:", error);
+            toast.error("Erro ao configurar funis da IA");
         } finally {
             setCreatingFunnel(false);
         }

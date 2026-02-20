@@ -46,7 +46,11 @@ export function DealNotesModal({ deal, trigger }: DealNotesModalProps) {
                 nota: newNote.trim()
             };
 
-            const currentNotes = deal.notes || [];
+            const currentNotes = Array.isArray(deal.notes)
+                ? deal.notes
+                : (typeof deal.notes === 'string' && (deal.notes as string).trim() !== ''
+                    ? [{ data: deal.created_at || new Date().toISOString(), usuario: "Sistema/Automação", nota: deal.notes }]
+                    : []);
             const updatedNotes = [...currentNotes, noteObject];
 
             const { error } = await supabase
@@ -71,6 +75,13 @@ export function DealNotesModal({ deal, trigger }: DealNotesModalProps) {
         addNoteMutation.mutate();
     };
 
+    // Normalizar notas (tratar registros antigos ou inserções de n8n/IA que salvaram como string pura)
+    const normalizedNotes = Array.isArray(deal.notes)
+        ? deal.notes
+        : (typeof deal.notes === 'string' && (deal.notes as string).trim() !== ''
+            ? [{ data: deal.created_at || new Date().toISOString(), usuario: "Sistema/Automação", nota: deal.notes }]
+            : []);
+
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
@@ -91,16 +102,16 @@ export function DealNotesModal({ deal, trigger }: DealNotesModalProps) {
 
                 <div className="flex flex-col gap-4 mt-4">
                     <ScrollArea className="h-[300px] w-full rounded-md border p-4 bg-muted/20">
-                        {deal.notes && deal.notes.length > 0 ? (
+                        {normalizedNotes.length > 0 ? (
                             <div className="flex flex-col gap-4">
-                                {[...deal.notes].reverse().map((note, idx) => (
+                                {[...normalizedNotes].reverse().map((note: any, idx) => (
                                     <div key={idx} className="flex flex-col gap-1 bg-background p-3 rounded-lg border shadow-sm">
                                         <div className="flex justify-between items-center text-xs text-muted-foreground border-b pb-1 mb-1">
                                             <div className="flex items-center gap-1">
                                                 <User className="h-3 w-3" />
                                                 <span className="font-medium">{note.usuario}</span>
                                             </div>
-                                            <span>{format(new Date(note.data), "dd/MM/yyyy HH:mm", { locale: ptBR })}</span>
+                                            <span>{note.data && !isNaN(new Date(note.data).getTime()) ? format(new Date(note.data), "dd/MM/yyyy HH:mm", { locale: ptBR }) : "Sem data"}</span>
                                         </div>
                                         <p className="text-sm whitespace-pre-wrap">{note.nota}</p>
                                     </div>

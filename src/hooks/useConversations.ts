@@ -93,7 +93,35 @@ export const useConversations = (options: UseConversationsOptions = {}) => {
         });
       }
 
-      return filteredData;
+      // Após filtrar, buscar os dados estruturados da última mensagem para os cards
+      const conversationsWithLastMessage = await Promise.all(
+        filteredData.map(async (conv) => {
+          try {
+            const { data: lastMsg } = await supabase
+              .from('messages')
+              .select('direction, body, created_at, status, message_type')
+              .eq('conversation_id', conv.id)
+              .not('body', 'like', '%transferida de%')
+              .not('body', 'like', '%transferiu para%')
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            return {
+              ...conv,
+              last_message_obj: lastMsg || null
+            };
+          } catch (e) {
+            console.error("Erro ao buscar ultima mensagem da conversa", conv.id, e);
+            return {
+              ...conv,
+              last_message_obj: null
+            };
+          }
+        })
+      );
+
+      return conversationsWithLastMessage as (Conversation & { last_message_obj: any })[];
     },
     enabled: !!userId,
     refetchInterval: 300000, // Polling every 5 minutes for follow up badges

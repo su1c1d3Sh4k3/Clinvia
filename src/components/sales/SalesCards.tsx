@@ -39,7 +39,7 @@ export function SalesCards({ month, year }: SalesCardsProps) {
             icon: Wallet,
             color: "text-primary",
             bgColor: "bg-primary/10",
-            borderColor: "border-primary/30",
+            glowColor: "from-primary/10",
             description: `Janeiro a Dezembro ${year}`,
             highlighted: true,
         },
@@ -49,7 +49,7 @@ export function SalesCards({ month, year }: SalesCardsProps) {
             icon: TrendingUp,
             color: "text-green-500",
             bgColor: "bg-green-500/10",
-            borderColor: "border-green-500/20",
+            glowColor: "from-green-500/10",
             description: `${summary?.total_sales_count || 0} vendas`,
         },
         {
@@ -58,7 +58,7 @@ export function SalesCards({ month, year }: SalesCardsProps) {
             icon: Package,
             color: "text-blue-500",
             bgColor: "bg-blue-500/10",
-            borderColor: "border-blue-500/20",
+            glowColor: "from-blue-500/10",
             description: topProduct?.name || "Nenhum produto",
             badge: topProduct ? SaleCategoryLabels[topProduct.type as keyof typeof SaleCategoryLabels] : undefined,
         },
@@ -68,7 +68,7 @@ export function SalesCards({ month, year }: SalesCardsProps) {
             icon: Calendar,
             color: "text-orange-500",
             bgColor: "bg-orange-500/10",
-            borderColor: "border-orange-500/20",
+            glowColor: "from-orange-500/10",
             description: `${projection?.pending_installments || 0} parcelas pendentes`,
         },
     ];
@@ -92,36 +92,36 @@ export function SalesCards({ month, year }: SalesCardsProps) {
             {cards.map((card, index) => (
                 <Card
                     key={index}
-                    className={`${card.borderColor} border-2 ${card.highlighted
-                        ? 'bg-gradient-to-br from-primary/5 via-transparent to-transparent shadow-lg'
-                        : ''
-                        }`}
+                    className={`relative group overflow-hidden rounded-2xl bg-background/80 backdrop-blur-xl border-border/50 shadow-sm hover:shadow-md hover:border-border/80 transition-all duration-300 ${card.highlighted ? 'border-primary/50' : ''}`}
                 >
-                    <CardContent className="p-3 md:p-6">
-                        <div className="flex flex-col gap-2 md:gap-3">
-                            <div className="flex items-center justify-between">
-                                <div className={`p-2 md:p-3 rounded-full ${card.bgColor}`}>
-                                    <card.icon className={`w-4 h-4 md:w-6 md:h-6 ${card.color}`} />
+                    <div className={`absolute inset-0 bg-gradient-to-br ${card.glowColor} via-transparent to-background/5 rounded-2xl opacity-50 group-hover:opacity-100 transition-opacity pointer-events-none blur-xl`} />
+                    <div className="relative z-10">
+                        <CardContent className="p-4 md:p-6">
+                            <div className="flex flex-col gap-2 md:gap-3">
+                                <div className="flex items-center justify-between">
+                                    <div className={`p-2 md:p-3 rounded-xl ${card.bgColor} backdrop-blur-sm`}>
+                                        <card.icon className={`w-4 h-4 md:w-5 md:h-5 ${card.color}`} />
+                                    </div>
+                                    {card.badge && (
+                                        <Badge variant="outline" className="text-[10px] md:text-xs bg-background/50">
+                                            {card.badge}
+                                        </Badge>
+                                    )}
                                 </div>
-                                {card.badge && (
-                                    <Badge variant="outline" className="text-[10px] md:text-xs">
-                                        {card.badge}
-                                    </Badge>
-                                )}
+                                <div className="mt-1">
+                                    <p className="text-[11px] md:text-xs text-muted-foreground font-medium uppercase tracking-wider">
+                                        {card.title}
+                                    </p>
+                                    <p className={`text-lg sm:text-xl md:text-2xl font-bold mt-1 ${card.color} tracking-tight`}>
+                                        {formatCurrency(card.value)}
+                                    </p>
+                                    <p className="text-[10px] md:text-xs text-muted-foreground mt-1.5 hidden sm:block truncate opacity-80">
+                                        {card.description}
+                                    </p>
+                                </div>
                             </div>
-                            <div>
-                                <p className="text-[10px] md:text-sm text-muted-foreground font-medium uppercase tracking-wide">
-                                    {card.title}
-                                </p>
-                                <p className={`text-sm sm:text-lg md:text-2xl font-bold mt-1 ${card.color}`}>
-                                    {formatCurrency(card.value)}
-                                </p>
-                                <p className="text-[10px] md:text-xs text-muted-foreground mt-1 hidden sm:block truncate">
-                                    {card.description}
-                                </p>
-                            </div>
-                        </div>
-                    </CardContent>
+                        </CardContent>
+                    </div>
                 </Card>
             ))}
         </div>

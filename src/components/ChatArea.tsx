@@ -20,6 +20,7 @@ import { InstanceSelectorModal } from "@/components/InstanceSelectorModal";
 import { EditMessageModal } from "@/components/EditMessageModal";
 import { DeleteMessageModal } from "@/components/DeleteMessageModal";
 import { EmojiPickerStandalone } from "@/components/EmojiReactionPicker";
+import { ForwardMessageModal } from "@/components/chat/ForwardMessageModal";
 import { cn } from "@/lib/utils";
 import {
   Dialog,
@@ -124,6 +125,10 @@ export const ChatArea = ({
   const [isInstanceModalOpen, setIsInstanceModalOpen] = useState(false);
   const [showSurveyModal, setShowSurveyModal] = useState(false);
   const [isSendingSurvey, setIsSendingSurvey] = useState(false);
+
+  // Forward Message State
+  const [isForwardModalOpen, setIsForwardModalOpen] = useState(false);
+  const [messageToForward, setMessageToForward] = useState<any | null>(null);
 
   // Quick Message Confirmation
   const [selectedQuickMessage, setSelectedQuickMessage] = useState<QuickMessage | null>(null);
@@ -345,6 +350,38 @@ export const ChatArea = ({
   const handleReact = (msg: any) => {
     setReactingToMessage({ id: msg.id, evolution_id: msg.evolution_id, clientNumber: contact?.number || null });
     setShowEmojiPicker(true);
+  };
+  const handleCopy = async (msg: any) => {
+    if (!msg.body) return;
+    try {
+      await navigator.clipboard.writeText(msg.body);
+      toast.success("Mensagem copiada para a área de transferência");
+    } catch (err) {
+      toast.error("Falha ao copiar mensagem");
+      console.error("Copy failed", err);
+    }
+  };
+
+  const handleToggleFavorite = async (msg: any) => {
+    try {
+      const { error } = await supabase
+        .from("messages")
+        .update({ is_favorite: !msg.is_favorite })
+        .eq("id", msg.id);
+
+      if (error) throw error;
+
+      queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
+      toast.success(msg.is_favorite ? "Removido dos favoritos" : "Adicionado aos favoritos");
+    } catch (e) {
+      console.error(e);
+      toast.error("Erro ao favoritar mensagem");
+    }
+  };
+
+  const handleForward = (msg: any) => {
+    setMessageToForward(msg);
+    setIsForwardModalOpen(true);
   };
 
   const executeEdit = async (newText: string) => {
@@ -568,6 +605,9 @@ export const ChatArea = ({
         onEdit={handleEdit}
         onDelete={handleDelete}
         onReact={handleReact}
+        onCopy={handleCopy}
+        onToggleFavorite={handleToggleFavorite}
+        onForward={handleForward}
         onOpenNewMessage={onOpenNewMessage}
         isMobile={isMobile}
         visibleMessagesCount={visibleMessagesCount}
@@ -635,10 +675,25 @@ export const ChatArea = ({
         onConfirm={handleConfirmQuickMessage}
       />
       {showEmojiPicker && (
-        <div className="absolute bottom-20 right-4 z-50">
+        <div className="absolute bottom-20 right-4 z-50 flex flex-col items-center gap-2 bg-popover border shadow-lg rounded-lg p-2">
           <EmojiPickerStandalone onSelect={(emoji) => executeReact(emoji)} onClose={() => setShowEmojiPicker(false)} />
+          <Button
+            variant="destructive"
+            size="sm"
+            className="w-full text-xs font-medium"
+            onClick={() => executeReact("")}
+          >
+            Remover Reação
+          </Button>
         </div>
       )}
+
+      <ForwardMessageModal
+        open={isForwardModalOpen}
+        onOpenChange={setIsForwardModalOpen}
+        messageToForward={messageToForward}
+      />
+
     </div>
   );
 };

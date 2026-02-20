@@ -16,7 +16,8 @@ import {
     LineChart,
     Line
 } from "recharts";
-import { TrendingUp, TrendingDown, MessageSquare, Clock, CheckCircle2 } from "lucide-react";
+import { TrendingUp, TrendingDown, MessageSquare, Clock, CheckCircle2, AlertCircle, Activity, Star } from "lucide-react";
+import { useCountUp } from "@/hooks/useCountUp";
 
 const COLORS = ['#8b5cf6', '#22d3ee', '#22c55e', '#f59e0b', '#ef4444', '#ec4899'];
 
@@ -50,21 +51,43 @@ const MetricRow = ({
     const change = previousWeek > 0 ? Math.round(((currentWeek - previousWeek) / previousWeek) * 100) : 0;
     const isPositive = change >= 0;
 
+    const { value: animatedValue, isAnimating } = useCountUp(value, { duration: 900 });
+
     return (
-        <div className="flex items-center justify-between py-5 border-b border-border/50 last:border-b-0">
+        <div className="flex items-center justify-between py-5 border-b border-border/50 last:border-b-0 group/metric">
             <div className="flex items-center gap-4">
                 {Icon && (
-                    <div className="p-3 rounded-xl bg-[#e5e5e5] dark:bg-muted/50">
-                        <Icon className="w-6 h-6" style={{ color }} />
+                    <div
+                        className="p-3 rounded-xl bg-[#e5e5e5] dark:bg-muted/50 transition-all duration-300 group-hover/metric:scale-110"
+                        style={{ filter: `drop-shadow(0 0 0px ${color}00)` }}
+                        onMouseEnter={(e) => {
+                            (e.currentTarget as HTMLDivElement).style.filter = `drop-shadow(0 0 8px ${color}60)`;
+                        }}
+                        onMouseLeave={(e) => {
+                            (e.currentTarget as HTMLDivElement).style.filter = `drop-shadow(0 0 0px ${color}00)`;
+                        }}
+                    >
+                        <Icon className="w-6 h-6 transition-transform duration-300" style={{ color }} />
                     </div>
                 )}
                 <div>
                     <p className="text-base text-muted-foreground font-medium">{title}</p>
                     <div className="flex items-center gap-3 mt-1">
-                        <span className="text-4xl font-bold" style={{ color }}>{value}</span>
+                        <span
+                            className={isAnimating ? "metric-value-active" : ""}
+                            style={{ fontSize: "2.25rem", fontWeight: 700, lineHeight: 1, color: isAnimating ? undefined : color }}
+                        >
+                            {animatedValue}
+                        </span>
                         {previousWeek > 0 && (
-                            <div className={`flex items-center gap-1 text-sm font-medium ${isPositive ? 'text-green-500' : 'text-red-500'}`}>
-                                {isPositive ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                            <div
+                                className={`flex items-center gap-1 text-sm font-medium ${isPositive ? 'text-green-500' : 'text-red-500'}`}
+                                style={{ filter: isPositive ? 'drop-shadow(0 0 4px #22c55e80)' : 'drop-shadow(0 0 4px #ef444480)' }}
+                            >
+                                {isPositive
+                                    ? <TrendingUp className="w-4 h-4" style={{ animation: "scale-in 0.4s cubic-bezier(0.34,1.56,0.64,1) both" }} />
+                                    : <TrendingDown className="w-4 h-4" style={{ animation: "scale-in 0.4s cubic-bezier(0.34,1.56,0.64,1) both" }} />
+                                }
                                 <span>{isPositive ? '+' : ''}{change}%</span>
                             </div>
                         )}
@@ -124,7 +147,7 @@ const CombinedMetricsCard = ({
     }));
 
     return (
-        <Card className="h-auto min-h-[480px] bg-white dark:bg-card">
+        <Card className="h-auto min-h-[480px] bg-white dark:bg-card animate-in fade-in slide-in-from-bottom-4 duration-500">
             <CardHeader className="pb-3">
                 <CardTitle className="text-lg font-semibold text-muted-foreground">
                     Resumo de Atendimentos
@@ -412,6 +435,12 @@ const DualGaugeCard = ({
     };
     const timeScore = calcTimeScore(responseTime);
 
+    // Animate values
+    const { value: animatedResponseTime } = useCountUp(responseTime, { duration: 1500 });
+    const { value: animatedQuality } = useCountUp(quality * 10, { duration: 1500 }); // Count up multiplied by 10 then divide
+    const qualityDisplay = quality > 0 ? (animatedQuality / 10).toFixed(1) : '—';
+
+
     return (
         <Card className="h-[340px] bg-white dark:bg-card">
             <CardHeader className="pb-2">
@@ -440,12 +469,15 @@ const DualGaugeCard = ({
                                     strokeLinecap="round"
                                     strokeDasharray={calcStroke(timeScore, 10)}
                                     className="transition-all duration-1000 ease-out"
-                                    style={{ filter: 'drop-shadow(0 0 8px #22d3ee60)' }}
+                                    style={{
+                                        filter: 'drop-shadow(0 0 8px #22d3ee80)',
+                                        animation: 'glow-pulse 3s ease-in-out infinite'
+                                    }}
                                 />
                             </svg>
                             <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                <span className="text-2xl font-bold text-cyan-400">
-                                    {formatTime(responseTime)}
+                                <span className="text-2xl font-bold text-cyan-400 metric-value-active">
+                                    {formatTime(animatedResponseTime)}
                                 </span>
                                 <span className="text-xs text-muted-foreground">Média</span>
                             </div>
@@ -453,7 +485,10 @@ const DualGaugeCard = ({
                         <p className="text-sm font-medium mt-2 text-center">Tempo de Resposta</p>
                         {responseTimeChange !== undefined && responseTimeChange !== 0 && (
                             <div className={`flex items-center gap-1 text-xs ${responseTimeChange < 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                {responseTimeChange < 0 ? <TrendingDown className="w-3 h-3" /> : <TrendingUp className="w-3 h-3" />}
+                                {responseTimeChange < 0
+                                    ? <TrendingDown className="w-3 h-3 animate-scale-in" />
+                                    : <TrendingUp className="w-3 h-3 animate-scale-in" />
+                                }
                                 <span>{responseTimeChange > 0 ? '+' : ''}{responseTimeChange.toFixed(1)}%</span>
                             </div>
                         )}
@@ -478,12 +513,15 @@ const DualGaugeCard = ({
                                     strokeLinecap="round"
                                     strokeDasharray={calcStroke(quality, 10)}
                                     className="transition-all duration-1000 ease-out"
-                                    style={{ filter: 'drop-shadow(0 0 8px #d946ef60)' }}
+                                    style={{
+                                        filter: 'drop-shadow(0 0 8px #d946ef80)',
+                                        animation: 'glow-pulse 3s ease-in-out infinite 0.5s' // delayed pulse
+                                    }}
                                 />
                             </svg>
                             <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                <span className="text-2xl font-bold text-fuchsia-500">
-                                    {quality > 0 ? quality.toFixed(1) : '—'}
+                                <span className="text-2xl font-bold text-fuchsia-500 metric-value-active">
+                                    {qualityDisplay}
                                 </span>
                                 <span className="text-xs text-muted-foreground">de 10</span>
                             </div>
@@ -491,7 +529,10 @@ const DualGaugeCard = ({
                         <p className="text-sm font-medium mt-2 text-center">Qualidade</p>
                         {qualityChange !== undefined && qualityChange !== 0 && (
                             <div className={`flex items-center gap-1 text-xs ${qualityChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                {qualityChange >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                                {qualityChange >= 0
+                                    ? <TrendingUp className="w-3 h-3 animate-scale-in" />
+                                    : <TrendingDown className="w-3 h-3 animate-scale-in" />
+                                }
                                 <span>{qualityChange > 0 ? '+' : ''}{qualityChange.toFixed(1)}%</span>
                             </div>
                         )}
@@ -632,10 +673,8 @@ export const ServiceMetricsGrid = () => {
     const dailyTickets = history?.daily_new_tickets || [];
 
     // Criar dados para o gráfico de status por dia
-    // Usar os valores diários reais e distribuir proporcionalmente
     const statusByDay = dailyTickets.map((d: any) => {
         const dayTotal = d.value || 0;
-        // Se não há tickets no total, assumir proporções básicas
         if (totalTickets === 0) {
             return {
                 date: d.date,
@@ -653,62 +692,146 @@ export const ServiceMetricsGrid = () => {
         };
     });
 
+    const formatTime = (seconds: number) => {
+        if (seconds < 60) return `${Math.round(seconds)}s`;
+        if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
+        return `${(seconds / 3600).toFixed(1)}h`;
+    };
+
     return (
         <div className="space-y-6">
             <h2 className="text-2xl font-bold tracking-tight">Painéis de Atendimento</h2>
 
-            {/* Linha 1: Card de métricas (largura fixa) + Gráfico de Linhas (restante) */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                <div className="lg:col-span-4">
-                    <CombinedMetricsCard
-                        totalTickets={totalTickets}
-                        pendingTickets={pendingTickets}
-                        resolvedTickets={resolvedTickets}
-                        dailyData={dailyTickets}
-                    />
-                </div>
-                <div className="lg:col-span-8">
-                    <MultiLineChartCard
-                        title="Atendimentos por Status (30 dias)"
-                        data={statusByDay}
-                        lines={[
-                            { dataKey: 'pendente', name: 'Pendente', color: '#eab308' },
-                            { dataKey: 'aberto', name: 'Aberto', color: '#3b82f6' },
-                            { dataKey: 'resolvido', name: 'Resolvido', color: '#22c55e' },
-                        ]}
-                    />
-                </div>
+            {/* Bento Grid KPIs Hero */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {/* Herói: Atendimentos Ativos */}
+                <Card className="md:col-span-2 md:row-span-2 bg-gradient-to-br from-primary/10 to-transparent border-primary/20 overflow-hidden relative group">
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl -mr-16 -mt-16 transition-transform group-hover:scale-110" />
+                    <CardContent className="flex flex-col justify-center h-full p-8 relative z-10">
+                        <div className="flex items-center gap-2 mb-6">
+                            <div className="p-2.5 rounded-xl bg-primary/10 text-primary">
+                                <Activity className="w-6 h-6" />
+                            </div>
+                            <h3 className="text-xl font-semibold tracking-tight text-foreground">
+                                Em Atendimento
+                            </h3>
+                        </div>
+                        <div className="text-6xl font-black tabular-nums tracking-tighter text-foreground mb-8">
+                            {pendingTickets + openTickets}
+                        </div>
+                        <div className="flex gap-8">
+                            <div>
+                                <div className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-1">Pendentes</div>
+                                <div className="text-3xl font-bold text-yellow-500 tabular-nums">
+                                    {pendingTickets}
+                                </div>
+                            </div>
+                            <div className="w-px bg-border/50" />
+                            <div>
+                                <div className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-1">Abertos</div>
+                                <div className="text-3xl font-bold text-blue-500 tabular-nums">
+                                    {openTickets}
+                                </div>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* Resolvidos */}
+                <Card className="bg-white dark:bg-card border-border/50 hover:border-border transition-colors group">
+                    <CardContent className="p-6 flex flex-col justify-center h-full relative overflow-hidden">
+                        <div className="absolute -right-4 -top-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                            <CheckCircle2 className="w-24 h-24 text-green-500" />
+                        </div>
+                        <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-2 z-10">Resolvidos</h3>
+                        <div className="text-4xl font-bold text-green-500 tabular-nums z-10">
+                            {resolvedTickets}
+                        </div>
+                        <div className="text-sm text-muted-foreground mt-1 z-10 flex items-center gap-1">
+                            <span>no período</span>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* Total */}
+                <Card className="bg-white dark:bg-card border-border/50 hover:border-border transition-colors group">
+                    <CardContent className="p-6 flex flex-col justify-center h-full relative overflow-hidden">
+                        <div className="absolute -right-4 -top-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                            <MessageSquare className="w-24 h-24 text-foreground" />
+                        </div>
+                        <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-2 z-10">Volume Total</h3>
+                        <div className="text-4xl font-bold text-foreground tabular-nums z-10">
+                            {totalTickets}
+                        </div>
+                        <div className="text-sm text-muted-foreground mt-1 z-10">
+                            conversas no período
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* TMA */}
+                <Card className="bg-white dark:bg-card border-border/50 hover:border-border transition-colors group md:col-start-3 md:row-start-2">
+                    <CardContent className="p-6 flex flex-col justify-center h-full relative overflow-hidden">
+                        <div className="absolute -right-4 -top-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                            <Clock className="w-24 h-24 text-cyan-500" />
+                        </div>
+                        <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-2 z-10">Tempo Médio</h3>
+                        <div className="text-4xl font-bold text-cyan-500 tabular-nums z-10">
+                            {formatTime(globalMetrics?.avg_response_time_seconds || 0)}
+                        </div>
+                        <div className="text-sm text-muted-foreground mt-1 z-10">
+                            de primeira resposta
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* NPS */}
+                <Card className="bg-white dark:bg-card border-border/50 hover:border-border transition-colors group md:col-start-4 md:row-start-2">
+                    <CardContent className="p-6 flex flex-col justify-center h-full relative overflow-hidden">
+                        <div className="absolute -right-4 -top-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                            <Star className="w-24 h-24 text-fuchsia-500" />
+                        </div>
+                        <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-2 z-10">Qualidade (NPS)</h3>
+                        <div className="flex items-baseline gap-1 mt-1 z-10">
+                            <div className="text-4xl font-bold text-fuchsia-500 tabular-nums">
+                                {(globalMetrics?.avg_quality || 0).toFixed(1)}
+                            </div>
+                            <span className="text-sm text-muted-foreground font-medium">/ 10</span>
+                        </div>
+                        <div className="text-sm text-muted-foreground mt-1 z-10">
+                            nota média de avaliação
+                        </div>
+                    </CardContent>
+                </Card>
             </div>
 
-            {/* Linha 2: Gráfico Radial + Distribuições + Gauges Combinados */}
-            {/* grid de 13 colunas: 3 cards menores (3 cols cada = 23%) + 1 card maior (4 cols = 31%) */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[repeat(13,1fr)] gap-6">
-                <div className="lg:col-span-3">
-                    <RadialChartCard
-                        title="Atendimento por Fila"
-                        data={stats.tickets_by_queue || []}
-                    />
-                </div>
-                <div className="lg:col-span-3">
-                    <DistributionCard
-                        title="Atendimento por Usuário"
-                        items={stats.tickets_by_user || []}
-                    />
-                </div>
-                <div className="lg:col-span-3">
-                    <DistributionCard
-                        title="Atendimento por Tag"
-                        items={stats.clients_by_tag || []}
-                    />
-                </div>
-                <div className="lg:col-span-4">
-                    <DualGaugeCard
-                        responseTime={globalMetrics?.avg_response_time_seconds || 0}
-                        responseTimeChange={globalMetrics?.response_time_change}
-                        quality={globalMetrics?.avg_quality || 0}
-                        qualityChange={globalMetrics?.quality_change}
-                    />
-                </div>
+            {/* Linha 2: Gráfico de Linhas Largo */}
+            <div className="grid grid-cols-1 gap-6">
+                <MultiLineChartCard
+                    title="Evolução de Atendimentos por Status"
+                    data={statusByDay}
+                    lines={[
+                        { dataKey: 'pendente', name: 'Pendente', color: '#eab308' },
+                        { dataKey: 'aberto', name: 'Aberto', color: '#3b82f6' },
+                        { dataKey: 'resolvido', name: 'Resolvido', color: '#22c55e' },
+                    ]}
+                />
+            </div>
+
+            {/* Linha 3: Distribuições (Bento 3-cols) */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <RadialChartCard
+                    title="Atendimento por Fila"
+                    data={stats.tickets_by_queue || []}
+                />
+                <DistributionCard
+                    title="Atendimento por Usuário"
+                    items={stats.tickets_by_user || []}
+                />
+                <DistributionCard
+                    title="Atendimento por Tag"
+                    items={stats.clients_by_tag || []}
+                />
             </div>
         </div>
     );

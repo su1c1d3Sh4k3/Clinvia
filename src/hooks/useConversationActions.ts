@@ -12,16 +12,18 @@ export function useConversationActions() {
     const transferQueue = useMutation({
         mutationFn: async ({
             conversationId,
-            newQueueId
+            newQueueId,
+            assignedAgentId = null
         }: {
             conversationId: string;
-            newQueueId: string
+            newQueueId: string;
+            assignedAgentId?: string | null;
         }) => {
             const { error } = await supabase
                 .from('conversations')
                 .update({
                     queue_id: newQueueId,
-                    assigned_agent_id: null // Clear assignment when transferring
+                    assigned_agent_id: assignedAgentId
                 })
                 .eq('id', conversationId);
 

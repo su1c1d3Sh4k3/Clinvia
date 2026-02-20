@@ -2,7 +2,7 @@ import { useRef, useEffect, useState, useMemo, useLayoutEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Clock, AlertCircle, Check, CheckCheck, Download, ChevronDown } from "lucide-react";
+import { Clock, AlertCircle, Check, CheckCheck, Download, ChevronDown, ArrowLeftRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MessageActionsMenu } from "@/components/MessageActionsMenu";
 import { ReplyQuoteBox, QuotedMessage } from "@/components/ReplyQuoteBox";
@@ -10,6 +10,7 @@ import { LazyMedia } from "@/components/LazyMedia";
 import { toast } from "sonner";
 import { useGroupMembers } from "@/hooks/useGroupMembers";
 import { ContactCard } from "@/components/chat/ContactCard";
+import { CustomAudioPlayer } from "@/components/chat/CustomAudioPlayer";
 
 interface MessageListProps {
     messages: any[];
@@ -21,6 +22,9 @@ interface MessageListProps {
     onEdit: (msg: any) => void;
     onDelete: (msg: any) => void;
     onReact: (msg: any) => void;
+    onCopy: (msg: any) => void;
+    onToggleFavorite: (msg: any) => void;
+    onForward: (msg: any) => void;
     onOpenNewMessage?: (phone?: string) => void;
     isMobile?: boolean;
     visibleMessagesCount: number;
@@ -42,6 +46,9 @@ export const MessageList = ({
     onEdit,
     onDelete,
     onReact,
+    onCopy,
+    onToggleFavorite,
+    onForward,
     onOpenNewMessage,
     isMobile = false,
     visibleMessagesCount,
@@ -290,6 +297,23 @@ export const MessageList = ({
         const evolutionId = (msg as any).evolution_id as string | undefined;
         const reactionEmojis = evolutionId ? (reactionMap.get(evolutionId) ?? []) : [];
 
+        // Identificar se é uma mensagem de sistema de transferência ("Conversa 123 transferida de X para Y")
+        const isSystemTransfer = msg.body && (msg.body.includes('transferida de') || msg.body.includes('transferiu para'));
+        if (isSystemTransfer) {
+            // Remove o texto "Conversa X " do início, mantendo apenas a ação
+            const cleanTransferText = msg.body.replace(/^Conversa \d+\s+/i, '');
+            const timeStr = new Date(msg.created_at || "").toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+
+            return (
+                <div key={msg.id} id={`message-${msg.id}`} className={cn("flex justify-center my-6 px-4", isMatch && matchIndex === currentMatchIndex ? "bg-yellow-100/10 rounded-lg p-1 -m-1" : "")}>
+                    <div className="bg-[#1e253c] dark:bg-[#1a2235] text-[#93c5fd] text-xs font-medium px-4 py-2 rounded-full flex items-center gap-2.5 shadow-sm border border-[#2a3655]/50 select-none">
+                        <ArrowLeftRight className="w-3.5 h-3.5 opacity-80" />
+                        <span>{timeStr} {cleanTransferText}</span>
+                    </div>
+                </div>
+            );
+        }
+
         return (
             <div
                 key={msg.id}
@@ -305,7 +329,7 @@ export const MessageList = ({
 
                 <div className={cn("group relative flex items-end gap-1 min-w-0", isMobile ? "max-w-[calc(100%-3rem)]" : "max-w-[70%]")}>
                     {msg.direction === "outbound" && (
-                        <MessageActionsMenu message={msg as any} onReply={() => onReply(msg)} onEdit={() => onEdit(msg)} onDelete={() => onDelete(msg)} onReact={() => onReact(msg)} className="self-center shrink-0" />
+                        <MessageActionsMenu message={msg as any} onReply={() => onReply(msg)} onEdit={() => onEdit(msg)} onDelete={() => onDelete(msg)} onReact={() => onReact(msg)} onCopy={() => onCopy(msg)} onToggleFavorite={() => onToggleFavorite(msg)} onForward={() => onForward(msg)} className="self-center shrink-0" />
                     )}
 
                     {/* Wrapper gives space for the badge below the bubble */}
@@ -320,9 +344,13 @@ export const MessageList = ({
 
                             {msg.message_type === 'image' && msg.media_url && <LazyMedia type="image" src={msg.media_url} alt="Imagem" />}
                             {msg.message_type === 'audio' && msg.media_url && (
-                                <div className="flex flex-col gap-1 min-w-[280px]">
-                                    <audio controls className="w-full"><source src={msg.media_url} /></audio>
-                                    {(msg as any).transcription && <div className="text-xs italic p-2 rounded border"><span className="font-semibold">Transcrição:</span> {(msg as any).transcription}</div>}
+                                <div className="flex flex-col gap-1 w-full min-w-[240px] max-w-[340px] sm:max-w-[400px] my-1">
+                                    <CustomAudioPlayer
+                                        audioUrl={msg.media_url}
+                                        transcription={(msg as any).transcription}
+                                        isOutbound={msg.direction === "outbound"}
+                                        senderName={isGroup && msg.direction === 'inbound' ? senderName : undefined}
+                                    />
                                 </div>
                             )}
                             {msg.message_type === 'video' && msg.media_url && <LazyMedia type="video" src={msg.media_url} />}
@@ -506,8 +534,11 @@ export const MessageList = ({
                             message={msg as any}
                             onReply={() => onReply(msg)}
                             onReact={() => onReact(msg)}
-                            onEdit={() => { }}
-                            onDelete={() => { }}
+                            onEdit={() => onEdit(msg)}
+                            onDelete={() => onDelete(msg)}
+                            onCopy={() => onCopy(msg)}
+                            onToggleFavorite={() => onToggleFavorite(msg)}
+                            onForward={() => onForward(msg)}
                             className="self-center shrink-0"
                         />
                     )}

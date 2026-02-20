@@ -157,11 +157,12 @@ export function QueueColumn({ queueId, queueName, conversations, index }: QueueC
         }
     };
 
-    const confirmTransfer = (newQueueId: string, newQueueName: string) => {
+    const confirmTransfer = (newQueueId: string, assignedAgentId: string | null) => {
         if (selectedConversation) {
             transferQueue.mutate({
                 conversationId: selectedConversation.id,
-                newQueueId
+                newQueueId,
+                assignedAgentId
             });
             setTransferModalOpen(false);
             setSelectedConversation(null);

@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { Search, Filter, Plus, MessageSquare, Send, Tag as TagIcon, Eye } from "lucide-react";
+import { Search, Filter, Plus, MessageSquare, Send, Tag as TagIcon, Eye, Check, CheckCheck, Clock, FileText, Mic, Image as ImageIcon, Video, StickyNote } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { FaWhatsapp, FaInstagram } from "react-icons/fa";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -134,6 +136,7 @@ export const ConversationsList = ({
   const [isContactDetailsOpen, setIsContactDetailsOpen] = useState(false);
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [selectedContactForDetails, setSelectedContactForDetails] = useState<any>(null);
+  const [selectedConversationForDetails, setSelectedConversationForDetails] = useState<any>(null);
   const [editingContact, setEditingContact] = useState<any>(null);
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<"people" | "groups">("people");
   const [selectedChannelFilter, setSelectedChannelFilter] = useState<"whatsapp" | "instagram">("whatsapp");
@@ -256,7 +259,7 @@ export const ConversationsList = ({
   };
 
   return (
-    <div className="w-full md:w-[300px] h-full md:h-screen border-r border-[#1E2229]/20 dark:border-border flex flex-col bg-white dark:bg-background overflow-hidden">
+    <div className="w-full md:w-[360px] h-full md:h-screen border-r border-[#1E2229]/20 dark:border-border flex flex-col bg-white dark:bg-background overflow-hidden">
       <div className="p-4 border-b border-[#1E2229]/20 dark:border-border space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold">Inbox</h2>
@@ -529,7 +532,7 @@ export const ConversationsList = ({
           <div className="p-4 text-center text-muted-foreground">Nenhuma conversa encontrada</div>
         ) : (
           <div className="p-2 space-y-1">
-            {filteredConversations.map((conversation) => {
+            {filteredConversations.map((conversation, index) => {
               const contact = conversation.contacts;
               const group = (conversation as any).groups;
               const isGroup = !!(conversation as any).group_id;
@@ -556,6 +559,20 @@ export const ConversationsList = ({
                 console.log("Instance lookup failed:", { instanceId, instances });
               }
 
+              const lastMsg = (conversation as any).last_message_obj;
+              const isOutbound = lastMsg?.direction === 'outbound';
+              const isSystem = lastMsg?.direction === 'system';
+
+              let timeDisplay = "";
+              if (conversation.last_message_at) {
+                try {
+                  timeDisplay = formatDistanceToNow(new Date(conversation.last_message_at), { addSuffix: true, locale: ptBR });
+                  timeDisplay = timeDisplay.replace('aproximadamente ', '');
+                } catch (e) {
+                  timeDisplay = new Date(conversation.last_message_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                }
+              }
+
               return (
                 <button
                   key={conversation.id}
@@ -564,96 +581,157 @@ export const ConversationsList = ({
                     onSelectConversation(conversation.id);
                   }}
                   className={cn(
-                    "block w-full max-w-[260px] mx-auto overflow-hidden p-4 rounded-2xl border border-[#1E2229]/20 dark:border-border/50 bg-white dark:bg-card text-left transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 group relative",
+                    "block w-full max-w-[340px] mx-auto overflow-hidden p-3 rounded-2xl border bg-white dark:bg-card text-left transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 group relative animate-stagger-in flex flex-col gap-1.5",
                     selectedId === conversation.id
-                      ? "ring-2 ring-primary shadow-md z-10"
-                      : "hover:border-primary/20"
+                      ? "conversation-card-selected border-primary/40 z-10"
+                      : "border-[#1E2229]/20 dark:border-border/50 hover:border-primary/20"
                   )}
+                  style={{ animationDelay: `${index * 45}ms` }}
                 >
-                  <div className="flex gap-3">
-                    <div className="flex flex-col items-center gap-1">
-                      <Avatar className="w-12 h-12 flex-shrink-0 border-2 border-white shadow-sm">
+                  {/* Row 1: Avatar + Name + Notification/Time */}
+                  <div className="flex justify-between items-center w-full">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <Avatar className={cn(
+                        "w-10 h-10 flex-shrink-0 border-2 shadow-sm transition-all duration-300",
+                        selectedId === conversation.id
+                          ? "border-primary shadow-[0_0_8px_2px_rgba(0,177,242,0.4)]"
+                          : "border-white"
+                      )}>
                         <AvatarImage src={profilePic || undefined} />
                         <AvatarFallback className="bg-secondary/10 text-secondary font-bold">
                           {displayName[0]?.toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
-                      {/* Follow Up Badge - Below Avatar (shows only when template time is reached) */}
-                      {followUpNotifications?.has(conversation.id) && (
-                        <Badge className="bg-green-500 text-white text-[8px] px-1 py-0 animate-pulse">
-                          Follow Up
-                        </Badge>
-                      )}
+                      <div className="flex flex-col min-w-0 flex-1 gap-0.5">
+                        <div className="flex items-center gap-1.5 ">
+                          <span className="font-semibold text-[15px] truncate text-foreground/90" title={displayName}>
+                            {displayName}
+                          </span>
+                          {/* Bolinha de Remetente da última mensagem */}
+                          {lastMsg && !isSystem && (
+                            <span className={cn(
+                              "w-2 h-2 rounded-full flex-shrink-0 shadow-sm",
+                              isOutbound ? "bg-green-500" : "bg-orange-500"
+                            )} title={isOutbound ? "Você enviou a última mensagem" : "Cliente enviou a última mensagem"} />
+                          )}
+                        </div>
+                        {/* Row 2: Ticket ID + Tags */}
+                        <div className="flex items-center gap-2">
+                          <div className="text-[12px] text-primary/80 font-medium tracking-tight">
+                            #{(conversation as any).ticket_id || conversation.id.substring(0, 5)}
+                          </div>
+                          {contact?.contact_tags?.length > 0 && (
+                            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar mask-gradient-right max-w-[140px]">
+                              {contact.contact_tags.map((ct: any) => (
+                                ct.tags && (
+                                  <div key={ct.tags.id} title={ct.tags.name} className="flex-shrink-0">
+                                    <TagIcon
+                                      className="w-3.5 h-3.5"
+                                      style={{ color: ct.tags.color }}
+                                    />
+                                  </div>
+                                )
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="flex-1 min-w-0">
-                      <div className="flex justify-between items-baseline mb-1">
-                        <span className="font-semibold truncate text-foreground/90 flex-1 min-w-0 mr-2" title={displayName}>{displayName}</span>
-                        <span className="text-[10px] text-muted-foreground whitespace-nowrap bg-muted/50 px-1.5 py-0.5 rounded-full">
-                          {new Date(conversation.updated_at).toLocaleDateString()}
-                        </span>
-                      </div>
-                      <div className="flex flex-col gap-0.5 mt-1">
-                        <div className="text-xs text-muted-foreground flex items-center gap-1">
-                          <span className="font-medium text-primary/80">#{(conversation as any).ticket_id || conversation.id.substring(0, 5)}</span>
-                        </div>
-                        {/* Nome do atendente atribuído */}
-                        {(conversation as any).assigned_agent_id && (() => {
-                          const assignedAgent = staffMembers?.find(m => m.id === (conversation as any).assigned_agent_id);
-                          return assignedAgent ? (
-                            <span className="text-[10px] text-green-600 dark:text-green-400 font-medium truncate max-w-[150px]" title={assignedAgent.name}>
-                              👤 {assignedAgent.name}
-                            </span>
-                          ) : null;
-                        })()}
-                        {queueName && (
-                          <span className="text-[10px] text-muted-foreground font-medium truncate max-w-[150px]" title={queueName}>
-                            {queueName}
+                    {/* Time and Badges Panel */}
+                    <div className="flex flex-col items-end gap-1 flex-shrink-0 ml-2">
+                      <span className="text-[11px] text-muted-foreground whitespace-nowrap capitalize font-medium">
+                        {timeDisplay}
+                      </span>
+                      <div className="flex flex-col items-end gap-1">
+                        {conversation.unread_count > 0 && (
+                          <Badge className="bg-primary text-primary-foreground h-[18px] px-1.5 min-w-[1.25rem] text-[11px] leading-none animate-in scale-in">
+                            {conversation.unread_count}
+                          </Badge>
+                        )}
+                        {/* Follow Up badge */}
+                        {followUpNotifications?.has(conversation.id) && (
+                          <span className="flex items-center gap-0.5 bg-green-500 text-white text-[9px] px-1.5 py-0.5 rounded-full flex-shrink-0 shadow-sm">
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="animate-bell-swing" style={{ transformOrigin: "top center" }}>
+                              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                            </svg>
                           </span>
                         )}
                       </div>
+                    </div>
+                  </div>
 
-                      <div className="flex items-center justify-between mt-3">
-                        <div className="flex items-center gap-1.5">
-                          {contact?.contact_tags?.map((ct: any) => (
-                            ct.tags && (
-                              <div key={ct.tags.id} title={ct.tags.name}>
-                                <TagIcon
-                                  className="w-3 h-3"
-                                  style={{ color: ct.tags.color }}
-                                />
-                              </div>
-                            )
-                          ))}
-                        </div>
+                  {/* Row 3: Preview da Última Mensagem */}
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground w-full px-2 py-1.5 mt-0.5 dark:bg-muted/40 dark:rounded-md dark:border dark:border-border/30">
+                    {isOutbound && lastMsg?.status && (
+                      <span className="flex-shrink-0">
+                        {lastMsg.status === 'read' || lastMsg.status === 'played' ? <CheckCheck className="w-3.5 h-3.5 text-blue-500" /> :
+                          lastMsg.status === 'delivered' ? <CheckCheck className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" /> :
+                            lastMsg.status === 'sent' ? <Check className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" /> :
+                              <Clock className="w-3 h-3 text-gray-400" />}
+                      </span>
+                    )}
+                    <span className="truncate flex-1 font-medium text-foreground/80">
+                      {isOutbound ? "Você: " : ""}
+                      {(() => {
+                        const t = lastMsg?.message_type;
+                        if (t === 'image') return <><ImageIcon className="w-3.5 h-3.5 mr-1 inline -mt-0.5 text-blue-500" />Imagem</>;
+                        if (t === 'video') return <><Video className="w-3.5 h-3.5 mr-1 inline -mt-0.5 text-purple-500" />Vídeo</>;
+                        if (t === 'audio' || t === 'ptt') return <><Mic className="w-3.5 h-3.5 mr-1 inline -mt-0.5 text-green-500" />Áudio</>;
+                        if (t === 'document') return <><FileText className="w-3.5 h-3.5 mr-1 inline -mt-0.5 text-orange-500" />Documento</>;
+                        if (t === 'sticker') return <><StickyNote className="w-3.5 h-3.5 mr-1 inline -mt-0.5 text-pink-500" />Figurinha</>;
+                        if (t === 'reaction') return `Reagiu com ${lastMsg.body}`;
+                        return lastMsg?.body || "Nenhuma mensagem";
+                      })()}
+                    </span>
+                  </div>
 
-                        <div className="flex items-center gap-2">
-                          {instanceName && (
-                            <span className="text-[10px] text-secondary dark:text-slate-400 font-medium bg-secondary/10 px-1.5 py-0.5 rounded-full max-w-[80px] truncate" title={instanceName}>
-                              {instanceName}
-                            </span>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 text-secondary dark:text-slate-400 hover:text-primary transition-colors"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedContactForDetails(contact);
-                              setIsContactDetailsOpen(true);
-                            }}
-                            title="Ver Detalhes"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
+                  {/* Row 4: Usuario atribuido | Nome da fila ----- nome da instancia | View Icon */}
+                  <div className="flex items-center justify-between text-[11px] pt-1">
+                    <div className="flex items-center gap-1.5 min-w-0 text-muted-foreground font-medium px-2 py-0.5 dark:bg-muted/50 dark:rounded dark:border dark:border-border/40">
+                      {/* Assigned Agent */}
+                      {(conversation as any).assigned_agent_id && (() => {
+                        const assignedAgent = staffMembers?.find(m => m.id === (conversation as any).assigned_agent_id);
+                        return assignedAgent ? (
+                          <span className="text-foreground/80 truncate max-w-[80px]" title={assignedAgent.name}>
+                            👤 {assignedAgent.name.split(' ')[0]}
+                          </span>
+                        ) : null;
+                      })()}
 
-                          {conversation.unread_count > 0 && (
-                            <Badge className="bg-primary text-primary-foreground h-5 min-w-[1.25rem] px-1">
-                              {conversation.unread_count}
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
+                      {(conversation as any).assigned_agent_id && queueName && <span className="text-border/80 text-[10px] mx-0.5">|</span>}
+
+                      {/* Queue */}
+                      {queueName && (
+                        <span className="truncate max-w-[80px]" title={queueName}>
+                          {queueName}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5 flex-shrink-0 ml-1.5">
+                      {/* Instance Name */}
+                      {instanceName && (
+                        <span className="text-secondary dark:text-primary font-semibold px-2 py-0.5 dark:bg-secondary/10 rounded max-w-[100px] truncate" title={instanceName}>
+                          {instanceName}
+                        </span>
+                      )}
+
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 rounded-full bg-secondary/5 text-secondary dark:bg-slate-800 dark:text-slate-400 hover:text-primary transition-all duration-300 hover:scale-110"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedContactForDetails(contact);
+                          setSelectedConversationForDetails(conversation);
+                          setIsContactDetailsOpen(true);
+                        }}
+                        title="Ver Detalhes do Contato"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
                   </div>
                 </button>
@@ -669,6 +747,7 @@ export const ConversationsList = ({
         open={isContactDetailsOpen}
         onOpenChange={setIsContactDetailsOpen}
         contact={selectedContactForDetails}
+        conversation={selectedConversationForDetails}
         onEdit={(contact) => {
           setEditingContact(contact);
           setIsContactModalOpen(true);

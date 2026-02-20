@@ -1,15 +1,14 @@
 import {
-  LayoutDashboard, MessageSquare, Briefcase, ListOrdered, Users, Settings,
+  ListOrdered, Users, Settings, LayoutDashboard, MessageSquare, Briefcase, Wrench, Grid3X3,
   Smartphone, LogOut, Tag as TagIcon, BookUser, Calendar, ClipboardList,
-  Package, Bot, Wallet, ChevronDown, MessageCircle, Wrench, Grid3X3, PieChart, Clock,
-  ShoppingCart, Headphones, UserRound
+  Package, Bot, ChevronDown, PieChart, Clock,
+  ShoppingCart, Headphones, UserRound, Sun, Moon
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "@/components/ThemeProvider";
-import { Sun, Moon } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -18,6 +17,7 @@ import { useFinancialAccess } from "@/hooks/useFinancialAccess";
 import { differenceInDays } from "date-fns";
 import { useState, useEffect } from "react";
 import { useMobileMenu } from "@/contexts/MobileMenuContext";
+import { AnimatedNavIcon } from "@/components/AnimatedNavIcon";
 
 // Menu structure with submenus
 interface MenuItem {
@@ -281,17 +281,22 @@ export const NavigationSidebar = () => {
     );
   };
 
+  // IDs that have dedicated AnimatedNavIcon versions
+  const ANIMATED_IDS = new Set(["dashboard", "inbox", "crm", "queues-manager", "automacao", "operacoes", "administrativo"]);
+
   const renderMenuItem = (item: MenuItem) => {
     const Icon = item.icon;
     const isActive = isPathActive(item.path);
     const hasChildren = item.children && item.children.length > 0;
     const isOpen = openSubmenus.has(item.id);
     const hasActiveInChildren = hasActiveChild(item);
+    const useAnimated = ANIMATED_IDS.has(item.id);
 
     // Badge counts - Dashboard gets notifications, CRM gets stagnated count
     const dashboardBadge = item.id === "dashboard" ? (dashboardNotificationsCount || 0) : 0;
     const crmBadge = item.id === "crm" ? (stagnatedCount || 0) : 0;
     const badgeCount = dashboardBadge || crmBadge;
+    const isItemActive = isActive || hasActiveInChildren;
 
     // Only show collapsed submenu icons for submenu with active item
     const showCollapsedSubmenu = hasChildren && hasActiveInChildren;
@@ -302,21 +307,42 @@ export const NavigationSidebar = () => {
           onClick={() => handleNavClick(item)}
           className={cn(
             "w-full flex items-center gap-3 py-3 transition-all duration-200 relative group/item",
-            "text-white/70 hover:text-white hover:bg-[#024a84] dark:hover:bg-[#1E2229]",
+            "text-white/70 hover:text-white",
+            isItemActive
+              ? "bg-[#024a84]/80 dark:bg-[#22262E] hover:bg-[#024a84] dark:hover:bg-[#22262E]"
+              : "hover:bg-[#024a84] dark:hover:bg-[#1E2229]",
             hasChildren && (isOpen || hasActiveInChildren) && "bg-[#024a84] dark:bg-[#22262E]",
             "px-4"
           )}
         >
-          <div className="relative shrink-0">
-            <Icon className={cn(
-              "w-[18px] h-[18px] transition-colors",
-              (isActive || hasActiveInChildren) && "text-[#00B0F0]"
-            )} />
+          {/* Active left accent bar */}
+          {isItemActive && (
+            <div
+              className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full bg-[#00B1F2]"
+              style={{ boxShadow: "0 0 8px 2px rgba(0,177,242,0.6)" }}
+            />
+          )}
+
+          <div className="relative shrink-0 ml-1">
+            {useAnimated ? (
+              <AnimatedNavIcon
+                iconId={item.id as any}
+                isActive={isItemActive}
+                hasUnread={item.id === "inbox" && (badgeCount > 0)}
+              />
+            ) : (
+              <Icon className={cn(
+                "w-[18px] h-[18px] transition-colors",
+                isItemActive && "text-[#00B0F0]",
+                isItemActive && "drop-shadow-[0_0_4px_rgba(0,177,242,0.6)]"
+              )} />
+            )}
             <NotificationBadge count={badgeCount} />
           </div>
 
           <span className={cn(
             "whitespace-nowrap text-[15px] font-medium flex-1 text-left transition-opacity duration-300",
+            isItemActive && "text-white",
             isMobile ? "opacity-100" : "opacity-0 group-hover/sidebar:opacity-100"
           )}>
             {item.label}
@@ -475,19 +501,71 @@ export const NavigationSidebar = () => {
             </span>
           </button>
 
-          <div className="flex items-center gap-3 py-2 px-4 overflow-hidden">
-            <Avatar className="w-9 h-9 border-2 border-white/20 shrink-0">
-              <AvatarImage src={profile?.avatar_url || undefined} />
-              <AvatarFallback className="bg-primary/20 text-primary font-bold text-sm">
-                {(profile?.name || profile?.full_name || user?.email)?.[0]?.toUpperCase() || "U"}
-              </AvatarFallback>
-            </Avatar>
+          {/* User Profile & Theme Toggle */}
+          <div className="p-4 border-t border-[#1E2229] dark:border-[#272C35]">
             <div className={cn(
-              "flex flex-col transition-opacity duration-300 overflow-hidden",
-              isMobile ? "opacity-100" : "opacity-0 group-hover/sidebar:opacity-100"
+              "flex items-center gap-3 transition-all duration-300",
+              isMobile ? "" : "justify-center group-hover/sidebar:justify-start"
             )}>
-              <span className="text-sm font-bold text-white truncate">{profile?.full_name || profile?.name || "Usuário"}</span>
-              <span className="text-[11px] text-white/50 truncate">{profile?.email || user?.email}</span>
+              <div className="relative group/avatar">
+                <Avatar className="h-9 w-9 border-2 border-[#1E2229] dark:border-[#272C35] transition-all duration-300 group-hover/avatar:border-[#00B1F2] group-hover/avatar:shadow-[0_0_12px_2px_rgba(0,177,242,0.4)]">
+                  <AvatarImage src={currentTeamMember?.profile_pic_url || undefined} />
+                  <AvatarFallback className="bg-[#024a84] text-white text-xs">
+                    {currentTeamMember?.name?.substring(0, 2).toUpperCase() || "US"}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-[#005FAA] rounded-full animate-gentle-float" />
+              </div>
+
+              <div className={cn(
+                "flex flex-col overflow-hidden transition-all duration-300",
+                isMobile ? "w-auto opacity-100" : "w-0 opacity-0 group-hover/sidebar:w-auto group-hover/sidebar:opacity-100"
+              )}>
+                <span className="text-sm font-medium text-white/90 truncate max-w-[120px]">
+                  {currentTeamMember?.name || "Usuário"}
+                </span>
+                <span className="text-xs text-white/50 truncate max-w-[120px]">
+                  {userRole === 'admin' ? 'Administrador' : 'Atendente'}
+                </span>
+              </div>
+
+              <div className={cn(
+                "ml-auto transition-all duration-200",
+                isMobile ? "block" : "hidden group-hover/sidebar:block"
+              )}>
+                <button
+                  onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                  className="p-1.5 rounded-lg text-white/70 hover:text-white hover:bg-[#1E2229]/50 transition-colors"
+                >
+                  {theme === 'dark' ? (
+                    <svg
+                      width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                      className="text-yellow-400"
+                    >
+                      <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+                      <path d="M19 3v4" className="animate-pulse" />
+                      <path d="M21 5h-4" className="animate-pulse" style={{ animationDelay: "0.5s" }} />
+                      <path d="m16 8 2-2" style={{ animation: "moon-star-twinkle 2s ease-in-out infinite" }} />
+                    </svg>
+                  ) : (
+                    <svg
+                      width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                      className="text-yellow-400"
+                      style={{ animation: "sun-spin 8s linear infinite" }}
+                    >
+                      <circle cx="12" cy="12" r="4" />
+                      <path d="M12 2v2" />
+                      <path d="M12 20v2" />
+                      <path d="m4.93 4.93 1.41 1.41" />
+                      <path d="m17.66 17.66 1.41 1.41" />
+                      <path d="M2 12h2" />
+                      <path d="M20 12h2" />
+                      <path d="m6.34 17.66-1.41 1.41" />
+                      <path d="m19.07 4.93-1.41 1.41" />
+                    </svg>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -18,7 +18,7 @@ serve(async (req) => {
     );
 
     const reqData = await req.json();
-    let { conversationId, body, messageType = 'text', mediaUrl, caption, replyId, quotedBody, quotedSender, contactId, groupId, mentions } = reqData;
+    let { conversationId, body, messageType = 'text', mediaUrl, caption, replyId, quotedBody, quotedSender, contactId, groupId, mentions, forward } = reqData;
     console.log('=== [UZAPI SEND MESSAGE] START ===');
     console.log('Conversation ID:', conversationId);
     console.log('Contact ID:', contactId);
@@ -311,6 +311,10 @@ serve(async (req) => {
         payload.replyid = replyId;
         console.log('Adding replyid to payload:', replyId);
       }
+      if (forward) {
+        payload.forward = true;
+        console.log('Adding forward flag to text payload');
+      }
     } else {
       sendUrl = `https://clinvia.uazapi.com/send/media`;
       let uzapiType = messageType;
@@ -325,6 +329,10 @@ serve(async (req) => {
       if (caption) {
         payload.caption = caption;
         console.log('Adding caption to media payload:', caption);
+      }
+      if (forward) {
+        payload.forward = true;
+        console.log('Adding forward flag to media payload');
       }
     }
 

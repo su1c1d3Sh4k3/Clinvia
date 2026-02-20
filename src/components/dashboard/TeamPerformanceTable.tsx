@@ -4,145 +4,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Loader2, Sparkles, TrendingUp, Clock, CheckCircle2, AlertCircle, Users } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Progress } from "@/components/ui/progress";
+import { Loader2, Sparkles, Clock, CheckCircle2, AlertCircle, Users, Award } from "lucide-react";
 import { toast } from "sonner";
-
-// Card individual de agente com design moderno
-const AgentCard = ({
-    agent,
-    rank,
-    onEvaluate
-}: {
-    agent: any,
-    rank: number,
-    onEvaluate: (agent: any) => void
-}) => {
-    const qualityColor = agent.avg_quality >= 8
-        ? 'text-green-500'
-        : agent.avg_quality >= 5
-            ? 'text-yellow-500'
-            : 'text-red-500';
-
-    const qualityBg = agent.avg_quality >= 8
-        ? 'bg-green-500/10'
-        : agent.avg_quality >= 5
-            ? 'bg-yellow-500/10'
-            : 'bg-red-500/10';
-
-    return (
-        <div className="relative rounded-2xl bg-white dark:bg-card/50 backdrop-blur-sm border border-border/50 p-5 hover:border-border hover:shadow-lg transition-all duration-300 group">
-            {/* Rank Badge */}
-            {rank <= 3 && (
-                <div className={`absolute -top-2 -left-2 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white ${rank === 1 ? 'bg-gradient-to-br from-yellow-400 to-yellow-600' :
-                    rank === 2 ? 'bg-gradient-to-br from-gray-300 to-gray-500' :
-                        'bg-gradient-to-br from-amber-600 to-amber-800'
-                    }`}>
-                    {rank}
-                </div>
-            )}
-
-            {/* Header */}
-            <div className="flex items-center gap-3 mb-4">
-                <Avatar className="w-12 h-12 ring-2 ring-background shadow-lg">
-                    <AvatarImage src={agent.avatar_url} />
-                    <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/40 text-primary font-semibold">
-                        {agent.name?.substring(0, 2).toUpperCase()}
-                    </AvatarFallback>
-                </Avatar>
-                <div className="flex-1 min-w-0">
-                    <h4 className="font-semibold truncate">{agent.name}</h4>
-                    <p className="text-xs text-muted-foreground">Atendente</p>
-                </div>
-            </div>
-
-            {/* Metrics Grid */}
-            <div className="grid grid-cols-3 gap-3 mb-4">
-                <div className="text-center p-2 rounded-lg bg-muted/30">
-                    <div className="flex items-center justify-center gap-1 text-yellow-500 mb-1">
-                        <Clock className="w-3 h-3" />
-                    </div>
-                    <p className="text-lg font-bold">{agent.pending_tickets}</p>
-                    <p className="text-[10px] text-muted-foreground uppercase">Pendentes</p>
-                </div>
-                <div className="text-center p-2 rounded-lg bg-muted/30">
-                    <div className="flex items-center justify-center gap-1 text-blue-500 mb-1">
-                        <AlertCircle className="w-3 h-3" />
-                    </div>
-                    <p className="text-lg font-bold">{agent.open_tickets}</p>
-                    <p className="text-[10px] text-muted-foreground uppercase">Abertos</p>
-                </div>
-                <div className="text-center p-2 rounded-lg bg-muted/30">
-                    <div className="flex items-center justify-center gap-1 text-green-500 mb-1">
-                        <CheckCircle2 className="w-3 h-3" />
-                    </div>
-                    <p className="text-lg font-bold">{agent.resolved_tickets}</p>
-                    <p className="text-[10px] text-muted-foreground uppercase">Resolvidos</p>
-                </div>
-            </div>
-
-            {/* Footer Stats */}
-            <div className="flex items-center justify-between pt-3 border-t border-border/50">
-                <div className="flex items-center gap-2">
-                    <div className={`px-2 py-1 rounded-full ${qualityBg} ${qualityColor} text-xs font-semibold`}>
-                        ★ {agent.avg_quality}
-                    </div>
-                    <span className="text-xs text-muted-foreground">
-                        {agent.avg_response_time_min}min avg
-                    </span>
-                </div>
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    className="gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={() => onEvaluate(agent)}
-                >
-                    <Sparkles className="w-3 h-3 text-yellow-500" />
-                    <span className="text-xs">Avaliar</span>
-                </Button>
-            </div>
-        </div>
-    );
-};
-
-// Card de resumo do time
-const TeamSummaryCard = ({ team }: { team: any[] }) => {
-    const totalResolved = team.reduce((acc, a) => acc + (a.resolved_tickets || 0), 0);
-    const avgQuality = team.length > 0
-        ? (team.reduce((acc, a) => acc + (a.avg_quality || 0), 0) / team.length).toFixed(1)
-        : 0;
-    const avgResponseTime = team.length > 0
-        ? Math.round(team.reduce((acc, a) => acc + (a.avg_response_time_min || 0), 0) / team.length)
-        : 0;
-
-    return (
-        <div className="rounded-2xl bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20 p-6">
-            <div className="flex items-center gap-3 mb-6">
-                <div className="p-3 rounded-xl bg-primary/10">
-                    <Users className="w-6 h-6 text-primary" />
-                </div>
-                <div>
-                    <h3 className="font-semibold">Resumo da Equipe</h3>
-                    <p className="text-sm text-muted-foreground">{team.length} agentes ativos</p>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-4">
-                <div className="text-center">
-                    <p className="text-3xl font-bold text-primary">{totalResolved}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Total Resolvidos</p>
-                </div>
-                <div className="text-center">
-                    <p className="text-3xl font-bold text-green-500">{avgQuality}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Nota Média</p>
-                </div>
-                <div className="text-center">
-                    <p className="text-3xl font-bold text-cyan-500">{avgResponseTime}m</p>
-                    <p className="text-xs text-muted-foreground mt-1">Tempo Médio</p>
-                </div>
-            </div>
-        </div>
-    );
-};
 
 export const TeamPerformanceTable = () => {
     const [selectedAgent, setSelectedAgent] = useState<any>(null);
@@ -211,20 +76,104 @@ export const TeamPerformanceTable = () => {
     // Ordenar por tickets resolvidos para ranking
     const sortedTeam = [...team].sort((a, b) => (b.resolved_tickets || 0) - (a.resolved_tickets || 0));
 
+    // Calcular os maiores valores para as barras de progresso
+    const maxResolved = Math.max(...sortedTeam.map(a => a.resolved_tickets || 0), 1);
+    const maxTime = Math.max(...sortedTeam.map(a => a.avg_response_time_min || 0), 1);
+
     return (
         <div className="space-y-6">
-            <h2 className="text-xl font-bold tracking-tight">Desempenho da Equipe</h2>
+            <h2 className="text-xl font-bold tracking-tight">Leaderboard da Equipe</h2>
 
-            {/* Agent Cards Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {sortedTeam.map((agent: any, index: number) => (
-                    <AgentCard
-                        key={agent.user_id}
-                        agent={agent}
-                        rank={index + 1}
-                        onEvaluate={handleEvaluate}
-                    />
-                ))}
+            {/* Tabela Analítica de Performance */}
+            <div className="rounded-xl border bg-card text-card-foreground shadow overflow-hidden">
+                <Table>
+                    <TableHeader className="bg-muted/50">
+                        <TableRow>
+                            <TableHead className="w-16 text-center">Rank</TableHead>
+                            <TableHead>Atendente</TableHead>
+                            <TableHead className="w-[120px] text-center">Ativos (P/A)</TableHead>
+                            <TableHead className="w-1/4">Resolvidos</TableHead>
+                            <TableHead className="w-1/6">TMA (Média)</TableHead>
+                            <TableHead className="text-center w-[120px]">Qualidade</TableHead>
+                            <TableHead className="w-[100px]"></TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {sortedTeam.map((agent: any, index: number) => {
+                            const rank = index + 1;
+                            const qualityColor = agent.avg_quality >= 8 ? 'text-green-500 bg-green-500/10' : agent.avg_quality >= 5 ? 'text-yellow-500 bg-yellow-500/10' : 'text-red-500 bg-red-500/10';
+
+                            // Progresso percentual invertido para o tempo (menos tempo = barra maior e melhor cor)
+                            const timePercent = Math.max(0, 100 - ((agent.avg_response_time_min || 0) / maxTime) * 100);
+
+                            return (
+                                <TableRow key={agent.user_id} className="group transition-colors hover:bg-muted/50">
+                                    <TableCell className="text-center font-medium">
+                                        {rank === 1 ? <Award className="w-5 h-5 mx-auto text-yellow-500" /> :
+                                            rank === 2 ? <Award className="w-5 h-5 mx-auto text-gray-400" /> :
+                                                rank === 3 ? <Award className="w-5 h-5 mx-auto text-amber-700" /> :
+                                                    <span className="text-muted-foreground">{rank}</span>}
+                                    </TableCell>
+                                    <TableCell>
+                                        <div className="flex items-center gap-3">
+                                            <Avatar className="w-9 h-9">
+                                                <AvatarImage src={agent.avatar_url} />
+                                                <AvatarFallback className="bg-primary/20 text-primary uppercase text-xs">
+                                                    {agent.name?.substring(0, 2)}
+                                                </AvatarFallback>
+                                            </Avatar>
+                                            <div className="flex flex-col">
+                                                <span className="font-semibold text-sm">{agent.name}</span>
+                                            </div>
+                                        </div>
+                                    </TableCell>
+                                    <TableCell>
+                                        <div className="flex justify-center items-center gap-2 text-sm font-medium">
+                                            <span className="text-yellow-500" title="Pendentes">{agent.pending_tickets}</span>
+                                            <span className="text-muted-foreground/30">/</span>
+                                            <span className="text-blue-500" title="Abertos">{agent.open_tickets}</span>
+                                        </div>
+                                    </TableCell>
+                                    <TableCell>
+                                        <div className="flex items-center gap-3">
+                                            <span className="w-8 font-semibold tabular-nums text-foreground/80">{agent.resolved_tickets}</span>
+                                            <div className="flex-1 max-w-[120px]">
+                                                <Progress value={((agent.resolved_tickets || 0) / maxResolved) * 100} className="h-1.5" />
+                                            </div>
+                                        </div>
+                                    </TableCell>
+                                    <TableCell>
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-12 text-sm font-medium text-muted-foreground">{agent.avg_response_time_min}m</span>
+                                            <div className="flex-1 max-w-[80px]">
+                                                {/* Usando div simplificada pois a cor do Progress padrão é sempre primary */}
+                                                <div className="h-1.5 w-full bg-muted overflow-hidden rounded-full">
+                                                    <div className={`h-full ${timePercent > 66 ? 'bg-green-500' : timePercent > 33 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${Math.max(10, timePercent)}%` }} />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </TableCell>
+                                    <TableCell className="text-center">
+                                        <div className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${qualityColor}`}>
+                                            ★ {agent.avg_quality}
+                                        </div>
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            onClick={() => onEvaluate(agent)}
+                                            title="Avaliar Desempenho (IA)"
+                                        >
+                                            <Sparkles className="w-4 h-4 text-yellow-500" />
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            );
+                        })}
+                    </TableBody>
+                </Table>
             </div>
 
             {/* Evaluation Dialog */}

@@ -2,8 +2,10 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { CheckCircle } from "lucide-react";
+import { CheckCircle, Star } from "lucide-react";
 import { QueueSelector } from "@/components/QueueSelector";
+import { useState } from "react";
+import { FavoriteMessagesModal } from "./FavoriteMessagesModal";
 
 interface ChatHeaderProps {
     isMobile?: boolean;
@@ -34,6 +36,7 @@ export const ChatHeader = ({
     resolveConversation,
     handleResolve
 }: ChatHeaderProps) => {
+    const [isFavoritesModalOpen, setIsFavoritesModalOpen] = useState(false);
 
     if (isMobile) return null;
 
@@ -97,7 +100,23 @@ export const ChatHeader = ({
                         </Button>
                     </>
                 )}
+
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsFavoritesModalOpen(true)}
+                    title="Mensagens Favoritas"
+                    className="ml-auto"
+                >
+                    <Star className="w-4 h-4 fill-yellow-500 text-yellow-500" />
+                </Button>
             </div>
+
+            <FavoriteMessagesModal
+                open={isFavoritesModalOpen}
+                onOpenChange={setIsFavoritesModalOpen}
+                conversationId={conversationId}
+            />
         </div>
     );
 };

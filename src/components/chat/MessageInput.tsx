@@ -178,6 +178,13 @@ export const MessageInput = ({
         setShowMentionPopup(false);
     }, [message, cursorPosition, quickMessages, isGroup, groupMembers]);
 
+    // Effect to reset textarea height when message is cleared (e.g. after sending)
+    useEffect(() => {
+        if (message === "" && textareaRef.current) {
+            textareaRef.current.style.height = "auto";
+        }
+    }, [message]);
+
     const handleMentionSelect = (member: GroupMember) => {
         const textBeforeCursor = message.slice(0, cursorPosition);
         const lastAtSymbolIndex = textBeforeCursor.lastIndexOf('@');

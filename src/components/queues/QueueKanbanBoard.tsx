@@ -6,6 +6,7 @@ import { useOwnerId } from '@/hooks/useOwnerId';
 import { useQueueConversations } from '@/hooks/useQueueConversations';
 import { useConversationActions } from '@/hooks/useConversationActions';
 import { QueueColumn } from './QueueColumn';
+import { AssignResponsibleModal } from './AssignResponsibleModal';
 import { Loader2 } from 'lucide-react';
 import type { QueueConversation } from '@/hooks/useQueueConversations';
 
@@ -28,6 +29,19 @@ export function QueueKanbanBoard({
     const { data: conversations, isLoading: conversationsLoading } = useQueueConversations();
     const { transferQueue } = useConversationActions();
     const queryClient = useQueryClient();
+
+    // Modal de Transferência Customizada
+    const [transferModal, setTransferModal] = useState<{
+        open: boolean;
+        queueId: string | null;
+        queueName: string;
+        conversationId: string | null;
+    }>({
+        open: false,
+        queueId: null,
+        queueName: '',
+        conversationId: null
+    });
 
     // Fetch queues
     const { data: queues, isLoading: queuesLoading } = useQuery({
@@ -156,11 +170,24 @@ export function QueueKanbanBoard({
         const newQueue = queues?.find(q => q.id === newQueueId);
         if (!newQueue) return;
 
-        // Optimistically update the UI or just wait for the mutation
-        transferQueue.mutate({
-            conversationId: draggableId,
-            newQueueId: destination.droppableId
+        // Abre modal pedindo pra escolher o responsável antes de disparar a mutação
+        setTransferModal({
+            open: true,
+            queueId: newQueue.id,
+            queueName: newQueue.name,
+            conversationId: draggableId
         });
+    };
+
+    const handleConfirmTransfer = (queueId: string, assignedAgentId: string | null) => {
+        if (transferModal.conversationId) {
+            transferQueue.mutate({
+                conversationId: transferModal.conversationId,
+                newQueueId: queueId,
+                assignedAgentId: assignedAgentId
+            });
+        }
+        setTransferModal(prev => ({ ...prev, open: false }));
     };
 
     if (queuesLoading || conversationsLoading) {
@@ -192,6 +219,15 @@ export function QueueKanbanBoard({
                     />
                 ))}
             </div>
+
+            <AssignResponsibleModal
+                open={transferModal.open}
+                onOpenChange={(open) => setTransferModal(prev => ({ ...prev, open }))}
+                targetQueueId={transferModal.queueId}
+                targetQueueName={transferModal.queueName}
+                onConfirm={handleConfirmTransfer}
+                isLoading={transferQueue.isPending}
+            />
         </DragDropContext>
     );
 }

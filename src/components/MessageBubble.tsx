@@ -3,6 +3,7 @@ import { format } from "date-fns";
 import { Download, Clock, AlertCircle, Check, CheckCheck, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LazyMedia } from "@/components/LazyMedia";
+import { CustomAudioPlayer } from "@/components/chat/CustomAudioPlayer";
 import { toast } from "sonner";
 
 interface MessageBubbleProps {
@@ -158,25 +159,13 @@ export function MessageBubble({
 
             {/* AUDIO */}
             {msg.message_type === 'audio' && msg.media_url && (
-                <div className="flex flex-col gap-1 min-w-[200px] sm:min-w-[280px]">
-                    <audio controls className="w-full">
-                        <source src={msg.media_url} type="audio/ogg" />
-                        <source src={msg.media_url} type="audio/mpeg" />
-                        <source src={msg.media_url} type="audio/webm" />
-                        Seu navegador não suporta áudio.
-                    </audio>
-                    {/* Transcrição */}
-                    {(msg as any).transcription && (
-                        <div className={`text-xs italic p-2 rounded border ${(msg as any).transcription.startsWith('[ERRO]')
-                            ? 'text-red-500 bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800'
-                            : 'text-black dark:text-gray-200 bg-black/5 dark:bg-white/5 border-black/5 dark:border-white/5'
-                            }`}>
-                            <span className="font-semibold not-italic">
-                                {(msg as any).transcription.startsWith('[ERRO]') ? '⚠️ Erro:' : 'Transcrição:'}
-                            </span>{' '}
-                            {(msg as any).transcription.replace('[ERRO] ', '')}
-                        </div>
-                    )}
+                <div className="flex flex-col gap-1 w-full min-w-[240px] max-w-[340px] sm:max-w-[400px] my-1">
+                    <CustomAudioPlayer
+                        audioUrl={msg.media_url}
+                        transcription={(msg as any).transcription}
+                        isOutbound={msg.direction === "outbound"}
+                        senderName={isGroup && msg.direction === 'inbound' ? msg.sender_name : undefined}
+                    />
                 </div>
             )}
 

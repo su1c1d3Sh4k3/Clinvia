@@ -18,6 +18,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { AssignResponsibleModal } from "@/components/queues/AssignResponsibleModal";
 
 interface QueueSelectorProps {
     conversationId: string;
@@ -44,12 +45,26 @@ export function QueueSelector({ conversationId, currentQueueId }: QueueSelectorP
         },
     });
 
+    // Modal de Transferência Customizada
+    const [transferModal, setTransferModal] = useState<{
+        open: boolean;
+        queueId: string | null;
+        queueName: string;
+    }>({
+        open: false,
+        queueId: null,
+        queueName: '',
+    });
+
     // Mutation to update queue
     const updateQueue = useMutation({
-        mutationFn: async (queueId: string | null) => {
+        mutationFn: async ({ queueId, agentId }: { queueId: string | null, agentId: string | null }) => {
             const { error } = await supabase
                 .from("conversations")
-                .update({ queue_id: queueId } as any) // Cast as any because type might not be updated yet
+                .update({
+                    queue_id: queueId,
+                    assigned_agent_id: agentId
+                } as any) // Cast as any because type might not be updated yet
                 .eq("id", conversationId);
 
             if (error) throw error;
@@ -72,60 +87,94 @@ export function QueueSelector({ conversationId, currentQueueId }: QueueSelectorP
         },
     });
 
+    const handleSelectQueue = (queueId: string | null, queueName: string) => {
+        if (!queueId) {
+            // Se for selecionar "Sem Fila", não precisamos pedir atendente (tecnicamente)
+            // Mas vamos manter a consistência ou apenas remover direto
+            updateQueue.mutate({ queueId: null, agentId: null });
+            setOpen(false);
+            return;
+        }
+
+        // Abre o modal de atribuição em vez de já salvar
+        setTransferModal({
+            open: true,
+            queueId,
+            queueName,
+        });
+        setOpen(false); // Fecha o popover atual
+    };
+
+    const handleConfirmTransfer = (queueId: string, assignedAgentId: string | null) => {
+        updateQueue.mutate({ queueId, agentId: assignedAgentId });
+        setTransferModal(prev => ({ ...prev, open: false }));
+    };
+
     const selectedQueue = queues?.find((q) => q.id === currentQueueId);
 
     return (
-        <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger asChild>
-                <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={open}
-                    size="sm"
-                    className="justify-between"
-                >
-                    <ListOrdered className="mr-2 h-4 w-4" />
-                    {selectedQueue ? selectedQueue.name : "Filas"}
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-[200px] p-0">
-                <Command>
-                    <CommandInput placeholder="Buscar fila..." />
-                    <CommandList>
-                        <CommandEmpty>Nenhuma fila encontrada.</CommandEmpty>
-                        <CommandGroup>
-                            <CommandItem
-                                value="none"
-                                onSelect={() => updateQueue.mutate(null)}
-                            >
-                                <Check
-                                    className={cn(
-                                        "mr-2 h-4 w-4",
-                                        !currentQueueId ? "opacity-100" : "opacity-0"
-                                    )}
-                                />
-                                Sem Fila
-                            </CommandItem>
-                            {queues?.map((queue) => (
+        <>
+            <Popover open={open} onOpenChange={setOpen}>
+                <PopoverTrigger asChild>
+                    <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={open}
+                        size="sm"
+                        className="justify-between"
+                    >
+                        <ListOrdered className="mr-2 h-4 w-4" />
+                        {selectedQueue ? selectedQueue.name : "Filas"}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[200px] p-0">
+                    <Command>
+                        <CommandInput placeholder="Buscar fila..." />
+                        <CommandList>
+                            <CommandEmpty>Nenhuma fila encontrada.</CommandEmpty>
+                            <CommandGroup>
                                 <CommandItem
-                                    key={queue.id}
-                                    value={queue.name}
-                                    onSelect={() => updateQueue.mutate(queue.id)}
+                                    value="none"
+                                    onSelect={() => handleSelectQueue(null, "Sem Fila")}
                                 >
                                     <Check
                                         className={cn(
                                             "mr-2 h-4 w-4",
-                                            currentQueueId === queue.id ? "opacity-100" : "opacity-0"
+                                            !currentQueueId ? "opacity-100" : "opacity-0"
                                         )}
                                     />
-                                    {queue.name}
+                                    Sem Fila
                                 </CommandItem>
-                            ))}
-                        </CommandGroup>
-                    </CommandList>
-                </Command>
-            </PopoverContent>
-        </Popover>
+                                {queues?.map((queue) => (
+                                    <CommandItem
+                                        key={queue.id}
+                                        value={queue.name}
+                                        onSelect={() => handleSelectQueue(queue.id, queue.name)}
+                                    >
+                                        <Check
+                                            className={cn(
+                                                "mr-2 h-4 w-4",
+                                                currentQueueId === queue.id ? "opacity-100" : "opacity-0"
+                                            )}
+                                        />
+                                        {queue.name}
+                                    </CommandItem>
+                                ))}
+                            </CommandGroup>
+                        </CommandList>
+                    </Command>
+                </PopoverContent>
+            </Popover>
+
+            <AssignResponsibleModal
+                open={transferModal.open}
+                onOpenChange={(open) => setTransferModal(prev => ({ ...prev, open }))}
+                targetQueueId={transferModal.queueId}
+                targetQueueName={transferModal.queueName}
+                onConfirm={handleConfirmTransfer}
+                isLoading={updateQueue.isPending}
+            />
+        </>
     );
 }

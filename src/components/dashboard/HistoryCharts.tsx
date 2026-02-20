@@ -40,9 +40,9 @@ const ModernAreaChart = ({
                     </defs>
                     <CartesianGrid
                         vertical={false}
-                        strokeDasharray="3 3"
+                        strokeDasharray="4 4"
                         stroke="hsl(var(--muted))"
-                        strokeOpacity={0.3}
+                        strokeOpacity={0.1}
                     />
                     <XAxis
                         dataKey="date"
@@ -90,9 +90,9 @@ const CombinedChart = ({
     data: any[]
 }) => {
     return (
-        <div className="rounded-2xl bg-white dark:bg-card/50 backdrop-blur-sm border border-border/50 p-6 hover:border-border transition-all duration-300 h-[400px]">
+        <div className="rounded-2xl bg-white dark:bg-card/50 backdrop-blur-sm border border-border/50 p-6 hover:border-border transition-all duration-300 h-[340px]">
             <h3 className="text-sm font-medium text-muted-foreground mb-4">{title}</h3>
-            <ResponsiveContainer width="100%" height="90%">
+            <ResponsiveContainer width="100%" height="85%">
                 <BarChart data={data} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}>
                     <defs>
                         <linearGradient id="barGradient1" x1="0" y1="0" x2="0" y2="1">
@@ -106,9 +106,9 @@ const CombinedChart = ({
                     </defs>
                     <CartesianGrid
                         vertical={false}
-                        strokeDasharray="3 3"
+                        strokeDasharray="4 4"
                         stroke="hsl(var(--muted))"
-                        strokeOpacity={0.3}
+                        strokeOpacity={0.1}
                     />
                     <XAxis
                         dataKey="month"
