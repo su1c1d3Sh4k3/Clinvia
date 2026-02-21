@@ -106,6 +106,7 @@ serve(async (req) => {
         let senderName: string | null = null;
         let senderJid: string | null = null;
         let senderProfilePicUrl: string | null = null;
+        let isNewContactForAutoDeal = false; // Flag para auto-create deal
         let conversation: any = null; // Declare in outer scope for webhook forwarding
 
         if (isGroup) {
@@ -392,7 +393,8 @@ serve(async (req) => {
             } else {
                 // Criar novo contato
                 // Verificar se o nome tem letras (nome real vs número)
-                const hasLetters = /[a-zA-Z]/.test(contactName);
+                const hasLetters = /[a-zA-Z]/.test(contactName || '');
+                isNewContactForAutoDeal = true;
 
                 const { data: newContact, error: createError } = await supabase
                     .from('contacts')
@@ -784,6 +786,54 @@ serve(async (req) => {
                     console.log('[webhook-handle-message] Message saved:', savedMessage.id);
 
                     // ========================================
+                    // CRIAÇÃO AUTOMÁTICA DE NEGOCIAÇÃO (DEAL)
+                    // ========================================
+                    // Apenas se for contato recém-criado, mensagem recebida, via WhatsApp individual
+                    // O contato precisa ter nome válido (hasLetters) e uma foto
+                    // Instância precisar ter um funil configurado
+                    if (isNewContactForAutoDeal && !fromMe && contactId && instance.auto_create_deal_funnel_id) {
+                        const hasValidName = /[a-zA-Z]/.test(senderName || '');
+                        if (hasValidName && senderProfilePicUrl) {
+                            console.log('[webhook-handle-message] Requirements met for Auto Deal creation. Funnel ID:', instance.auto_create_deal_funnel_id);
+                            try {
+                                // 1. Buscar a primeira etapa do Funil
+                                const { data: stages } = await supabase
+                                    .from('crm_stages')
+                                    .select('id')
+                                    .eq('funnel_id', instance.auto_create_deal_funnel_id)
+                                    .order('position', { ascending: true })
+                                    .limit(1);
+
+                                if (stages && stages.length > 0) {
+                                    // 2. Inserir negócio na primeira etapa
+                                    const { error: dealError } = await supabase
+                                        .from('crm_deals')
+                                        .insert({
+                                            title: senderName || 'Novo Cliente',
+                                            description: 'Criado automaticamente pelo sistema',
+                                            contact_id: contactId,
+                                            stage_id: stages[0].id,
+                                            user_id: userId,
+                                            status: 'active'
+                                        });
+
+                                    if (dealError) {
+                                        console.error('[webhook-handle-message] Error auto-creating deal:', dealError);
+                                    } else {
+                                        console.log('[webhook-handle-message] Deal auto-created successfully for new contact:', contactId);
+                                    }
+                                } else {
+                                    console.log('[webhook-handle-message] Could not find any stages for the configured funnel.');
+                                }
+                            } catch (err) {
+                                console.error('[webhook-handle-message] Exception auto-creating deal:', err);
+                            }
+                        } else {
+                            console.log('[webhook-handle-message] Auto Deal skipped: Contact lacks valid name or profile picture.', { hasValidName, hasProfilePic: !!senderProfilePicUrl });
+                        }
+                    }
+
+                    // ========================================
                     // NPS RESPONSE DETECTION WITH AI FEEDBACK
                     // ========================================
                     // Detect NPS response via npsButtonId (nps_1 to nps_5) or text match
@@ -1139,23 +1189,25 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
             if (conversationIsPending && contactIaOn && iaConfigOn && instanceIaOn && queueIsIa) {
                 console.log('[webhook-handle-message] All filters passed! Forwarding to external webhook...');
 
-                // Check if we need to include ia_funnel_id
+                // Fetch the 'Atendimento IA' funnel ID unconditionally to include in the payload
                 let iaFunnelId: string | null = null;
-                if (crmAuto) {
-                    console.log('[webhook-handle-message] crm_auto is TRUE, looking for IA funnel...');
-                    const { data: iaFunnel } = await supabase
+                try {
+                    console.log('[webhook-handle-message] Looking for "Atendimento IA" funnel unconditionally...');
+                    const { data: iaFunnel, error: iaFunnelError } = await supabase
                         .from('crm_funnels')
                         .select('id')
-                        .eq('name', 'IA')
+                        .eq('name', 'Atendimento IA')
                         .eq('user_id', userId)
                         .single();
 
-                    if (iaFunnel?.id) {
+                    if (iaFunnelError) {
+                        console.log('[webhook-handle-message] Error or not found "Atendimento IA" funnel:', iaFunnelError.message);
+                    } else if (iaFunnel?.id) {
                         iaFunnelId = iaFunnel.id;
-                        console.log('[webhook-handle-message] Found IA funnel:', iaFunnelId);
-                    } else {
-                        console.log('[webhook-handle-message] IA funnel not found for user');
+                        console.log('[webhook-handle-message] Found Atendimento IA funnel:', iaFunnelId);
                     }
+                } catch (err) {
+                    console.error('[webhook-handle-message] Exception finding IA funnel:', err);
                 }
 
                 try {

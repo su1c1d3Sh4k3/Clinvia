@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { CreateFunnelModal } from "@/components/crm/CreateFunnelModal";
@@ -9,8 +9,10 @@ import { CRMFilters } from "@/components/crm/CRMFilters";
 import { CRMFunnel } from "@/types/crm";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
+import { useLocation } from "react-router-dom";
 
 const CRM = () => {
+    const location = useLocation();
     const [selectedFunnelId, setSelectedFunnelId] = useState<string | null>(null);
 
     const { data: funnels, isLoading } = useQuery({
@@ -32,6 +34,15 @@ const CRM = () => {
         dateRange: undefined,
         dateFilterType: 'all',
     });
+
+    // Se vier ?funnel=ID da URL (ex: Dashboard), seleciona o funil correspondente
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        const funnelFromUrl = params.get('funnel');
+        if (funnelFromUrl) {
+            setSelectedFunnelId(funnelFromUrl);
+        }
+    }, [location.search]);
 
     // Auto-select first funnel if none selected
     React.useEffect(() => {

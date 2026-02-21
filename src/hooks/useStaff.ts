@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 export interface StaffMember {
     id: string; // team_members.id (UUID próprio)
@@ -12,8 +13,11 @@ export interface StaffMember {
 }
 
 export function useStaff() {
+    const { user } = useAuth();
+
     return useQuery({
-        queryKey: ["staff-members"],
+        queryKey: ["staff-members", user?.id],
+        enabled: !!user?.id,
         queryFn: async () => {
             // 1. Obter usuário logado
             const { data: userData } = await supabase.auth.getUser();
@@ -72,8 +76,11 @@ export function useStaff() {
 
 // Hook auxiliar para obter o team_member do usuário logado
 export function useCurrentTeamMember() {
+    const { user } = useAuth();
+
     return useQuery({
-        queryKey: ["current-team-member"],
+        queryKey: ["current-team-member", user?.id],
+        enabled: !!user?.id,
         queryFn: async () => {
             const { data: userData } = await supabase.auth.getUser();
             if (!userData.user) return null;

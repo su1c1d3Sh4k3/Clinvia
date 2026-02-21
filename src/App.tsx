@@ -10,6 +10,7 @@ import Auth from "./pages/Auth";
 import WhatsAppConnection from "./pages/WhatsAppConnection";
 import Connections from "./pages/Connections";
 import NotFound from "./pages/NotFound";
+import InternalInbox from "./pages/InternalInbox";
 
 import Queues from "./pages/Queues";
 import QueuesManager from "./pages/QueuesManager";
@@ -59,6 +60,7 @@ const App = () => (
               <Route path="/admin" element={<Admin />} />
               <Route element={<ErrorBoundary name="MainLayout"><Layout /></ErrorBoundary>}>
                 <Route path="/" element={<Index />} />
+                <Route path="/internal_inbox" element={<InternalInbox />} />
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/connections" element={<Connections />} />
                 <Route path="/whatsapp-connection" element={<Connections />} />

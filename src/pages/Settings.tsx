@@ -41,6 +41,7 @@ export default function Settings() {
     const [fullName, setFullName] = useState("");
     const [companyName, setCompanyName] = useState("");
     const [avatarUrl, setAvatarUrl] = useState("");
+    const [profilePicUrl, setProfilePicUrl] = useState("");
     const [uploading, setUploading] = useState(false);
 
     // New profile fields
@@ -94,6 +95,7 @@ export default function Settings() {
             setProfile(tm);
             setFullName(tm.full_name || tm.name || "");
             setAvatarUrl(tm.avatar_url || "");
+            setProfilePicUrl(tm.profile_pic_url || tm.avatar_url || "");
             setPhone(tm.phone || "");
             setAddress(tm.address || "");
             setProfileEmail(tm.email || "");
@@ -143,6 +145,7 @@ export default function Settings() {
                 name: fullName,
                 full_name: fullName,
                 avatar_url: avatarUrl,
+                profile_pic_url: profilePicUrl || avatarUrl,
                 phone,
                 address,
                 email: profileEmail,
@@ -150,8 +153,8 @@ export default function Settings() {
                 updated_at: new Date().toISOString(),
             };
 
-            if (!currentTeamMember?.id) {
-                toast.error("Erro: usuário não identificado");
+            if (!user?.id) {
+                toast.error("Erro: usuário não autenticado");
                 setLoading(false);
                 return;
             }
@@ -159,7 +162,7 @@ export default function Settings() {
             const { error } = await supabase
                 .from("team_members")
                 .update(updates)
-                .eq("id", currentTeamMember.id);
+                .eq("auth_user_id", user.id);
 
             if (error) throw error;
 
@@ -248,8 +251,8 @@ export default function Settings() {
                 updated_at: new Date().toISOString(),
             };
 
-            if (!currentTeamMember?.id) {
-                toast.error("Erro: usuário não identificado");
+            if (!user?.id) {
+                toast.error("Erro: usuário não autenticado");
                 setLoading(false);
                 return;
             }
@@ -257,7 +260,7 @@ export default function Settings() {
             const { error } = await supabase
                 .from("team_members")
                 .update(updates)
-                .eq("id", currentTeamMember.id);
+                .eq("auth_user_id", user.id);
 
             if (error) throw error;
 
@@ -318,8 +321,8 @@ export default function Settings() {
             setLoading(true);
             setSignMessagesEnabled(newValue); // Optimistic update
 
-            if (!currentTeamMember?.id) {
-                toast.error("Erro: usuário não identificado");
+            if (!user?.id) {
+                toast.error("Erro: usuário não autenticado");
                 setLoading(false);
                 return;
             }
@@ -327,7 +330,7 @@ export default function Settings() {
             const { error } = await supabase
                 .from("team_members")
                 .update({ sign_messages: newValue, updated_at: new Date().toISOString() })
-                .eq("id", currentTeamMember.id);
+                .eq("auth_user_id", user.id);
 
             if (error) throw error;
 
@@ -469,7 +472,7 @@ export default function Settings() {
                                 {/* Avatar */}
                                 <div className="flex flex-col items-center gap-3 md:gap-4 md:min-w-[200px]">
                                     <Avatar className="h-24 w-24 md:h-32 md:w-32 border-4 border-background shadow-xl">
-                                        <AvatarImage src={avatarUrl} />
+                                        <AvatarImage src={profilePicUrl || avatarUrl} />
                                         <AvatarFallback className="text-2xl md:text-4xl font-bold bg-primary/10 text-primary">
                                             {fullName?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase()}
                                         </AvatarFallback>
@@ -511,6 +514,7 @@ export default function Settings() {
 
                                                         const { data } = supabase.storage.from("avatars").getPublicUrl(filePath);
                                                         setAvatarUrl(data.publicUrl);
+                                                        setProfilePicUrl(data.publicUrl);
                                                         toast.success("Imagem carregada com sucesso!");
                                                     } catch (error: any) {
                                                         toast.error("Erro ao fazer upload da imagem");

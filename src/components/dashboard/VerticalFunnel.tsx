@@ -26,6 +26,7 @@ interface VerticalFunnelProps {
     currentFunnelId?: string;
     allFunnels?: { id: string; name: string }[];
     onFunnelSelect?: (funnelId: string) => void;
+    onFunnelClick?: (funnelId: string) => void;
 }
 
 const themeStyles = {
@@ -114,7 +115,8 @@ export function VerticalFunnel({
     wonDeals = 0,
     currentFunnelId,
     allFunnels,
-    onFunnelSelect
+    onFunnelSelect,
+    onFunnelClick
 }: VerticalFunnelProps) {
     const theme = themeStyles[colorTheme];
 
@@ -143,13 +145,20 @@ export function VerticalFunnel({
         )}>
             {/* Header */}
             <div className="flex items-start justify-between mb-4 gap-2">
-                <div className="flex items-start gap-2 pt-1">
+                <div
+                    className={cn(
+                        "flex items-start gap-2 pt-1",
+                        onFunnelClick && currentFunnelId && "cursor-pointer group/title"
+                    )}
+                    onClick={() => onFunnelClick && currentFunnelId && onFunnelClick(currentFunnelId)}
+                    title={onFunnelClick ? "Abrir no CRM" : undefined}
+                >
                     {icon && (
-                        <div className={cn("p-1.5 rounded-lg bg-background/50 backdrop-blur-md shadow-sm mt-0.5", theme.text)}>
+                        <div className={cn("p-1.5 rounded-lg bg-background/50 backdrop-blur-md shadow-sm mt-0.5 transition-transform group-hover/title:scale-110", theme.text)}>
                             {icon}
                         </div>
                     )}
-                    <h3 className={cn("font-bold text-[15px] leading-[1.1] md:text-sm xl:text-base", theme.text)}>{title}</h3>
+                    <h3 className={cn("font-bold text-[15px] leading-[1.1] md:text-sm xl:text-base group-hover/title:underline underline-offset-2", theme.text)}>{title}</h3>
                 </div>
 
                 {allFunnels && allFunnels.length > 0 && onFunnelSelect && currentFunnelId && (

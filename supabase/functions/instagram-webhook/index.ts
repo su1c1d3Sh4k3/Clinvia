@@ -476,22 +476,25 @@ serve(async (req) => {
                                         if (webhookUrl) {
                                             console.log('[INSTAGRAM WEBHOOK] Found WhatsApp instance with webhook_url:', webhookUrl);
 
-                                            // Check for IA funnel
+                                            // Fetch the 'Atendimento IA' funnel ID unconditionally to include in the payload
                                             let iaFunnelId: string | null = null;
-                                            const { data: iaConfig } = await supabase
-                                                .from('ia_config')
-                                                .select('crm_auto')
-                                                .eq('user_id', userId)
-                                                .single();
-
-                                            if (iaConfig?.crm_auto === true) {
-                                                const { data: iaFunnel } = await supabase
+                                            try {
+                                                console.log('[INSTAGRAM WEBHOOK] Looking for "Atendimento IA" funnel unconditionally...');
+                                                const { data: iaFunnel, error: iaFunnelError } = await supabase
                                                     .from('crm_funnels')
                                                     .select('id')
-                                                    .eq('name', 'IA')
+                                                    .eq('name', 'Atendimento IA')
                                                     .eq('user_id', userId)
                                                     .single();
-                                                iaFunnelId = iaFunnel?.id || null;
+
+                                                if (iaFunnelError) {
+                                                    console.log('[INSTAGRAM WEBHOOK] Error or not found "Atendimento IA" funnel:', iaFunnelError.message);
+                                                } else if (iaFunnel?.id) {
+                                                    iaFunnelId = iaFunnel.id;
+                                                    console.log('[INSTAGRAM WEBHOOK] Found Atendimento IA funnel:', iaFunnelId);
+                                                }
+                                            } catch (err) {
+                                                console.error('[INSTAGRAM WEBHOOK] Exception finding IA funnel:', err);
                                             }
 
                                             // Step 3: Build payload with bd_data

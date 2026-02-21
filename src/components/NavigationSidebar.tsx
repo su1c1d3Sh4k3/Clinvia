@@ -1,7 +1,7 @@
 import {
   ListOrdered, Users, Settings, LayoutDashboard, MessageSquare, Briefcase, Wrench, Grid3X3,
   Smartphone, LogOut, Tag as TagIcon, BookUser, Calendar, ClipboardList,
-  Package, Bot, ChevronDown, PieChart, Clock,
+  Package, Bot, ChevronDown, PieChart, Clock, MessageCircle,
   ShoppingCart, Headphones, UserRound, Sun, Moon
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -31,6 +31,7 @@ interface MenuItem {
 const menuStructure: MenuItem[] = [
   { icon: LayoutDashboard, label: "Dashboard", id: "dashboard", path: "/dashboard" },
   { icon: MessageSquare, label: "Inbox", id: "inbox", path: "/" },
+  { icon: MessageCircle, label: "Chat Interno", id: "internal_inbox", path: "/internal_inbox" },
   { icon: ListOrdered, label: "Gestão de Filas", id: "queues-manager", path: "/queues_manager" },
   { icon: Briefcase, label: "CRM", id: "crm", path: "/crm" },
   {

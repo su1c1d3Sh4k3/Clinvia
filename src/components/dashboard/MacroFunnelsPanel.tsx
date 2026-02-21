@@ -16,6 +16,7 @@ import { useCurrentTeamMember } from "@/hooks/useStaff";
 import { VerticalFunnel, StageMetric } from "./VerticalFunnel";
 import { DealsStageChart } from "./DealsStageChart";
 import { LossReasonsChart } from "./LossReasonsChart";
+import { useNavigate } from "react-router-dom";
 
 type DateFilterOption = "all" | "7days" | "30days" | "custom";
 
@@ -40,9 +41,14 @@ const getFunnelConfig = (funnelName: string) => {
 export function MacroFunnelsPanel() {
     const { data: userRole } = useUserRole();
     const { data: currentTeamMember } = useCurrentTeamMember();
+    const navigate = useNavigate();
     const [dateFilter, setDateFilter] = useState<DateFilterOption>("all");
     const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>();
     const [funnelSlots, setFunnelSlots] = useState<(string | null)[]>([null, null, null, null, null]);
+
+    const handleNavigateToCRM = (funnelId: string) => {
+        navigate(`/crm?funnel=${funnelId}`);
+    };
 
     // 1. Fetch All Data (Funnels, Stages, Deals)
     const { data: allData, isLoading } = useQuery({
@@ -222,6 +228,7 @@ export function MacroFunnelsPanel() {
                         currentFunnelId={funnel.id}
                         allFunnels={allAvailableFunnels}
                         onFunnelSelect={(id) => handleSlotChange(slotIndex, id)}
+                        onFunnelClick={handleNavigateToCRM}
                     />
                 </div>
             );
