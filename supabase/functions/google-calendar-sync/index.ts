@@ -9,6 +9,12 @@ const corsHeaders = {
 const GOOGLE_CLIENT_ID = Deno.env.get("GOOGLE_CLIENT_ID") || "";
 const GOOGLE_CLIENT_SECRET = Deno.env.get("GOOGLE_CLIENT_SECRET") || "";
 
+/** Garante formato RFC 3339 válido para a API do Google Calendar */
+function toRFC3339(ts: string): string {
+  // "2026-02-23 14:45:00+00" → "2026-02-23T14:45:00+00:00"
+  return ts.replace(" ", "T").replace(/([+-]\d{2})$/, "$1:00");
+}
+
 // Renova o access_token usando o refresh_token
 async function refreshAccessToken(refreshToken: string): Promise<{ access_token: string; expires_in: number } | null> {
   try {
@@ -26,7 +32,7 @@ async function refreshAccessToken(refreshToken: string): Promise<{ access_token:
     if (response.ok && data.access_token) {
       return { access_token: data.access_token, expires_in: data.expires_in || 3600 };
     }
-    console.error("[GCAL SYNC] Token refresh failed:", data.error);
+    console.error("[GCAL SYNC] Token refresh failed:", data.error, data.error_description);
     return null;
   } catch (e) {
     console.error("[GCAL SYNC] Token refresh error:", e);
@@ -42,17 +48,14 @@ async function getValidAccessToken(
   const now = new Date();
   const expiry = connection.token_expiry ? new Date(connection.token_expiry) : null;
 
-  // Se o token ainda é válido (com margem de 5 minutos), retornar diretamente
   if (connection.access_token && expiry && expiry.getTime() - now.getTime() > 5 * 60 * 1000) {
     return connection.access_token;
   }
 
-  // Renovar token
   console.log("[GCAL SYNC] Refreshing access token for connection:", connection.id);
   const refreshed = await refreshAccessToken(connection.refresh_token);
   if (!refreshed) return null;
 
-  // Salvar novo token no banco
   const newExpiry = new Date(Date.now() + refreshed.expires_in * 1000).toISOString();
   await supabase
     .from("professional_google_calendars")
@@ -90,14 +93,14 @@ function formatGoogleEvent(appointment: {
       "\nAgendado via Clinvia",
     ].filter(Boolean).join("\n"),
     start: {
-      dateTime: appointment.start_time,
+      dateTime: toRFC3339(appointment.start_time),
       timeZone: "America/Sao_Paulo",
     },
     end: {
-      dateTime: appointment.end_time,
+      dateTime: toRFC3339(appointment.end_time),
       timeZone: "America/Sao_Paulo",
     },
-    colorId: "5", // banana yellow
+    colorId: "5",
   };
 }
 
@@ -120,7 +123,7 @@ serve(async (req) => {
       );
     }
 
-    console.log(`[GCAL SYNC] Action: ${action}, Appointment: ${appointment_id}`);
+    console.log(`[GCAL SYNC] Action: ${action}, Appointment: ${appointment_id}, User: ${user_id}`);
 
     // Buscar dados completos do agendamento
     const { data: appointment, error: aptError } = await supabase
@@ -150,20 +153,26 @@ serve(async (req) => {
     // Buscar conexões Google Calendar ativas:
     // 1) Conexão individual do profissional
     // 2) Conexão global da clínica (professional_id IS NULL)
-    const { data: connections } = await supabase
+    const { data: connections, error: connErr } = await supabase
       .from("professional_google_calendars")
       .select("*")
       .eq("user_id", user_id)
       .eq("is_active", true)
       .or(`professional_id.eq.${appointment.professional_id},professional_id.is.null`);
 
+    if (connErr) {
+      console.error("[GCAL SYNC] Error fetching connections:", connErr);
+    }
+
     if (!connections || connections.length === 0) {
-      console.log("[GCAL SYNC] No active Google Calendar connections found");
+      console.log("[GCAL SYNC] No active Google Calendar connections found for user:", user_id);
       return new Response(
         JSON.stringify({ success: true, synced: 0, message: "No active connections" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    console.log(`[GCAL SYNC] Found ${connections.length} connection(s) to sync`);
 
     let synced = 0;
     const errors: string[] = [];
@@ -208,6 +217,8 @@ serve(async (req) => {
             professionalName
           );
 
+          console.log(`[GCAL SYNC] Syncing apt ${appointment_id}: start=${eventBody.start.dateTime}`);
+
           let googleEventId = appointment.google_event_id;
           let syncRes: Response;
 
@@ -231,7 +242,7 @@ serve(async (req) => {
             const body = await syncRes.text();
             // Se evento não encontrado (404), criar do zero
             if (syncRes.status === 404 && googleEventId) {
-              console.log(`[GCAL SYNC] Event not found, creating new one...`);
+              console.log(`[GCAL SYNC] Event not found (404), creating new...`);
               const createRes = await fetch(baseUrl, {
                 method: "POST",
                 headers,
@@ -239,13 +250,14 @@ serve(async (req) => {
               });
               if (!createRes.ok) {
                 const createBody = await createRes.text();
-                errors.push(`Connection ${connection.id}: Create after 404 failed: ${createBody}`);
+                errors.push(`Connection ${connection.id}: Create after 404 failed (${createRes.status}): ${createBody}`);
                 continue;
               }
               const created = await createRes.json();
               googleEventId = created.id;
             } else {
               errors.push(`Connection ${connection.id}: Sync failed (${syncRes.status}): ${body}`);
+              console.error(`[GCAL SYNC] API error ${syncRes.status}: ${body.substring(0, 500)}`);
               continue;
             }
           } else {
@@ -272,6 +284,7 @@ serve(async (req) => {
       } catch (connError: unknown) {
         const msg = connError instanceof Error ? connError.message : String(connError);
         errors.push(`Connection ${connection.id}: ${msg}`);
+        console.error(`[GCAL SYNC] Exception on connection ${connection.id}:`, msg);
       }
     }
 

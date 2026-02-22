@@ -13,6 +13,11 @@ async function refreshAccessToken(
   refreshToken: string,
 ): Promise<{ access_token: string; expires_in: number } | null> {
   try {
+    console.log("[GCAL POLL] Attempting token refresh...");
+    if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+      console.error("[GCAL POLL] CRITICAL: GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET not set!");
+      return null;
+    }
     const response = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -25,11 +30,13 @@ async function refreshAccessToken(
     });
     const data = await response.json();
     if (response.ok && data.access_token) {
+      console.log("[GCAL POLL] Token refresh successful, expires_in:", data.expires_in);
       return { access_token: data.access_token, expires_in: data.expires_in || 3600 };
     }
-    console.error("[GCAL POLL] Token refresh failed:", data.error);
+    console.error("[GCAL POLL] Token refresh failed. Status:", response.status, "Error:", data.error, "Description:", data.error_description);
     return null;
-  } catch {
+  } catch (e) {
+    console.error("[GCAL POLL] Token refresh exception:", e);
     return null;
   }
 }
@@ -45,25 +52,43 @@ async function getValidAccessToken(
 ): Promise<string | null> {
   const now = new Date();
   const expiry = connection.token_expiry ? new Date(connection.token_expiry) : null;
+  const minutesLeft = expiry ? Math.round((expiry.getTime() - now.getTime()) / 60000) : null;
+
+  console.log(`[GCAL POLL] Token status: expiry=${connection.token_expiry}, minutesLeft=${minutesLeft}`);
 
   if (
     connection.access_token &&
     expiry &&
     expiry.getTime() - now.getTime() > 5 * 60 * 1000
   ) {
+    console.log("[GCAL POLL] Using cached access token (still valid)");
     return connection.access_token;
   }
 
+  console.log("[GCAL POLL] Token expired or missing, refreshing...");
   const refreshed = await refreshAccessToken(connection.refresh_token);
   if (!refreshed) return null;
 
   const newExpiry = new Date(Date.now() + refreshed.expires_in * 1000).toISOString();
-  await supabase
+  const { error: updateErr } = await supabase
     .from("professional_google_calendars")
     .update({ access_token: refreshed.access_token, token_expiry: newExpiry })
     .eq("id", connection.id);
 
+  if (updateErr) {
+    console.error("[GCAL POLL] Failed to save refreshed token:", updateErr);
+  } else {
+    console.log("[GCAL POLL] New token saved, new expiry:", newExpiry);
+  }
+
   return refreshed.access_token;
+}
+
+/** Garante formato RFC 3339 com T e offset explícito */
+function toRFC3339(ts: string): string {
+  // "2026-02-23 14:45:00+00" → "2026-02-23T14:45:00+00:00"
+  // "2026-02-23T14:45:00+00:00" → mantém
+  return ts.replace(" ", "T").replace(/([+-]\d{2})$/, "$1:00");
 }
 
 serve(async (req) => {
@@ -85,7 +110,8 @@ serve(async (req) => {
       );
     }
 
-    console.log(`[GCAL POLL] Starting sync for user ${user_id}, connection ${connection_id || "all"}`);
+    console.log(`[GCAL POLL] ===== START sync for user=${user_id}, connection=${connection_id || "all"} =====`);
+    console.log(`[GCAL POLL] GOOGLE_CLIENT_ID set: ${!!GOOGLE_CLIENT_ID}, GOOGLE_CLIENT_SECRET set: ${!!GOOGLE_CLIENT_SECRET}`);
 
     // Buscar conexões ativas
     let query = supabase
@@ -100,25 +126,42 @@ serve(async (req) => {
 
     const { data: connections, error: connErr } = await query;
 
-    if (connErr || !connections || connections.length === 0) {
+    if (connErr) {
+      console.error("[GCAL POLL] Error fetching connections:", connErr);
+      return new Response(
+        JSON.stringify({ success: false, error: `DB error: ${connErr.message}` }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    if (!connections || connections.length === 0) {
+      console.log("[GCAL POLL] No active connections found for user:", user_id);
       return new Response(
         JSON.stringify({ success: true, message: "No active connections", synced: 0, imported: 0 }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
+    console.log(`[GCAL POLL] Found ${connections.length} active connection(s)`);
+
     let totalSynced = 0;
     let totalImported = 0;
     const errors: string[] = [];
 
-    const now = new Date();
-    const futureDate = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000); // +60 dias
+    // Início do dia atual (para incluir agendamentos de hoje)
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const futureDate = new Date(todayStart.getTime() + 60 * 24 * 60 * 60 * 1000); // +60 dias
 
     for (const connection of connections) {
       try {
+        console.log(`[GCAL POLL] Processing connection ${connection.id} (email: ${connection.google_account_email}, mode: ${connection.sync_mode})`);
+
         const accessToken = await getValidAccessToken(supabase, connection);
         if (!accessToken) {
-          errors.push(`Connection ${connection.id}: Could not refresh token`);
+          const msg = `Connection ${connection.id}: Could not get valid access token`;
+          errors.push(msg);
+          console.error(`[GCAL POLL] ${msg}`);
           continue;
         }
 
@@ -131,7 +174,21 @@ serve(async (req) => {
           "Content-Type": "application/json",
         };
 
-        // ─── FASE 1: Plataforma → Google Calendar (push de agendamentos futuros) ──────
+        // ─── PRÉ-VALIDAÇÃO: testar token antes de tentar sync ──────────────────────
+        const testRes = await fetch(
+          "https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=1",
+          { headers: { Authorization: `Bearer ${accessToken}` } },
+        );
+        if (!testRes.ok) {
+          const testBody = await testRes.text();
+          const msg = `Connection ${connection.id}: Token validation failed (${testRes.status}): ${testBody.substring(0, 400)}`;
+          errors.push(msg);
+          console.error(`[GCAL POLL] ${msg}`);
+          continue;
+        }
+        console.log(`[GCAL POLL] Token validated successfully for connection ${connection.id}`);
+
+        // ─── FASE 1: Plataforma → Google Calendar ────────────────────────────────
         let aptQuery = supabase
           .from("appointments")
           .select(`
@@ -144,7 +201,7 @@ serve(async (req) => {
           .eq("user_id", user_id)
           .eq("type", "appointment")
           .neq("status", "canceled")
-          .gte("start_time", now.toISOString())
+          .gte("start_time", todayStart.toISOString())
           .lte("start_time", futureDate.toISOString());
 
         // Conexão individual: filtrar por profissional
@@ -152,19 +209,22 @@ serve(async (req) => {
           aptQuery = aptQuery.eq("professional_id", connection.professional_id);
         }
 
-        const { data: appointments } = await aptQuery;
+        const { data: appointments, error: aptErr } = await aptQuery;
+
+        if (aptErr) {
+          console.error(`[GCAL POLL] Error fetching appointments:`, aptErr);
+        }
+
+        console.log(`[GCAL POLL] Found ${appointments?.length || 0} appointment(s) to sync (professional_id filter: ${connection.professional_id || "none"})`);
 
         for (const apt of appointments || []) {
           try {
-            const professionalName =
-              (apt as Record<string, unknown> & { professionals?: { name?: string } })
-                .professionals?.name || "Profissional";
-            const contactName =
-              (apt as Record<string, unknown> & { contacts?: { push_name?: string } })
-                .contacts?.push_name || "Paciente";
-            const serviceName =
-              (apt as Record<string, unknown> & { products_services?: { name?: string } })
-                .products_services?.name || "Consulta";
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const professionalName = (apt as any).professionals?.name || "Profissional";
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const contactName = (apt as any).contacts?.push_name || "Paciente";
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const serviceName = (apt as any).products_services?.name || "Consulta";
 
             const statusMap: Record<string, string> = {
               pending: "Pendente",
@@ -173,6 +233,9 @@ serve(async (req) => {
               completed: "Concluído",
               canceled: "Cancelado",
             };
+
+            const startTime = toRFC3339(apt.start_time);
+            const endTime = toRFC3339(apt.end_time);
 
             const eventBody = {
               summary: `${serviceName} – ${contactName}`,
@@ -187,10 +250,12 @@ serve(async (req) => {
               ]
                 .filter(Boolean)
                 .join("\n"),
-              start: { dateTime: apt.start_time, timeZone: "America/Sao_Paulo" },
-              end: { dateTime: apt.end_time, timeZone: "America/Sao_Paulo" },
+              start: { dateTime: startTime, timeZone: "America/Sao_Paulo" },
+              end: { dateTime: endTime, timeZone: "America/Sao_Paulo" },
               colorId: "5",
             };
+
+            console.log(`[GCAL POLL] Syncing apt ${apt.id}: "${eventBody.summary}", start=${startTime}, google_event_id=${apt.google_event_id || "none"}`);
 
             let googleEventId = apt.google_event_id;
             let syncRes: Response;
@@ -201,8 +266,8 @@ serve(async (req) => {
                 headers: authHeaders,
                 body: JSON.stringify(eventBody),
               });
-              // Evento não existe mais no GCal: criar novo
               if (syncRes.status === 404) {
+                console.log(`[GCAL POLL] Event ${googleEventId} not found in GCal, creating new one`);
                 syncRes = await fetch(baseUrl, {
                   method: "POST",
                   headers: authHeaders,
@@ -219,6 +284,7 @@ serve(async (req) => {
 
             if (syncRes.ok) {
               const eventData = await syncRes.json();
+              console.log(`[GCAL POLL] OK: event ${eventData.id} synced to GCal`);
               if (!apt.google_event_id && eventData.id) {
                 await supabase
                   .from("appointments")
@@ -229,18 +295,24 @@ serve(async (req) => {
                   .eq("id", apt.id);
               }
               totalSynced++;
+            } else {
+              const errBody = await syncRes.text();
+              const errMsg = `Apt ${apt.id}: GCal API ${syncRes.status} → ${errBody.substring(0, 500)}`;
+              errors.push(errMsg);
+              console.error(`[GCAL POLL] FAILED to sync: ${errMsg}`);
             }
           } catch (aptErr) {
-            errors.push(
-              `Apt ${apt.id}: ${aptErr instanceof Error ? aptErr.message : String(aptErr)}`,
-            );
+            const msg = `Apt ${apt.id}: ${aptErr instanceof Error ? aptErr.message : String(aptErr)}`;
+            errors.push(msg);
+            console.error(`[GCAL POLL] Exception on apt:`, msg);
           }
         }
 
-        // ─── FASE 2: Google Calendar → Plataforma (somente two_way) ──────────────────
+        // ─── FASE 2: Google Calendar → Plataforma (somente two_way) ──────────────
         if (connection.sync_mode === "two_way") {
+          console.log(`[GCAL POLL] Phase 2: fetching GCal events for two_way sync...`);
           const eventsUrl = `${baseUrl}?timeMin=${
-            encodeURIComponent(now.toISOString())
+            encodeURIComponent(todayStart.toISOString())
           }&timeMax=${
             encodeURIComponent(futureDate.toISOString())
           }&singleEvents=true&maxResults=250`;
@@ -250,6 +322,7 @@ serve(async (req) => {
           if (eventsRes.ok) {
             const eventsData = await eventsRes.json();
             const gcalEvents = eventsData.items || [];
+            console.log(`[GCAL POLL] Found ${gcalEvents.length} GCal event(s) in date range`);
 
             for (const event of gcalEvents) {
               if (event.status === "cancelled") continue;
@@ -259,7 +332,6 @@ serve(async (req) => {
               const endDateTime = event.end?.dateTime || event.end?.date;
               if (!startDateTime || !endDateTime) continue;
 
-              // Verificar se já existe na plataforma (tanto appointment quanto absence)
               const { data: existing } = await supabase
                 .from("appointments")
                 .select("id")
@@ -267,7 +339,6 @@ serve(async (req) => {
                 .maybeSingle();
 
               if (!existing) {
-                // Criar bloqueio de ausência
                 const absencePayload: Record<string, unknown> = {
                   user_id,
                   start_time: startDateTime,
@@ -291,27 +362,27 @@ serve(async (req) => {
 
                 if (!insErr) {
                   totalImported++;
-                  console.log(
-                    `[GCAL POLL] Imported absence block: ${event.summary || googleEventId}`,
-                  );
+                  console.log(`[GCAL POLL] Imported absence: "${event.summary || googleEventId}"`);
+                } else {
+                  console.error(`[GCAL POLL] Failed to insert absence block:`, insErr);
                 }
               }
             }
           } else {
             const errText = await eventsRes.text();
-            console.error(`[GCAL POLL] Failed to fetch GCal events: ${eventsRes.status} ${errText}`);
+            console.error(`[GCAL POLL] Failed to fetch GCal events: ${eventsRes.status} ${errText.substring(0, 400)}`);
           }
         }
 
-        console.log(
-          `[GCAL POLL] Connection ${connection.id}: synced=${totalSynced}, imported=${totalImported}`,
-        );
+        console.log(`[GCAL POLL] Connection ${connection.id} done: synced=${totalSynced}, imported=${totalImported}`);
       } catch (connErr) {
         const msg = connErr instanceof Error ? connErr.message : String(connErr);
         errors.push(`Connection ${connection.id}: ${msg}`);
-        console.error(`[GCAL POLL] Connection ${connection.id} error:`, msg);
+        console.error(`[GCAL POLL] Connection ${connection.id} exception:`, msg);
       }
     }
+
+    console.log(`[GCAL POLL] ===== DONE: synced=${totalSynced}, imported=${totalImported}, errors=${errors.length} =====`);
 
     return new Response(
       JSON.stringify({
@@ -324,7 +395,7 @@ serve(async (req) => {
     );
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error("[GCAL POLL] Unexpected error:", message);
+    console.error("[GCAL POLL] Unexpected top-level error:", message);
     return new Response(
       JSON.stringify({ error: message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
