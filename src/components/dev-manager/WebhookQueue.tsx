@@ -43,13 +43,18 @@ export function WebhookQueue({ pending, processing, failed, recentFailures, stat
       </div>
       {recentFailures.length > 0 ? (
         <div>
-          <p className="text-xs uppercase tracking-wider mb-2" style={{ color: "#555" }}>Falhas Recentes</p>
+          <p className="text-xs uppercase tracking-wider mb-2" style={{ color: "#555" }}>Falhas Recentes · 24h</p>
           <div className="space-y-1.5 max-h-40 overflow-y-auto">
             {recentFailures.map((f, i) => (
               <div key={i} className="p-2 rounded" style={{ background: "#ef444410", border: "1px solid #ef444428" }}>
                 <div className="flex items-center gap-2 mb-0.5">
                   <span className="text-xs font-mono font-medium truncate" style={{ color: "#ef4444" }}>{f.instance_name}</span>
                   <span className="text-xs px-1 rounded flex-shrink-0" style={{ background: "#1a1a1a", color: "#888" }}>{f.event_type}</span>
+                  {f.created_at && (
+                    <span className="text-xs font-mono ml-auto flex-shrink-0" style={{ color: "#555" }}>
+                      {new Date(f.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs truncate" style={{ color: "#888" }}>{f.error_message}</p>
               </div>

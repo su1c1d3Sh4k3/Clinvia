@@ -371,6 +371,51 @@ export default function DevManager() {
   }, [fetchMetrics]);
 
   // =============================================
+  // Clear actions
+  // =============================================
+  const handleClearAlerts = useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch(`${FUNCTION_URL}/infra-get-metrics`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "clear_alerts" }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success("Alertas limpos com sucesso");
+        await fetchMetrics(true);
+      } else {
+        toast.error(json.error ?? "Falha ao limpar alertas");
+      }
+    } catch (err) {
+      toast.error(`Erro: ${(err as Error).message}`);
+    }
+  }, [fetchMetrics]);
+
+  const handleClearN8nErrors = useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch(`${FUNCTION_URL}/infra-get-metrics`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "clear_n8n_errors" }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success("Erros n8n limpos com sucesso");
+        await fetchMetrics(true);
+      } else {
+        toast.error(json.error ?? "Falha ao limpar erros n8n");
+      }
+    } catch (err) {
+      toast.error(`Erro: ${(err as Error).message}`);
+    }
+  }, [fetchMetrics]);
+
+  // =============================================
   // Initial load + auto-refresh
   // =============================================
   useEffect(() => {
@@ -838,6 +883,7 @@ export default function DevManager() {
             errors={data.n8n.recent_errors}
             failedCount={data.n8n.failed_executions}
             n8nUrl={configValues.n8n_url}
+            onClear={handleClearN8nErrors}
           />
         )}
 
@@ -890,6 +936,7 @@ export default function DevManager() {
             <AlertFeed
               alerts={data.alerts.recent}
               unresolvedCount={data.alerts.unresolved_count}
+              onClear={handleClearAlerts}
             />
           </div>
         )}

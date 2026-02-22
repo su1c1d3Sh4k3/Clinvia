@@ -1,6 +1,6 @@
 // src/components/dev-manager/N8nErrorLog.tsx
-import React from "react";
-import { Activity, AlertCircle, CheckCircle, Clock, ExternalLink } from "lucide-react";
+import React, { useState } from "react";
+import { Activity, AlertCircle, CheckCircle, Clock, ExternalLink, Trash2 } from "lucide-react";
 
 interface N8nError {
   id: string;
@@ -15,6 +15,7 @@ interface N8nErrorLogProps {
   errors: N8nError[];
   failedCount: number;
   n8nUrl?: string;
+  onClear?: () => Promise<void>;
 }
 
 function getDuration(start: string, stop: string): string {
@@ -35,8 +36,15 @@ function getRelativeTime(date: string): string {
   return `há ${Math.floor(hours / 24)}d`;
 }
 
-export function N8nErrorLog({ errors, failedCount, n8nUrl }: N8nErrorLogProps) {
+export function N8nErrorLog({ errors, failedCount, n8nUrl, onClear }: N8nErrorLogProps) {
+  const [clearing, setClearing] = useState(false);
   const executionsUrl = n8nUrl ? `${n8nUrl.replace(/\/$/, "")}/executions` : null;
+
+  const handleClear = async () => {
+    if (!onClear || clearing) return;
+    setClearing(true);
+    try { await onClear(); } finally { setClearing(false); }
+  };
 
   return (
     <div className="rounded-xl border p-4" style={{ background: "#111111", borderColor: "#2a2a2a" }}>
@@ -51,18 +59,39 @@ export function N8nErrorLog({ errors, failedCount, n8nUrl }: N8nErrorLogProps) {
             {failedCount}
           </span>
         )}
-        {executionsUrl && (
-          <a
-            href={executionsUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="ml-auto flex items-center gap-1 text-xs transition-opacity hover:opacity-80"
-            style={{ color: "#555" }}
-          >
-            <ExternalLink size={10} />
-            Abrir n8n
-          </a>
-        )}
+        <span className="text-xs" style={{ color: "#555" }}>Últimas 24h</span>
+        <div className="ml-auto flex items-center gap-2">
+          {onClear && (
+            <button
+              onClick={handleClear}
+              disabled={clearing || errors.length === 0}
+              className="flex items-center gap-1 px-2 py-1 rounded text-xs transition-all"
+              style={{
+                background: errors.length === 0 ? "#1a1a1a" : "#ef444415",
+                color: errors.length === 0 ? "#333" : "#ef4444",
+                border: `1px solid ${errors.length === 0 ? "#2a2a2a" : "#ef444430"}`,
+                cursor: errors.length === 0 ? "not-allowed" : "pointer",
+                opacity: clearing ? 0.6 : 1,
+              }}
+              title="Limpar erros n8n"
+            >
+              <Trash2 size={10} />
+              {clearing ? "Limpando..." : "Limpar"}
+            </button>
+          )}
+          {executionsUrl && (
+            <a
+              href={executionsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-xs transition-opacity hover:opacity-80"
+              style={{ color: "#555" }}
+            >
+              <ExternalLink size={10} />
+              Abrir n8n
+            </a>
+          )}
+        </div>
       </div>
 
       <div className="space-y-2 max-h-64 overflow-y-auto">

@@ -1,6 +1,6 @@
 // src/components/dev-manager/AlertFeed.tsx
-import React from "react";
-import { AlertTriangle, Bell, CheckCircle, Info, XCircle } from "lucide-react";
+import React, { useState } from "react";
+import { AlertTriangle, Bell, CheckCircle, Info, Trash2, XCircle } from "lucide-react";
 
 interface AlertItem {
   id: string;
@@ -15,6 +15,7 @@ interface AlertItem {
 interface AlertFeedProps {
   alerts: AlertItem[];
   unresolvedCount: number;
+  onClear?: () => Promise<void>;
 }
 
 const SEVERITY_CONFIG = {
@@ -33,7 +34,15 @@ function getRelativeTime(date: string): string {
   return `há ${Math.floor(hours / 24)}d`;
 }
 
-export function AlertFeed({ alerts, unresolvedCount }: AlertFeedProps) {
+export function AlertFeed({ alerts, unresolvedCount, onClear }: AlertFeedProps) {
+  const [clearing, setClearing] = useState(false);
+
+  const handleClear = async () => {
+    if (!onClear || clearing) return;
+    setClearing(true);
+    try { await onClear(); } finally { setClearing(false); }
+  };
+
   return (
     <div className="rounded-xl border p-4" style={{ background: "#111111", borderColor: "#2a2a2a" }}>
       <div className="flex items-center gap-2 mb-4">
@@ -42,7 +51,25 @@ export function AlertFeed({ alerts, unresolvedCount }: AlertFeedProps) {
         {unresolvedCount > 0 && (
           <span className="px-2 py-0.5 text-xs rounded-full font-bold" style={{ background: "#ef4444", color: "#fff" }}>{unresolvedCount}</span>
         )}
-        <span className="ml-auto text-xs" style={{ color: "#555" }}>Últimos 20</span>
+        <span className="text-xs" style={{ color: "#555" }}>Últimas 24h</span>
+        {onClear && (
+          <button
+            onClick={handleClear}
+            disabled={clearing || alerts.length === 0}
+            className="ml-auto flex items-center gap-1 px-2 py-1 rounded text-xs transition-all"
+            style={{
+              background: alerts.length === 0 ? "#1a1a1a" : "#ef444415",
+              color: alerts.length === 0 ? "#333" : "#ef4444",
+              border: `1px solid ${alerts.length === 0 ? "#2a2a2a" : "#ef444430"}`,
+              cursor: alerts.length === 0 ? "not-allowed" : "pointer",
+              opacity: clearing ? 0.6 : 1,
+            }}
+            title="Limpar todos os alertas"
+          >
+            <Trash2 size={10} />
+            {clearing ? "Limpando..." : "Limpar"}
+          </button>
+        )}
       </div>
       <div className="space-y-2 max-h-72 overflow-y-auto">
         {alerts.length === 0 ? (
