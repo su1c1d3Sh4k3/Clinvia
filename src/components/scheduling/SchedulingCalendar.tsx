@@ -216,7 +216,13 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
 
                             {/* Events */}
                             {appointments
-                                .filter((apt) => apt.professional_id === professional.id && isSameDay(new Date(apt.start_time), date))
+                                .filter((apt) => {
+                                    const sameDay = isSameDay(new Date(apt.start_time), date);
+                                    if (!sameDay) return false;
+                                    // Absences imported from Google Calendar (clinic-wide, no specific professional) appear in ALL columns
+                                    if (apt.type === "absence" && apt.professional_id === null && apt.google_event_id) return true;
+                                    return apt.professional_id === professional.id;
+                                })
                                 .map((apt) => {
                                     const isFinalStatus = apt.status === 'completed' || apt.status === 'canceled';
 
@@ -301,8 +307,12 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                                 // Adaptive font size: min 8px (10min), max 12px (60min+)
                                                 const fontSize = Math.max(8, Math.min(12, Math.floor(durationInMinutes / 5) + 4));
 
-                                                // Extract first name only
-                                                const fullName = apt.type === "absence" ? "Ausência" : (apt.contacts?.push_name || apt.contact_name || "Cliente");
+                                                // Extract first name / event title
+                                                const gcalImported = apt.type === "absence" && apt.google_event_id;
+                                                const gcalTitle = gcalImported && apt.description
+                                                    ? apt.description.replace(/^Bloqueio importado do Google Calendar:\s*/i, "").trim() || "Bloqueio GCal"
+                                                    : null;
+                                                const fullName = gcalTitle ?? (apt.type === "absence" ? "Ausência" : (apt.contacts?.push_name || apt.contact_name || "Cliente"));
                                                 const firstName = fullName.split(' ')[0];
                                                 const serviceName = apt.products_services?.name || "Serviço";
 
