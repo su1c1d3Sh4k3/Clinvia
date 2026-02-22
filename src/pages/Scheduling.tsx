@@ -18,12 +18,14 @@ import { ptBR } from "date-fns/locale";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { generateDailyReport } from "@/utils/generateDailyReport";
+import { useOwnerId } from "@/hooks/useOwnerId";
 
 export default function Scheduling() {
     const { toast } = useToast();
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
     const queryClient = useQueryClient();
+    const { data: ownerId } = useOwnerId();
     const [date, setDate] = useState<Date | undefined>(new Date());
     const [selectedServices, setSelectedServices] = useState<string[]>([]);
     const [searchTerm, setSearchTerm] = useState("");
@@ -202,6 +204,14 @@ export default function Scheduling() {
                 .eq("id", appointmentId);
 
             if (error) throw error;
+
+            // Fire-and-forget: sincronizar com Google Calendar
+            if (ownerId) {
+                const syncAction = newStatus === "canceled" ? "delete_appointment" : "sync_appointment";
+                supabase.functions.invoke("google-calendar-sync", {
+                    body: { action: syncAction, appointment_id: appointmentId, user_id: ownerId },
+                }).catch(() => {});
+            }
 
             // If status is completed, open SaleModal with pre-filled data
             if (newStatus === 'completed' && event) {

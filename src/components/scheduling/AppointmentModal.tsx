@@ -314,12 +314,26 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                     .eq("id", appointmentToEdit.id);
                 if (error) throw error;
                 toast({ title: "Agendamento atualizado!" });
+                // Fire-and-forget: sincronizar com Google Calendar
+                if (ownerId) {
+                    supabase.functions.invoke("google-calendar-sync", {
+                        body: { action: "sync_appointment", appointment_id: appointmentToEdit.id, user_id: ownerId },
+                    }).catch(() => {});
+                }
             } else {
-                const { error } = await supabase
+                const { data: created, error } = await supabase
                     .from("appointments")
-                    .insert(payload);
+                    .insert(payload)
+                    .select()
+                    .single();
                 if (error) throw error;
                 toast({ title: "Agendamento criado!" });
+                // Fire-and-forget: sincronizar com Google Calendar
+                if (created?.id && ownerId) {
+                    supabase.functions.invoke("google-calendar-sync", {
+                        body: { action: "sync_appointment", appointment_id: created.id, user_id: ownerId },
+                    }).catch(() => {});
+                }
             }
 
             queryClient.invalidateQueries({ queryKey: ["appointments"] });

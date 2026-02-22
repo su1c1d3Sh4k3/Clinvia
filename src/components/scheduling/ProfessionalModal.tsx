@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Upload, X, CalendarDays, CheckCircle2, Unlink } from "lucide-react";
+import { Loader2, Upload, X, CalendarDays, CheckCircle2, Unlink, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -431,6 +431,7 @@ function GoogleCalendarSection({ professionalId }: { professionalId: string }) {
     const queryClient = useQueryClient();
     const [isDisconnecting, setIsDisconnecting] = useState(false);
     const [isSavingMode, setIsSavingMode] = useState(false);
+    const [isSyncing, setIsSyncing] = useState(false);
 
     const { data: connection, isLoading } = useQuery<GoogleCalendarConnection | null>({
         queryKey: ["google-calendar-connection", professionalId],
@@ -496,6 +497,34 @@ function GoogleCalendarSection({ professionalId }: { professionalId: string }) {
         }
     };
 
+    const handleSyncNow = async () => {
+        if (!connection) return;
+        setIsSyncing(true);
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error("Não autenticado");
+            const { data, error } = await supabase.functions.invoke("google-calendar-poll", {
+                body: { user_id: user.id, connection_id: connection.id },
+            });
+            if (error) throw error;
+            const synced = data?.synced ?? 0;
+            const imported = data?.imported ?? 0;
+            toast({
+                title: "Sincronização concluída",
+                description: `${synced} agendamento(s) enviado(s)${imported > 0 ? `, ${imported} evento(s) importado(s) do Google` : ""}.`,
+            });
+            queryClient.invalidateQueries({ queryKey: ["appointments"] });
+        } catch (err: unknown) {
+            toast({
+                title: "Erro na sincronização",
+                description: err instanceof Error ? err.message : String(err),
+                variant: "destructive",
+            });
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
     return (
         <>
             <Separator />
@@ -556,6 +585,21 @@ function GoogleCalendarSection({ professionalId }: { professionalId: string }) {
                                 </div>
                             </RadioGroup>
                         </div>
+
+                        {/* Sincronização manual */}
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="w-full gap-2"
+                            onClick={handleSyncNow}
+                            disabled={isSyncing}
+                        >
+                            {isSyncing
+                                ? <Loader2 className="w-4 h-4 animate-spin" />
+                                : <RefreshCw className="w-4 h-4" />}
+                            Sincronizar agora
+                        </Button>
                     </div>
                 ) : (
                     <div className="space-y-2">
