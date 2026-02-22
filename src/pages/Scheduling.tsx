@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -20,6 +21,9 @@ import { generateDailyReport } from "@/utils/generateDailyReport";
 
 export default function Scheduling() {
     const { toast } = useToast();
+    const [searchParams] = useSearchParams();
+    const navigate = useNavigate();
+    const queryClient = useQueryClient();
     const [date, setDate] = useState<Date | undefined>(new Date());
     const [selectedServices, setSelectedServices] = useState<string[]>([]);
     const [searchTerm, setSearchTerm] = useState("");
@@ -34,6 +38,66 @@ export default function Scheduling() {
     // SaleModal state for appointment completion
     const [isSaleModalOpen, setIsSaleModalOpen] = useState(false);
     const [completedAppointmentData, setCompletedAppointmentData] = useState<AppointmentSaleData | undefined>(undefined);
+
+    // ── Google Calendar OAuth callback ──────────────────────────────────────
+    useEffect(() => {
+        const code = searchParams.get("code");
+        const state = searchParams.get("state");
+
+        if (!code || !state) return;
+
+        // Validar state
+        const storedState = localStorage.getItem("google_oauth_state");
+        if (!storedState || storedState !== state) {
+            toast({
+                title: "Erro de segurança",
+                description: "Parâmetro de estado inválido. Tente conectar novamente.",
+                variant: "destructive",
+            });
+            localStorage.removeItem("google_oauth_state");
+            navigate("/scheduling", { replace: true });
+            return;
+        }
+
+        localStorage.removeItem("google_oauth_state");
+
+        // Processar callback
+        (async () => {
+            toast({ title: "Conectando Google Calendar...", description: "Aguarde um momento." });
+            try {
+                const { data, error } = await supabase.functions.invoke("google-oauth-callback", {
+                    body: {
+                        code,
+                        state,
+                        redirect_uri: `${window.location.origin}/scheduling`,
+                    },
+                });
+                if (error) throw error;
+                if (data?.success) {
+                    toast({
+                        title: "Google Calendar conectado!",
+                        description: `Conta ${data.email} conectada com sucesso.`,
+                    });
+                    // Invalidar queries de conexão para atualizar os modais
+                    queryClient.invalidateQueries({ queryKey: ["google-calendar-connection"] });
+                    queryClient.invalidateQueries({ queryKey: ["google-calendar-clinic-connection"] });
+                } else {
+                    throw new Error(data?.error || "Falha na conexão");
+                }
+            } catch (err: unknown) {
+                const message = err instanceof Error ? err.message : String(err);
+                toast({
+                    title: "Erro ao conectar Google Calendar",
+                    description: message,
+                    variant: "destructive",
+                });
+            } finally {
+                navigate("/scheduling", { replace: true });
+            }
+        })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+    // ────────────────────────────────────────────────────────────────────────
 
     const handlePreviousDay = () => date && setDate(subDays(date, 1));
     const handleNextDay = () => date && setDate(addDays(date, 1));
