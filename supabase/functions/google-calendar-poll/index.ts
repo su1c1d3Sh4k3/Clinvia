@@ -174,9 +174,11 @@ serve(async (req) => {
           "Content-Type": "application/json",
         };
 
-        // ─── PRÉ-VALIDAÇÃO: testar token antes de tentar sync ──────────────────────
+        // ─── PRÉ-VALIDAÇÃO: testar token usando endpoint calendar.events ──────────
+        // IMPORTANTE: usar /calendars/primary/events (scope: calendar.events)
+        // NÃO usar /users/me/calendarList (requer scope: calendar ou calendar.readonly)
         const testRes = await fetch(
-          "https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=1",
+          `https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=1`,
           { headers: { Authorization: `Bearer ${accessToken}` } },
         );
         if (!testRes.ok) {
