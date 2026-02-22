@@ -340,7 +340,10 @@ serve(async (req) => {
                 .eq("google_event_id", googleEventId)
                 .maybeSingle();
 
-              if (!existing) {
+              if (existing) {
+                console.log(`[GCAL POLL] Phase2: event "${event.summary || googleEventId}" already tracked (apt ${existing.id}), skipping`);
+              } else {
+                console.log(`[GCAL POLL] Phase2: importing new absence from GCal event "${event.summary || googleEventId}" (${googleEventId}), professional_id=${connection.professional_id || "null (clinic)"}`);
                 const absencePayload: Record<string, unknown> = {
                   user_id,
                   start_time: startDateTime,
@@ -364,9 +367,9 @@ serve(async (req) => {
 
                 if (!insErr) {
                   totalImported++;
-                  console.log(`[GCAL POLL] Imported absence: "${event.summary || googleEventId}"`);
+                  console.log(`[GCAL POLL] Phase2: absence imported successfully: "${event.summary || googleEventId}"`);
                 } else {
-                  console.error(`[GCAL POLL] Failed to insert absence block:`, insErr);
+                  console.error(`[GCAL POLL] Phase2: FAILED to insert absence block:`, JSON.stringify(insErr));
                 }
               }
             }
