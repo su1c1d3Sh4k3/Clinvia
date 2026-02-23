@@ -111,9 +111,45 @@ Cada card mostra:
 
 ---
 
+## Drag-and-Drop entre Filas
+
+Arraste um card de conversa e solte em outra coluna para **transferir a conversa para aquela fila** instantaneamente.
+
+---
+
+## Timer de Inatividade (Cor do Card)
+
+Cada card exibe um timer colorido indicando quanto tempo passou desde a última mensagem:
+
+| Cor | Tempo |
+|-----|-------|
+| 🟢 Verde | menos de 5 minutos |
+| 🔵 Azul | 5 a 15 minutos |
+| 🟡 Amarelo | 15 a 30 minutos |
+| 🟠 Laranja | 30 a 60 minutos |
+| 🔴 Vermelho | mais de 60 minutos |
+
+---
+
+## Resolver Conversa direto do Board
+
+Nos botões de ação do card, clique em **"Resolver"** para fechar a conversa sem precisar abrir o chat.
+
+---
+
+## Contexto do Cliente no Card
+
+Ao expandir um card, você pode ver:
+- **Deals CRM**: oportunidades abertas para aquele cliente
+- **Próximo agendamento**: próxima consulta/serviço agendado
+- **Tarefas**: tarefas vinculadas ao contato
+
+---
+
 ## Dicas de Uso
 
 1. **Monitore filas em tempo real**: A página atualiza automaticamente
-2. **Use filtros combinados**: Canal + Status para visão específica
-3. **Acompanhe distribuição**: Identifique filas sobrecarregadas
-4. **Gerencie pendências**: Filtre por "Pendentes" para priorizar
+2. **Use filtros combinados**: Canal + Status + Agente para visão precisa
+3. **Timer vermelho = urgente**: priorize atendimentos com timer vermelho
+4. **Drag-drop para redistribuir**: arraste conversas entre filas para balancear carga
+5. **Resolva sem abrir**: use o botão resolver no card para agilizar encerramento

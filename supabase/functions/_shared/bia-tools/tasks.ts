@@ -253,9 +253,20 @@ async function tasksCreate(
     }
 
     // Get boards to find or ask for one
-    const boards = await getAllTaskBoards(supabase, context.owner_id);
+    let boards = await getAllTaskBoards(supabase, context.owner_id);
     if (boards.length === 0) {
         return { success: false, error: 'Não há quadros de tarefas cadastrados. Crie um quadro primeiro.' };
+    }
+
+    // Agents can only create tasks on boards they are in allowed_agents
+    if (context.role === 'agent' && context.team_member_id) {
+        boards = boards.filter((b: any) =>
+            !b.allowed_agents || b.allowed_agents.length === 0 ||
+            b.allowed_agents.includes(context.team_member_id)
+        );
+        if (boards.length === 0) {
+            return { success: false, error: 'Você não tem acesso a nenhum quadro de tarefas. Solicite ao administrador.' };
+        }
     }
 
     // Find board
@@ -358,7 +369,15 @@ async function tasksGetBoards(
     context: UserContext
 ): Promise<FunctionResult> {
 
-    const boards = await getAllTaskBoards(supabase, context.owner_id);
+    let boards = await getAllTaskBoards(supabase, context.owner_id);
+
+    // Agents only see boards they have access to
+    if (context.role === 'agent' && context.team_member_id) {
+        boards = boards.filter((b: any) =>
+            !b.allowed_agents || b.allowed_agents.length === 0 ||
+            b.allowed_agents.includes(context.team_member_id)
+        );
+    }
 
     if (boards.length === 0) {
         return {
