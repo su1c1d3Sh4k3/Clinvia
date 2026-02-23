@@ -265,27 +265,34 @@ async function getFinancial(
             break;
     }
 
-    // Sales/Revenue
-    const { data: sales } = await supabase
-        .from('sales')
-        .select('total_amount, sale_date')
+    const endDate = new Date(now);
+    const startISO = startDate.toISOString();
+    const endISO = endDate.toISOString();
+
+    // Revenues (receitas pagas ou futuras no período)
+    const { data: revenueData } = await supabase
+        .from('revenues')
+        .select('amount, status')
         .eq('user_id', context.owner_id)
-        .gte('sale_date', startDate.toISOString());
+        .gte('due_date', startISO)
+        .lte('due_date', endISO);
 
-    const totalRevenue = sales?.reduce((sum: number, s: any) => sum + (s.total_amount || 0), 0) || 0;
-    const salesCount = sales?.length || 0;
+    const totalRevenue = revenueData?.reduce((sum: number, r: any) => sum + (parseFloat(r.amount) || 0), 0) || 0;
+    const paidRevenue = revenueData?.filter((r: any) => r.status === 'paid')
+        .reduce((sum: number, r: any) => sum + (parseFloat(r.amount) || 0), 0) || 0;
+    const salesCount = revenueData?.length || 0;
 
-    // Financial entries (if table exists)
+    // Expenses (despesas no período)
     let expenses = 0;
     try {
-        const { data: finEntries } = await supabase
-            .from('financial_entries')
-            .select('amount, type')
+        const { data: expenseData } = await supabase
+            .from('expenses')
+            .select('amount, status')
             .eq('user_id', context.owner_id)
-            .eq('type', 'expense')
-            .gte('date', startDate.toISOString());
+            .gte('due_date', startISO)
+            .lte('due_date', endISO);
 
-        expenses = finEntries?.reduce((sum: number, e: any) => sum + (e.amount || 0), 0) || 0;
+        expenses = expenseData?.reduce((sum: number, e: any) => sum + (parseFloat(e.amount) || 0), 0) || 0;
     } catch (_) { /* table might not exist */ }
 
     const periodLabel = args.period === 'today' ? 'hoje' :
@@ -295,13 +302,15 @@ async function getFinancial(
         success: true,
         data: {
             period: periodLabel,
-            revenue: totalRevenue,
-            revenue_formatted: `R$ ${totalRevenue.toFixed(2)}`,
-            sales_count: salesCount,
+            revenue_total: totalRevenue,
+            revenue_total_formatted: `R$ ${totalRevenue.toFixed(2)}`,
+            revenue_paid: paidRevenue,
+            revenue_paid_formatted: `R$ ${paidRevenue.toFixed(2)}`,
+            revenue_entries: salesCount,
             expenses: expenses,
             expenses_formatted: `R$ ${expenses.toFixed(2)}`,
-            profit: totalRevenue - expenses,
-            profit_formatted: `R$ ${(totalRevenue - expenses).toFixed(2)}`
+            profit: paidRevenue - expenses,
+            profit_formatted: `R$ ${(paidRevenue - expenses).toFixed(2)}`
         }
     };
 }
