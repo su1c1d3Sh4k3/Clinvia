@@ -53,7 +53,7 @@ export const LazyMedia = memo(function LazyMedia({ type, src, alt, className }: 
                     src={src}
                     alt={alt || 'Imagem'}
                     className={cn(
-                        "max-w-[280px] max-h-[220px] w-auto h-auto rounded-lg cursor-pointer mb-1 object-contain",
+                        "max-w-[560px] max-h-[440px] w-auto h-auto rounded-lg cursor-pointer mb-1 object-contain",
                         className,
                         isLoading && "animate-pulse"
                     )}
