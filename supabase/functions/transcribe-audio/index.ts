@@ -17,9 +17,7 @@ serve(async (req) => {
         const { messageId, mediaUrl } = await req.json();
         _messageId = messageId;
 
-        console.log(`[TRANSCRIBE-AUDIO] ========== START ==========`);
         console.log(`[TRANSCRIBE-AUDIO] Message ID: ${messageId}`);
-        console.log(`[TRANSCRIBE-AUDIO] Media URL: ${mediaUrl}`);
 
         if (!messageId || !mediaUrl) {
             throw new Error("Missing messageId or mediaUrl");
@@ -31,10 +29,7 @@ serve(async (req) => {
             console.error("[TRANSCRIBE-AUDIO] CRITICAL: OPENAI_API_KEY is not configured!");
             throw new Error("OPENAI_API_KEY not set - please configure it in Supabase Edge Function secrets");
         }
-        console.log(`[TRANSCRIBE-AUDIO] OpenAI API Key: configured (${openAiKey.substring(0, 7)}...)`);
-
         // 2. Download audio file
-        console.log(`[TRANSCRIBE-AUDIO] Downloading audio file...`);
         const audioResponse = await fetch(mediaUrl);
 
         if (!audioResponse.ok) {
@@ -45,9 +40,7 @@ serve(async (req) => {
         const audioBlob = await audioResponse.blob();
         const contentType = audioResponse.headers.get("content-type") || "audio/ogg";
 
-        console.log(`[TRANSCRIBE-AUDIO] Download successful!`);
-        console.log(`[TRANSCRIBE-AUDIO] Content-Type: ${contentType}`);
-        console.log(`[TRANSCRIBE-AUDIO] File Size: ${audioBlob.size} bytes`);
+        console.log(`[TRANSCRIBE-AUDIO] Downloaded ${audioBlob.size} bytes`);
 
         // Validate audio file
         if (audioBlob.size === 0) {
@@ -66,17 +59,14 @@ serve(async (req) => {
         else if (contentType.includes("webm")) extension = "webm";
 
         const filename = `audio.${extension}`;
-        console.log(`[TRANSCRIBE-AUDIO] Using filename: ${filename}`);
 
         // 3. Prepare FormData for OpenAI
-        console.log(`[TRANSCRIBE-AUDIO] Preparing request to OpenAI Whisper API...`);
         const formData = new FormData();
         formData.append("file", audioBlob, filename);
         formData.append("model", "whisper-1");
         formData.append("language", "pt"); // Specify Portuguese for better accuracy
 
         // 4. Send to OpenAI Whisper
-        console.log(`[TRANSCRIBE-AUDIO] Sending to OpenAI...`);
         const transcriptionResponse = await fetch("https://api.openai.com/v1/audio/transcriptions", {
             method: "POST",
             headers: {
@@ -97,10 +87,8 @@ serve(async (req) => {
         const transcriptionText = transcriptionData.text;
 
         console.log(`[TRANSCRIBE-AUDIO] Transcription successful!`);
-        console.log(`[TRANSCRIBE-AUDIO] Result: "${transcriptionText.substring(0, 100)}${transcriptionText.length > 100 ? '...' : ''}"`);
 
         // 5. Update message in Supabase
-        console.log(`[TRANSCRIBE-AUDIO] Saving transcription to database...`);
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
         const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
         const supabase = createClient(supabaseUrl, supabaseKey);
@@ -116,8 +104,7 @@ serve(async (req) => {
             throw updateError;
         }
 
-        console.log(`[TRANSCRIBE-AUDIO] Database updated successfully!`, updateData);
-        console.log(`[TRANSCRIBE-AUDIO] ========== END ==========`);
+        console.log(`[TRANSCRIBE-AUDIO] Done for message:`, messageId);
 
         return new Response(
             JSON.stringify({ success: true, transcription: transcriptionText }),
@@ -125,10 +112,7 @@ serve(async (req) => {
         );
 
     } catch (error) {
-        console.error(`[TRANSCRIBE-AUDIO] ========== ERROR ==========`);
-        console.error(`[TRANSCRIBE-AUDIO] Error Type: ${error.constructor.name}`);
-        console.error(`[TRANSCRIBE-AUDIO] Error Message: ${error.message}`);
-        console.error(`[TRANSCRIBE-AUDIO] Full Error:`, error);
+        console.error(`[TRANSCRIBE-AUDIO] Error for message`, _messageId, ':', error.message);
 
         // Attempt to write error to database for debugging visibility
         if (_messageId) {
@@ -138,14 +122,11 @@ serve(async (req) => {
                 const supabase = createClient(supabaseUrl, supabaseKey);
 
                 const errorMessage = `[ERRO] ${error.message}`;
-                console.log(`[TRANSCRIBE-AUDIO] Writing error to database for message ${_messageId}`);
 
                 await supabase
                     .from("messages")
                     .update({ transcription: errorMessage })
                     .eq("id", _messageId);
-
-                console.log(`[TRANSCRIBE-AUDIO] Error logged to database`);
             } catch (dbError) {
                 console.error("[TRANSCRIBE-AUDIO] Failed to log error to DB:", dbError);
             }

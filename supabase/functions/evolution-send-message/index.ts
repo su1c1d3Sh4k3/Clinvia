@@ -19,18 +19,11 @@ serve(async (req) => {
 
     const reqData = await req.json();
     let { conversationId, body, messageType = 'text', mediaUrl, caption, replyId, quotedBody, quotedSender, contactId, groupId, mentions, forward } = reqData;
-    console.log('=== [UZAPI SEND MESSAGE] START ===');
-    console.log('Conversation ID:', conversationId);
-    console.log('Contact ID:', contactId);
-    console.log('Group ID:', groupId);
-    console.log('Message Type:', messageType);
-    console.log('Reply ID:', replyId);
-    if (mentions) console.log('Mentions:', mentions);
+    console.log('[evolution-send-message] Start conversationId:', conversationId);
 
     // ✅ CONVERSATION CREATION LOGIC (Agent-initiated conversations)
     // Se não temos conversationId, mas temos contactId ou groupId, buscar/criar conversa
     if (!conversationId && (contactId || groupId)) {
-      console.log('[CONV-CREATE] No conversationId provided, searching for existing conversation...');
 
       // 1. Identificar agente autenticado
       const authHeader = req.headers.get('Authorization');
@@ -44,7 +37,6 @@ serve(async (req) => {
 
           if (user && !userError) {
             userId = user.id;
-            console.log('[CONV-CREATE] ✅ User authenticated:', user.id);
 
             const { data: teamMember } = await supabaseClient
               .from('team_members')
@@ -55,7 +47,6 @@ serve(async (req) => {
             if (teamMember) {
               authenticatedAgentId = teamMember.id;
               userId = teamMember.user_id; // Owner user_id
-              console.log('[CONV-CREATE] ✅ Agent ID:', authenticatedAgentId, 'Owner ID:', userId);
             }
           }
         } catch (authError) {
@@ -107,10 +98,8 @@ serve(async (req) => {
 
       if (existingConvs && existingConvs.length > 0) {
         conversationId = existingConvs[0].id;
-        console.log('[CONV-CREATE] ✅ Found existing conversation:', conversationId);
       } else if (authenticatedAgentId) {
         // 4. Criar nova conversa como 'open' + assigned to agent
-        console.log('[CONV-CREATE] Creating NEW conversation as OPEN + assigned to agent...');
 
         const { data: newConv, error: createError } = await supabaseClient
           .from('conversations')
@@ -128,7 +117,6 @@ serve(async (req) => {
 
         if (createError) throw createError;
         conversationId = newConv.id;
-        console.log('[CONV-CREATE] ✅ Created new conversation:', conversationId);
       } else {
         throw new Error('Cannot create conversation: Agent not authenticated');
       }
@@ -158,7 +146,6 @@ serve(async (req) => {
     let isGroup = false;
 
     if (conversation.group_id) {
-      console.log('Processing as Group Conversation. Group ID:', conversation.group_id);
       const { data: group, error: groupError } = await supabaseClient
         .from('groups')
         .select('remote_jid')
@@ -169,7 +156,6 @@ serve(async (req) => {
       remoteJid = group.remote_jid;
       isGroup = true;
     } else if (conversation.contact_id) {
-      console.log('Processing as Contact Conversation. Contact ID:', conversation.contact_id);
       const { data: contact, error: contactError } = await supabaseClient
         .from('contacts')
         .select('number')
@@ -197,15 +183,12 @@ serve(async (req) => {
       try {
         // Extrair token do header
         const token = authHeader.replace('Bearer ', '');
-        console.log('🔐 Token received, attempting validation...');
 
         // ✅ CORRETO: Usar getUser(jwt) passando o token diretamente
         // Funciona com qualquer cliente (SERVICE_ROLE ou ANON_KEY)
         const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token);
 
         if (user && !userError) {
-          console.log('✅ User authenticated:', user.id);
-
           // Buscar team_member usando o cliente SERVICE_ROLE (bypass RLS)
           const { data: teamMember, error: teamError } = await supabaseClient
             .from('team_members')
@@ -215,18 +198,13 @@ serve(async (req) => {
 
           if (teamMember && !teamError) {
             authenticatedAgentId = teamMember.id;
-            console.log('✅ Authenticated Agent ID:', authenticatedAgentId);
           } else {
-            console.log('⚠️ Team member not found for user:', user.id, teamError);
+            console.warn('⚠️ Team member not found for user:', user.id, teamError);
           }
-        } else {
-          console.log('⚠️ Auth validation failed:', userError);
         }
       } catch (authError) {
         console.error('❌ Auth error:', authError);
       }
-    } else {
-      console.log('⚠️ No Authorization header present');
     }
 
     // 3. Verificar flag wasSentByApi e Status
@@ -243,15 +221,9 @@ serve(async (req) => {
           // Se identificamos o agente logado, atribuir a ele
           if (authenticatedAgentId) {
             updates.assigned_agent_id = authenticatedAgentId;
-            console.log('[AUTO-ASSIGN] Assigning authenticated agent:', authenticatedAgentId);
           } else if (conversation.assigned_agent_id) {
-            console.log('[AUTO-UPDATE] Agent already assigned:', conversation.assigned_agent_id);
             // Mantém o agente atual
-          } else {
-            console.log('[AUTO-UPDATE] No authenticated agent found, opening without assignment.');
           }
-
-          console.log('[AUTO-UPDATE] Updating conversation status to open (Human Activity)...');
 
           const { error: updateError } = await supabaseClient
             .from('conversations')
@@ -261,7 +233,6 @@ serve(async (req) => {
           if (updateError) {
             console.error('[AUTO-UPDATE] Error updating conversation:', updateError);
           } else {
-            console.log('[AUTO-UPDATE] Conversation updated successfully!');
             conversation.status = 'open'; // Atualizar local
             if (updates.assigned_agent_id) conversation.assigned_agent_id = updates.assigned_agent_id;
           }
@@ -270,8 +241,6 @@ serve(async (req) => {
           console.error('[AUTO-UPDATE] Exception updating status:', statusError);
         }
       }
-    } else {
-      console.log('[AUTO-UPDATE] Skipping status update: Message sent by API (wasSentByApi = true)');
     }
 
     // ✅ OTIMIZAÇÃO: Adicionar assinatura do agente no BACKEND (movido do frontend)
@@ -309,11 +278,9 @@ serve(async (req) => {
       };
       if (replyId) {
         payload.replyid = replyId;
-        console.log('Adding replyid to payload:', replyId);
       }
       if (forward) {
         payload.forward = true;
-        console.log('Adding forward flag to text payload');
       }
     } else {
       sendUrl = `https://clinvia.uazapi.com/send/media`;
@@ -328,15 +295,12 @@ serve(async (req) => {
 
       if (caption) {
         payload.caption = caption;
-        console.log('Adding caption to media payload:', caption);
       }
       if (forward) {
         payload.forward = true;
-        console.log('Adding forward flag to media payload');
       }
     }
 
-    console.log('Uzapi URL:', sendUrl);
     // console.log('Payload:', JSON.stringify(payload));
 
     const controller = new AbortController();
@@ -365,7 +329,6 @@ serve(async (req) => {
       }
 
       const sendData = await sendResponse.json();
-      console.log('Uzapi response:', sendData);
 
       let insertBody = body;
       let insertCaption = caption || null;

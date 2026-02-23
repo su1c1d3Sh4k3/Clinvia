@@ -58,8 +58,7 @@ serve(async (req) => {
         // Step 1: Exchange code for short-lived access token
         // Using api.instagram.com for Instagram Business Login
         // =============================================
-        console.log('[INSTAGRAM OAUTH] Step 1: Exchanging code for short-lived token...');
-        console.log('[INSTAGRAM OAUTH] Using redirect_uri:', redirect_uri);
+        console.log('[INSTAGRAM OAUTH] Step 1: Exchanging code...');
 
         const tokenFormData = new FormData();
         tokenFormData.append('client_id', INSTAGRAM_APP_ID);
@@ -74,8 +73,6 @@ serve(async (req) => {
         });
 
         const tokenData = await tokenResponse.json();
-        console.log('[INSTAGRAM OAUTH] Token response status:', tokenResponse.status);
-        console.log('[INSTAGRAM OAUTH] Token response:', JSON.stringify(tokenData));
 
         if (!tokenResponse.ok || tokenData.error) {
             const errorMsg = tokenData.error_message || tokenData.error?.message || tokenData.error || 'Failed to exchange code for token';
@@ -94,7 +91,6 @@ serve(async (req) => {
             // New format from Instagram Business Login: { data: [{ access_token, user_id, permissions }] }
             shortLivedToken = tokenData.data[0].access_token;
             instagramUserId = String(tokenData.data[0].user_id);
-            console.log('[INSTAGRAM OAUTH] Using new format - permissions:', tokenData.data[0].permissions);
         } else if (tokenData.access_token) {
             // Old format: { access_token, user_id }
             shortLivedToken = tokenData.access_token;
@@ -106,8 +102,6 @@ serve(async (req) => {
                 { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
         }
-
-        console.log('[INSTAGRAM OAUTH] Got short-lived token for Instagram user ID:', instagramUserId);
 
         // =============================================
         // Step 2: Exchange for long-lived access token (60 days)
@@ -133,9 +127,6 @@ serve(async (req) => {
                 longLivedData = await longLivedResponse.json();
             }
 
-            console.log('[INSTAGRAM OAUTH] Long-lived token response status:', longLivedResponse.status);
-            console.log('[INSTAGRAM OAUTH] Long-lived token response:', JSON.stringify(longLivedData));
-
             if (longLivedResponse.ok && longLivedData.access_token) {
                 accessToken = longLivedData.access_token;
                 expiresIn = longLivedData.expires_in || 5184000; // 60 days
@@ -148,21 +139,6 @@ serve(async (req) => {
             console.warn('[INSTAGRAM OAUTH] ⚠️ Long-lived token exchange failed:', longLivedError.message);
             console.warn('[INSTAGRAM OAUTH] Using short-lived token (valid for 1 hour)');
         }
-
-        // =============================================
-        // TOKEN TYPE LOG - Para diagnóstico
-        // =============================================
-        console.log('='.repeat(60));
-        console.log('[TOKEN DIAGNÓSTICO] Tipo de token obtido:');
-        console.log('[TOKEN DIAGNÓSTICO] expires_in =', expiresIn, 'segundos');
-        console.log('[TOKEN DIAGNÓSTICO] expires_in em horas =', (expiresIn / 3600).toFixed(2), 'horas');
-        console.log('[TOKEN DIAGNÓSTICO] expires_in em dias =', (expiresIn / 86400).toFixed(2), 'dias');
-        if (expiresIn > 86400) {
-            console.log('[TOKEN DIAGNÓSTICO] ✅ TOKEN LONG-LIVED (60 dias)');
-        } else {
-            console.log('[TOKEN DIAGNÓSTICO] ❌ TOKEN SHORT-LIVED (1 hora) - PROBLEMA!');
-        }
-        console.log('='.repeat(60));
 
         // =============================================
         // Step 3: Get Instagram account info
@@ -188,9 +164,6 @@ serve(async (req) => {
                 profileData = await profileResponse.json();
             }
 
-            console.log('[INSTAGRAM OAUTH] Profile response status:', profileResponse.status);
-            console.log('[INSTAGRAM OAUTH] Profile data:', JSON.stringify(profileData));
-
             if (profileResponse.ok && !profileData.error) {
                 // Handle both nested data format and direct format
                 const profile = profileData.data?.[0] || profileData;
@@ -207,15 +180,9 @@ serve(async (req) => {
             console.warn('[INSTAGRAM OAUTH] Using user_id from token exchange');
         }
 
-        console.log('[INSTAGRAM OAUTH] Final Instagram User ID:', instagramUserId);
-        console.log('[INSTAGRAM OAUTH] Final Business Account ID (IGSID):', igBusinessAccountId);
-        console.log('[INSTAGRAM OAUTH] Final Account name:', accountName);
-
         // =============================================
         // Step 4: Save to database
         // =============================================
-        console.log('[INSTAGRAM OAUTH] Step 4: Saving to database...');
-
         const tokenExpiresAt = new Date(Date.now() + (expiresIn * 1000)).toISOString();
 
         // Check if this Instagram account is already connected

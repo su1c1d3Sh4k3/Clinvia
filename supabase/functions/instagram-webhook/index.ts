@@ -34,9 +34,7 @@ serve(async (req) => {
     const url = new URL(req.url);
     const method = req.method;
 
-    console.log('[INSTAGRAM WEBHOOK] ========================================');
     console.log('[INSTAGRAM WEBHOOK] Request received - Method:', method);
-    console.log('[INSTAGRAM WEBHOOK] ========================================');
 
     // Handle CORS preflight
     if (method === 'OPTIONS') {
@@ -68,7 +66,6 @@ serve(async (req) => {
     if (method === 'POST') {
         try {
             const rawBody = await req.text();
-            console.log('[INSTAGRAM WEBHOOK] Raw Body:', rawBody);
 
             let payload: any = {};
             try {
@@ -95,25 +92,14 @@ serve(async (req) => {
                     const entryId = entry.id; // This could be Page ID or IGSID
                     console.log('[INSTAGRAM WEBHOOK] Processing for entry ID:', entryId);
 
-                    // Log all messaging events for debugging
-                    const allMessaging = entry.messaging || [];
-                    console.log('[INSTAGRAM WEBHOOK] Total messaging events:', allMessaging.length);
-                    for (const evt of allMessaging) {
-                        console.log('[INSTAGRAM WEBHOOK] Event detail - sender:', evt.sender?.id,
-                            'recipient:', evt.recipient?.id,
-                            'is_echo:', evt.message?.is_echo,
-                            'has_message:', !!evt.message);
-                    }
-
                     // Collect all possible IDs from the messaging events
                     const possibleIds = new Set<string>();
                     possibleIds.add(String(entryId));
 
-                    for (const evt of allMessaging) {
+                    for (const evt of entry.messaging || []) {
                         if (evt.sender?.id) possibleIds.add(String(evt.sender.id));
                         if (evt.recipient?.id) possibleIds.add(String(evt.recipient.id));
                     }
-                    console.log('[INSTAGRAM WEBHOOK] All possible IDs to try:', Array.from(possibleIds));
 
                     // Try to find the Instagram instance - it might be stored with different IDs
                     let instagramInstance = null;
@@ -149,7 +135,6 @@ serve(async (req) => {
                             // The entry.id in webhooks is the IGSID, we need to find which token corresponds to it
                             for (const inst of allInstances) {
                                 try {
-                                    console.log('[INSTAGRAM WEBHOOK] Testing instance:', inst.id, 'stored ID:', inst.instagram_account_id);
 
                                     // Call Instagram API to get the account info with this token
                                     const verifyResponse = await fetch(
@@ -158,8 +143,6 @@ serve(async (req) => {
                                     const verifyData = await verifyResponse.json();
 
                                     if (verifyResponse.ok && verifyData.id) {
-                                        console.log('[INSTAGRAM WEBHOOK] Token check - API returned ID:', verifyData.id, 'username:', verifyData.username);
-
                                         // Check if this account ID matches our entry.id OR if there's a relationship
                                         // Instagram sometimes uses different IDs in different contexts
                                         // The entry.id is the IGSID which may be different from the user_id from oauth
@@ -201,13 +184,9 @@ serve(async (req) => {
                                     const instanceAge = Date.now() - new Date(recentInst.updated_at || recentInst.created_at).getTime();
                                     const maxAge = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
-                                    console.log('[INSTAGRAM WEBHOOK] Most recent instance:', recentInst.id);
-                                    console.log('[INSTAGRAM WEBHOOK] Instance age (ms):', instanceAge);
-
                                     // If the instance was updated in the last 24 hours, it's likely the correct one
                                     // This is a fallback for when Instagram returns mismatched IDs
                                     if (instanceAge < maxAge) {
-                                        console.log('[INSTAGRAM WEBHOOK] Using recent instance as fallback (age < 24h)');
                                         instagramInstance = recentInst;
 
                                         // Update the instagram_account_id to the webhook entry.id for future direct matching
@@ -244,15 +223,11 @@ serve(async (req) => {
 
                     for (const event of messaging) {
                         const senderId = event.sender?.id;
-                        const recipientId = event.recipient?.id;
                         const timestamp = event.timestamp;
                         const isEcho = event.message?.is_echo || false;
 
-                        console.log('[INSTAGRAM WEBHOOK] Event - Sender:', senderId, 'Recipient:', recipientId, 'IsEcho:', isEcho);
-
                         // Skip echo messages (messages sent by the page itself)
                         if (isEcho) {
-                            console.log('[INSTAGRAM WEBHOOK] Skipping echo message');
                             continue;
                         }
 
@@ -385,7 +360,6 @@ serve(async (req) => {
                                 const attachment = attachments[0];
                                 messageType = attachment.type || 'text';
                                 mediaUrl = attachment.payload?.url || null;
-                                console.log('[INSTAGRAM WEBHOOK] Attachment type:', messageType, 'URL:', mediaUrl);
                             }
 
                             const { data: savedMessage, error: msgError } = await supabase
@@ -415,8 +389,6 @@ serve(async (req) => {
                                     // Find assigned agent or owner
                                     const targetUserId = conversation.assigned_agent_id || userId;
 
-                                    console.log('[INSTAGRAM WEBHOOK] Triggering push notification for user:', targetUserId);
-
                                     await supabase.functions.invoke('send-push', {
                                         body: {
                                             auth_user_id: targetUserId,
@@ -435,18 +407,13 @@ serve(async (req) => {
                                 // 4.5 Trigger Audio Transcription (if audio message)
                                 // =============================================
                                 if (messageType === 'audio' && mediaUrl && savedMessage) {
-                                    console.log('[INSTAGRAM WEBHOOK] Triggering audio transcription...');
-                                    console.log('[INSTAGRAM WEBHOOK] Message ID:', savedMessage.id);
-                                    console.log('[INSTAGRAM WEBHOOK] Media URL:', mediaUrl);
                                     try {
-                                        const { data: transcribeResult, error: transcribeError } = await supabase.functions.invoke('transcribe-audio', {
+                                        const { error: transcribeError } = await supabase.functions.invoke('transcribe-audio', {
                                             body: { messageId: savedMessage.id, mediaUrl: mediaUrl }
                                         });
 
                                         if (transcribeError) {
                                             console.error('[INSTAGRAM WEBHOOK] Transcription function error:', transcribeError);
-                                        } else {
-                                            console.log('[INSTAGRAM WEBHOOK] Transcription result:', JSON.stringify(transcribeResult));
                                         }
                                     } catch (transcribeError) {
                                         console.error('[INSTAGRAM WEBHOOK] Exception invoking transcription:', transcribeError);
@@ -458,7 +425,6 @@ serve(async (req) => {
                                 // =============================================
                                 // Step 1: Check if ia_on_insta is TRUE for this Instagram instance
                                 if (instagramInstance.ia_on_insta === true) {
-                                    console.log('[INSTAGRAM WEBHOOK] ia_on_insta is TRUE, checking for WhatsApp instance...');
 
                                     // Step 2: Find WhatsApp instance with same user_id and ia_on_wpp = TRUE
                                     // IMPORTANT: If multiple instances match, take the first one
@@ -474,12 +440,9 @@ serve(async (req) => {
                                         const webhookUrl = whatsappInstance.webhook_url;
 
                                         if (webhookUrl) {
-                                            console.log('[INSTAGRAM WEBHOOK] Found WhatsApp instance with webhook_url:', webhookUrl);
-
                                             // Fetch the 'Atendimento IA' funnel ID unconditionally to include in the payload
                                             let iaFunnelId: string | null = null;
                                             try {
-                                                console.log('[INSTAGRAM WEBHOOK] Looking for "Atendimento IA" funnel unconditionally...');
                                                 const { data: iaFunnel, error: iaFunnelError } = await supabase
                                                     .from('crm_funnels')
                                                     .select('id')
@@ -488,10 +451,9 @@ serve(async (req) => {
                                                     .single();
 
                                                 if (iaFunnelError) {
-                                                    console.log('[INSTAGRAM WEBHOOK] Error or not found "Atendimento IA" funnel:', iaFunnelError.message);
+                                                    console.warn('[INSTAGRAM WEBHOOK] Error or not found "Atendimento IA" funnel:', iaFunnelError.message);
                                                 } else if (iaFunnel?.id) {
                                                     iaFunnelId = iaFunnel.id;
-                                                    console.log('[INSTAGRAM WEBHOOK] Found Atendimento IA funnel:', iaFunnelId);
                                                 }
                                             } catch (err) {
                                                 console.error('[INSTAGRAM WEBHOOK] Exception finding IA funnel:', err);
@@ -509,8 +471,6 @@ serve(async (req) => {
                                                 }
                                             };
 
-                                            console.log('[INSTAGRAM WEBHOOK] Forwarding to IA webhook with bd_data:', JSON.stringify(forwardedPayload.bd_data));
-
                                             try {
                                                 const forwardResponse = await fetch(webhookUrl, {
                                                     method: 'POST',
@@ -524,22 +484,13 @@ serve(async (req) => {
                                             } catch (forwardError) {
                                                 console.error('[INSTAGRAM WEBHOOK] Error forwarding to IA webhook:', forwardError);
                                             }
-                                        } else {
-                                            console.log('[INSTAGRAM WEBHOOK] WhatsApp instance found but no webhook_url configured');
                                         }
-                                    } else {
-                                        console.log('[INSTAGRAM WEBHOOK] No WhatsApp instance found with ia_on_wpp = TRUE for user:', userId);
                                     }
-                                } else {
-                                    console.log('[INSTAGRAM WEBHOOK] ia_on_insta is FALSE or not set, skipping IA webhook forwarding');
                                 }
                             }
                         }
 
                         // Handle read events
-                        if (event.read) {
-                            console.log('[INSTAGRAM WEBHOOK] Read event:', event.read);
-                        }
                     }
                 }
             }

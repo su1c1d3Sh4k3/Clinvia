@@ -56,20 +56,6 @@ serve(async (req) => {
             });
         }
 
-        // ============================================================
-        // 🚨🚨🚨 WEBHOOK RECEIVED - LOGGING EVERYTHING 🚨🚨🚨
-        // ============================================================
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        console.log('🔔 [WEBHOOK-QUEUE-RECEIVER] WEBHOOK RECEIVED!');
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        console.log('📦 RAW BODY LENGTH:', rawBody.length, 'bytes');
-        console.log('📋 PAYLOAD KEYS:', Object.keys(payload));
-        console.log('🔍 PAYLOAD.MESSAGE:', JSON.stringify(payload.message, null, 2));
-        console.log('🔍 PAYLOAD.MESSAGE.MESSAGETYPE:', payload.message?.messageType);
-        console.log('📄 COMPLETE PAYLOAD:');
-        console.log(JSON.stringify(payload, null, 2));
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-
         // Extrair informações básicas
         const instanceName = payload.instanceName || payload.body?.instanceName || 'unknown';
         const eventType = payload.EventType || payload.event || payload.type || 'messages';
@@ -107,8 +93,7 @@ serve(async (req) => {
         if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
             EdgeRuntime.waitUntil(
                 supabase.functions.invoke('webhook-queue-processor', { body: {} })
-                    .then((result) => {
-                        console.log('[webhook-queue-receiver] Background processor triggered:', result.data);
+                    .then((_result: unknown) => {
                     })
                     .catch((err) => {
                         console.error('[webhook-queue-receiver] Background processor error:', err);

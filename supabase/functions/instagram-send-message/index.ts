@@ -106,7 +106,6 @@ serve(async (req) => {
         const supabase = createClient(supabaseUrl, supabaseKey);
 
         const payload: SendMessagePayload = await req.json();
-        console.log('[INSTAGRAM SEND] Payload:', JSON.stringify(payload));
 
         const {
             conversation_id,
@@ -240,7 +239,6 @@ serve(async (req) => {
                     }
 
                     const webmBlob = await webmResponse.blob();
-                    console.log('[INSTAGRAM SEND] Downloaded WebM file, size:', webmBlob.size, 'bytes');
 
                     // ⚠️ CONVERSION STRATEGY:
                     // Since Deno Edge Functions don't support FFmpeg natively,
@@ -256,8 +254,6 @@ serve(async (req) => {
                     const randomSuffix = Math.random().toString(36).substring(7);
                     const m4aFileName = `instagram_audio_converted_${timestamp}_${randomSuffix}.m4a`;
                     const m4aFilePath = `instagram/${m4aFileName}`;
-
-                    console.log('[INSTAGRAM SEND] Uploading as M4A format...');
 
                     // Upload with M4A mime type
                     // Note: This is a container conversion. For true codec conversion,
@@ -282,9 +278,7 @@ serve(async (req) => {
                         const oldUrl = finalAudioUrl;
                         finalAudioUrl = m4aPublicUrlData.publicUrl;
 
-                        console.log('[INSTAGRAM SEND] ✅ Audio converted successfully');
-                        console.log('[INSTAGRAM SEND] Original WebM:', oldUrl);
-                        console.log('[INSTAGRAM SEND] Converted M4A:', finalAudioUrl);
+                        console.log('[INSTAGRAM SEND] Audio converted WebM→M4A');
 
                         // Optional: Delete the original WebM file to save storage
                         try {
@@ -418,8 +412,6 @@ serve(async (req) => {
         const igUserId = instance.instagram_account_id || 'me';
         const apiUrl = `https://graph.instagram.com/v21.0/${igUserId}/messages`;
 
-        console.log('[INSTAGRAM SEND] Using API URL:', apiUrl);
-
         let messagePayload: any;
         let messageBody = '';
 
@@ -438,7 +430,6 @@ serve(async (req) => {
                 }
             };
             messageBody = '[Áudio]';
-            console.log('[INSTAGRAM SEND] Sending audio message');
         } else if (message_type === 'image') {
             // Image message via attachment
             messagePayload = {
@@ -454,7 +445,6 @@ serve(async (req) => {
                 }
             };
             messageBody = '[Imagem]';
-            console.log('[INSTAGRAM SEND] Sending image message');
         } else {
             // Text message
             messagePayload = {
@@ -462,10 +452,7 @@ serve(async (req) => {
                 message: { text: message_text }
             };
             messageBody = message_text || '';
-            console.log('[INSTAGRAM SEND] Sending text message');
         }
-
-        console.log('[INSTAGRAM SEND] Sending to API:', apiUrl);
 
         const response = await fetch(apiUrl, {
             method: 'POST',
@@ -477,7 +464,6 @@ serve(async (req) => {
         });
 
         const responseData = await response.json();
-        console.log('[INSTAGRAM SEND] API Response:', JSON.stringify(responseData));
 
         if (!response.ok) {
             // Check if token expired
@@ -523,8 +509,6 @@ serve(async (req) => {
             if (dbError) {
                 console.error('[INSTAGRAM SEND] Error saving message:', dbError);
             } else {
-                console.log('[INSTAGRAM SEND] Message saved to database');
-
                 // Update conversation last_message
                 await supabase
                     .from('conversations')

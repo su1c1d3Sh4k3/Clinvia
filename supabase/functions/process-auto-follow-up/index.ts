@@ -55,7 +55,7 @@ serve(async (req) => {
     };
 
     try {
-        console.log('=== [AUTO FOLLOW UP] Starting processing ===');
+        console.log('[auto-follow-up] Starting processing');
         const now = new Date();
 
         // 1. Find all follow ups that need processing
@@ -160,8 +160,6 @@ serve(async (req) => {
                     text: template.message
                 };
 
-                console.log(`Sending to ${targetNumber}: "${template.message.substring(0, 50)}..."`);
-
                 const sendResponse = await fetch(sendUrl, {
                     method: 'POST',
                     headers: {
@@ -180,7 +178,6 @@ serve(async (req) => {
                 }
 
                 const sendData = await sendResponse.json();
-                console.log('Message sent successfully:', sendData);
 
                 // 6. Save message to database
                 await supabase
@@ -237,8 +234,7 @@ serve(async (req) => {
             }
         }
 
-        console.log('=== [AUTO FOLLOW UP] Processing complete ===');
-        console.log('Results:', results);
+        console.log('[auto-follow-up] Done. Sent:', results.sent, 'Errors:', results.errors.length);
 
         return new Response(
             JSON.stringify({ success: true, ...results }),
@@ -246,7 +242,7 @@ serve(async (req) => {
         );
 
     } catch (error: any) {
-        console.error('=== [AUTO FOLLOW UP] ERROR ===', error);
+        console.error('[auto-follow-up] Error:', error);
         return new Response(
             JSON.stringify({ success: false, error: error.message, ...results }),
             { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

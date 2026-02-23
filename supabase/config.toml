@@ -97,6 +97,15 @@ verify_jwt = false
 [functions.instagram-refresh-token]
 verify_jwt = false
 
+# Dev Manager Functions
+# infra-get-metrics: requires super-admin JWT (validated inside the function)
+[functions.infra-get-metrics]
+verify_jwt = false
+
+# infra-collector: called by pg_cron (x-cron-secret) or super-admin JWT
+[functions.infra-collector]
+verify_jwt = false
+
 # Webhook Functions
 [functions.webhook-queue-receiver]
 verify_jwt = false

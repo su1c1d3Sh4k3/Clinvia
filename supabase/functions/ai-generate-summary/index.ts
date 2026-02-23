@@ -30,8 +30,6 @@ serve(async (req) => {
     // Se conversationText não foi enviado, buscar do banco
     let textToAnalyze = conversationText;
     if (!textToAnalyze && conversationId) {
-      console.log(`Fetching messages for conversation: ${conversationId}`);
-
       const { data: messages, error: messagesError } = await supabase
         .from('messages')
         .select('direction, body, message_type, media_url, created_at')
@@ -58,7 +56,6 @@ serve(async (req) => {
         })
         .join('\n');
 
-      console.log('Text to analyze length:', textToAnalyze.length);
     }
 
     const prompt = `Analise a seguinte conversa de suporte e gere um resumo executivo e estruturado.
@@ -115,7 +112,6 @@ serve(async (req) => {
     const content = data.choices[0].message.content;
 
     console.log('✅ OpenAI response received');
-    console.log('Raw content:', content);
 
     // Tentar fazer parse do JSON
     const jsonMatch = content.match(/\{[\s\S]*\}/);
@@ -133,8 +129,6 @@ serve(async (req) => {
       };
     }
 
-    console.log('Parsed analysis:', analysis);
-
     // Track token usage (always track, regardless of which token was used)
     if (data.usage && ownerId) {
       await trackTokenUsage(supabase, {
@@ -147,7 +141,6 @@ serve(async (req) => {
     }
 
     // Save to database (ai_analysis)
-    console.log('Saving to ai_analysis table...');
     const { error: upsertError } = await supabase
       .from('ai_analysis')
       .upsert({
@@ -165,8 +158,7 @@ serve(async (req) => {
     console.log('Saved to ai_analysis successfully.');
 
     // Save to database (conversations table)
-    console.log('Updating conversations table with summary...');
-    const { data: updateData, error: updateError } = await supabase
+    const { error: updateError } = await supabase
       .from('conversations')
       .update({ summary: analysis.summary })
       .eq('id', conversationId)
@@ -174,8 +166,6 @@ serve(async (req) => {
 
     if (updateError) {
       console.error('Error updating conversations table:', updateError);
-    } else {
-      console.log('Conversations table updated successfully:', updateData);
     }
 
     return new Response(
