@@ -551,11 +551,11 @@ export default function IAConfig() {
 
         setTogglingIA(true);
         try {
-            // Chamar webhook via Edge Function
             const action = checked ? "create" : "delete";
 
             console.log(`[IAConfig] Calling ia-workflow-webhook for instance ${instance.name} with action: ${action}`);
 
+            // Chamar webhook via Edge Function (best-effort — não bloqueia update do banco)
             const { data: webhookResult, error: webhookError } = await supabase.functions.invoke(
                 "ia-workflow-webhook",
                 {
@@ -571,12 +571,16 @@ export default function IAConfig() {
             );
 
             if (webhookError) {
-                throw new Error(`Webhook failed: ${webhookError.message}`);
+                // Erro de invocação da Edge Function (rede, auth) — apenas loga, não bloqueia
+                console.warn(`[IAConfig] Webhook invoke error for ${instance.name}:`, webhookError.message);
+            } else if (!webhookResult?.success) {
+                // Webhook externo falhou — apenas loga, não bloqueia
+                console.warn(`[IAConfig] External webhook warning for ${instance.name}:`, webhookResult?.error);
+            } else {
+                console.log(`[IAConfig] Webhook OK for ${instance.name}:`, webhookResult);
             }
 
-            console.log(`[IAConfig] Webhook response for ${instance.name}:`, webhookResult);
-
-            // Atualizar status no banco
+            // Atualizar status no banco (sempre, independente do webhook)
             const { error } = await supabase
                 .from("instances")
                 .update({ ia_on_wpp: checked })
@@ -604,11 +608,11 @@ export default function IAConfig() {
 
         setTogglingIA(true);
         try {
-            // Chamar webhook via Edge Function
             const action = checked ? "create" : "delete";
 
             console.log(`[IAConfig] Calling ia-workflow-webhook for Instagram ${instance.account_name} with action: ${action}`);
 
+            // Chamar webhook via Edge Function (best-effort — não bloqueia update do banco)
             const { data: webhookResult, error: webhookError } = await supabase.functions.invoke(
                 "ia-workflow-webhook",
                 {
@@ -625,12 +629,16 @@ export default function IAConfig() {
             );
 
             if (webhookError) {
-                throw new Error(`Webhook failed: ${webhookError.message}`);
+                // Erro de invocação da Edge Function — apenas loga, não bloqueia
+                console.warn(`[IAConfig] Webhook invoke error for ${instance.account_name}:`, webhookError.message);
+            } else if (!webhookResult?.success) {
+                // Webhook externo falhou — apenas loga, não bloqueia
+                console.warn(`[IAConfig] External webhook warning for ${instance.account_name}:`, webhookResult?.error);
+            } else {
+                console.log(`[IAConfig] Webhook OK for ${instance.account_name}:`, webhookResult);
             }
 
-            console.log(`[IAConfig] Webhook response for ${instance.account_name}:`, webhookResult);
-
-            // Atualizar status no banco
+            // Atualizar status no banco (sempre, independente do webhook)
             const { error } = await supabase
                 .from("instagram_instances" as any)
                 .update({ ia_on_insta: checked })
