@@ -33,7 +33,7 @@ function buildGoogleOAuthUrl(userId: string): string {
         redirect_uri: `${window.location.origin}/scheduling`,
         response_type: "code",
         scope: [
-            "https://www.googleapis.com/auth/calendar.events",
+            "https://www.googleapis.com/auth/calendar", // superset: inclui calendar.events + permite criar/gerenciar sub-calendários
             "https://www.googleapis.com/auth/userinfo.email",
         ].join(" "),
         access_type: "offline",

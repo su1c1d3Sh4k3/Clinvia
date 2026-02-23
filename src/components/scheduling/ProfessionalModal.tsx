@@ -33,7 +33,7 @@ function buildGoogleOAuthUrl(userId: string, professionalId: string | null): str
         redirect_uri: `${window.location.origin}/scheduling`,
         response_type: "code",
         scope: [
-            "https://www.googleapis.com/auth/calendar.events",
+            "https://www.googleapis.com/auth/calendar", // superset: inclui calendar.events + permite criar/gerenciar sub-calendários
             "https://www.googleapis.com/auth/userinfo.email",
         ].join(" "),
         access_type: "offline",
@@ -214,11 +214,35 @@ export function ProfessionalModal({ open, onOpenChange, professionalToEdit }: Pr
                 if (error) throw error;
                 toast({ title: "Profissional atualizado com sucesso!" });
             } else {
-                const { error } = await supabase
+                const { data: newProf, error } = await supabase
                     .from("professionals")
-                    .insert(payload);
+                    .insert(payload)
+                    .select("id")
+                    .single();
                 if (error) throw error;
                 toast({ title: "Profissional criado com sucesso!" });
+
+                // Fire-and-forget: criar sub-calendário Google para o novo profissional,
+                // caso a clínica já tenha uma conexão Google Calendar ativa.
+                if (newProf?.id) {
+                    const { data: clinicConn } = await supabase
+                        .from("professional_google_calendars")
+                        .select("id")
+                        .eq("user_id", user.id)
+                        .is("professional_id", null)
+                        .eq("is_active", true)
+                        .maybeSingle();
+
+                    if (clinicConn) {
+                        supabase.functions.invoke("create-professional-calendar", {
+                            body: {
+                                user_id: user.id,
+                                professional_id: newProf.id,
+                                professional_name: values.name,
+                            },
+                        }).catch(() => {});
+                    }
+                }
             }
 
             queryClient.invalidateQueries({ queryKey: ["professionals"] });
