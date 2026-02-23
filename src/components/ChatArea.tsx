@@ -457,7 +457,11 @@ export const ChatArea = ({
       direction: "outbound",
       messageType,
       mediaUrl: mediaUrl || undefined,
-      caption: messageType === 'document' ? finalBody : undefined,
+      // caption é enviado para a API do WhatsApp junto com imagem, vídeo e documento
+      // Para áudio (ptt) não há suporte a caption
+      caption: (messageType === 'document' || messageType === 'image' || messageType === 'video') && finalBody.trim()
+        ? finalBody
+        : undefined,
       replyId: replyingTo?.evolution_id || undefined,
       quotedBody: replyingTo?.body || undefined,
       quotedSender: replyingTo?.sender_name || undefined,
