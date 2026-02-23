@@ -7,7 +7,7 @@ const corsHeaders = {
 
 /**
  * ia-workflow-webhook
- * 
+ *
  * Proxy function to call external IA workflow webhooks
  * Avoids CORS issues when calling from frontend
  */
@@ -39,45 +39,63 @@ serve(async (req) => {
 
         console.log('[ia-workflow-webhook] Calling:', webhookUrl);
 
-        // Call external webhook
-        const response = await fetch(webhookUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                user_id,
-                instance_name,
-                phone,
-                token,
-            }),
-        });
+        // Call external webhook with timeout (10s)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+        let response: Response;
+        try {
+            response = await fetch(webhookUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    user_id,
+                    instance_name,
+                    phone,
+                    token,
+                }),
+                signal: controller.signal,
+            });
+        } finally {
+            clearTimeout(timeoutId);
+        }
 
         const responseText = await response.text();
         console.log('[ia-workflow-webhook] Response status:', response.status);
         console.log('[ia-workflow-webhook] Response body:', responseText);
 
+        // IMPORTANTE: sempre retorna HTTP 200 para o cliente Supabase não definir `error`.
+        // O campo `success` no body indica se o webhook externo funcionou.
+        // Isso permite que o frontend atualize o banco mesmo se o webhook externo falhar.
         if (!response.ok) {
+            console.warn('[ia-workflow-webhook] External webhook returned error:', response.status, responseText);
             return new Response(
                 JSON.stringify({
                     success: false,
-                    error: `Webhook failed: ${response.status}`,
+                    error: `Webhook externo retornou ${response.status}`,
                     details: responseText
                 }),
-                { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
         }
 
         return new Response(
-            JSON.stringify({ success: true, message: 'Webhook called successfully', response: responseText }),
+            JSON.stringify({ success: true, message: 'Webhook chamado com sucesso', response: responseText }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
 
     } catch (error: any) {
-        console.error('[ia-workflow-webhook] Error:', error);
+        const isTimeout = error.name === 'AbortError';
+        console.error('[ia-workflow-webhook] Error:', isTimeout ? 'Timeout (10s)' : error.message);
+        // Sempre retorna 200 para não bloquear o update no banco do cliente
         return new Response(
-            JSON.stringify({ success: false, error: error.message }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            JSON.stringify({
+                success: false,
+                error: isTimeout ? 'Timeout ao chamar webhook externo' : error.message
+            }),
+            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
     }
 });
