@@ -48,13 +48,23 @@ export const LazyMedia = memo(function LazyMedia({ type, src, alt, className }: 
 
     if (type === 'image') {
         return (
-            <img
-                src={src}
-                alt={alt || 'Imagem'}
-                className={cn("max-w-full rounded-lg cursor-pointer mb-2", className, isLoading && "animate-pulse")}
-                onClick={() => window.open(src, '_blank')}
-                onLoad={() => setIsLoading(false)}
-            />
+            <div className="relative group inline-block">
+                <img
+                    src={src}
+                    alt={alt || 'Imagem'}
+                    className={cn(
+                        "max-w-[280px] max-h-[220px] w-auto h-auto rounded-lg cursor-pointer mb-1 object-contain",
+                        className,
+                        isLoading && "animate-pulse"
+                    )}
+                    onClick={() => window.open(src, '_blank')}
+                    onLoad={() => setIsLoading(false)}
+                    title="Clique para abrir em tamanho completo"
+                />
+                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none rounded-lg bg-black/20">
+                    <span className="text-white text-xs bg-black/50 px-2 py-1 rounded-full">🔍 Ampliar</span>
+                </div>
+            </div>
         );
     }
 
