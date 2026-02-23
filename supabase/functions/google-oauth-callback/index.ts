@@ -167,7 +167,9 @@ serve(async (req) => {
         .select("sync_mode")
         .eq("user_id", user_id)
         .is("professional_id", null)
-        .eq("is_active", true)
+        // Sem filtro is_active: preserva sync_mode mesmo após desconectar e reconectar
+        .order("updated_at", { ascending: false })
+        .limit(1)
         .maybeSingle();
       if (clinicConnForSync?.sync_mode) {
         clinicSyncMode = clinicConnForSync.sync_mode;

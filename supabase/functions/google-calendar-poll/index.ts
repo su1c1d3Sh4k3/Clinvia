@@ -191,6 +191,13 @@ serve(async (req) => {
         console.log(`[GCAL POLL] Token validated successfully for connection ${connection.id}`);
 
         // ─── FASE 1: Plataforma → Google Calendar ────────────────────────────────
+        // Conexões da clínica (professional_id=null) não participam da Phase 1:
+        // agendamentos devem ir apenas para o sub-calendário do profissional específico,
+        // evitando duplicação no calendário primary e re-importação pela Phase 2.
+        if (!connection.professional_id) {
+          console.log(`[GCAL POLL] Phase 1 skipped for clinic connection — appointments sync via professional sub-calendars`);
+        } else {
+
         let aptQuery = supabase
           .from("appointments")
           .select(`
@@ -206,10 +213,8 @@ serve(async (req) => {
           .gte("start_time", todayStart.toISOString())
           .lte("start_time", futureDate.toISOString());
 
-        // Conexão individual: filtrar por profissional
-        if (connection.professional_id) {
-          aptQuery = aptQuery.eq("professional_id", connection.professional_id);
-        }
+        // Filtrar por profissional da conexão
+        aptQuery = aptQuery.eq("professional_id", connection.professional_id);
 
         const { data: appointments, error: aptErr } = await aptQuery;
 
@@ -309,6 +314,7 @@ serve(async (req) => {
             console.error(`[GCAL POLL] Exception on apt:`, msg);
           }
         }
+        } // fim Phase 1 — somente conexões de profissional
 
         // ─── FASE 2: Google Calendar → Plataforma (somente two_way) ──────────────
         if (connection.sync_mode === "two_way") {
@@ -328,6 +334,13 @@ serve(async (req) => {
 
             for (const event of gcalEvents) {
               if (event.status === "cancelled") continue;
+
+              // Pular eventos criados pela própria plataforma (Phase 1 exporta com esse marcador)
+              // Evita re-importar agendamentos da plataforma como bloqueios de ausência
+              if (event.description?.includes("Agendado via Clinvia")) {
+                console.log(`[GCAL POLL] Phase2: skipping Clinvia-origin event "${event.summary || event.id}"`);
+                continue;
+              }
 
               const googleEventId = event.id as string;
               const startDateTime = event.start?.dateTime || event.start?.date;

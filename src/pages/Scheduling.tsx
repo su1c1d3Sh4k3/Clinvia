@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -7,7 +7,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { Plus, Filter, ChevronLeft, ChevronRight, Search, PanelLeftClose, PanelLeftOpen, Settings, FileText } from "lucide-react";
+import { Plus, Filter, ChevronLeft, ChevronRight, Search, PanelLeftClose, PanelLeftOpen, Settings, FileText, RefreshCw } from "lucide-react";
 import { SchedulingCalendar } from "@/components/scheduling/SchedulingCalendar";
 import { ProfessionalModal } from "@/components/scheduling/ProfessionalModal";
 import { AppointmentModal } from "@/components/scheduling/AppointmentModal";
@@ -40,6 +40,10 @@ export default function Scheduling() {
     // SaleModal state for appointment completion
     const [isSaleModalOpen, setIsSaleModalOpen] = useState(false);
     const [completedAppointmentData, setCompletedAppointmentData] = useState<AppointmentSaleData | undefined>(undefined);
+
+    // Google Calendar sync state
+    const [isSyncing, setIsSyncing] = useState(false);
+    const hasSyncedOnMount = useRef(false);
 
     // ── Google Calendar OAuth callback ──────────────────────────────────────
     useEffect(() => {
@@ -156,6 +160,67 @@ export default function Scheduling() {
             return data;
         },
     });
+
+    // Verificar se há conexão Google Calendar ativa
+    const { data: activeGCalConnection } = useQuery({
+        queryKey: ["gcal-active-connection", ownerId],
+        queryFn: async () => {
+            if (!ownerId) return null;
+            const { data } = await supabase
+                .from("professional_google_calendars")
+                .select("id")
+                .eq("user_id", ownerId)
+                .eq("is_active", true)
+                .limit(1)
+                .maybeSingle();
+            return data;
+        },
+        enabled: !!ownerId,
+    });
+
+    // Sincronizar Google Calendar (bidirectional poll)
+    const handleSyncGCal = async (silent = false) => {
+        if (!ownerId || !activeGCalConnection || isSyncing) return;
+        setIsSyncing(true);
+        if (!silent) {
+            toast({ title: "Sincronizando Google Calendar...", description: "Aguarde um momento." });
+        }
+        try {
+            const { data, error } = await supabase.functions.invoke("google-calendar-poll", {
+                body: { user_id: ownerId },
+            });
+            if (error) throw error;
+            if (data?.success !== false) {
+                await refetchAppointments();
+                if (!silent) {
+                    toast({
+                        title: "Sincronização concluída!",
+                        description: `${data?.synced ?? 0} enviados, ${data?.imported ?? 0} importados do Google Calendar.`,
+                    });
+                }
+            }
+        } catch (err: unknown) {
+            if (!silent) {
+                const message = err instanceof Error ? err.message : String(err);
+                toast({ title: "Erro na sincronização", description: message, variant: "destructive" });
+            }
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
+    // Auto-sync ao carregar a página (se houver conexão ativa)
+    useEffect(() => {
+        if (!ownerId || !activeGCalConnection || hasSyncedOnMount.current) return;
+        hasSyncedOnMount.current = true;
+        setIsSyncing(true);
+        supabase.functions.invoke("google-calendar-poll", {
+            body: { user_id: ownerId },
+        }).then(({ data }) => {
+            if (data?.success !== false) refetchAppointments();
+        }).catch(() => {}).finally(() => setIsSyncing(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [ownerId, activeGCalConnection]);
 
     const filteredProfessionals = professionals?.filter(p => {
         if (selectedServices.length === 0) return true;
@@ -339,6 +404,18 @@ export default function Scheduling() {
                             <FileText className="w-4 h-4 mr-2" />
                             Relatório Diário
                         </Button>
+
+                        {activeGCalConnection && (
+                            <Button
+                                onClick={() => handleSyncGCal(false)}
+                                disabled={isSyncing}
+                                variant="outline"
+                                className="w-full justify-start bg-white dark:bg-transparent border-0 dark:border"
+                            >
+                                <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? "animate-spin" : ""}`} />
+                                {isSyncing ? "Sincronizando..." : "Sincronizar Google"}
+                            </Button>
+                        )}
 
                         <Card className="w-full">
                             <CardHeader className="pb-3">
