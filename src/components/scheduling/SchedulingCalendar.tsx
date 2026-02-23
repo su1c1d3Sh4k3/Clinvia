@@ -236,7 +236,7 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                             style={{
                                                 ...getEventStyle(apt),
                                                 borderLeft: apt.type !== "absence" && apt.products_services?.color
-                                                    ? `3px solid ${apt.products_services.color}`
+                                                    ? `6px solid ${apt.products_services.color}`
                                                     : undefined,
                                             }}
                                             onClick={(e) => {
