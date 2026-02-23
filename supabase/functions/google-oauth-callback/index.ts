@@ -159,6 +159,24 @@ serve(async (req) => {
 
     const tokenExpiry = new Date(Date.now() + (expires_in || 3600) * 1000).toISOString();
 
+    // Buscar sync_mode da connection da clínica para herança nas connections de profissionais
+    let clinicSyncMode = "one_way";
+    {
+      const { data: clinicConnForSync } = await supabase
+        .from("professional_google_calendars")
+        .select("sync_mode")
+        .eq("user_id", user_id)
+        .is("professional_id", null)
+        .eq("is_active", true)
+        .maybeSingle();
+      if (clinicConnForSync?.sync_mode) {
+        clinicSyncMode = clinicConnForSync.sync_mode;
+        console.log(`[GOOGLE OAUTH] Inheriting sync_mode="${clinicSyncMode}" from existing clinic connection`);
+      } else {
+        console.log(`[GOOGLE OAUTH] No existing clinic connection — using default sync_mode="one_way"`);
+      }
+    }
+
     // ─── PASSO 2.5: Criar sub-calendários por profissional ──────────────────
     // Requer scope: https://www.googleapis.com/auth/calendar
     console.log(`[GOOGLE OAUTH] Step 2.5: Creating sub-calendars (professional_id=${professional_id || "null=clinic"})...`);
@@ -212,7 +230,7 @@ serve(async (req) => {
               token_expiry: tokenExpiry,
               is_active: true,
               calendar_id: newCalId,
-              sync_mode: "one_way",
+              sync_mode: clinicSyncMode,
               updated_at: new Date().toISOString(),
             };
 
@@ -336,7 +354,7 @@ serve(async (req) => {
     } else {
       result = await supabase
         .from("professional_google_calendars")
-        .insert({ ...upsertPayload, calendar_id: finalCalendarId, sync_mode: "one_way" })
+        .insert({ ...upsertPayload, calendar_id: finalCalendarId, sync_mode: clinicSyncMode })
         .select()
         .single();
       console.log("[GOOGLE OAUTH] Created new connection");

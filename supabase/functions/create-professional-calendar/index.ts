@@ -106,7 +106,7 @@ serve(async (req) => {
     // 1. Buscar connection da clínica (professional_id IS NULL) para obter tokens
     const { data: clinicConn, error: connErr } = await supabase
       .from("professional_google_calendars")
-      .select("id, access_token, refresh_token, token_expiry, google_account_email")
+      .select("id, access_token, refresh_token, token_expiry, google_account_email, sync_mode")
       .eq("user_id", user_id)
       .is("professional_id", null)
       .eq("is_active", true)
@@ -182,7 +182,7 @@ serve(async (req) => {
       token_expiry: clinicConn.token_expiry,
       is_active: true,
       calendar_id: newCalendarId,
-      sync_mode: "one_way",
+      sync_mode: clinicConn.sync_mode ?? "one_way",
       updated_at: new Date().toISOString(),
     };
 
