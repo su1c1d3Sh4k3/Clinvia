@@ -470,6 +470,23 @@ function GoogleCalendarSection({ professionalId }: { professionalId: string }) {
         },
     });
 
+    // Verificar se a clínica já tem uma conexão clínica-wide ativa
+    const { data: clinicHasConnection } = useQuery<boolean>({
+        queryKey: ["gcal-clinic-connection-exists"],
+        queryFn: async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return false;
+            const { data } = await supabase
+                .from("professional_google_calendars")
+                .select("id")
+                .eq("user_id", user.id)
+                .is("professional_id", null)
+                .eq("is_active", true)
+                .maybeSingle();
+            return !!data;
+        },
+    });
+
     const handleConnect = async () => {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
@@ -624,6 +641,15 @@ function GoogleCalendarSection({ professionalId }: { professionalId: string }) {
                                 : <RefreshCw className="w-4 h-4" />}
                             Sincronizar agora
                         </Button>
+                    </div>
+                ) : clinicHasConnection ? (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-3 space-y-1">
+                        <p className="text-sm font-medium text-amber-800 dark:text-amber-400">Conexão individual indisponível</p>
+                        <p className="text-xs text-amber-700 dark:text-amber-500">
+                            A clínica já possui uma conexão Google Calendar compartilhada entre todos os profissionais.
+                            Você pode usar uma <strong>conexão clínica única</strong> ou <strong>conexões por profissional</strong> — não ambas.
+                            Para usar conexões individuais, desconecte a agenda clínica nas Configurações de Agendamento.
+                        </p>
                     </div>
                 ) : (
                     <div className="space-y-2">

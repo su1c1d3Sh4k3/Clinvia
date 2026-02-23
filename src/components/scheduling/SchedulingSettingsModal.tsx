@@ -311,6 +311,22 @@ function ClinicCalendarSection() {
         },
     });
 
+    // Verificar se algum profissional já tem conexão individual ativa
+    const { data: hasIndividualConnections } = useQuery<boolean>({
+        queryKey: ["gcal-has-individual-connections"],
+        queryFn: async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return false;
+            const { count } = await supabase
+                .from("professional_google_calendars")
+                .select("id", { count: "exact", head: true })
+                .eq("user_id", user.id)
+                .not("professional_id", "is", null)
+                .eq("is_active", true);
+            return (count ?? 0) > 0;
+        },
+    });
+
     const handleConnect = async () => {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
@@ -464,6 +480,15 @@ function ClinicCalendarSection() {
                                 : <RefreshCw className="w-4 h-4" />}
                             Sincronizar agora
                         </Button>
+                    </div>
+                ) : hasIndividualConnections ? (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-3 space-y-1">
+                        <p className="text-sm font-medium text-amber-800 dark:text-amber-400">Conexão clínica indisponível</p>
+                        <p className="text-xs text-amber-700 dark:text-amber-500">
+                            Um ou mais profissionais já possuem conexões individuais com o Google Calendar.
+                            Você pode usar uma <strong>conexão clínica única</strong> ou <strong>conexões por profissional</strong> — não ambas.
+                            Para usar a conexão clínica, desconecte primeiro as agendas individuais no modal de cada profissional.
+                        </p>
                     </div>
                 ) : (
                     <Button

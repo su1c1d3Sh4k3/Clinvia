@@ -233,7 +233,12 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                                 "absolute left-1 right-1 rounded-md px-1.5 py-0.5 cursor-pointer border shadow-sm transition-all z-10 group/card",
                                                 apt.type === "absence" ? "bg-muted text-muted-foreground border-border" : getStatusColor(apt.status || 'pending')
                                             )}
-                                            style={getEventStyle(apt)}
+                                            style={{
+                                                ...getEventStyle(apt),
+                                                borderLeft: apt.type !== "absence" && apt.products_services?.color
+                                                    ? `3px solid ${apt.products_services.color}`
+                                                    : undefined,
+                                            }}
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 onEventClick(apt);

@@ -141,7 +141,7 @@ export default function Scheduling() {
                 .select(`
                     *,
                     contacts (push_name, number),
-                    products_services (name)
+                    products_services (name, color)
                 `)
                 .gte("start_time", start.toISOString())
                 .lte("start_time", end.toISOString());
