@@ -1,12 +1,13 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect, useRef } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { Plus, Filter, ChevronLeft, ChevronRight, Search, PanelLeftClose, PanelLeftOpen, Settings, FileText } from "lucide-react";
+import { Plus, Filter, ChevronLeft, ChevronRight, Search, PanelLeftClose, PanelLeftOpen, Settings, FileText, RefreshCw } from "lucide-react";
 import { SchedulingCalendar } from "@/components/scheduling/SchedulingCalendar";
 import { ProfessionalModal } from "@/components/scheduling/ProfessionalModal";
 import { AppointmentModal } from "@/components/scheduling/AppointmentModal";
@@ -17,9 +18,14 @@ import { ptBR } from "date-fns/locale";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { generateDailyReport } from "@/utils/generateDailyReport";
+import { useOwnerId } from "@/hooks/useOwnerId";
 
 export default function Scheduling() {
     const { toast } = useToast();
+    const [searchParams] = useSearchParams();
+    const navigate = useNavigate();
+    const queryClient = useQueryClient();
+    const { data: ownerId } = useOwnerId();
     const [date, setDate] = useState<Date | undefined>(new Date());
     const [selectedServices, setSelectedServices] = useState<string[]>([]);
     const [searchTerm, setSearchTerm] = useState("");
@@ -34,6 +40,70 @@ export default function Scheduling() {
     // SaleModal state for appointment completion
     const [isSaleModalOpen, setIsSaleModalOpen] = useState(false);
     const [completedAppointmentData, setCompletedAppointmentData] = useState<AppointmentSaleData | undefined>(undefined);
+
+    // Google Calendar sync state
+    const [isSyncing, setIsSyncing] = useState(false);
+    const hasSyncedOnMount = useRef(false);
+
+    // ── Google Calendar OAuth callback ──────────────────────────────────────
+    useEffect(() => {
+        const code = searchParams.get("code");
+        const state = searchParams.get("state");
+
+        if (!code || !state) return;
+
+        // Validar state
+        const storedState = localStorage.getItem("google_oauth_state");
+        if (!storedState || storedState !== state) {
+            toast({
+                title: "Erro de segurança",
+                description: "Parâmetro de estado inválido. Tente conectar novamente.",
+                variant: "destructive",
+            });
+            localStorage.removeItem("google_oauth_state");
+            navigate("/scheduling", { replace: true });
+            return;
+        }
+
+        localStorage.removeItem("google_oauth_state");
+
+        // Processar callback
+        (async () => {
+            toast({ title: "Conectando Google Calendar...", description: "Aguarde um momento." });
+            try {
+                const { data, error } = await supabase.functions.invoke("google-oauth-callback", {
+                    body: {
+                        code,
+                        state,
+                        redirect_uri: `${window.location.origin}/scheduling`,
+                    },
+                });
+                if (error) throw error;
+                if (data?.success) {
+                    toast({
+                        title: "Google Calendar conectado!",
+                        description: `Conta ${data.email} conectada com sucesso.`,
+                    });
+                    // Invalidar queries de conexão para atualizar os modais
+                    queryClient.invalidateQueries({ queryKey: ["google-calendar-connection"] });
+                    queryClient.invalidateQueries({ queryKey: ["google-calendar-clinic-connection"] });
+                } else {
+                    throw new Error(data?.error || "Falha na conexão");
+                }
+            } catch (err: unknown) {
+                const message = err instanceof Error ? err.message : String(err);
+                toast({
+                    title: "Erro ao conectar Google Calendar",
+                    description: message,
+                    variant: "destructive",
+                });
+            } finally {
+                navigate("/scheduling", { replace: true });
+            }
+        })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+    // ────────────────────────────────────────────────────────────────────────
 
     const handlePreviousDay = () => date && setDate(subDays(date, 1));
     const handleNextDay = () => date && setDate(addDays(date, 1));
@@ -71,7 +141,7 @@ export default function Scheduling() {
                 .select(`
                     *,
                     contacts (push_name, number),
-                    products_services (name)
+                    products_services (name, color)
                 `)
                 .gte("start_time", start.toISOString())
                 .lte("start_time", end.toISOString());
@@ -90,6 +160,67 @@ export default function Scheduling() {
             return data;
         },
     });
+
+    // Verificar se há conexão Google Calendar ativa
+    const { data: activeGCalConnection } = useQuery({
+        queryKey: ["gcal-active-connection", ownerId],
+        queryFn: async () => {
+            if (!ownerId) return null;
+            const { data } = await supabase
+                .from("professional_google_calendars")
+                .select("id")
+                .eq("user_id", ownerId)
+                .eq("is_active", true)
+                .limit(1)
+                .maybeSingle();
+            return data;
+        },
+        enabled: !!ownerId,
+    });
+
+    // Sincronizar Google Calendar (bidirectional poll)
+    const handleSyncGCal = async (silent = false) => {
+        if (!ownerId || !activeGCalConnection || isSyncing) return;
+        setIsSyncing(true);
+        if (!silent) {
+            toast({ title: "Sincronizando Google Calendar...", description: "Aguarde um momento." });
+        }
+        try {
+            const { data, error } = await supabase.functions.invoke("google-calendar-poll", {
+                body: { user_id: ownerId },
+            });
+            if (error) throw error;
+            if (data?.success !== false) {
+                await refetchAppointments();
+                if (!silent) {
+                    toast({
+                        title: "Sincronização concluída!",
+                        description: `${data?.synced ?? 0} enviados, ${data?.imported ?? 0} importados do Google Calendar.`,
+                    });
+                }
+            }
+        } catch (err: unknown) {
+            if (!silent) {
+                const message = err instanceof Error ? err.message : String(err);
+                toast({ title: "Erro na sincronização", description: message, variant: "destructive" });
+            }
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
+    // Auto-sync ao carregar a página (se houver conexão ativa)
+    useEffect(() => {
+        if (!ownerId || !activeGCalConnection || hasSyncedOnMount.current) return;
+        hasSyncedOnMount.current = true;
+        setIsSyncing(true);
+        supabase.functions.invoke("google-calendar-poll", {
+            body: { user_id: ownerId },
+        }).then(({ data }) => {
+            if (data?.success !== false) refetchAppointments();
+        }).catch(() => {}).finally(() => setIsSyncing(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [ownerId, activeGCalConnection]);
 
     const filteredProfessionals = professionals?.filter(p => {
         if (selectedServices.length === 0) return true;
@@ -138,6 +269,14 @@ export default function Scheduling() {
                 .eq("id", appointmentId);
 
             if (error) throw error;
+
+            // Fire-and-forget: sincronizar com Google Calendar
+            if (ownerId) {
+                const syncAction = newStatus === "canceled" ? "delete_appointment" : "sync_appointment";
+                supabase.functions.invoke("google-calendar-sync", {
+                    body: { action: syncAction, appointment_id: appointmentId, user_id: ownerId },
+                }).catch(() => {});
+            }
 
             // If status is completed, open SaleModal with pre-filled data
             if (newStatus === 'completed' && event) {
@@ -265,6 +404,18 @@ export default function Scheduling() {
                             <FileText className="w-4 h-4 mr-2" />
                             Relatório Diário
                         </Button>
+
+                        {activeGCalConnection && (
+                            <Button
+                                onClick={() => handleSyncGCal(false)}
+                                disabled={isSyncing}
+                                variant="outline"
+                                className="w-full justify-start bg-white dark:bg-transparent border-0 dark:border"
+                            >
+                                <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? "animate-spin" : ""}`} />
+                                {isSyncing ? "Sincronizando..." : "Sincronizar Google"}
+                            </Button>
+                        )}
 
                         <Card className="w-full">
                             <CardHeader className="pb-3">

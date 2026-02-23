@@ -101,13 +101,10 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
         queryKey: ["services-list-full"],
         queryFn: async () => {
             const { data, error } = await supabase.from("products_services").select("*").eq("type", "service");
-            console.log('[DEBUG] Services query result:', data);
             if (error) throw error;
             return data;
         },
     });
-
-
 
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
@@ -129,7 +126,31 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
     const watchDate = form.watch("date");
     const watchDuration = form.watch("duration") || 30;
 
+    // Buscar detalhes do profissional selecionado (service_ids + work_hours)
+    const { data: selectedProfessional } = useQuery({
+        queryKey: ["professional-detail", watchProfessionalId],
+        queryFn: async () => {
+            if (!watchProfessionalId) return null;
+            const { data, error } = await supabase
+                .from("professionals")
+                .select("id, service_ids, work_hours, work_days")
+                .eq("id", watchProfessionalId)
+                .single();
+            if (error) throw error;
+            return data;
+        },
+        enabled: !!watchProfessionalId,
+    });
+
+    // Filtrar serviços pelo profissional selecionado
+    const filteredServices = useMemo(() => {
+        if (!services) return [];
+        if (!selectedProfessional?.service_ids?.length) return services;
+        return services.filter((s: any) => selectedProfessional.service_ids.includes(s.id));
+    }, [services, selectedProfessional]);
+
     // Fetch existing appointments for the selected professional and date
+    // Inclui ausências clínica-wide do Google Calendar (professional_id IS NULL)
     const { data: existingAppointments } = useQuery({
         queryKey: ["existing-appointments", watchProfessionalId, watchDate],
         queryFn: async () => {
@@ -138,15 +159,25 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
             const startOfDay = `${watchDate}T00:00:00`;
             const endOfDay = `${watchDate}T23:59:59`;
 
-            const { data, error } = await supabase
-                .from("appointments")
-                .select("id, start_time, end_time")
-                .eq("professional_id", watchProfessionalId)
-                .gte("start_time", startOfDay)
-                .lte("start_time", endOfDay);
+            const [profResult, clinicResult] = await Promise.all([
+                supabase
+                    .from("appointments")
+                    .select("id, start_time, end_time")
+                    .eq("professional_id", watchProfessionalId)
+                    .gte("start_time", startOfDay)
+                    .lte("start_time", endOfDay),
+                supabase
+                    .from("appointments")
+                    .select("id, start_time, end_time")
+                    .is("professional_id", null)
+                    .eq("type", "absence")
+                    .not("google_event_id", "is", null)
+                    .gte("start_time", startOfDay)
+                    .lte("start_time", endOfDay),
+            ]);
 
-            if (error) throw error;
-            return data || [];
+            if (profResult.error) throw profResult.error;
+            return [...(profResult.data || []), ...(clinicResult.data || [])];
         },
         enabled: !!watchProfessionalId && !!watchDate,
     });
@@ -160,9 +191,14 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
         // Use duration as interval, with minimum of 10 minutes
         const interval = Math.max(watchDuration || 30, 10);
 
-        // Start from 8:00 (480 minutes from midnight) to 20:00 (1200 minutes)
-        const startMinutes = 8 * 60;
-        const endMinutes = 20 * 60;
+        // Usar work_hours do profissional; fallback 8:00 – 20:00
+        const wh = (selectedProfessional as any)?.work_hours;
+        const startMinutes = wh?.start != null ? wh.start * 60 : 8 * 60;
+        const endMinutes   = wh?.end   != null ? wh.end   * 60 : 20 * 60;
+
+        // Break time em minutos (valores fracionados = hora decimal, ex. 12.5 = 12:30)
+        const breakStartMin: number | null = wh?.break_start != null ? wh.break_start * 60 : null;
+        const breakEndMin:   number | null = wh?.break_end   != null ? wh.break_end   * 60 : null;
 
         for (let totalMinutes = startMinutes; totalMinutes <= endMinutes; totalMinutes += interval) {
             const hour = Math.floor(totalMinutes / 60);
@@ -171,12 +207,16 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
             const slotStart = new Date(`${watchDate}T${timeStr}`);
             const slotEnd = addMinutes(slotStart, watchDuration);
 
+            // Slot final não pode ultrapassar o fim do expediente
+            const slotEndMinutes = totalMinutes + watchDuration;
+            if (slotEndMinutes > endMinutes) continue;
+
             // Skip past times for today
             if (isToday && slotStart <= now) {
                 continue;
             }
 
-            // Check if this slot conflicts with any existing appointment
+            // Check if this slot conflicts with any existing appointment or clinic-wide GCal absence
             let isConflicting = false;
 
             if (existingAppointments) {
@@ -195,6 +235,15 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                 }
             }
 
+            // Verificar conflito com break time do profissional
+            if (!isConflicting && breakStartMin !== null && breakEndMin !== null) {
+                const slotStartMin = totalMinutes;
+                const slotEndMin   = totalMinutes + watchDuration;
+                if (slotStartMin < breakEndMin && slotEndMin > breakStartMin) {
+                    isConflicting = true;
+                }
+            }
+
             slots.push({
                 value: timeStr,
                 label: isConflicting ? `${timeStr} (ocupado)` : timeStr,
@@ -203,7 +252,7 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
         }
 
         return slots;
-    }, [watchDate, watchDuration, existingAppointments, appointmentToEdit]);
+    }, [watchDate, watchDuration, existingAppointments, appointmentToEdit, selectedProfessional]);
 
     useEffect(() => {
         if (open) {
@@ -240,6 +289,17 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
             }
         }
     }, [open, defaultDate, defaultProfessionalId, appointmentToEdit, activeTab, form, defaultContactId, defaultContactName, defaultContactPhone]);
+
+    // Quando o profissional muda, limpar serviço e duração (serviço pode ser inválido para o novo profissional)
+    useEffect(() => {
+        if (!open) return;
+        // Não limpar quando estamos apenas abrindo o modal para edição
+        if (appointmentToEdit) return;
+        form.setValue("service_id", "");
+        form.setValue("duration", 30);
+        form.setValue("price", 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [watchProfessionalId]);
 
     const handleServiceChange = (serviceId: string) => {
         console.log('[DEBUG] handleServiceChange called with:', serviceId);
@@ -314,12 +374,26 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                     .eq("id", appointmentToEdit.id);
                 if (error) throw error;
                 toast({ title: "Agendamento atualizado!" });
+                // Fire-and-forget: sincronizar com Google Calendar
+                if (ownerId) {
+                    supabase.functions.invoke("google-calendar-sync", {
+                        body: { action: "sync_appointment", appointment_id: appointmentToEdit.id, user_id: ownerId },
+                    }).catch(() => {});
+                }
             } else {
-                const { error } = await supabase
+                const { data: created, error } = await supabase
                     .from("appointments")
-                    .insert(payload);
+                    .insert(payload)
+                    .select()
+                    .single();
                 if (error) throw error;
                 toast({ title: "Agendamento criado!" });
+                // Fire-and-forget: sincronizar com Google Calendar
+                if (created?.id && ownerId) {
+                    supabase.functions.invoke("google-calendar-sync", {
+                        body: { action: "sync_appointment", appointment_id: created.id, user_id: ownerId },
+                    }).catch(() => {});
+                }
             }
 
             queryClient.invalidateQueries({ queryKey: ["appointments"] });
@@ -460,7 +534,7 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                                                         </SelectTrigger>
                                                     </FormControl>
                                                     <SelectContent>
-                                                        {services?.map((s) => (
+                                                        {filteredServices.map((s: any) => (
                                                             <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                                                         ))}
                                                     </SelectContent>

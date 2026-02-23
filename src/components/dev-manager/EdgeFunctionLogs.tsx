@@ -29,12 +29,15 @@ function formatTimestamp(ts: string): string {
 }
 
 export function EdgeFunctionLogs({ logs }: EdgeFunctionLogsProps) {
+  // Exibe apenas logs de erro (status >= 400)
+  const errorLogs = logs.filter(log => log.status >= 400);
+
   return (
     <div className="rounded-xl border p-4" style={{ background: "#111111", borderColor: "#2a2a2a" }}>
       <div className="flex items-center gap-2 mb-4">
         <Terminal size={16} style={{ color: "#f97316" }} />
         <h3 className="text-sm font-medium" style={{ color: "#fff" }}>Logs de Edge Functions</h3>
-        <span className="ml-auto text-xs" style={{ color: "#555" }}>Últimas 20</span>
+        <span className="ml-auto text-xs" style={{ color: "#555" }}>Somente erros · 24h</span>
       </div>
       <div className="space-y-1 max-h-72 overflow-y-auto font-mono">
         {logs.length === 0 ? (
@@ -46,7 +49,12 @@ export function EdgeFunctionLogs({ logs }: EdgeFunctionLogsProps) {
               no painel do Supabase para habilitar
             </p>
           </div>
-        ) : logs.map((log, i) => {
+        ) : errorLogs.length === 0 ? (
+          <div className="text-center py-8">
+            <CheckCircle size={20} className="mx-auto mb-3" style={{ color: "#22c55e" }} />
+            <p className="text-xs" style={{ color: "#555" }}>Sem erros nas últimas 24h ✓</p>
+          </div>
+        ) : errorLogs.map((log, i) => {
           const statusColor = getStatusColor(log.status);
           const isError = log.status >= 400;
           return (

@@ -21,6 +21,7 @@ const formSchema = z.object({
     stock_quantity: z.coerce.number().optional(),
     duration_minutes: z.coerce.number().optional(),
     opportunity_alert_days: z.coerce.number().min(0, "Dias deve ser positivo").default(0),
+    color: z.string().nullable().optional(),
 });
 
 interface ProductServiceModalProps {
@@ -46,6 +47,7 @@ export function ProductServiceModal({ open, onOpenChange, itemToEdit }: ProductS
             stock_quantity: 0,
             duration_minutes: 0,
             opportunity_alert_days: 0,
+            color: null,
         },
     });
 
@@ -59,6 +61,7 @@ export function ProductServiceModal({ open, onOpenChange, itemToEdit }: ProductS
                 stock_quantity: itemToEdit.stock_quantity || 0,
                 duration_minutes: itemToEdit.duration_minutes || 0,
                 opportunity_alert_days: itemToEdit.opportunity_alert_days || 0,
+                color: itemToEdit.color ?? null,
             });
             setExistingImages(itemToEdit.image_urls || []);
         } else {
@@ -69,6 +72,7 @@ export function ProductServiceModal({ open, onOpenChange, itemToEdit }: ProductS
                 stock_quantity: 0,
                 duration_minutes: 0,
                 opportunity_alert_days: 0,
+                color: null,
             });
             setExistingImages([]);
             setImageFiles([]);
@@ -127,6 +131,7 @@ export function ProductServiceModal({ open, onOpenChange, itemToEdit }: ProductS
                 image_urls: finalImageUrls,
                 stock_quantity: activeTab === "product" ? values.stock_quantity : null,
                 duration_minutes: activeTab === "service" ? values.duration_minutes : null,
+                color: activeTab === "service" ? (values.color ?? null) : null,
             };
 
             if (itemToEdit) {
@@ -253,6 +258,42 @@ export function ProductServiceModal({ open, onOpenChange, itemToEdit }: ProductS
                                     />
                                 )}
                             </div>
+
+                            {activeTab === "service" && (
+                                <FormField
+                                    control={form.control}
+                                    name="color"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Cor do Serviço (opcional)</FormLabel>
+                                            <FormControl>
+                                                <div className="flex items-center gap-3">
+                                                    <input
+                                                        type="color"
+                                                        value={field.value || "#3b82f6"}
+                                                        onChange={(e) => field.onChange(e.target.value)}
+                                                        className="h-9 w-16 rounded border cursor-pointer p-1"
+                                                    />
+                                                    <span className="text-sm text-muted-foreground">
+                                                        Exibida na lateral do card de agendamento
+                                                    </span>
+                                                    {field.value && (
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => field.onChange(null)}
+                                                        >
+                                                            Remover
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            )}
 
                             <FormField
                                 control={form.control}

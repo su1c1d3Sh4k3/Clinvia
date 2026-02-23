@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Clinvia Dev",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "npm run dev"],
+      "port": 8080
+    },
+    {
+      "name": "Clinvia Preview",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "npm run preview"],
+      "port": 4173
+    }
+  ]
+}

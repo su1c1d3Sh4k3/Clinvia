@@ -250,6 +250,19 @@ serve(async (req) => {
                 // Don't fail the request if notification fails
             }
 
+            // Sync com Google Calendar em background (fire-and-forget)
+            try {
+                const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+                const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+                const syncPromise = fetch(`${supabaseUrl}/functions/v1/google-calendar-sync`, {
+                    method: "POST",
+                    headers: { "Authorization": `Bearer ${serviceKey}`, "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "sync_appointment", appointment_id: data.id, user_id }),
+                });
+                // deno-lint-ignore no-explicit-any
+                (globalThis as any).EdgeRuntime?.waitUntil(syncPromise);
+            } catch (_syncErr) { /* silently ignore sync errors */ }
+
             return new Response(JSON.stringify(data), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
@@ -309,6 +322,19 @@ serve(async (req) => {
 
             if (error) throw error;
 
+            // Sync reagendamento com Google Calendar em background
+            try {
+                const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+                const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+                const syncPromise = fetch(`${supabaseUrl}/functions/v1/google-calendar-sync`, {
+                    method: "POST",
+                    headers: { "Authorization": `Bearer ${serviceKey}`, "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "sync_appointment", appointment_id, user_id }),
+                });
+                // deno-lint-ignore no-explicit-any
+                (globalThis as any).EdgeRuntime?.waitUntil(syncPromise);
+            } catch (_syncErr) { /* silently ignore sync errors */ }
+
             return new Response(JSON.stringify(data), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
@@ -323,6 +349,19 @@ serve(async (req) => {
                 .single();
 
             if (error) throw error;
+
+            // Remover evento do Google Calendar em background
+            try {
+                const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+                const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+                const syncPromise = fetch(`${supabaseUrl}/functions/v1/google-calendar-sync`, {
+                    method: "POST",
+                    headers: { "Authorization": `Bearer ${serviceKey}`, "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "delete_appointment", appointment_id, user_id }),
+                });
+                // deno-lint-ignore no-explicit-any
+                (globalThis as any).EdgeRuntime?.waitUntil(syncPromise);
+            } catch (_syncErr) { /* silently ignore sync errors */ }
 
             return new Response(JSON.stringify(data), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }

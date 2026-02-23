@@ -126,7 +126,9 @@ function healthLevel(score: number): { label: string; color: string; bg: string 
 
 function calcSupabaseHealth(d: InfraData): number {
   const dbStress = calcDbStress(d.database);
-  const webhookStress = Math.min(100, d.webhook_queue.failed * 5);
+  // Usa falhas recentes (24h) ao invés do acumulado histórico
+  const recentFails = d.webhook_queue.recent_failures?.length ?? 0;
+  const webhookStress = Math.min(100, recentFails * 10);
   const n8nPenalty = !d.n8n.reachable ? 40 : d.n8n.failed_executions >= 5 ? 20 : 0;
   return Math.min(100, Math.round(dbStress * 0.55 + webhookStress * 0.25 + n8nPenalty * 0.20));
 }
@@ -148,7 +150,9 @@ function analyzeSupabase(d: InfraData): HealthAnalysis {
     ? (d.database.total_connections / d.database.max_connections) * 100 : 0;
   const cachePressure = d.database.cache_hit_ratio > 0
     ? Math.max(0, 100 - d.database.cache_hit_ratio) : 0;
-  const webhookStress = Math.min(100, d.webhook_queue.failed * 5);
+  // Stress baseado em falhas das últimas 24h (não acumulado histórico)
+  const recentFails = d.webhook_queue.recent_failures?.length ?? 0;
+  const webhookStress = Math.min(100, recentFails * 10);
   const n8nStress = !d.n8n.reachable ? 100 : d.n8n.failed_executions >= 5 ? 40 : 0;
 
   const metrics: AnalysisLine[] = [
@@ -167,8 +171,8 @@ function analyzeSupabase(d: InfraData): HealthAnalysis {
       stress: Math.round(cachePressure),
     },
     {
-      label: "Webhooks",
-      detail: d.webhook_queue.failed > 0 ? `${d.webhook_queue.failed} falha(s)` : "Fila saudável",
+      label: "Webhooks (24h)",
+      detail: recentFails > 0 ? `${recentFails} falha(s) recente(s)` : "Sem falhas nas 24h",
       stress: webhookStress,
     },
     {
@@ -187,10 +191,10 @@ function analyzeSupabase(d: InfraData): HealthAnalysis {
     suggestions.push(`Cache hit baixo (${d.database.cache_hit_ratio}%) — adicione índices nas tabelas mais acessadas ou faça upgrade do plano para ampliar shared_buffers`);
   else if (d.database.cache_hit_ratio > 0 && d.database.cache_hit_ratio < 90)
     suggestions.push(`Cache hit em ${d.database.cache_hit_ratio}% — monitore e considere índices adicionais`);
-  if (d.webhook_queue.failed > 10)
-    suggestions.push(`${d.webhook_queue.failed} webhooks com falha — reprocesse ou limpe a fila e revise os logs`);
-  else if (d.webhook_queue.failed > 3)
-    suggestions.push(`${d.webhook_queue.failed} webhooks falhando — investigue o padrão de erro nos logs`);
+  if (recentFails > 5)
+    suggestions.push(`${recentFails} webhooks com falha nas últimas 24h — revise os logs e reprocesse se necessário`);
+  else if (recentFails > 2)
+    suggestions.push(`${recentFails} webhooks falhando nas últimas 24h — investigue o padrão de erro`);
   if (!d.n8n.reachable)
     suggestions.push("n8n inacessível — verifique o container e as configurações de rede/DNS");
   else if (d.n8n.failed_executions >= 5)
@@ -367,6 +371,51 @@ export default function DevManager() {
       toast.error(`Erro no coletor: ${(err as Error).message}`);
     } finally {
       setIsCollecting(false);
+    }
+  }, [fetchMetrics]);
+
+  // =============================================
+  // Clear actions
+  // =============================================
+  const handleClearAlerts = useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch(`${FUNCTION_URL}/infra-get-metrics`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "clear_alerts" }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success("Alertas limpos com sucesso");
+        await fetchMetrics(true);
+      } else {
+        toast.error(json.error ?? "Falha ao limpar alertas");
+      }
+    } catch (err) {
+      toast.error(`Erro: ${(err as Error).message}`);
+    }
+  }, [fetchMetrics]);
+
+  const handleClearN8nErrors = useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch(`${FUNCTION_URL}/infra-get-metrics`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "clear_n8n_errors" }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success("Erros n8n limpos com sucesso");
+        await fetchMetrics(true);
+      } else {
+        toast.error(json.error ?? "Falha ao limpar erros n8n");
+      }
+    } catch (err) {
+      toast.error(`Erro: ${(err as Error).message}`);
     }
   }, [fetchMetrics]);
 
@@ -838,6 +887,7 @@ export default function DevManager() {
             errors={data.n8n.recent_errors}
             failedCount={data.n8n.failed_executions}
             n8nUrl={configValues.n8n_url}
+            onClear={handleClearN8nErrors}
           />
         )}
 
@@ -890,6 +940,7 @@ export default function DevManager() {
             <AlertFeed
               alerts={data.alerts.recent}
               unresolvedCount={data.alerts.unresolved_count}
+              onClear={handleClearAlerts}
             />
           </div>
         )}

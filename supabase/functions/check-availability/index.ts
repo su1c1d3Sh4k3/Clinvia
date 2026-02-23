@@ -53,6 +53,10 @@ serve(async (req) => {
         let workDays = globalSettings?.work_days ?? [0, 1, 2, 3, 4, 5, 6];
         let serviceDuration = 60; // Default 60 min
 
+        // Break time (null = sem intervalo)
+        let breakStartHour: number | null = null;
+        let breakEndHour: number | null = null;
+
         // 2. Fetch Professional Specifics (if provided)
         if (professional_id) {
             const { data: professional, error: proError } = await supabase
@@ -68,14 +72,13 @@ serve(async (req) => {
                     workDays = professional.work_days;
                 }
                 if (professional.work_hours) {
-                    // Parse "HH:mm" to hours integer for simplicity, or keep as string logic
-                    // The current calendar uses integer hours. Let's try to respect that for consistency,
-                    // or parse the specific "HH:mm" strings if we want more precision.
-                    // For this V1, let's stick to the integer start/end based on the string.
-                    const startParts = professional.work_hours.start.split(':');
-                    const endParts = professional.work_hours.end.split(':');
-                    startHour = parseInt(startParts[0]);
-                    endHour = parseInt(endParts[0]);
+                    const wh = professional.work_hours;
+                    // work_hours é JSONB com valores numéricos (horas decimais)
+                    // ex: { start: 8, end: 18, break_start: 12, break_end: 13 }
+                    if (wh.start != null) startHour = Number(wh.start);
+                    if (wh.end   != null) endHour   = Number(wh.end);
+                    if (wh.break_start != null) breakStartHour = Number(wh.break_start);
+                    if (wh.break_end   != null) breakEndHour   = Number(wh.break_end);
                 }
             }
         }
@@ -84,12 +87,12 @@ serve(async (req) => {
         if (service_id) {
             const { data: service, error: serviceError } = await supabase
                 .from("products_services")
-                .select("duration")
+                .select("duration_minutes")
                 .eq("id", service_id)
                 .single();
 
             if (!serviceError && service) {
-                serviceDuration = service.duration || 60;
+                serviceDuration = service.duration_minutes || 60;
             }
         }
 
@@ -104,19 +107,38 @@ serve(async (req) => {
             );
         }
 
-        // 5. Fetch Existing Appointments
-        let query = supabase
-            .from("appointments")
-            .select("start_time, end_time")
-            .gte("start_time", `${date}T00:00:00`)
-            .lte("start_time", `${date}T23:59:59`);
+        // 5. Fetch Existing Appointments + Clinic-wide GCal Absences
+        const dayStart = `${date}T00:00:00`;
+        const dayEnd   = `${date}T23:59:59`;
 
-        if (professional_id) {
-            query = query.eq("professional_id", professional_id);
-        }
+        const [aptResult, clinicResult] = await Promise.all([
+            // Agendamentos do profissional
+            (() => {
+                let q = supabase
+                    .from("appointments")
+                    .select("start_time, end_time")
+                    .gte("start_time", dayStart)
+                    .lte("start_time", dayEnd);
+                if (professional_id) q = q.eq("professional_id", professional_id);
+                return q;
+            })(),
+            // Ausências clínica-wide do Google Calendar
+            supabase
+                .from("appointments")
+                .select("start_time, end_time")
+                .is("professional_id", null)
+                .eq("type", "absence")
+                .not("google_event_id", "is", null)
+                .gte("start_time", dayStart)
+                .lte("start_time", dayEnd),
+        ]);
 
-        const { data: appointments, error: aptError } = await query;
-        if (aptError) throw aptError;
+        if (aptResult.error) throw aptResult.error;
+
+        const allBlocked = [
+            ...(aptResult.data || []),
+            ...(clinicResult.data || []),
+        ];
 
         // 6. Calculate Slots
         const slots: string[] = [];
@@ -126,19 +148,39 @@ serve(async (req) => {
         const endTime = new Date(requestedDate);
         endTime.setHours(endHour, 0, 0, 0);
 
+        // Pre-calcular início/fim do break em Date para comparação
+        let breakStartDate: Date | null = null;
+        let breakEndDate:   Date | null = null;
+        if (breakStartHour !== null && breakEndHour !== null) {
+            breakStartDate = new Date(requestedDate);
+            breakStartDate.setHours(
+                Math.floor(breakStartHour),
+                Math.round((breakStartHour % 1) * 60),
+                0, 0
+            );
+            breakEndDate = new Date(requestedDate);
+            breakEndDate.setHours(
+                Math.floor(breakEndHour),
+                Math.round((breakEndHour % 1) * 60),
+                0, 0
+            );
+        }
+
         // Generate all potential slots
         while (isBefore(currentSlot, endTime) || isEqual(currentSlot, endTime)) {
             // Check if this slot + duration fits before end of day
             const slotEnd = addMinutes(currentSlot, serviceDuration);
             if (isBefore(slotEnd, endTime) || isEqual(slotEnd, endTime)) {
 
-                // Check collision with existing appointments
-                const isBusy = appointments.some((apt) => {
+                // Verificar conflito com break time do profissional
+                const isBreakConflict = breakStartDate !== null && breakEndDate !== null
+                    && isBefore(currentSlot, breakEndDate)
+                    && isBefore(breakStartDate, slotEnd);
+
+                // Check collision with existing appointments + clinic-wide absences
+                const isBusy = isBreakConflict || allBlocked.some((apt) => {
                     const aptStart = parseISO(apt.start_time);
                     const aptEnd = parseISO(apt.end_time);
-
-                    // Check overlap
-                    // (SlotStart < AptEnd) && (SlotEnd > AptStart)
                     return isBefore(currentSlot, aptEnd) && isBefore(aptStart, slotEnd);
                 });
 
@@ -147,10 +189,6 @@ serve(async (req) => {
                 }
             }
 
-            // Increment by... service duration? or fixed interval (e.g. 30 min)?
-            // Usually scheduling allows starting every 30 mins or 15 mins.
-            // Let's assume 30 minute intervals for flexibility, or equal to duration?
-            // Let's use 30 minutes step for now.
             currentSlot = addMinutes(currentSlot, 30);
         }
 
