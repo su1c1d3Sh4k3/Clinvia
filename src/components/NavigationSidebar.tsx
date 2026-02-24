@@ -451,22 +451,12 @@ export const NavigationSidebar = () => {
             className="h-10 w-10 object-contain shrink-0"
           />
           {/* Brand name - visible when expanded (desktop hover) or mobile */}
-          {/* Light mode: blue logo */}
-          <img
-            src="/logo-light.png"
-            alt="Clinvia"
-            className={cn(
-              "h-7 w-auto object-contain dark:hidden",
-              isMobile ? "block" : "hidden group-hover/sidebar:block"
-            )}
-          />
-          {/* Dark mode: white logo */}
           <img
             src="/clinvia-text-dark.png"
             alt="Clinvia"
             className={cn(
-              "h-7 w-auto object-contain hidden",
-              isMobile ? "dark:block" : "dark:group-hover/sidebar:block"
+              "h-7 w-auto object-contain",
+              isMobile ? "block" : "hidden group-hover/sidebar:block"
             )}
           />
         </div>

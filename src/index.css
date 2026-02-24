@@ -56,16 +56,16 @@ All colors MUST be HSL.
 
     --radius: 1rem;
 
-    /* Sidebar: Light theme (near-white background, dark text) */
-    --sidebar-background: 0 0% 97%;
-    --sidebar-foreground: 0 0% 8%;
-    --sidebar-primary: 0 0% 13%;
-    --sidebar-primary-foreground: 0 0% 97%;
-    --sidebar-accent: 0 0% 95%;
-    --sidebar-accent-foreground: 0 0% 13%;
-    --sidebar-border: 0 0% 89%;
-    --sidebar-ring: 0 0% 64%;
-    --sidebar-nav: 0 0% 97%;
+    /* Sidebar: #135AA9 blue with white text */
+    --sidebar-background: 212 80% 37%;
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary: 224 100% 57%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 212 80% 30%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 212 60% 28%;
+    --sidebar-ring: 196 100% 47%;
+    --sidebar-nav: 212 80% 37%;
 
     /* Chat */
     --chat-agent: 224 100% 57%;
