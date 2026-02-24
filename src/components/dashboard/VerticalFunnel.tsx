@@ -120,14 +120,50 @@ export function VerticalFunnel({
     // Calcula a largura visível de um estágio (100% → 60% mínimo, -8% por índice)
     const getVisibleWidth = (i: number) => Math.max(60, 100 - i * 8);
 
-    // Gera clipPath trapézoide: base do estágio N = topo do estágio N+1
-    // Isso cria o efeito funil contínuo e sem lacunas visuais entre etapas
+    // Gera clipPath trapézoide com cantos biselados (bevel) para simular bordas arredondadas.
+    // Base do estágio N = topo do estágio N+1, incluindo a última etapa.
     const getStageClipPath = (index: number, total: number) => {
         const wTop = getVisibleWidth(index);
-        const wBottom = index < total - 1 ? getVisibleWidth(index + 1) : wTop;
+        const wBottom = getVisibleWidth(index + 1); // sempre aplica -8%, incluindo última etapa
         const lTop = (100 - wTop) / 2;
         const lBottom = (100 - wBottom) / 2;
-        return `polygon(${lTop}% 0%, ${100 - lTop}% 0%, ${100 - lBottom}% 100%, ${lBottom}% 100%)`;
+
+        const isFirst = index === 0;
+        const isLast = index === total - 1;
+
+        // hr: bevel horizontal (% da largura do container)
+        // vr: bevel vertical (% da altura do bloco)
+        const hr = 2.5;
+        const vr = 14;
+
+        if (isFirst && isLast) {
+            // Estágio único: todos os 4 cantos biselados
+            return `polygon(
+                ${lTop + hr}% 0%, ${100 - lTop - hr}% 0%,
+                ${100 - lTop}% ${vr}%,
+                ${100 - lBottom}% ${100 - vr}%, ${100 - lBottom - hr}% 100%,
+                ${lBottom + hr}% 100%, ${lBottom}% ${100 - vr}%,
+                ${lTop}% ${vr}%
+            )`;
+        } else if (isFirst) {
+            // Primeiro estágio: cantos superiores biselados
+            return `polygon(
+                ${lTop + hr}% 0%, ${100 - lTop - hr}% 0%,
+                ${100 - lTop}% ${vr}%,
+                ${100 - lBottom}% 100%, ${lBottom}% 100%,
+                ${lTop}% ${vr}%
+            )`;
+        } else if (isLast) {
+            // Último estágio: cantos inferiores biselados
+            return `polygon(
+                ${lTop}% 0%, ${100 - lTop}% 0%,
+                ${100 - lBottom}% ${100 - vr}%, ${100 - lBottom - hr}% 100%,
+                ${lBottom + hr}% 100%, ${lBottom}% ${100 - vr}%
+            )`;
+        } else {
+            // Estágios intermediários: sem bevel (encaixam perfeitamente nos vizinhos)
+            return `polygon(${lTop}% 0%, ${100 - lTop}% 0%, ${100 - lBottom}% 100%, ${lBottom}% 100%)`;
+        }
     };
 
     // Posiciona o badge dentro da área visível de cada estágio (canto sup. direito)
