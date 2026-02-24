@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { encryptToken } from "../_shared/token-tracker.ts";
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -21,7 +22,7 @@ serve(async (req) => {
             );
         }
 
-        console.log('[admin-update-profile] Updating profile:', profileId, 'with:', updates);
+        console.log('[admin-update-profile] Updating profile:', profileId);
 
         const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
         const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -34,6 +35,15 @@ serve(async (req) => {
         for (const field of allowedFields) {
             if (field in updates) {
                 sanitizedUpdates[field] = updates[field];
+            }
+        }
+
+        // 🔐 Criptografar token OpenAI antes de salvar
+        if (sanitizedUpdates.openai_token && typeof sanitizedUpdates.openai_token === 'string') {
+            const encrypted = await encryptToken(sanitizedUpdates.openai_token);
+            if (encrypted) {
+                sanitizedUpdates.openai_token = encrypted;
+                console.log('[admin-update-profile] Token encrypted before storage');
             }
         }
 

@@ -107,12 +107,90 @@ export async function getTeamMemberFromAuthId(
 // Custom OpenAI Token Functions
 // =============================================
 
+// 🔐 Token Encryption/Decryption com AES-256-GCM
+// Chave derivada de OPENAI_TOKEN_ENCRYPTION_KEY env var
+
+async function getEncryptionKey(): Promise<CryptoKey | null> {
+    const keyMaterial = Deno.env.get('OPENAI_TOKEN_ENCRYPTION_KEY');
+    if (!keyMaterial) return null;
+
+    // Derivar chave de 256 bits do secret
+    const encoder = new TextEncoder();
+    const keyData = await crypto.subtle.digest('SHA-256', encoder.encode(keyMaterial));
+    return crypto.subtle.importKey('raw', keyData, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+}
+
+/**
+ * Criptografa um token OpenAI para armazenamento seguro.
+ * Formato: base64(iv:ciphertext:tag)
+ */
+export async function encryptToken(plainToken: string): Promise<string | null> {
+    try {
+        const key = await getEncryptionKey();
+        if (!key) return null; // Sem chave = armazena em plaintext (compatibilidade)
+
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const encoded = new TextEncoder().encode(plainToken);
+        const ciphertext = await crypto.subtle.encrypt(
+            { name: 'AES-GCM', iv },
+            key,
+            encoded
+        );
+
+        // Combina iv + ciphertext em base64
+        const combined = new Uint8Array(iv.length + new Uint8Array(ciphertext).length);
+        combined.set(iv, 0);
+        combined.set(new Uint8Array(ciphertext), iv.length);
+
+        // Prefixo "enc:" para identificar tokens criptografados
+        return 'enc:' + btoa(String.fromCharCode(...combined));
+    } catch (err) {
+        console.error('[encryptToken] Error:', err);
+        return null;
+    }
+}
+
+/**
+ * Descriptografa um token OpenAI armazenado.
+ * Suporta tokens em plaintext (sem prefixo) e criptografados (prefixo "enc:").
+ */
+export async function decryptToken(storedToken: string): Promise<string> {
+    // Token sem prefixo = plaintext (compatibilidade com tokens antigos)
+    if (!storedToken.startsWith('enc:')) {
+        return storedToken;
+    }
+
+    try {
+        const key = await getEncryptionKey();
+        if (!key) {
+            console.error('[decryptToken] OPENAI_TOKEN_ENCRYPTION_KEY not set but encrypted token found');
+            return '';
+        }
+
+        const combined = Uint8Array.from(atob(storedToken.slice(4)), c => c.charCodeAt(0));
+        const iv = combined.slice(0, 12);
+        const ciphertext = combined.slice(12);
+
+        const decrypted = await crypto.subtle.decrypt(
+            { name: 'AES-GCM', iv },
+            key,
+            ciphertext
+        );
+
+        return new TextDecoder().decode(decrypted);
+    } catch (err) {
+        console.error('[decryptToken] Error:', err);
+        return '';
+    }
+}
+
 export interface OpenAITokenResult {
     token: string;
     isCustom: boolean;
 }
 
 // Get OpenAI token for a profile (custom or default)
+// Descriptografa automaticamente tokens criptografados
 export async function getOpenAIToken(
     supabaseAdmin: any,
     ownerId: string | null
@@ -131,7 +209,10 @@ export async function getOpenAIToken(
             .single();
 
         if (profile?.openai_token) {
-            return { token: profile.openai_token, isCustom: true };
+            const decrypted = await decryptToken(profile.openai_token);
+            if (decrypted) {
+                return { token: decrypted, isCustom: true };
+            }
         }
     } catch (err) {
         console.error('[getOpenAIToken] Error fetching custom token:', err);

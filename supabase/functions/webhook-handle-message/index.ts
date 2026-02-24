@@ -6,7 +6,10 @@ import {
     base64ToUint8Array,
     getInstanceByName,
     downloadMediaFromUzapi,
-    fetchChatDetails
+    fetchChatDetails,
+    validateWebhookHMAC,
+    checkRateLimit,
+    validateWebhookPayload
 } from "../_shared/utils.ts";
 import { makeOpenAIRequest, trackTokenUsage } from "../_shared/token-tracker.ts";
 
@@ -28,7 +31,44 @@ serve(async (req) => {
     }
 
     try {
-        const payload = await req.json();
+        // 🛡️ RATE LIMITING — máximo 120 req/min por IP
+        const clientIP = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+            req.headers.get('cf-connecting-ip') || 'unknown';
+        if (!checkRateLimit(`whm:${clientIP}`, 120, 60000)) {
+            console.warn(`[webhook-handle-message] Rate limited IP: ${clientIP}`);
+            return new Response(
+                JSON.stringify({ success: false, error: 'Too many requests' }),
+                { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
+
+        // 🔐 HMAC VALIDATION — verifica assinatura se secret configurado
+        const rawBody = await req.text();
+        const webhookSecret = Deno.env.get('WEBHOOK_HMAC_SECRET');
+        if (webhookSecret) {
+            const signature = req.headers.get('x-webhook-signature') ||
+                req.headers.get('x-hub-signature-256');
+            const isValid = await validateWebhookHMAC(rawBody, signature, webhookSecret);
+            if (!isValid) {
+                console.warn(`[webhook-handle-message] Invalid HMAC signature from IP: ${clientIP}`);
+                return new Response(
+                    JSON.stringify({ success: false, error: 'Invalid webhook signature' }),
+                    { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                );
+            }
+        }
+
+        const payload = JSON.parse(rawBody);
+
+        // ✅ INPUT VALIDATION
+        const validationError = validateWebhookPayload(payload);
+        if (validationError) {
+            console.warn(`[webhook-handle-message] Payload validation failed: ${validationError}`);
+            return new Response(
+                JSON.stringify({ success: false, error: validationError }),
+                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
 
         const eventType = payload.EventType || payload.event || payload.type || 'messages';
         const instanceName = payload.instanceName;

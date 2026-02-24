@@ -1,9 +1,15 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { corsHeaders, createSupabaseClient } from "../_shared/utils.ts";
+import {
+    corsHeaders,
+    createSupabaseClient,
+    validateWebhookHMAC,
+    checkRateLimit,
+    validateWebhookPayload
+} from "../_shared/utils.ts";
 
 /**
  * webhook-handle-status
- * 
+ *
  * Processa eventos de atualização de status de mensagens:
  * - Read receipts (mensagem lida)
  * - Delivery receipts (mensagem entregue)
@@ -18,7 +24,33 @@ serve(async (req) => {
     console.log('[webhook-handle-status] Starting...');
 
     try {
-        const payload = await req.json();
+        // 🛡️ RATE LIMITING
+        const clientIP = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+            req.headers.get('cf-connecting-ip') || 'unknown';
+        if (!checkRateLimit(`whs:${clientIP}`, 200, 60000)) {
+            return new Response(
+                JSON.stringify({ success: false, error: 'Too many requests' }),
+                { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
+
+        // 🔐 HMAC VALIDATION
+        const rawBody = await req.text();
+        const webhookSecret = Deno.env.get('WEBHOOK_HMAC_SECRET');
+        if (webhookSecret) {
+            const signature = req.headers.get('x-webhook-signature') ||
+                req.headers.get('x-hub-signature-256');
+            const isValid = await validateWebhookHMAC(rawBody, signature, webhookSecret);
+            if (!isValid) {
+                console.warn(`[webhook-handle-status] Invalid HMAC from IP: ${clientIP}`);
+                return new Response(
+                    JSON.stringify({ success: false, error: 'Invalid webhook signature' }),
+                    { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                );
+            }
+        }
+
+        const payload = JSON.parse(rawBody);
         const eventType = payload.EventType || payload.event || payload.type || 'unknown';
 
         console.log('[webhook-handle-status] Event Type:', eventType);

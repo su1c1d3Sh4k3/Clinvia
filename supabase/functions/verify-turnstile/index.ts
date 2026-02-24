@@ -21,8 +21,17 @@ serve(async (req) => {
         }
 
         // Verify with Cloudflare
+        const turnstileSecret = Deno.env.get('TURNSTILE_SECRET_KEY');
+        if (!turnstileSecret) {
+            console.error('[verify-turnstile] TURNSTILE_SECRET_KEY not set in environment');
+            return new Response(
+                JSON.stringify({ error: 'Server configuration error' }),
+                { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+            )
+        }
+
         const formData = new FormData()
-        formData.append('secret', '0x4AAAAAACOK6zqllY8hGyKPFCue0eCggdo')
+        formData.append('secret', turnstileSecret)
         formData.append('response', token)
         if (ip) formData.append('remoteip', ip)
 

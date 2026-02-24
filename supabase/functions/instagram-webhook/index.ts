@@ -1,5 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import {
+    validateMetaWebhookSignature,
+    checkRateLimit,
+    validateInstagramPayload
+} from "../_shared/utils.ts";
 
 // =============================================
 // Instagram Webhook Handler
@@ -7,7 +12,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 // =============================================
 //
 // ⚠️⚠️⚠️ CRITICAL CONFIGURATION WARNING ⚠️⚠️⚠️
-// 
+//
 // This function MUST be configured in supabase/config.toml with:
 //
 //   [functions.instagram-webhook]
@@ -25,11 +30,6 @@ const corsHeaders = {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Token de verificação para o Facebook Developers
-// This MUST match the verify_token configured in Meta Developer Console
-const VERIFY_TOKEN = 'clinvia_instagram_webhook_verify_2024';
-
-
 serve(async (req) => {
     const url = new URL(req.url);
     const method = req.method;
@@ -41,6 +41,17 @@ serve(async (req) => {
         return new Response(null, { headers: corsHeaders });
     }
 
+    // 🛡️ RATE LIMITING — máximo 100 req/min por IP
+    const clientIP = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+        req.headers.get('cf-connecting-ip') || 'unknown';
+    if (!checkRateLimit(`ig:${clientIP}`, 100, 60000)) {
+        console.warn(`[INSTAGRAM WEBHOOK] Rate limited IP: ${clientIP}`);
+        return new Response(
+            JSON.stringify({ success: false, error: 'Too many requests' }),
+            { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+    }
+
     // =============================================
     // GET Request - Webhook Verification
     // =============================================
@@ -49,7 +60,10 @@ serve(async (req) => {
         const hubChallenge = url.searchParams.get('hub.challenge');
         const hubVerifyToken = url.searchParams.get('hub.verify_token');
 
-        console.log('[INSTAGRAM WEBHOOK] Verification - mode:', hubMode, 'token:', hubVerifyToken);
+        // Token de verificação via env (fallback para hardcoded por compatibilidade)
+        const VERIFY_TOKEN = Deno.env.get('INSTAGRAM_VERIFY_TOKEN') || 'clinvia_instagram_webhook_verify_2024';
+
+        console.log('[INSTAGRAM WEBHOOK] Verification - mode:', hubMode);
 
         if (hubMode === 'subscribe' && hubVerifyToken === VERIFY_TOKEN) {
             console.log('[INSTAGRAM WEBHOOK] ✅ Verification successful!');
@@ -67,6 +81,20 @@ serve(async (req) => {
         try {
             const rawBody = await req.text();
 
+            // 🔐 META SIGNATURE VALIDATION (X-Hub-Signature)
+            const metaAppSecret = Deno.env.get('META_APP_SECRET');
+            if (metaAppSecret) {
+                const xHubSignature = req.headers.get('x-hub-signature');
+                const isValid = await validateMetaWebhookSignature(rawBody, xHubSignature, metaAppSecret);
+                if (!isValid) {
+                    console.warn(`[INSTAGRAM WEBHOOK] Invalid Meta signature from IP: ${clientIP}`);
+                    return new Response(
+                        JSON.stringify({ success: false, error: 'Invalid signature' }),
+                        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                    );
+                }
+            }
+
             let payload: any = {};
             try {
                 payload = JSON.parse(rawBody);
@@ -75,6 +103,16 @@ serve(async (req) => {
                 return new Response(JSON.stringify({ error: 'Invalid JSON' }), {
                     status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
                 });
+            }
+
+            // ✅ INPUT VALIDATION
+            const validationError = validateInstagramPayload(payload);
+            if (validationError) {
+                console.warn(`[INSTAGRAM WEBHOOK] Payload validation failed: ${validationError}`);
+                return new Response(
+                    JSON.stringify({ success: false, error: validationError }),
+                    { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                );
             }
 
             // Initialize Supabase

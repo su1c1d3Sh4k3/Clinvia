@@ -1,11 +1,13 @@
 /**
  * Shared Utilities for Webhook Functions
- * 
+ *
  * Este módulo contém funções e constantes compartilhadas entre
  * webhook-handle-message e webhook-handle-status.
  */
 
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { crypto } from "https://deno.land/std@0.168.0/crypto/mod.ts";
+import { encode as hexEncode } from "https://deno.land/std@0.168.0/encoding/hex.ts";
 
 export const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -248,4 +250,220 @@ export async function fetchChatDetails(apiKey: string, number: string): Promise<
         console.error('[SHARED] Error fetching chat details:', error);
         return null;
     }
+}
+
+// ============================================
+// 🔒 SEGURANÇA — HMAC Validation
+// ============================================
+
+/**
+ * Valida assinatura HMAC-SHA256 de webhooks (UZAPI/Evolution API)
+ * Compara o header de assinatura com o HMAC calculado do body.
+ *
+ * @param rawBody - Body bruto da requisição (string)
+ * @param signatureHeader - Valor do header de assinatura (ex: sha256=abc123...)
+ * @param secret - Secret compartilhado para validação
+ * @returns true se válido, false se inválido
+ */
+export async function validateWebhookHMAC(
+    rawBody: string,
+    signatureHeader: string | null,
+    secret: string
+): Promise<boolean> {
+    if (!signatureHeader || !secret) {
+        return false;
+    }
+
+    try {
+        // Remove prefixo "sha256=" se presente
+        const providedSignature = signatureHeader.replace(/^sha256=/, '');
+
+        const key = await crypto.subtle.importKey(
+            'raw',
+            new TextEncoder().encode(secret),
+            { name: 'HMAC', hash: 'SHA-256' },
+            false,
+            ['sign']
+        );
+
+        const signature = await crypto.subtle.sign(
+            'HMAC',
+            key,
+            new TextEncoder().encode(rawBody)
+        );
+
+        const computedHex = new TextDecoder().decode(hexEncode(new Uint8Array(signature)));
+
+        // Comparação constante (timing-safe)
+        if (computedHex.length !== providedSignature.length) return false;
+        let result = 0;
+        for (let i = 0; i < computedHex.length; i++) {
+            result |= computedHex.charCodeAt(i) ^ providedSignature.charCodeAt(i);
+        }
+        return result === 0;
+    } catch (error) {
+        console.error('[SHARED] HMAC validation error:', error);
+        return false;
+    }
+}
+
+/**
+ * Valida assinatura HMAC-SHA1 do Meta (Facebook/Instagram webhooks)
+ * Meta envia header X-Hub-Signature com formato sha1=<hex>
+ *
+ * @param rawBody - Body bruto da requisição
+ * @param signatureHeader - Valor do X-Hub-Signature header
+ * @param appSecret - App Secret do Facebook App
+ * @returns true se válido
+ */
+export async function validateMetaWebhookSignature(
+    rawBody: string,
+    signatureHeader: string | null,
+    appSecret: string
+): Promise<boolean> {
+    if (!signatureHeader || !appSecret) {
+        return false;
+    }
+
+    try {
+        const providedSignature = signatureHeader.replace(/^sha1=/, '');
+
+        const key = await crypto.subtle.importKey(
+            'raw',
+            new TextEncoder().encode(appSecret),
+            { name: 'HMAC', hash: 'SHA-1' },
+            false,
+            ['sign']
+        );
+
+        const signature = await crypto.subtle.sign(
+            'HMAC',
+            key,
+            new TextEncoder().encode(rawBody)
+        );
+
+        const computedHex = new TextDecoder().decode(hexEncode(new Uint8Array(signature)));
+
+        // Timing-safe comparison
+        if (computedHex.length !== providedSignature.length) return false;
+        let result = 0;
+        for (let i = 0; i < computedHex.length; i++) {
+            result |= computedHex.charCodeAt(i) ^ providedSignature.charCodeAt(i);
+        }
+        return result === 0;
+    } catch (error) {
+        console.error('[SHARED] Meta HMAC-SHA1 validation error:', error);
+        return false;
+    }
+}
+
+// ============================================
+// 🛡️ RATE LIMITING — In-memory por IP/instanceName
+// ============================================
+
+interface RateLimitEntry {
+    count: number;
+    resetAt: number;
+}
+
+const rateLimitStore = new Map<string, RateLimitEntry>();
+
+/**
+ * Rate limiter simples em memória.
+ * Limita requisições por chave (IP, instanceName, etc).
+ *
+ * @param key - Identificador único (IP, instance name, etc)
+ * @param maxRequests - Máximo de requests no período (default: 120)
+ * @param windowMs - Janela em milissegundos (default: 60000 = 1 minuto)
+ * @returns true se permitido, false se bloqueado
+ */
+export function checkRateLimit(
+    key: string,
+    maxRequests: number = 120,
+    windowMs: number = 60000
+): boolean {
+    const now = Date.now();
+    const entry = rateLimitStore.get(key);
+
+    // Limpa entries expirados periodicamente (a cada 100 checks)
+    if (rateLimitStore.size > 1000) {
+        for (const [k, v] of rateLimitStore) {
+            if (v.resetAt < now) rateLimitStore.delete(k);
+        }
+    }
+
+    if (!entry || entry.resetAt < now) {
+        // Nova janela
+        rateLimitStore.set(key, { count: 1, resetAt: now + windowMs });
+        return true;
+    }
+
+    entry.count++;
+    if (entry.count > maxRequests) {
+        console.warn(`[RATE-LIMIT] Blocked: ${key} (${entry.count}/${maxRequests} in window)`);
+        return false;
+    }
+
+    return true;
+}
+
+// ============================================
+// ✅ INPUT VALIDATION — Webhook Payload
+// ============================================
+
+/**
+ * Valida payload básico de webhook da UZAPI/Evolution.
+ * Retorna null se válido, ou string com erro se inválido.
+ */
+export function validateWebhookPayload(payload: any): string | null {
+    if (!payload || typeof payload !== 'object') {
+        return 'Payload must be a valid JSON object';
+    }
+
+    // instanceName é obrigatório e deve ser string curta
+    const instanceName = payload.instanceName;
+    if (instanceName !== undefined) {
+        if (typeof instanceName !== 'string') {
+            return 'instanceName must be a string';
+        }
+        if (instanceName.length > 100) {
+            return 'instanceName too long (max 100 chars)';
+        }
+        // Previne caracteres perigosos
+        if (/[<>"';&|`$]/.test(instanceName)) {
+            return 'instanceName contains invalid characters';
+        }
+    }
+
+    // message.text não pode exceder 50KB
+    const messageText = payload.message?.text || payload.message?.content?.text;
+    if (messageText && typeof messageText === 'string' && messageText.length > 50000) {
+        return 'message.text exceeds maximum length (50KB)';
+    }
+
+    return null; // Válido
+}
+
+/**
+ * Valida payload do Instagram/Meta webhook.
+ * Retorna null se válido, ou string com erro se inválido.
+ */
+export function validateInstagramPayload(payload: any): string | null {
+    if (!payload || typeof payload !== 'object') {
+        return 'Payload must be a valid JSON object';
+    }
+
+    if (payload.object !== 'instagram' && payload.object !== 'page') {
+        return `Invalid object type: ${payload.object}`;
+    }
+
+    if (!Array.isArray(payload.entry)) {
+        return 'Missing or invalid entry array';
+    }
+
+    if (payload.entry.length > 50) {
+        return 'Too many entries in payload (max 50)';
+    }
+
+    return null; // Válido
 }
