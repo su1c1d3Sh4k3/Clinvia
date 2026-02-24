@@ -60,10 +60,10 @@ export function SalesByPersonTables({ month, year }: SalesByPersonTablesProps) {
                             <Table>
                                 <TableHeader>
                                     <TableRow>
-                                        <TableHead>Atendente</TableHead>
-                                        <TableHead>Faturado</TableHead>
-                                        <TableHead>Qtd</TableHead>
-                                        <TableHead>Top Produto</TableHead>
+                                        <TableHead className="text-[#005AA8] dark:text-muted-foreground">Atendente</TableHead>
+                                        <TableHead className="text-[#005AA8] dark:text-muted-foreground">Faturado</TableHead>
+                                        <TableHead className="text-[#005AA8] dark:text-muted-foreground">Qtd</TableHead>
+                                        <TableHead className="text-[#005AA8] dark:text-muted-foreground">Top Produto</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -117,10 +117,10 @@ export function SalesByPersonTables({ month, year }: SalesByPersonTablesProps) {
                             <Table>
                                 <TableHeader>
                                     <TableRow>
-                                        <TableHead>Profissional</TableHead>
-                                        <TableHead>Faturado</TableHead>
-                                        <TableHead>Qtd</TableHead>
-                                        <TableHead>Top Produto</TableHead>
+                                        <TableHead className="text-[#005AA8] dark:text-muted-foreground">Profissional</TableHead>
+                                        <TableHead className="text-[#005AA8] dark:text-muted-foreground">Faturado</TableHead>
+                                        <TableHead className="text-[#005AA8] dark:text-muted-foreground">Qtd</TableHead>
+                                        <TableHead className="text-[#005AA8] dark:text-muted-foreground">Top Produto</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>

@@ -114,12 +114,12 @@ export function TicketList({ tickets, isLoading }: { tickets: SupportTicket[], i
             <Table>
                 <TableHeader>
                     <TableRow className="bg-muted/50 hover:bg-muted/50">
-                        <TableHead className="w-[300px]">Assunto</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Prioridade</TableHead>
-                        <TableHead>Dias em Aberto</TableHead>
-                        <TableHead>Solicitante</TableHead>
-                        <TableHead>Relato</TableHead>
+                        <TableHead className="w-[300px] text-[#005AA8] dark:text-muted-foreground">Assunto</TableHead>
+                        <TableHead className="text-[#005AA8] dark:text-muted-foreground">Status</TableHead>
+                        <TableHead className="text-[#005AA8] dark:text-muted-foreground">Prioridade</TableHead>
+                        <TableHead className="text-[#005AA8] dark:text-muted-foreground">Dias em Aberto</TableHead>
+                        <TableHead className="text-[#005AA8] dark:text-muted-foreground">Solicitante</TableHead>
+                        <TableHead className="text-[#005AA8] dark:text-muted-foreground">Relato</TableHead>
                         <TableHead className="w-[50px]"></TableHead>
                     </TableRow>
                 </TableHeader>

@@ -213,7 +213,7 @@ export function MacroFunnelsPanel() {
             const config = getFunnelConfig(funnel.name);
 
             return (
-                <div key={`${slotIndex}-${funnel.id}`} className="min-w-[220px] w-full max-w-[400px]">
+                <div key={`${slotIndex}-${funnel.id}`} className="min-w-[220px] w-full max-w-[400px] bg-white dark:bg-card border border-border/50 shadow-sm rounded-xl overflow-hidden">
                     <VerticalFunnel
                         title={funnel.name}
                         icon={config.icon}

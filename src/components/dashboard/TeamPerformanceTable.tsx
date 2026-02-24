@@ -89,12 +89,12 @@ export const TeamPerformanceTable = () => {
                 <Table>
                     <TableHeader className="bg-muted/50">
                         <TableRow>
-                            <TableHead className="w-16 text-center">Rank</TableHead>
-                            <TableHead>Atendente</TableHead>
-                            <TableHead className="w-[120px] text-center">Ativos (P/A)</TableHead>
-                            <TableHead className="w-1/4">Resolvidos</TableHead>
-                            <TableHead className="w-1/6">TMA (Média)</TableHead>
-                            <TableHead className="text-center w-[120px]">Qualidade</TableHead>
+                            <TableHead className="w-16 text-center text-[#005AA8] dark:text-muted-foreground">Rank</TableHead>
+                            <TableHead className="text-[#005AA8] dark:text-muted-foreground">Atendente</TableHead>
+                            <TableHead className="w-[120px] text-center text-[#005AA8] dark:text-muted-foreground">Ativos (P/A)</TableHead>
+                            <TableHead className="w-1/4 text-[#005AA8] dark:text-muted-foreground">Resolvidos</TableHead>
+                            <TableHead className="w-1/6 text-[#005AA8] dark:text-muted-foreground">TMA (Média)</TableHead>
+                            <TableHead className="text-center w-[120px] text-[#005AA8] dark:text-muted-foreground">Qualidade</TableHead>
                             <TableHead className="w-[100px]"></TableHead>
                         </TableRow>
                     </TableHeader>

@@ -767,12 +767,12 @@ const TransactionsSection = ({ startDate, endDate }: { startDate?: string; endDa
                                     <Table>
                                         <TableHeader>
                                             <TableRow>
-                                                <TableHead>Categoria</TableHead>
-                                                <TableHead>Item</TableHead>
-                                                <TableHead>Valor</TableHead>
-                                                <TableHead>Pagamento</TableHead>
-                                                <TableHead>Vencimento</TableHead>
-                                                <TableHead>Status</TableHead>
+                                                <TableHead className="text-[#005AA8] dark:text-muted-foreground">Categoria</TableHead>
+                                                <TableHead className="text-[#005AA8] dark:text-muted-foreground">Item</TableHead>
+                                                <TableHead className="text-[#005AA8] dark:text-muted-foreground">Valor</TableHead>
+                                                <TableHead className="text-[#005AA8] dark:text-muted-foreground">Pagamento</TableHead>
+                                                <TableHead className="text-[#005AA8] dark:text-muted-foreground">Vencimento</TableHead>
+                                                <TableHead className="text-[#005AA8] dark:text-muted-foreground">Status</TableHead>
                                                 <TableHead className="text-right">Ações</TableHead>
                                             </TableRow>
                                         </TableHeader>
@@ -835,12 +835,12 @@ const TransactionsSection = ({ startDate, endDate }: { startDate?: string; endDa
                                     <Table>
                                         <TableHeader>
                                             <TableRow>
-                                                <TableHead>Categoria</TableHead>
-                                                <TableHead>Item</TableHead>
-                                                <TableHead>Valor</TableHead>
-                                                <TableHead>Pagamento</TableHead>
-                                                <TableHead>Vencimento</TableHead>
-                                                <TableHead>Status</TableHead>
+                                                <TableHead className="text-[#005AA8] dark:text-muted-foreground">Categoria</TableHead>
+                                                <TableHead className="text-[#005AA8] dark:text-muted-foreground">Item</TableHead>
+                                                <TableHead className="text-[#005AA8] dark:text-muted-foreground">Valor</TableHead>
+                                                <TableHead className="text-[#005AA8] dark:text-muted-foreground">Pagamento</TableHead>
+                                                <TableHead className="text-[#005AA8] dark:text-muted-foreground">Vencimento</TableHead>
+                                                <TableHead className="text-[#005AA8] dark:text-muted-foreground">Status</TableHead>
                                                 <TableHead className="text-right">Ações</TableHead>
                                             </TableRow>
                                         </TableHeader>
@@ -903,13 +903,13 @@ const TransactionsSection = ({ startDate, endDate }: { startDate?: string; endDa
                                     <Table>
                                         <TableHeader>
                                             <TableRow>
-                                                <TableHead>Tipo</TableHead>
-                                                <TableHead>Colaborador</TableHead>
-                                                <TableHead>Salário</TableHead>
-                                                <TableHead>Comissão</TableHead>
-                                                <TableHead>Total</TableHead>
-                                                <TableHead>Referência</TableHead>
-                                                <TableHead>Status</TableHead>
+                                                <TableHead className="text-[#005AA8] dark:text-muted-foreground">Tipo</TableHead>
+                                                <TableHead className="text-[#005AA8] dark:text-muted-foreground">Colaborador</TableHead>
+                                                <TableHead className="text-[#005AA8] dark:text-muted-foreground">Salário</TableHead>
+                                                <TableHead className="text-[#005AA8] dark:text-muted-foreground">Comissão</TableHead>
+                                                <TableHead className="text-[#005AA8] dark:text-muted-foreground">Total</TableHead>
+                                                <TableHead className="text-[#005AA8] dark:text-muted-foreground">Referência</TableHead>
+                                                <TableHead className="text-[#005AA8] dark:text-muted-foreground">Status</TableHead>
                                                 <TableHead className="text-right">Ações</TableHead>
                                             </TableRow>
                                         </TableHeader>
@@ -975,13 +975,13 @@ const TransactionsSection = ({ startDate, endDate }: { startDate?: string; endDa
                                     <Table>
                                         <TableHeader>
                                             <TableRow>
-                                                <TableHead>Origem</TableHead>
-                                                <TableHead>Campanha</TableHead>
-                                                <TableHead>Investimento</TableHead>
-                                                <TableHead>Leads</TableHead>
-                                                <TableHead>Conversões</TableHead>
-                                                <TableHead>Custo/Lead</TableHead>
-                                                <TableHead>Status</TableHead>
+                                                <TableHead className="text-[#005AA8] dark:text-muted-foreground">Origem</TableHead>
+                                                <TableHead className="text-[#005AA8] dark:text-muted-foreground">Campanha</TableHead>
+                                                <TableHead className="text-[#005AA8] dark:text-muted-foreground">Investimento</TableHead>
+                                                <TableHead className="text-[#005AA8] dark:text-muted-foreground">Leads</TableHead>
+                                                <TableHead className="text-[#005AA8] dark:text-muted-foreground">Conversões</TableHead>
+                                                <TableHead className="text-[#005AA8] dark:text-muted-foreground">Custo/Lead</TableHead>
+                                                <TableHead className="text-[#005AA8] dark:text-muted-foreground">Status</TableHead>
                                                 <TableHead className="text-right">Ações</TableHead>
                                             </TableRow>
                                         </TableHeader>
@@ -1125,10 +1125,10 @@ const ReturnByPersonSection = () => {
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead>Atendente</TableHead>
-                                    <TableHead>Valor Gerado</TableHead>
-                                    <TableHead>Comissão</TableHead>
-                                    <TableHead>Transações</TableHead>
+                                    <TableHead className="text-[#005AA8] dark:text-muted-foreground">Atendente</TableHead>
+                                    <TableHead className="text-[#005AA8] dark:text-muted-foreground">Valor Gerado</TableHead>
+                                    <TableHead className="text-[#005AA8] dark:text-muted-foreground">Comissão</TableHead>
+                                    <TableHead className="text-[#005AA8] dark:text-muted-foreground">Transações</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -1189,10 +1189,10 @@ const ReturnByPersonSection = () => {
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead>Profissional</TableHead>
-                                    <TableHead>Valor Gerado</TableHead>
-                                    <TableHead>Comissão</TableHead>
-                                    <TableHead>Agendamentos</TableHead>
+                                    <TableHead className="text-[#005AA8] dark:text-muted-foreground">Profissional</TableHead>
+                                    <TableHead className="text-[#005AA8] dark:text-muted-foreground">Valor Gerado</TableHead>
+                                    <TableHead className="text-[#005AA8] dark:text-muted-foreground">Comissão</TableHead>
+                                    <TableHead className="text-[#005AA8] dark:text-muted-foreground">Agendamentos</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>

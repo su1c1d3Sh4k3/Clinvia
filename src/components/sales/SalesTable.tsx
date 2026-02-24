@@ -251,14 +251,14 @@ export function SalesTable({ month, year }: SalesTableProps) {
                             <Table>
                                 <TableHeader>
                                     <TableRow>
-                                        <TableHead>Categoria</TableHead>
-                                        <TableHead>Item</TableHead>
-                                        <TableHead>Valor</TableHead>
-                                        <TableHead>Pagamento</TableHead>
-                                        <TableHead>Data</TableHead>
-                                        <TableHead>Parcelas</TableHead>
-                                        <TableHead>Atendente</TableHead>
-                                        <TableHead>Profissional</TableHead>
+                                        <TableHead className="text-[#005AA8] dark:text-muted-foreground">Categoria</TableHead>
+                                        <TableHead className="text-[#005AA8] dark:text-muted-foreground">Item</TableHead>
+                                        <TableHead className="text-[#005AA8] dark:text-muted-foreground">Valor</TableHead>
+                                        <TableHead className="text-[#005AA8] dark:text-muted-foreground">Pagamento</TableHead>
+                                        <TableHead className="text-[#005AA8] dark:text-muted-foreground">Data</TableHead>
+                                        <TableHead className="text-[#005AA8] dark:text-muted-foreground">Parcelas</TableHead>
+                                        <TableHead className="text-[#005AA8] dark:text-muted-foreground">Atendente</TableHead>
+                                        <TableHead className="text-[#005AA8] dark:text-muted-foreground">Profissional</TableHead>
                                         <TableHead className="text-right">Ações</TableHead>
                                     </TableRow>
                                 </TableHeader>

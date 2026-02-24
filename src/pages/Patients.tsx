@@ -259,7 +259,7 @@ const Patients = () => {
                                 placeholder="Buscar por nome..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="pl-8 h-9 bg-white dark:bg-background border-0 dark:border"
+                                className="pl-8 h-9 bg-white dark:bg-background border border-[#D4D5D6] dark:border-border"
                             />
                         </div>
                     </div>

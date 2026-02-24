@@ -171,7 +171,7 @@ export function QueueColumn({ queueId, queueName, conversations, index }: QueueC
 
     return (
         <>
-            <div className="flex-shrink-0 flex flex-col h-full min-w-[340px] max-w-[340px] rounded-xl bg-[#F5F6F8] dark:bg-muted/20">
+            <div className="flex-shrink-0 flex flex-col h-full min-w-[340px] max-w-[340px] rounded-xl bg-[#F5F6F8] dark:bg-muted/20 border border-border/50">
                 {/* Column Header */}
                 <div className="p-4 flex flex-col gap-2">
                     <div className="flex justify-between items-center">

@@ -92,7 +92,7 @@ export function SalesCards({ month, year }: SalesCardsProps) {
             {cards.map((card, index) => (
                 <Card
                     key={index}
-                    className={`relative group overflow-hidden rounded-2xl bg-background/80 backdrop-blur-xl border-border/50 shadow-sm hover:shadow-md hover:border-border/80 transition-all duration-300 ${card.highlighted ? 'border-primary/50' : ''}`}
+                    className={`relative group overflow-hidden rounded-2xl bg-white dark:bg-card border border-border/50 shadow-sm hover:shadow-md hover:border-border/80 transition-all duration-300 ${card.highlighted ? 'border-primary/50' : ''}`}
                 >
                     <div className={`absolute inset-0 bg-gradient-to-br ${card.glowColor} via-transparent to-background/5 rounded-2xl opacity-50 group-hover:opacity-100 transition-opacity pointer-events-none blur-xl`} />
                     <div className="relative z-10">

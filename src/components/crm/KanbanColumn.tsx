@@ -12,7 +12,7 @@ export function KanbanColumn({ stage, deals }: KanbanColumnProps) {
     const totalValue = deals.reduce((sum, deal) => sum + Number(deal.value), 0);
 
     return (
-        <div className="flex flex-col h-full min-w-[280px] max-w-[280px] rounded-xl bg-[#F5F6F8] dark:bg-muted/20">
+        <div className="flex flex-col h-full min-w-[280px] max-w-[280px] rounded-xl bg-[#F5F6F8] dark:bg-muted/20 border border-border/50">
             <div className="p-4 flex flex-col gap-2">
                 <div className="flex justify-between items-center">
                     <div className="flex items-center gap-2 overflow-hidden">

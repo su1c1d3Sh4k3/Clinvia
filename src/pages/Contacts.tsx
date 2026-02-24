@@ -331,7 +331,7 @@ const Contacts = () => {
                                 setSelectedChannelFilter('all');
                                 setCurrentPage(1);
                             }}
-                            className={`h-8 ${selectedChannelFilter !== 'all' ? 'bg-white dark:bg-transparent border-0 dark:border' : ''}`}
+                            className={`h-8 ${selectedChannelFilter !== 'all' ? 'bg-white dark:bg-transparent border border-[#D4D5D6] dark:border-border' : ''}`}
                         >
                             Todos
                         </Button>
@@ -342,7 +342,7 @@ const Contacts = () => {
                                 setSelectedChannelFilter('whatsapp');
                                 setCurrentPage(1);
                             }}
-                            className={`h-8 gap-1 ${selectedChannelFilter !== 'whatsapp' ? 'bg-white dark:bg-transparent border-0 dark:border' : ''}`}
+                            className={`h-8 gap-1 ${selectedChannelFilter !== 'whatsapp' ? 'bg-white dark:bg-transparent border border-[#D4D5D6] dark:border-border' : ''}`}
                         >
                             <FaWhatsapp className="h-4 w-4 text-green-500" />
                             WhatsApp
@@ -354,7 +354,7 @@ const Contacts = () => {
                                 setSelectedChannelFilter('instagram');
                                 setCurrentPage(1);
                             }}
-                            className={`h-8 gap-1 ${selectedChannelFilter !== 'instagram' ? 'bg-white dark:bg-transparent border-0 dark:border' : ''}`}
+                            className={`h-8 gap-1 ${selectedChannelFilter !== 'instagram' ? 'bg-white dark:bg-transparent border border-[#D4D5D6] dark:border-border' : ''}`}
                         >
                             <FaInstagram className="h-4 w-4 text-pink-500" />
                             Instagram
@@ -372,14 +372,14 @@ const Contacts = () => {
                                         setSearchTerm(e.target.value);
                                         setCurrentPage(1);
                                     }}
-                                    className="pl-8 h-9 bg-white dark:bg-background border-0 dark:border"
+                                    className="pl-8 h-9 bg-white dark:bg-background border border-[#D4D5D6] dark:border-border"
                                 />
                             </div>
                             <Select value={selectedTagFilter} onValueChange={(value) => {
                                 setSelectedTagFilter(value);
                                 setCurrentPage(1);
                             }}>
-                                <SelectTrigger className="w-full sm:w-[180px] h-9 text-sm bg-white dark:bg-background border-0 dark:border">
+                                <SelectTrigger className="w-full sm:w-[180px] h-9 text-sm bg-white dark:bg-background border border-[#D4D5D6] dark:border-border">
                                     <SelectValue placeholder="Filtrar Tag" />
                                 </SelectTrigger>
                                 <SelectContent>
