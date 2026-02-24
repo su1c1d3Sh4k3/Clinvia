@@ -1,22 +1,26 @@
 -- ============================================
--- FIX: team_members RLS — USING(true) → isolamento por empresa
--- Problema: Qualquer autenticado podia ver TODOS os team_members de TODAS as empresas
--- Fix: Só vê membros da própria empresa (user_id = owner da empresa)
+-- FIX: team_members RLS — Remover policy com subquery auto-referencial
+--
+-- HISTORICO:
+--   1) Existia policy com USING(true) que permitia qualquer autenticado ver todos
+--   2) Tentamos substituir por policy com subquery em team_members (auto-referencial)
+--   3) Isso causou recursao RLS e impediu membros de verem seus proprios registros
+--   4) SOLUCAO: Remover policy problematica. A policy existente
+--      "Qualquer membro autenticado pode ver a equipe da mesma empresa"
+--      ja faz isolamento correto usando get_my_owner_id() (SECURITY DEFINER)
+--
+-- Policies finais em team_members:
+--   - "Apenas admins podem gerenciar membros" (ALL) -> is_admin() SECURITY DEFINER
+--   - "Membros podem atualizar o proprio perfil" (UPDATE) -> auth_user_id = auth.uid()
+--   - "Qualquer membro autenticado pode ver a equipe da mesma empresa" (SELECT) -> user_id = get_my_owner_id()
 -- ============================================
 
--- Remover policy permissiva
+-- Remover policy com USING(true) (caso ainda exista)
 DROP POLICY IF EXISTS "Qualquer membro autenticado pode ver a equipe" ON public.team_members;
 
--- Nova policy: Só vê membros da mesma empresa
-CREATE POLICY "Membros veem apenas equipe da propria empresa"
-ON public.team_members FOR SELECT
-TO authenticated
-USING (
-  -- Owner da empresa vê todos os seus membros
-  user_id = auth.uid()
-  -- Membro da equipe vê colegas da mesma empresa
-  OR user_id IN (
-    SELECT tm.user_id FROM public.team_members tm
-    WHERE tm.auth_user_id = auth.uid()
-  )
-);
+-- Remover policy auto-referencial (causava recursao RLS)
+DROP POLICY IF EXISTS "Membros veem apenas equipe da propria empresa" ON public.team_members;
+
+-- A policy "Qualquer membro autenticado pode ver a equipe da mesma empresa"
+-- ja existe e usa get_my_owner_id() (SECURITY DEFINER) para isolamento seguro.
+-- Nao precisa criar nenhuma policy nova.
