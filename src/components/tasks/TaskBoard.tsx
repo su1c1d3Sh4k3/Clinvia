@@ -418,7 +418,7 @@ export function TaskBoard({ boardId }: TaskBoardProps) {
 
                 {/* Priority 2: Description */}
                 {showDescription && task.description && (
-                    <div className="text-xs opacity-80 line-clamp-2 mt-1 text-[#1E2229]">
+                    <div className="text-xs opacity-80 line-clamp-2 mt-1 text-foreground">
                         {task.description}
                     </div>
                 )}
@@ -524,12 +524,12 @@ export function TaskBoard({ boardId }: TaskBoardProps) {
                             {/* Header */}
                             <div className={cn(
                                 "h-10 border-b flex flex-col items-center justify-center sticky top-0 bg-background z-20",
-                                isSameDay(day, new Date()) && "bg-[#00B0F0] text-[#1E2229]"
+                                isSameDay(day, new Date()) && "bg-primary text-primary-foreground"
                             )}>
                                 <span className="text-xs text-muted-foreground capitalize">{format(day, "EEEE", { locale: ptBR })}</span>
                                 <span className={cn(
                                     "text-sm font-bold h-6 w-6 flex items-center justify-center rounded-full",
-                                    isSameDay(day, new Date()) && "bg-[#00B0F0] dark:bg-[#1E2229] text-white"
+                                    isSameDay(day, new Date()) && "bg-primary dark:bg-primary text-primary-foreground"
                                 )}>
                                     {format(day, "d")}
                                 </span>
@@ -595,7 +595,7 @@ export function TaskBoard({ boardId }: TaskBoardProps) {
                                                         setIsTaskModalOpen(true);
                                                     }}
                                                 >
-                                                    <Pencil className="w-3 h-3 text-[#1E2229]" />
+                                                    <Pencil className="w-3 h-3 text-foreground" />
                                                 </div>
                                             )}
 

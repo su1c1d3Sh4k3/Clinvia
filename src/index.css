@@ -8,63 +8,78 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    --background: 0 0% 90%;
-    /* #e5e5e5 - Light Gray for better contrast */
-    --foreground: 220 15% 16%;
+    /* Background: #f6fafd - Soft blue-white */
+    --background: 207 67% 98%;
+    /* Foreground: #1c1c1c - Near black for max contrast */
+    --foreground: 0 0% 11%;
 
+    /* Card: White */
     --card: 0 0% 100%;
-    --card-foreground: 220 15% 16%;
+    /* Card Foreground: #0a2f5c - Navy for high contrast */
+    --card-foreground: 211 82% 20%;
 
+    /* Popover: White */
     --popover: 0 0% 100%;
-    --popover-foreground: 220 15% 16%;
+    /* Popover Foreground: Black */
+    --popover-foreground: 0 0% 0%;
 
-    /* Primary: #00B1F2 (Cyan Blue) -> 196 100% 47% */
-    --primary: 196 100% 47%;
-    --primary-foreground: 0 0% 100%;
+    /* Primary: #2564ff (Blue) */
+    --primary: 224 100% 57%;
+    /* Primary Foreground: #f4fbfd */
+    --primary-foreground: 194 69% 97%;
 
-    /* Secondary: #005FAA (Deep Blue) -> 208 100% 33% */
-    --secondary: 208 100% 33%;
-    --secondary-foreground: 0 0% 100%;
+    /* Secondary: #dfe4ec (Light gray-blue) */
+    --secondary: 218 25% 90%;
+    /* Secondary Foreground: #1b58a1 (Dark blue) */
+    --secondary-foreground: 212 70% 37%;
 
-    /* Tertiary/Muted: #3D7FB8 (Muted Blue) -> 208 50% 48% */
-    --muted: 208 50% 48%;
-    --muted-foreground: 220 15% 16%;
+    /* Muted: #dfe4ec */
+    --muted: 218 25% 90%;
+    /* Muted Foreground: #4a4a4a */
+    --muted-foreground: 0 0% 29%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 220 15% 16%;
+    /* Accent: #dfe4ec */
+    --accent: 218 25% 90%;
+    /* Accent Foreground: Black */
+    --accent-foreground: 0 0% 0%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    /* Destructive: #ee1717 */
+    --destructive: 0 88% 51%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 196 100% 47%;
-    /* Primary ring */
+    /* Border: #e3e3e3 */
+    --border: 0 0% 89%;
+    /* Input: ~oklch(0.922) */
+    --input: 0 0% 90%;
+    /* Ring: ~oklch(0.708) */
+    --ring: 0 0% 64%;
 
     --radius: 1rem;
-    /* rounded-2xl = 1rem usually, or 0.5rem is rounded-lg. User asked for rounded-2xl which is 1rem */
 
-    /* Sidebar specific */
-    --sidebar-background: 208 100% 33%;
-    /* Secondary color as background */
-    --sidebar-foreground: 0 0% 100%;
-    --sidebar-primary: 196 100% 47%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 208 50% 48%;
-    /* Tertiary */
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 208 50% 48%;
-    --sidebar-ring: 196 100% 47%;
+    /* Sidebar: Light theme (near-white background, dark text) */
+    --sidebar-background: 0 0% 97%;
+    --sidebar-foreground: 0 0% 8%;
+    --sidebar-primary: 0 0% 13%;
+    --sidebar-primary-foreground: 0 0% 97%;
+    --sidebar-accent: 0 0% 95%;
+    --sidebar-accent-foreground: 0 0% 13%;
+    --sidebar-border: 0 0% 89%;
+    --sidebar-ring: 0 0% 64%;
+    --sidebar-nav: 0 0% 97%;
 
-    --chat-agent: 196 100% 47%;
-    /* Primary */
+    /* Chat */
+    --chat-agent: 224 100% 57%;
     --chat-customer: 0 0% 100%;
     --glassmorphism-bg: 0 0% 100% / 0.1;
-    --sidebar-nav: 208 100% 33%;
     --chart-axis: 0 0% 0%;
-    /* Black */
-    --chat-background: 37 100% 96%;
-    /* #FFF7EA - Warm Cream for chat */
+    --chat-background: 207 67% 98%;
+
+    /* Chart colors (blue gradient) */
+    --chart-1: 232 47% 72%;
+    --chart-2: 237 48% 50%;
+    --chart-3: 240 50% 43%;
+    --chart-4: 241 55% 36%;
+    --chart-5: 242 48% 29%;
   }
 
   .dark {
@@ -136,7 +151,7 @@ All colors MUST be HSL.
 :root:not(.dark) [data-radix-popper-content-wrapper] input,
 :root:not(.dark) [data-radix-popper-content-wrapper] textarea,
 :root:not(.dark) [data-radix-popper-content-wrapper] select {
-  border-color: #1E2229 !important;
+  border-color: hsl(var(--foreground)) !important;
 }
 
 
@@ -453,7 +468,7 @@ All colors MUST be HSL.
   position: absolute;
   inset: -6px;
   border-radius: 50%;
-  background: radial-gradient(circle, hsl(196 100% 47% / 0.45) 0%, transparent 70%);
+  background: radial-gradient(circle, hsl(var(--primary) / 0.45) 0%, transparent 70%);
   animation: glow-pulse 2.5s ease-in-out infinite;
   pointer-events: none;
 }
@@ -461,16 +476,16 @@ All colors MUST be HSL.
 /* Selected conversation card glow */
 .conversation-card-selected {
   box-shadow:
-    0 0 0 2px hsl(196 100% 47%),
-    0 0 20px 4px hsl(196 100% 47% / 0.2),
-    0 4px 16px hsl(196 100% 47% / 0.1);
+    0 0 0 2px hsl(var(--primary)),
+    0 0 20px 4px hsl(var(--primary) / 0.2),
+    0 4px 16px hsl(var(--primary) / 0.1);
 }
 
 /* Dashboard metric number count-up shimmer */
 .metric-value-active {
   background: linear-gradient(90deg,
       currentColor 25%,
-      hsl(196 100% 80%) 50%,
+      hsl(var(--primary) / 0.6) 50%,
       currentColor 75%);
   background-size: 200% auto;
   -webkit-background-clip: text;
@@ -495,6 +510,6 @@ All colors MUST be HSL.
   }
 
   .conversation-card-selected {
-    box-shadow: 0 0 0 2px hsl(196 100% 47%) !important;
+    box-shadow: 0 0 0 2px hsl(var(--primary)) !important;
   }
 }

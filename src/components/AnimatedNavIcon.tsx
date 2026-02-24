@@ -37,25 +37,25 @@ const DashboardIcon = ({ isActive, size }: { isActive: boolean; size: number }) 
         {/* Top-left quadrant */}
         <rect
             x="3" y="3" width="7" height="7" rx="1"
-            className={cn("transition-all duration-300", isActive && "fill-[#00B1F2]/20")}
+            className={cn("transition-all duration-300", isActive && "fill-primary/20")}
             style={isActive ? { animation: "scale-in 0.3s cubic-bezier(0.34,1.56,0.64,1) both" } : undefined}
         />
         {/* Top-right quadrant */}
         <rect
             x="14" y="3" width="7" height="7" rx="1"
-            className={cn("transition-all duration-300", isActive && "fill-[#00B1F2]/20")}
+            className={cn("transition-all duration-300", isActive && "fill-primary/20")}
             style={isActive ? { animation: "scale-in 0.4s cubic-bezier(0.34,1.56,0.64,1) both" } : undefined}
         />
         {/* Bottom-left quadrant */}
         <rect
             x="3" y="14" width="7" height="7" rx="1"
-            className={cn("transition-all duration-300", isActive && "fill-[#00B1F2]/20")}
+            className={cn("transition-all duration-300", isActive && "fill-primary/20")}
             style={isActive ? { animation: "scale-in 0.5s cubic-bezier(0.34,1.56,0.64,1) both" } : undefined}
         />
         {/* Bottom-right quadrant */}
         <rect
             x="14" y="14" width="7" height="7" rx="1"
-            className={cn("transition-all duration-300", isActive && "fill-[#00B1F2]/20")}
+            className={cn("transition-all duration-300", isActive && "fill-primary/20")}
             style={isActive ? { animation: "scale-in 0.6s cubic-bezier(0.34,1.56,0.64,1) both" } : undefined}
         />
     </svg>
@@ -76,7 +76,7 @@ const InboxIcon = ({ isActive, hasUnread, size }: { isActive: boolean; hasUnread
         {/* Chat bubble body */}
         <path
             d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
-            className={cn("transition-all duration-300", isActive && "fill-[#00B1F2]/20")}
+            className={cn("transition-all duration-300", isActive && "fill-primary/20")}
             strokeDasharray={hasUnread ? "60" : undefined}
             strokeDashoffset={hasUnread ? "0" : undefined}
         />
@@ -116,7 +116,7 @@ const CrmIcon = ({ isActive, size }: { isActive: boolean; size: number }) => (
         {/* Briefcase body */}
         <rect
             x="2" y="7" width="20" height="14" rx="2"
-            className={cn("transition-all duration-300", isActive && "fill-[#00B1F2]/15")}
+            className={cn("transition-all duration-300", isActive && "fill-primary/15")}
         />
         {/* Briefcase top handle */}
         <path
@@ -161,7 +161,7 @@ const QueuesIcon = ({ isActive, size }: { isActive: boolean; size: number }) => 
             style={isActive ? { animation: "icon-draw 0.3s ease-out 0.2s both" } : undefined}
             strokeDasharray={isActive ? "20" : undefined}
         />
-        <circle cx="4" cy="6" r="1.5" fill={isActive ? "#00B1F2" : "currentColor"} className="transition-colors duration-300" />
+        <circle cx="4" cy="6" r="1.5" className={cn("transition-colors duration-300", isActive ? "fill-primary" : "fill-current")} />
         <circle cx="4" cy="12" r="1.5" fill="currentColor" />
         <circle cx="4" cy="18" r="1.5" fill="currentColor" />
     </svg>
@@ -182,7 +182,7 @@ const AutomacaoIcon = ({ isActive, size }: { isActive: boolean; size: number }) 
         {/* Wrench */}
         <path
             d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"
-            className={cn("transition-all duration-300", isActive && "fill-[#00B1F2]/15")}
+            className={cn("transition-all duration-300", isActive && "fill-primary/15")}
             style={isActive ? { animation: "icon-draw 0.4s ease-out both", strokeDasharray: "80", strokeDashoffset: "0" } : undefined}
         />
     </svg>
@@ -200,11 +200,11 @@ const OperacoesIcon = ({ isActive, size }: { isActive: boolean; size: number }) 
         strokeLinejoin="round"
         aria-hidden="true"
     >
-        <rect x="3" y="3" width="5" height="5" rx="1" className={cn(isActive && "fill-[#00B1F2]/20 stroke-[#00B1F2]")} />
-        <rect x="10" y="3" width="5" height="5" rx="1" className={cn(isActive && "fill-[#00B1F2]/10")} style={{ opacity: isActive ? 0.7 : 1 }} />
+        <rect x="3" y="3" width="5" height="5" rx="1" className={cn(isActive && "fill-primary/20 stroke-primary")} />
+        <rect x="10" y="3" width="5" height="5" rx="1" className={cn(isActive && "fill-primary/10")} style={{ opacity: isActive ? 0.7 : 1 }} />
         <rect x="17" y="3" width="4" height="5" rx="1" style={{ opacity: isActive ? 0.4 : 1 }} />
         <rect x="3" y="10" width="5" height="5" rx="1" style={{ opacity: isActive ? 0.6 : 1 }} />
-        <rect x="10" y="10" width="11" height="5" rx="1" className={cn(isActive && "fill-[#00B1F2]/10")} style={{ opacity: isActive ? 0.8 : 1 }} />
+        <rect x="10" y="10" width="11" height="5" rx="1" className={cn(isActive && "fill-primary/10")} style={{ opacity: isActive ? 0.8 : 1 }} />
         <rect x="3" y="17" width="18" height="4" rx="1" style={{ opacity: isActive ? 0.5 : 1 }} />
     </svg>
 );
@@ -223,7 +223,7 @@ const AdminIcon = ({ isActive, size }: { isActive: boolean; size: number }) => (
     >
         <path
             d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"
-            className={cn("transition-all duration-300", isActive && "fill-[#00B1F2]/15")}
+            className={cn("transition-all duration-300", isActive && "fill-primary/15")}
         />
         <path d="M12 8v4l3 3" strokeLinecap="round" strokeDasharray={isActive ? "30" : undefined}
             style={isActive ? { animation: "icon-draw 0.5s ease-out both" } : undefined}
@@ -269,11 +269,11 @@ export const AnimatedNavIcon = ({
             <div
                 className={cn(
                     "transition-all duration-300",
-                    isActive ? "text-[#00B1F2]" : "text-white/70"
+                    isActive ? "text-primary" : "text-sidebar-foreground/70 dark:text-white/70"
                 )}
                 style={
                     isActive
-                        ? { filter: "drop-shadow(0 0 4px rgba(0,177,242,0.6))" }
+                        ? { filter: "drop-shadow(0 0 4px hsl(var(--primary) / 0.6))" }
                         : undefined
                 }
             >

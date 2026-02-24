@@ -244,30 +244,30 @@ export const NavigationSidebar = () => {
         onClick={() => navigate(child.path!)}
         className={cn(
           "w-full flex items-center gap-3 py-3 transition-all duration-200 relative group/item",
-          "text-white/70 hover:text-white hover:bg-[#024a84] dark:hover:bg-[#1E2229]",
+          "text-sidebar-foreground/70 dark:text-white/70 hover:text-sidebar-foreground dark:hover:text-white hover:bg-sidebar-accent dark:hover:bg-[#1E2229]",
           "pl-6 pr-4"
         )}
       >
         {/* Submenu vertical line with light beam effect - flush left */}
-        <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-[#272C35]">
+        <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-sidebar-border dark:bg-[#272C35]">
           {/* Light beam when active */}
           {isActive && (
             <div
-              className="absolute inset-0 w-0.5 bg-[#00B0F0]"
-              style={{ boxShadow: '0 0 6px 1px rgba(0, 176, 240, 0.5)' }}
+              className="absolute inset-0 w-0.5 bg-primary"
+              style={{ boxShadow: '0 0 6px 1px hsl(var(--primary) / 0.5)' }}
             />
           )}
           {/* Light beam on hover */}
           <div
-            className="absolute inset-0 w-0.5 bg-[#00B0F0] opacity-0 group-hover/item:opacity-100 transition-opacity"
-            style={{ boxShadow: '0 0 6px 1px rgba(0, 176, 240, 0.5)' }}
+            className="absolute inset-0 w-0.5 bg-primary opacity-0 group-hover/item:opacity-100 transition-opacity"
+            style={{ boxShadow: '0 0 6px 1px hsl(var(--primary) / 0.5)' }}
           />
         </div>
 
         <div className="relative shrink-0">
           <ChildIcon className={cn(
             "w-[18px] h-[18px] transition-colors",
-            isActive && "text-[#00B0F0]"
+            isActive && "text-primary"
           )} />
           <NotificationBadge count={crmBadgeCount} />
         </div>
@@ -308,19 +308,19 @@ export const NavigationSidebar = () => {
           onClick={() => handleNavClick(item)}
           className={cn(
             "w-full flex items-center gap-3 py-3 transition-all duration-200 relative group/item",
-            "text-white/70 hover:text-white",
+            "text-sidebar-foreground/70 dark:text-white/70 hover:text-sidebar-foreground dark:hover:text-white",
             isItemActive
-              ? "bg-[#024a84]/80 dark:bg-[#22262E] hover:bg-[#024a84] dark:hover:bg-[#22262E]"
-              : "hover:bg-[#024a84] dark:hover:bg-[#1E2229]",
-            hasChildren && (isOpen || hasActiveInChildren) && "bg-[#024a84] dark:bg-[#22262E]",
+              ? "bg-sidebar-accent dark:bg-[#22262E] hover:bg-sidebar-accent dark:hover:bg-[#22262E]"
+              : "hover:bg-sidebar-accent dark:hover:bg-[#1E2229]",
+            hasChildren && (isOpen || hasActiveInChildren) && "bg-sidebar-accent dark:bg-[#22262E]",
             "px-4"
           )}
         >
           {/* Active left accent bar */}
           {isItemActive && (
             <div
-              className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full bg-[#00B1F2]"
-              style={{ boxShadow: "0 0 8px 2px rgba(0,177,242,0.6)" }}
+              className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full bg-primary"
+              style={{ boxShadow: "0 0 8px 2px hsl(var(--primary) / 0.6)" }}
             />
           )}
 
@@ -334,8 +334,8 @@ export const NavigationSidebar = () => {
             ) : (
               <Icon className={cn(
                 "w-[18px] h-[18px] transition-colors",
-                isItemActive && "text-[#00B0F0]",
-                isItemActive && "drop-shadow-[0_0_4px_rgba(0,177,242,0.6)]"
+                isItemActive && "text-primary",
+                isItemActive && "drop-shadow-[0_0_4px_hsl(var(--primary)/0.6)]"
               )} />
             )}
             <NotificationBadge count={badgeCount} />
@@ -343,7 +343,7 @@ export const NavigationSidebar = () => {
 
           <span className={cn(
             "whitespace-nowrap text-[15px] font-medium flex-1 text-left transition-opacity duration-300",
-            isItemActive && "text-white",
+            isItemActive && "text-sidebar-foreground dark:text-white",
             isMobile ? "opacity-100" : "opacity-0 group-hover/sidebar:opacity-100"
           )}>
             {item.label}
@@ -365,7 +365,7 @@ export const NavigationSidebar = () => {
             isMobile ? "block" : "hidden group-hover/sidebar:block"
           )}>
             {/* Continuous vertical line for all submenu items - flush left */}
-            <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-[#272C35]" />
+            <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-sidebar-border dark:bg-[#272C35]" />
             {item.children!.map(child => renderSubmenuItem(child))}
           </div>
         )}
@@ -386,12 +386,12 @@ export const NavigationSidebar = () => {
                 <button
                   key={child.id}
                   onClick={() => navigate(child.path!)}
-                  className="w-full flex items-center justify-center py-3 transition-all duration-200 hover:bg-[#024a84] dark:hover:bg-[#1E2229]"
+                  className="w-full flex items-center justify-center py-3 transition-all duration-200 hover:bg-sidebar-accent dark:hover:bg-[#1E2229]"
                 >
                   <div className="relative">
                     <ChildIcon className={cn(
-                      "w-[18px] h-[18px] transition-colors text-white/50",
-                      childIsActive && "text-[#00B0F0]"
+                      "w-[18px] h-[18px] transition-colors text-sidebar-foreground/50 dark:text-white/50",
+                      childIsActive && "text-primary"
                     )} />
                     <NotificationBadge count={crmCollapsedBadge} />
                   </div>
@@ -443,7 +443,7 @@ export const NavigationSidebar = () => {
         onMouseLeave={() => !isMobile && setIsHovered(false)}
       >
         {/* Logo Header */}
-        <div className="flex items-center justify-center gap-2 px-3 py-2 border-b border-white/10 overflow-hidden">
+        <div className="flex items-center justify-center gap-2 px-3 py-2 border-b border-sidebar-border dark:border-white/10 overflow-hidden">
           {/* Logo icon - always visible */}
           <img
             src="/logo-icon.png"
@@ -467,10 +467,10 @@ export const NavigationSidebar = () => {
         </div>
 
         {/* Fixed Bottom Section */}
-        <div className="flex flex-col py-4 border-t border-white/10">
+        <div className="flex flex-col py-4 border-t border-sidebar-border dark:border-white/10">
           <button
             onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            className="flex items-center gap-3 py-3 px-4 transition-all duration-200 hover:bg-[#024a84] dark:hover:bg-[#1E2229] text-white/70 hover:text-white"
+            className="flex items-center gap-3 py-3 px-4 transition-all duration-200 hover:bg-sidebar-accent dark:hover:bg-[#1E2229] text-sidebar-foreground/70 dark:text-white/70 hover:text-sidebar-foreground dark:hover:text-white"
           >
             <div className="shrink-0">
               {theme === "dark" ? (
@@ -489,7 +489,7 @@ export const NavigationSidebar = () => {
 
           <button
             onClick={handleLogout}
-            className="flex items-center gap-3 py-3 px-4 transition-all duration-200 hover:bg-[#024a84] dark:hover:bg-[#1E2229] text-red-500"
+            className="flex items-center gap-3 py-3 px-4 transition-all duration-200 hover:bg-sidebar-accent dark:hover:bg-[#1E2229] text-red-500"
           >
             <div className="shrink-0">
               <LogOut className="w-[18px] h-[18px]" />
@@ -503,29 +503,29 @@ export const NavigationSidebar = () => {
           </button>
 
           {/* User Profile & Theme Toggle */}
-          <div className="p-4 border-t border-[#1E2229] dark:border-[#272C35]">
+          <div className="p-4 border-t border-sidebar-border dark:border-[#272C35]">
             <div className={cn(
               "flex items-center gap-3 transition-all duration-300",
               isMobile ? "" : "justify-center group-hover/sidebar:justify-start"
             )}>
               <div className="relative group/avatar">
-                <Avatar className="h-9 w-9 border-2 border-[#1E2229] dark:border-[#272C35] transition-all duration-300 group-hover/avatar:border-[#00B1F2] group-hover/avatar:shadow-[0_0_12px_2px_rgba(0,177,242,0.4)]">
+                <Avatar className="h-9 w-9 border-2 border-sidebar-border dark:border-[#272C35] transition-all duration-300 group-hover/avatar:border-primary group-hover/avatar:shadow-[0_0_12px_2px_hsl(var(--primary)/0.4)]">
                   <AvatarImage src={currentTeamMember?.profile_pic_url || undefined} />
-                  <AvatarFallback className="bg-[#024a84] text-white text-xs">
+                  <AvatarFallback className="bg-primary text-primary-foreground text-xs">
                     {currentTeamMember?.name?.substring(0, 2).toUpperCase() || "US"}
                   </AvatarFallback>
                 </Avatar>
-                <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-[#005FAA] rounded-full animate-gentle-float" />
+                <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-sidebar dark:border-[#005FAA] rounded-full animate-gentle-float" />
               </div>
 
               <div className={cn(
                 "flex flex-col overflow-hidden transition-all duration-300",
                 isMobile ? "w-auto opacity-100" : "w-0 opacity-0 group-hover/sidebar:w-auto group-hover/sidebar:opacity-100"
               )}>
-                <span className="text-sm font-medium text-white/90 truncate max-w-[120px]">
+                <span className="text-sm font-medium text-sidebar-foreground/90 dark:text-white/90 truncate max-w-[120px]">
                   {currentTeamMember?.name || "Usuário"}
                 </span>
-                <span className="text-xs text-white/50 truncate max-w-[120px]">
+                <span className="text-xs text-sidebar-foreground/50 dark:text-white/50 truncate max-w-[120px]">
                   {userRole === 'admin' ? 'Administrador' : 'Atendente'}
                 </span>
               </div>
@@ -536,7 +536,7 @@ export const NavigationSidebar = () => {
               )}>
                 <button
                   onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                  className="p-1.5 rounded-lg text-white/70 hover:text-white hover:bg-[#1E2229]/50 transition-colors"
+                  className="p-1.5 rounded-lg text-sidebar-foreground/70 dark:text-white/70 hover:text-sidebar-foreground dark:hover:text-white hover:bg-sidebar-accent dark:hover:bg-[#1E2229]/50 transition-colors"
                 >
                   {theme === 'dark' ? (
                     <svg
