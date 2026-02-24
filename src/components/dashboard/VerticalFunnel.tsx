@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, useRef, useState, useEffect } from "react";
 import { ArrowDown, DollarSign, Settings2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CRMStage } from "@/types/crm";
@@ -40,15 +40,15 @@ const mainStageBgs = [
     "bg-[#3093FA]",
 ];
 
-// Cores dos estágios para funis secundários (cinza-azulado progressivamente mais claro, +18R/+17G/+15B por etapa)
+// Cores dos estágios para funis secundários (cinza-azulado progressivamente mais claro)
 const otherStageBgs = [
-    "bg-[#838FAB]",  // 131, 143, 171
-    "bg-[#95A0BA]",  // 149, 160, 186
-    "bg-[#A7B1C9]",  // 167, 177, 201
-    "bg-[#B9C2D8]",  // 185, 194, 216
-    "bg-[#CBD3E7]",  // 203, 211, 231
-    "bg-[#DDE4F6]",  // 221, 228, 246
-    "bg-[#EFF5FF]",  // 239, 245, 255
+    "bg-[#838FAB]",
+    "bg-[#95A0BA]",
+    "bg-[#A7B1C9]",
+    "bg-[#B9C2D8]",
+    "bg-[#CBD3E7]",
+    "bg-[#DDE4F6]",
+    "bg-[#EFF5FF]",
 ];
 
 const themeStyles = {
@@ -99,6 +99,10 @@ const themeStyles = {
     },
 };
 
+// Altura fixa de cada estágio em px e raio de canto
+const STAGE_H = 84;
+const CORNER_R = 10;
+
 export function VerticalFunnel({
     title,
     icon,
@@ -117,53 +121,82 @@ export function VerticalFunnel({
 }: VerticalFunnelProps) {
     const theme = themeStyles[colorTheme];
 
-    // Calcula a largura visível de um estágio (100% → 60% mínimo, -8% por índice)
+    // Mede a largura real do container para gerar paths em pixels absolutos
+    const stagesContainerRef = useRef<HTMLDivElement>(null);
+    const [containerWidth, setContainerWidth] = useState(280);
+
+    useEffect(() => {
+        const el = stagesContainerRef.current;
+        if (!el) return;
+        const ro = new ResizeObserver(([entry]) => {
+            setContainerWidth(entry.contentRect.width);
+        });
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, []);
+
+    // Largura visível de cada estágio: 100% → 60% mínimo, -8% por índice
     const getVisibleWidth = (i: number) => Math.max(60, 100 - i * 8);
 
-    // Gera clipPath trapézoide com cantos biselados (bevel) para simular bordas arredondadas.
-    // Base do estágio N = topo do estágio N+1, incluindo a última etapa.
-    const getStageClipPath = (index: number, total: number) => {
-        const wTop = getVisibleWidth(index);
-        const wBottom = getVisibleWidth(index + 1); // sempre aplica -8%, incluindo última etapa
-        const lTop = (100 - wTop) / 2;
-        const lBottom = (100 - wBottom) / 2;
+    /**
+     * Gera clip-path com cantos verdadeiramente arredondados via bezier quadrático (CSS path()).
+     * Para cada vértice do trapézio, recua CORNER_R px ao longo de cada aresta adjacente
+     * e usa o vértice original como ponto de controle — criando cantos suaves em todos os 4 cantos.
+     * Usa coordenadas em pixels absolutos do container (via ResizeObserver).
+     */
+    const getStageClipPath = (index: number) => {
+        const w = containerWidth;
+        const h = STAGE_H;
+        const r = CORNER_R;
 
-        const isFirst = index === 0;
-        const isLast = index === total - 1;
+        const lTop    = (100 - getVisibleWidth(index))     / 2;
+        const lBottom = (100 - getVisibleWidth(index + 1)) / 2;
 
-        // hr: bevel horizontal (% da largura do container)
-        // vr: bevel vertical (% da altura do bloco)
-        const hr = 2.5;
-        const vr = 14;
+        // Vértices do trapézio em pixels: TL → TR → BR → BL
+        const pts: [number, number][] = [
+            [lTop    / 100 * w, 0],
+            [(1 - lTop    / 100) * w, 0],
+            [(1 - lBottom / 100) * w, h],
+            [lBottom / 100 * w, h],
+        ];
 
-        if (isFirst && isLast) {
-            // Estágio único: todos os 4 cantos biselados
-            return `polygon(
-                ${lTop + hr}% 0%, ${100 - lTop - hr}% 0%,
-                ${100 - lTop}% ${vr}%,
-                ${100 - lBottom}% ${100 - vr}%, ${100 - lBottom - hr}% 100%,
-                ${lBottom + hr}% 100%, ${lBottom}% ${100 - vr}%,
-                ${lTop}% ${vr}%
-            )`;
-        } else if (isFirst) {
-            // Primeiro estágio: cantos superiores biselados
-            return `polygon(
-                ${lTop + hr}% 0%, ${100 - lTop - hr}% 0%,
-                ${100 - lTop}% ${vr}%,
-                ${100 - lBottom}% 100%, ${lBottom}% 100%,
-                ${lTop}% ${vr}%
-            )`;
-        } else if (isLast) {
-            // Último estágio: cantos inferiores biselados
-            return `polygon(
-                ${lTop}% 0%, ${100 - lTop}% 0%,
-                ${100 - lBottom}% ${100 - vr}%, ${100 - lBottom - hr}% 100%,
-                ${lBottom + hr}% 100%, ${lBottom}% ${100 - vr}%
-            )`;
-        } else {
-            // Estágios intermediários: sem bevel (encaixam perfeitamente nos vizinhos)
-            return `polygon(${lTop}% 0%, ${100 - lTop}% 0%, ${100 - lBottom}% 100%, ${lBottom}% 100%)`;
+        const n = pts.length;
+        const f = (v: number) => v.toFixed(2);
+        const parts: string[] = [];
+
+        for (let i = 0; i < n; i++) {
+            const prev = pts[(i - 1 + n) % n];
+            const curr = pts[i];
+            const next = pts[(i + 1) % n];
+
+            // Vetor unitário: do vértice atual para o anterior (borda de entrada)
+            const d1x = prev[0] - curr[0], d1y = prev[1] - curr[1];
+            const len1 = Math.hypot(d1x, d1y);
+            const u1x = d1x / len1, u1y = d1y / len1;
+
+            // Vetor unitário: do vértice atual para o próximo (borda de saída)
+            const d2x = next[0] - curr[0], d2y = next[1] - curr[1];
+            const len2 = Math.hypot(d2x, d2y);
+            const u2x = d2x / len2, u2y = d2y / len2;
+
+            // Raio efetivo: nunca maior que metade da aresta mais curta
+            const rEff = Math.min(r, len1 / 2, len2 / 2);
+
+            // Ponto ao longo da borda de entrada, rEff antes do vértice
+            const p1x = curr[0] + u1x * rEff, p1y = curr[1] + u1y * rEff;
+            // Ponto ao longo da borda de saída, rEff após o vértice
+            const p2x = curr[0] + u2x * rEff, p2y = curr[1] + u2y * rEff;
+
+            if (i === 0) {
+                parts.push(`M ${f(p1x)} ${f(p1y)}`);
+            } else {
+                parts.push(`L ${f(p1x)} ${f(p1y)}`);
+            }
+            // Bezier quadrático: vértice original como ponto de controle → canto arredondado
+            parts.push(`Q ${f(curr[0])} ${f(curr[1])} ${f(p2x)} ${f(p2y)}`);
         }
+
+        return `path('${parts.join(' ')} Z')`;
     };
 
     // Posiciona o badge dentro da área visível de cada estágio (canto sup. direito)
@@ -236,13 +269,13 @@ export function VerticalFunnel({
             </div>
 
             {/* Estágios do Funil */}
-            <div className="flex-1 flex flex-col items-center justify-start gap-0 w-full mt-2">
+            <div ref={stagesContainerRef} className="flex-1 flex flex-col items-center justify-start gap-0 w-full mt-2">
                 {stages.map((metric, index) => {
                     const bgClass = theme.stageBgs[Math.min(index, theme.stageBgs.length - 1)];
 
                     return (
                         <div key={metric.stage.id} className="w-full flex flex-col items-center group">
-                            {/* Badge de conversão (acima do estágio, exceto o primeiro) */}
+                            {/* Badge de conversão entre estágios */}
                             {index > 0 && metric.conversionRate !== null && (
                                 <div className="z-10 -my-2 flex items-center justify-center">
                                     <div className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-background text-foreground shadow-sm border border-border flex items-center gap-1 opacity-90 group-hover:opacity-100 transition-opacity">
@@ -252,7 +285,7 @@ export function VerticalFunnel({
                                 </div>
                             )}
 
-                            {/* Bloco do Estágio — largura total com clipPath trapézoide */}
+                            {/* Bloco do Estágio — trapézio com cantos arredondados via path() */}
                             <div
                                 className={cn(
                                     "relative flex flex-col items-center justify-center py-3 px-2 shadow-sm transition-all duration-300 group-hover:brightness-110",
@@ -260,8 +293,8 @@ export function VerticalFunnel({
                                 )}
                                 style={{
                                     width: '100%',
-                                    minHeight: '80px',
-                                    clipPath: getStageClipPath(index, stages.length),
+                                    height: `${STAGE_H}px`,
+                                    clipPath: getStageClipPath(index),
                                 }}
                             >
                                 <span className={cn(
@@ -276,7 +309,7 @@ export function VerticalFunnel({
                                 )}>
                                     {metric.historyCount.toLocaleString('pt-BR')}
                                 </span>
-                                {/* Badge posicionado dentro da área visível do trapézio */}
+                                {/* Badge de oportunidades atuais no estágio */}
                                 <div
                                     className={cn(
                                         "absolute top-2 flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold",
@@ -295,7 +328,6 @@ export function VerticalFunnel({
 
             {/* Ganho / Perdido */}
             <div className="grid grid-cols-2 gap-2 mt-4 items-end">
-                {/* Ganho */}
                 {hasWonStage && (
                     <div className="flex flex-col items-center justify-center p-3 rounded-xl bg-white dark:bg-white/5 border border-green-500/40 dark:border-green-500/30">
                         <span className="text-green-600 dark:text-green-500 text-xs font-bold uppercase mb-1 flex items-center gap-1">
@@ -308,7 +340,6 @@ export function VerticalFunnel({
                     </div>
                 )}
 
-                {/* Perdido */}
                 <div className={cn(
                     "flex flex-col items-center justify-center p-3 rounded-xl bg-white dark:bg-white/5 border border-red-500/40 dark:border-red-500/30",
                     !hasWonStage && "col-span-2"
