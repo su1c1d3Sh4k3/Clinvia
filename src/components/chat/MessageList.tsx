@@ -335,7 +335,7 @@ export const MessageList = ({
                     {/* Wrapper gives space for the badge below the bubble */}
                     <div className={cn("relative", reactionEmojis.length > 0 && "mb-3")}>
                         <div className={cn(
-                            "flex flex-col items-end gap-0",
+                            "flex flex-col gap-0",
                             msg.message_type === 'sticker' ? "" : "rounded-lg p-3 overflow-hidden min-w-0 break-words shadow-sm",
                             msg.message_type !== 'sticker' && (msg.direction === "outbound" ? "bg-[#DCF7C5] text-gray-800 dark:bg-[#044740] dark:text-white" : "bg-white dark:bg-[hsl(var(--chat-customer))] text-gray-800 dark:text-foreground")
                         )}>
