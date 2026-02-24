@@ -316,8 +316,9 @@ export const ChatArea = ({
 
   const uploadFile = async (file: File) => {
     try {
+      if (!conversationId) throw new Error("No conversation selected");
       const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-      const filePath = `${Date.now()}_${safeName}`;
+      const filePath = `${conversationId}/${Date.now()}_${safeName}`;
       const { error } = await supabase.storage.from('media').upload(filePath, file);
       if (error) throw error;
       const { data } = supabase.storage.from('media').getPublicUrl(filePath);
