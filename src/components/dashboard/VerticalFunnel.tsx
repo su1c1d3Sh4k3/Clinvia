@@ -40,15 +40,15 @@ const mainStageBgs = [
     "bg-[#3093FA]",
 ];
 
-// Cores dos estágios para funis secundários (cinza-azulado progressivamente mais claro)
+// Cores dos estágios para funis secundários (cinza-azulado progressivamente mais claro, +18R/+17G/+15B por etapa)
 const otherStageBgs = [
-    "bg-[#838FAB]",
-    "bg-[#929EBA]",
-    "bg-[#A1ADC9]",
-    "bg-[#B0BCD8]",
-    "bg-[#BFCBE7]",
-    "bg-[#CEDAF6]",
-    "bg-[#DDE9FF]",
+    "bg-[#838FAB]",  // 131, 143, 171
+    "bg-[#95A0BA]",  // 149, 160, 186
+    "bg-[#A7B1C9]",  // 167, 177, 201
+    "bg-[#B9C2D8]",  // 185, 194, 216
+    "bg-[#CBD3E7]",  // 203, 211, 231
+    "bg-[#DDE4F6]",  // 221, 228, 246
+    "bg-[#EFF5FF]",  // 239, 245, 255
 ];
 
 const themeStyles = {
@@ -117,11 +117,23 @@ export function VerticalFunnel({
 }: VerticalFunnelProps) {
     const theme = themeStyles[colorTheme];
 
-    // Largura decrescente por estágio: 100% → 60% (mínimo)
-    const getStageWidth = (index: number) => {
-        const reduceBy = index * 8;
-        const width = Math.max(60, 100 - reduceBy);
-        return `${width}%`;
+    // Calcula a largura visível de um estágio (100% → 60% mínimo, -8% por índice)
+    const getVisibleWidth = (i: number) => Math.max(60, 100 - i * 8);
+
+    // Gera clipPath trapézoide: base do estágio N = topo do estágio N+1
+    // Isso cria o efeito funil contínuo e sem lacunas visuais entre etapas
+    const getStageClipPath = (index: number, total: number) => {
+        const wTop = getVisibleWidth(index);
+        const wBottom = index < total - 1 ? getVisibleWidth(index + 1) : wTop;
+        const lTop = (100 - wTop) / 2;
+        const lBottom = (100 - wBottom) / 2;
+        return `polygon(${lTop}% 0%, ${100 - lTop}% 0%, ${100 - lBottom}% 100%, ${lBottom}% 100%)`;
+    };
+
+    // Posiciona o badge dentro da área visível de cada estágio (canto sup. direito)
+    const getBadgeRight = (index: number) => {
+        const leftOffset = (100 - getVisibleWidth(index)) / 2;
+        return `calc(${leftOffset}% + 8px)`;
     };
 
     return (
@@ -188,7 +200,7 @@ export function VerticalFunnel({
             </div>
 
             {/* Estágios do Funil */}
-            <div className="flex-1 flex flex-col items-center justify-start gap-1.5 w-full mt-2">
+            <div className="flex-1 flex flex-col items-center justify-start gap-0 w-full mt-2">
                 {stages.map((metric, index) => {
                     const bgClass = theme.stageBgs[Math.min(index, theme.stageBgs.length - 1)];
 
@@ -204,15 +216,16 @@ export function VerticalFunnel({
                                 </div>
                             )}
 
-                            {/* Bloco do Estágio */}
+                            {/* Bloco do Estágio — largura total com clipPath trapézoide */}
                             <div
                                 className={cn(
-                                    "relative flex flex-col items-center justify-center py-3 px-2 shadow-sm transition-all duration-300 group-hover:brightness-110 rounded-2xl",
+                                    "relative flex flex-col items-center justify-center py-3 px-2 shadow-sm transition-all duration-300 group-hover:brightness-110",
                                     bgClass
                                 )}
                                 style={{
-                                    width: getStageWidth(index),
+                                    width: '100%',
                                     minHeight: '80px',
+                                    clipPath: getStageClipPath(index, stages.length),
                                 }}
                             >
                                 <span className={cn(
@@ -227,12 +240,13 @@ export function VerticalFunnel({
                                 )}>
                                     {metric.historyCount.toLocaleString('pt-BR')}
                                 </span>
-                                {/* Badge com quantidade atual no estágio */}
+                                {/* Badge posicionado dentro da área visível do trapézio */}
                                 <div
                                     className={cn(
-                                        "absolute top-2 right-2 flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold",
+                                        "absolute top-2 flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold",
                                         theme.badgeClass
                                     )}
+                                    style={{ right: getBadgeRight(index) }}
                                     title="Oportunidades atuais no estágio"
                                 >
                                     {metric.dealsInStage}
