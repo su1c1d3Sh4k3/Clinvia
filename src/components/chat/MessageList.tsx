@@ -343,6 +343,11 @@ export const MessageList = ({
                             {(msg as any).quoted_body && <QuotedMessage quotedBody={(msg as any).quoted_body} quotedSender={(msg as any).quoted_sender} isOutbound={msg.direction === "outbound"} />}
 
                             {msg.message_type === 'image' && msg.media_url && <LazyMedia type="image" src={msg.media_url} alt="Imagem" />}
+                            {msg.message_type === 'image' && !!((msg as any).caption || msg.body) && (
+                                <p className="text-sm break-words [overflow-wrap:anywhere] whitespace-pre-wrap mt-1 px-1">
+                                    <HighlightText text={(msg as any).caption || msg.body || ''} highlight={searchTerm} />
+                                </p>
+                            )}
                             {msg.message_type === 'audio' && msg.media_url && (
                                 <div className="flex flex-col gap-1 w-full min-w-[240px] max-w-[340px] sm:max-w-[400px] my-1">
                                     <CustomAudioPlayer
@@ -354,6 +359,11 @@ export const MessageList = ({
                                 </div>
                             )}
                             {msg.message_type === 'video' && msg.media_url && <LazyMedia type="video" src={msg.media_url} />}
+                            {msg.message_type === 'video' && !!((msg as any).caption || msg.body) && (
+                                <p className="text-sm break-words [overflow-wrap:anywhere] whitespace-pre-wrap mt-1 px-1">
+                                    <HighlightText text={(msg as any).caption || msg.body || ''} highlight={searchTerm} />
+                                </p>
+                            )}
                             {/* Sticker Rendering - no background */}
                             {msg.message_type === 'sticker' && msg.media_url && (
                                 <img
