@@ -19,7 +19,6 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
-    AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -28,6 +27,7 @@ import { useLocation } from "react-router-dom";
 const CRM = () => {
     const location = useLocation();
     const [selectedFunnelId, setSelectedFunnelId] = useState<string | null>(null);
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const queryClient = useQueryClient();
 
     const { data: funnels, isLoading } = useQuery({
@@ -61,6 +61,7 @@ const CRM = () => {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["crm-funnels"] });
             setSelectedFunnelId(null);
+            setDeleteDialogOpen(false);
             toast.success("Funil excluído com sucesso!");
         },
         onError: () => toast.error("Erro ao excluir funil"),
@@ -87,7 +88,6 @@ const CRM = () => {
         const checkAuth = async () => {
             const { data } = await supabase.auth.getUser();
             console.log("Current User ID:", data.user?.id);
-            // toast.info(`User ID: ${data.user?.id}`); // Uncomment to see on screen
         };
         checkAuth();
     }, []);
@@ -119,36 +119,16 @@ const CRM = () => {
                                     isSystemFunnel={selectedFunnel?.is_system ?? false}
                                 />
                             )}
+                            {/* Botão sem portal — AlertDialog é sempre montado separadamente */}
                             {selectedFunnel && !selectedFunnel.is_system && (
-                                <AlertDialog>
-                                    <AlertDialogTrigger asChild>
-                                        <Button
-                                            variant="outline"
-                                            size="icon"
-                                            className="h-8 md:h-9 w-8 md:w-9 text-destructive border-destructive/30 hover:bg-destructive/10"
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                    </AlertDialogTrigger>
-                                    <AlertDialogContent>
-                                        <AlertDialogHeader>
-                                            <AlertDialogTitle>Excluir funil?</AlertDialogTitle>
-                                            <AlertDialogDescription>
-                                                Esta ação não pode ser desfeita. O funil "{selectedFunnel.name}" e todas as suas negociações serão excluídos permanentemente.
-                                            </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <AlertDialogFooter>
-                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                            <AlertDialogAction
-                                                onClick={() => deleteFunnelMutation.mutate(selectedFunnelId!)}
-                                                className="bg-destructive hover:bg-destructive/90"
-                                                disabled={deleteFunnelMutation.isPending}
-                                            >
-                                                Excluir
-                                            </AlertDialogAction>
-                                        </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                </AlertDialog>
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-8 md:h-9 w-8 md:w-9 text-destructive border-destructive/30 hover:bg-destructive/10"
+                                    onClick={() => setDeleteDialogOpen(true)}
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                </Button>
                             )}
                         </div>
                     )}
@@ -159,6 +139,31 @@ const CRM = () => {
                     <CreateDealModal defaultFunnelId={selectedFunnelId || undefined} />
                 </div>
             </div>
+
+            {/* AlertDialog sempre montado fora de condicionais — evita conflito de portals
+                do Radix UI ao trocar funil (erro removeChild) */}
+            <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Excluir funil?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Esta ação não pode ser desfeita. O funil "{selectedFunnel?.name}" e todas as suas negociações serão excluídos permanentemente.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={() => {
+                                if (selectedFunnelId) deleteFunnelMutation.mutate(selectedFunnelId);
+                            }}
+                            className="bg-destructive hover:bg-destructive/90"
+                            disabled={deleteFunnelMutation.isPending}
+                        >
+                            Excluir
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
 
             {isLoading ? (
                 <div className="flex-1 flex items-center justify-center">
