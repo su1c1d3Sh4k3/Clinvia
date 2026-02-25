@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { CreateFunnelModal } from "@/components/crm/CreateFunnelModal";
 import { ManageStagesModal } from "@/components/crm/ManageStagesModal";
@@ -9,11 +9,26 @@ import { CRMFilters } from "@/components/crm/CRMFilters";
 import { CRMFunnel } from "@/types/crm";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { useLocation } from "react-router-dom";
 
 const CRM = () => {
     const location = useLocation();
     const [selectedFunnelId, setSelectedFunnelId] = useState<string | null>(null);
+    const queryClient = useQueryClient();
 
     const { data: funnels, isLoading } = useQuery({
         queryKey: ["crm-funnels"],
@@ -33,6 +48,22 @@ const CRM = () => {
         responsibleId: null,
         dateRange: undefined,
         dateFilterType: 'all',
+    });
+
+    const deleteFunnelMutation = useMutation({
+        mutationFn: async (id: string) => {
+            const { error } = await supabase
+                .from("crm_funnels" as any)
+                .delete()
+                .eq("id", id);
+            if (error) throw error;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["crm-funnels"] });
+            setSelectedFunnelId(null);
+            toast.success("Funil excluído com sucesso!");
+        },
+        onError: () => toast.error("Erro ao excluir funil"),
     });
 
     // Se vier ?funnel=ID da URL (ex: Dashboard), seleciona o funil correspondente
@@ -61,6 +92,8 @@ const CRM = () => {
         checkAuth();
     }, []);
 
+    const selectedFunnel = funnels?.find(f => f.id === selectedFunnelId);
+
     return (
         <div className="px-3 md:px-6 pt-4 md:pt-6 h-screen flex flex-col overflow-hidden">
             <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 mb-4 md:mb-6 flex-shrink-0">
@@ -80,7 +113,43 @@ const CRM = () => {
                                     ))}
                                 </SelectContent>
                             </Select>
-                            {selectedFunnelId && <ManageStagesModal funnelId={selectedFunnelId} />}
+                            {selectedFunnelId && (
+                                <ManageStagesModal
+                                    funnelId={selectedFunnelId}
+                                    isSystemFunnel={selectedFunnel?.is_system ?? false}
+                                />
+                            )}
+                            {selectedFunnel && !selectedFunnel.is_system && (
+                                <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            size="icon"
+                                            className="h-8 md:h-9 w-8 md:w-9 text-destructive border-destructive/30 hover:bg-destructive/10"
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                            <AlertDialogTitle>Excluir funil?</AlertDialogTitle>
+                                            <AlertDialogDescription>
+                                                Esta ação não pode ser desfeita. O funil "{selectedFunnel.name}" e todas as suas negociações serão excluídos permanentemente.
+                                            </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                            <AlertDialogAction
+                                                onClick={() => deleteFunnelMutation.mutate(selectedFunnelId!)}
+                                                className="bg-destructive hover:bg-destructive/90"
+                                                disabled={deleteFunnelMutation.isPending}
+                                            >
+                                                Excluir
+                                            </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                </AlertDialog>
+                            )}
                         </div>
                     )}
                 </div>

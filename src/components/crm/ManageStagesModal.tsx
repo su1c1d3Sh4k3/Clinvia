@@ -20,9 +20,10 @@ import { Label } from "@/components/ui/label";
 
 interface ManageStagesModalProps {
     funnelId: string;
+    isSystemFunnel: boolean;
 }
 
-export function ManageStagesModal({ funnelId }: ManageStagesModalProps) {
+export function ManageStagesModal({ funnelId, isSystemFunnel }: ManageStagesModalProps) {
     const [open, setOpen] = useState(false);
     const [newStageName, setNewStageName] = useState("");
     const [newStageStagnation, setNewStageStagnation] = useState("0");
@@ -188,123 +189,175 @@ export function ManageStagesModal({ funnelId }: ManageStagesModalProps) {
                     <DialogTitle>Gerenciar Etapas</DialogTitle>
                 </DialogHeader>
 
-                <div className="flex gap-2 mb-4 items-end">
-                    <div className="flex-1">
-                        <Label htmlFor="stage-name" className="text-xs mb-1 block">Nome</Label>
-                        <Input
-                            id="stage-name"
-                            placeholder="Nome da nova etapa"
-                            value={newStageName}
-                            onChange={(e) => setNewStageName(e.target.value)}
-                        />
+                {/* Formulário de criação de etapa — apenas para funis do usuário */}
+                {!isSystemFunnel && (
+                    <div className="flex gap-2 mb-4 items-end">
+                        <div className="flex-1">
+                            <Label htmlFor="stage-name" className="text-xs mb-1 block">Nome</Label>
+                            <Input
+                                id="stage-name"
+                                placeholder="Nome da nova etapa"
+                                value={newStageName}
+                                onChange={(e) => setNewStageName(e.target.value)}
+                            />
+                        </div>
+                        <div className="w-24">
+                            <Label htmlFor="stage-stagnation" className="text-xs mb-1 block">Estagnação (dias)</Label>
+                            <Input
+                                id="stage-stagnation"
+                                type="number"
+                                min="0"
+                                max="30"
+                                placeholder="Dias"
+                                value={newStageStagnation}
+                                onChange={(e) => setNewStageStagnation(e.target.value)}
+                            />
+                        </div>
+                        <Button onClick={handleAddStage} disabled={addStageMutation.isPending}>
+                            <Plus className="h-4 w-4" />
+                        </Button>
                     </div>
-                    <div className="w-24">
-                        <Label htmlFor="stage-stagnation" className="text-xs mb-1 block">Estagnação (dias)</Label>
-                        <Input
-                            id="stage-stagnation"
-                            type="number"
-                            min="0"
-                            max="30"
-                            placeholder="Dias"
-                            value={newStageStagnation}
-                            onChange={(e) => setNewStageStagnation(e.target.value)}
-                        />
-                    </div>
-                    <Button onClick={handleAddStage} disabled={addStageMutation.isPending}>
-                        <Plus className="h-4 w-4" />
-                    </Button>
-                </div>
+                )}
 
                 <div className="space-y-2 max-h-[400px] overflow-y-auto">
                     {isLoading ? (
                         <p className="text-center text-muted-foreground">Carregando...</p>
                     ) : (
-                        <DragDropContext onDragEnd={handleOnDragEnd}>
-                            <Droppable droppableId="stages">
-                                {(provided) => (
-                                    <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-2">
-                                        {stages?.filter(s => !s.is_system).map((stage, index) => (
-                                            <Draggable key={stage.id} draggableId={stage.id} index={index}>
-                                                {(provided) => (
-                                                    <div
-                                                        ref={provided.innerRef}
-                                                        {...provided.draggableProps}
-                                                        className="flex items-center justify-between p-3 bg-muted text-primary-foreground rounded-md"
-                                                    >
-                                                        <div className="flex items-center gap-2">
-                                                            <div {...provided.dragHandleProps}>
-                                                                <GripVertical className="h-4 w-4 text-primary-foreground/70 cursor-grab" />
-                                                            </div>
-                                                            <div className="flex items-center gap-2">
-                                                                <input
-                                                                    type="color"
-                                                                    value={stage.color || "#000000"}
-                                                                    onChange={(e) => updateStageMutation.mutate({ id: stage.id, color: e.target.value })}
-                                                                    className="w-6 h-6 p-0 border-0 rounded cursor-pointer bg-transparent"
-                                                                    title="Alterar cor da etapa"
-                                                                />
-                                                                <span className="text-sm font-medium">{stage.name}</span>
-                                                            </div>
-                                                        </div>
-                                                        <div className="flex items-center gap-1">
-                                                            <Popover>
-                                                                <PopoverTrigger asChild>
-                                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-primary-foreground/70">
-                                                                        <Clock className={`h-4 w-4 ${stage.stagnation_limit_days && stage.stagnation_limit_days > 0 ? "text-yellow-500" : ""}`} />
-                                                                    </Button>
-                                                                </PopoverTrigger>
-                                                                <PopoverContent className="w-60">
-                                                                    <div className="space-y-2">
-                                                                        <h4 className="font-medium leading-none">Estagnação</h4>
-                                                                        <p className="text-sm text-muted-foreground">
-                                                                            Defina o limite de dias para considerar esta etapa estagnada (0-30).
-                                                                        </p>
-                                                                        <div className="flex items-center gap-2">
-                                                                            <Input
-                                                                                type="number"
-                                                                                min="0"
-                                                                                max="30"
-                                                                                defaultValue={stage.stagnation_limit_days || 0}
-                                                                                onChange={(e) => {
-                                                                                    const val = parseInt(e.target.value);
-                                                                                    if (!isNaN(val)) {
-                                                                                        updateStageMutation.mutate({ id: stage.id, stagnation_limit_days: val });
-                                                                                    }
-                                                                                }}
-                                                                            />
-                                                                            <span className="text-sm text-muted-foreground">dias</span>
-                                                                        </div>
-                                                                    </div>
-                                                                </PopoverContent>
-                                                            </Popover>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                onClick={() => deleteStageMutation.mutate(stage.id)}
-                                                                className="h-8 w-8 text-destructive hover:text-destructive"
+                        <>
+                            {/* Etapas do usuário — com drag, cor, estagnação e delete */}
+                            {!isSystemFunnel && (
+                                <DragDropContext onDragEnd={handleOnDragEnd}>
+                                    <Droppable droppableId="stages">
+                                        {(provided) => (
+                                            <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-2">
+                                                {stages?.filter(s => !s.is_system).map((stage, index) => (
+                                                    <Draggable key={stage.id} draggableId={stage.id} index={index}>
+                                                        {(provided) => (
+                                                            <div
+                                                                ref={provided.innerRef}
+                                                                {...provided.draggableProps}
+                                                                className="flex items-center justify-between p-3 bg-muted text-foreground rounded-md"
                                                             >
-                                                                <Trash2 className="h-4 w-4" />
-                                                            </Button>
+                                                                <div className="flex items-center gap-2">
+                                                                    <div {...provided.dragHandleProps}>
+                                                                        <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <input
+                                                                            type="color"
+                                                                            value={stage.color || "#000000"}
+                                                                            onChange={(e) => updateStageMutation.mutate({ id: stage.id, color: e.target.value })}
+                                                                            className="w-6 h-6 p-0 border-0 rounded cursor-pointer bg-transparent"
+                                                                            title="Alterar cor da etapa"
+                                                                        />
+                                                                        <span className="text-sm font-medium text-foreground">{stage.name}</span>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex items-center gap-1">
+                                                                    <Popover>
+                                                                        <PopoverTrigger asChild>
+                                                                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                                                                                <Clock className={`h-4 w-4 ${stage.stagnation_limit_days && stage.stagnation_limit_days > 0 ? "text-yellow-500" : "text-muted-foreground"}`} />
+                                                                            </Button>
+                                                                        </PopoverTrigger>
+                                                                        <PopoverContent className="w-60">
+                                                                            <div className="space-y-2">
+                                                                                <h4 className="font-medium leading-none">Estagnação</h4>
+                                                                                <p className="text-sm text-muted-foreground">
+                                                                                    Defina o limite de dias para considerar esta etapa estagnada (0-30).
+                                                                                </p>
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <Input
+                                                                                        type="number"
+                                                                                        min="0"
+                                                                                        max="30"
+                                                                                        defaultValue={stage.stagnation_limit_days || 0}
+                                                                                        onChange={(e) => {
+                                                                                            const val = parseInt(e.target.value);
+                                                                                            if (!isNaN(val)) {
+                                                                                                updateStageMutation.mutate({ id: stage.id, stagnation_limit_days: val });
+                                                                                            }
+                                                                                        }}
+                                                                                    />
+                                                                                    <span className="text-sm text-muted-foreground">dias</span>
+                                                                                </div>
+                                                                            </div>
+                                                                        </PopoverContent>
+                                                                    </Popover>
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        onClick={() => deleteStageMutation.mutate(stage.id)}
+                                                                        className="h-8 w-8 text-destructive hover:text-destructive"
+                                                                    >
+                                                                        <Trash2 className="h-4 w-4" />
+                                                                    </Button>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </Draggable>
+                                                ))}
+                                                {provided.placeholder}
+                                            </div>
+                                        )}
+                                    </Droppable>
+                                </DragDropContext>
+                            )}
+
+                            {/* Etapas do sistema — com cor e estagnação editáveis */}
+                            <div className={isSystemFunnel ? "" : "pt-4 border-t"}>
+                                {!isSystemFunnel && (
+                                    <p className="text-sm text-muted-foreground mb-2">Etapas do Sistema (Fixas)</p>
+                                )}
+                                <div className="space-y-2">
+                                    {stages?.filter(s => s.is_system).map((stage) => (
+                                        <div key={stage.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-md">
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="color"
+                                                    value={stage.color || "#3b82f6"}
+                                                    onChange={(e) => updateStageMutation.mutate({ id: stage.id, color: e.target.value })}
+                                                    className="w-6 h-6 p-0 border-0 rounded cursor-pointer bg-transparent"
+                                                    title="Alterar cor da etapa"
+                                                />
+                                                <span className="text-sm font-medium text-foreground">{stage.name}</span>
+                                            </div>
+                                            <Popover>
+                                                <PopoverTrigger asChild>
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                                                        <Clock className={`h-4 w-4 ${stage.stagnation_limit_days && stage.stagnation_limit_days > 0 ? "text-yellow-500" : "text-muted-foreground"}`} />
+                                                    </Button>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-60">
+                                                    <div className="space-y-2">
+                                                        <h4 className="font-medium leading-none">Estagnação</h4>
+                                                        <p className="text-sm text-muted-foreground">
+                                                            Defina o limite de dias para considerar esta etapa estagnada (0-30).
+                                                        </p>
+                                                        <div className="flex items-center gap-2">
+                                                            <Input
+                                                                type="number"
+                                                                min="0"
+                                                                max="30"
+                                                                defaultValue={stage.stagnation_limit_days || 0}
+                                                                onChange={(e) => {
+                                                                    const val = parseInt(e.target.value);
+                                                                    if (!isNaN(val)) {
+                                                                        updateStageMutation.mutate({ id: stage.id, stagnation_limit_days: val });
+                                                                    }
+                                                                }}
+                                                            />
+                                                            <span className="text-sm text-muted-foreground">dias</span>
                                                         </div>
                                                     </div>
-                                                )}
-                                            </Draggable>
-                                        ))}
-                                        {provided.placeholder}
-                                    </div>
-                                )}
-                            </Droppable>
-                        </DragDropContext>
-                    )}
-
-                    <div className="pt-4 border-t">
-                        <p className="text-sm text-muted-foreground mb-2">Etapas do Sistema (Fixas)</p>
-                        {stages?.filter(s => s.is_system).map((stage) => (
-                            <div key={stage.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-md opacity-70">
-                                <span>{stage.name}</span>
+                                                </PopoverContent>
+                                            </Popover>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
-                        ))}
-                    </div>
+                        </>
+                    )}
                 </div>
             </DialogContent>
         </Dialog>
