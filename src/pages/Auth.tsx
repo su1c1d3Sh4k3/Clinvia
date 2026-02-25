@@ -259,13 +259,13 @@ const Auth = () => {
             <TabsList className="grid w-full grid-cols-2 bg-white/10 border border-white/10 mb-6">
               <TabsTrigger
                 value="login"
-                className="data-[state=active]:bg-white data-[state=active]:text-secondary text-white/70 hover:text-white transition-all"
+                className="data-[state=active]:bg-white data-[state=active]:text-[#005AA8] text-white/70 hover:text-white transition-all"
               >
                 Login
               </TabsTrigger>
               <TabsTrigger
                 value="signup"
-                className="data-[state=active]:bg-white data-[state=active]:text-secondary text-white/70 hover:text-white transition-all"
+                className="data-[state=active]:bg-white data-[state=active]:text-[#005AA8] text-white/70 hover:text-white transition-all"
               >
                 Cadastro
               </TabsTrigger>
