@@ -211,7 +211,7 @@ const Auth = () => {
           <div className="absolute top-[40%] -right-[10%] w-[40%] h-[40%] rounded-full bg-tertiary/30 blur-[100px]" />
         </div>
 
-        <Card className="w-full max-w-md border-white/20 bg-white/10 backdrop-blur-xl shadow-2xl relative z-10">
+        <Card className="w-full max-w-md border-white/10 bg-[#0F172A]/95 backdrop-blur-xl shadow-2xl relative z-10">
           <CardContent className="pt-8 pb-8 text-center">
             <CheckCircle className="w-16 h-16 text-green-400 mx-auto mb-4" />
             <h2 className="text-2xl font-bold text-white mb-2">Cadastro Enviado!</h2>
@@ -241,7 +241,7 @@ const Auth = () => {
         <div className="absolute -bottom-[10%] left-[20%] w-[30%] h-[30%] rounded-full bg-white/10 blur-[80px]" />
       </div>
 
-      <Card className="w-full max-w-md border-white/20 bg-white/10 backdrop-blur-xl shadow-2xl relative z-10">
+      <Card className="w-full max-w-md border-white/10 bg-[#0F172A]/95 backdrop-blur-xl shadow-2xl relative z-10">
         <CardHeader className="text-center space-y-2 pb-6">
           <div className="mx-auto mb-2">
             <img
