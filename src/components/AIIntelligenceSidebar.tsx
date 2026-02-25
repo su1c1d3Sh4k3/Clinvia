@@ -672,7 +672,7 @@ export const AIIntelligenceSidebar = ({ conversationId, onFollowUpMessageClick, 
                         key={idx}
                         className={`text-xs p-2 rounded ${msg.role === "user"
                           ? "bg-primary text-primary-foreground ml-4"
-                          : "bg-muted text-primary-foreground mr-4"
+                          : "bg-muted text-foreground mr-4"
                           }`}
                       >
                         {msg.content}
