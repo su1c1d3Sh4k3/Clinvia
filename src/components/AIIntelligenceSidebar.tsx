@@ -250,7 +250,7 @@ export const AIIntelligenceSidebar = ({ conversationId, onFollowUpMessageClick, 
   const satisfactionScore = analysis?.sentiment_score ?? 5;
 
   return (
-    <div className="w-full md:w-[320px] md:h-screen md:border-l border-[#1E2229]/20 dark:border-border bg-white dark:bg-background/50 backdrop-blur-sm flex flex-col p-4 gap-4 overflow-y-auto">
+    <div className="w-full md:w-[320px] md:h-screen md:border-l border-[#1E2229]/20 dark:border-border bg-white dark:bg-background/50 backdrop-blur-sm flex flex-col pt-4 px-4 pb-20 gap-4 overflow-y-auto">
       <CopilotSettingsModal open={isSettingsOpen} onOpenChange={setIsSettingsOpen} />
 
       {/* CRM Integration - Hide for Groups */}
