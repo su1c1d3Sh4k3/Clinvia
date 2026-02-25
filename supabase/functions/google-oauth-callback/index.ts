@@ -210,7 +210,24 @@ serve(async (req) => {
               .maybeSingle();
 
             if (existingConn?.calendar_id && existingConn.calendar_id !== "primary") {
-              console.log(`[GOOGLE OAUTH] ${prof.name}: already has calendar ${existingConn.calendar_id}, skipping`);
+              // Reconexão: sub-calendário já existe — apenas reativar e atualizar tokens
+              const { error: reactivateErr } = await supabase
+                .from("professional_google_calendars")
+                .update({
+                  google_account_email: googleEmail,
+                  refresh_token,
+                  access_token,
+                  token_expiry: tokenExpiry,
+                  sync_mode: clinicSyncMode,
+                  is_active: true,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", existingConn.id);
+              if (reactivateErr) {
+                console.error(`[GOOGLE OAUTH] ${prof.name}: reactivate error:`, reactivateErr.message);
+              } else {
+                console.log(`[GOOGLE OAUTH] ${prof.name}: reactivated + tokens updated → calendar_id=${existingConn.calendar_id}`);
+              }
               continue;
             }
 
