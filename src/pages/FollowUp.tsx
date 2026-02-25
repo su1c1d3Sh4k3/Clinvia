@@ -93,12 +93,12 @@ export default function FollowUp() {
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead className="text-[#005AA8] dark:text-muted-foreground min-w-[100px]">Nome</TableHead>
-                                    <TableHead className="text-[#005AA8] dark:text-muted-foreground">Tempo</TableHead>
-                                    <TableHead className="text-[#005AA8] dark:text-muted-foreground hidden md:table-cell">Mensagem</TableHead>
-                                    <TableHead className="text-[#005AA8] dark:text-muted-foreground hidden sm:table-cell">Atendente</TableHead>
-                                    <TableHead className="text-[#005AA8] dark:text-muted-foreground hidden lg:table-cell">Categoria</TableHead>
-                                    <TableHead className="text-[#005AA8] dark:text-muted-foreground text-right">Ações</TableHead>
+                                    <TableHead className="text-foreground dark:text-muted-foreground min-w-[100px]">Nome</TableHead>
+                                    <TableHead className="text-foreground dark:text-muted-foreground">Tempo</TableHead>
+                                    <TableHead className="text-foreground dark:text-muted-foreground hidden md:table-cell">Mensagem</TableHead>
+                                    <TableHead className="text-foreground dark:text-muted-foreground hidden sm:table-cell">Atendente</TableHead>
+                                    <TableHead className="text-foreground dark:text-muted-foreground hidden lg:table-cell">Categoria</TableHead>
+                                    <TableHead className="text-foreground dark:text-muted-foreground text-right">Ações</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>

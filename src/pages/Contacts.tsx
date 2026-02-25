@@ -478,15 +478,15 @@ const Contacts = () => {
                                             aria-label="Select all"
                                         />
                                     </TableHead>
-                                    <TableHead className="text-secondary dark:text-slate-400 font-semibold w-[25%] md:w-[20%]">Nome</TableHead>
-                                    <TableHead className="text-secondary dark:text-slate-400 font-semibold hidden sm:table-cell w-[15%]">Telefone</TableHead>
-                                    <TableHead className="text-secondary dark:text-slate-400 font-semibold hidden md:table-cell w-[12%]">Etiquetas</TableHead>
-                                    <TableHead className="text-secondary dark:text-slate-400 font-semibold text-center w-[8%] hidden sm:table-cell">IA</TableHead>
-                                    {!isAgent && <TableHead className="text-secondary dark:text-slate-400 font-semibold text-center hidden lg:table-cell w-[8%]">Satisf.</TableHead>}
-                                    {!isAgent && <TableHead className="text-secondary dark:text-slate-400 font-semibold text-center hidden lg:table-cell w-[8%]">Resumos</TableHead>}
-                                    {!isAgent && <TableHead className="text-secondary dark:text-slate-400 font-semibold text-center hidden lg:table-cell w-[10%]">Avaliação</TableHead>}
-                                    {!isAgent && <TableHead className="text-secondary dark:text-slate-400 font-semibold text-center hidden lg:table-cell w-[8%]">Feedbacks</TableHead>}
-                                    <TableHead className="w-[100px] md:w-[140px] text-secondary dark:text-slate-400 font-semibold">Ações</TableHead>
+                                    <TableHead className="text-foreground dark:text-slate-400 font-semibold w-[25%] md:w-[20%]">Nome</TableHead>
+                                    <TableHead className="text-foreground dark:text-slate-400 font-semibold hidden sm:table-cell w-[15%]">Telefone</TableHead>
+                                    <TableHead className="text-foreground dark:text-slate-400 font-semibold hidden md:table-cell w-[12%]">Etiquetas</TableHead>
+                                    <TableHead className="text-foreground dark:text-slate-400 font-semibold text-center w-[8%] hidden sm:table-cell">IA</TableHead>
+                                    {!isAgent && <TableHead className="text-foreground dark:text-slate-400 font-semibold text-center hidden lg:table-cell w-[8%]">Satisf.</TableHead>}
+                                    {!isAgent && <TableHead className="text-foreground dark:text-slate-400 font-semibold text-center hidden lg:table-cell w-[8%]">Resumos</TableHead>}
+                                    {!isAgent && <TableHead className="text-foreground dark:text-slate-400 font-semibold text-center hidden lg:table-cell w-[10%]">Avaliação</TableHead>}
+                                    {!isAgent && <TableHead className="text-foreground dark:text-slate-400 font-semibold text-center hidden lg:table-cell w-[8%]">Feedbacks</TableHead>}
+                                    <TableHead className="w-[100px] md:w-[140px] text-foreground dark:text-slate-400 font-semibold">Ações</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>

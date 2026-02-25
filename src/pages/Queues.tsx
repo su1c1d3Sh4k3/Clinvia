@@ -106,11 +106,11 @@ const Queues = () => {
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead className="w-[80px] text-secondary dark:text-slate-400 font-semibold hidden sm:table-cell">ID</TableHead>
-                                    <TableHead className="text-secondary dark:text-slate-400 font-semibold min-w-[100px]">Nome</TableHead>
-                                    <TableHead className="text-secondary dark:text-slate-400 font-semibold">Status</TableHead>
-                                    <TableHead className="text-secondary dark:text-slate-400 font-semibold hidden md:table-cell">Atribuída</TableHead>
-                                    <TableHead className="text-right text-secondary dark:text-slate-400 font-semibold">Ações</TableHead>
+                                    <TableHead className="w-[80px] text-foreground dark:text-slate-400 font-semibold hidden sm:table-cell">ID</TableHead>
+                                    <TableHead className="text-foreground dark:text-slate-400 font-semibold min-w-[100px]">Nome</TableHead>
+                                    <TableHead className="text-foreground dark:text-slate-400 font-semibold">Status</TableHead>
+                                    <TableHead className="text-foreground dark:text-slate-400 font-semibold hidden md:table-cell">Atribuída</TableHead>
+                                    <TableHead className="text-right text-foreground dark:text-slate-400 font-semibold">Ações</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>

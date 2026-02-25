@@ -110,9 +110,9 @@ const Tags = () => {
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead className="text-secondary dark:text-slate-400 font-semibold min-w-[120px]">Nome</TableHead>
-                                    <TableHead className="text-secondary dark:text-slate-400 font-semibold">Status</TableHead>
-                                    <TableHead className="w-[80px] md:w-[100px] text-secondary dark:text-slate-400 font-semibold">Ações</TableHead>
+                                    <TableHead className="text-foreground dark:text-slate-400 font-semibold min-w-[120px]">Nome</TableHead>
+                                    <TableHead className="text-foreground dark:text-slate-400 font-semibold">Status</TableHead>
+                                    <TableHead className="w-[80px] md:w-[100px] text-foreground dark:text-slate-400 font-semibold">Ações</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>

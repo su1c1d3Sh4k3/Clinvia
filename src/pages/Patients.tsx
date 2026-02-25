@@ -268,11 +268,11 @@ const Patients = () => {
                         <Table className="table-fixed w-full">
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead className="text-secondary dark:text-slate-400 font-semibold w-[30%]">Nome</TableHead>
-                                    <TableHead className="text-secondary dark:text-slate-400 font-semibold hidden sm:table-cell w-[20%]">Telefone</TableHead>
-                                    <TableHead className="text-secondary dark:text-slate-400 font-semibold hidden md:table-cell w-[18%]">CPF</TableHead>
-                                    <TableHead className="text-secondary dark:text-slate-400 font-semibold hidden lg:table-cell w-[18%]">Última Atualização</TableHead>
-                                    <TableHead className="w-[14%] text-secondary dark:text-slate-400 font-semibold">Ações</TableHead>
+                                    <TableHead className="text-foreground dark:text-slate-400 font-semibold w-[30%]">Nome</TableHead>
+                                    <TableHead className="text-foreground dark:text-slate-400 font-semibold hidden sm:table-cell w-[20%]">Telefone</TableHead>
+                                    <TableHead className="text-foreground dark:text-slate-400 font-semibold hidden md:table-cell w-[18%]">CPF</TableHead>
+                                    <TableHead className="text-foreground dark:text-slate-400 font-semibold hidden lg:table-cell w-[18%]">Última Atualização</TableHead>
+                                    <TableHead className="w-[14%] text-foreground dark:text-slate-400 font-semibold">Ações</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
