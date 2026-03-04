@@ -7,6 +7,8 @@ import { KanbanColumn } from "./KanbanColumn";
 import { toast } from "sonner";
 import { PaymentTypeModal } from "./PaymentTypeModal";
 import { LossReasonModal } from "./LossReasonModal"; // Loss Reason Modal
+import { DeliveryLaunchModal } from "@/components/delivery/DeliveryLaunchModal";
+import { useOwnerId } from "@/hooks/useOwnerId";
 
 
 import { CRMFiltersState } from "./CRMFilters";
@@ -25,6 +27,28 @@ export function KanbanBoard({ funnelId, filters }: KanbanBoardProps) {
     // Hooks para verificar role do usuário e obter team_member_id
     const { data: userRole } = useUserRole();
     const { data: currentTeamMember } = useCurrentTeamMember();
+    const { data: ownerId } = useOwnerId();
+
+    // Estado de ordem manual por coluna (drag vertical)
+    const [localOrder, setLocalOrder] = useState<Record<string, string[]>>({});
+
+    // Estado de ordenação por coluna (asc/desc)
+    const [columnSortOrders, setColumnSortOrders] = useState<Record<string, 'asc' | 'desc'>>({});
+
+    const toggleColumnSort = (stageId: string) => {
+        setColumnSortOrders(prev => ({
+            ...prev,
+            [stageId]: prev[stageId] === 'asc' ? 'desc' : 'asc',
+        }));
+        // Ao mudar a ordenação da coluna, resetar a ordem manual dela
+        setLocalOrder(prev => ({ ...prev, [stageId]: [] }));
+    };
+
+    // Resetar ordens ao mudar de funil
+    useEffect(() => {
+        setLocalOrder({});
+        setColumnSortOrders({});
+    }, [funnelId]);
 
     // CRM-Sales integration state
     const [paymentModalOpen, setPaymentModalOpen] = useState(false);
@@ -35,6 +59,15 @@ export function KanbanBoard({ funnelId, filters }: KanbanBoardProps) {
         products: any[];
     } | null>(null);
     const [isCreatingSales, setIsCreatingSales] = useState(false);
+
+    // Delivery Launch Modal state
+    const [deliveryLaunchOpen, setDeliveryLaunchOpen] = useState(false);
+    const [deliveryLaunchData, setDeliveryLaunchData] = useState<{
+        contactId: string;
+        dealProducts: any[];
+        dealTitle: string;
+        saleDate: string;
+    } | null>(null);
 
     // Loss Reason Modal state
     const [lossReasonModalOpen, setLossReasonModalOpen] = useState(false);
@@ -114,6 +147,32 @@ export function KanbanBoard({ funnelId, filters }: KanbanBoardProps) {
 
         return true;
     });
+
+    // Retorna os deals de uma etapa respeitando a ordem local (DnD) ou ordenando por data
+    const getOrderedDealsForStage = (stageId: string): CRMDeal[] => {
+        const stageDeals = filteredDeals?.filter(deal => deal.stage_id === stageId) || [];
+        const localIds = localOrder[stageId];
+        if (localIds && localIds.length > 0) {
+            const dealMap = new Map(stageDeals.map(d => [d.id, d]));
+            const ordered: CRMDeal[] = [];
+            for (const id of localIds) {
+                const deal = dealMap.get(id);
+                if (deal) ordered.push(deal);
+            }
+            // Adicionar deals novos que ainda não estão na ordem local
+            for (const deal of stageDeals) {
+                if (!localIds.includes(deal.id)) ordered.push(deal);
+            }
+            return ordered;
+        }
+        // Ordenar por created_at conforme a ordenação da coluna (padrão: desc)
+        const colSort = columnSortOrders[stageId] ?? 'desc';
+        return [...stageDeals].sort((a, b) => {
+            const dateA = new Date(a.created_at).getTime();
+            const dateB = new Date(b.created_at).getTime();
+            return colSort === 'asc' ? dateA - dateB : dateB - dateA;
+        });
+    };
 
     const moveDealMutation = useMutation({
         mutationFn: async ({ dealId, stageId, fromStageId }: { dealId: string; stageId: string; fromStageId: string }) => {
@@ -195,6 +254,16 @@ export function KanbanBoard({ funnelId, filters }: KanbanBoardProps) {
 
         const startStageId = source.droppableId;
         const finishStageId = destination.droppableId;
+
+        // Reordenação vertical dentro da mesma coluna
+        if (startStageId === finishStageId) {
+            const currentDeals = getOrderedDealsForStage(startStageId);
+            const dealIds = currentDeals.map(d => d.id);
+            const [removed] = dealIds.splice(source.index, 1);
+            dealIds.splice(destination.index, 0, removed);
+            setLocalOrder(prev => ({ ...prev, [startStageId]: dealIds }));
+            return;
+        }
 
         if (startStageId !== finishStageId) {
             // Check if moving to "Perdido" stage
@@ -361,6 +430,20 @@ export function KanbanBoard({ funnelId, filters }: KanbanBoardProps) {
 
             toast.success(paymentType === 'pending' ? 'Vendas criadas como pendente' : 'Vendas criadas com sucesso!');
             queryClient.invalidateQueries({ queryKey: ['sales'] });
+
+            // Lançar DeliveryLaunchModal se houver serviços no deal
+            const serviceItems = validProducts.filter(
+                (p: any) => p.product_service?.type === 'service'
+            );
+            if (serviceItems.length > 0 && deal.contact_id) {
+                setDeliveryLaunchData({
+                    contactId: deal.contact_id,
+                    dealProducts: serviceItems,
+                    dealTitle: deal.title,
+                    saleDate,
+                });
+                setDeliveryLaunchOpen(true);
+            }
         } catch (error: any) {
             console.error('Error creating sales:', error);
             toast.error('Erro ao criar venda: ' + error.message);
@@ -384,12 +467,14 @@ export function KanbanBoard({ funnelId, filters }: KanbanBoardProps) {
             <DragDropContext onDragEnd={onDragEnd}>
                 <div className="flex h-full gap-4 overflow-x-auto pb-6 px-2 crm-scrollbar transition-colors">
                     {stages.map((stage) => {
-                        const stageDeals = filteredDeals?.filter(deal => deal.stage_id === stage.id) || [];
+                        const stageDeals = getOrderedDealsForStage(stage.id);
                         return (
                             <KanbanColumn
                                 key={stage.id}
                                 stage={stage}
                                 deals={stageDeals}
+                                sortOrder={columnSortOrders[stage.id] ?? 'desc'}
+                                onToggleSort={() => toggleColumnSort(stage.id)}
                             />
                         );
                     })}
@@ -416,6 +501,22 @@ export function KanbanBoard({ funnelId, filters }: KanbanBoardProps) {
                 onConfirm={handleLossReasonConfirm}
                 onCancel={handleLossReasonCancel}
             />
+
+            {/* Delivery Launch Modal */}
+            {deliveryLaunchData && ownerId && (
+                <DeliveryLaunchModal
+                    open={deliveryLaunchOpen}
+                    onOpenChange={(open) => {
+                        setDeliveryLaunchOpen(open);
+                        if (!open) setDeliveryLaunchData(null);
+                    }}
+                    contactId={deliveryLaunchData.contactId}
+                    dealProducts={deliveryLaunchData.dealProducts}
+                    dealTitle={deliveryLaunchData.dealTitle}
+                    saleDate={deliveryLaunchData.saleDate}
+                    ownerId={ownerId}
+                />
+            )}
         </>
     );
 }

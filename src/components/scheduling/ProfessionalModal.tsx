@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -269,11 +270,15 @@ export function ProfessionalModal({ open, onOpenChange, professionalToEdit }: Pr
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                         <div className="flex justify-center mb-4">
                             <div className="relative w-24 h-24">
-                                <img
-                                    src={photoFile ? URL.createObjectURL(photoFile) : existingPhoto || "https://github.com/shadcn.png"}
-                                    alt="Avatar"
-                                    className="w-full h-full object-cover rounded-full border-2 border-border"
-                                />
+                                <Avatar className="w-24 h-24 border-2 border-border">
+                                    <AvatarImage
+                                        src={photoFile ? URL.createObjectURL(photoFile) : existingPhoto || undefined}
+                                        className="object-cover"
+                                    />
+                                    <AvatarFallback className="bg-gray-500 text-white font-semibold text-3xl">
+                                        {(form.watch("name") || "P").charAt(0).toUpperCase()}
+                                    </AvatarFallback>
+                                </Avatar>
                                 <label className="absolute bottom-0 right-0 bg-primary text-primary-foreground rounded-full p-1 cursor-pointer hover:bg-primary/90">
                                     <Upload className="w-4 h-4" />
                                     <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
