@@ -90,6 +90,11 @@ export const ChatArea = ({
   const [quickMessages, setQuickMessages] = useState<QuickMessage[]>([]);
   const [visibleMessagesCount, setVisibleMessagesCount] = useState(MESSAGES_PER_PAGE);
 
+  // Reset visible count when conversation changes so the slice always starts from the end
+  useEffect(() => {
+    setVisibleMessagesCount(MESSAGES_PER_PAGE);
+  }, [conversationId]);
+
   // Audio Recording State
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);

@@ -71,6 +71,7 @@ export const MessageList = ({
         const visible = searchTerm
             ? messages
             : messages.slice(-Math.min(messages.length, visibleMessagesCount));
+        // Only exclude reaction messages — they are rendered as emoji badges on the target bubble
         return visible.filter(m => m.message_type !== 'reaction');
     }, [messages, visibleMessagesCount, searchTerm]);
 

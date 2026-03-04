@@ -74,12 +74,13 @@ export const useMessages = (conversationId?: string) => {
     enabled: !!conversationId,
   });
 
-  // Set up realtime subscription for new messages
+  // Set up realtime subscriptions for new messages
   useEffect(() => {
     if (!conversationId) return;
 
     const channel = supabase
       .channel(`messages-${conversationId}`)
+      // Primary: listen to direct message inserts/updates for this conversation
       .on(
         "postgres_changes",
         {
@@ -87,6 +88,20 @@ export const useMessages = (conversationId?: string) => {
           schema: "public",
           table: "messages",
           filter: `conversation_id=eq.${conversationId}`,
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
+        }
+      )
+      // Fallback: listen to conversation row updates (webhook always updates last_message_at)
+      // This channel is confirmed to work and fires on every new inbound/outbound message
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "conversations",
+          filter: `id=eq.${conversationId}`,
         },
         () => {
           queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
