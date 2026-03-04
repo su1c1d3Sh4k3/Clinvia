@@ -2,13 +2,17 @@ import { CRMStage, CRMDeal } from "@/types/crm";
 import { Droppable } from "@hello-pangea/dnd";
 import { KanbanCard } from "./KanbanCard";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
+import { ArrowDown, ArrowUp } from "lucide-react";
 
 interface KanbanColumnProps {
     stage: CRMStage;
     deals: CRMDeal[];
+    sortOrder?: 'asc' | 'desc';
+    onToggleSort?: () => void;
 }
 
-export function KanbanColumn({ stage, deals }: KanbanColumnProps) {
+export function KanbanColumn({ stage, deals, sortOrder = 'desc', onToggleSort }: KanbanColumnProps) {
     const totalValue = deals.reduce((sum, deal) => sum + Number(deal.value), 0);
 
     return (
@@ -19,9 +23,22 @@ export function KanbanColumn({ stage, deals }: KanbanColumnProps) {
                         <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: stage.color }} />
                         <h3 className="font-semibold text-sm truncate text-foreground/90">{stage.name}</h3>
                     </div>
-                    <span className="text-xs font-medium text-muted-foreground bg-background/50 px-2 py-0.5 rounded-full border border-border/50">
-                        {deals.length}
-                    </span>
+                    <div className="flex items-center gap-1">
+                        <span className="text-xs font-medium text-muted-foreground bg-background/50 px-2 py-0.5 rounded-full border border-border/50">
+                            {deals.length}
+                        </span>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 text-muted-foreground hover:text-foreground shrink-0"
+                            onClick={onToggleSort}
+                            title={sortOrder === 'desc' ? 'Mais recente primeiro' : 'Mais antigo primeiro'}
+                        >
+                            {sortOrder === 'desc'
+                                ? <ArrowDown className="h-3 w-3" />
+                                : <ArrowUp className="h-3 w-3" />}
+                        </Button>
+                    </div>
                 </div>
                 {totalValue > 0 && (
                     <div className="flex items-center gap-1 pl-5">

@@ -420,7 +420,7 @@ export default function Settings() {
         if (Notification.permission === 'granted') {
             new Notification("Teste de Notificação", {
                 body: "Se você está vendo isso, as notificações estão funcionando!",
-                icon: "/placeholder.png"
+                icon: "/logo-icon.png"
             });
             playTestSound();
             toast.success("Notificação de teste enviada!");

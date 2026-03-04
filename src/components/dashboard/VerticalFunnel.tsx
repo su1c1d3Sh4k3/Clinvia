@@ -27,6 +27,10 @@ interface VerticalFunnelProps {
     allFunnels?: { id: string; name: string }[];
     onFunnelSelect?: (funnelId: string) => void;
     onFunnelClick?: (funnelId: string) => void;
+    /** Label customizado para o estágio "ganho" (padrão: "Ganho") */
+    wonLabel?: string;
+    /** Label customizado para o estágio "perdido" (padrão: "Perdido") */
+    lostLabel?: string;
 }
 
 // Cores dos estágios para os 4 funis principais
@@ -117,7 +121,9 @@ export function VerticalFunnel({
     currentFunnelId,
     allFunnels,
     onFunnelSelect,
-    onFunnelClick
+    onFunnelClick,
+    wonLabel = "Ganho",
+    lostLabel = "Perdido",
 }: VerticalFunnelProps) {
     const theme = themeStyles[colorTheme];
 
@@ -332,7 +338,7 @@ export function VerticalFunnel({
                     <div className="flex flex-col items-center justify-center p-3 rounded-xl bg-white dark:bg-white/5 border border-green-500/40 dark:border-green-500/30">
                         <span className="text-green-600 dark:text-green-500 text-xs font-bold uppercase mb-1 flex items-center gap-1">
                             <DollarSign className="w-3 h-3" />
-                            Ganho
+                            {wonLabel}
                         </span>
                         <span className="text-green-700 dark:text-green-400 font-bold text-lg">
                             {wonDeals}
@@ -346,7 +352,7 @@ export function VerticalFunnel({
                 )}>
                     <span className="text-red-500 text-xs font-bold uppercase mb-1 flex items-center gap-1">
                         <ArrowDown className="w-3 h-3" />
-                        Perdido
+                        {lostLabel}
                     </span>
                     <div className="flex items-center gap-1.5">
                         <span className="text-red-600 dark:text-red-400 font-bold text-lg">

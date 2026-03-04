@@ -71,15 +71,18 @@ interface AppointmentModalProps {
     onOpenChange: (open: boolean) => void;
     defaultDate?: Date;
     defaultProfessionalId?: string;
+    defaultServiceId?: string;
     appointmentToEdit?: any;
     // Props for pre-filled contact from conversation
     defaultContactId?: string;
     defaultContactName?: string;
     defaultContactPhone?: string;
     hideTypeTabs?: boolean; // Hide appointment/absence tabs
+    onAppointmentCreated?: () => void;
+    lockHour?: boolean; // Travar o campo de hora (apenas quando aberto via clique em slot específico do calendário)
 }
 
-export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfessionalId, appointmentToEdit, defaultContactId, defaultContactName, defaultContactPhone, hideTypeTabs }: AppointmentModalProps) {
+export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfessionalId, defaultServiceId, appointmentToEdit, defaultContactId, defaultContactName, defaultContactPhone, hideTypeTabs, onAppointmentCreated, lockHour }: AppointmentModalProps) {
     const { toast } = useToast();
     const queryClient = useQueryClient();
     const [activeTab, setActiveTab] = useState<"appointment" | "absence">("appointment");
@@ -87,6 +90,9 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
     const { data: ownerId } = useOwnerId();
 
     const isPast = appointmentToEdit && new Date(appointmentToEdit.end_time) < new Date();
+
+    // Detectar modo "hora travada" — ativo APENAS quando prop lockHour=true (clique em slot específico)
+    const isHourLocked = !appointmentToEdit && !!lockHour;
 
     const { data: professionals } = useQuery({
         queryKey: ["professionals-list"],
@@ -125,6 +131,9 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
     const watchProfessionalId = form.watch("professional_id");
     const watchDate = form.watch("date");
     const watchDuration = form.watch("duration") || 30;
+    const watchStartTime = form.watch("start_time");
+    const currentHour   = watchStartTime?.split(":")[0] ?? "";
+    const currentMinute = watchStartTime?.split(":")[1] ?? "";
 
     // Buscar detalhes do profissional selecionado (service_ids + work_hours)
     const { data: selectedProfessional } = useQuery({
@@ -182,23 +191,34 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
         enabled: !!watchProfessionalId && !!watchDate,
     });
 
-    // Generate available time slots with dynamic intervals and past time filtering
+    // Generate available time slots with fixed 10-min intervals
     const availableTimeSlots = useMemo(() => {
-        const slots: { value: string; label: string; disabled: boolean }[] = [];
+        const slots: { value: string; hour: number; minute: number; label: string; disabled: boolean }[] = [];
         const now = new Date();
         const isToday = watchDate === format(now, "yyyy-MM-dd");
 
-        // Use duration as interval, with minimum of 10 minutes
-        const interval = Math.max(watchDuration || 30, 10);
+        // Fixed 10-minute intervals
+        const interval = 10;
+
+        // Converte work_hours para minutos. Suporta string "HH:MM", número decimal (9.5) e número inteiro (9)
+        const parseWorkTime = (t: any): number | null => {
+            if (t == null) return null;
+            if (typeof t === "string" && t.includes(":")) {
+                const [h, m] = t.split(":").map(Number);
+                return h * 60 + (m || 0);
+            }
+            const num = parseFloat(t);
+            return isNaN(num) ? null : num * 60;
+        };
 
         // Usar work_hours do profissional; fallback 8:00 – 20:00
         const wh = (selectedProfessional as any)?.work_hours;
-        const startMinutes = wh?.start != null ? wh.start * 60 : 8 * 60;
-        const endMinutes   = wh?.end   != null ? wh.end   * 60 : 20 * 60;
+        const startMinutes = parseWorkTime(wh?.start) ?? 8 * 60;
+        const endMinutes   = parseWorkTime(wh?.end)   ?? 20 * 60;
 
-        // Break time em minutos (valores fracionados = hora decimal, ex. 12.5 = 12:30)
-        const breakStartMin: number | null = wh?.break_start != null ? wh.break_start * 60 : null;
-        const breakEndMin:   number | null = wh?.break_end   != null ? wh.break_end   * 60 : null;
+        // Break time em minutos
+        const breakStartMin: number | null = parseWorkTime(wh?.break_start);
+        const breakEndMin:   number | null = parseWorkTime(wh?.break_end);
 
         for (let totalMinutes = startMinutes; totalMinutes <= endMinutes; totalMinutes += interval) {
             const hour = Math.floor(totalMinutes / 60);
@@ -246,6 +266,8 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
 
             slots.push({
                 value: timeStr,
+                hour,
+                minute,
                 label: isConflicting ? `${timeStr} (ocupado)` : timeStr,
                 disabled: isConflicting
             });
@@ -253,6 +275,95 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
 
         return slots;
     }, [watchDate, watchDuration, existingAppointments, appointmentToEdit, selectedProfessional]);
+
+    // Slots sem conflito
+    const validSlots = useMemo(
+        () => availableTimeSlots.filter((s) => !s.disabled),
+        [availableTimeSlots]
+    );
+
+    // Horas com pelo menos 1 slot válido
+    const availableHours = useMemo(() => {
+        const seen = new Set<number>();
+        return validSlots
+            .filter((s) => { if (seen.has(s.hour)) return false; seen.add(s.hour); return true; })
+            .map((s) => ({ value: String(s.hour).padStart(2, "0") }));
+    }, [validSlots]);
+
+    // Minutos válidos para a hora atual selecionada (modo padrão, sem hora travada)
+    const availableMinutes = useMemo(() => {
+        if (!currentHour) return [];
+        return validSlots
+            .filter((s) => s.hour === parseInt(currentHour))
+            .map((s) => ({ value: String(s.minute).padStart(2, "0") }));
+    }, [validSlots, currentHour]);
+
+    // Minutos para hora travada: exibe todos os 6 minutos (00,10,20,30,40,50),
+    // bloqueando APENAS por conflito real de agendamento ou break — sem verificar fim do expediente.
+    // Isso permite, ex: iniciar às 14:50 mesmo que o serviço termine às 15:20.
+    const minutesForLockedHour = useMemo(() => {
+        if (!isHourLocked || !currentHour) return [];
+
+        const now = new Date();
+        const isToday = watchDate === format(now, "yyyy-MM-dd");
+        const hour = parseInt(currentHour);
+
+        // Helper para parsear work_hours (break time apenas)
+        const parseTime = (t: any): number | null => {
+            if (t == null) return null;
+            if (typeof t === "string" && t.includes(":")) {
+                const [h, m] = t.split(":").map(Number);
+                return h * 60 + (m || 0);
+            }
+            const num = parseFloat(t);
+            return isNaN(num) ? null : num * 60;
+        };
+
+        const wh = (selectedProfessional as any)?.work_hours;
+        const breakStartMin = parseTime(wh?.break_start);
+        const breakEndMin   = parseTime(wh?.break_end);
+
+        const result: { value: string }[] = [];
+
+        for (const minute of [0, 10, 20, 30, 40, 50]) {
+            const totalMinutes = hour * 60 + minute;
+            const timeStr = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+            const slotStart = new Date(`${watchDate}T${timeStr}`);
+            const slotEnd = addMinutes(slotStart, watchDuration);
+
+            // Ignorar horários passados para hoje
+            if (isToday && slotStart <= now) continue;
+
+            // Verificar conflito com agendamentos existentes
+            let conflicting = false;
+            if (existingAppointments) {
+                for (const apt of existingAppointments) {
+                    if (appointmentToEdit && apt.id === appointmentToEdit.id) continue;
+                    const aptStart = new Date(apt.start_time);
+                    const aptEnd = new Date(apt.end_time);
+                    if (slotStart < aptEnd && slotEnd > aptStart) {
+                        conflicting = true;
+                        break;
+                    }
+                }
+            }
+
+            // Verificar conflito com break time (ainda se aplica)
+            if (!conflicting && breakStartMin !== null && breakEndMin !== null) {
+                const slotEndMin = totalMinutes + watchDuration;
+                if (totalMinutes < breakEndMin && slotEndMin > breakStartMin) {
+                    conflicting = true;
+                }
+            }
+
+            if (!conflicting) {
+                result.push({ value: String(minute).padStart(2, "0") });
+            }
+        }
+
+        return result;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isHourLocked, currentHour, watchDate, watchDuration, existingAppointments, selectedProfessional]);
 
     useEffect(() => {
         if (open) {
@@ -278,6 +389,7 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                     contact_name: defaultContactName || "",
                     contact_phone: defaultContactPhone || "",
                     professional_id: defaultProfessionalId || "",
+                    service_id: defaultServiceId || "",
                     date: defaultDate ? format(defaultDate, "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd"),
                     start_time: defaultDate ? format(defaultDate, "HH:mm") : "09:00",
                     end_time: defaultDate ? format(addMinutes(defaultDate, 60), "HH:mm") : "10:00",
@@ -288,31 +400,77 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                 });
             }
         }
-    }, [open, defaultDate, defaultProfessionalId, appointmentToEdit, activeTab, form, defaultContactId, defaultContactName, defaultContactPhone]);
+    }, [open, defaultDate, defaultProfessionalId, defaultServiceId, appointmentToEdit, activeTab, form, defaultContactId, defaultContactName, defaultContactPhone]);
 
     // Quando o profissional muda, limpar serviço e duração (serviço pode ser inválido para o novo profissional)
     useEffect(() => {
         if (!open) return;
         // Não limpar quando estamos apenas abrindo o modal para edição
         if (appointmentToEdit) return;
+        // Não limpar quando o serviço foi pré-definido via prop
+        if (defaultServiceId) return;
         form.setValue("service_id", "");
         form.setValue("duration", 30);
         form.setValue("price", 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [watchProfessionalId]);
 
+    // Preencher duração/preço quando defaultServiceId e services estão disponíveis
+    useEffect(() => {
+        if (!open || !defaultServiceId || !services) return;
+        handleServiceChange(defaultServiceId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [services, defaultServiceId, open]);
+
+    const handleHourChange = (newHour: string) => {
+        const firstMin = validSlots.find((s) => s.hour === parseInt(newHour));
+        const minute = firstMin ? String(firstMin.minute).padStart(2, "0") : "00";
+        form.setValue("start_time", `${newHour}:${minute}`);
+    };
+
+    const handleMinuteChange = (newMinute: string) => {
+        form.setValue("start_time", `${currentHour}:${newMinute}`);
+    };
+
+    // Auto-ajusta start_time para o primeiro slot válido (modo padrão — hora NÃO travada)
+    useEffect(() => {
+        if (!open || appointmentToEdit || isHourLocked) return;
+        if (availableHours.length === 0) return;
+
+        const isCurrentHourValid = availableHours.some(h => h.value === currentHour);
+        if (!isCurrentHourValid) {
+            // Hora inválida → snap para primeira hora + primeiro minuto válidos
+            const firstHour = availableHours[0].value;
+            const firstMin = validSlots.find(s => s.hour === parseInt(firstHour));
+            const minute = firstMin ? String(firstMin.minute).padStart(2, "0") : "00";
+            form.setValue("start_time", `${firstHour}:${minute}`);
+            return;
+        }
+
+        // Hora válida → verificar se minuto também é válido
+        if (availableMinutes.length === 0) return;
+        const isCurrentMinuteValid = availableMinutes.some(m => m.value === currentMinute);
+        if (!isCurrentMinuteValid) {
+            form.setValue("start_time", `${currentHour}:${availableMinutes[0].value}`);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [availableHours, availableMinutes, open]);
+
+    // Auto-ajusta o minuto quando a hora está travada e os minutos disponíveis mudam
+    useEffect(() => {
+        if (!open || !isHourLocked || minutesForLockedHour.length === 0) return;
+        const isCurrentMinuteValid = minutesForLockedHour.some(m => m.value === currentMinute);
+        if (!isCurrentMinuteValid) {
+            form.setValue("start_time", `${currentHour}:${minutesForLockedHour[0].value}`);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [minutesForLockedHour, open]);
+
     const handleServiceChange = (serviceId: string) => {
-        console.log('[DEBUG] handleServiceChange called with:', serviceId);
-        console.log('[DEBUG] Available services:', services);
         const service = services?.find((s: any) => s.id === serviceId) as any;
-        console.log('[DEBUG] Found service:', service);
-        console.log('[DEBUG] Service fields - duration_minutes:', service?.duration_minutes, 'price:', service?.price);
         if (service) {
-            const duration = service.duration_minutes ?? 30;
-            const price = service.price ?? 0;
-            console.log('[DEBUG] Setting duration:', duration, 'price:', price);
-            form.setValue("duration", duration);
-            form.setValue("price", price);
+            form.setValue("duration", service.duration_minutes ?? 30);
+            form.setValue("price", service.price ?? 0);
         }
     };
 
@@ -394,6 +552,7 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                         body: { action: "sync_appointment", appointment_id: created.id, user_id: ownerId },
                     }).catch(() => {});
                 }
+                onAppointmentCreated?.();
             }
 
             queryClient.invalidateQueries({ queryKey: ["appointments"] });
@@ -431,7 +590,6 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
 
                     <Form {...form}>
                         <form onSubmit={form.handleSubmit(onSubmit, (errors) => {
-                            console.log('[DEBUG] Form validation errors:', errors);
                             const firstError = Object.values(errors)[0];
                             if (firstError?.message) {
                                 toast({
@@ -527,7 +685,7 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                                         render={({ field }) => (
                                             <FormItem>
                                                 <FormLabel>Serviço</FormLabel>
-                                                <Select onValueChange={(val) => { field.onChange(val); handleServiceChange(val); }} defaultValue={field.value} disabled={isPast}>
+                                                <Select onValueChange={(val) => { field.onChange(val); handleServiceChange(val); }} value={field.value} disabled={isPast || !!defaultServiceId}>
                                                     <FormControl>
                                                         <SelectTrigger>
                                                             <SelectValue placeholder="Selecione" />
@@ -563,28 +721,55 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                                 <FormField
                                     control={form.control}
                                     name="start_time"
-                                    render={({ field }) => (
+                                    render={() => (
                                         <FormItem>
                                             <FormLabel>Início</FormLabel>
-                                            <Select onValueChange={field.onChange} value={field.value} disabled={isPast}>
-                                                <FormControl>
-                                                    <SelectTrigger>
-                                                        <SelectValue placeholder="Selecione" />
-                                                    </SelectTrigger>
-                                                </FormControl>
-                                                <SelectContent>
-                                                    {availableTimeSlots.map((slot) => (
-                                                        <SelectItem
-                                                            key={slot.value}
-                                                            value={slot.value}
-                                                            disabled={slot.disabled}
-                                                            className={slot.disabled ? "text-red-400 opacity-50" : ""}
-                                                        >
-                                                            {slot.label} {slot.disabled && "(ocupado)"}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
+                                            <div className="flex gap-1">
+                                                {/* Hora: quando travada, elemento estático (evita bug Radix placeholder) */}
+                                                {isHourLocked ? (
+                                                    <div className="flex-1 h-9 flex items-center justify-center border rounded-md bg-muted text-sm font-medium text-foreground select-none">
+                                                        {currentHour ? `${currentHour}h` : "—"}
+                                                    </div>
+                                                ) : (
+                                                    <Select
+                                                        value={currentHour}
+                                                        onValueChange={handleHourChange}
+                                                        disabled={isPast}
+                                                    >
+                                                        <FormControl>
+                                                            <SelectTrigger className="flex-1">
+                                                                <SelectValue placeholder="Hora" />
+                                                            </SelectTrigger>
+                                                        </FormControl>
+                                                        <SelectContent>
+                                                            {availableHours.map((h) => (
+                                                                <SelectItem key={h.value} value={h.value}>
+                                                                    {h.value}h
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                )}
+                                                {/* Minutos: 00-50 filtrado por conflito real quando hora travada, normal caso contrário */}
+                                                <Select
+                                                    value={currentMinute}
+                                                    onValueChange={handleMinuteChange}
+                                                    disabled={isPast || !currentHour}
+                                                >
+                                                    <FormControl>
+                                                        <SelectTrigger className="flex-1">
+                                                            <SelectValue placeholder="Min" />
+                                                        </SelectTrigger>
+                                                    </FormControl>
+                                                    <SelectContent>
+                                                        {(isHourLocked ? minutesForLockedHour : availableMinutes).map((m) => (
+                                                            <SelectItem key={m.value} value={m.value}>
+                                                                {m.value}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
                                             <FormMessage />
                                         </FormItem>
                                     )}

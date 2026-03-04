@@ -560,6 +560,7 @@ export default function Scheduling() {
                 defaultDate={selectedSlot?.date || date}
                 defaultProfessionalId={selectedSlot?.professionalId}
                 appointmentToEdit={appointmentToEdit}
+                lockHour={!!selectedSlot}
             />
 
             <SchedulingSettingsModal

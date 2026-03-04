@@ -5,6 +5,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { differenceInMinutes } from "date-fns";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 export function NotificationManager() {
     const { user } = useAuth();
@@ -134,8 +135,8 @@ export function NotificationManager() {
 
                     // Determine Icon (Photo)
                     const profilePic = isGroup
-                        ? (group?.group_pic_url || "/placeholder.png")
-                        : (contact?.profile_pic_url || msg.sender_profile_pic_url || "/placeholder.png");
+                        ? (group?.group_pic_url || "/logo-icon.png")
+                        : (contact?.profile_pic_url || msg.sender_profile_pic_url || "/logo-icon.png");
 
                     // Determine Body (Content)
                     let body = msg.message_type === 'text' ? msg.body : `📷 ${msg.message_type || 'Mídia'} recebida`;
@@ -182,12 +183,12 @@ export function NotificationManager() {
 
                             {/* Avatar */}
                             <div className="relative shrink-0">
-                                <img
-                                    src={profilePic}
-                                    alt="Contact"
-                                    className="w-12 h-12 rounded-full object-cover border-2 border-[#04A2DD]"
-                                    onError={(e) => (e.currentTarget.src = "https://github.com/shadcn.png")}
-                                />
+                                <Avatar className="w-12 h-12 border-2 border-[#04A2DD]">
+                                    <AvatarImage src={profilePic !== "/logo-icon.png" ? profilePic : undefined} className="object-cover" />
+                                    <AvatarFallback className="bg-gray-500 text-white font-semibold text-lg">
+                                        {title.charAt(0).toUpperCase()}
+                                    </AvatarFallback>
+                                </Avatar>
                                 <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white dark:border-[#272C35]"></div>
                             </div>
 

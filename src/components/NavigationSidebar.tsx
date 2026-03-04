@@ -2,7 +2,7 @@ import {
   ListOrdered, Users, Settings, LayoutDashboard, MessageSquare, Briefcase, Wrench, Grid3X3,
   Smartphone, LogOut, Tag as TagIcon, BookUser, Calendar, ClipboardList,
   Package, Bot, ChevronDown, PieChart, Clock, MessageCircle,
-  ShoppingCart, Headphones, UserRound, Sun, Moon
+  ShoppingCart, Headphones, UserRound, Sun, Moon, ClipboardCheck, Layers
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -32,8 +32,14 @@ const menuStructure: MenuItem[] = [
   { icon: LayoutDashboard, label: "Dashboard", id: "dashboard", path: "/dashboard" },
   { icon: MessageSquare, label: "Inbox", id: "inbox", path: "/" },
   { icon: MessageCircle, label: "Chat Interno", id: "internal_inbox", path: "/internal_inbox" },
-  { icon: ListOrdered, label: "Gestão de Filas", id: "queues-manager", path: "/queues_manager" },
-  { icon: Briefcase, label: "CRM", id: "crm", path: "/crm" },
+  {
+    icon: Layers, label: "Gestão", id: "gestao",
+    children: [
+      { icon: Briefcase, label: "CRM", id: "crm", path: "/crm" },
+      { icon: ClipboardCheck, label: "Delivery", id: "delivery", path: "/delivery" },
+      { icon: ListOrdered, label: "Gestão de Filas", id: "queues-manager", path: "/queues_manager" },
+    ]
+  },
   {
     icon: Wrench, label: "Automação", id: "automacao",
     children: [

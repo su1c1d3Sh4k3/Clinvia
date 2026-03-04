@@ -17,6 +17,8 @@ interface PatientModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     patientToEdit?: Patient | null;
+    defaultContactId?: string;
+    onCreated?: (patientId: string) => void;
 }
 
 const ESTADOS_BRASIL = [
@@ -33,7 +35,7 @@ const ESCOLARIDADES = [
     "Pós-Graduação", "Mestrado", "Doutorado"
 ];
 
-export const PatientModal = ({ open, onOpenChange, patientToEdit }: PatientModalProps) => {
+export const PatientModal = ({ open, onOpenChange, patientToEdit, defaultContactId, onCreated }: PatientModalProps) => {
     const [step, setStep] = useState(1);
     const [isLoading, setIsLoading] = useState(false);
     const { toast } = useToast();
@@ -115,10 +117,13 @@ export const PatientModal = ({ open, onOpenChange, patientToEdit }: PatientModal
                 setConvenios(patientToEdit.convenios?.length ? patientToEdit.convenios : [{ nome: "", tipo_plano: "", numero_carteirinha: "", validade: "", carencia: "", acomodacao: "" }]);
             } else {
                 resetForm();
+                if (defaultContactId) {
+                    setContactId(defaultContactId);
+                }
             }
             setStep(1);
         }
-    }, [open, patientToEdit]);
+    }, [open, patientToEdit, defaultContactId]);
 
     const resetForm = () => {
         setContactId("");
@@ -248,6 +253,9 @@ export const PatientModal = ({ open, onOpenChange, patientToEdit }: PatientModal
             queryClient.invalidateQueries({ queryKey: ["patients"] });
             queryClient.invalidateQueries({ queryKey: ["contacts"] });
             toast({ title: patientToEdit ? "Paciente atualizado!" : "Paciente cadastrado!" });
+            if (!patientToEdit && patientId && onCreated) {
+                onCreated(patientId);
+            }
             onOpenChange(false);
         } catch (error: any) {
             toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });

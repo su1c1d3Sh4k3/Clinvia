@@ -14,6 +14,7 @@ import { DateRange } from "react-day-picker";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useCurrentTeamMember } from "@/hooks/useStaff";
 import { VerticalFunnel, StageMetric } from "./VerticalFunnel";
+import { DeliveryFunnelCard } from "./DeliveryFunnelCard";
 import { DealsStageChart } from "./DealsStageChart";
 import { LossReasonsChart } from "./LossReasonsChart";
 import { useNavigate } from "react-router-dom";
@@ -44,7 +45,7 @@ export function MacroFunnelsPanel() {
     const navigate = useNavigate();
     const [dateFilter, setDateFilter] = useState<DateFilterOption>("all");
     const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>();
-    const [funnelSlots, setFunnelSlots] = useState<(string | null)[]>([null, null, null, null, null]);
+    const [funnelSlots, setFunnelSlots] = useState<(string | null)[]>([null, null, null, null]);
 
     const handleNavigateToCRM = (funnelId: string) => {
         navigate(`/crm?funnel=${funnelId}`);
@@ -106,11 +107,11 @@ export function MacroFunnelsPanel() {
         return deals;
     }, [allData?.deals, dateFilter, customDateRange, userRole, currentTeamMember]);
 
-    // 3. Auto-assign funnels to 5 slots initially
+    // 3. Auto-assign funnels to 4 slots initially (Delivery é fixo, não ocupa slot)
     useEffect(() => {
         if (allData?.funnels && allData.funnels.length > 0 && funnelSlots.every(s => s === null)) {
             const funnels = allData.funnels;
-            const newSlots = [null, null, null, null, null] as (string | null)[];
+            const newSlots = [null, null, null, null] as (string | null)[];
 
             const qF = funnels.find(f => f.name.toLowerCase().includes('qualifica'));
             newSlots[0] = qF ? qF.id : funnels[0]?.id || null;
@@ -118,16 +119,14 @@ export function MacroFunnelsPanel() {
             const iaF = funnels.find(f => f.name.toLowerCase().includes('ia') || f.name.toLowerCase().includes('atendimento'));
             newSlots[1] = iaF ? iaF.id : funnels[1]?.id || null;
 
-            const dF = funnels.find(f => f.name.toLowerCase().includes('delivery') || f.name.toLowerCase().includes('entrega'));
-            newSlots[2] = dF ? dF.id : funnels[2]?.id || null;
-
             const rF = funnels.find(f => f.name.toLowerCase().includes('recorr') || f.name.toLowerCase().includes('reten'));
-            newSlots[3] = rF ? rF.id : funnels[3]?.id || null;
+            newSlots[3] = rF ? rF.id : funnels[2]?.id || null;
 
-            const usedIds = [newSlots[0], newSlots[1], newSlots[2], newSlots[3]].filter(Boolean);
+            // Slot 2: primeiro funil não utilizado nos demais slots
+            const usedIds = [newSlots[0], newSlots[1], newSlots[3]].filter(Boolean);
             const remaining = funnels.filter(f => !usedIds.includes(f.id));
             if (remaining.length > 0) {
-                newSlots[4] = remaining[0].id;
+                newSlots[2] = remaining[0].id;
             }
 
             setFunnelSlots(newSlots);
@@ -304,9 +303,13 @@ export function MacroFunnelsPanel() {
                 </div>
             )}
 
-            {/* Funnels Grid - 5 Columns */}
+            {/* Funnels Grid - Delivery fixo + até 5 funis CRM */}
             {userRole !== 'agent' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4 lg:gap-5 place-items-stretch">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 lg:gap-5 place-items-stretch">
+                    {/* Card fixo de Delivery — sempre presente, dados da tabela deliveries */}
+                    <div className="min-w-[220px] w-full max-w-[400px]">
+                        <DeliveryFunnelCard />
+                    </div>
                     {funnelsCards}
                 </div>
             )}
