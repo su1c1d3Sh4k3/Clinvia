@@ -93,7 +93,7 @@ export default function Delivery() {
                             htmlFor="ai-toggle"
                             className="text-sm cursor-pointer select-none"
                         >
-                            IA Automática
+                            Delegar agendamento para IA
                         </Label>
                         <Switch
                             id="ai-toggle"

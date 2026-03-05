@@ -80,7 +80,7 @@ export function MetricGauge({
             className="font-mono font-bold text-xl leading-none"
             style={{ color: "#fff" }}
           >
-            {clamped.toFixed(0)}
+            {clamped < 10 ? clamped.toFixed(1) : clamped.toFixed(0)}
             {unit}
           </span>
         </div>
