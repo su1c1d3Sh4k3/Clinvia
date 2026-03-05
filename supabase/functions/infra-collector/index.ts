@@ -199,27 +199,39 @@ serve(async (req) => {
               Status: string;
             }> = await containersRes.json();
 
-            // Priming pass: Docker Stats API requires 2 readings to calculate
-            // cpu_delta (precpu_stats is empty on first call). Fire all running
-            // containers in parallel to warm the daemon's cache, then wait 500ms
-            // so the second reading has a valid delta to compute CPU %.
+            // Two-sample CPU measurement: Docker Stats API needs two readings
+            // separated by a time window to produce a valid cpu_delta.
+            // We fire reading-1 for all running containers in parallel (capturing
+            // the raw data), wait 1 second, then fire reading-2. CPU % is computed
+            // as (reading2.cpu_stats - reading1.cpu_stats) / system_delta, which
+            // is fully independent of Docker's built-in precpu_stats field.
             const runningIds = containerList
               .filter((c) => c.State === "running")
               .map((c) => c.Id);
 
+            // Reading 1: capture baseline stats for all running containers
+            const baselineStats = new Map<string, any>();
             if (runningIds.length > 0) {
               await Promise.all(
-                runningIds.map((id) =>
-                  fetch(
-                    `${portainerUrl}/api/endpoints/${endpoint.Id}/docker/containers/${id}/stats?stream=false`,
-                    {
-                      headers: { "X-API-Key": PORTAINER_TOKEN },
-                      signal: AbortSignal.timeout(8000),
+                runningIds.map(async (id) => {
+                  try {
+                    const res = await fetch(
+                      `${portainerUrl}/api/endpoints/${endpoint.Id}/docker/containers/${id}/stats?stream=false`,
+                      {
+                        headers: { "X-API-Key": PORTAINER_TOKEN },
+                        signal: AbortSignal.timeout(8000),
+                      }
+                    );
+                    if (res.ok) {
+                      baselineStats.set(id, await res.json());
                     }
-                  ).catch(() => null)
-                )
+                  } catch (_) {
+                    // ignore — container will report 0% CPU
+                  }
+                })
               );
-              await new Promise((r) => setTimeout(r, 500));
+              // 1-second window gives a clean delta even on low-utilisation hosts
+              await new Promise((r) => setTimeout(r, 1000));
             }
 
             for (const container of containerList) {
@@ -233,7 +245,7 @@ serve(async (req) => {
               let memUsage = "0B";
               let memLimit = "0B";
 
-              // Step 3: Stats for running containers
+              // Step 3: Stats for running containers (reading 2)
               if (isRunning) {
                 try {
                   const statsRes = await fetch(
@@ -246,12 +258,25 @@ serve(async (req) => {
 
                   if (statsRes.ok) {
                     const stats = await statsRes.json();
+
+                    // Prefer our own two-sample delta; fall back to Docker's
+                    // built-in precpu_stats when the baseline is unavailable.
+                    const prev = baselineStats.get(container.Id);
+                    const prevCpuUsage =
+                      prev?.cpu_stats?.cpu_usage?.total_usage ??
+                      stats.precpu_stats?.cpu_usage?.total_usage ??
+                      0;
+                    const prevSystemUsage =
+                      prev?.cpu_stats?.system_cpu_usage ??
+                      stats.precpu_stats?.system_cpu_usage ??
+                      0;
+
                     const cpuDelta =
                       (stats.cpu_stats?.cpu_usage?.total_usage ?? 0) -
-                      (stats.precpu_stats?.cpu_usage?.total_usage ?? 0);
+                      prevCpuUsage;
                     const systemDelta =
                       (stats.cpu_stats?.system_cpu_usage ?? 0) -
-                      (stats.precpu_stats?.system_cpu_usage ?? 0);
+                      prevSystemUsage;
                     const numCpus = stats.cpu_stats?.online_cpus ?? 1;
                     cpuPercent =
                       systemDelta > 0
