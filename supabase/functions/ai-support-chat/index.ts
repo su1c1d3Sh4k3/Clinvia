@@ -10,12 +10,17 @@ const corsHeaders = {
 
 // Fallback mínimo caso o Storage falhe
 const FALLBACK_MANUAL = `
-🏠 CLINBIA - Sistema de Atendimento
+🏠 CLINVIA - Sistema de Atendimento
 
 MENU PRINCIPAL:
-- Dashboard 📊: métricas
+- Dashboard 📊: métricas e resumos
 - Inbox 💬: conversas WhatsApp/Instagram
-- CRM 💼: funis de vendas
+- Chat Interno 💬: comunicação da equipe
+
+SUBMENU "GESTÃO" 🗂️:
+- CRM 💼: funis de vendas e negociações
+- Delivery ✅: funil de procedimentos/serviços
+- Gestão de Filas 📋: board kanban de conversas
 
 SUBMENU "AUTOMAÇÃO" 🔧:
 - Definições da IA 🤖
@@ -33,6 +38,7 @@ SUBMENU "ADMINISTRATIVO" 📊:
 - Agendamentos 📅
 - Tarefas 📋
 - Vendas 🛒
+- Suporte 🎫
 - Equipe 👥
 `;
 
@@ -156,6 +162,7 @@ const SLUG_TO_FILE: Record<string, string> = {
     'contacts': 'contacts.md',
     'queues': 'queues.md',
     'queues_manager': 'queues_manager.md',
+    'delivery': 'delivery.md',
     'tags': 'tags.md',
     'follow-up': 'follow-up.md',
     'financial': 'financial.md',
@@ -171,6 +178,7 @@ function detectTopicFromMessage(message: string): string | null {
     const keywords: [string, string[]][] = [
         ['scheduling', ['agendamento', 'agendar', 'horário', 'horario', 'ausência', 'ausencia', 'calendário de profissional', 'google calendar', 'gcal', 'sincronizar agenda', 'break time', 'intervalo do profissional']],
         ['products-services', ['produto', 'serviço', 'servico', 'catálogo', 'catalogo', 'estoque', 'preço', 'preco']],
+        ['delivery', ['delivery', 'procedimento', 'funil de procedimento', 'lançar procedimento', 'aguardando agendamento', 'procedimento agendado', 'procedimento confirmado', 'procedimento concluído', 'procedimento cancelado', 'lançamento delivery']],
         ['crm', ['crm', 'funil', 'deal', 'negociação', 'negociacao', 'kanban', 'etapa', 'pipeline']],
         ['tasks', ['tarefa', 'atividade', 'quadro de tarefa', 'nova tarefa']],
         ['contacts', ['contato', 'lead', 'telefone']],

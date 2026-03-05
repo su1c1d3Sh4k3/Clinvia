@@ -2,9 +2,9 @@
 
 ## 📍 Como Acessar
 
-No **menu lateral**, clique em **"CRM"** (ícone de maleta 💼).
+No **menu lateral**, abra o submenu **"Gestão"** (ícone de camadas 🗂️) e clique em **"CRM"** (ícone de maleta 💼).
 
-Este é um item principal do menu, não está dentro de nenhum submenu.
+URL direta: `/crm`
 
 ---
 
@@ -143,6 +143,25 @@ Cada card mostra:
 
 ---
 
+## Integração com Delivery (Funil de Procedimentos)
+
+Quando uma negociação é movida para **"Ganho"** e contém **serviços** (não apenas produtos), o sistema abre automaticamente o **modal de lançamento de procedimentos**:
+
+1. Mova o deal para **"Ganho"** → Modal de pagamento aparece → Confirme
+2. Se o deal contiver serviços: o **modal "Lançar Procedimentos"** abre automaticamente
+3. Para cada serviço (e unidade): aparece um card para preencher:
+   - **Profissional** que executará o procedimento
+   - **Data de Contato** (quando entrar em contato com o paciente)
+   - **Data Limite** (prazo para execução)
+   - **Observações** opcionais
+4. Clique em **"Lançar Procedimentos"** → os registros são criados na página Delivery
+
+> **Nota**: Se o contato do deal ainda não tem um paciente cadastrado, o sistema pedirá para criar o cadastro antes de lançar os procedimentos.
+
+> **Atenção**: Somente itens do tipo **Serviço** disparam o lançamento de Delivery. Produtos físicos não geram procedimentos.
+
+---
+
 ## Filtros
 
 | Filtro | Função |
@@ -175,6 +194,7 @@ Negociações estagnadas aparecem no **Dashboard** como alerta.
 - **Tarefas**: Crie tarefas de follow-up direto do card
 - **Vendas**: Negociações "Ganhas" viram vendas automaticamente
 - **Inbox**: Acesse a conversa do cliente pelo card
+- **Delivery**: Negociações "Ganhas" com serviços geram procedimentos no Funil de Delivery
 
 ---
 

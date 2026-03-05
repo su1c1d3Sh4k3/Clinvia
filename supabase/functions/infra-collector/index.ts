@@ -199,6 +199,29 @@ serve(async (req) => {
               Status: string;
             }> = await containersRes.json();
 
+            // Priming pass: Docker Stats API requires 2 readings to calculate
+            // cpu_delta (precpu_stats is empty on first call). Fire all running
+            // containers in parallel to warm the daemon's cache, then wait 500ms
+            // so the second reading has a valid delta to compute CPU %.
+            const runningIds = containerList
+              .filter((c) => c.State === "running")
+              .map((c) => c.Id);
+
+            if (runningIds.length > 0) {
+              await Promise.all(
+                runningIds.map((id) =>
+                  fetch(
+                    `${portainerUrl}/api/endpoints/${endpoint.Id}/docker/containers/${id}/stats?stream=false`,
+                    {
+                      headers: { "X-API-Key": PORTAINER_TOKEN },
+                      signal: AbortSignal.timeout(8000),
+                    }
+                  ).catch(() => null)
+                )
+              );
+              await new Promise((r) => setTimeout(r, 500));
+            }
+
             for (const container of containerList) {
               totalContainers++;
               const isRunning = container.State === "running";
