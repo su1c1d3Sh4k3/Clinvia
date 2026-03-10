@@ -19,10 +19,10 @@ import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { EditDealModal } from "./EditDealModal";
-import { ViewDealModal } from "./ViewDealModal";
+import { DealDetailModal } from "./DealDetailModal";
 import { TaskModal } from "../tasks/TaskModal";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useState, useRef } from "react";
 
 interface KanbanCardProps {
     deal: CRMDeal;
@@ -37,6 +37,19 @@ export function KanbanCard({ deal, index, stagnationLimitDays }: KanbanCardProps
     const [showEditModal, setShowEditModal] = useState(false);
     const [showViewModal, setShowViewModal] = useState(false);
     const [showTaskModal, setShowTaskModal] = useState(false);
+
+    // Distingue clique simples de arrasto
+    const dragStartPos = useRef<{ x: number; y: number } | null>(null);
+    const handleMouseDown = (e: React.MouseEvent) => {
+        dragStartPos.current = { x: e.clientX, y: e.clientY };
+    };
+    const handleMouseUp = (e: React.MouseEvent) => {
+        if (!dragStartPos.current) return;
+        const dx = Math.abs(e.clientX - dragStartPos.current.x);
+        const dy = Math.abs(e.clientY - dragStartPos.current.y);
+        dragStartPos.current = null;
+        if (dx < 5 && dy < 5) setShowViewModal(true);
+    };
     const queryClient = useQueryClient();
     const { data: staffMembers } = useStaff();
     const { data: ownerId } = useOwnerId();
@@ -99,6 +112,8 @@ export function KanbanCard({ deal, index, stagnationLimitDays }: KanbanCardProps
                         {...provided.draggableProps}
                         {...provided.dragHandleProps}
                         className="mb-3 group"
+                        onMouseDown={handleMouseDown}
+                        onMouseUp={handleMouseUp}
                     >
                         <Card className="hover:shadow-md transition-all cursor-grab active:cursor-grabbing border-l-4 overflow-hidden relative" style={{ borderLeftColor: deal.priority ? undefined : 'transparent' }}>
                             {deal.priority && (
@@ -113,7 +128,7 @@ export function KanbanCard({ deal, index, stagnationLimitDays }: KanbanCardProps
                                     </h4>
                                     <DropdownMenu>
                                         <DropdownMenuTrigger asChild>
-                                            <Button variant="ghost" className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                                            <Button variant="ghost" className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" onMouseDown={e => e.stopPropagation()} onMouseUp={e => e.stopPropagation()}>
                                                 <MoreHorizontal className="h-4 w-4" />
                                             </Button>
                                         </DropdownMenuTrigger>
@@ -232,7 +247,7 @@ export function KanbanCard({ deal, index, stagnationLimitDays }: KanbanCardProps
                                             )}
                                         </div>
 
-                                        <div className="flex gap-1">
+                                        <div className="flex gap-1" onMouseDown={e => e.stopPropagation()} onMouseUp={e => e.stopPropagation()}>
                                             {deal.contact_id && deal.contacts && (
                                                 <DealConversationModal
                                                     contactId={deal.contact_id}
@@ -304,7 +319,7 @@ export function KanbanCard({ deal, index, stagnationLimitDays }: KanbanCardProps
                 onOpenChange={setShowEditModal}
             />
 
-            <ViewDealModal
+            <DealDetailModal
                 deal={deal}
                 open={showViewModal}
                 onOpenChange={setShowViewModal}
