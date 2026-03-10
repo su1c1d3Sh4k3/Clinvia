@@ -282,8 +282,8 @@ export function DealDetailModal({ deal, open, onOpenChange }: DealDetailModalPro
         enabled: open && !!deal.contact_id,
     });
 
-    // Products state for the form — inicializa do deal.deal_products (já carregado pelo KanbanBoard)
-    const mapDealProds = (prods: any[]): ProductItem[] => prods.map(p => ({
+    // Produtos derivados diretamente da query (fonte de verdade)
+    const displayProducts: ProductItem[] = (existingProducts ?? []).map((p: any) => ({
         id: p.id,
         category: p.product_service?.type || "product",
         productServiceId: p.product_service_id,
@@ -291,16 +291,6 @@ export function DealDetailModal({ deal, open, onOpenChange }: DealDetailModalPro
         unitPrice: p.unit_price,
         name: p.product_service?.name,
     }));
-
-    const [products, setProducts] = useState<ProductItem[]>(() =>
-        deal.deal_products && deal.deal_products.length > 0 ? mapDealProds(deal.deal_products) : []
-    );
-
-    // Atualiza quando a query explícita resolver (ex: após salvar)
-    useEffect(() => {
-        if (existingProducts === undefined) return;
-        setProducts(existingProducts.length > 0 ? mapDealProds(existingProducts) : []);
-    }, [existingProducts]);
 
     // ── Mutations ─────────────────────────────────────────────────────────────
 
@@ -947,14 +937,16 @@ export function DealDetailModal({ deal, open, onOpenChange }: DealDetailModalPro
                                                 onClick={() => setDealProductsModalOpen(true)}
                                             >
                                                 <Plus className="h-3 w-3 mr-1" />
-                                                {products.length > 0 ? "Editar" : "Adicionar"}
+                                                {displayProducts.length > 0 ? "Editar" : "Adicionar"}
                                             </Button>
                                         </div>
-                                        {products.length === 0 ? (
-                                            <p className="text-xs text-muted-foreground text-center py-2">Nenhum item</p>
+                                        {displayProducts.length === 0 ? (
+                                            <p className="text-xs text-muted-foreground text-center py-2">
+                                                {existingProducts === undefined ? "Carregando..." : "Nenhum item"}
+                                            </p>
                                         ) : (
                                             <div className="space-y-1">
-                                                {products.filter(p => p.productServiceId).map((p) => (
+                                                {displayProducts.filter(p => p.productServiceId).map((p) => (
                                                     <div key={p.id} className="flex items-center justify-between text-xs py-1 border-b last:border-0">
                                                         <span className="flex-1 truncate text-foreground">{p.name || "Item"}</span>
                                                         <span className="text-muted-foreground mx-2 shrink-0">×{p.quantity}</span>
@@ -967,7 +959,7 @@ export function DealDetailModal({ deal, open, onOpenChange }: DealDetailModalPro
                                                     <span>Total</span>
                                                     <span>
                                                         {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
-                                                            products.filter(p => p.productServiceId).reduce((s, p) => s + p.quantity * p.unitPrice, 0)
+                                                            displayProducts.filter(p => p.productServiceId).reduce((s, p) => s + p.quantity * p.unitPrice, 0)
                                                         )}
                                                     </span>
                                                 </div>
@@ -1114,8 +1106,8 @@ export function DealDetailModal({ deal, open, onOpenChange }: DealDetailModalPro
                 onOpenChange={setDealProductsModalOpen}
                 dealId={deal.id}
                 dealTitle={deal.title}
-                initialProducts={products}
-                onSaved={(saved) => setProducts(saved)}
+                initialProducts={displayProducts}
+                onSaved={() => {}}
             />
         </>
     );
