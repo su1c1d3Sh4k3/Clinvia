@@ -841,9 +841,9 @@ export function DealDetailModal({ deal, open, onOpenChange }: DealDetailModalPro
                         </ScrollArea>
 
                         {/* ── Right Sidebar ── */}
-                        <div className="w-72 border-l shrink-0 flex flex-col">
+                        <div className="w-72 border-l shrink-0 flex flex-col overflow-hidden">
                             <ScrollArea className="flex-1 h-full">
-                                <div className="p-4 space-y-4">
+                                <div className="p-4 space-y-4 min-w-0 overflow-hidden">
 
                                     {/* Container Finalizar */}
                                     <div className="space-y-2">
@@ -945,17 +945,19 @@ export function DealDetailModal({ deal, open, onOpenChange }: DealDetailModalPro
                                                 {existingProducts === undefined ? "Carregando..." : "Nenhum item"}
                                             </p>
                                         ) : (
-                                            <div className="space-y-1">
+                                            <div className="space-y-1 w-full min-w-0">
                                                 {displayProducts.filter(p => p.productServiceId).map((p) => (
-                                                    <div key={p.id} className="flex items-center justify-between text-xs py-1 border-b last:border-0">
-                                                        <span className="flex-1 truncate text-foreground">{p.name || "Item"}</span>
-                                                        <span className="text-muted-foreground mx-2 shrink-0">×{p.quantity}</span>
-                                                        <span className="font-medium shrink-0">
-                                                            {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(p.quantity * p.unitPrice)}
-                                                        </span>
+                                                    <div key={p.id} className="py-1 border-b last:border-0 min-w-0">
+                                                        <p className="text-xs text-foreground truncate w-full">{p.name || "Item"}</p>
+                                                        <div className="flex justify-between items-center mt-0.5">
+                                                            <span className="text-xs text-muted-foreground">×{p.quantity}</span>
+                                                            <span className="text-xs font-medium">
+                                                                {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(p.quantity * p.unitPrice)}
+                                                            </span>
+                                                        </div>
                                                     </div>
                                                 ))}
-                                                <div className="flex justify-between text-xs font-semibold pt-1 text-green-600">
+                                                <div className="flex justify-between items-center text-xs font-semibold pt-1 text-green-600">
                                                     <span>Total</span>
                                                     <span>
                                                         {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
