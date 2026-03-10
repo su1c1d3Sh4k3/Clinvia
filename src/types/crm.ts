@@ -97,3 +97,25 @@ export interface CRMDeal {
     deal_products?: CRMDealProduct[];
 }
 
+export interface CRMDealAttachment {
+    id: string;
+    deal_id: string;
+    user_id: string;
+    file_name: string;
+    file_url: string;
+    file_type?: string;
+    file_size?: number;
+    created_at: string;
+}
+
+export interface CRMDealHistory {
+    id: string;
+    deal_id: string;
+    user_id: string;
+    event_type: 'stage_change' | 'funnel_change' | 'field_update' | 'note_added' | 'attachment_added' | 'created' | 'won' | 'lost';
+    old_value?: string;
+    new_value?: string;
+    metadata?: Record<string, unknown>;
+    created_at: string;
+}
+
