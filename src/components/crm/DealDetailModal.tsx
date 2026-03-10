@@ -6,7 +6,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { CRMDeal, CRMFunnel, CRMStage, CRMDealAttachment, CRMDealHistory } from "@/types/crm";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
@@ -176,7 +176,7 @@ export function DealDetailModal({ deal, open, onOpenChange }: DealDetailModalPro
         enabled: open,
     });
 
-    const { data: existingProducts = [] } = useDealProducts(deal.id);
+    const { data: existingProducts } = useDealProducts(deal.id);
 
     const { data: productsServices = [] } = useQuery({
         queryKey: ["products-services"],
@@ -297,6 +297,7 @@ export function DealDetailModal({ deal, open, onOpenChange }: DealDetailModalPro
     // Products state for the form
     const [products, setProducts] = useState<ProductItem[]>([]);
     useEffect(() => {
+        if (existingProducts === undefined) return;
         if (existingProducts.length > 0) {
             setProducts(existingProducts.map((p: any) => ({
                 id: p.id,
@@ -580,6 +581,7 @@ export function DealDetailModal({ deal, open, onOpenChange }: DealDetailModalPro
                     className="max-w-6xl w-full p-0 gap-0 overflow-hidden"
                     style={{ height: "90vh", maxHeight: "90vh" }}
                 >
+                    <DialogTitle className="sr-only">{deal.title}</DialogTitle>
                     {/* ── Header ── */}
                     <div
                         className="flex items-center gap-3 px-5 py-3 border-b bg-card shrink-0"
