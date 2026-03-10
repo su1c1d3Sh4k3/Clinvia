@@ -17,7 +17,7 @@ import { Separator } from "@/components/ui/separator";
 import {
     X, CheckCircle2, XCircle, StickyNote, Plus, User, Phone, Mail,
     Building2, Instagram, Tag, Calendar, Clock, Paperclip, Download,
-    Trash2, ArrowRightLeft, MessageSquare, CalendarPlus, Package,
+    Trash2, ArrowRightLeft, MessageSquare, CalendarPlus,
     ChevronRight, ChevronDown, History, FileText, Briefcase,
     AlertCircle, CreditCard, Layers,
 } from "lucide-react";
@@ -27,7 +27,8 @@ import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { useStaff } from "@/hooks/useStaff";
-import { DealProductsForm, ProductItem } from "./DealProductsForm";
+import { ProductItem } from "./DealProductsForm";
+import { DealProductsModal } from "./DealProductsModal";
 import { DealConversationModal } from "./DealConversationModal";
 import { TaskModal } from "../tasks/TaskModal";
 import { PaymentTypeModal } from "./PaymentTypeModal";
@@ -177,19 +178,6 @@ export function DealDetailModal({ deal, open, onOpenChange }: DealDetailModalPro
     });
 
     const { data: existingProducts } = useDealProducts(deal.id);
-
-    const { data: productsServices = [] } = useQuery({
-        queryKey: ["products-services"],
-        queryFn: async () => {
-            const { data, error } = await supabase
-                .from("products_services" as any)
-                .select("*")
-                .order("name", { ascending: true });
-            if (error) throw error;
-            return data as any[];
-        },
-        enabled: open,
-    });
 
     const { data: professionals = [] } = useQuery({
         queryKey: ["professionals"],
@@ -373,38 +361,7 @@ export function DealDetailModal({ deal, open, onOpenChange }: DealDetailModalPro
         onSuccess: () => queryClient.invalidateQueries({ queryKey: ["crm-deals"] }),
     });
 
-    const saveProductsMutation = useMutation({
-        mutationFn: async (items: ProductItem[]) => {
-            await supabase.from("crm_deal_products" as any).delete().eq("deal_id", deal.id);
-            const valid = items.filter(p => p.productServiceId);
-            if (valid.length > 0) {
-                const total = valid.reduce((s, p) => s + p.quantity * p.unitPrice, 0);
-                await supabase.from("crm_deal_products" as any).insert(
-                    valid.map(p => ({
-                        deal_id: deal.id,
-                        product_service_id: p.productServiceId,
-                        quantity: p.quantity,
-                        unit_price: p.unitPrice,
-                    }))
-                );
-                // Sync value
-                await supabase.from("crm_deals" as any).update({ value: total, updated_at: new Date().toISOString() }).eq("id", deal.id);
-            }
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["crm-deals"] });
-            queryClient.invalidateQueries({ queryKey: ["deal-products", deal.id] });
-        },
-    });
-
-    const prodTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const handleProductsChange = useCallback((items: ProductItem[]) => {
-        setProducts(items);
-        if (prodTimerRef.current) clearTimeout(prodTimerRef.current);
-        prodTimerRef.current = setTimeout(() => {
-            saveProductsMutation.mutate(items);
-        }, 1500);
-    }, []);
+    const [dealProductsModalOpen, setDealProductsModalOpen] = useState(false);
 
     const addNoteMutation = useMutation({
         mutationFn: async (noteText: string) => {
@@ -981,12 +938,41 @@ export function DealDetailModal({ deal, open, onOpenChange }: DealDetailModalPro
 
                                     {/* Container Negociação */}
                                     <div className="space-y-2">
-                                        <Label className="text-xs uppercase text-muted-foreground tracking-wider">Negociação</Label>
-                                        <DealProductsForm
-                                            products={products}
-                                            onChange={handleProductsChange}
-                                            availableProducts={productsServices}
-                                        />
+                                        <div className="flex items-center justify-between">
+                                            <Label className="text-xs uppercase text-muted-foreground tracking-wider">Negociação</Label>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-6 text-xs px-2"
+                                                onClick={() => setDealProductsModalOpen(true)}
+                                            >
+                                                <Plus className="h-3 w-3 mr-1" />
+                                                {products.length > 0 ? "Editar" : "Adicionar"}
+                                            </Button>
+                                        </div>
+                                        {products.length === 0 ? (
+                                            <p className="text-xs text-muted-foreground text-center py-2">Nenhum item</p>
+                                        ) : (
+                                            <div className="space-y-1">
+                                                {products.filter(p => p.productServiceId).map((p) => (
+                                                    <div key={p.id} className="flex items-center justify-between text-xs py-1 border-b last:border-0">
+                                                        <span className="flex-1 truncate text-foreground">{p.name || "Item"}</span>
+                                                        <span className="text-muted-foreground mx-2 shrink-0">×{p.quantity}</span>
+                                                        <span className="font-medium shrink-0">
+                                                            {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(p.quantity * p.unitPrice)}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                                <div className="flex justify-between text-xs font-semibold pt-1 text-green-600">
+                                                    <span>Total</span>
+                                                    <span>
+                                                        {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
+                                                            products.filter(p => p.productServiceId).reduce((s, p) => s + p.quantity * p.unitPrice, 0)
+                                                        )}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
 
                                     <Separator />
@@ -1121,6 +1107,16 @@ export function DealDetailModal({ deal, open, onOpenChange }: DealDetailModalPro
                     }}
                 />
             )}
+
+            {/* Modal de produtos/serviços da negociação */}
+            <DealProductsModal
+                open={dealProductsModalOpen}
+                onOpenChange={setDealProductsModalOpen}
+                dealId={deal.id}
+                dealTitle={deal.title}
+                initialProducts={products}
+                onSaved={(saved) => setProducts(saved)}
+            />
         </>
     );
 }
