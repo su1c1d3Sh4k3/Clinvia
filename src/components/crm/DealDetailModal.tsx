@@ -294,22 +294,24 @@ export function DealDetailModal({ deal, open, onOpenChange }: DealDetailModalPro
         enabled: open && !!deal.contact_id,
     });
 
-    // Products state for the form
-    const [products, setProducts] = useState<ProductItem[]>([]);
+    // Products state for the form — inicializa do deal.deal_products (já carregado pelo KanbanBoard)
+    const mapDealProds = (prods: any[]): ProductItem[] => prods.map(p => ({
+        id: p.id,
+        category: p.product_service?.type || "product",
+        productServiceId: p.product_service_id,
+        quantity: p.quantity,
+        unitPrice: p.unit_price,
+        name: p.product_service?.name,
+    }));
+
+    const [products, setProducts] = useState<ProductItem[]>(() =>
+        deal.deal_products && deal.deal_products.length > 0 ? mapDealProds(deal.deal_products) : []
+    );
+
+    // Atualiza quando a query explícita resolver (ex: após salvar)
     useEffect(() => {
         if (existingProducts === undefined) return;
-        if (existingProducts.length > 0) {
-            setProducts(existingProducts.map((p: any) => ({
-                id: p.id,
-                category: p.product_service?.type || "product",
-                productServiceId: p.product_service_id,
-                quantity: p.quantity,
-                unitPrice: p.unit_price,
-                name: p.product_service?.name,
-            })));
-        } else {
-            setProducts([]);
-        }
+        setProducts(existingProducts.length > 0 ? mapDealProds(existingProducts) : []);
     }, [existingProducts]);
 
     // ── Mutations ─────────────────────────────────────────────────────────────
@@ -429,10 +431,13 @@ export function DealDetailModal({ deal, open, onOpenChange }: DealDetailModalPro
     // ── Ganho / Perdido ───────────────────────────────────────────────────────
 
     const handleWon = async () => {
-        const wonStage = stages.find(s => s.name === "Ganho");
-        if (!wonStage) { toast.error("Etapa 'Ganho' não encontrada"); return; }
+        // Busca etapa "Ganho" no funil atual ou em qualquer funil do sistema
+        const wonStageId = stages.find(s => s.name === "Ganho")?.id
+            || allStages.find(s => s.name === "Ganho")?.id;
 
-        await updateStageMutation.mutateAsync(wonStage.id);
+        if (wonStageId) {
+            await updateStageMutation.mutateAsync(wonStageId);
+        }
 
         const { data: fullDeal } = await supabase
             .from("crm_deals" as any)
@@ -502,10 +507,12 @@ export function DealDetailModal({ deal, open, onOpenChange }: DealDetailModalPro
     };
 
     const handleLossConfirm = async (reason: string, otherDesc?: string) => {
-        const lostStage = stages.find(s => s.name === "Perdido");
-        if (!lostStage) { toast.error("Etapa 'Perdido' não encontrada"); return; }
+        // Busca etapa "Perdido" no funil atual ou em qualquer funil do sistema
+        const lostStageId = stages.find(s => s.name === "Perdido")?.id
+            || allStages.find(s => s.name === "Perdido")?.id;
 
-        const updateData: Record<string, any> = { stage_id: lostStage.id, loss_reason: reason, updated_at: new Date().toISOString() };
+        const updateData: Record<string, any> = { loss_reason: reason, updated_at: new Date().toISOString() };
+        if (lostStageId) updateData.stage_id = lostStageId;
         if (reason === "other" && otherDesc) updateData.loss_reason_other = otherDesc;
 
         const { error } = await supabase.from("crm_deals" as any).update(updateData).eq("id", deal.id);
@@ -615,9 +622,6 @@ export function DealDetailModal({ deal, open, onOpenChange }: DealDetailModalPro
                             </div>
                         </div>
 
-                        <Button variant="ghost" size="icon" className="shrink-0 h-7 w-7" onClick={() => onOpenChange(false)}>
-                            <X className="h-4 w-4" />
-                        </Button>
                     </div>
 
                     {/* ── Body ── */}
@@ -701,10 +705,10 @@ export function DealDetailModal({ deal, open, onOpenChange }: DealDetailModalPro
                                                 </div>
                                             </div>
 
-                                            {fullContact.phone && (
+                                            {(fullContact.number || fullContact.phone) && (
                                                 <div className="flex items-center gap-2 text-muted-foreground">
                                                     <Phone className="h-3.5 w-3.5 shrink-0" />
-                                                    <span>{fullContact.phone}</span>
+                                                    <span>{fullContact.number || fullContact.phone}</span>
                                                 </div>
                                             )}
                                             {fullContact.email && (
