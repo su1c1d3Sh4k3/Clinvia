@@ -2,10 +2,11 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, Star } from "lucide-react";
+import { CheckCircle, Star, Files } from "lucide-react";
 import { QueueSelector } from "@/components/QueueSelector";
 import { useState } from "react";
 import { FavoriteMessagesModal } from "./FavoriteMessagesModal";
+import { ConversationMediaModal } from "./ConversationMediaModal";
 
 interface ChatHeaderProps {
     isMobile?: boolean;
@@ -20,6 +21,7 @@ interface ChatHeaderProps {
     updateStatus: any; // Mutation
     resolveConversation: any; // Mutation
     handleResolve: () => void;
+    onJumpToMessage?: (messageId: string) => void;
 }
 
 export const ChatHeader = ({
@@ -34,9 +36,11 @@ export const ChatHeader = ({
     conversation,
     updateStatus,
     resolveConversation,
-    handleResolve
+    handleResolve,
+    onJumpToMessage
 }: ChatHeaderProps) => {
     const [isFavoritesModalOpen, setIsFavoritesModalOpen] = useState(false);
+    const [isMediaModalOpen, setIsMediaModalOpen] = useState(false);
 
     if (isMobile) return null;
 
@@ -104,6 +108,15 @@ export const ChatHeader = ({
                 <Button
                     variant="outline"
                     size="sm"
+                    onClick={() => setIsMediaModalOpen(true)}
+                    title="Mídia da Conversa"
+                >
+                    <Files className="w-4 h-4" />
+                </Button>
+
+                <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => setIsFavoritesModalOpen(true)}
                     title="Mensagens Favoritas"
                     className="ml-auto"
@@ -116,6 +129,13 @@ export const ChatHeader = ({
                 open={isFavoritesModalOpen}
                 onOpenChange={setIsFavoritesModalOpen}
                 conversationId={conversationId}
+            />
+
+            <ConversationMediaModal
+                open={isMediaModalOpen}
+                onOpenChange={setIsMediaModalOpen}
+                conversationId={conversationId}
+                onJumpToMessage={onJumpToMessage}
             />
         </div>
     );

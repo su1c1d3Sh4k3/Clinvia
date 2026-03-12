@@ -383,7 +383,7 @@ export const NavigationSidebar = () => {
               const ChildIcon = child.icon;
               const childIsActive = isPathActive(child.path);
 
-              if (child.id === "team" && userRole === "agent") return null;
+              if (userRole === "agent" && child.id === "team") return null;
 
               // CRM badge in collapsed mode
               const crmCollapsedBadge = child.id === "crm" ? (stagnatedCount || 0) : 0;

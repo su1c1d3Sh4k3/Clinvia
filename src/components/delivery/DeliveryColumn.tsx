@@ -59,7 +59,7 @@ export function DeliveryColumn({
                         <div
                             ref={provided.innerRef}
                             {...provided.droppableProps}
-                            className={`w-full flex flex-col min-h-full gap-1.5 transition-colors p-2 ${
+                            className={`w-full flex flex-col min-h-full gap-3 transition-colors p-2 ${
                                 snapshot.isDraggingOver
                                     ? "bg-muted/30"
                                     : ""

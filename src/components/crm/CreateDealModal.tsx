@@ -15,7 +15,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ContactPicker } from "@/components/ui/contact-picker";
-import { CurrencyInput } from "@/components/ui/currency-input";
 import { Textarea } from "@/components/ui/textarea";
 import {
     Form,
@@ -54,6 +53,12 @@ const formSchema = z.object({
 
 interface CreateDealModalProps {
     defaultFunnelId?: string;
+    defaultStageId?: string;
+    defaultTitle?: string;
+    defaultPriority?: "low" | "medium" | "high";
+    defaultDescription?: string;
+    defaultAssignedProfessionalId?: string;
+    defaultProducts?: ProductItem[];
     open?: boolean;
     onOpenChange?: (open: boolean) => void;
     defaultContact?: {
@@ -67,6 +72,12 @@ interface CreateDealModalProps {
 
 export function CreateDealModal({
     defaultFunnelId,
+    defaultStageId,
+    defaultTitle,
+    defaultPriority,
+    defaultDescription,
+    defaultAssignedProfessionalId,
+    defaultProducts,
     open: controlledOpen,
     onOpenChange: setControlledOpen,
     defaultContact,
@@ -82,31 +93,37 @@ export function CreateDealModal({
     const { data: staffMembers } = useStaff();
     const { data: currentTeamMember } = useCurrentTeamMember();
 
-    // Estado para produtos múltiplos
-    const [products, setProducts] = useState<ProductItem[]>([]);
+    // Estado para produtos múltiplos — inicializado com defaultProducts se fornecidos
+    const [products, setProducts] = useState<ProductItem[]>(defaultProducts ?? []);
 
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
         defaultValues: {
-            title: "",
+            title: defaultTitle || "",
             value: 0,
-            priority: "medium",
+            priority: defaultPriority || "medium",
             funnel_id: defaultFunnelId || "",
-            description: "",
+            description: defaultDescription || "",
             responsible_id: defaultResponsibleId || "",
             contact_id: defaultContact?.id || "",
+            assigned_professional_id: defaultAssignedProfessionalId || "",
         },
     });
 
-    // Reset when opening
+    // Sincroniza todos os defaults quando o modal abre (suporta modo controlado com dados dinâmicos)
     useEffect(() => {
         if (open) {
-            if (defaultContact) form.setValue("contact_id", defaultContact.id);
-            if (defaultResponsibleId) form.setValue("responsible_id", defaultResponsibleId);
-            if (defaultFunnelId) form.setValue("funnel_id", defaultFunnelId);
-            setProducts([]); // Clear products on new open
+            setProducts(defaultProducts?.length ? defaultProducts : []);
+            form.setValue("contact_id", defaultContact?.id || "");
+            form.setValue("responsible_id", defaultResponsibleId || "");
+            form.setValue("funnel_id", defaultFunnelId || "");
+            form.setValue("assigned_professional_id", defaultAssignedProfessionalId || "");
+            if (defaultTitle)       form.setValue("title", defaultTitle);
+            if (defaultPriority)    form.setValue("priority", defaultPriority);
+            if (defaultDescription) form.setValue("description", defaultDescription);
         }
-    }, [open, defaultContact, defaultResponsibleId, defaultFunnelId, form]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open]);
 
     // Atualizar valor total baseado nos produtos
     useEffect(() => {
@@ -146,7 +163,12 @@ export function CreateDealModal({
         enabled: !!selectedFunnelId,
     });
 
-
+    // Auto-seleciona defaultStageId quando as stages do funil carregam
+    useEffect(() => {
+        if (defaultStageId && stages?.some((s) => s.id === defaultStageId)) {
+            form.setValue("stage_id", defaultStageId);
+        }
+    }, [stages, defaultStageId, form]);
 
     // Fetch Products/Services
     const { data: productsServices = [] } = useQuery({
@@ -309,7 +331,7 @@ export function CreateDealModal({
                                 render={({ field }) => (
                                     <FormItem>
                                         <FormLabel>Funil *</FormLabel>
-                                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                        <Select onValueChange={field.onChange} value={field.value}>
                                             <FormControl>
                                                 <SelectTrigger>
                                                     <SelectValue placeholder="Selecione o funil" />
@@ -333,7 +355,7 @@ export function CreateDealModal({
                                 render={({ field }) => (
                                     <FormItem>
                                         <FormLabel>Etapa *</FormLabel>
-                                        <Select onValueChange={field.onChange} defaultValue={field.value} disabled={!selectedFunnelId}>
+                                        <Select onValueChange={field.onChange} value={field.value} disabled={!selectedFunnelId}>
                                             <FormControl>
                                                 <SelectTrigger>
                                                     <SelectValue placeholder="Selecione a etapa" />
@@ -381,7 +403,7 @@ export function CreateDealModal({
                                 render={({ field }) => (
                                     <FormItem>
                                         <FormLabel>Prioridade</FormLabel>
-                                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                        <Select onValueChange={field.onChange} value={field.value}>
                                             <FormControl>
                                                 <SelectTrigger>
                                                     <SelectValue placeholder="Selecione" />
@@ -405,7 +427,7 @@ export function CreateDealModal({
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Responsável</FormLabel>
-                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                    <Select onValueChange={field.onChange} value={field.value}>
                                         <FormControl>
                                             <SelectTrigger>
                                                 <SelectValue placeholder="Selecione o responsável" />

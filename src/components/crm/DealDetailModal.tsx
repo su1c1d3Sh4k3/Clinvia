@@ -17,7 +17,7 @@ import { Separator } from "@/components/ui/separator";
 import {
     X, CheckCircle2, XCircle, StickyNote, Plus, User, Phone, Mail,
     Building2, Instagram, Tag, Calendar, Clock, Paperclip, Download,
-    Trash2, ArrowRightLeft, MessageSquare, CalendarPlus,
+    Trash2, ArrowRightLeft, MessageSquare, CalendarPlus, Eye, CalendarClock,
     ChevronRight, ChevronDown, History, FileText, Briefcase,
     AlertCircle, CreditCard, Layers,
 } from "lucide-react";
@@ -35,6 +35,7 @@ import { PaymentTypeModal } from "./PaymentTypeModal";
 import { LossReasonModal } from "./LossReasonModal";
 import { MoveToCRMStageModal } from "./MoveToCRMStageModal";
 import { DeliveryLaunchModal } from "@/components/delivery/DeliveryLaunchModal";
+import { AppointmentModal } from "@/components/scheduling/AppointmentModal";
 
 interface DealDetailModalProps {
     deal: CRMDeal;
@@ -122,6 +123,7 @@ export function DealDetailModal({ deal, open, onOpenChange }: DealDetailModalPro
 
     // Sub-modal states
     const [showTaskModal, setShowTaskModal] = useState(false);
+    const [showAppointmentModal, setShowAppointmentModal] = useState(false);
     const [paymentModalOpen, setPaymentModalOpen] = useState(false);
     const [lossReasonModalOpen, setLossReasonModalOpen] = useState(false);
     const [pendingWonDeal, setPendingWonDeal] = useState<any>(null);
@@ -981,7 +983,7 @@ export function DealDetailModal({ deal, open, onOpenChange }: DealDetailModalPro
                                                     contactName={deal.contacts.push_name}
                                                     trigger={
                                                         <Button variant="outline" size="sm" className="w-full h-8 text-xs justify-start">
-                                                            <MessageSquare className="h-3.5 w-3.5 mr-2" />Enviar Mensagem
+                                                            <Eye className="h-3.5 w-3.5 mr-2" />Visualizar Conversa
                                                         </Button>
                                                     }
                                                 />
@@ -989,6 +991,10 @@ export function DealDetailModal({ deal, open, onOpenChange }: DealDetailModalPro
 
                                             <Button variant="outline" size="sm" className="w-full h-8 text-xs justify-start" onClick={() => setShowTaskModal(true)}>
                                                 <CalendarPlus className="h-3.5 w-3.5 mr-2" />Criar Tarefa
+                                            </Button>
+
+                                            <Button variant="outline" size="sm" className="w-full h-8 text-xs justify-start" onClick={() => setShowAppointmentModal(true)}>
+                                                <CalendarClock className="h-3.5 w-3.5 mr-2" />Criar Agendamento
                                             </Button>
 
                                             <div className="space-y-1.5">
@@ -1054,6 +1060,14 @@ export function DealDetailModal({ deal, open, onOpenChange }: DealDetailModalPro
                 onOpenChange={setShowTaskModal}
                 initialDealId={deal.id}
                 initialContactId={deal.contact_id}
+            />
+
+            <AppointmentModal
+                open={showAppointmentModal}
+                onOpenChange={setShowAppointmentModal}
+                defaultContactId={deal.contact_id || undefined}
+                defaultContactName={deal.contacts?.push_name}
+                defaultContactPhone={deal.contacts?.number}
             />
 
             <PaymentTypeModal

@@ -61,15 +61,19 @@ export const useMessages = (conversationId?: string) => {
         });
       }
 
-      // 3. If active, fetch from messages table
+      // 3. If active, fetch from messages table.
+      // IMPORTANT: fetch in descending order (newest first) with explicit limit to avoid
+      // Supabase's default 1000-row cap silently cutting off the newest messages in
+      // conversations with >1000 messages. We then reverse so the array is chronological.
       const { data, error } = await supabase
         .from("messages")
         .select("*")
         .eq("conversation_id", conversationId)
-        .order("created_at", { ascending: true });
+        .order("created_at", { ascending: false })
+        .limit(1000);
 
       if (error) throw error;
-      return data as Message[];
+      return (data as Message[]).reverse();
     },
     enabled: !!conversationId,
   });

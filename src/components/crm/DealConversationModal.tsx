@@ -1,3 +1,4 @@
+import React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useOwnerId } from "@/hooks/useOwnerId";
@@ -30,9 +31,10 @@ import { toast } from "sonner";
 interface DealConversationModalProps {
     contactId: string;
     contactName: string;
+    trigger?: React.ReactNode;
 }
 
-export function DealConversationModal({ contactId, contactName }: DealConversationModalProps) {
+export function DealConversationModal({ contactId, contactName, trigger }: DealConversationModalProps) {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const [message, setMessage] = useState("");
@@ -222,9 +224,11 @@ export function DealConversationModal({ contactId, contactName }: DealConversati
     return (
         <Dialog>
             <DialogTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-6 w-6 text-black dark:text-muted-foreground" title="Ver Conversa" disabled={!activeConversationId}>
-                    <Eye className="h-3 w-3" />
-                </Button>
+                {trigger ?? (
+                    <Button variant="ghost" size="icon" className="h-6 w-6 text-black dark:text-muted-foreground" title="Ver Conversa" disabled={!activeConversationId}>
+                        <Eye className="h-3 w-3" />
+                    </Button>
+                )}
             </DialogTrigger>
             <DialogContent className="max-w-2xl h-[80vh] flex flex-col">
                 <DialogHeader>

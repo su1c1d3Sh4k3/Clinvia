@@ -89,6 +89,7 @@ export const ChatArea = ({
   // Quick Messages State
   const [quickMessages, setQuickMessages] = useState<QuickMessage[]>([]);
   const [visibleMessagesCount, setVisibleMessagesCount] = useState(MESSAGES_PER_PAGE);
+  const [jumpToMessageId, setJumpToMessageId] = useState<string | null>(null);
 
   // Reset visible count when conversation changes so the slice always starts from the end
   useEffect(() => {
@@ -141,6 +142,20 @@ export const ChatArea = ({
 
   // Core Hooks
   const { messages, isLoading } = useMessages(conversationId);
+
+  // Jump to a specific message: expand visible range if needed, then scroll
+  useEffect(() => {
+    if (!jumpToMessageId || !messages) return;
+    const idx = messages.findIndex((m: any) => m.id === jumpToMessageId);
+    if (idx === -1) { setJumpToMessageId(null); return; }
+    const fromEnd = messages.length - idx;
+    setVisibleMessagesCount(prev => Math.max(prev, fromEnd + 10));
+    setTimeout(() => {
+      document.getElementById(`message-${jumpToMessageId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setJumpToMessageId(null);
+    }, 150);
+  }, [jumpToMessageId, messages]);
+
   const sendMessageMutation = useSendMessage();
   const resolveConversation = useResolveConversation();
   const updateStatus = useUpdateTicketStatus();
@@ -603,6 +618,7 @@ export const ChatArea = ({
         updateStatus={updateStatus}
         resolveConversation={resolveConversation}
         handleResolve={() => resolveConversation.mutate(conversationId)}
+        onJumpToMessage={setJumpToMessageId}
       />
 
       <MessageList
