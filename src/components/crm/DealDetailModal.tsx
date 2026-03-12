@@ -41,6 +41,8 @@ interface DealDetailModalProps {
     deal: CRMDeal;
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    onDealWon?: (fullDeal: any) => void;
+    onDealLost?: (dealId: string, dealTitle: string) => void;
 }
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -108,7 +110,7 @@ function Section({ icon: Icon, title, defaultOpen = true, children }: {
 // ────────────────────────────────────────────────────────────────────────────
 // Componente principal
 // ────────────────────────────────────────────────────────────────────────────
-export function DealDetailModal({ deal, open, onOpenChange }: DealDetailModalProps) {
+export function DealDetailModal({ deal, open, onOpenChange, onDealWon, onDealLost }: DealDetailModalProps) {
     const { user } = useAuth();
     const queryClient = useQueryClient();
     const { data: staffMembers = [] } = useStaff();
@@ -380,21 +382,27 @@ export function DealDetailModal({ deal, open, onOpenChange }: DealDetailModalPro
     // ── Ganho / Perdido ───────────────────────────────────────────────────────
 
     const handleWon = async () => {
-        // Busca etapa "Ganho" no funil atual ou em qualquer funil do sistema
-        const wonStageId = stages.find(s => s.name === "Ganho")?.id
-            || allStages.find(s => s.name === "Ganho")?.id;
-
-        if (wonStageId) {
-            await updateStageMutation.mutateAsync(wonStageId);
-        }
-
+        // Busca dados completos do deal
         const { data: fullDeal } = await supabase
             .from("crm_deals" as any)
             .select("*, product_service:products_services(id,name,type,price), assigned_professional:professionals(id,name,role), deal_products:crm_deal_products(*, product_service:products_services(id,name,type,price))")
             .eq("id", deal.id)
             .single();
 
-        if (fullDeal) {
+        if (!fullDeal) return;
+
+        if (onDealWon) {
+            // Usa callback do KanbanBoard (evita problema de unmounting do KanbanCard)
+            // Fecha o modal ANTES de mover o deal para que o unmounting não cause problemas
+            onOpenChange(false);
+            await onDealWon(fullDeal);
+        } else {
+            // Fallback: fluxo interno (usado quando DealDetailModal não está dentro de um KanbanCard)
+            const wonStageId = stages.find(s => s.name === "Ganho")?.id
+                || allStages.find(s => s.name === "Ganho")?.id;
+            if (wonStageId) {
+                await updateStageMutation.mutateAsync(wonStageId);
+            }
             const prods = (fullDeal as any).deal_products?.length > 0
                 ? (fullDeal as any).deal_products
                 : ((fullDeal as any).product_service_id ? [{ product_service_id: (fullDeal as any).product_service_id, quantity: (fullDeal as any).quantity || 1, unit_price: (fullDeal as any).product_service?.price || 0, product_service: (fullDeal as any).product_service }] : []);
@@ -403,7 +411,16 @@ export function DealDetailModal({ deal, open, onOpenChange }: DealDetailModalPro
         }
     };
 
-    const handleLost = () => setLossReasonModalOpen(true);
+    const handleLost = () => {
+        if (onDealLost) {
+            // Usa callback do KanbanBoard (evita problema de unmounting do KanbanCard)
+            onOpenChange(false);
+            onDealLost(deal.id, deal.title);
+        } else {
+            // Fallback: fluxo interno
+            setLossReasonModalOpen(true);
+        }
+    };
 
     const createSalesFromDeal = async (paymentType: 'cash' | 'installment' | 'pending', installments?: number, interestRate?: number) => {
         if (!pendingWonDeal) return;
@@ -478,7 +495,19 @@ export function DealDetailModal({ deal, open, onOpenChange }: DealDetailModalPro
         const file = e.target.files?.[0];
         if (!file || !user) return;
 
-        const path = `deal-attachments/${deal.id}/${Date.now()}_${file.name}`;
+        // Sanitize filename: remove accents, replace spaces and invalid chars
+        const sanitizeFileName = (name: string) => {
+            const ext = name.includes(".") ? "." + name.split(".").pop() : "";
+            const base = name.slice(0, name.length - ext.length);
+            return base
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "")
+                .replace(/[^a-zA-Z0-9._-]/g, "_")
+                .replace(/_+/g, "_")
+                .replace(/^_|_$/g, "") + ext;
+        };
+        const safeFileName = sanitizeFileName(file.name);
+        const path = `deal-attachments/${deal.id}/${Date.now()}_${safeFileName}`;
         const { error: uploadError } = await supabase.storage.from("deal-attachments").upload(path, file);
         if (uploadError) { toast.error("Erro no upload: " + uploadError.message); return; }
 
@@ -518,6 +547,10 @@ export function DealDetailModal({ deal, open, onOpenChange }: DealDetailModalPro
 
     const normalizedNotes = Array.isArray(deal.notes) ? deal.notes : [];
     const priorityColor = deal.priority ? PRIORITY_COLORS[deal.priority] : "#6366f1";
+
+    // Verifica se o funil atual possui as etapas terminais (esconde botões se não tiver)
+    const hasWonStage = stages.some(s => s.name === "Ganho");
+    const hasLostStage = stages.some(s => s.name === "Perdido");
 
     const stagnationDays = (() => {
         if (!deal.stage_changed_at) return null;
@@ -847,27 +880,42 @@ export function DealDetailModal({ deal, open, onOpenChange }: DealDetailModalPro
                             <ScrollArea className="flex-1 h-full">
                                 <div className="p-4 space-y-4 min-w-0 overflow-hidden">
 
-                                    {/* Container Finalizar */}
-                                    <div className="space-y-2">
-                                        <Label className="text-xs uppercase text-muted-foreground tracking-wider">Finalizar</Label>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white h-8 text-xs" onClick={handleWon}>
-                                                <CheckCircle2 className="h-3.5 w-3.5 mr-1" />Ganho
-                                            </Button>
-                                            <Button size="sm" variant="outline" className="border-red-400 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 h-8 text-xs" onClick={handleLost}>
-                                                <XCircle className="h-3.5 w-3.5 mr-1" />Perdido
-                                            </Button>
+                                    {/* Container Finalizar — só exibe se o funil tiver as etapas Ganho/Perdido */}
+                                    {(hasWonStage || hasLostStage) && (
+                                        <div className="space-y-2">
+                                            <Label className="text-xs uppercase text-muted-foreground tracking-wider">Finalizar</Label>
+                                            <div className={`grid gap-2 ${hasWonStage && hasLostStage ? "grid-cols-2" : "grid-cols-1"}`}>
+                                                {hasWonStage && (
+                                                    <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white h-8 text-xs" onClick={handleWon}>
+                                                        <CheckCircle2 className="h-3.5 w-3.5 mr-1" />Ganho
+                                                    </Button>
+                                                )}
+                                                {hasLostStage && (
+                                                    <Button size="sm" variant="outline" className="border-red-400 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 h-8 text-xs" onClick={handleLost}>
+                                                        <XCircle className="h-3.5 w-3.5 mr-1" />Perdido
+                                                    </Button>
+                                                )}
+                                            </div>
                                         </div>
-                                    </div>
+                                    )}
 
-                                    <Separator />
+                                    {(hasWonStage || hasLostStage) && <Separator />}
 
                                     {/* Container Etapa */}
                                     <div className="space-y-2">
                                         <Label className="text-xs uppercase text-muted-foreground tracking-wider">Etapa</Label>
                                         <Select
                                             value={deal.stage_id}
-                                            onValueChange={val => updateStageMutation.mutate(val)}
+                                            onValueChange={val => {
+                                                const selectedStage = stages.find(s => s.id === val);
+                                                if (selectedStage?.name === "Ganho") {
+                                                    handleWon();
+                                                } else if (selectedStage?.name === "Perdido") {
+                                                    handleLost();
+                                                } else {
+                                                    updateStageMutation.mutate(val);
+                                                }
+                                            }}
                                         >
                                             <SelectTrigger className="h-8 text-xs">
                                                 <SelectValue />

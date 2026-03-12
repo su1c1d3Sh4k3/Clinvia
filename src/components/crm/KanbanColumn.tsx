@@ -10,9 +10,11 @@ interface KanbanColumnProps {
     deals: CRMDeal[];
     sortOrder?: 'asc' | 'desc';
     onToggleSort?: () => void;
+    onDealWon?: (deal: any) => void;
+    onDealLost?: (dealId: string, dealTitle: string) => void;
 }
 
-export function KanbanColumn({ stage, deals, sortOrder = 'desc', onToggleSort }: KanbanColumnProps) {
+export function KanbanColumn({ stage, deals, sortOrder = 'desc', onToggleSort, onDealWon, onDealLost }: KanbanColumnProps) {
     const totalValue = deals.reduce((sum, deal) => sum + Number(deal.value), 0);
 
     return (
@@ -61,7 +63,14 @@ export function KanbanColumn({ stage, deals, sortOrder = 'desc', onToggleSort }:
                                     }`}
                             >
                                 {deals.map((deal, index) => (
-                                    <KanbanCard key={deal.id} deal={deal} index={index} stagnationLimitDays={stage.stagnation_limit_days} />
+                                    <KanbanCard
+                                        key={deal.id}
+                                        deal={deal}
+                                        index={index}
+                                        stagnationLimitDays={stage.stagnation_limit_days}
+                                        onDealWon={onDealWon}
+                                        onDealLost={onDealLost}
+                                    />
                                 ))}
                                 {provided.placeholder}
                             </div>

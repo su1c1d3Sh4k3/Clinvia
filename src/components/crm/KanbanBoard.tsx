@@ -347,6 +347,42 @@ export function KanbanBoard({ funnelId, filters }: KanbanBoardProps) {
         // Deal is not moved, stays in original position
     };
 
+    // Handler chamado pelo DealDetailModal quando clica em "Ganho" ou muda para etapa Ganho via select
+    const handleDealWonFromModal = async (fullDeal: any) => {
+        const wonStage = stages?.find(s => s.name === "Ganho");
+        if (wonStage) {
+            const { error } = await supabase
+                .from("crm_deals" as any)
+                .update({
+                    stage_id: wonStage.id,
+                    stage_changed_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                })
+                .eq("id", fullDeal.id);
+            if (error) {
+                toast.error("Erro ao atualizar etapa");
+                return;
+            }
+            queryClient.invalidateQueries({ queryKey: ["crm-deals", funnelId] });
+            queryClient.invalidateQueries({ queryKey: ["crm-stages", funnelId] });
+            toast.success("Negociação ganha! 🎉");
+        }
+        await triggerSalesCreation(fullDeal);
+    };
+
+    // Handler chamado pelo DealDetailModal quando clica em "Perdido" ou muda para etapa Perdido via select
+    const handleDealLostFromModal = (dealId: string, dealTitle: string) => {
+        const lostStage = stages?.find(s => s.name === "Perdido");
+        if (!lostStage) return;
+        setPendingLossDeal({
+            dealId,
+            dealTitle,
+            fromStageId: "",
+            toStageId: lostStage.id,
+        });
+        setLossReasonModalOpen(true);
+    };
+
     // NEW - CRM-Sales Integration: Sales creation trigger
     const triggerSalesCreation = async (deal: any) => {
         const totalValue = deal.value || 0;
@@ -475,6 +511,8 @@ export function KanbanBoard({ funnelId, filters }: KanbanBoardProps) {
                                 deals={stageDeals}
                                 sortOrder={columnSortOrders[stage.id] ?? 'desc'}
                                 onToggleSort={() => toggleColumnSort(stage.id)}
+                                onDealWon={handleDealWonFromModal}
+                                onDealLost={handleDealLostFromModal}
                             />
                         );
                     })}

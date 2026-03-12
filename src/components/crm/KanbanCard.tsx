@@ -18,7 +18,6 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { EditDealModal } from "./EditDealModal";
 import { DealDetailModal } from "./DealDetailModal";
 import { TaskModal } from "../tasks/TaskModal";
 import { toast } from "sonner";
@@ -28,13 +27,14 @@ interface KanbanCardProps {
     deal: CRMDeal;
     index: number;
     stagnationLimitDays?: number;
+    onDealWon?: (deal: any) => void;
+    onDealLost?: (dealId: string, dealTitle: string) => void;
 }
 
 
 
-export function KanbanCard({ deal, index, stagnationLimitDays }: KanbanCardProps) {
+export function KanbanCard({ deal, index, stagnationLimitDays, onDealWon, onDealLost }: KanbanCardProps) {
     const navigate = useNavigate();
-    const [showEditModal, setShowEditModal] = useState(false);
     const [showViewModal, setShowViewModal] = useState(false);
     const [showTaskModal, setShowTaskModal] = useState(false);
 
@@ -135,9 +135,6 @@ export function KanbanCard({ deal, index, stagnationLimitDays }: KanbanCardProps
                                         <DropdownMenuContent align="end">
                                             <DropdownMenuItem onClick={() => setShowViewModal(true)}>
                                                 Visualizar
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem onClick={() => setShowEditModal(true)}>
-                                                Editar
                                             </DropdownMenuItem>
                                             <DropdownMenuItem
                                                 className="text-destructive"
@@ -313,16 +310,12 @@ export function KanbanCard({ deal, index, stagnationLimitDays }: KanbanCardProps
                 )}
             </Draggable>
 
-            <EditDealModal
-                deal={deal}
-                open={showEditModal}
-                onOpenChange={setShowEditModal}
-            />
-
             <DealDetailModal
                 deal={deal}
                 open={showViewModal}
                 onOpenChange={setShowViewModal}
+                onDealWon={onDealWon}
+                onDealLost={onDealLost}
             />
 
             <TaskModal

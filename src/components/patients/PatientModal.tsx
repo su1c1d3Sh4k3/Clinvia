@@ -66,12 +66,10 @@ export const PatientModal = ({ open, onOpenChange, patientToEdit, defaultContact
     const [estadoCivil, setEstadoCivil] = useState("");
     const [escolaridade, setEscolaridade] = useState("");
     const [profissao, setProfissao] = useState("");
-    const [contatosEmergencia, setContatosEmergencia] = useState<{ nome: string; telefone: string }[]>([{ nome: "", telefone: "" }]);
+    const [contatosEmergencia, setContatosEmergencia] = useState<{ nome: string; telefone: string }[]>([]);
 
     // Form state - Step 4
-    const [convenios, setConvenios] = useState<{ nome: string; tipo_plano: string; numero_carteirinha: string; validade: string; carencia: string; acomodacao: string }[]>([
-        { nome: "", tipo_plano: "", numero_carteirinha: "", validade: "", carencia: "", acomodacao: "" }
-    ]);
+    const [convenios, setConvenios] = useState<{ nome: string; tipo_plano: string; numero_carteirinha: string; validade: string; carencia: string; acomodacao: string }[]>([]);
 
     // Fetch contacts for dropdown
     const { data: contacts } = useQuery({
@@ -113,8 +111,8 @@ export const PatientModal = ({ open, onOpenChange, patientToEdit, defaultContact
                 setEstadoCivil(patientToEdit.estado_civil || "");
                 setEscolaridade(patientToEdit.escolaridade || "");
                 setProfissao(patientToEdit.profissao || "");
-                setContatosEmergencia(patientToEdit.contatos_emergencia?.length ? patientToEdit.contatos_emergencia : [{ nome: "", telefone: "" }]);
-                setConvenios(patientToEdit.convenios?.length ? patientToEdit.convenios : [{ nome: "", tipo_plano: "", numero_carteirinha: "", validade: "", carencia: "", acomodacao: "" }]);
+                setContatosEmergencia(patientToEdit.contatos_emergencia || []);
+                setConvenios(patientToEdit.convenios || []);
             } else {
                 resetForm();
                 if (defaultContactId) {
@@ -145,8 +143,8 @@ export const PatientModal = ({ open, onOpenChange, patientToEdit, defaultContact
         setEstadoCivil("");
         setEscolaridade("");
         setProfissao("");
-        setContatosEmergencia([{ nome: "", telefone: "" }]);
-        setConvenios([{ nome: "", tipo_plano: "", numero_carteirinha: "", validade: "", carencia: "", acomodacao: "" }]);
+        setContatosEmergencia([]);
+        setConvenios([]);
     };
 
     // Masks
@@ -180,6 +178,19 @@ export const PatientModal = ({ open, onOpenChange, patientToEdit, defaultContact
         return `${nums.slice(0, 2)}/${nums.slice(2, 4)}/${nums.slice(4)}`;
     };
 
+    // Auto-fill when contacts load asynchronously (modal opened with defaultContactId from CRM)
+    useEffect(() => {
+        if (open && !patientToEdit && defaultContactId && contacts && !nome) {
+            const contact = contacts.find(c => c.id === defaultContactId);
+            if (contact) {
+                setNome(contact.push_name || "");
+                setTelefone(formatPhone(contact.phone || contact.number?.split("@")[0] || ""));
+                setEmail(contact.email || "");
+                setCpf(formatCPF(contact.cpf || ""));
+            }
+        }
+    }, [contacts, open, defaultContactId, patientToEdit]);
+
     // Auto-fill from contact
     const handleContactSelect = (id: string) => {
         setContactId(id);
@@ -195,6 +206,11 @@ export const PatientModal = ({ open, onOpenChange, patientToEdit, defaultContact
     const handleSave = async () => {
         if (!nome.trim() || !telefone.trim()) {
             toast({ title: "Preencha os campos obrigatórios", variant: "destructive" });
+            return;
+        }
+
+        if (!ownerId) {
+            toast({ title: "Aguarde", description: "Carregando dados do usuário...", variant: "destructive" });
             return;
         }
 

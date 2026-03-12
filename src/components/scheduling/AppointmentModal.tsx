@@ -556,6 +556,7 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
             }
 
             queryClient.invalidateQueries({ queryKey: ["appointments"] });
+            queryClient.invalidateQueries({ queryKey: ["contact-appointments"] });
             onOpenChange(false);
         } catch (error: any) {
             toast({

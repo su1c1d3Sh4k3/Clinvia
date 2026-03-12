@@ -319,6 +319,7 @@ export function TaskModal({ open, onOpenChange, boardId, taskId: propTaskId, ini
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["tasks"] });
+            queryClient.invalidateQueries({ queryKey: ["deal-tasks"] });
             toast.success(taskId ? "Tarefa atualizada!" : "Tarefa criada!");
             if (onSuccess) onSuccess();
             onOpenChange(false);
