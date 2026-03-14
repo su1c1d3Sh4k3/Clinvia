@@ -13,7 +13,14 @@ serve(async (req) => {
   }
 
   try {
-    const { message, conversationId, userId } = await req.json();
+    const {
+      message,
+      conversationId,
+      userId,
+      systemPrompt: customSystemPrompt,
+      conversationHistory: customHistory,
+      ownerId: bodyOwnerId,
+    } = await req.json();
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
@@ -25,11 +32,16 @@ serve(async (req) => {
 
     let context = "";
     let systemPrompt = "";
-    let ownerId: string | null = null;
+    let ownerId: string | null = bodyOwnerId || null;
     let teamMemberId: string | null = null;
 
-    // Fetch Copilot Settings if userId is provided
-    if (userId && SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
+    // If a custom system prompt is provided, use it directly (skip copilot settings fetch)
+    if (customSystemPrompt) {
+      systemPrompt = customSystemPrompt;
+    }
+
+    // Fetch Copilot Settings if userId is provided (skipped when customSystemPrompt is set)
+    if (!customSystemPrompt && userId && SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
       try {
         const settingsUrl = `${SUPABASE_URL}/rest/v1/copilot?user_id=eq.${userId}&select=*`;
         const settingsResponse = await fetch(settingsUrl, {
@@ -110,15 +122,20 @@ serve(async (req) => {
       }
     }
 
-    // Call OpenAI API with GPT-4.1 (with custom token support)
-    const { response, usedCustomToken } = await makeOpenAIRequest(supabaseAdmin, ownerId, {
-      endpoint: "https://api.openai.com/v1/chat/completions",
-      body: {
-        model: "gpt-4.1",
-        messages: [
-          {
-            role: "system",
-            content: `${systemPrompt}
+    // Build messages array: use customHistory if provided, otherwise single-message format
+    let openAIMessages: { role: string; content: string }[];
+    if (customHistory && Array.isArray(customHistory) && customHistory.length > 0) {
+      openAIMessages = [
+        { role: "system", content: systemPrompt },
+        ...customHistory
+          .filter((m: any) => m && (m.role === 'user' || m.role === 'assistant') && m.content)
+          .map((m: any) => ({ role: m.role as string, content: (m.content as string).substring(0, 3000) })),
+      ];
+    } else {
+      openAIMessages = [
+        {
+          role: "system",
+          content: `${systemPrompt}
 
             Diretrizes de Comportamento:
             1. **Analise Antes de Responder**: Leia o histórico da conversa. Se você não tiver informações suficientes para dar uma solução certeira, **FAÇA PERGUNTAS** ao agente para entender melhor o cenário.
@@ -126,114 +143,20 @@ serve(async (req) => {
             2. **Seja Extremamente Conciso**: Evite textos longos. Use frases curtas. Vá direto ao ponto.
             3. **Foco na Ação**: Suas respostas devem ser orientadas para a resolução. Diga o que fazer, não apenas o que é o problema.
             4. **Tom de Voz**: Profissional, mas leve e parceiro. Use emojis com moderação.
-            
-            ═══════════════════════════════════════════════════════════════
-            📚 GUIA DE MANUAIS DO SISTEMA
-            ═══════════════════════════════════════════════════════════════
-            
-            Para dúvidas sobre funcionalidades do sistema, consulte os manuais abaixo.
-            IMPORTANTE: Sempre indique como acessar a página quando explicar uma funcionalidade!
-            
-            📬 **INBOX / CONVERSAS** (inbox.md)
-            📍 ACESSO: Menu lateral > "Inbox" (ícone de mensagem 💬)
-            - Lista de conversas, filtros, status (abertos/pendentes/resolvidos)
-            - Área de chat, enviar mensagens, anexos, áudios
-            - Menu de ações (responder/editar/apagar/reagir)
-            - Botão IA no chat (gerar/corrigir/melhorar)
-            - Mensagens rápidas (comando /atalho)
-            - Painel lateral: CRM, Vendas, Agendamento, Follow Up, Copilot
-            
-            📋 **TAREFAS** (tasks.md)
-            📍 ACESSO: Menu lateral > Submenu "Administrativo" 📊 > "Tarefas" 📋
-            - Criar, editar, excluir tarefas
-            - Status, prioridades, responsáveis
-            - Quadros de tarefas personalizados
-            
-            📊 **CRM** (crm.md)
-            📍 ACESSO: Menu lateral > "CRM" (ícone de maleta 💼)
-            - Pipeline de vendas, Kanban
-            - Leads, Deals, Negócios
-            - Movimentação entre etapas
-            
-            🤖 **DEFINIÇÕES DE IA** (ia-config.md)
-            📍 ACESSO: Menu lateral > Submenu "Automação" 🔧 > "Definições da IA" 🤖
-            - Configurar comportamento da IA
-            - Empresa, Restrições, Qualificação, FAQ
-            - Ativar/desativar IA por instância
-            
-            📱 **CONEXÕES WHATSAPP** (whatsapp-connection.md)
-            📍 ACESSO: Menu lateral > Submenu "Automação" 🔧 > "Conexões" 📱
-            - Conectar/desconectar instâncias WhatsApp
-            - Gerar código de pareamento
-            - Configurar fila padrão
-            
-            ⚙️ **CONFIGURAÇÕES** (settings.md)
-            📍 ACESSO: Menu lateral > Submenu "Automação" 🔧 > "Configurações" ⚙️
-            - Perfil, Empresa, Segurança, Sistema
-            - Notificações push, instalar PWA
-            - Exclusão de conta
-            
-            📦 **PRODUTOS E SERVIÇOS** (products-services.md)
-            📍 ACESSO: Menu lateral > Submenu "Operações" 📦 > "Produtos e Serviços" 📦
-            - Cadastrar produtos e serviços
-            - Preços, duração, alertas de oportunidade
-            - Importação via CSV
-            
-            👥 **CONTATOS** (contacts.md)
-            📍 ACESSO: Menu lateral > Submenu "Operações" 📦 > "Contatos" 📇
-            - Lista de contatos, busca
-            - Tags, edição, exclusão em massa
-            - Toggle de IA por contato
-            
-            📂 **FILAS** (queues.md)
-            📍 ACESSO: Menu lateral > Submenu "Operações" 📦 > "Filas" 📋
-            - Criar e gerenciar filas de atendimento
-            - Atribuir usuários às filas
-            
-            🏷️ **TAGS** (tags.md)
-            📍 ACESSO: Menu lateral > Submenu "Operações" 📦 > "Tags" 🏷️
-            - Criar, editar, excluir tags
-            - Cores, status, tag especial "IA"
-            
-            ⏰ **FOLLOW UP** (follow-up.md)
-            📍 ACESSO: Menu lateral > Submenu "Operações" 📦 > "Follow Up" ⏰
-            - Mensagens de follow up por tempo
-            - Categorias, templates
-            - Envio automático
-            
-            📅 **AGENDAMENTOS** (scheduling.md)
-            📍 ACESSO: Menu lateral > Submenu "Administrativo" 📊 > "Agendamentos" 📅
-            - Calendário, criar agendamentos
-            - Profissionais, serviços, horários
-            - Ausências, status (concluído/cancelado)
-            
-            💰 **VENDAS** (sales.md)
-            📍 ACESSO: Menu lateral > Submenu "Administrativo" 📊 > "Vendas" 🛒
-            - Registrar vendas
-            - Pagamento à vista/parcelado
-            - Relatórios de vendas
-            
-            👨‍💼 **EQUIPE** (team.md)
-            📍 ACESSO: Menu lateral > Submenu "Administrativo" 📊 > "Equipe" 👥
-            - Membros da equipe (atendentes, supervisores)
-            - Profissionais de agenda
-            - Permissões e comissões
-            
-            ═══════════════════════════════════════════════════════════════
-            INSTRUÇÕES DE USO:
-            - Quando o usuário perguntar sobre uma funcionalidade, SEMPRE indique como acessar a página
-            - Exemplo: "Para adicionar um produto, acesse: Menu lateral > Operações > Produtos e Serviços"
-            - Seja direto e objetivo nas explicações
-            - Forneça passos práticos quando possível
-            ═══════════════════════════════════════════════════════════════
-            
             ${context}`
-          },
-          { role: "user", content: message }
-        ],
+        },
+        { role: "user", content: message }
+      ];
+    }
+
+    // Call OpenAI API with GPT-4.1 (with custom token support)
+    const { response, usedCustomToken } = await makeOpenAIRequest(supabaseAdmin, ownerId, {
+      endpoint: "https://api.openai.com/v1/chat/completions",
+      body: {
+        model: "gpt-4.1",
+        messages: openAIMessages,
       },
     });
-
     console.log(`[ai-copilot-chat] Used ${usedCustomToken ? 'custom' : 'default'} OpenAI token`);
 
     if (!response.ok) {
