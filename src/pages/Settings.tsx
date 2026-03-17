@@ -316,6 +316,60 @@ export default function Settings() {
         }
     };
 
+    const updateNotificationsEnabled = async (newValue: boolean) => {
+        try {
+            setNotificationsEnabled(newValue);
+            if (!user?.id) return;
+            const { error } = await supabase
+                .from("team_members")
+                .update({ notifications_enabled: newValue, updated_at: new Date().toISOString() })
+                .eq("auth_user_id", user.id);
+            if (error) throw error;
+            queryClient.invalidateQueries({ queryKey: ["current-team-member"] });
+            toast.success(newValue ? "Notificações ativadas!" : "Notificações desativadas!");
+        } catch (error: any) {
+            setNotificationsEnabled(!newValue);
+            toast.error("Erro ao atualizar notificações");
+            console.error(error);
+        }
+    };
+
+    const updateGroupNotificationsEnabled = async (newValue: boolean) => {
+        try {
+            setGroupNotificationsEnabled(newValue);
+            if (!user?.id) return;
+            const { error } = await supabase
+                .from("team_members")
+                .update({ group_notifications_enabled: newValue, updated_at: new Date().toISOString() })
+                .eq("auth_user_id", user.id);
+            if (error) throw error;
+            queryClient.invalidateQueries({ queryKey: ["current-team-member"] });
+            toast.success(newValue ? "Notificações de grupos ativadas!" : "Notificações de grupos desativadas!");
+        } catch (error: any) {
+            setGroupNotificationsEnabled(!newValue);
+            toast.error("Erro ao atualizar notificações de grupos");
+            console.error(error);
+        }
+    };
+
+    const updateInstagramNotificationsEnabled = async (newValue: boolean) => {
+        try {
+            setInstagramNotificationsEnabled(newValue);
+            if (!user?.id) return;
+            const { error } = await supabase
+                .from("team_members")
+                .update({ instagram_notifications_enabled: newValue, updated_at: new Date().toISOString() })
+                .eq("auth_user_id", user.id);
+            if (error) throw error;
+            queryClient.invalidateQueries({ queryKey: ["current-team-member"] });
+            toast.success(newValue ? "Notificações do Instagram ativadas!" : "Notificações do Instagram desativadas!");
+        } catch (error: any) {
+            setInstagramNotificationsEnabled(!newValue);
+            toast.error("Erro ao atualizar notificações do Instagram");
+            console.error(error);
+        }
+    };
+
     const updateSignMessages = async (newValue: boolean) => {
         try {
             setLoading(true);
@@ -702,7 +756,7 @@ export default function Settings() {
                                 </div>
                                 <Switch
                                     checked={notificationsEnabled}
-                                    onCheckedChange={setNotificationsEnabled}
+                                    onCheckedChange={updateNotificationsEnabled}
                                 />
                             </div>
 
@@ -721,7 +775,7 @@ export default function Settings() {
                                 </div>
                                 <Switch
                                     checked={groupNotificationsEnabled}
-                                    onCheckedChange={setGroupNotificationsEnabled}
+                                    onCheckedChange={updateGroupNotificationsEnabled}
                                     disabled={!notificationsEnabled}
                                 />
                             </div>
@@ -741,7 +795,7 @@ export default function Settings() {
                                 </div>
                                 <Switch
                                     checked={instagramNotificationsEnabled}
-                                    onCheckedChange={setInstagramNotificationsEnabled}
+                                    onCheckedChange={updateInstagramNotificationsEnabled}
                                     disabled={!notificationsEnabled}
                                 />
                             </div>
