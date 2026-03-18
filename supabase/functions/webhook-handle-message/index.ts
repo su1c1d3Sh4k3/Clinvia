@@ -810,28 +810,36 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                         const supabaseUrl = Deno.env.get('SUPABASE_URL');
                         const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
+                        console.log(`[webhook-handle-message] Sending push to ${teamMembersToNotify.length} user(s):`, teamMembersToNotify.map(t => t.auth_user_id));
                         for (const tm of teamMembersToNotify) {
                             if (tm.auth_user_id && supabaseUrl && serviceKey) {
+                                const pushPayload = {
+                                    auth_user_id: tm.auth_user_id,
+                                    title: notificationTitle,
+                                    body: messagePreview,
+                                    icon: notificationIcon,
+                                    notification_type: 'messages',
+                                    url: `/?conversationId=${conversation.id}`,
+                                    tag: `message-${conversation.id}`,
+                                    contact_id: conversation.contact_id || '',
+                                    owner_id: conversation.owner_id || '',
+                                };
+                                console.log(`[webhook-handle-message] Calling send-push for ${tm.auth_user_id}, title: "${notificationTitle}", body: "${messagePreview}"`);
                                 fetch(`${supabaseUrl}/functions/v1/send-push`, {
                                     method: 'POST',
                                     headers: {
                                         'Content-Type': 'application/json',
                                         'Authorization': `Bearer ${serviceKey}`
                                     },
-                                    body: JSON.stringify({
-                                        auth_user_id: tm.auth_user_id,
-                                        title: notificationTitle,
-                                        body: messagePreview,
-                                        icon: notificationIcon,
-                                        notification_type: 'messages',
-                                        url: `/?conversationId=${conversation.id}`,
-                                        tag: `message-${conversation.id}`
-                                    })
+                                    body: JSON.stringify(pushPayload)
+                                }).then(async (res) => {
+                                    const body = await res.text();
+                                    console.log(`[webhook-handle-message] send-push response for ${tm.auth_user_id}: status=${res.status}, body=${body}`);
                                 }).catch(err => console.error('[webhook-handle-message] Push fetch error:', err));
                             }
                         }
 
-                        console.log(`[webhook-handle-message] Push notifications sent to ${teamMembersToNotify.length} user(s)`);
+                        console.log(`[webhook-handle-message] Push notifications dispatched to ${teamMembersToNotify.length} user(s)`);
                     }
 
                     // Trigger Audio Transcription

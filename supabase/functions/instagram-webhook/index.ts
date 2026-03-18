@@ -288,14 +288,8 @@ serve(async (req) => {
                                 .eq('user_id', userId)
                                 .single();
 
-                            if (existingContact) {
-                                contact = existingContact;
-                                console.log('[INSTAGRAM WEBHOOK] Found existing contact:', contact.id);
-                            } else {
-                                // Fetch sender info from Instagram API
-                                let senderName = 'Instagram User';
-                                let profilePicUrl = null;
-
+                            // Helper: fetch profile from Instagram Graph API
+                            const fetchInstagramProfile = async (): Promise<{ name: string | null; profilePicUrl: string | null }> => {
                                 try {
                                     const accessToken = instagramInstance.access_token;
                                     const profileResponse = await fetch(
@@ -303,13 +297,43 @@ serve(async (req) => {
                                     );
                                     if (profileResponse.ok) {
                                         const profileData = await profileResponse.json();
-                                        senderName = profileData.name || senderName;
-                                        profilePicUrl = profileData.profile_pic || null;
-                                        console.log('[INSTAGRAM WEBHOOK] Fetched profile:', senderName);
+                                        return {
+                                            name: profileData.name || null,
+                                            profilePicUrl: profileData.profile_pic || null,
+                                        };
                                     }
                                 } catch (e) {
                                     console.error('[INSTAGRAM WEBHOOK] Error fetching profile:', e);
                                 }
+                                return { name: null, profilePicUrl: null };
+                            };
+
+                            if (existingContact) {
+                                contact = existingContact;
+                                console.log('[INSTAGRAM WEBHOOK] Found existing contact:', contact.id);
+
+                                // Atualiza foto se estiver ausente (não atualiza a cada mensagem para evitar rate limit)
+                                if (!contact.profile_pic_url) {
+                                    const { name: fetchedName, profilePicUrl: fetchedPic } = await fetchInstagramProfile();
+                                    const updates: Record<string, string> = {};
+                                    if (fetchedPic) updates.profile_pic_url = fetchedPic;
+                                    if (fetchedName && (!contact.push_name || contact.push_name === 'Instagram User')) {
+                                        updates.push_name = fetchedName;
+                                    }
+                                    if (Object.keys(updates).length > 0) {
+                                        await supabase
+                                            .from('contacts')
+                                            .update(updates)
+                                            .eq('id', contact.id);
+                                        contact = { ...contact, ...updates };
+                                        console.log('[INSTAGRAM WEBHOOK] Updated existing contact profile:', contact.id);
+                                    }
+                                }
+                            } else {
+                                // Fetch sender info from Instagram API
+                                const { name: fetchedName, profilePicUrl } = await fetchInstagramProfile();
+                                const senderName = fetchedName || 'Instagram User';
+                                console.log('[INSTAGRAM WEBHOOK] Fetched profile for new contact:', senderName);
 
                                 // Create new contact
                                 const { data: newContact, error: contactError } = await supabase
