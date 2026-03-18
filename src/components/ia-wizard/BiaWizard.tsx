@@ -132,17 +132,44 @@ export function BiaWizard({ open, onClose, existingConfig, ownerId, productsServ
       const payload = toConfigPayload();
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error } = await (supabase as any)
-        .from('ia_config')
-        .upsert(
-          { ...payload, user_id: ownerId },
-          { onConflict: 'user_id' },
-        )
-        .select()
-        .single();
+      const db = supabase as any;
+      let error;
+
+      if (existingConfig) {
+        // Usuário existente: UPDATE apenas os campos do wizard
+        // Preserva ia_on, delay, followup, voice e demais configurações intactas
+        const { error: updateError } = await db
+          .from('ia_config')
+          .update(payload)
+          .eq('user_id', ownerId);
+        error = updateError;
+      } else {
+        // Usuário novo: INSERT com defaults seguros para todos os campos obrigatórios
+        const { error: insertError } = await db
+          .from('ia_config')
+          .insert({
+            ia_on: false,
+            followup: false,
+            fup1: false,
+            fup2: false,
+            fup3: false,
+            crm_auto: false,
+            followup_business_hours: false,
+            voice: false,
+            delay: 15,
+            fup1_time: 60,
+            fup2_time: 120,
+            fup3_time: 240,
+            welcome: '',
+            genre: 'female',
+            ...payload,
+            user_id: ownerId,
+          });
+        error = insertError;
+      }
 
       if (error) {
-        console.error('[BiaWizard] Supabase upsert error:', error);
+        console.error('[BiaWizard] Supabase save error:', error);
         throw error;
       }
       onSaveSuccess();
