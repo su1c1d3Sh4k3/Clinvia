@@ -121,11 +121,14 @@ export function QueueSelector({ conversationId, currentQueueId }: QueueSelectorP
                         role="combobox"
                         aria-expanded={open}
                         size="sm"
-                        className="justify-between"
+                        className="justify-between px-2 max-w-[140px] lg:max-w-[180px]"
+                        title={selectedQueue ? selectedQueue.name : "Filas"}
                     >
-                        <ListOrdered className="mr-2 h-4 w-4" />
-                        {selectedQueue ? selectedQueue.name : "Filas"}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        <ListOrdered className="h-4 w-4 flex-shrink-0" />
+                        <span className="hidden lg:inline mx-1.5 truncate">
+                            {selectedQueue ? selectedQueue.name : "Filas"}
+                        </span>
+                        <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-[200px] p-0">
