@@ -62,6 +62,7 @@ export function EditDealModal({ deal, open, onOpenChange }: EditDealModalProps) 
     const { data: staffMembers } = useStaff();
 
     const [products, setProducts] = useState<ProductItem[]>([]);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Fetch existing deal products
     const { data: existingProducts } = useDealProducts(deal?.id);
@@ -179,6 +180,7 @@ export function EditDealModal({ deal, open, onOpenChange }: EditDealModalProps) 
 
 
     const onSubmit = async (values: z.infer<typeof formSchema>) => {
+        setIsSubmitting(true);
         try {
             // Update Deal
             const cleanedValues = {
@@ -234,6 +236,8 @@ export function EditDealModal({ deal, open, onOpenChange }: EditDealModalProps) 
         } catch (error) {
             console.error("Erro ao atualizar negociação:", error);
             toast.error("Erro ao atualizar negociação");
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -426,8 +430,8 @@ export function EditDealModal({ deal, open, onOpenChange }: EditDealModalProps) 
                             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                                 Cancelar
                             </Button>
-                            <Button type="submit">
-                                Salvar Alterações
+                            <Button type="submit" disabled={isSubmitting}>
+                                {isSubmitting ? "Salvando..." : "Salvar Alterações"}
                             </Button>
                         </div>
                     </form>

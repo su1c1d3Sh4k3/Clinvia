@@ -261,19 +261,90 @@ serve(async (req) => {
 
                     for (const event of messaging) {
                         const senderId = event.sender?.id;
+                        const recipientId = event.recipient?.id;
                         const timestamp = event.timestamp;
                         const isEcho = event.message?.is_echo || false;
-
-                        // Skip echo messages (messages sent by the page itself)
-                        if (isEcho) {
-                            continue;
-                        }
 
                         if (event.message) {
                             const message = event.message;
                             const messageId = message.mid;
                             const messageText = message.text || '';
                             const attachments = message.attachments || [];
+
+                            // Echo = mensagem enviada pela página (outbound)
+                            // Para echoes, o "sender" é a página e o "recipient" é o cliente
+                            if (isEcho) {
+                                console.log('[INSTAGRAM WEBHOOK] Echo message (outbound):', messageId);
+
+                                // Encontra o contato pelo recipient (que é o cliente)
+                                const { data: echoContact } = await supabase
+                                    .from('contacts')
+                                    .select('id, push_name')
+                                    .eq('instagram_id', recipientId)
+                                    .eq('user_id', userId)
+                                    .single();
+
+                                if (!echoContact) {
+                                    console.warn('[INSTAGRAM WEBHOOK] Echo: contact not found for recipient', recipientId);
+                                    continue;
+                                }
+
+                                // Encontra conversa aberta
+                                const { data: echoConvs } = await supabase
+                                    .from('conversations')
+                                    .select('id')
+                                    .eq('contact_id', echoContact.id)
+                                    .eq('user_id', userId)
+                                    .in('status', ['open', 'pending'])
+                                    .order('created_at', { ascending: false })
+                                    .limit(1);
+
+                                if (!echoConvs?.length) {
+                                    console.warn('[INSTAGRAM WEBHOOK] Echo: no open conversation for contact', echoContact.id);
+                                    continue;
+                                }
+
+                                const echoConvId = echoConvs[0].id;
+
+                                // Verifica duplicata
+                                const { data: existingMsg } = await supabase
+                                    .from('messages')
+                                    .select('id')
+                                    .eq('evolution_id', messageId)
+                                    .maybeSingle();
+
+                                if (existingMsg) {
+                                    console.log('[INSTAGRAM WEBHOOK] Echo: duplicate, skipping', messageId);
+                                    continue;
+                                }
+
+                                let echoMediaUrl = null;
+                                let echoMsgType = 'text';
+                                if (attachments.length > 0) {
+                                    echoMsgType = attachments[0].type || 'text';
+                                    echoMediaUrl = attachments[0].payload?.url || null;
+                                }
+
+                                await supabase.from('messages').insert({
+                                    conversation_id: echoConvId,
+                                    body: messageText,
+                                    direction: 'outbound',
+                                    message_type: echoMsgType,
+                                    evolution_id: messageId,
+                                    user_id: userId,
+                                    media_url: echoMediaUrl,
+                                    status: 'sent',
+                                });
+
+                                // Atualiza last_message_at
+                                await supabase.from('conversations').update({
+                                    last_message: messageText || 'Mídia',
+                                    last_message_at: new Date().toISOString(),
+                                }).eq('id', echoConvId);
+
+                                console.log('[INSTAGRAM WEBHOOK] ✅ Echo message saved as outbound');
+                                continue;
+                            }
 
                             console.log('[INSTAGRAM WEBHOOK] Message:', messageId, 'Text:', messageText);
 
@@ -289,19 +360,26 @@ serve(async (req) => {
                                 .single();
 
                             // Helper: fetch profile from Instagram Graph API
+                            // Usa profile_pic (campo que funciona na Messaging API) + username como fallback de nome
+                            // Nota: a API retorna erro 100 para alguns usuários (privacidade/permissões) — nesse caso retorna null
                             const fetchInstagramProfile = async (): Promise<{ name: string | null; profilePicUrl: string | null }> => {
                                 try {
                                     const accessToken = instagramInstance.access_token;
                                     const profileResponse = await fetch(
-                                        `https://graph.instagram.com/v24.0/${senderId}?fields=name,profile_pic&access_token=${accessToken}`
+                                        `https://graph.instagram.com/v24.0/${senderId}?fields=name,username,profile_pic&access_token=${accessToken}`
                                     );
-                                    if (profileResponse.ok) {
-                                        const profileData = await profileResponse.json();
-                                        return {
-                                            name: profileData.name || null,
-                                            profilePicUrl: profileData.profile_pic || null,
-                                        };
+                                    const profileData = await profileResponse.json();
+                                    console.log('[INSTAGRAM WEBHOOK] Profile API response:', JSON.stringify(profileData));
+
+                                    if (profileData.error) {
+                                        console.warn('[INSTAGRAM WEBHOOK] API error for', senderId, ':', profileData.error.message);
+                                        return { name: null, profilePicUrl: null };
                                     }
+
+                                    return {
+                                        name: profileData.name || profileData.username || null,
+                                        profilePicUrl: profileData.profile_pic || null,
+                                    };
                                 } catch (e) {
                                     console.error('[INSTAGRAM WEBHOOK] Error fetching profile:', e);
                                 }
@@ -312,8 +390,9 @@ serve(async (req) => {
                                 contact = existingContact;
                                 console.log('[INSTAGRAM WEBHOOK] Found existing contact:', contact.id);
 
-                                // Atualiza foto se estiver ausente (não atualiza a cada mensagem para evitar rate limit)
-                                if (!contact.profile_pic_url) {
+                                // Atualiza foto se ausente OU nome genérico — re-tenta a cada mensagem
+                                // até conseguir dados reais do perfil
+                                if (!contact.profile_pic_url || contact.push_name === 'Instagram User') {
                                     const { name: fetchedName, profilePicUrl: fetchedPic } = await fetchInstagramProfile();
                                     const updates: Record<string, string> = {};
                                     if (fetchedPic) updates.profile_pic_url = fetchedPic;

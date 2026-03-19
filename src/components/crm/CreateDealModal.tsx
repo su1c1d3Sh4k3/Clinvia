@@ -95,6 +95,7 @@ export function CreateDealModal({
 
     // Estado para produtos múltiplos — inicializado com defaultProducts se fornecidos
     const [products, setProducts] = useState<ProductItem[]>(defaultProducts ?? []);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
@@ -184,6 +185,7 @@ export function CreateDealModal({
     });
 
     const onSubmit = async (values: z.infer<typeof formSchema>) => {
+        setIsSubmitting(true);
         try {
             const { data: userData } = await supabase.auth.getUser();
             if (!userData.user) throw new Error("Usuário não autenticado");
@@ -262,6 +264,8 @@ export function CreateDealModal({
         } catch (error) {
             console.error("Erro ao criar negociação:", error);
             toast.error("Erro ao criar negociação");
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -461,8 +465,8 @@ export function CreateDealModal({
                             )}
                         />
 
-                        <Button type="submit" className="w-full">
-                            Criar Negociação
+                        <Button type="submit" className="w-full" disabled={isSubmitting}>
+                            {isSubmitting ? "Criando..." : "Criar Negociação"}
                         </Button>
                     </form>
                 </Form>

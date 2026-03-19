@@ -37,6 +37,7 @@ const formSchema = z.object({
 
 export function CreateFunnelModal() {
     const [open, setOpen] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const queryClient = useQueryClient();
 
     const form = useForm<z.infer<typeof formSchema>>({
@@ -48,6 +49,7 @@ export function CreateFunnelModal() {
     });
 
     const onSubmit = async (values: z.infer<typeof formSchema>) => {
+        setIsSubmitting(true);
         try {
             const { data: userData } = await supabase.auth.getUser();
             if (!userData.user) throw new Error("Usuário não autenticado");
@@ -124,6 +126,8 @@ export function CreateFunnelModal() {
         } catch (error) {
             console.error("Erro ao criar funil:", error);
             toast.error("Erro ao criar funil");
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -167,8 +171,8 @@ export function CreateFunnelModal() {
                                 </FormItem>
                             )}
                         />
-                        <Button type="submit" className="w-full">
-                            Criar Funil
+                        <Button type="submit" className="w-full" disabled={isSubmitting}>
+                            {isSubmitting ? "Criando..." : "Criar Funil"}
                         </Button>
                     </form>
                 </Form>
