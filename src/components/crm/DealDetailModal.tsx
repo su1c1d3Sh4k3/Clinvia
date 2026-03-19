@@ -306,8 +306,10 @@ export function DealDetailModal({ deal, open, onOpenChange, onDealWon, onDealLos
                 .eq("id", deal.id);
             if (error) throw error;
         },
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: ["crm-deals"] });
-            queryClient.invalidateQueries({ queryKey: ["crm-deals-contact"] }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["crm-deals"] });
+            queryClient.invalidateQueries({ queryKey: ["crm-deals-contact"] });
+        },
     });
 
     // Debounced description save
@@ -343,8 +345,10 @@ export function DealDetailModal({ deal, open, onOpenChange, onDealWon, onDealLos
                 .eq("id", deal.id);
             if (error) throw error;
         },
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: ["crm-deals"] });
-            queryClient.invalidateQueries({ queryKey: ["crm-deals-contact"] }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["crm-deals"] });
+            queryClient.invalidateQueries({ queryKey: ["crm-deals-contact"] });
+        },
     });
 
     const updateProfessionalMutation = useMutation({
@@ -355,8 +359,10 @@ export function DealDetailModal({ deal, open, onOpenChange, onDealWon, onDealLos
                 .eq("id", deal.id);
             if (error) throw error;
         },
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: ["crm-deals"] });
-            queryClient.invalidateQueries({ queryKey: ["crm-deals-contact"] }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["crm-deals"] });
+            queryClient.invalidateQueries({ queryKey: ["crm-deals-contact"] });
+        },
     });
 
     const [dealProductsModalOpen, setDealProductsModalOpen] = useState(false);
