@@ -306,7 +306,8 @@ export function DealDetailModal({ deal, open, onOpenChange, onDealWon, onDealLos
                 .eq("id", deal.id);
             if (error) throw error;
         },
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: ["crm-deals"] }),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ["crm-deals"] });
+            queryClient.invalidateQueries({ queryKey: ["crm-deals-contact"] }),
     });
 
     // Debounced description save
@@ -329,6 +330,7 @@ export function DealDetailModal({ deal, open, onOpenChange, onDealWon, onDealLos
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["crm-deals"] });
+            queryClient.invalidateQueries({ queryKey: ["crm-deals-contact"] });
             queryClient.invalidateQueries({ queryKey: ["deal-history", deal.id] });
         },
     });
@@ -341,7 +343,8 @@ export function DealDetailModal({ deal, open, onOpenChange, onDealWon, onDealLos
                 .eq("id", deal.id);
             if (error) throw error;
         },
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: ["crm-deals"] }),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ["crm-deals"] });
+            queryClient.invalidateQueries({ queryKey: ["crm-deals-contact"] }),
     });
 
     const updateProfessionalMutation = useMutation({
@@ -352,7 +355,8 @@ export function DealDetailModal({ deal, open, onOpenChange, onDealWon, onDealLos
                 .eq("id", deal.id);
             if (error) throw error;
         },
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: ["crm-deals"] }),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ["crm-deals"] });
+            queryClient.invalidateQueries({ queryKey: ["crm-deals-contact"] }),
     });
 
     const [dealProductsModalOpen, setDealProductsModalOpen] = useState(false);
@@ -375,6 +379,7 @@ export function DealDetailModal({ deal, open, onOpenChange, onDealWon, onDealLos
             toast.success("Nota adicionada!");
             setNewNote("");
             queryClient.invalidateQueries({ queryKey: ["crm-deals"] });
+            queryClient.invalidateQueries({ queryKey: ["crm-deals-contact"] });
         },
         onError: () => toast.error("Erro ao adicionar nota"),
     });
@@ -457,6 +462,7 @@ export function DealDetailModal({ deal, open, onOpenChange, onDealWon, onDealLos
             toast.success("Negociação marcada como ganha!");
             queryClient.invalidateQueries({ queryKey: ["sales"] });
             queryClient.invalidateQueries({ queryKey: ["crm-deals"] });
+            queryClient.invalidateQueries({ queryKey: ["crm-deals-contact"] });
 
             const serviceItems = validProds.filter((p: any) => p.product_service?.type === "service");
             if (serviceItems.length > 0 && d.contact_id) {
@@ -486,6 +492,7 @@ export function DealDetailModal({ deal, open, onOpenChange, onDealWon, onDealLos
 
         toast.success("Negociação marcada como perdida");
         queryClient.invalidateQueries({ queryKey: ["crm-deals"] });
+            queryClient.invalidateQueries({ queryKey: ["crm-deals-contact"] });
         setLossReasonModalOpen(false);
     };
 

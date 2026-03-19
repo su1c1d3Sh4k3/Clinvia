@@ -229,6 +229,7 @@ export function EditDealModal({ deal, open, onOpenChange }: EditDealModalProps) 
             toast.success("Negociação atualizada!");
             queryClient.invalidateQueries({ queryKey: ["crm-deals"] });
             queryClient.invalidateQueries({ queryKey: ["deal-products", deal.id] });
+            queryClient.invalidateQueries({ queryKey: ["crm-deals-contact"] });
             onOpenChange(false);
         } catch (error) {
             console.error("Erro ao atualizar negociação:", error);

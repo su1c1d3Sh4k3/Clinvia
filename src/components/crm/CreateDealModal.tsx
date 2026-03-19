@@ -255,6 +255,7 @@ export function CreateDealModal({
             toast.success("Negociação criada com sucesso!");
             queryClient.invalidateQueries({ queryKey: ["crm-deals"] });
             queryClient.invalidateQueries({ queryKey: ["crm-stages"] });
+            queryClient.invalidateQueries({ queryKey: ["crm-deals-contact"] });
             if (setOpen) setOpen(false);
             form.reset();
             setProducts([]);
