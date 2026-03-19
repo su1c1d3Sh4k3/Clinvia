@@ -937,10 +937,23 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
             let iaConfigOn = false;
             const { data: iaConfig } = await supabase
                 .from('ia_config')
-                .select('ia_on')
+                .select('ia_on, test_mode, test_numbers')
                 .eq('user_id', userId)
                 .single();
             iaConfigOn = iaConfig?.ia_on === true;
+
+            // ─── Modo de Testes: bloquear se número não está na whitelist ───
+            if (iaConfigOn && iaConfig?.test_mode === true) {
+                const testNumbers: string[] = iaConfig?.test_numbers ?? [];
+                // Extrair dígitos do remetente (ex: "5511999999999@s.whatsapp.net" → "5511999999999")
+                const senderRaw = (payload?.data?.key?.remoteJid ?? '').split('@')[0];
+                const senderDigits = senderRaw.replace(/\D/g, '');
+                const allowed = testNumbers.map((n: string) => n.replace(/\D/g, '')).filter(Boolean);
+                if (!allowed.includes(senderDigits)) {
+                    console.log(`[webhook-handle-message] test_mode: sender ${senderDigits} not in whitelist — skipping N8N forward`);
+                    iaConfigOn = false; // impede o envio ao N8N
+                }
+            }
 
             const instanceIaOn = instance.ia_on_wpp !== false;
 

@@ -61,6 +61,8 @@ interface IAConfigData {
     voice: boolean;
     genre: string;
     convenio: string;
+    test_mode: boolean;
+    test_numbers: string[];
 }
 
 interface QualifyItem {
@@ -115,6 +117,8 @@ const defaultConfig: IAConfigData = {
     voice: false,
     genre: "female",
     convenio: "",
+    test_mode: false,
+    test_numbers: [],
 };
 
 export default function IAConfig() {
@@ -145,6 +149,21 @@ export default function IAConfig() {
     const [togglingIA, setTogglingIA] = useState(false); // Loading do toggle de IA
     const [showWizard, setShowWizard] = useState(false); // Wizard Bia
     const [wizardAutoOpened, setWizardAutoOpened] = useState(false); // Controla auto-abertura do wizard
+
+    // ─── Helpers de telefone para Modo de Testes ───────────────────────────
+    const formatPhone = (digits: string): string => {
+        const d = digits.replace(/\D/g, '').slice(0, 13);
+        if (!d) return '';
+        if (d.length <= 2)  return `+${d}`;
+        if (d.length <= 4)  return `+${d.slice(0,2)} (${d.slice(2)}`;
+        const ddi = d.slice(0,2), ddd = d.slice(2,4), num = d.slice(4);
+        if (num.length === 0) return `+${ddi} (${ddd})`;
+        if (num.length <= 4)  return `+${ddi} (${ddd}) ${num}`;
+        const cut = num.length <= 8 ? num.length - 4 : 5;
+        return `+${ddi} (${ddd}) ${num.slice(0, cut)}-${num.slice(cut)}`;
+    };
+    const parsePhone = (formatted: string): string =>
+        formatted.replace(/\D/g, '').slice(0, 13);
 
     // Buscar configuração existente
     const { data: existingConfig, isLoading: isLoadingConfig } = useQuery({
@@ -1273,6 +1292,84 @@ export default function IAConfig() {
                                                     Nenhuma instância conectada.
                                                 </p>
                                             )}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Modo de Testes */}
+                            <div className="space-y-3 p-3 md:p-4 border rounded-lg">
+                                <div className="flex items-center justify-between gap-3">
+                                    <div className="space-y-0.5">
+                                        <h4 className="font-medium text-sm md:text-base">Modo de Testes</h4>
+                                        <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">
+                                            {!config.ia_on || !hasAnyActiveInstance()
+                                                ? "Ative a IA e habilite uma instância para usar este modo."
+                                                : config.test_mode
+                                                    ? "Apenas números cadastrados receberão resposta da IA."
+                                                    : "A IA responde todos os contatos normalmente."}
+                                        </p>
+                                    </div>
+                                    <Switch
+                                        checked={config.test_mode}
+                                        onCheckedChange={(checked) => setConfig({ ...config, test_mode: checked })}
+                                        disabled={!config.ia_on || !hasAnyActiveInstance()}
+                                    />
+                                </div>
+
+                                {config.test_mode && config.ia_on && hasAnyActiveInstance() && (
+                                    <div className="space-y-3 pt-3 border-t">
+                                        <p className="text-xs text-muted-foreground">
+                                            Números autorizados a receber respostas da IA:
+                                        </p>
+
+                                        {(config.test_numbers.length === 0 ? [''] : config.test_numbers).map((num, idx) => (
+                                            <div key={idx} className="flex items-center gap-2">
+                                                <Input
+                                                    type="tel"
+                                                    placeholder="+55 (11) 99999-9999"
+                                                    value={formatPhone(num)}
+                                                    onChange={(e) => {
+                                                        const digits = parsePhone(e.target.value);
+                                                        const updated = [...config.test_numbers];
+                                                        if (config.test_numbers.length === 0) {
+                                                            setConfig({ ...config, test_numbers: [digits] });
+                                                        } else {
+                                                            updated[idx] = digits;
+                                                            setConfig({ ...config, test_numbers: updated });
+                                                        }
+                                                    }}
+                                                    className="flex-1"
+                                                />
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="text-destructive hover:text-destructive"
+                                                    onClick={() => {
+                                                        const updated = config.test_numbers.filter((_, i) => i !== idx);
+                                                        setConfig({ ...config, test_numbers: updated });
+                                                    }}
+                                                    disabled={config.test_numbers.length <= 1}
+                                                >
+                                                    <span className="text-base leading-none">×</span>
+                                                </Button>
+                                            </div>
+                                        ))}
+
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            className="w-full"
+                                            onClick={() =>
+                                                setConfig({
+                                                    ...config,
+                                                    test_numbers: [...config.test_numbers, ''],
+                                                })
+                                            }
+                                        >
+                                            + Adicionar número
+                                        </Button>
                                     </div>
                                 )}
                             </div>
