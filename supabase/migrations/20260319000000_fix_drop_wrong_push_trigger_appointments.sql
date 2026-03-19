@@ -1,0 +1,14 @@
+-- Remove trigger incorreto na tabela appointments
+-- Esse trigger usava trigger_push_notification() que verifica NEW.direction,
+-- campo que não existe em appointments, causando erro "record 'new' has no field 'direction'"
+-- ao deletar produtos (que fazem SET NULL via FK em appointments.service_id → ON DELETE SET NULL)
+--
+-- Fluxo que causava o erro:
+-- 1. DELETE em products_services
+-- 2. FK ON DELETE SET NULL → UPDATE em appointments.service_id = NULL
+-- 3. Trigger push_on_appointment_change (AFTER INSERT UPDATE) dispara
+-- 4. Chama trigger_push_notification() que acessa NEW.direction
+-- 5. appointments não tem coluna direction → ERROR
+--
+-- A tabela appointments já possui o trigger correto: on_appointment_status_change
+DROP TRIGGER IF EXISTS push_on_appointment_change ON appointments;
