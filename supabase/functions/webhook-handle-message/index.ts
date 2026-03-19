@@ -596,6 +596,26 @@ serve(async (req) => {
                         (contextInfo.participant.includes('@lid') ? 'Atendente' : 'Cliente') : null;
                 }
 
+                // Dedup: skip if this message was already processed (Evolution API can send duplicate webhooks)
+                // IMPORTANTE: filtrar por conversation_id para evitar falsos positivos entre instâncias
+                // distintas do mesmo usuário (a mesma evolution_id pode existir como inbound em uma
+                // conversa e outbound em outra quando as duas instâncias se comunicam entre si)
+                if (messageId && conversation?.id) {
+                    const { data: existingMsg } = await supabase
+                        .from('messages')
+                        .select('id')
+                        .eq('evolution_id', messageId)
+                        .eq('conversation_id', conversation.id)
+                        .maybeSingle();
+
+                    if (existingMsg) {
+                        console.log('[webhook-handle-message] Duplicate webhook skipped, evolution_id:', messageId);
+                        return new Response(JSON.stringify({ success: true, duplicate: true }), {
+                            headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200
+                        });
+                    }
+                }
+
                 // Save Message
                 const { data: savedMessage, error: msgError } = await supabase
                     .from('messages')
