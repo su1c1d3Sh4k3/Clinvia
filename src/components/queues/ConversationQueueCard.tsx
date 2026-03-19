@@ -113,28 +113,29 @@ export function ConversationQueueCard({
             </div>
 
             {/* Satisfaction Score + Tags */}
-            <div className="flex items-center gap-2 mb-2 flex-wrap">
+            <div className="flex items-center gap-2 mb-2 overflow-hidden">
                 {conversation.sentiment_score !== null && (
-                    <span className="text-xs flex items-center gap-1">
+                    <span className="text-xs flex items-center gap-1 flex-shrink-0">
                         ⭐ {conversation.sentiment_score}
                     </span>
                 )}
 
-                {/* Tags - show max 2 on mobile, 3 on desktop */}
-                {conversation.contact.contact_tags?.slice(0, window.innerWidth < 768 ? 2 : 3).map((ct) => (
-                    <Badge
-                        key={ct.tag_id}
-                        style={{ backgroundColor: `${ct.tags?.color || '#gray'}20`, color: ct.tags?.color || '#gray' }}
-                        className="text-xs px-1.5 py-0.5"
-                    >
-                        {ct.tags?.name || 'Tag'}
-                    </Badge>
-                ))}
-                {(conversation.contact.contact_tags?.length || 0) > (window.innerWidth < 768 ? 2 : 3) && (
-                    <span className="text-xs text-muted-foreground">
-                        +{(conversation.contact.contact_tags?.length || 0) - (window.innerWidth < 768 ? 2 : 3)}
-                    </span>
-                )}
+                <div className="flex items-center gap-1 overflow-hidden min-w-0">
+                    {conversation.contact.contact_tags?.slice(0, 2).map((ct) => (
+                        <Badge
+                            key={ct.tag_id}
+                            style={{ backgroundColor: `${ct.tags?.color || '#gray'}20`, color: ct.tags?.color || '#gray' }}
+                            className="text-xs px-1.5 py-0.5 flex-shrink-0"
+                        >
+                            {ct.tags?.name || 'Tag'}
+                        </Badge>
+                    ))}
+                    {(conversation.contact.contact_tags?.length || 0) > 2 && (
+                        <span className="text-xs text-muted-foreground flex-shrink-0">
+                            +{(conversation.contact.contact_tags?.length || 0) - 2}
+                        </span>
+                    )}
+                </div>
             </div>
 
             {/* Action Icons */}
