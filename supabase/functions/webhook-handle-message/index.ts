@@ -945,8 +945,10 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
             // ─── Modo de Testes: bloquear se número não está na whitelist ───
             if (iaConfigOn && iaConfig?.test_mode === true) {
                 const testNumbers: string[] = iaConfig?.test_numbers ?? [];
-                // Extrair dígitos do remetente (ex: "5511999999999@s.whatsapp.net" → "5511999999999")
-                const senderRaw = (payload?.data?.key?.remoteJid ?? '').split('@')[0];
+                // Extrair dígitos do remetente — usa senderJid que já foi resolvido do contato
+                // (payload?.data?.key?.remoteJid não existe neste formato de webhook)
+                const senderRaw = senderJid
+                    ?? (payload?.chat?.wa_chatid || payload?.message?.chatid || '');
                 const senderDigits = senderRaw.replace(/\D/g, '');
 
                 // Gera variantes do número para lidar com o dígito 9 do celular brasileiro:
