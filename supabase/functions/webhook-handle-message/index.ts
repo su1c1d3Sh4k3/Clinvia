@@ -948,8 +948,24 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                 // Extrair dígitos do remetente (ex: "5511999999999@s.whatsapp.net" → "5511999999999")
                 const senderRaw = (payload?.data?.key?.remoteJid ?? '').split('@')[0];
                 const senderDigits = senderRaw.replace(/\D/g, '');
+
+                // Gera variantes do número para lidar com o dígito 9 do celular brasileiro:
+                // WhatsApp pode enviar "5511987654321" (13 dígitos) ou "551187654321" (12 dígitos)
+                const phoneVariants = (d: string): string[] => {
+                    const v = [d];
+                    if (d.startsWith('55') && d.length === 13 && d[4] === '9') {
+                        v.push(d.slice(0, 4) + d.slice(5)); // remove o 9 → 12 dígitos
+                    } else if (d.startsWith('55') && d.length === 12) {
+                        v.push(d.slice(0, 4) + '9' + d.slice(4)); // adiciona 9 → 13 dígitos
+                    }
+                    return v;
+                };
+
+                const senderVariants = phoneVariants(senderDigits);
                 const allowed = testNumbers.map((n: string) => n.replace(/\D/g, '')).filter(Boolean);
-                if (!allowed.includes(senderDigits)) {
+                const isAllowed = allowed.some(n => phoneVariants(n).some(nv => senderVariants.includes(nv)));
+
+                if (!isAllowed) {
                     console.log(`[webhook-handle-message] test_mode: sender ${senderDigits} not in whitelist — skipping N8N forward`);
                     iaConfigOn = false; // impede o envio ao N8N
                 }
