@@ -85,6 +85,18 @@ serve(async (req) => {
                 const eventType = job.event_type || job.payload?.EventType || job.payload?.event || 'messages';
                 let targetFunction: string;
 
+                // Eventos de conexão/status da instância → ignorar (marcar como done imediatamente)
+                const IGNORED_EVENTS = ['connection', 'status.instance', 'contacts.upsert', 'contacts.update', 'presence.update', 'chats.upsert', 'chats.update', 'chats.delete'];
+                if (IGNORED_EVENTS.includes(eventType)) {
+                    await supabase.from('webhook_queue').update({
+                        status: 'done',
+                        completed_at: new Date().toISOString()
+                    }).eq('id', job.id);
+                    console.log(`[webhook-queue-processor] Job ${job.id} ignored (event: ${eventType})`);
+                    processed++;
+                    continue;
+                }
+
                 // Status updates (read receipts, ack) → webhook-handle-status
                 if (eventType === 'messages_update' || eventType === 'ack' || job.payload?.type === 'ReadReceipt') {
                     targetFunction = 'webhook-handle-status';
@@ -119,13 +131,15 @@ serve(async (req) => {
             } catch (e: any) {
                 console.error(`[webhook-queue-processor] Error processing job ${job.id}:`, e);
 
-                // 5. Determinar status: retry ou failed
-                const newStatus = job.attempts + 1 >= MAX_ATTEMPTS ? 'failed' : 'pending';
+                // 5. Determinar status: retry ou failed (incrementar attempts SEMPRE)
+                const newAttempts = (job.attempts || 0) + 1;
+                const newStatus = newAttempts >= MAX_ATTEMPTS ? 'failed' : 'pending';
 
                 await supabase
                     .from('webhook_queue')
                     .update({
                         status: newStatus,
+                        attempts: newAttempts,
                         error_message: e.message || String(e)
                     })
                     .eq('id', job.id);
