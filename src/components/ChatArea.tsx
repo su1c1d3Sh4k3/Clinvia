@@ -249,6 +249,30 @@ export const ChatArea = ({
     enabled: !!(conversation as any)?.instance_id,
   });
 
+  // Para conversas Instagram: busca a instância conectada do usuário
+  const { data: instagramInstance } = useQuery({
+    queryKey: ["instagram-instance", (conversation as any)?.instagram_instance_id],
+    queryFn: async () => {
+      const conv = conversation as any;
+      if (conv?.instagram_instance_id) {
+        const { data } = await supabase
+          .from("instagram_instances" as any)
+          .select("*")
+          .eq("id", conv.instagram_instance_id)
+          .single();
+        return data || null;
+      }
+      // Se não houver vínculo, tenta buscar qualquer instância Instagram conectada do usuário
+      const { data } = await supabase
+        .from("instagram_instances" as any)
+        .select("*")
+        .limit(1)
+        .maybeSingle();
+      return data || null;
+    },
+    enabled: (conversation as any)?.channel === 'instagram',
+  });
+
 
   const contact = conversation?.contacts;
   const group = conversation?.groups;
@@ -504,11 +528,16 @@ export const ChatArea = ({
 
     // Conversas do Instagram: nunca mostrar o modal de WhatsApp
     if (conv?.channel === 'instagram') {
-      if (!conv?.instagram_instance_id) {
-        toast.error("Nenhuma conta Instagram conectada para esta conversa.");
+      const igInstanceId = conv?.instagram_instance_id || (instagramInstance as any)?.id;
+      if (!igInstanceId) {
+        toast.error("Nenhuma conta Instagram conectada. Conecte uma conta em Configurações > Instagram.");
         return;
       }
-      await executeSendMessage(conv.instagram_instance_id, options);
+      // Vincula a instância à conversa se ainda não estava vinculada
+      if (!conv?.instagram_instance_id) {
+        await supabase.from('conversations').update({ instagram_instance_id: igInstanceId }).eq('id', conversationId);
+      }
+      await executeSendMessage(igInstanceId, options);
       return;
     }
 
