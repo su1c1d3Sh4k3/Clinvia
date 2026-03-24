@@ -65,7 +65,6 @@ const App = () => (
           <Sonner />
           <BrowserRouter>
             <ChangePasswordModal />
-            <ImpersonationBanner />
             <NotificationManager />
             <AutoFollowUpProcessor />
             <Suspense fallback={<PageLoader />}>
