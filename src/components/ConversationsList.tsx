@@ -259,7 +259,7 @@ export const ConversationsList = ({
   };
 
   return (
-    <div className="w-full md:w-[360px] h-full md:h-screen border-r border-[#1E2229]/20 dark:border-border flex flex-col bg-white dark:bg-background overflow-hidden">
+    <div className="w-full md:w-[360px] h-full border-r border-[#1E2229]/20 dark:border-border flex flex-col bg-white dark:bg-background overflow-hidden">
       <div className="p-4 border-b border-[#1E2229]/20 dark:border-border space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold">Inbox</h2>
