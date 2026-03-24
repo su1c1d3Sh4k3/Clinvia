@@ -499,11 +499,25 @@ export const ChatArea = ({
 
   const handleSend = async (options?: { mentions?: string[], body?: string }) => {
     if ((!message.trim() && !selectedFile) || !conversationId) return;
-    if (!(conversation as any)?.instance_id) {
+
+    const conv = conversation as any;
+
+    // Conversas do Instagram: nunca mostrar o modal de WhatsApp
+    if (conv?.channel === 'instagram') {
+      if (!conv?.instagram_instance_id) {
+        toast.error("Nenhuma conta Instagram conectada para esta conversa.");
+        return;
+      }
+      await executeSendMessage(conv.instagram_instance_id, options);
+      return;
+    }
+
+    // WhatsApp: exibe modal se não houver instância vinculada
+    if (!conv?.instance_id) {
       setIsInstanceModalOpen(true);
       return;
     }
-    await executeSendMessage((conversation as any).instance_id, options);
+    await executeSendMessage(conv.instance_id, options);
   };
 
   const handleInstanceSelect = async (instanceId: string) => {
