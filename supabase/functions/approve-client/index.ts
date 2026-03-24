@@ -62,20 +62,31 @@ serve(async (req) => {
         // ACTION: APPROVE
         // 1. Create auth user with default password
         // Set is_team_member to prevent trigger from creating duplicate profile/team_member
-        const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-            email: signup.email,
-            password: DEFAULT_PASSWORD,
-            email_confirm: true,
-            user_metadata: {
-                full_name: signup.full_name,
-                is_approved_client: true,
-                is_team_member: true // Prevents handle_new_user trigger from creating records
-            },
-        });
 
-        if (authError) throw authError;
+        // Check if user with this email already exists in auth
+        let newAuthUserId: string;
+        const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
+        const existingUser = existingUsers?.users?.find(u => u.email === signup.email);
 
-        const newAuthUserId = authData.user.id;
+        if (existingUser) {
+            // User already exists — reuse their auth ID
+            newAuthUserId = existingUser.id;
+            console.log(`[approve-client] User ${signup.email} already exists in auth, reusing id: ${newAuthUserId}`);
+        } else {
+            const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+                email: signup.email,
+                password: DEFAULT_PASSWORD,
+                email_confirm: true,
+                user_metadata: {
+                    full_name: signup.full_name,
+                    is_approved_client: true,
+                    is_team_member: true // Prevents handle_new_user trigger from creating records
+                },
+            });
+
+            if (authError) throw authError;
+            newAuthUserId = authData.user.id;
+        }
 
         // 2. Create/Update profile with the auth user id (upsert to handle trigger race condition)
         const { error: profileError } = await supabaseAdmin
@@ -133,9 +144,10 @@ serve(async (req) => {
 
     } catch (error) {
         console.error("Error:", error);
+        // Retorna 200 com success:false para que o SDK não mascare a mensagem real de erro
         return new Response(
             JSON.stringify({ success: false, error: error.message }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
     }
 });
