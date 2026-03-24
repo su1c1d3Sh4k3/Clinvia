@@ -438,11 +438,11 @@ export const NavigationSidebar = () => {
       {/* Sidebar - Desktop: normal behavior, Mobile: slide in/out */}
       <div
         className={cn(
-          "bg-[hsl(var(--sidebar-nav))] h-screen flex flex-col transition-all duration-300 ease-in-out group/sidebar shadow-xl",
+          "bg-[hsl(var(--sidebar-nav))] flex flex-col transition-all duration-300 ease-in-out group/sidebar shadow-xl",
           // Desktop styles
-          !isMobile && "w-[60px] hover:w-[260px] z-50",
+          !isMobile && "h-full w-[60px] hover:w-[260px] z-50",
           // Mobile styles
-          isMobile && "fixed top-0 left-0 w-[280px] z-[60]",
+          isMobile && "fixed top-0 left-0 h-screen w-[280px] z-[60]",
           isMobile && (isMobileMenuOpen ? "translate-x-0" : "-translate-x-full")
         )}
         onMouseEnter={() => !isMobile && setIsHovered(true)}
