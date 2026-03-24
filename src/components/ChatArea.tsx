@@ -597,7 +597,7 @@ export const ChatArea = ({
 
   if (!conversationId) {
     return (
-      <div className="flex-1 h-screen flex items-center justify-center bg-background">
+      <div className="flex-1 h-full flex items-center justify-center bg-background">
         <p className="text-muted-foreground">Selecione uma conversa para começar</p>
       </div>
     );
