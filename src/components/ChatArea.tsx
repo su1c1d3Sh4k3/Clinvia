@@ -494,6 +494,34 @@ export const ChatArea = ({
     setSelectedFile(null);
     setReplyingTo(null);
 
+    // Conversas Instagram usam função dedicada (Graph API), não a de WhatsApp
+    if ((conversation as any)?.channel === 'instagram') {
+      try {
+        const igPayload: any = {
+          conversation_id: conversationId,
+          message_type: messageType === 'document' ? 'text' : messageType, // Instagram não suporta document
+          message_text: finalBody || undefined,
+          audio_url: messageType === 'audio' ? mediaUrl : undefined,
+          image_url: messageType === 'image' ? mediaUrl : undefined,
+        };
+
+        const { data, error } = await supabase.functions.invoke('instagram-send-message', { body: igPayload });
+        setIsUploading(false);
+
+        if (error || !data?.success) {
+          toast.error(`Erro ao enviar: ${data?.error || error?.message || 'Erro desconhecido'}`);
+          return;
+        }
+
+        queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
+        queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      } catch (err: any) {
+        setIsUploading(false);
+        toast.error(`Erro ao enviar mensagem Instagram: ${err.message}`);
+      }
+      return;
+    }
+
     sendMessageMutation.mutate({
       conversationId: conversationId!,
       contactId: conversation?.contact_id,
