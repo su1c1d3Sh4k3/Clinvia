@@ -43,6 +43,7 @@ const Delivery = React.lazy(() => import("./pages/Delivery"));
 const Admin = React.lazy(() => import("./pages/Admin"));
 const AdminAuth = React.lazy(() => import("./pages/AdminAuth"));
 const DevManager = React.lazy(() => import("./pages/DevManager"));
+const Reports = React.lazy(() => import("./pages/Reports"));
 
 // Fallback de loading enquanto o chunk da página carrega
 const PageLoader = () => (
@@ -98,6 +99,7 @@ const App = () => (
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/support" element={<Support />} />
                   <Route path="/delivery" element={<Delivery />} />
+                  <Route path="/reports" element={<Reports />} />
                 </Route>
                 <Route path="*" element={<NotFound />} />
               </Routes>

@@ -2,7 +2,7 @@ import {
   ListOrdered, Users, Settings, LayoutDashboard, MessageSquare, Briefcase, Wrench, Grid3X3,
   Smartphone, LogOut, Tag as TagIcon, BookUser, Calendar, ClipboardList,
   Package, Bot, ChevronDown, PieChart, Clock, MessageCircle,
-  ShoppingCart, Headphones, UserRound, Sun, Moon, ClipboardCheck, Layers
+  ShoppingCart, Headphones, UserRound, Sun, Moon, ClipboardCheck, Layers, Megaphone
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -156,6 +156,23 @@ export const NavigationSidebar = () => {
       return notifs?.filter((n: any) => !dismissedIds.has(n.id)).length || 0;
     },
     refetchInterval: 60000, // Check every 1 minute (optimized from 30s)
+    enabled: !!user?.id,
+  });
+
+  const { data: unreadUpdatesCount } = useQuery({
+    queryKey: ["system-updates-unread"],
+    queryFn: async () => {
+      const { data: updates } = await supabase
+        .from('system_updates' as any)
+        .select('id');
+      const { data: reads } = await supabase
+        .from('system_update_reads' as any)
+        .select('update_id')
+        .eq('user_id', user?.id);
+      const readIds = new Set((reads || []).map((r: any) => r.update_id));
+      return (updates || []).filter((u: any) => !readIds.has(u.id)).length;
+    },
+    refetchInterval: 60000,
     enabled: !!user?.id,
   });
 
@@ -490,6 +507,27 @@ export const NavigationSidebar = () => {
               isMobile ? "opacity-100" : "opacity-0 group-hover/sidebar:opacity-100"
             )}>
               Alternar Tema
+            </span>
+          </button>
+
+          <button
+            onClick={() => navigate('/reports')}
+            className={cn(
+              "flex items-center gap-3 py-3 px-4 transition-all duration-200 hover:bg-sidebar-accent dark:hover:bg-[#1E2229]",
+              location.pathname === '/reports'
+                ? "text-primary bg-sidebar-accent dark:bg-[#1E2229]"
+                : "text-sidebar-foreground/70 dark:text-white/70 hover:text-sidebar-foreground dark:hover:text-white"
+            )}
+          >
+            <div className="relative shrink-0">
+              <Megaphone className="w-[18px] h-[18px]" />
+              <NotificationBadge count={unreadUpdatesCount || 0} />
+            </div>
+            <span className={cn(
+              "whitespace-nowrap transition-opacity duration-300 text-[15px] font-medium",
+              isMobile ? "opacity-100" : "opacity-0 group-hover/sidebar:opacity-100"
+            )}>
+              Atualizações
             </span>
           </button>
 

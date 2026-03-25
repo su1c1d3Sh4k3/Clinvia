@@ -8,12 +8,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { ChevronDown, ChevronUp, Search, LogOut, ShieldAlert, Users, Briefcase, Calendar, MessageSquare, UserCheck, UserX, Clock, Check, X, Phone, Instagram, MapPin, Mail, Coins, Eye } from "lucide-react";
+import { ChevronDown, ChevronUp, Search, LogOut, ShieldAlert, Users, Briefcase, Calendar, MessageSquare, UserCheck, UserX, Clock, Check, X, Phone, Instagram, MapPin, Mail, Coins, Eye, Megaphone, Plus, RefreshCw, TrendingUp, Wrench, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import TokenUsageCharts from "@/components/admin/TokenUsageCharts";
 import OpenAITokenManager from "@/components/admin/OpenAITokenManager";
+import { SystemUpdateModal } from "@/components/admin/SystemUpdateModal";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { UPDATE_TYPE_CONFIG, UpdateType } from "@/pages/Reports";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { useExchangeRate } from "@/hooks/useExchangeRate";
 import { useAdminImpersonate } from "@/hooks/useAdminImpersonate";
 import { sendClientApprovalWebhook } from "@/utils/sendApprovalWebhook";
@@ -78,7 +83,8 @@ const Admin = () => {
     const [appointmentStats, setAppointmentStats] = useState<StatItem[]>([]);
     const [conversationStats, setConversationStats] = useState<StatItem[]>([]);
     const [loadingDetails, setLoadingDetails] = useState(false);
-    const [activeTab, setActiveTab] = useState<"ativos" | "pendentes" | "inativos">("ativos");
+    const [activeTab, setActiveTab] = useState<"ativos" | "pendentes" | "inativos" | "updates">("ativos");
+    const [showUpdateModal, setShowUpdateModal] = useState(false);
     const [pendingProfiles, setPendingProfiles] = useState<PendingProfile[]>([]);
     const [inactiveProfiles, setInactiveProfiles] = useState<PendingProfile[]>([]);
     const [loadingPending, setLoadingPending] = useState(false);
@@ -88,6 +94,19 @@ const Admin = () => {
 
     const { convertToReal } = useExchangeRate();
     const { impersonate, isLoading: impersonateLoading } = useAdminImpersonate();
+    const queryClientAdmin = useQueryClient();
+
+    const { data: adminSystemUpdates = [], isLoading: loadingUpdates, refetch: refetchUpdates } = useQuery({
+        queryKey: ["system-updates-admin"],
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from("system_updates" as any)
+                .select("*")
+                .order("published_at", { ascending: false });
+            if (error) throw error;
+            return (data || []) as any[];
+        },
+    });
 
     const ITEMS_PER_PAGE = 10;
 
@@ -354,8 +373,8 @@ const Admin = () => {
             {/* Main Content */}
             <main className="p-6 max-w-7xl mx-auto">
                 {/* Tabs */}
-                <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "ativos" | "pendentes" | "inativos")} className="w-full mb-6">
-                    <TabsList className="grid w-full max-w-2xl mx-auto grid-cols-3 bg-gray-800 border border-gray-700">
+                <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "ativos" | "pendentes" | "inativos" | "updates")} className="w-full mb-6">
+                    <TabsList className="grid w-full max-w-3xl mx-auto grid-cols-4 bg-gray-800 border border-gray-700">
                         <TabsTrigger value="ativos" className="flex items-center gap-2 data-[state=active]:bg-green-600 data-[state=active]:text-white">
                             <UserCheck className="h-4 w-4" />
                             <span className="hidden sm:inline">Clientes Ativos</span>
@@ -370,6 +389,11 @@ const Admin = () => {
                             <UserX className="h-4 w-4" />
                             <span className="hidden sm:inline">Clientes Inativos</span>
                             <span className="sm:hidden">Inativos</span>
+                        </TabsTrigger>
+                        <TabsTrigger value="updates" className="flex items-center gap-2 data-[state=active]:bg-blue-600 data-[state=active]:text-white">
+                            <Megaphone className="h-4 w-4" />
+                            <span className="hidden sm:inline">Atualizações</span>
+                            <span className="sm:hidden">Updates</span>
                         </TabsTrigger>
                     </TabsList>
                 </Tabs>
@@ -788,6 +812,62 @@ const Admin = () => {
                                 ))}
                             </div>
                         )}
+                    </div>
+                )}
+                {/* Tab: Atualizações */}
+                {activeTab === "updates" && (
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-lg font-semibold text-blue-400 flex items-center gap-2">
+                                <Megaphone className="w-5 h-5" />
+                                Atualizações Publicadas ({adminSystemUpdates.length})
+                            </h3>
+                            <Button
+                                onClick={() => setShowUpdateModal(true)}
+                                className="bg-blue-600 hover:bg-blue-700 text-white"
+                            >
+                                <Plus className="w-4 h-4 mr-2" />
+                                Lançar Notificação
+                            </Button>
+                        </div>
+
+                        {loadingUpdates ? (
+                            <div className="text-center py-12 text-gray-400">Carregando...</div>
+                        ) : adminSystemUpdates.length === 0 ? (
+                            <div className="text-center py-12 text-gray-500">
+                                <Megaphone className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                                <p>Nenhuma atualização publicada</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                {adminSystemUpdates.map((update: any) => {
+                                    const cfg = UPDATE_TYPE_CONFIG[update.type as UpdateType];
+                                    const Icon = cfg?.icon || Megaphone;
+                                    return (
+                                        <div key={update.id} className="bg-gray-800 border border-gray-700 rounded-lg p-4 flex items-center gap-4">
+                                            <div className={`p-2 rounded-lg ${cfg?.bgColor || 'bg-gray-700'}`}>
+                                                <Icon className={`w-4 h-4 ${cfg?.color || 'text-gray-400'}`} />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="font-medium text-white truncate">{update.title}</p>
+                                                <p className="text-xs text-gray-400">
+                                                    {cfg?.label || update.type} · {format(new Date(update.published_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                                                    {update.affected_areas?.length > 0 && ` · Áreas: ${update.affected_areas.join(', ')}`}
+                                                </p>
+                                            </div>
+                                            <Badge variant="outline" className={`shrink-0 ${cfg?.badgeClass || ''}`}>
+                                                Impacto {update.impact_level}/10
+                                            </Badge>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        <SystemUpdateModal
+                            open={showUpdateModal}
+                            onClose={() => setShowUpdateModal(false)}
+                        />
                     </div>
                 )}
             </main>
