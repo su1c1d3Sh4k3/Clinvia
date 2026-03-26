@@ -324,7 +324,7 @@ export default function Team() {
                                     <SelectTrigger>
                                         <SelectValue />
                                     </SelectTrigger>
-                                    <SelectContent>
+                                    <SelectContent position="popper">
                                         <SelectItem value="agent">Atendente</SelectItem>
                                         {userRole === "admin" && (
                                             <SelectItem value="supervisor">Supervisor</SelectItem>
@@ -459,7 +459,7 @@ export default function Team() {
                                 <SelectTrigger>
                                     <SelectValue />
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent position="popper">
                                     <SelectItem value="agent">Atendente</SelectItem>
                                     {userRole === "admin" && (
                                         <SelectItem value="supervisor">Supervisor</SelectItem>
