@@ -12,6 +12,8 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { Loader2, Upload, X } from "lucide-react";
 
 const formSchema = z.object({
@@ -37,6 +39,8 @@ export function ProductServiceModal({ open, onOpenChange, itemToEdit }: ProductS
     const [isLoading, setIsLoading] = useState(false);
     const [imageFiles, setImageFiles] = useState<File[]>([]);
     const [existingImages, setExistingImages] = useState<string[]>([]);
+    const [availableForAi, setAvailableForAi] = useState(true);
+    const [visibleForAi, setVisibleForAi] = useState(true);
 
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
@@ -64,6 +68,8 @@ export function ProductServiceModal({ open, onOpenChange, itemToEdit }: ProductS
                 color: itemToEdit.color ?? null,
             });
             setExistingImages(itemToEdit.image_urls || []);
+            setAvailableForAi(itemToEdit.available_for_ai ?? true);
+            setVisibleForAi(itemToEdit.visible_for_ai ?? true);
         } else {
             form.reset({
                 name: "",
@@ -76,6 +82,8 @@ export function ProductServiceModal({ open, onOpenChange, itemToEdit }: ProductS
             });
             setExistingImages([]);
             setImageFiles([]);
+            setAvailableForAi(true);
+            setVisibleForAi(true);
         }
     }, [itemToEdit, open, form]);
 
@@ -132,6 +140,8 @@ export function ProductServiceModal({ open, onOpenChange, itemToEdit }: ProductS
                 stock_quantity: activeTab === "product" ? values.stock_quantity : null,
                 duration_minutes: activeTab === "service" ? values.duration_minutes : null,
                 color: activeTab === "service" ? (values.color ?? null) : null,
+                available_for_ai: availableForAi,
+                visible_for_ai: visibleForAi,
             };
 
             if (itemToEdit) {
@@ -349,6 +359,44 @@ export function ProductServiceModal({ open, onOpenChange, itemToEdit }: ProductS
                                             onChange={handleImageUpload}
                                         />
                                     </label>
+                                </div>
+                            </div>
+
+                            {/* IA Flags */}
+                            <div className="rounded-lg border border-border p-4 space-y-4 bg-muted/30">
+                                <p className="text-sm font-medium text-foreground flex items-center gap-2">
+                                    🤖 Configurações da IA
+                                </p>
+                                <div className="flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <Label htmlFor="visible-for-ai" className="text-sm font-normal cursor-pointer">
+                                            Visível para a IA
+                                        </Label>
+                                        <p className="text-xs text-muted-foreground">
+                                            A IA consegue ver e consultar as informações deste item
+                                        </p>
+                                    </div>
+                                    <Switch
+                                        id="visible-for-ai"
+                                        checked={visibleForAi}
+                                        onCheckedChange={setVisibleForAi}
+                                    />
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <Label htmlFor="available-for-ai" className="text-sm font-normal cursor-pointer">
+                                            Disponível para a IA
+                                        </Label>
+                                        <p className="text-xs text-muted-foreground">
+                                            A IA pode oferecer e mencionar este item nas conversas
+                                        </p>
+                                    </div>
+                                    <Switch
+                                        id="available-for-ai"
+                                        checked={availableForAi}
+                                        onCheckedChange={setAvailableForAi}
+                                        disabled={!visibleForAi}
+                                    />
                                 </div>
                             </div>
 
