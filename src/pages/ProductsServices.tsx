@@ -391,8 +391,8 @@ service;Exemplo de Serviço;Descrição do serviço aqui;150.00;;60;7`;
                                     <TableHead className="hidden md:table-cell min-w-[150px]">Descrição</TableHead>
                                     <TableHead className="hidden sm:table-cell">Alerta</TableHead>
                                     <TableHead className="hidden sm:table-cell">Estoque</TableHead>
-                                    <TableHead className="hidden lg:table-cell text-center whitespace-nowrap">Visível IA</TableHead>
-                                    <TableHead className="hidden lg:table-cell text-center whitespace-nowrap">Disponível IA</TableHead>
+                                    <TableHead className="text-center whitespace-nowrap">Visível IA</TableHead>
+                                    <TableHead className="text-center whitespace-nowrap">Disponível IA</TableHead>
                                     {!isAgent && <TableHead className="text-right">Ações</TableHead>}
                                 </TableRow>
                             </TableHeader>
@@ -433,14 +433,14 @@ service;Exemplo de Serviço;Descrição do serviço aqui;150.00;;60;7`;
                                                 )}
                                             </TableCell>
                                             <TableCell className="hidden sm:table-cell text-sm py-2 md:py-4">{item.stock_quantity ?? "-"}</TableCell>
-                                            <TableCell className="hidden lg:table-cell text-center py-2 md:py-4">
+                                            <TableCell className="text-center py-2 md:py-4">
                                                 <Switch
                                                     checked={item.visible_for_ai ?? true}
                                                     onCheckedChange={(val) => toggleAiFlagMutation.mutate({ id: item.id, field: 'visible_for_ai', value: val })}
                                                     disabled={isAgent}
                                                 />
                                             </TableCell>
-                                            <TableCell className="hidden lg:table-cell text-center py-2 md:py-4">
+                                            <TableCell className="text-center py-2 md:py-4">
                                                 <Switch
                                                     checked={item.available_for_ai ?? true}
                                                     onCheckedChange={(val) => toggleAiFlagMutation.mutate({ id: item.id, field: 'available_for_ai', value: val })}
@@ -487,8 +487,8 @@ service;Exemplo de Serviço;Descrição do serviço aqui;150.00;;60;7`;
                                     <TableHead className="hidden md:table-cell min-w-[150px]">Descrição</TableHead>
                                     <TableHead className="hidden sm:table-cell">Alerta</TableHead>
                                     <TableHead className="hidden sm:table-cell">Duração</TableHead>
-                                    <TableHead className="hidden lg:table-cell text-center whitespace-nowrap">Visível IA</TableHead>
-                                    <TableHead className="hidden lg:table-cell text-center whitespace-nowrap">Disponível IA</TableHead>
+                                    <TableHead className="text-center whitespace-nowrap">Visível IA</TableHead>
+                                    <TableHead className="text-center whitespace-nowrap">Disponível IA</TableHead>
                                     {!isAgent && <TableHead className="text-right">Ações</TableHead>}
                                 </TableRow>
                             </TableHeader>
@@ -529,14 +529,14 @@ service;Exemplo de Serviço;Descrição do serviço aqui;150.00;;60;7`;
                                                 )}
                                             </TableCell>
                                             <TableCell className="hidden sm:table-cell text-sm py-2 md:py-4">{item.duration_minutes ? `${item.duration_minutes}min` : "-"}</TableCell>
-                                            <TableCell className="hidden lg:table-cell text-center py-2 md:py-4">
+                                            <TableCell className="text-center py-2 md:py-4">
                                                 <Switch
                                                     checked={item.visible_for_ai ?? true}
                                                     onCheckedChange={(val) => toggleAiFlagMutation.mutate({ id: item.id, field: 'visible_for_ai', value: val })}
                                                     disabled={isAgent}
                                                 />
                                             </TableCell>
-                                            <TableCell className="hidden lg:table-cell text-center py-2 md:py-4">
+                                            <TableCell className="text-center py-2 md:py-4">
                                                 <Switch
                                                     checked={item.available_for_ai ?? true}
                                                     onCheckedChange={(val) => toggleAiFlagMutation.mutate({ id: item.id, field: 'available_for_ai', value: val })}
