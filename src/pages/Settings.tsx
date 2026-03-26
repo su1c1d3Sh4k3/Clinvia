@@ -800,27 +800,25 @@ export default function Settings() {
                                 />
                             </div>
 
-                            {/* Sign Messages */}
-                            {userRole !== 'agent' && (
-                                <div className="flex items-center justify-between p-3 md:p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors border-l-4 border-l-primary gap-3">
-                                    <div className="flex items-center gap-3 md:gap-4">
-                                        <div className="p-1.5 md:p-2 bg-primary/10 rounded-full">
-                                            <Pen className="h-4 w-4 md:h-5 md:w-5 text-primary" />
-                                        </div>
-                                        <div className="space-y-0.5">
-                                            <h4 className="font-medium text-sm md:text-base">Assinar mensagens</h4>
-                                            <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">
-                                                Seu nome será enviado com as mensagens.
-                                            </p>
-                                        </div>
+                            {/* Sign Messages — visível para todos os membros */}
+                            <div className="flex items-center justify-between p-3 md:p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors border-l-4 border-l-primary gap-3">
+                                <div className="flex items-center gap-3 md:gap-4">
+                                    <div className="p-1.5 md:p-2 bg-primary/10 rounded-full">
+                                        <Pen className="h-4 w-4 md:h-5 md:w-5 text-primary" />
                                     </div>
-                                    <Switch
-                                        checked={signMessagesEnabled}
-                                        onCheckedChange={updateSignMessages}
-                                        disabled={loading}
-                                    />
+                                    <div className="space-y-0.5">
+                                        <h4 className="font-medium text-sm md:text-base">Assinar mensagens</h4>
+                                        <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">
+                                            Seu nome será enviado com as mensagens.
+                                        </p>
+                                    </div>
                                 </div>
-                            )}
+                                <Switch
+                                    checked={signMessagesEnabled}
+                                    onCheckedChange={updateSignMessages}
+                                    disabled={loading}
+                                />
+                            </div>
 
                             {/* Financial Access Control */}
                             {userRole === 'admin' && (

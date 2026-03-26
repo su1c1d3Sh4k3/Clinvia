@@ -244,13 +244,15 @@ serve(async (req) => {
     }
 
     // ✅ OTIMIZAÇÃO: Adicionar assinatura do agente no BACKEND (movido do frontend)
+    // Usa o agente atribuído à conversa OU o agente autenticado que está enviando (fallback)
+    const signerAgentId = conversation.assigned_agent_id || authenticatedAgentId;
     let finalBody = body;
 
-    if (conversation.status === 'open' && messageType === 'text' && conversation.assigned_agent_id) {
+    if (conversation.status === 'open' && messageType === 'text' && signerAgentId) {
       const { data: teamMember } = await supabaseClient
         .from('team_members')
         .select('full_name, name, sign_messages')
-        .eq('id', conversation.assigned_agent_id)
+        .eq('id', signerAgentId)
         .single();
 
       if (teamMember && teamMember.sign_messages !== false) {
@@ -335,11 +337,11 @@ serve(async (req) => {
 
       if (messageType === 'document') {
         insertBody = body;
-        if (caption && conversation.assigned_agent_id) {
+        if (caption && signerAgentId) {
           const { data: teamMember } = await supabaseClient
             .from('team_members')
             .select('full_name, name, sign_messages')
-            .eq('id', conversation.assigned_agent_id)
+            .eq('id', signerAgentId)
             .single();
 
           if (teamMember && teamMember.sign_messages !== false) {
