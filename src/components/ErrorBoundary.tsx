@@ -22,10 +22,29 @@ export class ErrorBoundary extends Component<Props, State> {
     };
 
     public static getDerivedStateFromError(error: Error): State {
+        // Erros de DOM causados por autocomplete/extensões do browser não devem crashar a UI
+        const isDomAutocompleteError =
+            error.message?.includes("removeChild") ||
+            error.message?.includes("insertBefore") ||
+            error.message?.includes("not a child of this node");
+
+        if (isDomAutocompleteError) {
+            // Ignorar — não mudar estado, não exibir tela de erro
+            return { hasError: false, error: null };
+        }
         return { hasError: true, error };
     }
 
     public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+        const isDomAutocompleteError =
+            error.message?.includes("removeChild") ||
+            error.message?.includes("insertBefore") ||
+            error.message?.includes("not a child of this node");
+
+        if (isDomAutocompleteError) {
+            console.warn(`[ErrorBoundary] DOM autocomplete conflict ignorado em ${this.props.name || 'Component'}:`, error.message);
+            return;
+        }
         console.error(`Uncaught error in ${this.props.name || 'Component'}:`, error, errorInfo);
     }
 

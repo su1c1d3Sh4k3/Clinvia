@@ -2,6 +2,30 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 
+// Patch global para prevenir crash causado por extensões de browser ou autocomplete nativo
+// injetando nós no DOM que o React não reconhece como filhos (removeChild/insertBefore).
+// Erro original: "Failed to execute 'removeChild' on 'Node': The node to be removed is not a child of this node"
+(function patchDomForBrowserAutocomplete() {
+    const originalRemoveChild = Node.prototype.removeChild;
+    // @ts-ignore
+    Node.prototype.removeChild = function <T extends Node>(child: T): T {
+        if (child.parentNode !== this) {
+            // Browser (autocomplete, extensão de senha, etc.) moveu o nó — ignorar silenciosamente
+            return child;
+        }
+        return originalRemoveChild.call(this, child) as T;
+    };
+
+    const originalInsertBefore = Node.prototype.insertBefore;
+    // @ts-ignore
+    Node.prototype.insertBefore = function <T extends Node>(newNode: T, referenceNode: Node | null): T {
+        if (referenceNode && referenceNode.parentNode !== this) {
+            return originalInsertBefore.call(this, newNode, null) as T;
+        }
+        return originalInsertBefore.call(this, newNode, referenceNode) as T;
+    };
+})();
+
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { registerSW } from 'virtual:pwa-register';
 
