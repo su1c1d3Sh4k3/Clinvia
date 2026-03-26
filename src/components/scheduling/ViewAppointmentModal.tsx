@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
     Dialog,
     DialogContent,
@@ -8,9 +9,10 @@ import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 import { ptBR } from "date-fns/locale";
-import { Pencil, Calendar, Clock, User, DollarSign, FileText, Briefcase } from "lucide-react";
+import { Pencil, Calendar, Clock, User, DollarSign, FileText, Briefcase, Bell } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
+import { NotifyAppointmentModal } from "./NotifyAppointmentModal";
 
 const TIMEZONE = "America/Sao_Paulo";
 
@@ -22,6 +24,8 @@ interface ViewAppointmentModalProps {
 }
 
 export function ViewAppointmentModal({ appointment, open, onOpenChange, onEdit }: ViewAppointmentModalProps) {
+    const [notifyOpen, setNotifyOpen] = useState(false);
+
     if (!appointment) return null;
 
     const toZoned = (dateStr: string) => {
@@ -29,8 +33,11 @@ export function ViewAppointmentModal({ appointment, open, onOpenChange, onEdit }
     };
 
     const isPast = new Date(appointment.end_time) < new Date();
+    const hasContact = !!appointment.contacts && !!appointment.contact_id;
+    const isAppointment = appointment.type !== 'absence';
 
     return (
+        <>
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-[500px]">
                 <DialogHeader className="flex flex-row items-center justify-between pr-8">
@@ -154,8 +161,30 @@ export function ViewAppointmentModal({ appointment, open, onOpenChange, onEdit }
                             {appointment.description || <span className="text-muted-foreground italic">Sem observações.</span>}
                         </div>
                     </div>
+
+                    {/* Botão Notificar Cliente */}
+                    {isAppointment && hasContact && (
+                        <div className="pt-2 border-t">
+                            <Button
+                                className="w-full gap-2"
+                                variant="outline"
+                                onClick={() => setNotifyOpen(true)}
+                            >
+                                <Bell className="h-4 w-4" />
+                                Notificar Cliente
+                            </Button>
+                        </div>
+                    )}
                 </div>
             </DialogContent>
         </Dialog>
+
+        {/* Modal de notificação */}
+        <NotifyAppointmentModal
+            appointment={appointment}
+            open={notifyOpen}
+            onOpenChange={setNotifyOpen}
+        />
+        </>
     );
 }
