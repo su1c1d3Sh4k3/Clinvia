@@ -159,6 +159,7 @@ export function PaymentTypeModal({
                                     step="0.1"
                                     value={interestRate}
                                     onChange={(e) => setInterestRate(parseFloat(e.target.value) || 0)}
+                                    autoComplete="off"
                                 />
                             </div>
                         </div>

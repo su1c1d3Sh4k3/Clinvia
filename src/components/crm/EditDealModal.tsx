@@ -251,7 +251,7 @@ export function EditDealModal({ deal, open, onOpenChange }: EditDealModalProps) 
                                 <FormItem>
                                     <FormLabel>Título</FormLabel>
                                     <FormControl>
-                                        <Input placeholder="Ex: Contrato Empresa X" {...field} />
+                                        <Input autoComplete="off" placeholder="Ex: Contrato Empresa X" {...field} />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>

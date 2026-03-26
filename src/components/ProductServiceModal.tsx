@@ -186,7 +186,7 @@ export function ProductServiceModal({ open, onOpenChange, itemToEdit }: ProductS
                                     <FormItem>
                                         <FormLabel>Nome</FormLabel>
                                         <FormControl>
-                                            <Input placeholder="Nome do item" {...field} />
+                                            <Input autoComplete="off" placeholder="Nome do item" {...field} />
                                         </FormControl>
                                         <FormMessage />
                                     </FormItem>
@@ -236,7 +236,7 @@ export function ProductServiceModal({ open, onOpenChange, itemToEdit }: ProductS
                                             <FormItem>
                                                 <FormLabel>Estoque</FormLabel>
                                                 <FormControl>
-                                                    <Input type="number" {...field} />
+                                                    <Input autoComplete="off" type="number" {...field} />
                                                 </FormControl>
                                                 <FormMessage />
                                             </FormItem>
@@ -250,7 +250,7 @@ export function ProductServiceModal({ open, onOpenChange, itemToEdit }: ProductS
                                             <FormItem>
                                                 <FormLabel>Duração (minutos)</FormLabel>
                                                 <FormControl>
-                                                    <Input type="number" {...field} />
+                                                    <Input autoComplete="off" type="number" {...field} />
                                                 </FormControl>
                                                 <FormMessage />
                                             </FormItem>
@@ -302,7 +302,7 @@ export function ProductServiceModal({ open, onOpenChange, itemToEdit }: ProductS
                                     <FormItem>
                                         <FormLabel>Alerta de Oportunidade (dias)</FormLabel>
                                         <FormControl>
-                                            <Input type="number" {...field} />
+                                            <Input autoComplete="off" type="number" {...field} />
                                         </FormControl>
                                         <FormDescription>
                                             Dias para notificar nova oportunidade após venda

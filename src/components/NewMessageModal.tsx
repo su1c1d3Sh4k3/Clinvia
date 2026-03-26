@@ -197,6 +197,8 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone }: NewMessa
 
             toast({ title: "Mensagem enviada com sucesso!" });
             onOpenChange(false);
+            setSelectedInstance("");
+            setSelectedContact(null);
             setNumber("55");
             setMessage("");
         } catch (error: any) {
@@ -261,6 +263,7 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone }: NewMessa
                             }}
                             placeholder="+55 (37) 9 9999-9999"
                             type="tel"
+                            autoComplete="off"
                         />
                         <p className="text-xs text-muted-foreground">
                             Formato: +55 (DDD) 9 XXXX-XXXX
