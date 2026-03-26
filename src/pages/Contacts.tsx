@@ -685,7 +685,7 @@ const Contacts = () => {
                                                     >
                                                         <Instagram className="w-3.5 h-3.5 md:w-4 md:h-4" />
                                                     </Button>
-                                                    {userRole === "admin" && (
+                                                    {(userRole === "admin" || userRole === "supervisor") && (
                                                         <>
                                                             <Button
                                                                 variant="ghost"
@@ -696,6 +696,7 @@ const Contacts = () => {
                                                             >
                                                                 <Pencil className="w-3.5 h-3.5 md:w-4 md:h-4" />
                                                             </Button>
+                                                            {userRole === "admin" && (
                                                             <Button
                                                                 variant="ghost"
                                                                 size="icon"
@@ -705,6 +706,7 @@ const Contacts = () => {
                                                             >
                                                                 <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
                                                             </Button>
+                                                            )}
                                                         </>
                                                     )}
                                                 </div>
