@@ -144,6 +144,45 @@ export async function executeConfirmedAction(
                 return { success: true, data: { message: 'Item atualizado com sucesso! ✅' } };
             }
 
+            case 'create_contact': {
+                const { error } = await supabase
+                    .from('contacts')
+                    .insert(params);
+                if (error) throw error;
+                return { success: true, data: { message: 'Contato criado com sucesso! ✅' } };
+            }
+
+            case 'update_task_status': {
+                const { task_id, status } = params;
+                const { error } = await supabase
+                    .from('tasks')
+                    .update({ status })
+                    .eq('id', task_id);
+                if (error) throw error;
+                const statusLabels: Record<string, string> = { pending: 'Pendente', open: 'Em Andamento', finished: 'Concluída' };
+                return { success: true, data: { message: `Status atualizado para **${statusLabels[status] || status}**! ✅` } };
+            }
+
+            case 'update_deal': {
+                const { deal_id, updates } = params;
+                const { error } = await supabase
+                    .from('crm_deals')
+                    .update(updates)
+                    .eq('id', deal_id);
+                if (error) throw error;
+                return { success: true, data: { message: 'Negociação atualizada com sucesso! ✅' } };
+            }
+
+            case 'move_deal_stage': {
+                const { deal_id, stage_id } = params;
+                const { error } = await supabase
+                    .from('crm_deals')
+                    .update({ stage_id, stage_changed_at: new Date().toISOString() })
+                    .eq('id', deal_id);
+                if (error) throw error;
+                return { success: true, data: { message: 'Negociação movida para a nova etapa! ✅' } };
+            }
+
             default:
                 return { success: false, error: `Ação desconhecida: ${action}` };
         }

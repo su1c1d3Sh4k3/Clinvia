@@ -186,6 +186,35 @@ export const appointmentsTools: ToolFunction[] = [
             }
         }
     }
+    ,{
+        type: 'function',
+        function: {
+            name: 'appointments_cancel',
+            description: 'Cancela um agendamento. Use quando o usuário pedir para cancelar, desmarcar ou remover um agendamento.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    professional_name: {
+                        type: 'string',
+                        description: 'Nome do profissional'
+                    },
+                    date: {
+                        type: 'string',
+                        description: 'Data do agendamento (hoje, amanhã, DD/MM, ou YYYY-MM-DD)'
+                    },
+                    time: {
+                        type: 'string',
+                        description: 'Horário do agendamento (ex: 14h, 14:30)'
+                    },
+                    reason: {
+                        type: 'string',
+                        description: 'Motivo do cancelamento (opcional)'
+                    }
+                },
+                required: ['professional_name', 'date', 'time']
+            }
+        }
+    }
 ];
 
 // ============================================
@@ -214,6 +243,8 @@ export async function handleAppointmentsFunction(
             return await appointmentsUpdateStatus(supabase, context, args);
         case 'appointments_get_availability':
             return await appointmentsGetAvailability(supabase, context, args);
+        case 'appointments_cancel':
+            return await appointmentsCancel(supabase, context, args);
         default:
             return { success: false, error: `Função desconhecida: ${functionName}` };
     }
@@ -645,6 +676,69 @@ async function appointmentsGetAvailability(
             break_time: `${workHours.break_start} às ${workHours.break_end}`,
             busy_slots: busyTimes,
             appointments_count: appointments?.length || 0
+        }
+    };
+}
+
+async function appointmentsCancel(
+    supabase: any,
+    context: UserContext,
+    args: { professional_name: string; date: string; time: string; reason?: string }
+): Promise<FunctionResult> {
+
+    if (!hasPermission(context.role, 'appointments:update')) {
+        return { success: false, error: 'Você não tem permissão para cancelar agendamentos' };
+    }
+
+    const profLookup = await lookupProfessional(supabase, args.professional_name, context.owner_id);
+    if (!profLookup.found) {
+        return { success: true, data: { found: false, message: `Profissional "${args.professional_name}" não encontrado` } };
+    }
+
+    const dateStr = resolveDate(args.date);
+    const timeStr = resolveTime(args.time);
+    const targetTime = `${dateStr}T${timeStr}:00`;
+
+    const { data: appointments, error } = await supabase
+        .from('appointments')
+        .select('id, start_time, contacts (push_name), products_services (name)')
+        .eq('user_id', context.owner_id)
+        .eq('professional_id', profLookup.items[0].id)
+        .gte('start_time', `${dateStr}T00:00:00`)
+        .lte('start_time', `${dateStr}T23:59:59`)
+        .order('start_time');
+
+    if (error || !appointments || appointments.length === 0) {
+        return { success: true, data: { found: false, message: `Nenhum agendamento encontrado para ${profLookup.items[0].name} em ${formatDateBR(dateStr)}` } };
+    }
+
+    // Find closest to target time
+    const targetDate = new Date(targetTime);
+    let closest = appointments[0];
+    let minDiff = Math.abs(new Date(closest.start_time).getTime() - targetDate.getTime());
+    for (const apt of appointments) {
+        const diff = Math.abs(new Date(apt.start_time).getTime() - targetDate.getTime());
+        if (diff < minDiff) { minDiff = diff; closest = apt; }
+    }
+
+    const aptTime = new Date(closest.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const clientName = closest.contacts?.push_name || 'Cliente';
+    const serviceName = closest.products_services?.name ? ` — ${closest.products_services.name}` : '';
+
+    let confirmMsg = `Confirma o cancelamento do agendamento?\n\n👤 **Cliente**: ${clientName}\n🕐 **Horário**: ${aptTime}${serviceName}\n📅 **Data**: ${formatDateBR(dateStr)}`;
+    if (args.reason) confirmMsg += `\n\n📝 **Motivo**: ${args.reason}`;
+
+    return {
+        success: true,
+        needs_confirmation: true,
+        confirmation_message: confirmMsg,
+        data: {
+            action: 'update_appointment_status',
+            params: {
+                appointment_id: closest.id,
+                status: 'cancelled'
+            },
+            summary: { client: clientName, date: formatDateBR(dateStr), time: aptTime }
         }
     };
 }
