@@ -277,11 +277,12 @@ export default function Team() {
                         <DialogHeader>
                             <DialogTitle>Adicionar Novo Membro</DialogTitle>
                         </DialogHeader>
-                        <form onSubmit={handleSubmit} className="space-y-4">
+                        <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
                             <div className="space-y-2">
                                 <Label htmlFor="name">Nome</Label>
                                 <Input
                                     id="name"
+                                    autoComplete="off"
                                     value={formData.name}
                                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                                     required
@@ -292,6 +293,7 @@ export default function Team() {
                                 <Input
                                     id="email"
                                     type="email"
+                                    autoComplete="off"
                                     value={formData.email}
                                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                                     required
@@ -302,6 +304,7 @@ export default function Team() {
                                 <Input
                                     id="password"
                                     type="password"
+                                    autoComplete="new-password"
                                     value={formData.password}
                                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                                     required
@@ -311,6 +314,7 @@ export default function Team() {
                                 <Label htmlFor="phone">Telefone</Label>
                                 <Input
                                     id="phone"
+                                    autoComplete="off"
                                     value={formData.phone}
                                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                                 />
@@ -431,11 +435,12 @@ export default function Team() {
                     <DialogHeader>
                         <DialogTitle>Editar Membro</DialogTitle>
                     </DialogHeader>
-                    <form onSubmit={handleUpdate} className="space-y-4">
+                    <form onSubmit={handleUpdate} className="space-y-4" autoComplete="off">
                         <div className="space-y-2">
                             <Label htmlFor="edit-name">Nome</Label>
                             <Input
                                 id="edit-name"
+                                autoComplete="off"
                                 value={formData.name}
                                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                                 required
@@ -445,6 +450,7 @@ export default function Team() {
                             <Label htmlFor="edit-phone">Telefone</Label>
                             <Input
                                 id="edit-phone"
+                                autoComplete="off"
                                 value={formData.phone}
                                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                             />
