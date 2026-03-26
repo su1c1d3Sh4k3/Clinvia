@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, Building2, CheckCircle2, Unlink, CalendarDays, RefreshCw } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useOwnerId } from "@/hooks/useOwnerId";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -70,6 +71,7 @@ const DAYS = [
 export function SchedulingSettingsModal({ open, onOpenChange, currentSettings }: SchedulingSettingsModalProps) {
     const { toast } = useToast();
     const queryClient = useQueryClient();
+    const { data: ownerId } = useOwnerId();
     const [isLoading, setIsLoading] = useState(false);
 
     const form = useForm<z.infer<typeof formSchema>>({
@@ -98,13 +100,14 @@ export function SchedulingSettingsModal({ open, onOpenChange, currentSettings }:
         try {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error("Usuário não autenticado");
+            if (!ownerId) throw new Error("ID da organização não encontrado");
 
             if (values.end_hour <= values.start_hour) {
                 throw new Error("Horário de fim deve ser maior que o início");
             }
 
             const payload = {
-                user_id: user.id,
+                user_id: ownerId,
                 start_hour: values.start_hour,
                 end_hour: values.end_hour,
                 work_days: values.work_days,
@@ -291,6 +294,7 @@ export function SchedulingSettingsModal({ open, onOpenChange, currentSettings }:
 function ClinicCalendarSection() {
     const { toast } = useToast();
     const queryClient = useQueryClient();
+    const { data: ownerId } = useOwnerId();
     const [isDisconnecting, setIsDisconnecting] = useState(false);
     const [isSavingMode, setIsSavingMode] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
@@ -298,38 +302,37 @@ function ClinicCalendarSection() {
     const { data: connection, isLoading } = useQuery<GoogleCalendarConnection | null>({
         queryKey: ["google-calendar-clinic-connection"],
         queryFn: async () => {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) return null;
+            if (!ownerId) return null;
             const { data } = await supabase
                 .from("professional_google_calendars")
                 .select("*")
-                .eq("user_id", user.id)
+                .eq("user_id", ownerId)
                 .is("professional_id", null)
                 .eq("is_active", true)
                 .maybeSingle();
             return data as GoogleCalendarConnection | null;
         },
+        enabled: !!ownerId,
     });
 
     // Verificar se algum profissional já tem conexão individual ativa
     const { data: hasIndividualConnections } = useQuery<boolean>({
         queryKey: ["gcal-has-individual-connections"],
         queryFn: async () => {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) return false;
+            if (!ownerId) return false;
             const { count } = await supabase
                 .from("professional_google_calendars")
                 .select("id", { count: "exact", head: true })
-                .eq("user_id", user.id)
+                .eq("user_id", ownerId)
                 .not("professional_id", "is", null)
                 .eq("is_active", true);
             return (count ?? 0) > 0;
         },
+        enabled: !!ownerId,
     });
 
     const handleConnect = async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+        if (!ownerId) return;
         if (!GOOGLE_CLIENT_ID) {
             toast({
                 title: "Configuração pendente",
@@ -338,7 +341,7 @@ function ClinicCalendarSection() {
             });
             return;
         }
-        window.location.href = buildGoogleOAuthUrl(user.id);
+        window.location.href = buildGoogleOAuthUrl(ownerId);
     };
 
     const handleDisconnect = async () => {
@@ -376,13 +379,11 @@ function ClinicCalendarSection() {
     };
 
     const handleSyncNow = async () => {
-        if (!connection) return;
+        if (!connection || !ownerId) return;
         setIsSyncing(true);
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error("Não autenticado");
             const { data, error } = await supabase.functions.invoke("google-calendar-poll", {
-                body: { user_id: user.id, connection_id: connection.id },
+                body: { user_id: ownerId, connection_id: connection.id },
             });
             if (error) throw error;
             const synced = data?.synced ?? 0;

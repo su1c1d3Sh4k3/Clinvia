@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
+import { useOwnerId } from "@/hooks/useOwnerId";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Loader2, Upload, X } from "lucide-react";
@@ -35,6 +36,7 @@ interface ProductServiceModalProps {
 export function ProductServiceModal({ open, onOpenChange, itemToEdit }: ProductServiceModalProps) {
     const { toast } = useToast();
     const queryClient = useQueryClient();
+    const { data: ownerId } = useOwnerId();
     const [activeTab, setActiveTab] = useState<"product" | "service">("product");
     const [isLoading, setIsLoading] = useState(false);
     const [imageFiles, setImageFiles] = useState<File[]>([]);
@@ -106,6 +108,7 @@ export function ProductServiceModal({ open, onOpenChange, itemToEdit }: ProductS
         try {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error("Usuário não autenticado");
+            if (!ownerId) throw new Error("ID da organização não encontrado");
 
             // Upload images
             const uploadedUrls: string[] = [];
@@ -130,7 +133,7 @@ export function ProductServiceModal({ open, onOpenChange, itemToEdit }: ProductS
             const finalImageUrls = [...existingImages, ...uploadedUrls];
 
             const payload = {
-                user_id: user.id,
+                user_id: ownerId,
                 type: activeTab,
                 name: values.name,
                 description: values.description,
