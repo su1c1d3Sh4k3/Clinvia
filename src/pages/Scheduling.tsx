@@ -11,6 +11,7 @@ import { Plus, Filter, ChevronLeft, ChevronRight, Search, PanelLeftClose, PanelL
 import { SchedulingCalendar } from "@/components/scheduling/SchedulingCalendar";
 import { ProfessionalModal } from "@/components/scheduling/ProfessionalModal";
 import { AppointmentModal } from "@/components/scheduling/AppointmentModal";
+import { ViewAppointmentModal } from "@/components/scheduling/ViewAppointmentModal";
 import { SchedulingSettingsModal } from "@/components/scheduling/SchedulingSettingsModal";
 import { SaleModal, AppointmentSaleData } from "@/components/sales/SaleModal";
 import { format, addDays, subDays, isSameDay } from "date-fns";
@@ -32,6 +33,8 @@ export default function Scheduling() {
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [isProfessionalModalOpen, setIsProfessionalModalOpen] = useState(false);
     const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false);
+    const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+    const [appointmentToView, setAppointmentToView] = useState<any>(null);
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
     const [selectedSlot, setSelectedSlot] = useState<{ professionalId: string, date: Date } | undefined>(undefined);
     const [appointmentToEdit, setAppointmentToEdit] = useState<any>(null);
@@ -235,9 +238,8 @@ export default function Scheduling() {
     };
 
     const handleEventClick = (event: any) => {
-        setAppointmentToEdit(event);
-        setSelectedSlot(undefined);
-        setIsAppointmentModalOpen(true);
+        setAppointmentToView(event);
+        setIsViewModalOpen(true);
     };
 
     const handleEditProfessional = (professional: any) => {
@@ -552,6 +554,17 @@ export default function Scheduling() {
                 open={isProfessionalModalOpen}
                 onOpenChange={setIsProfessionalModalOpen}
                 professionalToEdit={professionalToEdit}
+            />
+
+            <ViewAppointmentModal
+                appointment={appointmentToView}
+                open={isViewModalOpen}
+                onOpenChange={setIsViewModalOpen}
+                onEdit={(apt) => {
+                    setAppointmentToEdit(apt);
+                    setSelectedSlot(undefined);
+                    setIsAppointmentModalOpen(true);
+                }}
             />
 
             <AppointmentModal
