@@ -24,6 +24,38 @@ import { makeOpenAIRequest, trackTokenUsage } from "../_shared/token-tracker.ts"
  * - Dispara transcrição de áudio
  * - Encaminha para webhook externo
  */
+
+/**
+ * Busca a foto de perfil de um contato na Evolution API.
+ * Retorna a URL da foto ou null se não encontrada.
+ */
+async function fetchProfilePicFromEvolution(
+    serverUrl: string,
+    instanceName: string,
+    apikey: string,
+    number: string
+): Promise<string | null> {
+    try {
+        const response = await fetch(
+            `${serverUrl}/chat/fetchProfilePictureUrl/${instanceName}`,
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'apikey': apikey,
+                },
+                body: JSON.stringify({ number }),
+            }
+        );
+        if (!response.ok) return null;
+        const data = await response.json();
+        return data.profilePictureUrl || data.picture || data.url || null;
+    } catch {
+        return null;
+    }
+}
+
 serve(async (req) => {
     // Handle CORS preflight
     if (req.method === 'OPTIONS') {
@@ -310,7 +342,7 @@ serve(async (req) => {
                 .maybeSingle();
 
             if (contact) {
-                // Contato existe - atualizar foto se mudou (sempre permitido)
+                // Contato existe - atualizar foto se mudou (payload tem foto nova)
                 if (profilePicUrl && profilePicUrl !== contact.profile_pic_url) {
                     const { error: photoError } = await supabase
                         .from('contacts')
@@ -319,7 +351,23 @@ serve(async (req) => {
 
                     if (photoError) {
                         console.error('[webhook-handle-message] Error updating profile picture:', photoError);
+                    } else {
+                        contact.profile_pic_url = profilePicUrl;
                     }
+                }
+
+                // Sem foto no payload E contato não tem foto salva → buscar na Evolution API (fire-and-forget)
+                if (!profilePicUrl && !contact.profile_pic_url && instance.server_url && instance.apikey) {
+                    const contactId_ = contact.id;
+                    const numberToFetch = waNumber;
+                    fetchProfilePicFromEvolution(instance.server_url, instanceName, instance.apikey, numberToFetch)
+                        .then(fetchedUrl => {
+                            if (fetchedUrl) {
+                                supabase.from('contacts').update({ profile_pic_url: fetchedUrl }).eq('id', contactId_)
+                                    .then(({ error }) => { if (error) console.error('[webhook] Error saving fetched pic:', error); });
+                            }
+                        })
+                        .catch(err => console.error('[webhook] fetchProfilePic error:', err));
                 }
 
                 // Atualizar nome APENAS se não foi editado manualmente e não é grupo
@@ -371,6 +419,19 @@ serve(async (req) => {
                     }
                 } else {
                     contact = newContact;
+                    // Novo contato sem foto no payload → buscar na Evolution API (fire-and-forget)
+                    if (!profilePicUrl && instance.server_url && instance.apikey && newContact) {
+                        const contactId_ = newContact.id;
+                        const numberToFetch = waNumber;
+                        fetchProfilePicFromEvolution(instance.server_url, instanceName, instance.apikey, numberToFetch)
+                            .then(fetchedUrl => {
+                                if (fetchedUrl) {
+                                    supabase.from('contacts').update({ profile_pic_url: fetchedUrl }).eq('id', contactId_)
+                                        .then(({ error }) => { if (error) console.error('[webhook] Error saving fetched pic (new):', error); });
+                                }
+                            })
+                            .catch(err => console.error('[webhook] fetchProfilePic error (new):', err));
+                    }
                 }
             }
 
