@@ -155,6 +155,7 @@ export const ContactModal = ({ open, onOpenChange, contactToEdit }: ContactModal
                             value={name}
                             onChange={(e) => setName(e.target.value)}
                             placeholder="Nome do cliente"
+                            autoComplete="off"
                         />
                     </div>
                     <div className="space-y-2">
@@ -165,6 +166,7 @@ export const ContactModal = ({ open, onOpenChange, contactToEdit }: ContactModal
                             onChange={(e) => setPhone(unformatPhoneNumber(e.target.value))}
                             placeholder="+55 (37) 9 9999-9999"
                             disabled={!!contactToEdit}
+                            autoComplete="off"
                         />
                         {contactToEdit && <p className="text-xs text-muted-foreground">O telefone não pode ser alterado diretamente.</p>}
                     </div>
@@ -175,6 +177,7 @@ export const ContactModal = ({ open, onOpenChange, contactToEdit }: ContactModal
                             value={company}
                             onChange={(e) => setCompany(e.target.value)}
                             placeholder="Nome da empresa"
+                            autoComplete="off"
                         />
                     </div>
                     <div className="space-y-2">
@@ -184,6 +187,7 @@ export const ContactModal = ({ open, onOpenChange, contactToEdit }: ContactModal
                             value={cpf}
                             onChange={(e) => setCpf(e.target.value)}
                             placeholder="000.000.000-00"
+                            autoComplete="off"
                         />
                     </div>
                     <div className="space-y-2">
@@ -195,6 +199,7 @@ export const ContactModal = ({ open, onOpenChange, contactToEdit }: ContactModal
                             onChange={(e) => setEmail(e.target.value)}
                             placeholder="cliente@email.com"
                             className={email && !isValidEmail(email) ? "border-red-500" : ""}
+                            autoComplete="off"
                         />
                         {email && !isValidEmail(email) && (
                             <p className="text-xs text-red-500">Email inválido</p>
@@ -207,6 +212,7 @@ export const ContactModal = ({ open, onOpenChange, contactToEdit }: ContactModal
                             value={instagram}
                             onChange={(e) => setInstagram(e.target.value)}
                             placeholder="usuario_instagram"
+                            autoComplete="off"
                         />
                     </div>
                 </div>

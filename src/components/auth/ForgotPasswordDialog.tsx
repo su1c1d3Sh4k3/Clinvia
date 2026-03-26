@@ -74,6 +74,7 @@ export function ForgotPasswordDialog() {
                                 onChange={(e) => setEmail(e.target.value)}
                                 required
                                 className="pl-9 bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-primary/50 focus:ring-primary/50"
+                                autoComplete="off"
                             />
                         </div>
                     </div>

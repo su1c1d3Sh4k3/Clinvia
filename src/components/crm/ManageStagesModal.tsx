@@ -199,6 +199,7 @@ export function ManageStagesModal({ funnelId, isSystemFunnel }: ManageStagesModa
                                 placeholder="Nome da nova etapa"
                                 value={newStageName}
                                 onChange={(e) => setNewStageName(e.target.value)}
+                                autoComplete="off"
                             />
                         </div>
                         <div className="w-24">
@@ -211,6 +212,7 @@ export function ManageStagesModal({ funnelId, isSystemFunnel }: ManageStagesModa
                                 placeholder="Dias"
                                 value={newStageStagnation}
                                 onChange={(e) => setNewStageStagnation(e.target.value)}
+                                autoComplete="off"
                             />
                         </div>
                         <Button onClick={handleAddStage} disabled={addStageMutation.isPending}>
@@ -278,6 +280,7 @@ export function ManageStagesModal({ funnelId, isSystemFunnel }: ManageStagesModa
                                                                                                 updateStageMutation.mutate({ id: stage.id, stagnation_limit_days: val });
                                                                                             }
                                                                                         }}
+                                                                                        autoComplete="off"
                                                                                     />
                                                                                     <span className="text-sm text-muted-foreground">dias</span>
                                                                                 </div>

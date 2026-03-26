@@ -304,6 +304,7 @@ export function DeliveryLaunchModal({
                                                 className="h-8 text-sm"
                                                 value={cardStates[unit.instanceId]?.contact_date ?? ""}
                                                 onChange={(e) => updateCard(unit.instanceId, "contact_date", e.target.value)}
+                                                autoComplete="off"
                                             />
                                         </div>
                                         <div>
@@ -313,6 +314,7 @@ export function DeliveryLaunchModal({
                                                 className="h-8 text-sm"
                                                 value={cardStates[unit.instanceId]?.deadline_date ?? ""}
                                                 onChange={(e) => updateCard(unit.instanceId, "deadline_date", e.target.value)}
+                                                autoComplete="off"
                                             />
                                         </div>
                                     </div>
@@ -326,6 +328,7 @@ export function DeliveryLaunchModal({
                                             placeholder="Observações sobre este procedimento..."
                                             value={cardStates[unit.instanceId]?.notes ?? ""}
                                             onChange={(e) => updateCard(unit.instanceId, "notes", e.target.value)}
+                                            autoComplete="off"
                                         />
                                     </div>
                                 </div>

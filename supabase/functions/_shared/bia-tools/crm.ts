@@ -131,6 +131,60 @@ export const crmTools: ToolFunction[] = [
             }
         }
     }
+    ,{
+        type: 'function',
+        function: {
+            name: 'crm_update_deal',
+            description: 'Atualiza o título, valor ou descrição de uma negociação/deal existente.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    deal_title: {
+                        type: 'string',
+                        description: 'Título atual ou parte do título da negociação'
+                    },
+                    new_title: {
+                        type: 'string',
+                        description: 'Novo título (opcional)'
+                    },
+                    new_value: {
+                        type: 'number',
+                        description: 'Novo valor em R$ (opcional)'
+                    },
+                    new_description: {
+                        type: 'string',
+                        description: 'Nova descrição (opcional)'
+                    }
+                },
+                required: ['deal_title']
+            }
+        }
+    }
+    ,{
+        type: 'function',
+        function: {
+            name: 'crm_move_deal_stage',
+            description: 'Move uma negociação para outra etapa do funil. Use quando o usuário pedir para mover, avançar ou recuar um deal.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    deal_title: {
+                        type: 'string',
+                        description: 'Título ou parte do título da negociação'
+                    },
+                    target_stage: {
+                        type: 'string',
+                        description: 'Nome da etapa de destino'
+                    },
+                    funnel_name: {
+                        type: 'string',
+                        description: 'Nome do funil (opcional, para desambiguação)'
+                    }
+                },
+                required: ['deal_title', 'target_stage']
+            }
+        }
+    }
 ];
 
 // ============================================
@@ -157,6 +211,10 @@ export async function handleCrmFunction(
             return await crmGetTotalPipelineValue(supabase, context, args);
         case 'crm_get_funnels_list':
             return await crmGetFunnelsList(supabase, context);
+        case 'crm_update_deal':
+            return await crmUpdateDeal(supabase, context, args);
+        case 'crm_move_deal_stage':
+            return await crmMoveDealStage(supabase, context, args);
         default:
             return { success: false, error: `Função desconhecida: ${functionName}` };
     }
@@ -505,6 +563,136 @@ async function crmGetFunnelsList(
                 stages_count: f.stages?.length || 0,
                 stages: (f.stages || []).sort((a: any, b: any) => a.order_index - b.order_index).map((s: any) => s.name)
             }))
+        }
+    };
+}
+
+async function crmUpdateDeal(
+    supabase: any,
+    context: UserContext,
+    args: { deal_title: string; new_title?: string; new_value?: number; new_description?: string }
+): Promise<FunctionResult> {
+
+    if (!hasPermission(context.role, 'crm:update')) {
+        return { success: false, error: 'Você não tem permissão para editar negociações' };
+    }
+
+    if (!args.new_title && args.new_value === undefined && !args.new_description) {
+        return { success: false, error: 'Informe pelo menos um campo para atualizar (título, valor ou descrição)' };
+    }
+
+    let query = supabase
+        .from('crm_deals')
+        .select('id, title, value, description, assigned_to')
+        .eq('user_id', context.owner_id)
+        .is('closed_at', null)
+        .ilike('title', `%${args.deal_title}%`);
+
+    if (!canViewAll(context.role, 'crm')) {
+        query = query.eq('assigned_to', context.team_member_id);
+    }
+
+    const { data, error } = await query.limit(5);
+
+    if (error) return { success: false, error: `Erro ao buscar negociação: ${error.message}` };
+    if (!data || data.length === 0) {
+        return { success: true, data: { found: false, message: `Nenhuma negociação encontrada com o título "${args.deal_title}"` } };
+    }
+
+    if (data.length > 1) {
+        const list = data.map((d: any, i: number) => `${i + 1}. **${d.title}** (${formatCurrency(d.value || 0)})`).join('\n');
+        return {
+            success: true,
+            data: { needs_info: true, message: `Encontrei ${data.length} negociações. Qual você quer editar?\n\n${list}` }
+        };
+    }
+
+    const deal = data[0];
+    const updates: Record<string, any> = {};
+    const changes: string[] = [];
+
+    if (args.new_title) { updates.title = args.new_title; changes.push(`Título: "${deal.title}" → "${args.new_title}"`); }
+    if (args.new_value !== undefined) { updates.value = args.new_value; changes.push(`Valor: ${formatCurrency(deal.value || 0)} → ${formatCurrency(args.new_value)}`); }
+    if (args.new_description) { updates.description = args.new_description; changes.push(`Descrição atualizada`); }
+
+    return {
+        success: true,
+        needs_confirmation: true,
+        confirmation_message: `Confirma as alterações na negociação **"${deal.title}"**?\n\n${changes.map(c => `• ${c}`).join('\n')}`,
+        data: {
+            action: 'update_deal',
+            params: { deal_id: deal.id, updates },
+            summary: { title: deal.title, changes }
+        }
+    };
+}
+
+async function crmMoveDealStage(
+    supabase: any,
+    context: UserContext,
+    args: { deal_title: string; target_stage: string; funnel_name?: string }
+): Promise<FunctionResult> {
+
+    if (!hasPermission(context.role, 'crm:update')) {
+        return { success: false, error: 'Você não tem permissão para mover negociações' };
+    }
+
+    // Find deal
+    let dealQuery = supabase
+        .from('crm_deals')
+        .select('id, title, stage_id, funnel_id, assigned_to, crm_stages(name), crm_funnels(name, id)')
+        .eq('user_id', context.owner_id)
+        .is('closed_at', null)
+        .ilike('title', `%${args.deal_title}%`);
+
+    if (!canViewAll(context.role, 'crm')) {
+        dealQuery = dealQuery.eq('assigned_to', context.team_member_id);
+    }
+
+    const { data: deals, error: dealError } = await dealQuery.limit(5);
+
+    if (dealError) return { success: false, error: `Erro ao buscar negociação: ${dealError.message}` };
+    if (!deals || deals.length === 0) {
+        return { success: true, data: { found: false, message: `Negociação "${args.deal_title}" não encontrada` } };
+    }
+
+    if (deals.length > 1) {
+        const list = deals.map((d: any, i: number) => `${i + 1}. **${d.title}** (${d.crm_stages?.name || '?'} em ${d.crm_funnels?.name || '?'})`).join('\n');
+        return { success: true, data: { needs_info: true, message: `Encontrei ${deals.length} negociações:\n\n${list}\n\nQual você quer mover?` } };
+    }
+
+    const deal = deals[0];
+
+    // Find target stage in the deal's funnel
+    const { data: stages } = await supabase
+        .from('crm_stages')
+        .select('id, name')
+        .eq('funnel_id', deal.funnel_id)
+        .ilike('name', `%${args.target_stage}%`);
+
+    if (!stages || stages.length === 0) {
+        return { success: true, data: { found: false, message: `Etapa "${args.target_stage}" não encontrada no funil **${deal.crm_funnels?.name}**` } };
+    }
+
+    if (stages.length > 1) {
+        const stageList = stages.map((s: any) => `• ${s.name}`).join('\n');
+        return { success: true, data: { needs_info: true, message: `Encontrei ${stages.length} etapas com esse nome:\n${stageList}\n\nQual é a etapa de destino?` } };
+    }
+
+    const targetStage = stages[0];
+
+    if (targetStage.id === deal.stage_id) {
+        return { success: true, data: { needs_info: true, message: `A negociação já está na etapa **${targetStage.name}**` } };
+    }
+
+    return {
+        success: true,
+        needs_confirmation: true,
+        confirmation_message: `Mover **"${deal.title}"** de **${deal.crm_stages?.name}** para **${targetStage.name}**?`,
+        data: {
+            action: 'move_deal_stage',
+            params: { deal_id: deal.id, stage_id: targetStage.id },
+            summary: { title: deal.title, from_stage: deal.crm_stages?.name, to_stage: targetStage.name }
         }
     };
 }

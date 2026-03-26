@@ -125,6 +125,7 @@ export function CopilotSettingsModal({ open, onOpenChange }: CopilotSettingsModa
                             placeholder="Descreva de forma objetiva sobre o que é a empresa..."
                             value={formData.about_company}
                             onChange={(e) => setFormData({ ...formData, about_company: e.target.value })}
+                            autoComplete="off"
                         />
                     </div>
 
@@ -135,6 +136,7 @@ export function CopilotSettingsModal({ open, onOpenChange }: CopilotSettingsModa
                             placeholder="Descreva os tipos de produto que trabalham..."
                             value={formData.products}
                             onChange={(e) => setFormData({ ...formData, products: e.target.value })}
+                            autoComplete="off"
                         />
                     </div>
 
@@ -145,6 +147,7 @@ export function CopilotSettingsModal({ open, onOpenChange }: CopilotSettingsModa
                             placeholder="Descreva o perfil do cliente que atendem..."
                             value={formData.customer_profile}
                             onChange={(e) => setFormData({ ...formData, customer_profile: e.target.value })}
+                            autoComplete="off"
                         />
                     </div>
 

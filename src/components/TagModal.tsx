@@ -113,6 +113,7 @@ export const TagModal = ({ open, onOpenChange, tagToEdit }: TagModalProps) => {
                             value={name}
                             onChange={(e) => setName(e.target.value)}
                             placeholder="Ex: Urgente, Financeiro..."
+                            autoComplete="off"
                         />
                     </div>
                     <div className="space-y-2">
@@ -124,12 +125,14 @@ export const TagModal = ({ open, onOpenChange, tagToEdit }: TagModalProps) => {
                                 value={color}
                                 onChange={(e) => setColor(e.target.value)}
                                 className="w-12 h-10 p-1 cursor-pointer"
+                                autoComplete="off"
                             />
                             <Input
                                 value={color}
                                 onChange={(e) => setColor(e.target.value)}
                                 placeholder="#000000"
                                 className="flex-1"
+                                autoComplete="off"
                             />
                         </div>
                     </div>

@@ -122,6 +122,7 @@ export function LossReasonModal({
                                 value={otherDescription}
                                 onChange={(e) => setOtherDescription(e.target.value)}
                                 className="min-h-[80px]"
+                                autoComplete="off"
                             />
                         </div>
                     )}

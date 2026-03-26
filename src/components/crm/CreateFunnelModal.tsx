@@ -152,7 +152,7 @@ export function CreateFunnelModal() {
                                 <FormItem>
                                     <FormLabel>Nome do Funil</FormLabel>
                                     <FormControl>
-                                        <Input placeholder="Ex: Vendas B2B" {...field} />
+                                        <Input autoComplete="off" placeholder="Ex: Vendas B2B" {...field} />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>

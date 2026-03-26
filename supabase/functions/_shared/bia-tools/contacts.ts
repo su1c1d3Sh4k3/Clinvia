@@ -75,6 +75,45 @@ export const contactsTools: ToolFunction[] = [
             }
         }
     }
+    ,{
+        type: 'function',
+        function: {
+            name: 'contacts_create',
+            description: 'Cria um novo contato. Use quando o usuário pedir para criar, cadastrar ou adicionar um contato.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    name: {
+                        type: 'string',
+                        description: 'Nome completo do contato'
+                    },
+                    phone: {
+                        type: 'string',
+                        description: 'Telefone no formato internacional (ex: 5511999998888)'
+                    },
+                    email: {
+                        type: 'string',
+                        description: 'Email do contato (opcional)'
+                    },
+                    channel: {
+                        type: 'string',
+                        description: 'Canal de comunicação',
+                        enum: ['whatsapp', 'instagram']
+                    },
+                    tags: {
+                        type: 'array',
+                        items: { type: 'string' },
+                        description: 'Tags para categorização (opcional)'
+                    },
+                    notes: {
+                        type: 'string',
+                        description: 'Observações sobre o contato (opcional)'
+                    }
+                },
+                required: ['name', 'phone']
+            }
+        }
+    }
 ];
 
 // ============================================
@@ -95,6 +134,8 @@ export async function handleContactsFunction(
             return await contactsGetDetails(supabase, context, args);
         case 'contacts_count':
             return await contactsCount(supabase, context, args);
+        case 'contacts_create':
+            return await contactsCreate(supabase, context, args);
         default:
             return { success: false, error: `Função desconhecida: ${functionName}` };
     }
@@ -249,6 +290,75 @@ async function contactsCount(
         data: {
             count: count || 0,
             message: `Você tem ${count || 0} contatos${channelLabel} cadastrados`
+        }
+    };
+}
+
+async function contactsCreate(
+    supabase: any,
+    context: UserContext,
+    args: { name: string; phone: string; email?: string; channel?: string; tags?: string[]; notes?: string }
+): Promise<FunctionResult> {
+
+    if (!hasPermission(context.role, 'contacts:create')) {
+        return { success: false, error: 'Você não tem permissão para criar contatos' };
+    }
+
+    if (!args.name?.trim()) {
+        return { success: false, error: 'Nome é obrigatório' };
+    }
+    if (!args.phone?.trim()) {
+        return { success: false, error: 'Telefone é obrigatório' };
+    }
+
+    // Normalize phone: remove non-digits
+    const phone = args.phone.replace(/\D/g, '');
+    if (phone.length < 10) {
+        return { success: false, error: 'Telefone inválido. Use o formato: 5511999998888' };
+    }
+
+    // Check for duplicate
+    const { data: existing } = await supabase
+        .from('contacts')
+        .select('id, push_name')
+        .eq('user_id', context.owner_id)
+        .eq('phone', phone)
+        .limit(1);
+
+    if (existing && existing.length > 0) {
+        return {
+            success: true,
+            data: {
+                needs_info: true,
+                message: `Já existe um contato com este telefone: **${existing[0].push_name}**. Deseja criar mesmo assim ou atualizar o existente?`
+            }
+        };
+    }
+
+    const channel = args.channel || 'whatsapp';
+
+    const confirmMsg = `Confirma a criação do contato?\n\n👤 **Nome**: ${args.name.trim()}\n📱 **Telefone**: ${phone}\n📡 **Canal**: ${channel}${args.email ? `\n📧 **Email**: ${args.email}` : ''}${args.tags?.length ? `\n🏷️ **Tags**: ${args.tags.join(', ')}` : ''}`;
+
+    return {
+        success: true,
+        needs_confirmation: true,
+        confirmation_message: confirmMsg,
+        data: {
+            action: 'create_contact',
+            params: {
+                user_id: context.owner_id,
+                push_name: args.name.trim(),
+                phone: phone,
+                email: args.email || null,
+                channel: channel,
+                tags: args.tags || [],
+                notes: args.notes || null
+            },
+            summary: {
+                name: args.name.trim(),
+                phone: phone,
+                channel: channel
+            }
         }
     };
 }

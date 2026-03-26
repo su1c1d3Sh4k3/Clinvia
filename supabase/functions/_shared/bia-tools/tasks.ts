@@ -124,6 +124,32 @@ export const tasksTools: ToolFunction[] = [
             }
         }
     }
+    ,{
+        type: 'function',
+        function: {
+            name: 'tasks_update_status',
+            description: 'Altera o status de uma tarefa (pendente, em andamento, concluída). Use quando o usuário pedir para atualizar, mover ou concluir uma tarefa.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    task_title: {
+                        type: 'string',
+                        description: 'Título ou parte do título da tarefa'
+                    },
+                    new_status: {
+                        type: 'string',
+                        description: 'Novo status da tarefa',
+                        enum: ['pending', 'open', 'finished']
+                    },
+                    board_name: {
+                        type: 'string',
+                        description: 'Nome do quadro para filtrar (opcional)'
+                    }
+                },
+                required: ['task_title', 'new_status']
+            }
+        }
+    }
 ];
 
 // ============================================
@@ -146,6 +172,8 @@ export async function handleTasksFunction(
             return await tasksCreate(supabase, context, args);
         case 'tasks_get_boards':
             return await tasksGetBoards(supabase, context);
+        case 'tasks_update_status':
+            return await tasksUpdateStatus(supabase, context, args);
         default:
             return { success: false, error: `Função desconhecida: ${functionName}` };
     }
@@ -398,6 +426,69 @@ async function tasksGetBoards(
                 name: b.name,
                 hours: `${b.start_hour}h às ${b.end_hour}h`
             }))
+        }
+    };
+}
+
+async function tasksUpdateStatus(
+    supabase: any,
+    context: UserContext,
+    args: { task_title: string; new_status: string; board_name?: string }
+): Promise<FunctionResult> {
+
+    if (!hasPermission(context.role, 'tasks:update')) {
+        return { success: false, error: 'Você não tem permissão para alterar tarefas' };
+    }
+
+    // Search task by title
+    let query = supabase
+        .from('tasks')
+        .select('id, title, status, task_boards(name)')
+        .eq('user_id', context.owner_id)
+        .ilike('title', `%${args.task_title}%`)
+        .neq('status', 'finished');
+
+    // Agents can only update their own tasks
+    if (context.role === 'agent' && context.team_member_id) {
+        query = query.eq('assigned_to', context.team_member_id);
+    }
+
+    const { data, error } = await query.limit(5);
+
+    if (error) return { success: false, error: `Erro ao buscar tarefa: ${error.message}` };
+    if (!data || data.length === 0) {
+        return { success: true, data: { found: false, message: `Nenhuma tarefa encontrada com o título "${args.task_title}"` } };
+    }
+
+    if (data.length > 1) {
+        const list = data.map((t: any, i: number) => `${i + 1}. **${t.title}** (${t.task_boards?.name || 'sem quadro'})`).join('\n');
+        return {
+            success: true,
+            data: {
+                needs_info: true,
+                message: `Encontrei ${data.length} tarefas. Qual delas você quer atualizar?\n\n${list}`
+            }
+        };
+    }
+
+    const task = data[0];
+    const statusLabels: Record<string, string> = { pending: 'Pendente', open: 'Em Andamento', finished: 'Concluída' };
+
+    return {
+        success: true,
+        needs_confirmation: true,
+        confirmation_message: `Quer alterar o status da tarefa **"${task.title}"** de **${statusLabels[task.status] || task.status}** para **${statusLabels[args.new_status] || args.new_status}**?`,
+        data: {
+            action: 'update_task_status',
+            params: {
+                task_id: task.id,
+                status: args.new_status
+            },
+            summary: {
+                title: task.title,
+                old_status: statusLabels[task.status] || task.status,
+                new_status: statusLabels[args.new_status] || args.new_status
+            }
         }
     };
 }

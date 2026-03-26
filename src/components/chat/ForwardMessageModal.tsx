@@ -149,6 +149,8 @@ export const ForwardMessageModal = ({ open, onOpenChange, messageToForward }: Fo
 
             toast({ title: "Mensagem encaminhada com sucesso!" });
             onOpenChange(false);
+            setSelectedInstance("");
+            setSelectedContact(null);
             setNumber("55");
         } catch (error: any) {
             console.error("Erro ao encaminhar mensagem:", error);
@@ -223,6 +225,7 @@ export const ForwardMessageModal = ({ open, onOpenChange, messageToForward }: Fo
                             }}
                             placeholder="+55 (37) 9 9999-9999"
                             type="tel"
+                            autoComplete="off"
                         />
                     </div>
                 </div>

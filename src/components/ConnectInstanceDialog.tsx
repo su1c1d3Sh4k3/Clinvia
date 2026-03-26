@@ -143,6 +143,7 @@ export const ConnectInstanceDialog = ({
                                     onChange={handlePhoneChange}
                                     disabled={isLoading}
                                     autoFocus
+                                    autoComplete="off"
                                 />
                                 <p className="text-xs text-muted-foreground">
                                     Formato: DDI + DDD + Número (ex: 55 11 999999999)

@@ -88,6 +88,7 @@ export function ChangePasswordModal({ open, onClose }: ChangePasswordModalProps)
                                 required
                                 minLength={6}
                                 className="pl-9 pr-10"
+                                autoComplete="new-password"
                             />
                             <button
                                 type="button"
@@ -111,6 +112,7 @@ export function ChangePasswordModal({ open, onClose }: ChangePasswordModalProps)
                                 onChange={(e) => setConfirmPassword(e.target.value)}
                                 required
                                 minLength={6}
+                                autoComplete="new-password"
                                 className={`pl-9 ${confirmPassword && confirmPassword !== newPassword
                                         ? "border-red-500"
                                         : confirmPassword && confirmPassword === newPassword

@@ -131,6 +131,7 @@ export function DealNotesModal({ deal, trigger }: DealNotesModalProps) {
                             value={newNote}
                             onChange={(e) => setNewNote(e.target.value)}
                             className="min-h-[80px]"
+                            autoComplete="off"
                         />
                         <Button
                             onClick={handleSubmit}
