@@ -686,28 +686,26 @@ const Contacts = () => {
                                                         <Instagram className="w-3.5 h-3.5 md:w-4 md:h-4" />
                                                     </Button>
                                                     {(userRole === "admin" || userRole === "supervisor") && (
-                                                        <>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                className="h-7 w-7 md:h-8 md:w-8"
-                                                                onClick={() => handleEdit(contact)}
-                                                                title="Editar"
-                                                            >
-                                                                <Pencil className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                                                            </Button>
-                                                            {userRole === "admin" && (
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                className="text-destructive hover:text-destructive h-7 w-7 md:h-8 md:w-8"
-                                                                onClick={() => setContactToDelete(contact)}
-                                                                title="Excluir"
-                                                            >
-                                                                <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                                                            </Button>
-                                                            )}
-                                                        </>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-7 w-7 md:h-8 md:w-8"
+                                                            onClick={() => handleEdit(contact)}
+                                                            title="Editar"
+                                                        >
+                                                            <Pencil className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                                                        </Button>
+                                                    )}
+                                                    {userRole === "admin" && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="text-destructive hover:text-destructive h-7 w-7 md:h-8 md:w-8"
+                                                            onClick={() => setContactToDelete(contact)}
+                                                            title="Excluir"
+                                                        >
+                                                            <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                                                        </Button>
                                                     )}
                                                 </div>
                                             </TableCell>
