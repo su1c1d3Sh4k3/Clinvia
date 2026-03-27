@@ -225,16 +225,25 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                 })
                                 .map((apt) => {
                                     const isFinalStatus = apt.status === 'completed' || apt.status === 'canceled';
+                                    const isCanceled = apt.status === 'canceled';
+
+                                    // Agendamentos cancelados: exibe apenas faixa fina (20px) no topo
+                                    // liberando o restante do slot para novos agendamentos
+                                    const baseStyle = getEventStyle(apt);
+                                    const eventStyle = isCanceled
+                                        ? { ...baseStyle, height: '20px', opacity: 0.55 }
+                                        : baseStyle;
 
                                     return (
                                         <div
                                             key={apt.id}
                                             className={cn(
                                                 "absolute left-1 right-1 rounded-md px-1.5 py-0.5 cursor-pointer border shadow-sm transition-all z-10 group/card",
-                                                apt.type === "absence" ? "bg-muted text-muted-foreground border-border" : getStatusColor(apt.status || 'pending')
+                                                apt.type === "absence" ? "bg-muted text-muted-foreground border-border" : getStatusColor(apt.status || 'pending'),
+                                                isCanceled && "border-dashed"
                                             )}
                                             style={{
-                                                ...getEventStyle(apt),
+                                                ...eventStyle,
                                                 borderLeft: apt.type !== "absence" && apt.products_services?.color
                                                     ? `6px solid ${apt.products_services.color}`
                                                     : undefined,
@@ -303,7 +312,17 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                                 </div>
                                             )}
 
-                                            {(() => {
+                                            {isCanceled ? (
+                                                // Cancelado: só exibe faixa fina com nome + "Cancelado"
+                                                <div className="flex items-center gap-1 truncate h-full" style={{ fontSize: '9px', lineHeight: 1 }}>
+                                                    <X className="h-2.5 w-2.5 shrink-0" />
+                                                    <span className="font-semibold truncate">
+                                                        {(apt.contacts?.push_name || apt.contact_name || 'Cliente').split(' ')[0]}
+                                                    </span>
+                                                    <span className="opacity-60 truncate">· {apt.products_services?.name || 'Serviço'}</span>
+                                                    <span className="opacity-50 shrink-0">{format(new Date(apt.start_time), 'HH:mm')}</span>
+                                                </div>
+                                            ) : (() => {
                                                 const start = new Date(apt.start_time);
                                                 const end = new Date(apt.end_time);
                                                 const durationInMinutes = differenceInMinutes(end, start);
