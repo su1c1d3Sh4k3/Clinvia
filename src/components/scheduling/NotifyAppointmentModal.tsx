@@ -28,20 +28,18 @@ import { Bell, Send, User, Loader2 } from "lucide-react";
 
 const TIMEZONE = "America/Sao_Paulo";
 
-interface NotifyAppointmentModalProps {
-    appointment: any;
-    open: boolean;
-    onOpenChange: (open: boolean) => void;
-}
+export const DEFAULT_NOTIFICATION_TEMPLATE =
+    "Olá, {nome}! Seu agendamento do procedimento de {procedimento} com {profissional} foi realizado para o dia {data} às {hora}, seu procedimento tem duração estimada de {tempo} minutos. Qualquer dúvida, estamos à disposição, pode entrar em contato.";
 
-function buildNotificationMessage(appointment: any): string {
+function buildNotificationMessage(appointment: any, template: string): string {
     const contact = appointment?.contacts;
-    const service = appointment?.services;
-    const professional = appointment?.professionals || appointment?.professional;
-
     const clientName = contact?.push_name || contact?.name || "Cliente";
-    const serviceName = service?.name || "procedimento";
-    const professionalName = professional?.name || "profissional";
+    const serviceName =
+        appointment?.products_services?.name ||
+        appointment?.service_name ||
+        "procedimento";
+    const professionalName =
+        appointment?.professional_name || "profissional";
 
     const startZoned = toZonedTime(appointment.start_time, TIMEZONE);
     const dateStr = format(startZoned, "dd/MM/yyyy", { locale: ptBR });
@@ -52,12 +50,19 @@ function buildNotificationMessage(appointment: any): string {
         new Date(appointment.start_time).getTime();
     const durationMin = Math.round(durationMs / 60000);
 
-    return (
-        `Olá, ${clientName}! Seu agendamento do procedimento de ${serviceName} com ` +
-        `${professionalName} foi realizado para o dia ${dateStr} às ${startTime}, ` +
-        `seu procedimento tem duração estimada de ${durationMin} minutos. ` +
-        `Qualquer dúvida, estamos à disposição, pode entrar em contato.`
-    );
+    return template
+        .replace(/\{nome\}/g, clientName)
+        .replace(/\{procedimento\}/g, serviceName)
+        .replace(/\{profissional\}/g, professionalName)
+        .replace(/\{data\}/g, dateStr)
+        .replace(/\{hora\}/g, startTime)
+        .replace(/\{tempo\}/g, String(durationMin));
+}
+
+interface NotifyAppointmentModalProps {
+    appointment: any;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
 }
 
 export function NotifyAppointmentModal({
@@ -71,12 +76,29 @@ export function NotifyAppointmentModal({
     const { data: ownerId } = useOwnerId();
     const sendMessageMutation = useSendMessage();
 
-    // Gera a mensagem pre-preenchida sempre que o agendamento mudar
+    // Busca template salvo nas configurações de agendamento
+    const { data: settings } = useQuery({
+        queryKey: ["scheduling_settings", ownerId],
+        queryFn: async () => {
+            if (!ownerId) return null;
+            const { data } = await supabase
+                .from("scheduling_settings")
+                .select("notification_template")
+                .eq("user_id", ownerId)
+                .maybeSingle();
+            return data;
+        },
+        enabled: !!ownerId,
+    });
+
+    // Gera a mensagem usando o template salvo (ou padrão)
     useEffect(() => {
         if (appointment && open) {
-            setMessage(buildNotificationMessage(appointment));
+            const template =
+                settings?.notification_template || DEFAULT_NOTIFICATION_TEMPLATE;
+            setMessage(buildNotificationMessage(appointment, template));
         }
-    }, [appointment, open]);
+    }, [appointment, open, settings]);
 
     // Busca instâncias conectadas
     const { data: instances } = useQuery({
@@ -95,14 +117,10 @@ export function NotifyAppointmentModal({
     // Pré-seleciona a instância do contato ou a primeira disponível
     useEffect(() => {
         if (!instances || instances.length === 0) return;
-
         const contactInstanceId = appointment?.contacts?.instance_id;
         if (contactInstanceId) {
             const match = instances.find((i) => i.id === contactInstanceId);
-            if (match) {
-                setSelectedInstanceId(match.id);
-                return;
-            }
+            if (match) { setSelectedInstanceId(match.id); return; }
         }
         setSelectedInstanceId(instances[0].id);
     }, [instances, appointment]);
@@ -123,7 +141,6 @@ export function NotifyAppointmentModal({
 
         setIsSending(true);
         try {
-            // Busca conversa aberta para esse contato + instância
             const { data: existingConvs } = await supabase
                 .from("conversations")
                 .select("id")
@@ -138,10 +155,7 @@ export function NotifyAppointmentModal({
             if (existingConvs && existingConvs.length > 0) {
                 conversationId = existingConvs[0].id;
             } else {
-                // Cria nova conversa com a instância selecionada
-                const {
-                    data: { user },
-                } = await supabase.auth.getUser();
+                const { data: { user } } = await supabase.auth.getUser();
                 if (!user) throw new Error("Usuário não autenticado");
 
                 const { data: member } = await supabase
@@ -278,9 +292,7 @@ export function NotifyAppointmentModal({
                     </Button>
                     <Button
                         onClick={handleSend}
-                        disabled={
-                            isSending || !selectedInstanceId || !message.trim()
-                        }
+                        disabled={isSending || !selectedInstanceId || !message.trim()}
                         className="gap-2"
                     >
                         {isSending ? (

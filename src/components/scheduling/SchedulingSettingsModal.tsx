@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -9,14 +9,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, Building2, CheckCircle2, Unlink, CalendarDays, RefreshCw } from "lucide-react";
+import { Loader2, Building2, CheckCircle2, Unlink, CalendarDays, RefreshCw, Bell, RotateCcw } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import type { GoogleCalendarConnection, GoogleSyncMode } from "@/types/googleCalendar";
+import { DEFAULT_NOTIFICATION_TEMPLATE } from "./NotifyAppointmentModal";
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 
@@ -73,6 +75,8 @@ export function SchedulingSettingsModal({ open, onOpenChange, currentSettings }:
     const queryClient = useQueryClient();
     const { data: ownerId } = useOwnerId();
     const [isLoading, setIsLoading] = useState(false);
+    const [notificationTemplate, setNotificationTemplate] = useState(DEFAULT_NOTIFICATION_TEMPLATE);
+    const templateRef = useRef<HTMLTextAreaElement>(null);
 
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
@@ -92,6 +96,9 @@ export function SchedulingSettingsModal({ open, onOpenChange, currentSettings }:
                 work_days: currentSettings.work_days,
                 auto_complete: currentSettings.auto_complete ?? false,
             });
+            setNotificationTemplate(
+                currentSettings.notification_template || DEFAULT_NOTIFICATION_TEMPLATE
+            );
         }
     }, [currentSettings, form]);
 
@@ -112,6 +119,7 @@ export function SchedulingSettingsModal({ open, onOpenChange, currentSettings }:
                 end_hour: values.end_hour,
                 work_days: values.work_days,
                 auto_complete: values.auto_complete,
+                notification_template: notificationTemplate || null,
             };
 
             // Upsert settings
@@ -274,6 +282,75 @@ export function SchedulingSettingsModal({ open, onOpenChange, currentSettings }:
                                 </FormItem>
                             )}
                         />
+
+                        {/* Template de Notificação */}
+                        <div className="space-y-3 rounded-lg border p-4">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <Bell className="w-4 h-4 text-muted-foreground" />
+                                    <span className="text-sm font-medium">Template de Notificação</span>
+                                </div>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 gap-1 text-xs text-muted-foreground"
+                                    onClick={() => setNotificationTemplate(DEFAULT_NOTIFICATION_TEMPLATE)}
+                                >
+                                    <RotateCcw className="w-3 h-3" />
+                                    Restaurar padrão
+                                </Button>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                Use os atalhos abaixo para inserir dados do agendamento na mensagem.
+                            </p>
+                            <div className="flex flex-wrap gap-1.5">
+                                {[
+                                    { label: "{nome}", title: "Nome do cliente" },
+                                    { label: "{procedimento}", title: "Nome do serviço" },
+                                    { label: "{profissional}", title: "Nome do profissional" },
+                                    { label: "{data}", title: "Data do agendamento" },
+                                    { label: "{hora}", title: "Horário de início" },
+                                    { label: "{tempo}", title: "Duração em minutos" },
+                                ].map(({ label, title }) => (
+                                    <button
+                                        key={label}
+                                        type="button"
+                                        title={title}
+                                        onClick={() => {
+                                            const el = templateRef.current;
+                                            if (!el) {
+                                                setNotificationTemplate((prev) => prev + label);
+                                                return;
+                                            }
+                                            const start = el.selectionStart ?? notificationTemplate.length;
+                                            const end = el.selectionEnd ?? notificationTemplate.length;
+                                            const next =
+                                                notificationTemplate.slice(0, start) +
+                                                label +
+                                                notificationTemplate.slice(end);
+                                            setNotificationTemplate(next);
+                                            requestAnimationFrame(() => {
+                                                el.focus();
+                                                el.setSelectionRange(start + label.length, start + label.length);
+                                            });
+                                        }}
+                                        className="px-2 py-0.5 rounded text-xs font-mono bg-primary/10 text-primary hover:bg-primary/20 transition-colors border border-primary/20"
+                                    >
+                                        {label}
+                                    </button>
+                                ))}
+                            </div>
+                            <Textarea
+                                ref={templateRef}
+                                value={notificationTemplate}
+                                onChange={(e) => setNotificationTemplate(e.target.value)}
+                                rows={5}
+                                className="resize-none text-sm leading-relaxed font-mono"
+                                autoComplete="off"
+                                placeholder={DEFAULT_NOTIFICATION_TEMPLATE}
+                            />
+                        </div>
 
                         <Button type="submit" className="w-full" disabled={isLoading}>
                             {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
