@@ -95,6 +95,15 @@ export const ContactModal = ({ open, onOpenChange, contactToEdit }: ContactModal
                 throw new Error("Usuário não autenticado. Por favor, faça login novamente.");
             }
 
+            // Resolve o owner_id correto (para supervisores/agentes, usa o user_id do admin)
+            let ownerUserId = userId;
+            try {
+                const { data: rpcOwnerId } = await supabase.rpc('get_my_owner_id' as any);
+                if (rpcOwnerId) ownerUserId = rpcOwnerId as string;
+            } catch (e) {
+                console.warn('[ContactModal] get_my_owner_id falhou, usando userId do auth:', e);
+            }
+
             const contactData = {
                 push_name: name,
                 phone: phone,
@@ -115,12 +124,12 @@ export const ContactModal = ({ open, onOpenChange, contactToEdit }: ContactModal
                 if (error) throw error;
                 toast({ title: "Contato atualizado com sucesso!" });
             } else {
-                // Add user_id and is_group for new contacts
+                // Add user_id (owner) and is_group for new contacts
                 const { error } = await supabase
                     .from("contacts")
                     .insert({
                         ...contactData,
-                        user_id: userId,
+                        user_id: ownerUserId,
                         is_group: false,
                     });
 
