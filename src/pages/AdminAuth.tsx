@@ -55,13 +55,22 @@ const AdminAuth = () => {
 
             if (error) throw error;
 
-            const responseText = data?.response || "";
+            let responseText = "";
+            if (typeof data?.response === "string") {
+                responseText = data.response.trim().toLowerCase();
+            } else if (typeof data === "string") {
+                responseText = data.trim().toLowerCase();
+            } else if (data?.message) {
+                responseText = String(data.message).trim().toLowerCase();
+            }
 
-            if (responseText === "code true") {
+            console.log("[2FA] generate response:", responseText, "| raw:", data);
+
+            if (responseText.includes("true") || responseText.includes("sent") || responseText.includes("enviado")) {
                 setCodeGenerated(true);
                 toast.success("Código enviado! Verifique seu dispositivo.");
             } else {
-                console.error("Generate code unexpected response:", responseText);
+                console.error("Generate code unexpected response:", data);
                 toast.error("Erro ao gerar código. Tente novamente.");
             }
         } catch (error) {
@@ -85,17 +94,27 @@ const AdminAuth = () => {
 
             if (error) throw error;
 
-            const responseText = data?.response || "";
+            // Normaliza a resposta — pode vir como string pura ou dentro de um objeto JSON
+            let responseText = "";
+            if (typeof data?.response === "string") {
+                responseText = data.response.trim().toLowerCase();
+            } else if (typeof data === "string") {
+                responseText = data.trim().toLowerCase();
+            } else if (data?.message) {
+                responseText = String(data.message).trim().toLowerCase();
+            }
 
-            if (responseText === "validate true") {
+            console.log("[2FA] validate response:", responseText, "| raw:", data);
+
+            if (responseText.includes("true")) {
                 setCodeValidated(true);
                 toast.success("Código validado com sucesso!");
-            } else if (responseText === "validate false") {
+            } else if (responseText.includes("false") || responseText.includes("invalid") || responseText.includes("erro")) {
                 toast.error("Código inválido. Tente novamente.");
             } else {
-                // Unexpected response format
-                console.error("Unexpected response:", responseText);
-                toast.error("Resposta inesperada do servidor. Contate o administrador.");
+                // Fallback: se não reconhece o formato, loga e informa
+                console.error("Unexpected response format:", data);
+                toast.error("Código inválido ou expirado. Tente novamente.");
             }
         } catch (error) {
             console.error("Validate code error:", error);
