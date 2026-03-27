@@ -173,6 +173,7 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                     .from("appointments")
                     .select("id, start_time, end_time")
                     .eq("professional_id", watchProfessionalId)
+                    .neq("status", "canceled")
                     .gte("start_time", startOfDay)
                     .lte("start_time", endOfDay),
                 supabase
