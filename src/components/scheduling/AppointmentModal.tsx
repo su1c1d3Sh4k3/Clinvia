@@ -192,14 +192,14 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
         enabled: !!watchProfessionalId && !!watchDate,
     });
 
-    // Generate available time slots with fixed 10-min intervals
+    // Generate available time slots with fixed 5-min intervals
     const availableTimeSlots = useMemo(() => {
         const slots: { value: string; hour: number; minute: number; label: string; disabled: boolean }[] = [];
         const now = new Date();
         const isToday = watchDate === format(now, "yyyy-MM-dd");
 
-        // Fixed 10-minute intervals
-        const interval = 10;
+        // Fixed 5-minute intervals
+        const interval = 5;
 
         // Converte work_hours para minutos. Suporta string "HH:MM", número decimal (9.5) e número inteiro (9)
         const parseWorkTime = (t: any): number | null => {
