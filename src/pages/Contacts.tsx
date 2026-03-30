@@ -144,8 +144,9 @@ const Contacts = () => {
 
     const deleteMutation = useMutation({
         mutationFn: async (id: string) => {
-            const { error } = await supabase.from("contacts").delete().eq("id", id);
+            const { data, error } = await supabase.from("contacts").delete().eq("id", id).select("id");
             if (error) throw error;
+            if (!data?.length) throw new Error("Não foi possível excluir o contato. Verifique suas permissões.");
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["contacts"] });

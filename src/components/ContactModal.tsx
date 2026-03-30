@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
+import { useUserRole } from "@/hooks/useUserRole";
 import { formatPhoneNumber, unformatPhoneNumber, isValidEmail } from "@/utils/formatters";
 
 interface Contact {
@@ -36,6 +37,8 @@ export const ContactModal = ({ open, onOpenChange, contactToEdit }: ContactModal
     const [isLoading, setIsLoading] = useState(false);
     const { toast } = useToast();
     const queryClient = useQueryClient();
+    const { data: userRole } = useUserRole();
+    const isAgent = userRole === "agent";
 
     useEffect(() => {
         if (contactToEdit) {
@@ -107,7 +110,8 @@ export const ContactModal = ({ open, onOpenChange, contactToEdit }: ContactModal
             const contactData = {
                 push_name: name,
                 phone: phone,
-                number: contactToEdit ? contactToEdit.number : `${phone}@s.whatsapp.net`,
+                // Agentes não podem alterar o number; admin/supervisor podem
+                number: (contactToEdit && isAgent) ? contactToEdit.number : `${phone}@s.whatsapp.net`,
                 company: company || null,
                 cpf: cpf || null,
                 email: email || null,
@@ -124,14 +128,14 @@ export const ContactModal = ({ open, onOpenChange, contactToEdit }: ContactModal
                 if (error) throw error;
                 toast({ title: "Contato atualizado com sucesso!" });
             } else {
-                // Add user_id (owner) and is_group for new contacts
+                // Upsert: se já existe contato com o mesmo número (ex: recriado pelo webhook),
+                // atualiza os dados em vez de falhar com erro de unicidade
                 const { error } = await supabase
                     .from("contacts")
-                    .insert({
-                        ...contactData,
-                        user_id: ownerUserId,
-                        is_group: false,
-                    });
+                    .upsert(
+                        { ...contactData, user_id: ownerUserId, is_group: false },
+                        { onConflict: "user_id,number" }
+                    );
 
                 if (error) throw error;
                 toast({ title: "Contato criado com sucesso!" });
@@ -174,10 +178,10 @@ export const ContactModal = ({ open, onOpenChange, contactToEdit }: ContactModal
                             value={formatPhoneNumber(phone)}
                             onChange={(e) => setPhone(unformatPhoneNumber(e.target.value))}
                             placeholder="+55 (37) 9 9999-9999"
-                            disabled={!!contactToEdit}
+                            disabled={!!contactToEdit && isAgent}
                             autoComplete="off"
                         />
-                        {contactToEdit && <p className="text-xs text-muted-foreground">O telefone não pode ser alterado diretamente.</p>}
+                        {contactToEdit && isAgent && <p className="text-xs text-muted-foreground">O telefone não pode ser alterado diretamente.</p>}
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="company">Empresa</Label>
