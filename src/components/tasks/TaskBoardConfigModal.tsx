@@ -82,9 +82,6 @@ export function TaskBoardConfigModal({ open, onOpenChange, boardId }: TaskBoardC
 
     const mutation = useMutation({
         mutationFn: async (values: BoardFormValues) => {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error("User not authenticated");
-
             if (boardId) {
                 const { error } = await supabase
                     .from("task_boards")
@@ -92,9 +89,13 @@ export function TaskBoardConfigModal({ open, onOpenChange, boardId }: TaskBoardC
                     .eq("id", boardId);
                 if (error) throw error;
             } else {
+                // Resolve o owner_id para garantir que supervisores criem no tenant correto
+                const { data: ownerUserId } = await supabase.rpc("get_my_owner_id" as any);
+                if (!ownerUserId) throw new Error("Usuário não autenticado");
+
                 const { error } = await supabase
                     .from("task_boards")
-                    .insert({ ...values, user_id: user.id });
+                    .insert({ ...values, user_id: ownerUserId });
                 if (error) throw error;
             }
         },

@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Plus, Settings, Calendar as CalendarIcon } from "lucide-react";
 import { TaskBoardConfigModal } from "@/components/tasks/TaskBoardConfigModal";
 import { TaskBoard } from "@/components/tasks/TaskBoard";
+import { TaskModal } from "@/components/tasks/TaskModal";
+import { format } from "date-fns";
 import {
     Select,
     SelectContent,
@@ -130,6 +132,15 @@ export default function Tasks() {
                 open={isConfigOpen}
                 onOpenChange={setIsConfigOpen}
                 boardId={editingBoardId}
+            />
+
+            <TaskModal
+                open={isCreateTaskOpen}
+                onOpenChange={setIsCreateTaskOpen}
+                boardId={selectedBoardId ?? undefined}
+                initialDate={new Date()}
+                initialStartTime={format(new Date(), "HH:mm")}
+                onSuccess={() => setIsCreateTaskOpen(false)}
             />
         </div>
     );
