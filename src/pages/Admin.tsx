@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { ChevronDown, ChevronUp, Search, LogOut, ShieldAlert, Users, Briefcase, Calendar, MessageSquare, UserCheck, UserX, Clock, Check, X, Phone, Instagram, MapPin, Mail, Coins, Eye, Megaphone, Plus, RefreshCw, TrendingUp, Wrench, AlertTriangle } from "lucide-react";
+import { ChevronDown, ChevronUp, Search, LogOut, ShieldAlert, Users, Briefcase, Calendar, MessageSquare, UserCheck, UserX, Clock, Check, X, Phone, Instagram, MapPin, Mail, Coins, Eye, Megaphone, Plus, RefreshCw, TrendingUp, Wrench, AlertTriangle, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -91,6 +92,8 @@ const Admin = () => {
     const [loadingInactive, setLoadingInactive] = useState(false);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
     const [expandedProfileData, setExpandedProfileData] = useState<{ openai_token: string | null; openai_token_invalid: boolean } | null>(null);
+    const [profileToDelete, setProfileToDelete] = useState<Profile | null>(null);
+    const [deletingAccount, setDeletingAccount] = useState(false);
 
     const { convertToReal } = useExchangeRate();
     const { impersonate, isLoading: impersonateLoading } = useAdminImpersonate();
@@ -346,6 +349,30 @@ const Admin = () => {
         navigate("/admin-oath");
     };
 
+    const handleDeleteAccount = async () => {
+        if (!profileToDelete) return;
+        setDeletingAccount(true);
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) throw new Error("Sessão inválida");
+
+            const { data, error } = await supabase.functions.invoke("admin-delete-client", {
+                body: { profileId: profileToDelete.id },
+            });
+
+            if (error) throw error;
+            if (!data?.success) throw new Error(data?.error || "Erro desconhecido");
+
+            toast.success(`Conta de "${profileToDelete.full_name || profileToDelete.email}" excluída com sucesso`);
+            setProfileToDelete(null);
+            fetchProfiles();
+        } catch (err: any) {
+            toast.error("Erro ao excluir conta: " + err.message);
+        } finally {
+            setDeletingAccount(false);
+        }
+    };
+
     const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
 
     if (isLoading) {
@@ -448,19 +475,33 @@ const Admin = () => {
                                             </div>
                                             <div className="flex items-center gap-3">
                                                 {profile.role !== "super-admin" && (
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        className="border-orange-500/50 text-orange-400 hover:bg-orange-500/20 hover:text-orange-300"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            impersonate(profile.id);
-                                                        }}
-                                                        disabled={impersonateLoading}
-                                                    >
-                                                        <Eye className="w-4 h-4 mr-2" />
-                                                        Acessar
-                                                    </Button>
+                                                    <>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="border-orange-500/50 text-orange-400 hover:bg-orange-500/20 hover:text-orange-300"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                impersonate(profile.id);
+                                                            }}
+                                                            disabled={impersonateLoading}
+                                                        >
+                                                            <Eye className="w-4 h-4 mr-2" />
+                                                            Acessar
+                                                        </Button>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="border-red-500/50 text-red-400 hover:bg-red-500/20 hover:text-red-300"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setProfileToDelete(profile);
+                                                            }}
+                                                        >
+                                                            <Trash2 className="w-4 h-4 mr-2" />
+                                                            Excluir
+                                                        </Button>
+                                                    </>
                                                 )}
                                                 {profile.role && (
                                                     <Badge variant={profile.role === "super-admin" ? "destructive" : "secondary"}>
@@ -871,6 +912,48 @@ const Admin = () => {
                     </div>
                 )}
             </main>
+
+            {/* Delete Account Confirmation Dialog */}
+            <AlertDialog open={!!profileToDelete} onOpenChange={(open) => { if (!open) setProfileToDelete(null); }}>
+                <AlertDialogContent className="bg-gray-800 border-gray-700 text-white">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="flex items-center gap-2 text-red-400">
+                            <Trash2 className="w-5 h-5" />
+                            Excluir conta permanentemente
+                        </AlertDialogTitle>
+                        <AlertDialogDescription className="text-gray-300 space-y-2">
+                            <p>
+                                Você está prestes a excluir a conta de{" "}
+                                <span className="font-semibold text-white">
+                                    {profileToDelete?.full_name || profileToDelete?.email}
+                                </span>
+                                {profileToDelete?.company_name && (
+                                    <span> ({profileToDelete.company_name})</span>
+                                )}
+                                .
+                            </p>
+                            <p className="text-red-400 font-medium">
+                                Esta ação é irreversível. Todos os dados vinculados à conta serão excluídos permanentemente, incluindo contatos, conversas, agendamentos, tarefas, configurações e membros da equipe.
+                            </p>
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel
+                            className="bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600"
+                            disabled={deletingAccount}
+                        >
+                            Cancelar
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                            className="bg-red-600 hover:bg-red-700 text-white"
+                            onClick={handleDeleteAccount}
+                            disabled={deletingAccount}
+                        >
+                            {deletingAccount ? "Excluindo..." : "Sim, excluir conta"}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 };
