@@ -36,7 +36,7 @@ const mergeWithCustom = (
 };
 
 export function PermissionsSettings() {
-    const ownerId = useOwnerId();
+    const { data: ownerId } = useOwnerId();
     const queryClient = useQueryClient();
     const [supervisorOpen, setSupervisorOpen] = useState(true);
     const [agentOpen, setAgentOpen] = useState(false);

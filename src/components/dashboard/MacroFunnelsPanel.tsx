@@ -240,8 +240,8 @@ export function MacroFunnelsPanel() {
                 <div className="flex justify-end gap-2 mb-8">
                     <Skeleton className="h-10 w-40" />
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4 place-items-stretch">
-                    {[...Array(5)].map((_, i) => (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 place-items-stretch">
+                    {[...Array(4)].map((_, i) => (
                         <Skeleton key={i} className="h-[600px] w-full rounded-2xl" />
                     ))}
                 </div>
@@ -303,9 +303,9 @@ export function MacroFunnelsPanel() {
                 </div>
             )}
 
-            {/* Funnels Grid - Delivery fixo + até 5 funis CRM */}
+            {/* Funnels Grid - Delivery fixo + até 4 funis CRM */}
             {userRole !== 'agent' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 lg:gap-5 place-items-stretch">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-5 place-items-stretch">
                     {/* Card fixo de Delivery — sempre presente, dados da tabela deliveries */}
                     <div className="min-w-[220px] w-full max-w-[400px]">
                         <DeliveryFunnelCard />
