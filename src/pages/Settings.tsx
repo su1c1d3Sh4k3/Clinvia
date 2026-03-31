@@ -9,7 +9,8 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
-import { User, Building2, Lock, Camera, Loader2, Bell, BellRing, Users, Volume2, DollarSign, Settings as SettingsIcon, Pen, Download, Smartphone, Monitor, CheckCircle2, Calendar, ListTodo, TrendingUp, Lightbulb, ChevronDown, ChevronUp, AlertCircle } from "lucide-react";
+import { User, Building2, Lock, Camera, Loader2, Bell, BellRing, Users, Volume2, DollarSign, Settings as SettingsIcon, Pen, Download, Smartphone, Monitor, CheckCircle2, Calendar, ListTodo, TrendingUp, Lightbulb, ChevronDown, ChevronUp, AlertCircle, ShieldCheck } from "lucide-react";
+import { PermissionsSettings } from "@/components/settings/PermissionsSettings";
 import { FaInstagram } from "react-icons/fa";
 import { Switch } from "@/components/ui/switch";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -493,7 +494,7 @@ export default function Settings() {
             <h1 className="text-2xl md:text-3xl font-bold mb-4 md:mb-8 text-foreground">Configurações do Sistema</h1>
 
             <Tabs defaultValue="profile" className="w-full">
-                <TabsList className="grid w-full grid-cols-4 mb-4 md:mb-8 h-auto">
+                <TabsList className={`grid w-full mb-4 md:mb-8 h-auto ${userRole === 'admin' ? 'grid-cols-5' : 'grid-cols-4'}`}>
                     <TabsTrigger value="profile" className="flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
                         <User className="h-4 w-4" />
                         <span className="hidden md:inline">Perfil</span>
@@ -510,6 +511,12 @@ export default function Settings() {
                         <SettingsIcon className="h-4 w-4" />
                         <span className="hidden md:inline">Sistema</span>
                     </TabsTrigger>
+                    {userRole === 'admin' && (
+                        <TabsTrigger value="permissions" className="flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
+                            <ShieldCheck className="h-4 w-4" />
+                            <span className="hidden md:inline">Permissões</span>
+                        </TabsTrigger>
+                    )}
                 </TabsList>
 
                 {/* Profile Tab */}
@@ -820,28 +827,6 @@ export default function Settings() {
                                 />
                             </div>
 
-                            {/* Financial Access Control */}
-                            {userRole === 'admin' && (
-                                <div className="flex items-center justify-between p-3 md:p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors border-l-4 border-l-primary gap-3">
-                                    <div className="flex items-center gap-3 md:gap-4">
-                                        <div className="p-1.5 md:p-2 bg-primary/10 rounded-full">
-                                            <DollarSign className="h-4 w-4 md:h-5 md:w-5 text-primary" />
-                                        </div>
-                                        <div className="space-y-0.5">
-                                            <h4 className="font-medium text-sm md:text-base">Acesso financeiro</h4>
-                                            <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">
-                                                Supervisor visualiza dados financeiros.
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <Switch
-                                        checked={financialAccessEnabled}
-                                        onCheckedChange={updateFinancialAccess}
-                                        disabled={loading}
-                                    />
-                                </div>
-                            )}
-
                             {/* Test Section */}
                             <div className="flex items-center justify-between p-3 md:p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors gap-3">
                                 <div className="flex items-center gap-3 md:gap-4">
@@ -1097,6 +1082,27 @@ export default function Settings() {
                         </CardFooter>
                     </Card>
                 </TabsContent>
+
+                {/* Permissions Tab — admin only */}
+                {userRole === 'admin' && (
+                    <TabsContent value="permissions">
+                        <Card>
+                            <CardHeader className="p-4 md:p-6">
+                                <CardTitle className="text-base md:text-lg flex items-center gap-2">
+                                    <ShieldCheck className="h-5 w-5 text-primary" />
+                                    Permissões por Role
+                                </CardTitle>
+                                <CardDescription className="text-xs md:text-sm">
+                                    Defina o que Supervisores e Agentes podem criar, editar ou deletar em cada módulo.
+                                    As conversas e regras de visibilidade de dados sempre seguem as regras padrão do sistema.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="p-4 md:p-6 pt-0">
+                                <PermissionsSettings />
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+                )}
             </Tabs>
         </div>
     );

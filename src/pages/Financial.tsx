@@ -88,6 +88,7 @@ import { MarketingCampaignModal } from "@/components/financial/MarketingCampaign
 import { FinancialReportsModal } from "@/components/financial/FinancialReportsModal";
 import PeriodSelector from "@/components/financial/PeriodSelector";
 import { useUserRole } from "@/hooks/useUserRole";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useNavigate } from "react-router-dom";
 
 // ========================================
@@ -1240,16 +1241,17 @@ const ReturnByPersonSection = () => {
 
 const Financial = () => {
     const { data: userRole } = useUserRole();
+    const { hasAnyAccess, isReady } = usePermissions();
     const navigate = useNavigate();
     const currentDate = new Date();
     const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
-    // Redirecionar agentes para página principal
+    // Redirecionar usuários sem acesso ao financeiro
     useEffect(() => {
-        if (userRole === 'agent') {
+        if (userRole !== 'admin' && isReady && !hasAnyAccess('financial')) {
             navigate('/', { replace: true });
         }
-    }, [userRole, navigate]);
+    }, [userRole, isReady, hasAnyAccess, navigate]);
 
     // Period filter state
     const [periodMode, setPeriodMode] = useState<'monthly' | 'quarterly' | 'yearly'>('monthly');

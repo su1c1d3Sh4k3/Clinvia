@@ -13,7 +13,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useCurrentTeamMember } from "@/hooks/useStaff";
-import { useFinancialAccess } from "@/hooks/useFinancialAccess";
+import { usePermissions } from "@/hooks/usePermissions";
 import { differenceInDays } from "date-fns";
 import { useState, useEffect } from "react";
 import { useMobileMenu } from "@/contexts/MobileMenuContext";
@@ -177,7 +177,7 @@ export const NavigationSidebar = () => {
   });
 
   const { data: userRole } = useUserRole();
-  const { data: financialAccess } = useFinancialAccess();
+  const { hasAnyAccess } = usePermissions();
 
   // Check if a path is active
   const isPathActive = (path?: string) => {
@@ -246,16 +246,12 @@ export const NavigationSidebar = () => {
     const ChildIcon = child.icon;
     const isActive = isPathActive(child.path);
 
-    // Hide restricted items
-    if (userRole === "agent") {
-      if (child.id === "team" || child.id === "ia-config" || child.id === "sales") {
-        return null;
-      }
-    }
-
-    // New: Hide sales for supervisors if access is revoked
-    if (userRole === "supervisor" && child.id === "sales" && financialAccess === false) {
-      return null;
+    // Hide items based on permissions
+    if (userRole !== "admin") {
+      if (child.id === "team" && !hasAnyAccess('team_members')) return null;
+      if (child.id === "ia-config" && !hasAnyAccess('ia_config')) return null;
+      if (child.id === "sales" && !hasAnyAccess('sales')) return null;
+      if (child.id === "financial" && !hasAnyAccess('financial')) return null;
     }
 
     // CRM badge - same style as Dashboard
@@ -400,7 +396,12 @@ export const NavigationSidebar = () => {
               const ChildIcon = child.icon;
               const childIsActive = isPathActive(child.path);
 
-              if (userRole === "agent" && child.id === "team") return null;
+              if (userRole !== "admin") {
+                if (child.id === "team" && !hasAnyAccess('team_members')) return null;
+                if (child.id === "ia-config" && !hasAnyAccess('ia_config')) return null;
+                if (child.id === "sales" && !hasAnyAccess('sales')) return null;
+                if (child.id === "financial" && !hasAnyAccess('financial')) return null;
+              }
 
               // CRM badge in collapsed mode
               const crmCollapsedBadge = child.id === "crm" ? (stagnatedCount || 0) : 0;
@@ -570,7 +571,7 @@ export const NavigationSidebar = () => {
                   {currentTeamMember?.name || "Usuário"}
                 </span>
                 <span className="text-xs text-sidebar-foreground/50 dark:text-white/50 truncate max-w-[120px]">
-                  {userRole === 'admin' ? 'Administrador' : userRole === 'supervisor' ? 'Supervisor' : 'Atendente'}
+                  {userRole === 'admin' ? 'Administrador' : 'Atendente'}
                 </span>
               </div>
 

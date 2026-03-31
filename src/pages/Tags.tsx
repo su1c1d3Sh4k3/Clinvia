@@ -24,7 +24,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useUserRole } from "@/hooks/useUserRole";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface Tag {
     id: string;
@@ -34,8 +34,7 @@ interface Tag {
 }
 
 const Tags = () => {
-    const { data: userRole } = useUserRole();
-    const isAdminOrSupervisor = userRole === 'admin' || userRole === 'supervisor';
+    const { canCreate, canEdit, canDelete } = usePermissions();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingTag, setEditingTag] = useState<Tag | null>(null);
     const [tagToDelete, setTagToDelete] = useState<Tag | null>(null);
@@ -98,7 +97,7 @@ const Tags = () => {
                                 Gerencie as tags para categorizar conversas
                             </p>
                         </div>
-                        {isAdminOrSupervisor && (
+                        {canCreate('tags') && (
                             <Button onClick={handleAddNew} size="sm" className="h-8 md:h-9 text-xs md:text-sm w-fit">
                                 <Plus className="w-4 h-4 mr-1 md:mr-2" />
                                 <span className="hidden sm:inline">Nova </span>Tag
@@ -147,7 +146,7 @@ const Tags = () => {
                                             </TableCell>
                                             <TableCell className="py-2 md:py-4">
                                                 <div className="flex items-center gap-1">
-                                                    {isAdminOrSupervisor && (
+                                                    {canEdit('tags') && (
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
@@ -157,7 +156,7 @@ const Tags = () => {
                                                             <Pencil className="w-3.5 h-3.5 md:w-4 md:h-4" />
                                                         </Button>
                                                     )}
-                                                    {userRole === "admin" && (
+                                                    {canDelete('tags') && (
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"

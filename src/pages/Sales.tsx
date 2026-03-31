@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/select";
 import { FileText, ShoppingCart } from "lucide-react";
 import { useUserRole } from "@/hooks/useUserRole";
-import { useFinancialAccess } from "@/hooks/useFinancialAccess";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useNavigate } from "react-router-dom";
 import { useEffect } from "react";
 
@@ -41,7 +41,7 @@ const YEARS = Array.from({ length: 10 }, (_, i) => 2026 + i).filter(y => y <= cu
 const Sales = () => {
     const navigate = useNavigate();
     const { data: userRole, isLoading: roleLoading } = useUserRole();
-    const { data: financialAccess, isLoading: accessLoading } = useFinancialAccess();
+    const { hasAnyAccess, isReady } = usePermissions();
 
     // Período selecionado
     const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
@@ -50,24 +50,15 @@ const Sales = () => {
     // Modal de relatórios
     const [reportsModalOpen, setReportsModalOpen] = useState(false);
 
-    // Controle de acesso - mesma lógica do Financeiro
+    // Controle de acesso
     useEffect(() => {
-        if (!roleLoading && !accessLoading) {
-            // Agents não têm acesso
-            if (userRole === "agent") {
-                navigate("/");
-                return;
-            }
-            // Supervisors precisam de permissão
-            if (userRole === "supervisor" && financialAccess === false) {
-                navigate("/");
-                return;
-            }
+        if (userRole !== 'admin' && isReady && !hasAnyAccess('sales')) {
+            navigate("/");
         }
-    }, [userRole, financialAccess, roleLoading, accessLoading, navigate]);
+    }, [userRole, isReady, hasAnyAccess, navigate]);
 
     // Loading enquanto verifica permissões
-    if (roleLoading || accessLoading) {
+    if (roleLoading || !isReady) {
         return (
             <div className="flex-1 flex items-center justify-center">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
@@ -76,7 +67,7 @@ const Sales = () => {
     }
 
     // Não renderiza se não tiver acesso
-    if (userRole === "agent" || (userRole === "supervisor" && financialAccess === false)) {
+    if (userRole !== 'admin' && !hasAnyAccess('sales')) {
         return null;
     }
 

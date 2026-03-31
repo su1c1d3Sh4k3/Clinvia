@@ -11,7 +11,7 @@ import { Plus, Search, Trash2, Edit, Image as ImageIcon, Loader2, Download, Uplo
 import { ProductServiceModal } from "@/components/ProductServiceModal";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { useUserRole } from "@/hooks/useUserRole";
+import { usePermissions } from "@/hooks/usePermissions";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -26,9 +26,7 @@ import {
 export default function ProductsServices() {
     const { toast } = useToast();
     const queryClient = useQueryClient();
-    const { data: userRole } = useUserRole();
-    const isAgent = userRole === 'agent';
-    const isSupervisor = userRole === 'supervisor';
+    const { canCreate, canEdit, canDelete } = usePermissions();
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedItems, setSelectedItems] = useState<string[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -318,7 +316,7 @@ service;Exemplo de Serviço;Descrição do serviço aqui;150.00;;60;7`;
                     <h1 className="text-2xl md:text-3xl font-bold">Produtos e Serviços</h1>
                     <p className="text-muted-foreground text-sm md:text-base">Gerencie seu catálogo</p>
                 </div>
-                {!isAgent && (
+                {canCreate('products_services') && (
                     <div className="flex gap-2 flex-wrap">
                         <Button variant="outline" size="sm" onClick={handleDownloadTemplate} className="h-8 md:h-9 text-xs md:text-sm px-2 md:px-3 bg-white dark:bg-transparent border border-[#D4D5D6] dark:border-border">
                             <Download className="w-4 h-4 md:mr-2" />
@@ -359,7 +357,7 @@ service;Exemplo de Serviço;Descrição do serviço aqui;150.00;;60;7`;
                         className="pl-9 h-9 bg-white dark:bg-background border border-[#D4D5D6] dark:border-border"
                     />
                 </div>
-                {selectedItems.length > 0 && !isAgent && !isSupervisor && (
+                {selectedItems.length > 0 && canDelete('products_services') && (
                     <Button variant="destructive" size="sm" onClick={handleBulkDelete} className="h-9 text-xs md:text-sm">
                         <Trash2 className="w-4 h-4 mr-1 md:mr-2" />
                         Excluir ({selectedItems.length})
@@ -378,7 +376,7 @@ service;Exemplo de Serviço;Descrição do serviço aqui;150.00;;60;7`;
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    {!isAgent && (
+                                    {canDelete('products_services') && (
                                         <TableHead className="w-[40px] md:w-[50px]">
                                             <Checkbox
                                                 checked={filteredItems?.length ? filteredItems.length === selectedItems.length && filteredItems.length > 0 : false}
@@ -393,7 +391,7 @@ service;Exemplo de Serviço;Descrição do serviço aqui;150.00;;60;7`;
                                     <TableHead className="hidden sm:table-cell">Estoque</TableHead>
                                     <TableHead className="text-center whitespace-nowrap">Visível IA</TableHead>
                                     <TableHead className="text-center whitespace-nowrap">Disponível IA</TableHead>
-                                    {!isAgent && <TableHead className="text-right">Ações</TableHead>}
+                                    {(canEdit('products_services') || canDelete('products_services')) && <TableHead className="text-right">Ações</TableHead>}
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -412,7 +410,7 @@ service;Exemplo de Serviço;Descrição do serviço aqui;150.00;;60;7`;
                                 ) : (
                                     filteredItems?.map((item) => (
                                         <TableRow key={item.id}>
-                                            {!isAgent && (
+                                            {canDelete('products_services') && (
                                                 <TableCell className="py-2 md:py-4">
                                                     <Checkbox
                                                         checked={selectedItems.includes(item.id)}
@@ -437,23 +435,25 @@ service;Exemplo de Serviço;Descrição do serviço aqui;150.00;;60;7`;
                                                 <Switch
                                                     checked={item.visible_for_ai ?? true}
                                                     onCheckedChange={(val) => toggleAiFlagMutation.mutate({ id: item.id, field: 'visible_for_ai', value: val })}
-                                                    disabled={isAgent}
+                                                    disabled={!canEdit('products_services')}
                                                 />
                                             </TableCell>
                                             <TableCell className="text-center py-2 md:py-4">
                                                 <Switch
                                                     checked={item.available_for_ai ?? true}
                                                     onCheckedChange={(val) => toggleAiFlagMutation.mutate({ id: item.id, field: 'available_for_ai', value: val })}
-                                                    disabled={isAgent || !(item.visible_for_ai ?? true)}
+                                                    disabled={!canEdit('products_services') || !(item.visible_for_ai ?? true)}
                                                 />
                                             </TableCell>
-                                            {!isAgent && (
+                                            {(canEdit('products_services') || canDelete('products_services')) && (
                                                 <TableCell className="text-right py-2 md:py-4">
                                                     <div className="flex justify-end gap-1">
-                                                        <Button variant="ghost" size="icon" className="h-7 w-7 md:h-8 md:w-8" onClick={() => handleEdit(item)}>
-                                                            <Edit className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                                                        </Button>
-                                                        {!isSupervisor && (
+                                                        {canEdit('products_services') && (
+                                                            <Button variant="ghost" size="icon" className="h-7 w-7 md:h-8 md:w-8" onClick={() => handleEdit(item)}>
+                                                                <Edit className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                                                            </Button>
+                                                        )}
+                                                        {canDelete('products_services') && (
                                                             <Button variant="ghost" size="icon" className="h-7 w-7 md:h-8 md:w-8" onClick={() => handleDelete(item.id)}>
                                                                 <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4 text-destructive" />
                                                             </Button>
@@ -474,7 +474,7 @@ service;Exemplo de Serviço;Descrição do serviço aqui;150.00;;60;7`;
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    {!isAgent && (
+                                    {canDelete('products_services') && (
                                         <TableHead className="w-[40px] md:w-[50px]">
                                             <Checkbox
                                                 checked={filteredItems?.length ? filteredItems.length === selectedItems.length && filteredItems.length > 0 : false}
@@ -489,7 +489,7 @@ service;Exemplo de Serviço;Descrição do serviço aqui;150.00;;60;7`;
                                     <TableHead className="hidden sm:table-cell">Duração</TableHead>
                                     <TableHead className="text-center whitespace-nowrap">Visível IA</TableHead>
                                     <TableHead className="text-center whitespace-nowrap">Disponível IA</TableHead>
-                                    {!isAgent && <TableHead className="text-right">Ações</TableHead>}
+                                    {(canEdit('products_services') || canDelete('products_services')) && <TableHead className="text-right">Ações</TableHead>}
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -508,7 +508,7 @@ service;Exemplo de Serviço;Descrição do serviço aqui;150.00;;60;7`;
                                 ) : (
                                     filteredItems?.map((item) => (
                                         <TableRow key={item.id}>
-                                            {!isAgent && (
+                                            {canDelete('products_services') && (
                                                 <TableCell className="py-2 md:py-4">
                                                     <Checkbox
                                                         checked={selectedItems.includes(item.id)}
@@ -533,23 +533,25 @@ service;Exemplo de Serviço;Descrição do serviço aqui;150.00;;60;7`;
                                                 <Switch
                                                     checked={item.visible_for_ai ?? true}
                                                     onCheckedChange={(val) => toggleAiFlagMutation.mutate({ id: item.id, field: 'visible_for_ai', value: val })}
-                                                    disabled={isAgent}
+                                                    disabled={!canEdit('products_services')}
                                                 />
                                             </TableCell>
                                             <TableCell className="text-center py-2 md:py-4">
                                                 <Switch
                                                     checked={item.available_for_ai ?? true}
                                                     onCheckedChange={(val) => toggleAiFlagMutation.mutate({ id: item.id, field: 'available_for_ai', value: val })}
-                                                    disabled={isAgent || !(item.visible_for_ai ?? true)}
+                                                    disabled={!canEdit('products_services') || !(item.visible_for_ai ?? true)}
                                                 />
                                             </TableCell>
-                                            {!isAgent && (
+                                            {(canEdit('products_services') || canDelete('products_services')) && (
                                                 <TableCell className="text-right py-2 md:py-4">
                                                     <div className="flex justify-end gap-1">
-                                                        <Button variant="ghost" size="icon" className="h-7 w-7 md:h-8 md:w-8" onClick={() => handleEdit(item)}>
-                                                            <Edit className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                                                        </Button>
-                                                        {!isSupervisor && (
+                                                        {canEdit('products_services') && (
+                                                            <Button variant="ghost" size="icon" className="h-7 w-7 md:h-8 md:w-8" onClick={() => handleEdit(item)}>
+                                                                <Edit className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                                                            </Button>
+                                                        )}
+                                                        {canDelete('products_services') && (
                                                             <Button variant="ghost" size="icon" className="h-7 w-7 md:h-8 md:w-8" onClick={() => handleDelete(item.id)}>
                                                                 <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4 text-destructive" />
                                                             </Button>
