@@ -13,18 +13,17 @@ export const useUserRole = () => {
             if (!user) return null;
 
             // Buscar por auth_user_id (ID do próprio membro no auth.users)
-            // Primeiro tenta auth_user_id, se não encontrar, tenta user_id (para admins antigos)
             let { data: teamMember, error } = await supabase
                 .from("team_members")
-                .select("role")
+                .select("role, auth_user_id, user_id")
                 .eq("auth_user_id", user.id)
                 .maybeSingle();
 
-            // Fallback: se não encontrou por auth_user_id, busca por user_id (admins)
+            // Fallback: se não encontrou por auth_user_id, busca por user_id (admins antigos)
             if (!teamMember) {
                 const { data: adminMember, error: adminError } = await supabase
                     .from("team_members")
-                    .select("role")
+                    .select("role, auth_user_id, user_id")
                     .eq("user_id", user.id)
                     .eq("role", "admin")
                     .maybeSingle();
@@ -41,12 +40,20 @@ export const useUserRole = () => {
                 return null;
             }
 
-            if (teamMember) return teamMember.role as UserRole;
+            if (teamMember) {
+                // BLINDAGEM: Se auth_user_id === user_id, o usuário é o dono da conta.
+                // Independente do que está no campo role, ele DEVE ser tratado como admin.
+                // Isso previne o caso onde o dono foi cadastrado acidentalmente como supervisor/agent.
+                if (teamMember.auth_user_id && teamMember.user_id &&
+                    teamMember.auth_user_id === teamMember.user_id) {
+                    return "admin";
+                }
+                return teamMember.role as UserRole;
+            }
 
             return null; // Usuário não registrado em team_members
         },
         enabled: !!user,
-        staleTime: 1000 * 60 * 10, // Cache for 10 minutes (optimized from 5 min)
+        staleTime: 1000 * 60 * 10, // Cache for 10 minutes
     });
 };
-
