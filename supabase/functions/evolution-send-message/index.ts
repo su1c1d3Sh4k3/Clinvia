@@ -243,9 +243,9 @@ serve(async (req) => {
       }
     }
 
-    // ✅ OTIMIZAÇÃO: Adicionar assinatura do agente no BACKEND (movido do frontend)
-    // Usa o agente atribuído à conversa OU o agente autenticado que está enviando (fallback)
-    const signerAgentId = conversation.assigned_agent_id || authenticatedAgentId;
+    // ✅ Assinatura do agente: prioriza quem REALMENTE está enviando (authenticatedAgentId)
+    // Fallback para assigned_agent_id apenas quando não há agente autenticado (ex: envio via API)
+    const signerAgentId = authenticatedAgentId || conversation.assigned_agent_id;
     let finalBody = body;
 
     if (conversation.status === 'open' && messageType === 'text' && signerAgentId) {

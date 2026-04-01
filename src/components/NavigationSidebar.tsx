@@ -572,7 +572,7 @@ export const NavigationSidebar = () => {
                   {currentTeamMember?.name || "Usuário"}
                 </span>
                 <span className="text-xs text-sidebar-foreground/50 dark:text-white/50 truncate max-w-[120px]">
-                  {userRole === 'admin' ? 'Administrador' : 'Atendente'}
+                  {userRole === 'admin' ? 'Administrador' : userRole === 'supervisor' ? 'Supervisor' : 'Atendente'}
                 </span>
               </div>
 

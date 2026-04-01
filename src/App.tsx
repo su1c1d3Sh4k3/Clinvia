@@ -1,8 +1,8 @@
-import React, { Suspense } from "react";
+import React, { Suspense, useEffect, useRef } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ChangePasswordModal } from "@/components/auth/ChangePasswordModal";
 import { Layout } from "./components/Layout";
@@ -12,6 +12,7 @@ import { MobileMenuProvider } from "./contexts/MobileMenuContext";
 import { TypingProvider } from "./contexts/TypingContext";
 import { ImpersonationBanner } from "./components/ImpersonationBanner";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { supabase } from "./integrations/supabase/client";
 
 // ============================================
 // LAZY LOADING — Code Splitting por página
@@ -58,8 +59,51 @@ const PageLoader = () => (
 
 const queryClient = new QueryClient();
 
+/**
+ * Componente que limpa o cache do React Query quando o usuário muda.
+ * Garante que dados do usuário anterior não persistam quando
+ * outro membro da equipe loga no mesmo navegador.
+ */
+function AuthCacheManager() {
+  const qc = useQueryClient();
+  const prevUserIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        const newUserId = session?.user?.id ?? null;
+        const prevUserId = prevUserIdRef.current;
+
+        // Quando o user ID muda (logout+login de outro user, ou SIGNED_IN com user diferente)
+        if (prevUserId && newUserId && prevUserId !== newUserId) {
+          console.log('[AuthCacheManager] User changed, clearing query cache');
+          qc.clear(); // Limpa todo o cache do React Query
+        }
+
+        // Quando faz logout, limpa tudo
+        if (event === 'SIGNED_OUT') {
+          console.log('[AuthCacheManager] Signed out, clearing query cache');
+          qc.clear();
+        }
+
+        prevUserIdRef.current = newUserId;
+      }
+    );
+
+    // Inicializar com o user atual
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      prevUserIdRef.current = session?.user?.id ?? null;
+    });
+
+    return () => subscription.unsubscribe();
+  }, [qc]);
+
+  return null;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
+    <AuthCacheManager />
     <TypingProvider>
       <MobileMenuProvider>
         <TooltipProvider>
