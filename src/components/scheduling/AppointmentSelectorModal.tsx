@@ -30,7 +30,7 @@ export function AppointmentSelectorModal({ appointments, open, onOpenChange, onS
                     <DialogTitle>Selecionar Agendamento</DialogTitle>
                 </DialogHeader>
 
-                <div className="flex flex-col gap-2 overflow-y-auto pr-2 mt-2">
+                <div className="flex flex-col gap-2 overflow-y-auto pr-2 mt-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
                     {appointments.map((appointment) => (
                         <div
                             key={appointment.id}

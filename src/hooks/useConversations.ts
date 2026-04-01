@@ -97,6 +97,26 @@ export const useConversations = (options: UseConversationsOptions = {}) => {
       const conversationsWithLastMessage = await Promise.all(
         filteredData.map(async (conv) => {
           try {
+            // Para conversas resolvidas, as mensagens são deletadas do DB por trigger.
+            // Usar messages_history (JSONB já incluído no SELECT *) como fonte primária.
+            if (conv.status === 'resolved') {
+              const history = (conv as any).messages_history;
+              if (Array.isArray(history) && history.length > 0) {
+                const lastHistMsg = history[history.length - 1];
+                return {
+                  ...conv,
+                  last_message_obj: {
+                    direction: lastHistMsg.role === 'user' ? 'inbound' : 'outbound',
+                    body: lastHistMsg.content || '',
+                    created_at: lastHistMsg.created_at,
+                    status: 'read',
+                    message_type: lastHistMsg.type || 'text'
+                  }
+                };
+              }
+              // messages_history vazio/nulo: fallback para a tabela (conversas antigas)
+            }
+
             const { data: lastMsg } = await supabase
               .from('messages')
               .select('direction, body, created_at, status, message_type')

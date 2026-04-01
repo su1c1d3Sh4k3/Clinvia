@@ -24,6 +24,32 @@ serve(async (req) => {
             throw new Error("owner_id is required");
         }
 
+        // 0a. Verificar se email já existe em qualquer conta do sistema (auth.users)
+        //     Isso impede que um email de dono de empresa seja cadastrado como membro de outra empresa
+        const { data: authEmailExists } = await supabaseAdmin
+            .rpc('check_auth_email_exists', { p_email: email });
+
+        if (authEmailExists) {
+            return new Response(
+                JSON.stringify({ error: 'Este email já está cadastrado no sistema. Não é possível criar um membro com este email.' }),
+                { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
+
+        // 0b. Verificar se email já existe na tabela team_members (qualquer empresa)
+        const { data: emailCheck } = await supabaseAdmin
+            .from('team_members')
+            .select('id')
+            .eq('email', email)
+            .maybeSingle();
+
+        if (emailCheck) {
+            return new Response(
+                JSON.stringify({ error: 'Este email já está cadastrado na equipe. Use um email diferente.' }),
+                { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
+
         // 1. Create Auth User
         const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
             email,
@@ -35,7 +61,20 @@ serve(async (req) => {
             },
         });
 
-        if (authError) throw authError;
+        if (authError) {
+            // Traduzir erro de email duplicado do Supabase para português
+            const msg = authError.message?.toLowerCase() ?? '';
+            if (
+                msg.includes('already registered') ||
+                msg.includes('already been registered') ||
+                msg.includes('email exists') ||
+                msg.includes('user already exists') ||
+                msg.includes('duplicate')
+            ) {
+                throw new Error('Este email já está cadastrado em outra conta. Use um email diferente.');
+            }
+            throw authError;
+        }
 
         // 2. Create Team Member Record
         // user_id = owner_id (ID do admin/owner da conta)

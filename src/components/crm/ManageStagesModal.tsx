@@ -46,14 +46,18 @@ export function ManageStagesModal({ funnelId, isSystemFunnel }: ManageStagesModa
 
     const addStageMutation = useMutation({
         mutationFn: async (name: string) => {
-            // Calculate next position (before system stages)
             const systemStages = stages?.filter(s => s.is_system) || [];
             const customStages = stages?.filter(s => !s.is_system) || [];
-            const nextPosition = customStages.length;
 
             if (customStages.length >= 10) {
                 throw new Error("Limite de 10 etapas atingido");
             }
+
+            // Posição sempre antes das etapas do sistema (Ganho/Perdido)
+            const systemMinPosition = systemStages.length > 0
+                ? Math.min(...systemStages.map(s => s.position))
+                : 998;
+            const nextPosition = Math.min(customStages.length, systemMinPosition - 1);
 
             const { error } = await supabase
                 .from("crm_stages" as any)
@@ -163,17 +167,18 @@ export function ManageStagesModal({ funnelId, isSystemFunnel }: ManageStagesModa
     const handleOnDragEnd = (result: any) => {
         if (!result.destination || !stages) return;
 
-        const items = Array.from(stages);
+        // Operar SOMENTE nas etapas customizadas — nunca tocar em Ganho/Perdido
+        const customStages = stages.filter(s => !s.is_system);
+        const items = Array.from(customStages);
         const [reorderedItem] = items.splice(result.source.index, 1);
         items.splice(result.destination.index, 0, reorderedItem);
 
-        // Update positions locally
+        // Reatribuir posições apenas às etapas customizadas (0, 1, 2...)
         const updatedItems = items.map((item, index) => ({
             ...item,
             position: index
         }));
 
-        // Optimistic update could go here, but for now we just trigger mutation
         updatePositionsMutation.mutate(updatedItems);
     };
 

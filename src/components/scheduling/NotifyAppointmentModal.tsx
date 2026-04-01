@@ -261,7 +261,7 @@ export function NotifyAppointmentModal({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[540px] max-h-[90vh] overflow-y-auto">
+            <DialogContent className="sm:max-w-[540px] max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <Bell className="h-5 w-5 text-primary" />

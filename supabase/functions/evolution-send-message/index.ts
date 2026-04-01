@@ -296,14 +296,17 @@ serve(async (req) => {
       };
 
       if (caption) {
+        // Uazapi aceita 'caption' para imagens/vídeos (padrão WhatsApp)
+        // e alguns endpoints usam 'text' — enviamos ambos para garantir compatibilidade
         payload.caption = caption;
+        payload.text = caption;
       }
       if (forward) {
         payload.forward = true;
       }
     }
 
-    // console.log('Payload:', JSON.stringify(payload));
+    console.log('[evolution-send-message] Payload to Uazapi:', JSON.stringify(payload));
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);

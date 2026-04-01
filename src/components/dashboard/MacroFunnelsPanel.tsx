@@ -13,6 +13,7 @@ import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { DateRange } from "react-day-picker";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useCurrentTeamMember } from "@/hooks/useStaff";
+import { useOwnerId } from "@/hooks/useOwnerId";
 import { VerticalFunnel, StageMetric } from "./VerticalFunnel";
 import { DeliveryFunnelCard } from "./DeliveryFunnelCard";
 import { DealsStageChart } from "./DealsStageChart";
@@ -42,10 +43,14 @@ const getFunnelConfig = (funnelName: string) => {
 export function MacroFunnelsPanel() {
     const { data: userRole } = useUserRole();
     const { data: currentTeamMember } = useCurrentTeamMember();
+    const { data: ownerId } = useOwnerId();
     const navigate = useNavigate();
     const [dateFilter, setDateFilter] = useState<DateFilterOption>("all");
     const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>();
     const [funnelSlots, setFunnelSlots] = useState<(string | null)[]>([null, null, null, null]);
+    const [slotsInitialized, setSlotsInitialized] = useState(false);
+
+    const storageKey = ownerId ? `funnel_slots_${ownerId}` : null;
 
     const handleNavigateToCRM = (funnelId: string) => {
         navigate(`/crm?funnel=${funnelId}`);
@@ -107,36 +112,59 @@ export function MacroFunnelsPanel() {
         return deals;
     }, [allData?.deals, dateFilter, customDateRange, userRole, currentTeamMember]);
 
-    // 3. Auto-assign funnels to 4 slots initially (Delivery é fixo, não ocupa slot)
+    // 3. Inicializar os 4 slots — carrega do localStorage ou faz auto-assign
     useEffect(() => {
-        if (allData?.funnels && allData.funnels.length > 0 && funnelSlots.every(s => s === null)) {
-            const funnels = allData.funnels;
-            const newSlots = [null, null, null, null] as (string | null)[];
+        if (!allData?.funnels || allData.funnels.length === 0 || slotsInitialized) return;
 
-            const qF = funnels.find(f => f.name.toLowerCase().includes('qualifica'));
-            newSlots[0] = qF ? qF.id : funnels[0]?.id || null;
+        const funnels = allData.funnels;
+        const availableIds = new Set(funnels.map(f => f.id));
 
-            const iaF = funnels.find(f => f.name.toLowerCase().includes('ia') || f.name.toLowerCase().includes('atendimento'));
-            newSlots[1] = iaF ? iaF.id : funnels[1]?.id || null;
-
-            const rF = funnels.find(f => f.name.toLowerCase().includes('recorr') || f.name.toLowerCase().includes('reten'));
-            newSlots[3] = rF ? rF.id : funnels[2]?.id || null;
-
-            // Slot 2: primeiro funil não utilizado nos demais slots
-            const usedIds = [newSlots[0], newSlots[1], newSlots[3]].filter(Boolean);
-            const remaining = funnels.filter(f => !usedIds.includes(f.id));
-            if (remaining.length > 0) {
-                newSlots[2] = remaining[0].id;
+        // Tenta recuperar seleção salva no localStorage
+        if (storageKey) {
+            try {
+                const saved = localStorage.getItem(storageKey);
+                if (saved) {
+                    const parsed = JSON.parse(saved) as (string | null)[];
+                    // Valida se os IDs salvos ainda existem (funil pode ter sido deletado)
+                    const validated = parsed.map(id => (id && availableIds.has(id)) ? id : null);
+                    if (validated.some(id => id !== null)) {
+                        setFunnelSlots(validated);
+                        setSlotsInitialized(true);
+                        return;
+                    }
+                }
+            } catch {
+                // ignora erro de parse
             }
-
-            setFunnelSlots(newSlots);
         }
-    }, [allData?.funnels, funnelSlots]);
+
+        // Auto-assign padrão (nenhuma escolha salva ou inválida)
+        const newSlots = [null, null, null, null] as (string | null)[];
+
+        const qF = funnels.find(f => f.name.toLowerCase().includes('qualifica'));
+        newSlots[0] = qF ? qF.id : funnels[0]?.id || null;
+
+        const iaF = funnels.find(f => f.name.toLowerCase().includes('ia') || f.name.toLowerCase().includes('atendimento'));
+        newSlots[1] = iaF ? iaF.id : funnels[1]?.id || null;
+
+        const rF = funnels.find(f => f.name.toLowerCase().includes('recorr') || f.name.toLowerCase().includes('reten'));
+        newSlots[3] = rF ? rF.id : funnels[2]?.id || null;
+
+        const usedIds = [newSlots[0], newSlots[1], newSlots[3]].filter(Boolean);
+        const remaining = funnels.filter(f => !usedIds.includes(f.id));
+        if (remaining.length > 0) newSlots[2] = remaining[0].id;
+
+        setFunnelSlots(newSlots);
+        setSlotsInitialized(true);
+        if (storageKey) localStorage.setItem(storageKey, JSON.stringify(newSlots));
+    }, [allData?.funnels, slotsInitialized, storageKey]);
 
     const handleSlotChange = (slotIndex: number, newFunnelId: string) => {
         setFunnelSlots(prev => {
             const up = [...prev];
             up[slotIndex] = newFunnelId;
+            // Persiste a nova seleção imediatamente
+            if (storageKey) localStorage.setItem(storageKey, JSON.stringify(up));
             return up;
         });
     };

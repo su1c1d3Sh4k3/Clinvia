@@ -145,7 +145,7 @@ export function SchedulingSettingsModal({ open, onOpenChange, currentSettings }:
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
                 <DialogHeader>
                     <DialogTitle>Configurações de Agendamento</DialogTitle>
                 </DialogHeader>

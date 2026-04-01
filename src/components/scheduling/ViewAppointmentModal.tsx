@@ -39,7 +39,7 @@ export function ViewAppointmentModal({ appointment, open, onOpenChange, onEdit }
     return (
         <>
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[500px]">
+            <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
                 <DialogHeader className="flex flex-row items-center justify-between pr-8">
                     <DialogTitle className="text-xl font-bold truncate pr-4">
                         {appointment.type === 'absence' ? 'Ausência' : 'Detalhes do Agendamento'}
