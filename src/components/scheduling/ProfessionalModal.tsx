@@ -17,6 +17,7 @@ import { Separator } from "@/components/ui/separator";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import type { GoogleCalendarConnection, GoogleSyncMode } from "@/types/googleCalendar";
+import { useOwnerId } from "@/hooks/useOwnerId";
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 
@@ -78,6 +79,7 @@ const DAYS = [
 export function ProfessionalModal({ open, onOpenChange, professionalToEdit }: ProfessionalModalProps) {
     const { toast } = useToast();
     const queryClient = useQueryClient();
+    const { data: ownerId } = useOwnerId();
     const [isLoading, setIsLoading] = useState(false);
     const [photoFile, setPhotoFile] = useState<File | null>(null);
     const [existingPhoto, setExistingPhoto] = useState<string | null>(null);
@@ -175,13 +177,14 @@ export function ProfessionalModal({ open, onOpenChange, professionalToEdit }: Pr
         try {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error("Usuário não autenticado");
+            if (!ownerId) throw new Error("ID da organização não encontrado");
 
             let photoUrl = existingPhoto;
 
             if (photoFile) {
                 const fileExt = photoFile.name.split('.').pop();
                 const fileName = `${Math.random()}.${fileExt}`;
-                const filePath = `${user.id}/${fileName}`;
+                const filePath = `${ownerId}/${fileName}`;
 
                 const { error: uploadError } = await supabase.storage
                     .from('professional-avatars')
@@ -197,7 +200,7 @@ export function ProfessionalModal({ open, onOpenChange, professionalToEdit }: Pr
             }
 
             const payload = {
-                user_id: user.id,
+                user_id: ownerId,
                 name: values.name,
                 role: values.role,
                 commission: values.commission,
@@ -229,7 +232,7 @@ export function ProfessionalModal({ open, onOpenChange, professionalToEdit }: Pr
                     const { data: clinicConn } = await supabase
                         .from("professional_google_calendars")
                         .select("id")
-                        .eq("user_id", user.id)
+                        .eq("user_id", ownerId)
                         .is("professional_id", null)
                         .eq("is_active", true)
                         .maybeSingle();
@@ -237,7 +240,7 @@ export function ProfessionalModal({ open, onOpenChange, professionalToEdit }: Pr
                     if (clinicConn) {
                         supabase.functions.invoke("create-professional-calendar", {
                             body: {
-                                user_id: user.id,
+                                user_id: ownerId,
                                 professional_id: newProf.id,
                                 professional_name: values.name,
                             },
@@ -458,6 +461,7 @@ export function ProfessionalModal({ open, onOpenChange, professionalToEdit }: Pr
 function GoogleCalendarSection({ professionalId }: { professionalId: string }) {
     const { toast } = useToast();
     const queryClient = useQueryClient();
+    const { data: ownerId } = useOwnerId();
     const [isDisconnecting, setIsDisconnecting] = useState(false);
     const [isSavingMode, setIsSavingMode] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
@@ -477,25 +481,24 @@ function GoogleCalendarSection({ professionalId }: { professionalId: string }) {
 
     // Verificar se a clínica já tem uma conexão clínica-wide ativa
     const { data: clinicHasConnection } = useQuery<boolean>({
-        queryKey: ["gcal-clinic-connection-exists"],
+        queryKey: ["gcal-clinic-connection-exists", ownerId],
         queryFn: async () => {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) return false;
+            if (!ownerId) return false;
             const { data } = await supabase
                 .from("professional_google_calendars")
                 .select("id")
-                .eq("user_id", user.id)
+                .eq("user_id", ownerId)
                 .is("professional_id", null)
                 .eq("is_active", true)
                 .maybeSingle();
             return !!data;
         },
+        enabled: !!ownerId,
     });
 
     const handleConnect = async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-            toast({ title: "Erro", description: "Usuário não autenticado", variant: "destructive" });
+        if (!ownerId) {
+            toast({ title: "Erro", description: "ID da organização não encontrado", variant: "destructive" });
             return;
         }
         if (!GOOGLE_CLIENT_ID) {
@@ -506,7 +509,7 @@ function GoogleCalendarSection({ professionalId }: { professionalId: string }) {
             });
             return;
         }
-        window.location.href = buildGoogleOAuthUrl(user.id, professionalId);
+        window.location.href = buildGoogleOAuthUrl(ownerId, professionalId);
     };
 
     const handleDisconnect = async () => {
@@ -547,10 +550,8 @@ function GoogleCalendarSection({ professionalId }: { professionalId: string }) {
         if (!connection) return;
         setIsSyncing(true);
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error("Não autenticado");
             const { data, error } = await supabase.functions.invoke("google-calendar-poll", {
-                body: { user_id: user.id, connection_id: connection.id },
+                body: { user_id: ownerId, connection_id: connection.id },
             });
             if (error) throw error;
             const synced = data?.synced ?? 0;

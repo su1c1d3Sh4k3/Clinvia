@@ -2,7 +2,7 @@ import {
   ListOrdered, Users, Settings, LayoutDashboard, MessageSquare, Briefcase, Wrench, Grid3X3,
   Smartphone, LogOut, Tag as TagIcon, BookUser, Calendar, ClipboardList,
   Package, Bot, ChevronDown, PieChart, Clock, MessageCircle,
-  ShoppingCart, Headphones, UserRound, Sun, Moon, ClipboardCheck, Layers, Megaphone
+  ShoppingCart, Headphones, UserRound, Sun, Moon, ClipboardCheck, Layers, Megaphone, MessageSquareText
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -45,6 +45,7 @@ const menuStructure: MenuItem[] = [
     children: [
       { icon: Bot, label: "Definições da IA", id: "ia-config", path: "/ia-config" },
       { icon: Smartphone, label: "Conexões", id: "whatsapp", path: "/whatsapp-connection" },
+      { icon: MessageSquareText, label: "Mensagens Automáticas", id: "auto-messages", path: "/auto-messages" },
       { icon: Settings, label: "Configurações", id: "settings", path: "/settings" },
     ]
   },

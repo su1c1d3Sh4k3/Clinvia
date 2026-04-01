@@ -508,6 +508,9 @@ serve(async (req) => {
                 payload.message?.content?.buttonOrListid ||
                 '';
 
+            // Detect NPS response early — needed to adjust conversation lookup scope
+            const isNpsButtonResponse = !!(npsButtonId && npsButtonId.startsWith('nps_'));
+
             // Use vote or selectedDisplayText as message body for button responses
             // For reactions, use the emoji directly
             const effectiveMessageBody = messageType === 'reaction'
@@ -515,12 +518,17 @@ serve(async (req) => {
                 : (voteText || selectedDisplayText || messageText);
 
             // Find existing conversation in CURRENT instance
+            // NPS responses come from resolved conversations — include 'resolved' in that case
+            const conversationStatusFilter = isNpsButtonResponse
+                ? ['pending', 'open', 'resolved']
+                : ['pending', 'open'];
+
             let query = supabase
                 .from('conversations')
                 .select('*')
                 .eq('instance_id', instance.id)
                 .eq('user_id', userId)
-                .in('status', ['pending', 'open'])
+                .in('status', conversationStatusFilter)
                 .order('created_at', { ascending: false })
                 .limit(1);
 
@@ -539,7 +547,7 @@ serve(async (req) => {
                     .select('*')
                     .is('instance_id', null)
                     .eq('user_id', userId)
-                    .in('status', ['pending', 'open'])
+                    .in('status', conversationStatusFilter)
                     .order('created_at', { ascending: false })
                     .limit(1);
 
@@ -569,13 +577,16 @@ serve(async (req) => {
                 conversation = conversations[0];
                 console.log('[webhook-handle-message] Found conversation:', conversation.id);
 
+                // NPS responses must not reopen a resolved conversation
+                const wasResolved = conversation.status === 'resolved';
                 await supabase
                     .from('conversations')
                     .update({
                         last_message: messageText || 'Mídia',
-                        unread_count: (conversation.unread_count || 0) + 1,
+                        ...(wasResolved && isNpsButtonResponse ? {} : { unread_count: (conversation.unread_count || 0) + 1 }),
                         updated_at: new Date().toISOString(),
-                        last_message_at: new Date().toISOString()
+                        last_message_at: new Date().toISOString(),
+                        ...(wasResolved && isNpsButtonResponse ? { status: 'resolved' } : {})
                     })
                     .eq('id', conversation.id);
             } else {
@@ -601,7 +612,7 @@ serve(async (req) => {
                         .from('conversations')
                         .select('*')
                         .eq('instance_id', instance.id)
-                        .in('status', ['pending', 'open'])
+                        .in('status', conversationStatusFilter)
                         .order('created_at', { ascending: false })
                         .limit(1);
 
@@ -836,6 +847,14 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
 
                         if (npsError) {
                             console.error('[webhook-handle-message] Error saving NPS:', npsError);
+                        }
+
+                        // Ensure the conversation stays resolved after NPS response
+                        if (conversation?.id) {
+                            await supabase
+                                .from('conversations')
+                                .update({ status: 'resolved', nps_sent_at: new Date().toISOString() })
+                                .eq('id', conversation.id);
                         }
                     }
 
