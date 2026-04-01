@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useEffect } from "react";
-import { useUserRole } from "@/hooks/useUserRole";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface InstanceRowProps {
     instance: any;
@@ -16,9 +16,7 @@ interface InstanceRowProps {
 export const InstanceRow = ({ instance, onConnect }: InstanceRowProps) => {
     const { toast } = useToast();
     const queryClient = useQueryClient();
-    const { data: userRole } = useUserRole();
-    const isAgent = userRole === 'agent';
-    const isSupervisor = userRole === 'supervisor';
+    const { canCreate, canEdit, canDelete } = usePermissions();
 
     const checkConnectionMutation = useMutation({
         mutationFn: async (id: string) => {
@@ -139,7 +137,7 @@ export const InstanceRow = ({ instance, onConnect }: InstanceRowProps) => {
             </div>
 
             <div className="flex flex-col sm:flex-row sm:items-center gap-2 md:gap-4">
-                {!isAgent && (
+                {canEdit('connections') && (
                     <div className="flex items-center gap-2">
                         <span className="text-xs md:text-sm text-muted-foreground whitespace-nowrap">Fila:</span>
                         <Select
@@ -161,7 +159,7 @@ export const InstanceRow = ({ instance, onConnect }: InstanceRowProps) => {
                     </div>
                 )}
 
-                {(!isAgent && queues?.find(q => q.id === instance.default_queue_id)?.name?.trim() !== "Atendimento IA") && (
+                {(canEdit('connections') && queues?.find(q => q.id === instance.default_queue_id)?.name?.trim() !== "Atendimento IA") && (
                     <div className="flex items-center gap-2">
                         <span className="text-xs md:text-sm text-muted-foreground whitespace-nowrap">Criar Negociação:</span>
                         <Select
@@ -212,7 +210,7 @@ export const InstanceRow = ({ instance, onConnect }: InstanceRowProps) => {
                         </Button>
                     )}
 
-                    {!isAgent && !isSupervisor && (
+                    {canDelete('connections') && (
                         <Button
                             size="sm"
                             variant="destructive"

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useUserRole } from "@/hooks/useUserRole";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { useProfessionals } from "@/hooks/useFinancial";
 import { ProfessionalModal } from "@/components/scheduling/ProfessionalModal";
@@ -37,6 +38,7 @@ import { Loader2, Plus, Pencil, Trash2, Users, Briefcase } from "lucide-react";
 
 export default function Team() {
     const { data: userRole } = useUserRole();
+    const { canCreate, canEdit, canDelete, hasAnyAccess } = usePermissions();
     const { data: ownerId } = useOwnerId();
     const { toast } = useToast();
     const queryClient = useQueryClient();
@@ -246,7 +248,7 @@ export default function Team() {
         updateMemberMutation.mutate({ ...formData, id: selectedMember.id });
     };
 
-    if (userRole === "agent") {
+    if (userRole !== "admin" && !hasAnyAccess('team_members')) {
         return (
             <div className="flex items-center justify-center h-screen">
                 <p className="text-muted-foreground">Você não tem permissão para acessar esta página.</p>
@@ -267,12 +269,14 @@ export default function Team() {
                     </p>
                 </div>
                 <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-                    <DialogTrigger asChild>
-                        <Button size="sm" className="h-8 md:h-9 text-xs md:text-sm w-fit">
-                            <Plus className="mr-1 md:mr-2 h-4 w-4" />
-                            <span className="hidden sm:inline">Adicionar </span>Membro
-                        </Button>
-                    </DialogTrigger>
+                    {canCreate('team_members') && (
+                        <DialogTrigger asChild>
+                            <Button size="sm" className="h-8 md:h-9 text-xs md:text-sm w-fit">
+                                <Plus className="mr-1 md:mr-2 h-4 w-4" />
+                                <span className="hidden sm:inline">Adicionar </span>Membro
+                            </Button>
+                        </DialogTrigger>
+                    )}
                     <DialogContent>
                         <DialogHeader>
                             <DialogTitle>Adicionar Novo Membro</DialogTitle>
@@ -388,26 +392,28 @@ export default function Team() {
                                     <TableCell className="hidden sm:table-cell text-sm py-2 md:py-4">{member.phone || "-"}</TableCell>
                                     <TableCell className="text-right py-2 md:py-4">
                                         <div className="flex justify-end gap-1">
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-7 w-7 md:h-8 md:w-8"
-                                                onClick={() => {
-                                                    setSelectedMember(member);
-                                                    setFormData({
-                                                        name: member.name,
-                                                        email: member.email,
-                                                        phone: member.phone || "",
-                                                        role: member.role,
-                                                        password: "",
-                                                        commission: member.commission || 0,
-                                                    });
-                                                    setIsEditOpen(true);
-                                                }}
-                                            >
-                                                <Pencil className="h-3.5 w-3.5 md:h-4 md:w-4" />
-                                            </Button>
-                                            {userRole === "admin" && member.role !== "admin" && (
+                                            {canEdit('team_members') && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-7 w-7 md:h-8 md:w-8"
+                                                    onClick={() => {
+                                                        setSelectedMember(member);
+                                                        setFormData({
+                                                            name: member.name,
+                                                            email: member.email,
+                                                            phone: member.phone || "",
+                                                            role: member.role,
+                                                            password: "",
+                                                            commission: member.commission || 0,
+                                                        });
+                                                        setIsEditOpen(true);
+                                                    }}
+                                                >
+                                                    <Pencil className="h-3.5 w-3.5 md:h-4 md:w-4" />
+                                                </Button>
+                                            )}
+                                            {canDelete('team_members') && member.role !== "admin" && (
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"

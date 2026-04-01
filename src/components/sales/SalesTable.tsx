@@ -37,7 +37,7 @@ import {
     ChevronRight,
 } from "lucide-react";
 import { useSales, useDeleteSale } from "@/hooks/useSales";
-import { useUserRole } from "@/hooks/useUserRole";
+import { usePermissions } from "@/hooks/usePermissions";
 import type { Sale } from "@/types/sales";
 import { SaleCategoryLabels, PaymentTypeLabels } from "@/types/sales";
 import { SaleModal } from "./SaleModal";
@@ -66,8 +66,7 @@ const calculatePriceAdjustment = (soldPrice: number, basePrice: number): string 
 };
 
 export function SalesTable({ month, year }: SalesTableProps) {
-    const { data: userRole } = useUserRole();
-    const isSupervisor = userRole === 'supervisor';
+    const { canEdit, canDelete } = usePermissions();
 
     // Modal states
     const [modalOpen, setModalOpen] = useState(false);
@@ -338,24 +337,28 @@ export function SalesTable({ month, year }: SalesTableProps) {
                                                     {sale.professional?.name || '-'}
                                                 </TableCell>
                                                 <TableCell className="text-right">
-                                                    {!isSupervisor && (
+                                                    {(canEdit('sales') || canDelete('sales')) && (
                                                         <div className="flex items-center justify-end gap-1">
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                className="h-8 w-8"
-                                                                onClick={() => handleEditClick(sale)}
-                                                            >
-                                                                <Pencil className="h-4 w-4" />
-                                                            </Button>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                className="h-8 w-8 text-destructive"
-                                                                onClick={() => handleDeleteClick(sale)}
-                                                            >
-                                                                <Trash2 className="h-4 w-4" />
-                                                            </Button>
+                                                            {canEdit('sales') && (
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className="h-8 w-8"
+                                                                    onClick={() => handleEditClick(sale)}
+                                                                >
+                                                                    <Pencil className="h-4 w-4" />
+                                                                </Button>
+                                                            )}
+                                                            {canDelete('sales') && (
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className="h-8 w-8 text-destructive"
+                                                                    onClick={() => handleDeleteClick(sale)}
+                                                                >
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                </Button>
+                                                            )}
                                                         </div>
                                                     )}
                                                 </TableCell>

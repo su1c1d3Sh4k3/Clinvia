@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { useUserRole } from "@/hooks/useUserRole";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -121,17 +122,18 @@ export default function IAConfig() {
     const { user } = useAuth();
     const { data: ownerId } = useOwnerId();
     const { data: userRole } = useUserRole();
+    const { hasAnyAccess, isReady } = usePermissions();
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const [loading, setLoading] = useState(false);
     const [config, setConfig] = useState<IAConfigData>(defaultConfig);
 
-    // Redirecionar agentes para página principal
+    // Redirecionar usuários sem acesso à página
     useEffect(() => {
-        if (userRole === 'agent') {
+        if (userRole !== 'admin' && isReady && !hasAnyAccess('ia_config')) {
             navigate('/', { replace: true });
         }
-    }, [userRole, navigate]);
+    }, [userRole, isReady, hasAnyAccess, navigate]);
 
     // Estados para campos dinâmicos
     const [restrictions, setRestrictions] = useState<RestrictionItem[]>([]);

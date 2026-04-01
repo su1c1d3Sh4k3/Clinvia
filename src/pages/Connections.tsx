@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ConnectInstanceDialog } from "@/components/ConnectInstanceDialog";
 import { InstanceRow } from "@/components/InstanceRow";
 import { useAuth } from "@/hooks/useAuth";
-import { useUserRole } from "@/hooks/useUserRole";
+import { usePermissions } from "@/hooks/usePermissions";
 import { FaWhatsapp, FaInstagram } from "react-icons/fa";
 import { Badge } from "@/components/ui/badge";
 import { AlertCircle, CheckCircle2, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
@@ -21,8 +21,7 @@ const INSTAGRAM_APP_ID = import.meta.env.VITE_INSTAGRAM_APP_ID || '7466745084618
 
 const Connections = () => {
     const { user } = useAuth();
-    const { data: userRole } = useUserRole();
-    const isAgent = userRole === 'agent';
+    const { canCreate, canEdit, canDelete } = usePermissions();
     const { toast } = useToast();
     const queryClient = useQueryClient();
     const [searchParams] = useSearchParams();
@@ -549,7 +548,7 @@ const Connections = () => {
 
                     {/* WhatsApp Tab */}
                     <TabsContent value="whatsapp" className="space-y-4 mt-4">
-                        {!isAgent && (
+                        {canCreate('connections') && (
                             <Card>
                                 <CardHeader className="p-4 md:p-6">
                                     <CardTitle className="text-base md:text-lg">Nova Instância WhatsApp</CardTitle>
@@ -640,26 +639,30 @@ const Connections = () => {
                                                 </div>
                                                 <div className="flex items-center gap-2">
                                                     {getStatusBadge(instance.status)}
-                                                    {!isAgent && (
+                                                    {(canEdit('connections') || canDelete('connections')) && (
                                                         <>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                onClick={() => refreshInstagramTokenMutation.mutate(instance.id)}
-                                                                disabled={refreshInstagramTokenMutation.isPending}
-                                                                title="Atualizar token"
-                                                            >
-                                                                <RefreshCw className={`h-4 w-4 text-green-500 ${refreshInstagramTokenMutation.isPending ? 'animate-spin' : ''}`} />
-                                                            </Button>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                onClick={() => deleteInstagramMutation.mutate(instance.id)}
-                                                                disabled={deleteInstagramMutation.isPending}
-                                                                title="Remover conta"
-                                                            >
-                                                                <Trash2 className="h-4 w-4 text-destructive" />
-                                                            </Button>
+                                                            {canEdit('connections') && (
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    onClick={() => refreshInstagramTokenMutation.mutate(instance.id)}
+                                                                    disabled={refreshInstagramTokenMutation.isPending}
+                                                                    title="Atualizar token"
+                                                                >
+                                                                    <RefreshCw className={`h-4 w-4 text-green-500 ${refreshInstagramTokenMutation.isPending ? 'animate-spin' : ''}`} />
+                                                                </Button>
+                                                            )}
+                                                            {canDelete('connections') && (
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    onClick={() => deleteInstagramMutation.mutate(instance.id)}
+                                                                    disabled={deleteInstagramMutation.isPending}
+                                                                    title="Remover conta"
+                                                                >
+                                                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                                                </Button>
+                                                            )}
                                                         </>
                                                     )}
                                                 </div>
@@ -681,7 +684,7 @@ const Connections = () => {
                         </Card>
 
                         {/* Instagram Connect Card */}
-                        {!isAgent && (
+                        {canCreate('connections') && (
                             <Card>
                                 <CardHeader className="p-4 md:p-6">
                                     <CardTitle className="text-base md:text-lg">Conectar nova conta</CardTitle>

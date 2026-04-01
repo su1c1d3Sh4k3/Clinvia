@@ -1,27 +1,22 @@
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { usePermissions } from "./usePermissions";
 import { useUserRole } from "./useUserRole";
 
+/**
+ * Returns whether the current user can access the financial module.
+ * Delegates to the custom_permissions system (feature: 'financial').
+ * Admins always have access.
+ *
+ * Keeps the same { data: boolean } shape as before so all callers continue to work.
+ */
 export function useFinancialAccess() {
     const { data: role } = useUserRole();
+    const { hasAnyAccess, isReady } = usePermissions();
 
-    return useQuery({
-        queryKey: ['financial-access-setting'],
-        queryFn: async (): Promise<boolean> => {
-            // Admins always have access
-            if (role === 'admin') return true;
+    // Mirror the react-query shape expected by existing callers
+    const access = role === "admin" ? true : isReady ? hasAnyAccess("financial") : true;
 
-            // For others, check the global setting
-            const { data, error } = await supabase.rpc('get_financial_access_setting');
-
-            if (error) {
-                console.error('Error fetching financial access setting:', error);
-                return true; // Fallback to true on error to avoid lockout by bug
-            }
-
-            return data ?? true;
-        },
-        enabled: !!role, // Only run after role is known
-        staleTime: 1000 * 60 * 5, // Cache for 5 minutes (optimized from 2 min)
-    });
+    return {
+        data: access,
+        isLoading: !isReady && role !== "admin",
+    };
 }
