@@ -47,7 +47,7 @@ export function MacroFunnelsPanel() {
     const navigate = useNavigate();
     const [dateFilter, setDateFilter] = useState<DateFilterOption>("all");
     const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>();
-    const [funnelSlots, setFunnelSlots] = useState<(string | null)[]>([null, null, null, null]);
+    const [funnelSlots, setFunnelSlots] = useState<(string | null)[]>([null, null, null]);
     const [slotsInitialized, setSlotsInitialized] = useState(false);
 
     const storageKey = ownerId ? `funnel_slots_${ownerId}` : null;
@@ -124,12 +124,15 @@ export function MacroFunnelsPanel() {
             try {
                 const saved = localStorage.getItem(storageKey);
                 if (saved) {
-                    const parsed = JSON.parse(saved) as (string | null)[];
+                    let parsed = JSON.parse(saved) as (string | null)[];
+                    // Migração: se tinha 4 slots salvos, trunca para 3 (Delivery é fixo)
+                    if (parsed.length > 3) parsed = parsed.slice(0, 3);
                     // Valida se os IDs salvos ainda existem (funil pode ter sido deletado)
                     const validated = parsed.map(id => (id && availableIds.has(id)) ? id : null);
                     if (validated.some(id => id !== null)) {
                         setFunnelSlots(validated);
                         setSlotsInitialized(true);
+                        localStorage.setItem(storageKey, JSON.stringify(validated));
                         return;
                     }
                 }
@@ -139,7 +142,8 @@ export function MacroFunnelsPanel() {
         }
 
         // Auto-assign padrão (nenhuma escolha salva ou inválida)
-        const newSlots = [null, null, null, null] as (string | null)[];
+        // 3 slots CRM + Delivery fixo = 4 funis no total (MÁXIMO)
+        const newSlots = [null, null, null] as (string | null)[];
 
         const qF = funnels.find(f => f.name.toLowerCase().includes('qualifica'));
         newSlots[0] = qF ? qF.id : funnels[0]?.id || null;
@@ -148,11 +152,7 @@ export function MacroFunnelsPanel() {
         newSlots[1] = iaF ? iaF.id : funnels[1]?.id || null;
 
         const rF = funnels.find(f => f.name.toLowerCase().includes('recorr') || f.name.toLowerCase().includes('reten'));
-        newSlots[3] = rF ? rF.id : funnels[2]?.id || null;
-
-        const usedIds = [newSlots[0], newSlots[1], newSlots[3]].filter(Boolean);
-        const remaining = funnels.filter(f => !usedIds.includes(f.id));
-        if (remaining.length > 0) newSlots[2] = remaining[0].id;
+        newSlots[2] = rF ? rF.id : funnels[2]?.id || null;
 
         setFunnelSlots(newSlots);
         setSlotsInitialized(true);
@@ -331,7 +331,7 @@ export function MacroFunnelsPanel() {
                 </div>
             )}
 
-            {/* Funnels Grid - Delivery fixo + até 4 funis CRM */}
+            {/* Funnels Grid - SEMPRE 4 funis: Delivery fixo + 3 funis CRM */}
             {userRole !== 'agent' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-5 place-items-stretch">
                     {/* Card fixo de Delivery — sempre presente, dados da tabela deliveries */}
