@@ -3,6 +3,8 @@ import { Button } from "@/components/ui/button";
 import { CheckCircle, Star, Files, CircleCheck } from "lucide-react";
 import { QueueSelector } from "@/components/QueueSelector";
 import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { FavoriteMessagesModal } from "./FavoriteMessagesModal";
 import { ConversationMediaModal } from "./ConversationMediaModal";
 import { cn } from "@/lib/utils";
@@ -70,6 +72,22 @@ export const ChatHeader = ({
 }: ChatHeaderProps) => {
     const [isFavoritesModalOpen, setIsFavoritesModalOpen] = useState(false);
     const [isMediaModalOpen, setIsMediaModalOpen] = useState(false);
+    const queryClient = useQueryClient();
+
+    const toggleLeadMutation = useMutation({
+        mutationFn: async (newValue: boolean) => {
+            if (!contact?.id) return;
+            const { error } = await supabase
+                .from("contacts")
+                .update({ is_lead: newValue } as any)
+                .eq("id", contact.id);
+            if (error) throw error;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["conversation", conversationId] });
+            queryClient.invalidateQueries({ queryKey: ["contacts"] });
+        },
+    });
 
     if (isMobile) return null;
 
@@ -86,9 +104,25 @@ export const ChatHeader = ({
                     <AvatarFallback>{displayName[0]?.toUpperCase()}</AvatarFallback>
                 </Avatar>
                 <div className="min-w-0">
-                    <h3 className="font-semibold text-sm leading-tight truncate max-w-[160px] xl:max-w-[240px]">
-                        {displayName}
-                    </h3>
+                    <div className="flex items-center gap-1.5">
+                        <h3 className="font-semibold text-sm leading-tight truncate max-w-[160px] xl:max-w-[240px]">
+                            {displayName}
+                        </h3>
+                        {!isGroup && contact && (
+                            <button
+                                onClick={() => toggleLeadMutation.mutate(!contact.is_lead)}
+                                disabled={toggleLeadMutation.isPending}
+                                className={cn(
+                                    "px-1.5 py-0 rounded text-[9px] font-bold uppercase tracking-wider border transition-colors flex-shrink-0",
+                                    contact.is_lead
+                                        ? "bg-emerald-500/15 text-emerald-500 border-emerald-500/30 hover:bg-emerald-500/25"
+                                        : "bg-gray-500/10 text-gray-400 border-gray-500/20 hover:bg-gray-500/20"
+                                )}
+                            >
+                                LEAD
+                            </button>
+                        )}
+                    </div>
                     {instanceName && (
                         <span className="text-xs text-muted-foreground truncate block max-w-[160px] xl:max-w-[240px]">
                             {instanceName}

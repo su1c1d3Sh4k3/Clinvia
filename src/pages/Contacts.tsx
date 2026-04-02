@@ -48,6 +48,7 @@ import { NpsFeedbackModal } from "@/components/NpsFeedbackModal";
 import { Sparkles, FileText } from "lucide-react";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useOwnerId } from "@/hooks/useOwnerId";
+import { cn } from "@/lib/utils";
 
 interface Contact {
     id: string;
@@ -70,6 +71,7 @@ interface Contact {
     analysis?: { data: string; resumo: string }[];
     report?: string;
     ia_on?: boolean;
+    is_lead?: boolean;
     nps?: { id?: string; dataPesquisa: string; nota: number; feedback: string }[];
 }
 
@@ -84,7 +86,7 @@ const Contacts = () => {
     const [selectedContactForMessage, setSelectedContactForMessage] = useState<Contact | null>(null);
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedTagFilter, setSelectedTagFilter] = useState<string>("all");
-    const [selectedChannelFilter, setSelectedChannelFilter] = useState<"all" | "whatsapp" | "instagram">("all");
+    const [selectedChannelFilter, setSelectedChannelFilter] = useState<"all" | "whatsapp" | "instagram" | "leads">("all");
 
     // Bulk Actions State
     const [selectedContactIds, setSelectedContactIds] = useState<Set<string>>(new Set());
@@ -236,6 +238,26 @@ const Contacts = () => {
         },
     });
 
+    const toggleLeadMutation = useMutation({
+        mutationFn: async ({ id, is_lead }: { id: string; is_lead: boolean }) => {
+            const { error } = await supabase
+                .from("contacts")
+                .update({ is_lead } as any)
+                .eq("id", id);
+            if (error) throw error;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["contacts"] });
+        },
+        onError: (error) => {
+            toast({
+                title: "Erro ao atualizar status de lead",
+                description: error.message,
+                variant: "destructive",
+            });
+        },
+    });
+
     const handleEdit = (contact: Contact) => {
         setEditingContact(contact);
         setIsModalOpen(true);
@@ -260,9 +282,12 @@ const Contacts = () => {
         const matchesTag = selectedTagFilter === "all" || contact.contact_tags?.some((ct: any) => ct.tags.id === selectedTagFilter);
 
         const matchesChannel = selectedChannelFilter === "all" ||
+            selectedChannelFilter === "leads" ||
             (contact.channel || 'whatsapp') === selectedChannelFilter;
 
-        return matchesSearch && matchesTag && matchesChannel;
+        const matchesLead = selectedChannelFilter !== "leads" || contact.is_lead === true;
+
+        return matchesSearch && matchesTag && matchesChannel && matchesLead;
     });
 
     // Calculate pagination
@@ -347,6 +372,18 @@ const Contacts = () => {
                         >
                             <FaWhatsapp className="h-4 w-4 text-green-500" />
                             WhatsApp
+                        </Button>
+                        <Button
+                            variant={selectedChannelFilter === 'leads' ? 'secondary' : 'outline'}
+                            size="sm"
+                            onClick={() => {
+                                setSelectedChannelFilter('leads');
+                                setCurrentPage(1);
+                            }}
+                            className={`h-8 gap-1 ${selectedChannelFilter !== 'leads' ? 'bg-white dark:bg-transparent border border-[#D4D5D6] dark:border-border' : ''}`}
+                        >
+                            <Users className="h-4 w-4 text-emerald-500" />
+                            Leads
                         </Button>
                         <Button
                             variant={selectedChannelFilter === 'instagram' ? 'secondary' : 'outline'}
@@ -482,7 +519,8 @@ const Contacts = () => {
                                     <TableHead className="text-foreground dark:text-slate-400 font-semibold w-[25%] md:w-[20%]">Nome</TableHead>
                                     <TableHead className="text-foreground dark:text-slate-400 font-semibold hidden sm:table-cell w-[15%]">Telefone</TableHead>
                                     <TableHead className="text-foreground dark:text-slate-400 font-semibold hidden md:table-cell w-[12%]">Etiquetas</TableHead>
-                                    <TableHead className="text-foreground dark:text-slate-400 font-semibold text-center w-[8%] hidden sm:table-cell">IA</TableHead>
+                                    <TableHead className="text-foreground dark:text-slate-400 font-semibold text-center w-[6%] hidden sm:table-cell">Lead</TableHead>
+                                    <TableHead className="text-foreground dark:text-slate-400 font-semibold text-center w-[6%] hidden sm:table-cell">IA</TableHead>
                                     {!isAgent && <TableHead className="text-foreground dark:text-slate-400 font-semibold text-center hidden lg:table-cell w-[8%]">Satisf.</TableHead>}
                                     {!isAgent && <TableHead className="text-foreground dark:text-slate-400 font-semibold text-center hidden lg:table-cell w-[8%]">Resumos</TableHead>}
                                     {!isAgent && <TableHead className="text-foreground dark:text-slate-400 font-semibold text-center hidden lg:table-cell w-[10%]">Avaliação</TableHead>}
@@ -493,13 +531,13 @@ const Contacts = () => {
                             <TableBody>
                                 {isLoading ? (
                                     <TableRow>
-                                        <TableCell colSpan={10} className="text-center py-8">
+                                        <TableCell colSpan={11} className="text-center py-8">
                                             Carregando...
                                         </TableCell>
                                     </TableRow>
                                 ) : filteredContacts?.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                                        <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
                                             Nenhum contato encontrado
                                         </TableCell>
                                     </TableRow>
@@ -567,6 +605,20 @@ const Contacts = () => {
                                                         <Badge variant="outline" className="text-[10px]">+{contact.contact_tags.length - 2}</Badge>
                                                     )}
                                                 </div>
+                                            </TableCell>
+                                            <TableCell className="text-center hidden sm:table-cell py-2 md:py-4">
+                                                <button
+                                                    onClick={() => toggleLeadMutation.mutate({ id: contact.id, is_lead: !contact.is_lead })}
+                                                    disabled={toggleLeadMutation.isPending}
+                                                    className={cn(
+                                                        "px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border transition-colors",
+                                                        contact.is_lead
+                                                            ? "bg-emerald-500/15 text-emerald-500 border-emerald-500/30 hover:bg-emerald-500/25"
+                                                            : "bg-gray-500/10 text-gray-400 border-gray-500/20 hover:bg-gray-500/20"
+                                                    )}
+                                                >
+                                                    LEAD
+                                                </button>
                                             </TableCell>
                                             <TableCell className="text-center hidden sm:table-cell py-2 md:py-4">
                                                 <Switch
