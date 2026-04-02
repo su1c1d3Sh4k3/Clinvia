@@ -29,7 +29,6 @@ export class ErrorBoundary extends Component<Props, State> {
             error.message?.includes("not a child of this node");
 
         if (isDomAutocompleteError) {
-            // Ignorar — não mudar estado, não exibir tela de erro
             return { hasError: false, error: null };
         }
         return { hasError: true, error };
@@ -45,12 +44,41 @@ export class ErrorBoundary extends Component<Props, State> {
             console.warn(`[ErrorBoundary] DOM autocomplete conflict ignorado em ${this.props.name || 'Component'}:`, error.message);
             return;
         }
+
+        // Auto-reload para erros de chunk/módulo dinâmico (deploy novo com hashes diferentes)
+        const isChunkError =
+            error.message?.includes("dynamically imported module") ||
+            error.message?.includes("Failed to fetch dynamically imported module") ||
+            error.message?.includes("Loading chunk") ||
+            error.message?.includes("Loading CSS chunk") ||
+            error.name === "ChunkLoadError";
+
+        if (isChunkError) {
+            const lastReload = sessionStorage.getItem("chunk_error_reload");
+            const now = Date.now();
+            // Evita loop infinito — só faz auto-reload 1x a cada 30s
+            if (!lastReload || now - Number(lastReload) > 30000) {
+                sessionStorage.setItem("chunk_error_reload", String(now));
+                window.location.reload();
+                return;
+            }
+        }
+
         console.error(`Uncaught error in ${this.props.name || 'Component'}:`, error, errorInfo);
     }
 
     public handleReload = () => {
+        const isChunkError =
+            this.state.error?.message?.includes("dynamically imported module") ||
+            this.state.error?.message?.includes("Failed to fetch dynamically imported module") ||
+            this.state.error?.message?.includes("Loading chunk") ||
+            this.state.error?.name === "ChunkLoadError";
+
+        if (isChunkError) {
+            window.location.reload();
+            return;
+        }
         this.setState({ hasError: false, error: null });
-        // Optional: window.location.reload(); if it's a critical global error
     };
 
     public render() {

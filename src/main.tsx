@@ -63,6 +63,24 @@ if ('serviceWorker' in navigator) {
     });
 }
 
+// Auto-reload quando um chunk/módulo dinâmico falha ao carregar (deploy novo)
+window.addEventListener("unhandledrejection", (event) => {
+    const msg = event.reason?.message || String(event.reason || "");
+    if (
+        msg.includes("dynamically imported module") ||
+        msg.includes("Failed to fetch dynamically imported module") ||
+        msg.includes("Loading chunk") ||
+        msg.includes("Loading CSS chunk")
+    ) {
+        const lastReload = sessionStorage.getItem("chunk_error_reload");
+        const now = Date.now();
+        if (!lastReload || now - Number(lastReload) > 30000) {
+            sessionStorage.setItem("chunk_error_reload", String(now));
+            window.location.reload();
+        }
+    }
+});
+
 createRoot(document.getElementById("root")!).render(
     <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
         <App />
