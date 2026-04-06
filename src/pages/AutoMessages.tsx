@@ -32,6 +32,7 @@ interface AutoMessage {
   timing_unit: string;
   timing_direction: string;
   send_hour: number;
+  send_minute: number;
   funnel_id?: string | null;
   stage_id?: string | null;
   instance_id?: string | null;
@@ -72,6 +73,7 @@ const defaultAutoMessage = (triggerType: string, overrides: Partial<AutoMessage>
   timing_unit: "hours",
   timing_direction: "before",
   send_hour: 9,
+  send_minute: 0,
   funnel_id: null,
   stage_id: null,
   instance_id: null,
@@ -904,11 +906,12 @@ function BirthdayTab({ config, onSave, instances }: BirthdayTabProps) {
   const [local, setLocal] = useState<AutoMessage>(() => ({
     ...config,
     send_hour: config.send_hour ?? 9,
+    send_minute: config.send_minute ?? 0,
   }));
 
   useEffect(() => {
-    setLocal({ ...config, send_hour: config.send_hour ?? 9 });
-  }, [config.id, config.is_active, config.message, config.send_hour]);
+    setLocal({ ...config, send_hour: config.send_hour ?? 9, send_minute: config.send_minute ?? 0 });
+  }, [config.id, config.is_active, config.message, config.send_hour, config.send_minute]);
 
   const handleToggle = (checked: boolean) => {
     const updated = { ...local, is_active: checked };
@@ -939,7 +942,7 @@ function BirthdayTab({ config, onSave, instances }: BirthdayTabProps) {
             <div className="flex items-center gap-3">
               <Clock className="w-4 h-4 text-muted-foreground flex-shrink-0" />
               <Label className="text-sm text-muted-foreground whitespace-nowrap">Horário de envio</Label>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1">
                 <Select
                   value={String(local.send_hour)}
                   onValueChange={v => {
@@ -948,13 +951,33 @@ function BirthdayTab({ config, onSave, instances }: BirthdayTabProps) {
                     onSave(updated);
                   }}
                 >
-                  <SelectTrigger className="w-28 h-8 text-sm">
+                  <SelectTrigger className="w-20 h-8 text-sm">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {Array.from({ length: 24 }, (_, i) => (
                       <SelectItem key={i} value={String(i)}>
-                        {String(i).padStart(2, "0")}:00
+                        {String(i).padStart(2, "0")}h
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <span className="text-muted-foreground font-medium">:</span>
+                <Select
+                  value={String(local.send_minute ?? 0)}
+                  onValueChange={v => {
+                    const updated = { ...local, send_minute: parseInt(v) };
+                    setLocal(updated);
+                    onSave(updated);
+                  }}
+                >
+                  <SelectTrigger className="w-20 h-8 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[0, 10, 20, 30, 40, 50].map(m => (
+                      <SelectItem key={m} value={String(m)}>
+                        {String(m).padStart(2, "0")}min
                       </SelectItem>
                     ))}
                   </SelectContent>
