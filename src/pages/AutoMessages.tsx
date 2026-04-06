@@ -130,39 +130,48 @@ const AutoMessages = () => {
     },
   });
 
-  // ── Upsert mutation (for non-CRM types)
+  // ── Save mutation (for non-CRM types): update se existe, insert se novo
   const upsertMutation = useMutation({
     mutationFn: async (payload: AutoMessage) => {
-      // Remove id para evitar conflito duplo (PK vs partial unique index)
-      const { id, ...rest } = payload;
+      const { id, user_id: _uid, ...rest } = payload as any;
       const row = { ...rest, user_id: ownerId };
 
       if (id) {
-        // Registro já existe — faz update direto pelo id
         const { error } = await supabase
           .from("auto_messages" as any)
           .update(row)
           .eq("id", id);
         if (error) throw error;
       } else {
-        // Registro novo — faz insert
+        // Tenta insert; se duplicar (race condition), faz update pelo trigger_type
         const { error } = await supabase
           .from("auto_messages" as any)
           .insert(row);
-        if (error) throw error;
+        if (error) {
+          // Fallback: se já existe registro para esse trigger_type, faz update
+          if (error.code === "23505") {
+            const { error: updateError } = await supabase
+              .from("auto_messages" as any)
+              .update(row)
+              .eq("user_id", ownerId)
+              .eq("trigger_type", row.trigger_type);
+            if (updateError) throw updateError;
+          } else {
+            throw error;
+          }
+        }
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["auto-messages", ownerId] });
     },
-    onError: (err: any) => toast.error("Erro ao salvar configuração: " + (err?.message || "")),
+    onError: (err: any) => toast.error("Erro ao salvar configuração"),
   });
 
   // ── Insert/update CRM rule
   const saveCrmMutation = useMutation({
     mutationFn: async (payload: AutoMessage) => {
-      // Remove id do body para não tentar atualizar a PK
-      const { id, ...rest } = payload;
+      const { id, user_id: _uid, ...rest } = payload as any;
       const row = { ...rest, user_id: ownerId };
 
       if (id) {
