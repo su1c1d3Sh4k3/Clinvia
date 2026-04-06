@@ -133,27 +133,43 @@ const AutoMessages = () => {
   // ── Upsert mutation (for non-CRM types)
   const upsertMutation = useMutation({
     mutationFn: async (payload: AutoMessage) => {
-      const row = { ...payload, user_id: ownerId };
-      const { error } = await supabase
-        .from("auto_messages" as any)
-        .upsert(row, { onConflict: "user_id,trigger_type" });
-      if (error) throw error;
+      // Remove id para evitar conflito duplo (PK vs partial unique index)
+      const { id, ...rest } = payload;
+      const row = { ...rest, user_id: ownerId };
+
+      if (id) {
+        // Registro já existe — faz update direto pelo id
+        const { error } = await supabase
+          .from("auto_messages" as any)
+          .update(row)
+          .eq("id", id);
+        if (error) throw error;
+      } else {
+        // Registro novo — faz insert
+        const { error } = await supabase
+          .from("auto_messages" as any)
+          .insert(row);
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["auto-messages", ownerId] });
     },
-    onError: () => toast.error("Erro ao salvar configuração"),
+    onError: (err: any) => toast.error("Erro ao salvar configuração: " + (err?.message || "")),
   });
 
   // ── Insert/update CRM rule
   const saveCrmMutation = useMutation({
     mutationFn: async (payload: AutoMessage) => {
-      const row = { ...payload, user_id: ownerId };
-      if (payload.id) {
+      // Remove id do body para não tentar atualizar a PK
+      const { id, ...rest } = payload;
+      const row = { ...rest, user_id: ownerId };
+
+      if (id) {
         const { error } = await supabase
           .from("auto_messages" as any)
           .update(row)
-          .eq("id", payload.id);
+          .eq("id", id);
         if (error) throw error;
       } else {
         const { error } = await supabase
@@ -166,7 +182,7 @@ const AutoMessages = () => {
       queryClient.invalidateQueries({ queryKey: ["auto-messages", ownerId] });
       toast.success("Regra salva com sucesso!");
     },
-    onError: () => toast.error("Erro ao salvar regra"),
+    onError: (err: any) => toast.error("Erro ao salvar regra: " + (err?.message || "")),
   });
 
   const deleteCrmMutation = useMutation({
