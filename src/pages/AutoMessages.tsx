@@ -34,6 +34,14 @@ interface AutoMessage {
   send_hour: number;
   funnel_id?: string | null;
   stage_id?: string | null;
+  instance_id?: string | null;
+}
+
+interface Instance {
+  id: string;
+  name: string;
+  instance_name: string;
+  status: string;
 }
 
 interface CRMFunnel { id: string; name: string; }
@@ -66,6 +74,7 @@ const defaultAutoMessage = (triggerType: string, overrides: Partial<AutoMessage>
   send_hour: 9,
   funnel_id: null,
   stage_id: null,
+  instance_id: null,
   ...overrides,
 });
 
@@ -128,6 +137,19 @@ const AutoMessages = () => {
         .order("position", { ascending: true });
       return (data ?? []) as CRMStage[];
     },
+  });
+
+  // ── Instâncias do cliente (WhatsApp)
+  const { data: instances = [] } = useQuery({
+    queryKey: ["instances-simple", ownerId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("instances")
+        .select("id, name, instance_name, status")
+        .order("name");
+      return (data ?? []) as Instance[];
+    },
+    enabled: !!ownerId,
   });
 
   // ── Save mutation (for non-CRM types): update se existe, insert se novo
@@ -284,6 +306,7 @@ const AutoMessages = () => {
                   onSave={saveConfig}
                   showTiming={false}
                   variables={["nome_cliente", "data_agendamento", "hora_agendamento", "nome_profissional", "nome_servico"]}
+                  instances={instances}
                 />
                 <AgendaCard
                   title="Lembrete de Agendamento"
@@ -296,6 +319,7 @@ const AutoMessages = () => {
                   timingLabel="Enviar quantas horas antes?"
                   defaultTimingValue={24}
                   variables={["nome_cliente", "data_agendamento", "hora_agendamento", "nome_profissional", "nome_servico"]}
+                  instances={instances}
                 />
                 <AgendaCard
                   title="Lembrete no Dia"
@@ -308,6 +332,7 @@ const AutoMessages = () => {
                   timingLabel="Enviar quantas horas antes?"
                   defaultTimingValue={2}
                   variables={["nome_cliente", "data_agendamento", "hora_agendamento", "nome_profissional", "nome_servico"]}
+                  instances={instances}
                 />
                 <AgendaCard
                   title="Cancelamento"
@@ -317,6 +342,7 @@ const AutoMessages = () => {
                   onSave={saveConfig}
                   showTiming={false}
                   variables={["nome_cliente", "data_agendamento", "hora_agendamento", "nome_profissional"]}
+                  instances={instances}
                 />
                 <AgendaCard
                   title="Pós-Atendimento"
@@ -329,6 +355,7 @@ const AutoMessages = () => {
                   timingLabel="Enviar quantas horas depois?"
                   defaultTimingValue={2}
                   variables={["nome_cliente", "nome_profissional", "nome_servico"]}
+                  instances={instances}
                 />
               </div>
             )}
@@ -344,6 +371,7 @@ const AutoMessages = () => {
               onSave={(rule) => saveCrmMutation.mutate(rule)}
               onDelete={(id) => deleteCrmMutation.mutate(id)}
               isSaving={saveCrmMutation.isPending}
+              instances={instances}
             />
           </TabsContent>
 
@@ -352,6 +380,7 @@ const AutoMessages = () => {
             <SatisfactionTab
               config={cfg("conversation_resolved")}
               onSave={saveConfig}
+              instances={instances}
             />
           </TabsContent>
 
@@ -360,6 +389,7 @@ const AutoMessages = () => {
             <BirthdayTab
               config={cfg("patient_birthday")}
               onSave={saveConfig}
+              instances={instances}
             />
           </TabsContent>
         </Tabs>
@@ -367,6 +397,35 @@ const AutoMessages = () => {
     </div>
   );
 };
+
+// ─── InstancePicker (reutilizado em todas as abas) ──────────────────────────
+
+function InstancePicker({ value, onChange, instances }: {
+  value: string | null | undefined;
+  onChange: (id: string | null) => void;
+  instances: Instance[];
+}) {
+  if (instances.length === 0) return null;
+  return (
+    <div className="flex items-center gap-3">
+      <MessageSquareText className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+      <Label className="text-sm text-muted-foreground whitespace-nowrap">Disparar pela instância</Label>
+      <Select value={value || "_auto_"} onValueChange={v => onChange(v === "_auto_" ? null : v)}>
+        <SelectTrigger className="w-[200px] h-8 text-sm">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="_auto_">Automático (primeira disponível)</SelectItem>
+          {instances.map(inst => (
+            <SelectItem key={inst.id} value={inst.id}>
+              {inst.name || inst.instance_name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
 
 // ─── AgendaCard ───────────────────────────────────────────────────────────────
 
@@ -381,11 +440,12 @@ interface AgendaCardProps {
   timingLabel?: string;
   defaultTimingValue?: number;
   variables: string[];
+  instances: Instance[];
 }
 
 function AgendaCard({
   title, description, triggerType, config, onSave,
-  showTiming, timingDirection = "before", timingLabel, defaultTimingValue = 0, variables,
+  showTiming, timingDirection = "before", timingLabel, defaultTimingValue = 0, variables, instances,
 }: AgendaCardProps) {
   const [local, setLocal] = useState<AutoMessage>(() => ({
     ...config,
@@ -446,6 +506,11 @@ function AgendaCard({
               </div>
             </div>
           )}
+          <InstancePicker
+            value={local.instance_id}
+            onChange={v => { const updated = { ...local, instance_id: v }; setLocal(updated); onSave(updated); }}
+            instances={instances}
+          />
           <div className="space-y-1.5">
             <Label className="text-sm">Mensagem</Label>
             <Textarea
@@ -473,6 +538,7 @@ interface CRMTabProps {
   onSave: (rule: AutoMessage) => void;
   onDelete: (id: string) => void;
   isSaving: boolean;
+  instances: Instance[];
 }
 
 const TRIGGER_LABELS: Record<string, string> = {
@@ -481,7 +547,7 @@ const TRIGGER_LABELS: Record<string, string> = {
   crm_stagnation: "Estagnado por X dias",
 };
 
-function CRMTab({ rules, funnels, allStages, onSave, onDelete, isSaving }: CRMTabProps) {
+function CRMTab({ rules, funnels, allStages, onSave, onDelete, isSaving, instances }: CRMTabProps) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<AutoMessage | null>(null);
 
@@ -669,6 +735,27 @@ function CRMTab({ rules, funnels, allStages, onSave, onDelete, isSaving }: CRMTa
                 <VariableHint vars={["nome_cliente", "nome_etapa", "nome_funil"]} />
               </div>
 
+              {/* Instância */}
+              <div className="space-y-1.5">
+                <Label>Instância de envio</Label>
+                <Select
+                  value={editing.instance_id || "_auto_"}
+                  onValueChange={v => setEditing({ ...editing, instance_id: v === "_auto_" ? null : v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_auto_">Automático (primeira disponível)</SelectItem>
+                    {instances.map(inst => (
+                      <SelectItem key={inst.id} value={inst.id}>
+                        {inst.name || inst.instance_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               {/* Ativo */}
               <div className="flex items-center justify-between rounded-lg border p-3">
                 <div>
@@ -703,9 +790,10 @@ function CRMTab({ rules, funnels, allStages, onSave, onDelete, isSaving }: CRMTa
 interface SatisfactionTabProps {
   config: AutoMessage;
   onSave: (c: AutoMessage) => void;
+  instances: Instance[];
 }
 
-function SatisfactionTab({ config, onSave }: SatisfactionTabProps) {
+function SatisfactionTab({ config, onSave, instances }: SatisfactionTabProps) {
   const [local, setLocal] = useState<AutoMessage>(() => ({
     ...config,
     timing_value: config.timing_value || 0,
@@ -766,6 +854,12 @@ function SatisfactionTab({ config, onSave }: SatisfactionTabProps) {
               </div>
             </div>
 
+            <InstancePicker
+              value={local.instance_id}
+              onChange={v => { const updated = { ...local, instance_id: v }; setLocal(updated); onSave(updated); }}
+              instances={instances}
+            />
+
             {/* Preview dos botões */}
             <div className="rounded-xl border bg-muted/30 p-4 space-y-3">
               <div className="flex items-center gap-2">
@@ -803,9 +897,10 @@ function SatisfactionTab({ config, onSave }: SatisfactionTabProps) {
 interface BirthdayTabProps {
   config: AutoMessage;
   onSave: (c: AutoMessage) => void;
+  instances: Instance[];
 }
 
-function BirthdayTab({ config, onSave }: BirthdayTabProps) {
+function BirthdayTab({ config, onSave, instances }: BirthdayTabProps) {
   const [local, setLocal] = useState<AutoMessage>(() => ({
     ...config,
     send_hour: config.send_hour ?? 9,
@@ -866,6 +961,12 @@ function BirthdayTab({ config, onSave }: BirthdayTabProps) {
                 </Select>
               </div>
             </div>
+
+            <InstancePicker
+              value={local.instance_id}
+              onChange={v => { const updated = { ...local, instance_id: v }; setLocal(updated); onSave(updated); }}
+              instances={instances}
+            />
 
             <div className="space-y-1.5">
               <Label className="text-sm">Mensagem</Label>
