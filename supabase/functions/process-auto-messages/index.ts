@@ -12,6 +12,11 @@ const WINDOW_MINUTES = 15;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+/** Extrai data de query Supabase, protegendo contra null (data: null em caso de erro) */
+function safeRows(result: { data: any[] | null }): any[] {
+  return result.data ?? [];
+}
+
 function applyVariables(template: string, vars: Record<string, string>): string {
   return Object.entries(vars).reduce(
     (msg, [key, val]) => msg.replaceAll(`{${key}}`, val ?? ""),
@@ -54,40 +59,36 @@ function isInSendWindow(sendHour: number, sendMinute: number): boolean {
   return nowTotal >= targetTotal && nowTotal < targetTotal + WINDOW_MINUTES;
 }
 
-// ─── Evolution API sender ────────────────────────────────────────────────────
+// ─── UZAPI sender ────────────────────────────────────────────────────────────
 
 async function sendWhatsApp(
   serverUrl: string,
-  instanceName: string,
+  _instanceName: string,
   apikey: string,
   number: string,
   text: string
 ): Promise<any> {
   const phone = normalizePhone(number);
-  const url = `${serverUrl}/message/sendText/${instanceName}`;
+  const url = `${serverUrl}/send/text`;
   console.log(`[send] ${url} → ${phone}`);
 
   const resp = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "apikey": apikey,
+      "Accept": "application/json",
+      "token": apikey,
     },
     body: JSON.stringify({
       number: phone,
-      options: {
-        delay: 1200,
-        presence: "composing",
-        linkPreview: false,
-      },
-      textMessage: { text },
+      text,
     }),
   });
 
   if (!resp.ok) {
     const errText = await resp.text();
     console.error(`[send] Error ${resp.status}:`, errText);
-    throw new Error(`Evolution API error: ${errText}`);
+    throw new Error(`UZAPI error: ${errText}`);
   }
 
   return await resp.json();
@@ -224,10 +225,11 @@ serve(async (req) => {
     const windowStart = new Date(now.getTime() - WINDOW_MINUTES * 60 * 1000);
 
     // Carregar todas as configs ativas
-    const { data: configs = [] } = await supabase
+    const { data: rawConfigs } = await supabase
       .from("auto_messages")
       .select("*")
       .eq("is_active", true);
+    const configs = rawConfigs ?? [];
 
     if (!configs.length) {
       console.log("[process-auto-messages] No active configs");
@@ -252,13 +254,13 @@ serve(async (req) => {
         if (apptCreatedCfg) {
           const instance = await getInstance(supabase, userId, apptCreatedCfg.instance_id);
           if (instance) {
-            const { data: appts = [] } = await supabase
+            const appts = safeRows(await supabase
               .from("appointments")
               .select("id, start_time, contact_id, contacts(push_name, number), professionals(name), products_services(name)")
               .eq("user_id", userId)
               .gte("created_at", windowStart.toISOString())
               .lte("created_at", now.toISOString())
-              .not("contact_id", "is", null);
+              .not("contact_id", "is", null));
 
             for (const appt of appts) {
               try {
@@ -295,14 +297,14 @@ serve(async (req) => {
           const targetStart = new Date(now.getTime() + hoursVal * 60 * 60 * 1000);
           const targetEnd = new Date(targetStart.getTime() + WINDOW_MINUTES * 60 * 1000);
 
-          const { data: appts = [] } = await supabase
+          const appts = safeRows(await supabase
             .from("appointments")
             .select("id, start_time, contact_id, contacts(push_name, number), professionals(name), products_services(name)")
             .eq("user_id", userId)
             .gte("start_time", targetStart.toISOString())
             .lte("start_time", targetEnd.toISOString())
             .in("status", ["confirmed", "pending"])
-            .not("contact_id", "is", null);
+            .not("contact_id", "is", null));
 
           for (const appt of appts) {
             try {
@@ -332,14 +334,14 @@ serve(async (req) => {
         if (cancelledCfg) {
           const instance = await getInstance(supabase, userId, cancelledCfg.instance_id);
           if (instance) {
-            const { data: appts = [] } = await supabase
+            const appts = safeRows(await supabase
               .from("appointments")
               .select("id, start_time, updated_at, contact_id, contacts(push_name, number), professionals(name)")
               .eq("user_id", userId)
               .eq("status", "canceled")
               .gte("updated_at", windowStart.toISOString())
               .lte("updated_at", now.toISOString())
-              .not("contact_id", "is", null);
+              .not("contact_id", "is", null));
 
             for (const appt of appts) {
               try {
@@ -373,14 +375,14 @@ serve(async (req) => {
             const targetStart = new Date(now.getTime() - (hoursVal * 60 + WINDOW_MINUTES) * 60 * 1000);
             const targetEnd = new Date(now.getTime() - hoursVal * 60 * 60 * 1000);
 
-            const { data: appts = [] } = await supabase
+            const appts = safeRows(await supabase
               .from("appointments")
               .select("id, start_time, updated_at, contact_id, contacts(push_name, number), professionals(name), products_services(name)")
               .eq("user_id", userId)
               .eq("status", "completed")
               .gte("updated_at", targetStart.toISOString())
               .lte("updated_at", targetEnd.toISOString())
-              .not("contact_id", "is", null);
+              .not("contact_id", "is", null));
 
             for (const appt of appts) {
               try {
@@ -411,14 +413,14 @@ serve(async (req) => {
           const instance = await getInstance(supabase, userId, cfg.instance_id);
           if (!instance) continue;
 
-          const { data: deals = [] } = await supabase
+          const deals = safeRows(await supabase
             .from("crm_deals")
             .select("id, contact_id, stage_id, stage_changed_at, contacts(push_name, number), crm_stages(name), crm_funnels(name)")
             .eq("user_id", userId)
             .eq("stage_id", cfg.stage_id)
             .gte("stage_changed_at", windowStart.toISOString())
             .lte("stage_changed_at", now.toISOString())
-            .not("contact_id", "is", null);
+            .not("contact_id", "is", null));
 
           for (const deal of deals) {
             try {
@@ -451,14 +453,14 @@ serve(async (req) => {
           const targetDate = new Date(now.getTime() - cfg.timing_value * 24 * 60 * 60 * 1000);
           const targetStart = new Date(targetDate.getTime() - WINDOW_MINUTES * 60 * 1000);
 
-          const { data: deals = [] } = await supabase
+          const deals = safeRows(await supabase
             .from("crm_deals")
             .select("id, contact_id, stage_changed_at, contacts(push_name, number), crm_stages(name), crm_funnels(name)")
             .eq("user_id", userId)
             .eq("stage_id", cfg.stage_id)
             .gte("stage_changed_at", targetStart.toISOString())
             .lte("stage_changed_at", targetDate.toISOString())
-            .not("contact_id", "is", null);
+            .not("contact_id", "is", null));
 
           for (const deal of deals) {
             try {
@@ -490,13 +492,13 @@ serve(async (req) => {
 
           const stagnationCutoff = new Date(now.getTime() - cfg.timing_value * 24 * 60 * 60 * 1000);
 
-          const { data: deals = [] } = await supabase
+          const deals = safeRows(await supabase
             .from("crm_deals")
             .select("id, contact_id, stage_changed_at, contacts(push_name, number), crm_stages(name), crm_funnels(name)")
             .eq("user_id", userId)
             .eq("stage_id", cfg.stage_id)
             .lt("stage_changed_at", stagnationCutoff.toISOString())
-            .not("contact_id", "is", null);
+            .not("contact_id", "is", null));
 
           for (const deal of deals) {
             try {
@@ -526,7 +528,7 @@ serve(async (req) => {
           const resolvedBefore = new Date(now.getTime() - delayMs);
           const resolvedAfter = new Date(resolvedBefore.getTime() - WINDOW_MINUTES * 60 * 1000);
 
-          const { data: convs = [] } = await supabase
+          const convs = safeRows(await supabase
             .from("conversations")
             .select("id, contact_id, instance_id, contacts(push_name, number)")
             .eq("user_id", userId)
@@ -534,7 +536,7 @@ serve(async (req) => {
             .is("nps_sent_at", null)
             .gte("updated_at", resolvedAfter.toISOString())
             .lte("updated_at", resolvedBefore.toISOString())
-            .not("contact_id", "is", null);
+            .not("contact_id", "is", null));
 
           for (const conv of convs) {
             try {
@@ -568,18 +570,18 @@ serve(async (req) => {
             const { month: todayMonth, day: todayDay } = getBrasiliaDate();
             const sendHour = birthdayCfg.send_hour ?? 9;
             const sendMinute = birthdayCfg.send_minute ?? 0;
-            const { hour: brHour, minute: brMinute } = getBrasiliaTime();
 
-            console.log(`[birthday] Brasilia=${brHour}:${brMinute}, target=${sendHour}:${sendMinute}, today=${todayMonth}/${todayDay}`);
+            console.log(`[birthday] today=${todayMonth}/${todayDay}, target=${sendHour}:${sendMinute}`);
 
             // Só executa na janela do horário configurado (Brasília)
             if (isInSendWindow(sendHour, sendMinute)) {
-              const { data: patients = [] } = await supabase
+              // IMPORTANT: explicit FK hint needed — patients has bidirectional FK with contacts
+              const patients = safeRows(await supabase
                 .from("patients")
-                .select("id, nome, data_nascimento, contact_id, contacts(push_name, number)")
+                .select("id, nome, data_nascimento, contact_id, contacts!patients_contact_id_fkey(push_name, number)")
                 .eq("user_id", userId)
                 .not("data_nascimento", "is", null)
-                .not("contact_id", "is", null);
+                .not("contact_id", "is", null));
 
               console.log(`[birthday] Found ${patients.length} patients with birthdate and contact`);
 
