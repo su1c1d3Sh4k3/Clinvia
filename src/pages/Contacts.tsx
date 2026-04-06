@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Pencil, Trash2, Users, Search, Send, Instagram, CheckSquare, Square, Tag, AlertTriangle, Star } from "lucide-react";
+import { Plus, Pencil, Trash2, Users, Search, Send, Instagram, CheckSquare, Square, Tag, AlertTriangle, Star, Download, Upload, FileSpreadsheet } from "lucide-react";
+import * as XLSX from "xlsx";
 import { FaWhatsapp, FaInstagram } from "react-icons/fa";
 import {
     Table,
@@ -107,6 +108,8 @@ const Contacts = () => {
     // Pagination state
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(20);
+    const [isImporting, setIsImporting] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const { toast } = useToast();
     const queryClient = useQueryClient();
@@ -331,6 +334,118 @@ const Contacts = () => {
         setTagsToAssign(newSet);
     };
 
+    const TEMPLATE_COLUMNS = ["Nome", "Telefone", "Empresa", "CPF", "Email", "Instagram"];
+
+    const handleDownloadTemplate = () => {
+        const ws = XLSX.utils.aoa_to_sheet([
+            TEMPLATE_COLUMNS,
+            ["João Silva", "5511999999999", "Empresa X", "123.456.789-00", "joao@email.com", "joao_silva"],
+        ]);
+        // Larguras das colunas
+        ws["!cols"] = [{ wch: 25 }, { wch: 18 }, { wch: 20 }, { wch: 16 }, { wch: 28 }, { wch: 18 }];
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Contatos");
+        XLSX.writeFile(wb, "modelo_contatos.xlsx");
+    };
+
+    const handleImportContacts = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !ownerId) return;
+        // Limpa o input para permitir reimportar o mesmo arquivo
+        e.target.value = "";
+
+        setIsImporting(true);
+        try {
+            const data = await file.arrayBuffer();
+            const wb = XLSX.read(data);
+            const ws = wb.Sheets[wb.SheetNames[0]];
+            const rows = XLSX.utils.sheet_to_json<Record<string, any>>(ws);
+
+            if (rows.length === 0) {
+                toast({ title: "Planilha vazia", description: "Nenhum contato encontrado na planilha.", variant: "destructive" });
+                return;
+            }
+
+            // Mapeia colunas flexíveis (aceita variações de nome)
+            const mapField = (row: Record<string, any>, keys: string[]) => {
+                for (const k of keys) {
+                    const found = Object.keys(row).find(rk => rk.toLowerCase().trim() === k.toLowerCase());
+                    if (found && row[found] != null && String(row[found]).trim()) return String(row[found]).trim();
+                }
+                return null;
+            };
+
+            const contactsToImport = rows.map(row => {
+                const name = mapField(row, ["nome", "name", "push_name"]);
+                const phone = mapField(row, ["telefone", "phone", "celular", "whatsapp", "número", "numero"]);
+                if (!name || !phone) return null;
+
+                const cleanPhone = phone.replace(/\D/g, "");
+                return {
+                    push_name: name,
+                    phone: cleanPhone,
+                    number: `${cleanPhone}@s.whatsapp.net`,
+                    company: mapField(row, ["empresa", "company"]) || null,
+                    cpf: mapField(row, ["cpf", "documento"]) || null,
+                    email: mapField(row, ["email", "e-mail"]) || null,
+                    instagram: mapField(row, ["instagram", "insta"]) || null,
+                    user_id: ownerId,
+                    is_group: false,
+                    edited: true,
+                };
+            }).filter(Boolean);
+
+            if (contactsToImport.length === 0) {
+                toast({ title: "Nenhum contato válido", description: "Verifique se a planilha tem as colunas Nome e Telefone preenchidas.", variant: "destructive" });
+                return;
+            }
+
+            // Upsert em lotes de 100
+            const BATCH = 100;
+            let imported = 0;
+            for (let i = 0; i < contactsToImport.length; i += BATCH) {
+                const batch = contactsToImport.slice(i, i + BATCH);
+                const { error } = await supabase
+                    .from("contacts")
+                    .upsert(batch as any[], { onConflict: "user_id,number", ignoreDuplicates: false });
+                if (error) throw error;
+                imported += batch.length;
+            }
+
+            queryClient.invalidateQueries({ queryKey: ["contacts"] });
+            toast({ title: `${imported} contatos importados com sucesso!` });
+        } catch (error: any) {
+            toast({ title: "Erro ao importar", description: error.message, variant: "destructive" });
+        } finally {
+            setIsImporting(false);
+        }
+    };
+
+    const handleExportContacts = () => {
+        if (!filteredContacts || filteredContacts.length === 0) {
+            toast({ title: "Nenhum contato para exportar", variant: "destructive" });
+            return;
+        }
+
+        const exportData = filteredContacts.map(c => ({
+            Nome: c.push_name || "",
+            Telefone: c.phone || c.number?.split("@")[0] || "",
+            Empresa: c.company || "",
+            CPF: c.cpf || "",
+            Email: c.email || "",
+            Instagram: c.instagram || "",
+            Lead: c.is_lead ? "Sim" : "Não",
+            Etiquetas: c.contact_tags?.map((ct: any) => ct.tags?.name).filter(Boolean).join(", ") || "",
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(exportData);
+        ws["!cols"] = [{ wch: 25 }, { wch: 18 }, { wch: 20 }, { wch: 16 }, { wch: 28 }, { wch: 18 }, { wch: 8 }, { wch: 25 }];
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Contatos");
+        XLSX.writeFile(wb, `contatos_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        toast({ title: `${exportData.length} contatos exportados!` });
+    };
+
     return (
         <div className="flex h-screen w-full bg-background">
             <div className="flex-1 p-4 md:p-8 overflow-auto">
@@ -342,10 +457,25 @@ const Contacts = () => {
                                 Gerencie seus contatos
                             </p>
                         </div>
-                        <Button onClick={handleAddNew} size="sm" className="h-8 md:h-9 text-xs md:text-sm w-fit">
-                            <Plus className="w-4 h-4 mr-1 md:mr-2" />
-                            <span className="hidden sm:inline">Novo </span>Contato
-                        </Button>
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <Button onClick={handleDownloadTemplate} variant="outline" size="sm" className="h-8 md:h-9 text-xs md:text-sm gap-1" title="Baixar planilha modelo">
+                                <FileSpreadsheet className="w-4 h-4" />
+                                <span className="hidden lg:inline">Modelo</span>
+                            </Button>
+                            <Button onClick={() => fileInputRef.current?.click()} variant="outline" size="sm" className="h-8 md:h-9 text-xs md:text-sm gap-1" disabled={isImporting} title="Importar contatos de planilha">
+                                <Upload className="w-4 h-4" />
+                                <span className="hidden lg:inline">{isImporting ? "Importando..." : "Importar"}</span>
+                            </Button>
+                            <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleImportContacts} />
+                            <Button onClick={handleExportContacts} variant="outline" size="sm" className="h-8 md:h-9 text-xs md:text-sm gap-1" title="Exportar contatos para planilha">
+                                <Download className="w-4 h-4" />
+                                <span className="hidden lg:inline">Exportar</span>
+                            </Button>
+                            <Button onClick={handleAddNew} size="sm" className="h-8 md:h-9 text-xs md:text-sm">
+                                <Plus className="w-4 h-4 mr-1 md:mr-2" />
+                                <span className="hidden sm:inline">Novo </span>Contato
+                            </Button>
+                        </div>
                     </div>
 
                     {/* Channel Tabs */}
