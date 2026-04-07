@@ -21,6 +21,7 @@ import { EditMessageModal } from "@/components/EditMessageModal";
 import { DeleteMessageModal } from "@/components/DeleteMessageModal";
 import { EmojiPickerStandalone } from "@/components/EmojiReactionPicker";
 import { ForwardMessageModal } from "@/components/chat/ForwardMessageModal";
+import { ContactPickerModal } from "@/components/chat/ContactPickerModal";
 import { cn } from "@/lib/utils";
 import {
   Dialog,
@@ -139,6 +140,9 @@ export const ChatArea = ({
   // Quick Message Confirmation
   const [selectedQuickMessage, setSelectedQuickMessage] = useState<QuickMessage | null>(null);
   const [isQuickMessageConfirmOpen, setIsQuickMessageConfirmOpen] = useState(false);
+
+  // Contact Picker
+  const [isContactPickerOpen, setIsContactPickerOpen] = useState(false);
 
   // Core Hooks
   const { messages, isLoading } = useMessages(conversationId);
@@ -650,6 +654,72 @@ export const ChatArea = ({
     });
   };
 
+  // Send Contact (vCard) handler
+  const handleSendContact = async (selectedContact: { id: string; push_name: string | null; number: string; profile_pic_url: string | null }) => {
+    if (!conversationId) return;
+    const conv = conversation as any;
+    if (!conv?.instance_id) {
+      toast.error("Nenhuma instância WhatsApp vinculada a esta conversa");
+      return;
+    }
+
+    const fullName = selectedContact.push_name || "Contato";
+    const phoneNumber = selectedContact.number.includes("@")
+      ? selectedContact.number.split("@")[0]
+      : selectedContact.number.replace(/\D/g, "");
+    const vCardBody = `${fullName}\nPhone: ${phoneNumber}`;
+
+    try {
+      setIsUploading(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      const { data, error } = await supabase.functions.invoke("evolution-send-message", {
+        headers: session ? { Authorization: `Bearer ${session.access_token}` } : {},
+        body: {
+          conversationId,
+          contactId: conv.contact_id,
+          groupId: conv.group_id,
+          body: vCardBody,
+          messageType: "contact",
+          contactData: { fullName, phoneNumber },
+          message: { wasSentByApi: false }
+        },
+      });
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error);
+
+      queryClient.setQueryData(["messages", conversationId], (old: any) => {
+        if (!old) return old;
+        return [...old, {
+          id: data?.messageId || `temp-contact-${Date.now()}`,
+          conversation_id: conversationId,
+          body: vCardBody,
+          direction: "outbound",
+          message_type: "contact",
+          media_url: null,
+          created_at: new Date().toISOString(),
+          status: "sent",
+          transcription: null,
+          evolution_id: data?.providerId || null,
+          user_id: null,
+          reply_to_id: null,
+          quoted_body: null,
+          quoted_sender: null,
+          is_deleted: false,
+          sender_name: null,
+          sender_jid: null,
+          sender_profile_pic_url: null
+        }];
+      });
+      queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      toast.success("Contato enviado");
+    } catch (err: any) {
+      console.error("Error sending contact:", err);
+      toast.error(`Erro ao enviar contato: ${err.message}`);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   // Paste handler for images
   const handlePaste = (e: React.ClipboardEvent) => {
     const items = e.clipboardData?.items;
@@ -739,6 +809,7 @@ export const ChatArea = ({
         isSendingSurvey={isSendingSurvey}
         conversationId={conversationId}
         isGroup={isGroup}
+        onSendContact={() => setIsContactPickerOpen(true)}
       />
 
       {/* Modals */}
@@ -789,6 +860,12 @@ export const ChatArea = ({
         open={isForwardModalOpen}
         onOpenChange={setIsForwardModalOpen}
         messageToForward={messageToForward}
+      />
+
+      <ContactPickerModal
+        open={isContactPickerOpen}
+        onOpenChange={setIsContactPickerOpen}
+        onSelect={handleSendContact}
       />
 
     </div>

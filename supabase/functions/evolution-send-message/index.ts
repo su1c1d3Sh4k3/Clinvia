@@ -18,7 +18,7 @@ serve(async (req) => {
     );
 
     const reqData = await req.json();
-    let { conversationId, body, messageType = 'text', mediaUrl, caption, replyId, quotedBody, quotedSender, contactId, groupId, mentions, forward } = reqData;
+    let { conversationId, body, messageType = 'text', mediaUrl, caption, replyId, quotedBody, quotedSender, contactId, groupId, mentions, forward, contactData } = reqData;
     console.log('[evolution-send-message] Start conversationId:', conversationId);
 
     // ✅ CONVERSATION CREATION LOGIC (Agent-initiated conversations)
@@ -272,7 +272,18 @@ serve(async (req) => {
     let sendUrl;
     let payload;
 
-    if (messageType === 'text') {
+    if (messageType === 'contact' && contactData) {
+      // Enviar cartão de contato (vCard) via UZAPI
+      sendUrl = `https://clinvia.uazapi.com/send/contact`;
+      payload = {
+        number: targetNumber,
+        fullName: contactData.fullName || 'Contato',
+        phoneNumber: contactData.phoneNumber || '',
+        organization: contactData.organization || '',
+        email: contactData.email || '',
+        url: contactData.url || ''
+      };
+    } else if (messageType === 'text') {
       sendUrl = `https://clinvia.uazapi.com/send/text`;
       payload = {
         number: targetNumber,
@@ -338,7 +349,10 @@ serve(async (req) => {
       let insertBody = body;
       let insertCaption = caption || null;
 
-      if (messageType === 'document') {
+      if (messageType === 'contact') {
+        insertBody = body; // vCard text (e.g. "Nome\nPhone: 551199999")
+        insertCaption = null;
+      } else if (messageType === 'document') {
         insertBody = body;
         if (caption && signerAgentId) {
           const { data: teamMember } = await supabaseClient

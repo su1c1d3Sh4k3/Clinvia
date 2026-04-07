@@ -214,6 +214,177 @@ async function findConversation(supabase: any, contactId: string, userId: string
   return data?.id ?? null;
 }
 
+// ─── Targeted mode (instant trigger from DB) ────────────────────────────────
+
+async function processTargeted(
+  supabase: any,
+  params: { trigger_type: string; entity_id: string; auto_message_id: string }
+): Promise<Response> {
+  const { trigger_type, entity_id, auto_message_id } = params;
+  console.log(`[targeted] ${trigger_type} for entity ${entity_id}, config ${auto_message_id}`);
+
+  try {
+    // Load config
+    const { data: cfg } = await supabase
+      .from("auto_messages")
+      .select("*")
+      .eq("id", auto_message_id)
+      .eq("is_active", true)
+      .maybeSingle();
+
+    if (!cfg) {
+      console.log("[targeted] Config not found or inactive");
+      return new Response(JSON.stringify({ processed: 0, reason: "config_inactive" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Check dedup
+    if (await alreadySent(supabase, cfg.id, entity_id)) {
+      console.log("[targeted] Already sent");
+      return new Response(JSON.stringify({ processed: 0, reason: "already_sent" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Get instance
+    const instance = await getInstance(supabase, cfg.user_id, cfg.instance_id);
+    if (!instance) {
+      console.error("[targeted] No connected instance found");
+      return new Response(JSON.stringify({ processed: 0, reason: "no_instance" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ── CRM STAGE ENTER (instant) ──
+    if (trigger_type === "crm_stage_enter") {
+      const { data: deal } = await supabase
+        .from("crm_deals")
+        .select("id, contact_id, stage_id, contacts(push_name, number), crm_stages(name), crm_funnels(name)")
+        .eq("id", entity_id)
+        .maybeSingle();
+
+      if (!deal) {
+        console.error("[targeted] Deal not found:", entity_id);
+        return new Response(JSON.stringify({ processed: 0, reason: "deal_not_found" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const phone = (deal.contacts as any)?.number;
+      if (!phone) {
+        console.error("[targeted] Contact has no phone number");
+        return new Response(JSON.stringify({ processed: 0, reason: "no_phone" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const msg = applyVariables(cfg.message, {
+        nome_cliente: (deal.contacts as any)?.push_name ?? "",
+        nome_etapa: (deal.crm_stages as any)?.name ?? "",
+        nome_funil: (deal.crm_funnels as any)?.name ?? "",
+      });
+
+      await sendWhatsApp(instance.server_url, instance.instance_name, instance.apikey, phone, msg);
+      const convId = await findConversation(supabase, deal.contact_id, cfg.user_id);
+      await saveMessage(supabase, convId, cfg.user_id, msg);
+      await logSent(supabase, cfg.id, "deal", deal.id);
+
+      console.log(`[targeted] CRM message sent to ${normalizePhone(phone)}`);
+      return new Response(JSON.stringify({ processed: 1, trigger_type }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ── APPOINTMENT triggers (instant) ──
+    if (trigger_type === "appointment_created" || trigger_type === "appointment_cancelled") {
+      const { data: appt } = await supabase
+        .from("appointments")
+        .select("id, start_time, contact_id, contacts(push_name, number), professionals(name), products_services(name)")
+        .eq("id", entity_id)
+        .maybeSingle();
+
+      if (!appt) {
+        return new Response(JSON.stringify({ processed: 0, reason: "appointment_not_found" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const phone = (appt.contacts as any)?.number;
+      if (!phone) {
+        return new Response(JSON.stringify({ processed: 0, reason: "no_phone" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const msg = applyVariables(cfg.message, {
+        nome_cliente: (appt.contacts as any)?.push_name ?? "",
+        data_agendamento: formatDate(appt.start_time),
+        hora_agendamento: formatTime(appt.start_time),
+        nome_profissional: (appt.professionals as any)?.name ?? "",
+        nome_servico: (appt.products_services as any)?.name ?? "",
+      });
+
+      await sendWhatsApp(instance.server_url, instance.instance_name, instance.apikey, phone, msg);
+      const convId = await findConversation(supabase, appt.contact_id, cfg.user_id);
+      await saveMessage(supabase, convId, cfg.user_id, msg);
+      await logSent(supabase, cfg.id, "appointment", appt.id);
+
+      console.log(`[targeted] Appointment message sent to ${normalizePhone(phone)}`);
+      return new Response(JSON.stringify({ processed: 1, trigger_type }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ── SATISFACTION SURVEY (instant) ──
+    if (trigger_type === "conversation_resolved") {
+      const { data: conv } = await supabase
+        .from("conversations")
+        .select("id, contact_id, instance_id, contacts(push_name, number)")
+        .eq("id", entity_id)
+        .maybeSingle();
+
+      if (!conv) {
+        return new Response(JSON.stringify({ processed: 0, reason: "conversation_not_found" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const phone = (conv.contacts as any)?.number;
+      if (!phone) {
+        return new Response(JSON.stringify({ processed: 0, reason: "no_phone" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const instanceId = cfg.instance_id || conv.instance_id;
+      await sendSatisfactionSurvey(conv.contact_id, phone, conv.id, instanceId);
+
+      await supabase
+        .from("conversations")
+        .update({ nps_sent_at: new Date().toISOString() })
+        .eq("id", conv.id);
+
+      await logSent(supabase, cfg.id, "conversation", conv.id);
+
+      console.log(`[targeted] Satisfaction survey sent for conversation ${conv.id}`);
+      return new Response(JSON.stringify({ processed: 1, trigger_type }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify({ processed: 0, reason: "unsupported_trigger" }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (error: any) {
+    console.error("[targeted] Error:", error);
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 serve(async (req) => {
@@ -223,6 +394,14 @@ serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
     const now = new Date();
     const windowStart = new Date(now.getTime() - WINDOW_MINUTES * 60 * 1000);
+
+    // Check for targeted invocation (from database trigger — instant dispatch)
+    const body = await req.json().catch(() => ({}));
+    if (body.trigger_type && body.entity_id && body.auto_message_id) {
+      return await processTargeted(supabase, body);
+    }
+
+    // ── Full cron scan mode ──────────────────────────────────────────────────
 
     // Carregar todas as configs ativas
     const { data: rawConfigs } = await supabase

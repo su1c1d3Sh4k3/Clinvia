@@ -2,7 +2,7 @@ import { useRef, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Send, Paperclip, Smile, Mic, Sparkles, X, StopCircle, Image as ImageIcon, Video, FileText, Zap, ClipboardList, CheckCircle, AtSign } from "lucide-react";
+import { Send, Paperclip, Smile, Mic, Sparkles, X, StopCircle, Image as ImageIcon, Video, FileText, Zap, ClipboardList, CheckCircle, AtSign, UserCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import EmojiPicker, { EmojiClickData } from "emoji-picker-react";
 import { QuickMessagesMenu } from "@/components/QuickMessagesMenu";
@@ -57,6 +57,8 @@ interface MessageInputProps {
     quickMessages?: QuickMessage[];
     /** Handler when a quick message is selected from the popup or menu */
     onQuickMessageSelect?: (qm: QuickMessage) => void;
+    /** Handler to open the contact picker modal */
+    onSendContact?: () => void;
     /** Handler to trigger the satisfaction survey */
     onSendSurvey?: () => void;
     /** Whether the survey is currently being sent */
@@ -98,6 +100,7 @@ export const MessageInput = ({
     handlePaste,
     quickMessages = [],
     onQuickMessageSelect,
+    onSendContact,
     onSendSurvey,
     isSendingSurvey,
     conversationId,
@@ -354,6 +357,13 @@ export const MessageInput = ({
                                     <span className="text-sm">Documento</span>
                                     <input type="file" className="hidden" accept="*" onChange={handleFileSelect} />
                                 </label>
+                                <button
+                                    className="flex items-center gap-2 p-2 hover:bg-muted rounded-md cursor-pointer transition-colors w-full"
+                                    onClick={() => onSendContact?.()}
+                                >
+                                    <UserCircle className="w-4 h-4 text-emerald-500" />
+                                    <span className="text-sm">Contato</span>
+                                </button>
                             </div>
                         </PopoverContent>
                     </Popover>
