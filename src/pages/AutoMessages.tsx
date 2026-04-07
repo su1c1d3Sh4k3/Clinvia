@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useOwnerId } from "@/hooks/useOwnerId";
@@ -48,20 +48,52 @@ interface Instance {
 interface CRMFunnel { id: string; name: string; }
 interface CRMStage  { id: string; name: string; funnel_id: string; is_system: boolean; }
 
-// ─── Variables chip component ─────────────────────────────────────────────────
+// ─── Variables chip component (clickable to insert) ─────────────────────────
 
-const VarChip = ({ label }: { label: string }) => (
-  <span className="inline-flex items-center px-2 py-0.5 rounded bg-primary/10 text-primary text-xs font-mono border border-primary/20 cursor-default select-all">
+const VarChip = ({ label, onClick }: { label: string; onClick?: () => void }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className="inline-flex items-center px-2 py-0.5 rounded bg-primary/10 text-primary text-xs font-mono border border-primary/20 hover:bg-primary/20 hover:border-primary/40 active:scale-95 transition-all cursor-pointer select-none"
+    title={`Clique para inserir {${label}}`}
+  >
     {"{" + label + "}"}
-  </span>
+  </button>
 );
 
-const VariableHint = ({ vars }: { vars: string[] }) => (
-  <div className="flex flex-wrap gap-1 mt-1">
-    <span className="text-xs text-muted-foreground mr-1">Variáveis:</span>
-    {vars.map(v => <VarChip key={v} label={v} />)}
+const VariableHint = ({ vars, onInsert }: { vars: string[]; onInsert?: (v: string) => void }) => (
+  <div className="flex flex-wrap gap-1.5 mt-1.5">
+    <span className="text-xs text-muted-foreground mr-0.5 leading-5">Variáveis:</span>
+    {vars.map(v => <VarChip key={v} label={v} onClick={() => onInsert?.(v)} />)}
   </div>
 );
+
+/** Hook: insere variável na posição do cursor de um textarea */
+function useVariableInserter(
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>,
+  getMessage: () => string,
+  setMessage: (msg: string) => void,
+) {
+  return useCallback((variable: string) => {
+    const ta = textareaRef.current;
+    const varText = `{${variable}}`;
+    if (!ta) {
+      // Fallback: append ao final
+      setMessage(getMessage() + varText);
+      return;
+    }
+    const start = ta.selectionStart ?? ta.value.length;
+    const end = ta.selectionEnd ?? start;
+    const text = ta.value;
+    const newText = text.substring(0, start) + varText + text.substring(end);
+    setMessage(newText);
+    // Restaurar cursor após re-render do React
+    requestAnimationFrame(() => {
+      ta.focus();
+      ta.selectionStart = ta.selectionEnd = start + varText.length;
+    });
+  }, [textareaRef, getMessage, setMessage]);
+}
 
 // ─── Empty state for a single config ─────────────────────────────────────────
 
@@ -307,7 +339,7 @@ const AutoMessages = () => {
                   config={cfg("appointment_created")}
                   onSave={saveConfig}
                   showTiming={false}
-                  variables={["nome_cliente", "data_agendamento", "hora_agendamento", "nome_profissional", "nome_servico"]}
+                  variables={["nome_cliente", "primeiro_nome", "data_agendamento", "hora_agendamento", "nome_profissional", "nome_servico"]}
                   instances={instances}
                 />
                 <AgendaCard
@@ -320,7 +352,7 @@ const AutoMessages = () => {
                   timingDirection="before"
                   timingLabel="Enviar quantas horas antes?"
                   defaultTimingValue={24}
-                  variables={["nome_cliente", "data_agendamento", "hora_agendamento", "nome_profissional", "nome_servico"]}
+                  variables={["nome_cliente", "primeiro_nome", "data_agendamento", "hora_agendamento", "nome_profissional", "nome_servico"]}
                   instances={instances}
                 />
                 <AgendaCard
@@ -333,7 +365,7 @@ const AutoMessages = () => {
                   timingDirection="before"
                   timingLabel="Enviar quantas horas antes?"
                   defaultTimingValue={2}
-                  variables={["nome_cliente", "data_agendamento", "hora_agendamento", "nome_profissional", "nome_servico"]}
+                  variables={["nome_cliente", "primeiro_nome", "data_agendamento", "hora_agendamento", "nome_profissional", "nome_servico"]}
                   instances={instances}
                 />
                 <AgendaCard
@@ -343,7 +375,7 @@ const AutoMessages = () => {
                   config={cfg("appointment_cancelled")}
                   onSave={saveConfig}
                   showTiming={false}
-                  variables={["nome_cliente", "data_agendamento", "hora_agendamento", "nome_profissional"]}
+                  variables={["nome_cliente", "primeiro_nome", "data_agendamento", "hora_agendamento", "nome_profissional"]}
                   instances={instances}
                 />
                 <AgendaCard
@@ -356,7 +388,7 @@ const AutoMessages = () => {
                   timingDirection="after"
                   timingLabel="Enviar quantas horas depois?"
                   defaultTimingValue={2}
-                  variables={["nome_cliente", "nome_profissional", "nome_servico"]}
+                  variables={["nome_cliente", "primeiro_nome", "nome_profissional", "nome_servico"]}
                   instances={instances}
                 />
               </div>
@@ -454,6 +486,7 @@ function AgendaCard({
     timing_value: config.timing_value || defaultTimingValue,
     timing_direction: timingDirection,
   }));
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     setLocal({
@@ -472,6 +505,14 @@ function AgendaCard({
   const handleBlur = () => {
     onSave(local);
   };
+
+  const localRef = useRef(local);
+  localRef.current = local;
+  const insertVariable = useVariableInserter(
+    textareaRef,
+    () => localRef.current.message,
+    (msg) => setLocal(prev => ({ ...prev, message: msg })),
+  );
 
   return (
     <Card className={cn("transition-all duration-200", local.is_active ? "border-primary/30 bg-primary/5" : "")}>
@@ -516,13 +557,14 @@ function AgendaCard({
           <div className="space-y-1.5">
             <Label className="text-sm">Mensagem</Label>
             <Textarea
+              ref={textareaRef}
               value={local.message}
               onChange={e => setLocal({ ...local, message: e.target.value })}
               onBlur={handleBlur}
               placeholder="Digite o template da mensagem..."
               className="min-h-[100px] text-sm resize-none"
             />
-            <VariableHint vars={variables} />
+            <VariableHint vars={variables} onInsert={insertVariable} />
           </div>
         </CardContent>
       )}
@@ -552,6 +594,7 @@ const TRIGGER_LABELS: Record<string, string> = {
 function CRMTab({ rules, funnels, allStages, onSave, onDelete, isSaving, instances }: CRMTabProps) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<AutoMessage | null>(null);
+  const crmTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   const openNew = () => {
     setEditing(defaultAutoMessage("crm_stage_enter"));
@@ -569,6 +612,14 @@ function CRMTab({ rules, funnels, allStages, onSave, onDelete, isSaving, instanc
     setOpen(false);
     setEditing(null);
   };
+
+  const editingRef = useRef(editing);
+  editingRef.current = editing;
+  const insertCrmVariable = useVariableInserter(
+    crmTextareaRef,
+    () => editingRef.current?.message ?? "",
+    (msg) => setEditing(prev => prev ? { ...prev, message: msg } : prev),
+  );
 
   const stagesForFunnel = (funnelId: string) =>
     allStages.filter(s => s.funnel_id === funnelId && !s.is_system);
@@ -729,12 +780,13 @@ function CRMTab({ rules, funnels, allStages, onSave, onDelete, isSaving, instanc
               <div className="space-y-1.5">
                 <Label>Mensagem</Label>
                 <Textarea
+                  ref={crmTextareaRef}
                   value={editing.message}
                   onChange={e => setEditing({ ...editing, message: e.target.value })}
                   placeholder="Digite a mensagem que será enviada ao cliente..."
                   className="min-h-[120px] resize-none"
                 />
-                <VariableHint vars={["nome_cliente", "nome_etapa", "nome_funil"]} />
+                <VariableHint vars={["nome_cliente", "primeiro_nome", "nome_etapa", "nome_funil"]} onInsert={insertCrmVariable} />
               </div>
 
               {/* Instância */}
@@ -908,6 +960,7 @@ function BirthdayTab({ config, onSave, instances }: BirthdayTabProps) {
     send_hour: config.send_hour ?? 9,
     send_minute: config.send_minute ?? 0,
   }));
+  const birthdayTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     setLocal({ ...config, send_hour: config.send_hour ?? 9, send_minute: config.send_minute ?? 0 });
@@ -920,6 +973,14 @@ function BirthdayTab({ config, onSave, instances }: BirthdayTabProps) {
   };
 
   const handleBlur = () => onSave(local);
+
+  const localRef = useRef(local);
+  localRef.current = local;
+  const insertBirthdayVariable = useVariableInserter(
+    birthdayTextareaRef,
+    () => localRef.current.message,
+    (msg) => setLocal(prev => ({ ...prev, message: msg })),
+  );
 
   return (
     <div className="space-y-4">
@@ -994,13 +1055,14 @@ function BirthdayTab({ config, onSave, instances }: BirthdayTabProps) {
             <div className="space-y-1.5">
               <Label className="text-sm">Mensagem</Label>
               <Textarea
+                ref={birthdayTextareaRef}
                 value={local.message}
                 onChange={e => setLocal({ ...local, message: e.target.value })}
                 onBlur={handleBlur}
                 placeholder="Ex: Feliz aniversário, {nome_paciente}! 🎂 Desejamos um dia incrível e contamos com sua presença em breve!"
                 className="min-h-[120px] text-sm resize-none"
               />
-              <VariableHint vars={["nome_paciente"]} />
+              <VariableHint vars={["nome_paciente", "primeiro_nome"]} onInsert={insertBirthdayVariable} />
             </div>
 
             <div className="flex items-start gap-2 text-xs text-muted-foreground bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">

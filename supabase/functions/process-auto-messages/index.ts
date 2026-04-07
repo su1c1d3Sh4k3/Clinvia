@@ -24,6 +24,10 @@ function applyVariables(template: string, vars: Record<string, string>): string 
   );
 }
 
+function firstName(fullName: string | null | undefined): string {
+  return (fullName ?? "").trim().split(/\s+/)[0] || "";
+}
+
 function formatDate(dt: string): string {
   return new Date(dt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "America/Sao_Paulo" });
 }
@@ -279,8 +283,10 @@ async function processTargeted(
         });
       }
 
+      const dealContactName = (deal.contacts as any)?.push_name ?? "";
       const msg = applyVariables(cfg.message, {
-        nome_cliente: (deal.contacts as any)?.push_name ?? "",
+        nome_cliente: dealContactName,
+        primeiro_nome: firstName(dealContactName),
         nome_etapa: (deal.crm_stages as any)?.name ?? "",
         nome_funil: (deal.crm_funnels as any)?.name ?? "",
       });
@@ -317,8 +323,10 @@ async function processTargeted(
         });
       }
 
+      const apptContactName = (appt.contacts as any)?.push_name ?? "";
       const msg = applyVariables(cfg.message, {
-        nome_cliente: (appt.contacts as any)?.push_name ?? "",
+        nome_cliente: apptContactName,
+        primeiro_nome: firstName(apptContactName),
         data_agendamento: formatDate(appt.start_time),
         hora_agendamento: formatTime(appt.start_time),
         nome_profissional: (appt.professionals as any)?.name ?? "",
@@ -446,8 +454,10 @@ serve(async (req) => {
                 if (await alreadySent(supabase, apptCreatedCfg.id, appt.id)) continue;
                 const phone = (appt.contacts as any)?.number;
                 if (!phone) continue;
+                const cn1 = (appt.contacts as any)?.push_name ?? "";
                 const msg = applyVariables(apptCreatedCfg.message, {
-                  nome_cliente: (appt.contacts as any)?.push_name ?? "",
+                  nome_cliente: cn1,
+                  primeiro_nome: firstName(cn1),
                   data_agendamento: formatDate(appt.start_time),
                   hora_agendamento: formatTime(appt.start_time),
                   nome_profissional: (appt.professionals as any)?.name ?? "",
@@ -490,8 +500,10 @@ serve(async (req) => {
               if (await alreadySent(supabase, cfg.id, appt.id)) continue;
               const phone = (appt.contacts as any)?.number;
               if (!phone) continue;
+              const cn2 = (appt.contacts as any)?.push_name ?? "";
               const msg = applyVariables(cfg.message, {
-                nome_cliente: (appt.contacts as any)?.push_name ?? "",
+                nome_cliente: cn2,
+                primeiro_nome: firstName(cn2),
                 data_agendamento: formatDate(appt.start_time),
                 hora_agendamento: formatTime(appt.start_time),
                 nome_profissional: (appt.professionals as any)?.name ?? "",
@@ -527,8 +539,10 @@ serve(async (req) => {
                 if (await alreadySent(supabase, cancelledCfg.id, appt.id)) continue;
                 const phone = (appt.contacts as any)?.number;
                 if (!phone) continue;
+                const cn3 = (appt.contacts as any)?.push_name ?? "";
                 const msg = applyVariables(cancelledCfg.message, {
-                  nome_cliente: (appt.contacts as any)?.push_name ?? "",
+                  nome_cliente: cn3,
+                  primeiro_nome: firstName(cn3),
                   data_agendamento: formatDate(appt.start_time),
                   hora_agendamento: formatTime(appt.start_time),
                   nome_profissional: (appt.professionals as any)?.name ?? "",
@@ -568,8 +582,10 @@ serve(async (req) => {
                 if (await alreadySent(supabase, postSvcCfg.id, appt.id)) continue;
                 const phone = (appt.contacts as any)?.number;
                 if (!phone) continue;
+                const cn4 = (appt.contacts as any)?.push_name ?? "";
                 const msg = applyVariables(postSvcCfg.message, {
-                  nome_cliente: (appt.contacts as any)?.push_name ?? "",
+                  nome_cliente: cn4,
+                  primeiro_nome: firstName(cn4),
                   nome_profissional: (appt.professionals as any)?.name ?? "",
                   nome_servico: (appt.products_services as any)?.name ?? "",
                 });
@@ -606,8 +622,10 @@ serve(async (req) => {
               if (await alreadySent(supabase, cfg.id, deal.id)) continue;
               const phone = (deal.contacts as any)?.number;
               if (!phone) continue;
+              const dcn1 = (deal.contacts as any)?.push_name ?? "";
               const msg = applyVariables(cfg.message, {
-                nome_cliente: (deal.contacts as any)?.push_name ?? "",
+                nome_cliente: dcn1,
+                primeiro_nome: firstName(dcn1),
                 nome_etapa: (deal.crm_stages as any)?.name ?? "",
                 nome_funil: (deal.crm_funnels as any)?.name ?? "",
               });
@@ -646,8 +664,10 @@ serve(async (req) => {
               if (await alreadySent(supabase, cfg.id, deal.id)) continue;
               const phone = (deal.contacts as any)?.number;
               if (!phone) continue;
+              const dcn2 = (deal.contacts as any)?.push_name ?? "";
               const msg = applyVariables(cfg.message, {
-                nome_cliente: (deal.contacts as any)?.push_name ?? "",
+                nome_cliente: dcn2,
+                primeiro_nome: firstName(dcn2),
                 nome_etapa: (deal.crm_stages as any)?.name ?? "",
                 nome_funil: (deal.crm_funnels as any)?.name ?? "",
               });
@@ -684,8 +704,10 @@ serve(async (req) => {
               if (await alreadySent(supabase, cfg.id, deal.id)) continue;
               const phone = (deal.contacts as any)?.number;
               if (!phone) continue;
+              const dcn3 = (deal.contacts as any)?.push_name ?? "";
               const msg = applyVariables(cfg.message, {
-                nome_cliente: (deal.contacts as any)?.push_name ?? "",
+                nome_cliente: dcn3,
+                primeiro_nome: firstName(dcn3),
                 nome_etapa: (deal.crm_stages as any)?.name ?? "",
                 nome_funil: (deal.crm_funnels as any)?.name ?? "",
               });
@@ -775,8 +797,10 @@ serve(async (req) => {
 
                   console.log(`[birthday] Sending to patient ${patient.id} (${patient.nome})`);
 
+                  const patientName = patient.nome ?? (patient.contacts as any)?.push_name ?? "";
                   const msg = applyVariables(birthdayCfg.message, {
-                    nome_paciente: patient.nome ?? (patient.contacts as any)?.push_name ?? "",
+                    nome_paciente: patientName,
+                    primeiro_nome: firstName(patientName),
                   });
                   await sendWhatsApp(instance.server_url, instance.instance_name, instance.apikey, phone, msg);
                   const convId = await findConversation(supabase, patient.contact_id, userId);
