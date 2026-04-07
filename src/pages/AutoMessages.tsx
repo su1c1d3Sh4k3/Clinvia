@@ -53,6 +53,7 @@ interface CRMStage  { id: string; name: string; funnel_id: string; is_system: bo
 const VarChip = ({ label, onClick }: { label: string; onClick?: () => void }) => (
   <button
     type="button"
+    onMouseDown={e => e.preventDefault()}
     onClick={onClick}
     className="inline-flex items-center px-2 py-0.5 rounded bg-primary/10 text-primary text-xs font-mono border border-primary/20 hover:bg-primary/20 hover:border-primary/40 active:scale-95 transition-all cursor-pointer select-none"
     title={`Clique para inserir {${label}}`}
