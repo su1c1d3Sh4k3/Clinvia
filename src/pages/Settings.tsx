@@ -1090,7 +1090,7 @@ export default function Settings() {
                             <CardHeader className="p-4 md:p-6">
                                 <CardTitle className="text-base md:text-lg flex items-center gap-2">
                                     <ShieldCheck className="h-5 w-5 text-primary" />
-                                    Permissões por Role
+                                    Permissões por Nível de Privilégio do Usuário
                                 </CardTitle>
                                 <CardDescription className="text-xs md:text-sm">
                                     Defina o que Supervisores e Agentes podem criar, editar ou deletar em cada módulo.

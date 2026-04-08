@@ -24,9 +24,12 @@ interface TagAssignmentProps {
     contactId?: string;
     open?: boolean;
     onClose?: () => void;
+    triggerClassName?: string;
+    triggerVariant?: "ghost" | "outline" | "default";
+    iconClassName?: string;
 }
 
-export const TagAssignment = ({ contactId, open: externalOpen, onClose }: TagAssignmentProps) => {
+export const TagAssignment = ({ contactId, open: externalOpen, onClose, triggerClassName, triggerVariant = "outline", iconClassName }: TagAssignmentProps) => {
     const [internalOpen, setInternalOpen] = useState(false);
     const { user } = useAuth();
     const { toast } = useToast();
@@ -77,7 +80,8 @@ export const TagAssignment = ({ contactId, open: externalOpen, onClose }: TagAss
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["contact-tags", contactId] });
-            queryClient.invalidateQueries({ queryKey: ["conversations"] }); // Refresh list to show new tags
+            queryClient.invalidateQueries({ queryKey: ["contacts"] });
+            queryClient.invalidateQueries({ queryKey: ["conversations"] });
             toast({ title: "Tag atribuída com sucesso" });
         },
         onError: (error) => {
@@ -101,6 +105,7 @@ export const TagAssignment = ({ contactId, open: externalOpen, onClose }: TagAss
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["contact-tags", contactId] });
+            queryClient.invalidateQueries({ queryKey: ["contacts"] });
             queryClient.invalidateQueries({ queryKey: ["conversations"] });
             toast({ title: "Tag removida com sucesso" });
         },
@@ -127,13 +132,13 @@ export const TagAssignment = ({ contactId, open: externalOpen, onClose }: TagAss
         }}>
             <PopoverTrigger asChild>
                 <Button
-                    variant="outline"
+                    variant={triggerVariant}
                     size="icon"
-                    className="flex-1"
+                    className={triggerClassName || "flex-1"}
                     title="Atribuir Tag"
                     disabled={!contactId}
                 >
-                    <TagIcon className="h-4 w-4" />
+                    <TagIcon className={iconClassName || "h-4 w-4"} />
                 </Button>
             </PopoverTrigger>
             <PopoverContent className="w-64 p-2" align="start">

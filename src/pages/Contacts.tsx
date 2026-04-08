@@ -46,6 +46,7 @@ import {
 import { AnalysisHistoryModal } from "@/components/AnalysisHistoryModal";
 import { ClientReportModal } from "@/components/ClientReportModal";
 import { NpsFeedbackModal } from "@/components/NpsFeedbackModal";
+import { TagAssignment } from "@/components/TagAssignment";
 import { Sparkles, FileText } from "lucide-react";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useOwnerId } from "@/hooks/useOwnerId";
@@ -868,6 +869,12 @@ const Contacts = () => {
                                                     >
                                                         <Send className="w-3.5 h-3.5 md:w-4 md:h-4" />
                                                     </Button>
+                                                    <TagAssignment
+                                                        contactId={contact.id}
+                                                        triggerVariant="ghost"
+                                                        triggerClassName="h-7 w-7 md:h-8 md:w-8 text-foreground"
+                                                        iconClassName="w-3.5 h-3.5 md:w-4 md:h-4"
+                                                    />
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"
