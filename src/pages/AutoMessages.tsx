@@ -623,7 +623,7 @@ function CRMTab({ rules, funnels, allStages, onSave, onDelete, isSaving, instanc
   );
 
   const stagesForFunnel = (funnelId: string) =>
-    allStages.filter(s => s.funnel_id === funnelId && !s.is_system);
+    allStages.filter(s => s.funnel_id === funnelId && s.name !== "Ganho" && s.name !== "Perdido");
 
   const funnelName = (id?: string | null) =>
     funnels.find(f => f.id === id)?.name ?? "—";
