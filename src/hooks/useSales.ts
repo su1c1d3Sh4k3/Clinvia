@@ -102,7 +102,8 @@ export function useSalesSummary(month: number, year: number) {
     });
 }
 
-// Vendas Anuais (12 meses) - baseado no total de vendas por mês
+// Vendas Anuais (12 meses) - baseado nas PARCELAS (due_date) pagas/pendentes
+// Distribui receita corretamente: à vista no mês da venda, parcelado nos meses futuros
 export function useAnnualSales(year?: number) {
     return useQuery({
         queryKey: ['annual-sales', year],
@@ -111,24 +112,25 @@ export function useAnnualSales(year?: number) {
             const startDate = `${targetYear}-01-01`;
             const endDate = `${targetYear}-12-31`;
 
-            const { data: sales, error } = await supabase
-                .from('sales' as any)
-                .select('sale_date, total_amount, payment_type')
-                .gte('sale_date', startDate)
-                .lte('sale_date', endDate)
-                .neq('payment_type', 'pending');
+            const { data: installments, error } = await supabase
+                .from('sale_installments' as any)
+                .select('due_date, amount, status, sale:sales!sale_id(payment_type)')
+                .gte('due_date', startDate)
+                .lte('due_date', endDate);
 
             if (error) throw error;
 
-            // Agrupar por mês
+            // Agrupar por mês usando due_date da parcela
             const monthlyData: Record<number, number> = {};
             for (let m = 1; m <= 12; m++) {
                 monthlyData[m] = 0;
             }
 
-            (sales || []).forEach((sale: any) => {
-                const month = new Date(sale.sale_date).getMonth() + 1;
-                monthlyData[month] = (monthlyData[month] || 0) + Number(sale.total_amount);
+            (installments || []).forEach((inst: any) => {
+                // Ignora parcelas de vendas pendentes (sem compromisso de pagamento)
+                if ((inst.sale as any)?.payment_type === 'pending') return;
+                const month = new Date(inst.due_date).getMonth() + 1;
+                monthlyData[month] = (monthlyData[month] || 0) + Number(inst.amount);
             });
 
             const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -141,7 +143,8 @@ export function useAnnualSales(year?: number) {
     });
 }
 
-// Vendas Diárias do Mês (para gráfico mensal) - baseado no total de vendas por dia
+// Vendas Diárias do Mês (para gráfico mensal) - baseado nas PARCELAS por dia
+// Distribui receita corretamente: à vista no dia da venda, parcelas nos dias de vencimento
 export function useMonthlySales(month: number, year: number) {
     return useQuery({
         queryKey: ['monthly-sales', month, year],
@@ -149,16 +152,15 @@ export function useMonthlySales(month: number, year: number) {
             const startDate = new Date(year, month - 1, 1);
             const endDate = new Date(year, month, 0);
 
-            const { data: sales, error } = await supabase
-                .from('sales' as any)
-                .select('sale_date, total_amount, payment_type')
-                .gte('sale_date', startDate.toISOString().split('T')[0])
-                .lte('sale_date', endDate.toISOString().split('T')[0])
-                .neq('payment_type', 'pending');
+            const { data: installments, error } = await supabase
+                .from('sale_installments' as any)
+                .select('due_date, amount, status, sale:sales!sale_id(payment_type)')
+                .gte('due_date', startDate.toISOString().split('T')[0])
+                .lte('due_date', endDate.toISOString().split('T')[0]);
 
             if (error) throw error;
 
-            // Agrupar por dia
+            // Agrupar por dia usando due_date da parcela
             const dailyData: Record<number, number> = {};
             const daysInMonth = endDate.getDate();
 
@@ -166,9 +168,10 @@ export function useMonthlySales(month: number, year: number) {
                 dailyData[d] = 0;
             }
 
-            (sales || []).forEach((sale: any) => {
-                const day = new Date(sale.sale_date).getDate();
-                dailyData[day] = (dailyData[day] || 0) + Number(sale.total_amount);
+            (installments || []).forEach((inst: any) => {
+                if ((inst.sale as any)?.payment_type === 'pending') return;
+                const day = new Date(inst.due_date).getDate();
+                dailyData[day] = (dailyData[day] || 0) + Number(inst.amount);
             });
 
             return Object.entries(dailyData).map(([day, revenue]) => ({
@@ -310,7 +313,8 @@ export function useTopSellers(month?: number, year?: number) {
     });
 }
 
-// Faturamento Anual Total - soma de todas as vendas do ano
+// Faturamento Anual Total - soma de todas as PARCELAS do ano
+// Distribui receita corretamente por mês de vencimento
 export function useAnnualRevenue(year: number) {
     return useQuery({
         queryKey: ['annual-revenue', year],
@@ -318,15 +322,16 @@ export function useAnnualRevenue(year: number) {
             const startDate = `${year}-01-01`;
             const endDate = `${year}-12-31`;
 
-            const { data, error } = await supabase
-                .from('sales' as any)
-                .select('total_amount, payment_type')
-                .gte('sale_date', startDate)
-                .lte('sale_date', endDate)
-                .neq('payment_type', 'pending');
+            const { data: installments, error } = await supabase
+                .from('sale_installments' as any)
+                .select('amount, due_date, sale:sales!sale_id(payment_type)')
+                .gte('due_date', startDate)
+                .lte('due_date', endDate);
 
             if (error) throw error;
-            return (data || []).reduce((sum: number, sale: any) => sum + Number(sale.total_amount), 0);
+            return (installments || [])
+                .filter((inst: any) => (inst.sale as any)?.payment_type !== 'pending')
+                .reduce((sum: number, inst: any) => sum + Number(inst.amount), 0);
         },
     });
 }
