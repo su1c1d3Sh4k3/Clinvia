@@ -513,3 +513,56 @@ All colors MUST be HSL.
     box-shadow: 0 0 0 2px hsl(var(--primary)) !important;
   }
 }
+
+/* ===============================================
+   PDF EXPORT — Force light mode for html2pdf.js
+   =============================================== */
+.pdf-export-light {
+  background-color: #ffffff !important;
+  color: #1a1a1a !important;
+  padding: 20px !important;
+}
+
+.pdf-export-light * {
+  color: #1a1a1a !important;
+  border-color: #e5e5e5 !important;
+}
+
+.pdf-export-light h1,
+.pdf-export-light h2,
+.pdf-export-light h3,
+.pdf-export-light h4 {
+  color: #111827 !important;
+}
+
+.pdf-export-light strong,
+.pdf-export-light b {
+  color: #111827 !important;
+}
+
+.pdf-export-light table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.pdf-export-light th {
+  background-color: #f3f4f6 !important;
+  color: #111827 !important;
+  font-weight: 600;
+}
+
+.pdf-export-light td,
+.pdf-export-light th {
+  border: 1px solid #e5e7eb !important;
+  padding: 8px 12px;
+}
+
+.pdf-export-light code {
+  background-color: #f3f4f6 !important;
+  color: #111827 !important;
+}
+
+.pdf-export-light blockquote {
+  border-left: 4px solid #d1d5db !important;
+  color: #4b5563 !important;
+}

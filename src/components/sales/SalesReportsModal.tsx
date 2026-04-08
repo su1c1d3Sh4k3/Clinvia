@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
     Dialog,
     DialogContent,
@@ -12,7 +12,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, FileText, Trash2, Eye, Plus, Calendar, Sparkles, ArrowLeft } from "lucide-react";
+import { Loader2, FileText, Trash2, Eye, Plus, Calendar, Sparkles, ArrowLeft, Download } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 import {
     useSalesReports,
     useGenerateSalesReport,
@@ -39,6 +40,7 @@ export function SalesReportsModal({ open, onOpenChange }: SalesReportsModalProps
     const [activeTab, setActiveTab] = useState("saved");
     const [selectedReport, setSelectedReport] = useState<SalesReport | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+    const reportRef = useRef<HTMLDivElement>(null);
 
     // Form state for new report
     const [reportName, setReportName] = useState("");
@@ -81,26 +83,77 @@ export function SalesReportsModal({ open, onOpenChange }: SalesReportsModalProps
         return new Date(dateString).toLocaleDateString('pt-BR');
     };
 
+    const handleDownloadPDF = async () => {
+        if (!reportRef.current || !selectedReport) return;
+
+        try {
+            reportRef.current.classList.add('pdf-export-light');
+
+            const html2pdf = (await import('html2pdf.js')).default;
+
+            const opt = {
+                margin: [10, 10, 10, 10] as [number, number, number, number],
+                filename: `${selectedReport.name.replace(/[^a-zA-Z0-9À-ú ]/g, '_')}.pdf`,
+                image: { type: 'jpeg' as const, quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+                jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const },
+                pagebreak: { mode: ['avoid-all', 'css', 'legacy'] as const }
+            };
+
+            await html2pdf().set(opt).from(reportRef.current).save();
+            reportRef.current.classList.remove('pdf-export-light');
+        } catch (error) {
+            console.error('Erro ao gerar PDF:', error);
+            reportRef.current?.classList.remove('pdf-export-light');
+            window.print();
+        }
+    };
+
     // If viewing a report, show the viewer
     if (selectedReport) {
         return (
             <Dialog open={open} onOpenChange={onOpenChange}>
                 <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden">
                     <DialogHeader>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => setSelectedReport(null)}
+                                >
+                                    <ArrowLeft className="w-4 h-4" />
+                                </Button>
+                                <DialogTitle>{selectedReport.name}</DialogTitle>
+                            </div>
                             <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => setSelectedReport(null)}
+                                variant="outline"
+                                size="sm"
+                                className="gap-2"
+                                onClick={handleDownloadPDF}
                             >
-                                <ArrowLeft className="w-4 h-4" />
+                                <Download className="w-4 h-4" />
+                                Baixar PDF
                             </Button>
-                            <DialogTitle>{selectedReport.name}</DialogTitle>
                         </div>
                     </DialogHeader>
                     <ScrollArea className="h-[70vh] pr-4">
-                        <div className="prose prose-sm dark:prose-invert max-w-none">
-                            <div dangerouslySetInnerHTML={{ __html: selectedReport.content.replace(/\n/g, '<br/>') }} />
+                        <div
+                            ref={reportRef}
+                            className="prose prose-sm dark:prose-invert max-w-none
+                                prose-headings:text-foreground prose-headings:font-bold
+                                prose-h1:text-xl prose-h1:border-b prose-h1:pb-2 prose-h1:mb-4
+                                prose-h2:text-lg prose-h2:mt-6 prose-h2:mb-3
+                                prose-h3:text-base prose-h3:mt-4 prose-h3:mb-2
+                                prose-p:text-muted-foreground prose-p:leading-relaxed
+                                prose-strong:text-foreground
+                                prose-ul:text-muted-foreground prose-ol:text-muted-foreground
+                                prose-li:marker:text-primary
+                                prose-table:text-sm
+                                prose-th:bg-muted/50 prose-th:px-3 prose-th:py-2 prose-th:text-left prose-th:font-semibold
+                                prose-td:px-3 prose-td:py-2 prose-td:border-b prose-td:border-border"
+                        >
+                            <ReactMarkdown>{selectedReport.content}</ReactMarkdown>
                         </div>
                     </ScrollArea>
                 </DialogContent>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
     Dialog,
     DialogContent,
@@ -8,7 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Sparkles, RefreshCw, FileText, User, Phone, Mail } from "lucide-react";
+import { Sparkles, RefreshCw, FileText, User, Phone, Mail, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import ReactMarkdown from "react-markdown"; // Assuming react-markdown is installed or we use simple whitespace-pre-wrap
@@ -27,6 +27,34 @@ export const ClientReportModal = ({
     const { toast } = useToast();
     const [isGenerating, setIsGenerating] = useState(false);
     const [report, setReport] = useState<string | null>(contact?.report || null);
+    const reportRef = useRef<HTMLDivElement>(null);
+
+    const handleDownloadPDF = async () => {
+        if (!reportRef.current || !report) return;
+
+        try {
+            reportRef.current.classList.add('pdf-export-light');
+
+            const html2pdf = (await import('html2pdf.js')).default;
+
+            const clientName = contact?.push_name || 'Cliente';
+            const opt = {
+                margin: [10, 10, 10, 10] as [number, number, number, number],
+                filename: `Relatorio_${clientName.replace(/[^a-zA-Z0-9À-ú ]/g, '_')}.pdf`,
+                image: { type: 'jpeg' as const, quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+                jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const },
+                pagebreak: { mode: ['avoid-all', 'css', 'legacy'] as const }
+            };
+
+            await html2pdf().set(opt).from(reportRef.current).save();
+            reportRef.current.classList.remove('pdf-export-light');
+        } catch (error) {
+            console.error('Erro ao gerar PDF:', error);
+            reportRef.current?.classList.remove('pdf-export-light');
+            window.print();
+        }
+    };
 
     const handleGenerateReport = async () => {
         setIsGenerating(true);
@@ -130,10 +158,34 @@ export const ClientReportModal = ({
                     {/* Main Content - Report */}
                     <ScrollArea className="flex-1 pl-2">
                         {report ? (
-                            <div className="prose dark:prose-invert max-w-none">
-                                {/* Simple rendering if markdown component not available, or use a library */}
-                                <div className="whitespace-pre-wrap leading-relaxed text-sm">
-                                    {report}
+                            <div className="space-y-3">
+                                <div className="flex justify-end">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="gap-2"
+                                        onClick={handleDownloadPDF}
+                                    >
+                                        <Download className="w-4 h-4" />
+                                        Baixar PDF
+                                    </Button>
+                                </div>
+                                <div
+                                    ref={reportRef}
+                                    className="prose prose-sm dark:prose-invert max-w-none
+                                        prose-headings:text-foreground prose-headings:font-bold
+                                        prose-h1:text-xl prose-h1:border-b prose-h1:pb-2 prose-h1:mb-4
+                                        prose-h2:text-lg prose-h2:mt-6 prose-h2:mb-3
+                                        prose-h3:text-base prose-h3:mt-4 prose-h3:mb-2
+                                        prose-p:text-muted-foreground prose-p:leading-relaxed
+                                        prose-strong:text-foreground
+                                        prose-ul:text-muted-foreground prose-ol:text-muted-foreground
+                                        prose-li:marker:text-primary
+                                        prose-table:text-sm
+                                        prose-th:bg-muted/50 prose-th:px-3 prose-th:py-2 prose-th:text-left prose-th:font-semibold
+                                        prose-td:px-3 prose-td:py-2 prose-td:border-b prose-td:border-border"
+                                >
+                                    <ReactMarkdown>{report}</ReactMarkdown>
                                 </div>
                             </div>
                         ) : (
