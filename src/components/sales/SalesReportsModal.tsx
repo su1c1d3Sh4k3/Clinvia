@@ -13,7 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, FileText, Trash2, Eye, Plus, Calendar, Sparkles, ArrowLeft, Download } from "lucide-react";
-import ReactMarkdown from "react-markdown";
+import { marked } from "marked";
 import {
     useSalesReports,
     useGenerateSalesReport,
@@ -140,21 +140,16 @@ export function SalesReportsModal({ open, onOpenChange }: SalesReportsModalProps
                     <ScrollArea className="h-[70vh] pr-4">
                         <div
                             ref={reportRef}
-                            className="prose prose-sm dark:prose-invert max-w-none
+                            className="prose dark:prose-invert max-w-none
                                 prose-headings:text-foreground prose-headings:font-bold
-                                prose-h1:text-xl prose-h1:border-b prose-h1:pb-2 prose-h1:mb-4
-                                prose-h2:text-lg prose-h2:mt-6 prose-h2:mb-3
-                                prose-h3:text-base prose-h3:mt-4 prose-h3:mb-2
-                                prose-p:text-muted-foreground prose-p:leading-relaxed
+                                prose-h2:text-xl prose-h2:mt-6 prose-h2:mb-3 prose-h2:border-b prose-h2:pb-2
+                                prose-h3:text-lg prose-h3:mt-5 prose-h3:mb-2
+                                prose-h4:text-base prose-h4:mt-4 prose-h4:mb-2
+                                prose-p:leading-relaxed
                                 prose-strong:text-foreground
-                                prose-ul:text-muted-foreground prose-ol:text-muted-foreground
-                                prose-li:marker:text-primary
-                                prose-table:text-sm
-                                prose-th:bg-muted/50 prose-th:px-3 prose-th:py-2 prose-th:text-left prose-th:font-semibold
-                                prose-td:px-3 prose-td:py-2 prose-td:border-b prose-td:border-border"
-                        >
-                            <ReactMarkdown>{selectedReport.content}</ReactMarkdown>
-                        </div>
+                                prose-li:marker:text-primary"
+                            dangerouslySetInnerHTML={{ __html: marked.parse(selectedReport.content) as string }}
+                        />
                     </ScrollArea>
                 </DialogContent>
             </Dialog>
