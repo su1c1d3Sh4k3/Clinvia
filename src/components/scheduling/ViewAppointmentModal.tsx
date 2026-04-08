@@ -21,9 +21,10 @@ interface ViewAppointmentModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onEdit: (appointment: any) => void;
+    canEdit?: boolean;
 }
 
-export function ViewAppointmentModal({ appointment, open, onOpenChange, onEdit }: ViewAppointmentModalProps) {
+export function ViewAppointmentModal({ appointment, open, onOpenChange, onEdit, canEdit = true }: ViewAppointmentModalProps) {
     const [notifyOpen, setNotifyOpen] = useState(false);
 
     if (!appointment) return null;
@@ -44,17 +45,19 @@ export function ViewAppointmentModal({ appointment, open, onOpenChange, onEdit }
                     <DialogTitle className="text-xl font-bold truncate pr-4">
                         {appointment.type === 'absence' ? 'Ausência' : 'Detalhes do Agendamento'}
                     </DialogTitle>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="absolute right-12 top-4 rounded-sm ring-offset-background transition-opacity focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                        onClick={() => {
-                            onOpenChange(false);
-                            onEdit(appointment);
-                        }}
-                    >
-                        <Pencil className="h-4 w-4" />
-                    </Button>
+                    {canEdit && (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-12 top-4 rounded-sm ring-offset-background transition-opacity focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                            onClick={() => {
+                                onOpenChange(false);
+                                onEdit(appointment);
+                            }}
+                        >
+                            <Pencil className="h-4 w-4" />
+                        </Button>
+                    )}
                 </DialogHeader>
 
                 <div className="space-y-6 mt-2">

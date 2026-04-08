@@ -408,9 +408,9 @@ export function KanbanBoard({ funnelId, filters }: KanbanBoardProps) {
     };
 
     // Handle payment type selection
-    const handlePaymentConfirm = async (paymentType: 'cash' | 'installment', installments?: number, interestRate?: number) => {
+    const handlePaymentConfirm = async (paymentType: 'cash' | 'installment' | 'mixed', installments?: number, interestRate?: number, cashAmount?: number) => {
         if (!pendingWonDeal) return;
-        await createSalesFromDeal(paymentType, installments, interestRate);
+        await createSalesFromDeal(paymentType, installments, interestRate, cashAmount);
     };
 
     // Handle cancel - creates as pending
@@ -420,7 +420,7 @@ export function KanbanBoard({ funnelId, filters }: KanbanBoardProps) {
     };
 
     // Create sales from deal
-    const createSalesFromDeal = async (paymentType: 'cash' | 'installment' | 'pending', installments?: number, interestRate?: number) => {
+    const createSalesFromDeal = async (paymentType: 'cash' | 'installment' | 'pending' | 'mixed', installments?: number, interestRate?: number, cashAmount?: number) => {
         if (!pendingWonDeal) return;
         setIsCreatingSales(true);
 
@@ -449,8 +449,9 @@ export function KanbanBoard({ funnelId, filters }: KanbanBoardProps) {
                 // Total amount for this sale item
                 total_amount: (prod.unit_price || prod.product_service?.price || 0) * (prod.quantity || 1),
                 payment_type: paymentType,
-                installments: paymentType === 'installment' ? (installments || 1) : 1,
-                interest_rate: paymentType === 'installment' ? (interestRate || 0) : 0,
+                installments: (paymentType === 'installment' || paymentType === 'mixed') ? (installments || 1) : 1,
+                interest_rate: (paymentType === 'installment' || paymentType === 'mixed') ? (interestRate || 0) : 0,
+                cash_amount: paymentType === 'mixed' ? (cashAmount || 0) : (paymentType === 'cash' ? ((prod.unit_price || prod.product_service?.price || 0) * (prod.quantity || 1)) : 0),
                 sale_date: saleDate,
                 team_member_id: deal.responsible_id || null,
                 professional_id: deal.assigned_professional_id || null,

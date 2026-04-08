@@ -362,6 +362,7 @@ export function useCreateSale() {
 
             const ownerId = await getOwnerId(user.user.id);
 
+            const isCashOrPending = data.payment_type === 'cash' || data.payment_type === 'pending';
             const dbData = {
                 user_id: ownerId,
                 category: data.category,
@@ -371,8 +372,9 @@ export function useCreateSale() {
                 unit_price: data.unit_price,
                 total_amount: data.total_amount,
                 payment_type: data.payment_type,
-                installments: data.payment_type === 'cash' || data.payment_type === 'pending' ? 1 : data.installments,
-                interest_rate: data.payment_type === 'cash' || data.payment_type === 'pending' ? 0 : data.interest_rate,
+                installments: isCashOrPending ? 1 : data.installments,
+                interest_rate: isCashOrPending ? 0 : data.interest_rate,
+                cash_amount: data.payment_type === 'mixed' ? (data.cash_amount || 0) : (data.payment_type === 'cash' ? data.total_amount : 0),
                 sale_date: data.sale_date,
                 team_member_id: data.team_member_id || null,
                 professional_id: data.professional_id || null,
@@ -417,12 +419,14 @@ export function useUpdateSale() {
                 .eq('sale_id', id);
 
             // Update sale - trigger will regenerate installments
+            const isCashOrPending = data.payment_type === 'cash' || data.payment_type === 'pending';
             const { data: result, error } = await supabase
                 .from('sales' as any)
                 .update({
                     ...data,
-                    installments: data.payment_type === 'cash' ? 1 : data.installments,
-                    interest_rate: data.payment_type === 'cash' ? 0 : data.interest_rate,
+                    installments: isCashOrPending ? 1 : data.installments,
+                    interest_rate: isCashOrPending ? 0 : data.interest_rate,
+                    cash_amount: data.payment_type === 'mixed' ? (data.cash_amount || 0) : (data.payment_type === 'cash' ? data.total_amount : 0),
                 })
                 .eq('id', id)
                 .select()

@@ -36,6 +36,7 @@ import { LossReasonModal } from "./LossReasonModal";
 import { MoveToCRMStageModal } from "./MoveToCRMStageModal";
 import { DeliveryLaunchModal } from "@/components/delivery/DeliveryLaunchModal";
 import { AppointmentModal } from "@/components/scheduling/AppointmentModal";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface DealDetailModalProps {
     deal: CRMDeal;
@@ -114,6 +115,7 @@ export function DealDetailModal({ deal, open, onOpenChange, onDealWon, onDealLos
     const { user } = useAuth();
     const queryClient = useQueryClient();
     const { data: staffMembers = [] } = useStaff();
+    const { canEdit: canEditPerm, canDelete: canDeletePerm } = usePermissions();
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Local state (description with debounce)
@@ -433,7 +435,7 @@ export function DealDetailModal({ deal, open, onOpenChange, onDealWon, onDealLos
         }
     };
 
-    const createSalesFromDeal = async (paymentType: 'cash' | 'installment' | 'pending', installments?: number, interestRate?: number) => {
+    const createSalesFromDeal = async (paymentType: 'cash' | 'installment' | 'pending' | 'mixed', installments?: number, interestRate?: number, cashAmount?: number) => {
         if (!pendingWonDeal) return;
         setIsCreatingSales(true);
         try {
@@ -455,8 +457,9 @@ export function DealDetailModal({ deal, open, onOpenChange, onDealWon, onDealLos
                     unit_price: p.unit_price || 0,
                     total_amount: (p.unit_price || 0) * (p.quantity || 1),
                     payment_type: paymentType,
-                    installments: paymentType === "installment" ? (installments || 1) : 1,
-                    interest_rate: paymentType === "installment" ? (interestRate || 0) : 0,
+                    installments: (paymentType === 'installment' || paymentType === 'mixed') ? (installments || 1) : 1,
+                    interest_rate: (paymentType === 'installment' || paymentType === 'mixed') ? (interestRate || 0) : 0,
+                    cash_amount: paymentType === 'mixed' ? (cashAmount || 0) : (paymentType === 'cash' ? ((p.unit_price || 0) * (p.quantity || 1)) : 0),
                     sale_date: saleDate,
                     team_member_id: d.responsible_id || null,
                     professional_id: d.assigned_professional_id || null,
@@ -632,6 +635,7 @@ export function DealDetailModal({ deal, open, onOpenChange, onDealWon, onDealLos
                                         value={description}
                                         onChange={e => handleDescriptionChange(e.target.value)}
                                         className="min-h-[100px] resize-none text-sm"
+                                        disabled={!canEditPerm('crm_deals')}
                                     />
                                     {updateDescriptionMutation.isPending && (
                                         <p className="text-xs text-muted-foreground mt-1">Salvando...</p>
@@ -797,15 +801,19 @@ export function DealDetailModal({ deal, open, onOpenChange, onDealWon, onDealLos
                                 {/* Anexos */}
                                 <Section icon={Paperclip} title={`Anexos (${attachments.length})`} defaultOpen={false}>
                                     <div className="space-y-3">
-                                        <div
-                                            className="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer hover:bg-muted/30 transition-colors"
-                                            onClick={() => fileInputRef.current?.click()}
-                                        >
-                                            <Paperclip className="h-6 w-6 mx-auto mb-2 text-muted-foreground" />
-                                            <p className="text-sm text-muted-foreground">Clique ou arraste para anexar</p>
-                                            <p className="text-xs text-muted-foreground mt-1">Limite: 50MB por arquivo</p>
-                                        </div>
-                                        <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileUpload} />
+                                        {canEditPerm('crm_deals') && (
+                                            <>
+                                                <div
+                                                    className="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer hover:bg-muted/30 transition-colors"
+                                                    onClick={() => fileInputRef.current?.click()}
+                                                >
+                                                    <Paperclip className="h-6 w-6 mx-auto mb-2 text-muted-foreground" />
+                                                    <p className="text-sm text-muted-foreground">Clique ou arraste para anexar</p>
+                                                    <p className="text-xs text-muted-foreground mt-1">Limite: 50MB por arquivo</p>
+                                                </div>
+                                                <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileUpload} />
+                                            </>
+                                        )}
 
                                         {attachments.map(att => (
                                             <div key={att.id} className="flex items-center gap-2 p-2 border rounded-lg">
@@ -817,9 +825,11 @@ export function DealDetailModal({ deal, open, onOpenChange, onDealWon, onDealLos
                                                 <a href={att.file_url} target="_blank" rel="noopener noreferrer">
                                                     <Button variant="ghost" size="icon" className="h-7 w-7"><Download className="h-3.5 w-3.5" /></Button>
                                                 </a>
-                                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteAttachment(att)}>
-                                                    <Trash2 className="h-3.5 w-3.5" />
-                                                </Button>
+                                                {canDeletePerm('crm_deals') && (
+                                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteAttachment(att)}>
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                )}
                                             </div>
                                         ))}
                                     </div>
@@ -893,8 +903,8 @@ export function DealDetailModal({ deal, open, onOpenChange, onDealWon, onDealLos
                             <ScrollArea className="flex-1 h-full">
                                 <div className="p-4 space-y-4 min-w-0 overflow-hidden">
 
-                                    {/* Container Finalizar — só exibe se o funil tiver as etapas Ganho/Perdido */}
-                                    {(hasWonStage || hasLostStage) && (
+                                    {/* Container Finalizar — só exibe se o funil tiver as etapas Ganho/Perdido e se o usuário pode editar */}
+                                    {canEditPerm('crm_deals') && (hasWonStage || hasLostStage) && (
                                         <div className="space-y-2">
                                             <Label className="text-xs uppercase text-muted-foreground tracking-wider">Finalizar</Label>
                                             <div className={`grid gap-2 ${hasWonStage && hasLostStage ? "grid-cols-2" : "grid-cols-1"}`}>
@@ -912,13 +922,14 @@ export function DealDetailModal({ deal, open, onOpenChange, onDealWon, onDealLos
                                         </div>
                                     )}
 
-                                    {(hasWonStage || hasLostStage) && <Separator />}
+                                    {canEditPerm('crm_deals') && (hasWonStage || hasLostStage) && <Separator />}
 
                                     {/* Container Etapa */}
                                     <div className="space-y-2">
                                         <Label className="text-xs uppercase text-muted-foreground tracking-wider">Etapa</Label>
                                         <Select
                                             value={deal.stage_id}
+                                            disabled={!canEditPerm('crm_deals')}
                                             onValueChange={val => {
                                                 const selectedStage = stages.find(s => s.id === val);
                                                 if (selectedStage?.name === "Ganho") {
@@ -955,6 +966,7 @@ export function DealDetailModal({ deal, open, onOpenChange, onDealWon, onDealLos
                                             <Label className="text-xs text-muted-foreground">Responsável</Label>
                                             <Select
                                                 value={deal.responsible_id || "_none"}
+                                                disabled={!canEditPerm('crm_deals')}
                                                 onValueChange={val => updateResponsibleMutation.mutate(val === "_none" ? "" : val)}
                                             >
                                                 <SelectTrigger className="h-8 text-xs">
@@ -972,6 +984,7 @@ export function DealDetailModal({ deal, open, onOpenChange, onDealWon, onDealLos
                                             <Label className="text-xs text-muted-foreground">Profissional</Label>
                                             <Select
                                                 value={deal.assigned_professional_id || "_none"}
+                                                disabled={!canEditPerm('crm_deals')}
                                                 onValueChange={val => updateProfessionalMutation.mutate(val === "_none" ? "" : val)}
                                             >
                                                 <SelectTrigger className="h-8 text-xs">
@@ -993,15 +1006,17 @@ export function DealDetailModal({ deal, open, onOpenChange, onDealWon, onDealLos
                                     <div className="space-y-2">
                                         <div className="flex items-center justify-between">
                                             <Label className="text-xs uppercase text-muted-foreground tracking-wider">Negociação</Label>
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                className="h-6 text-xs px-2"
-                                                onClick={() => setDealProductsModalOpen(true)}
-                                            >
-                                                <Plus className="h-3 w-3 mr-1" />
-                                                {displayProducts.length > 0 ? "Editar" : "Adicionar"}
-                                            </Button>
+                                            {canEditPerm('crm_deals') && (
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="h-6 text-xs px-2"
+                                                    onClick={() => setDealProductsModalOpen(true)}
+                                                >
+                                                    <Plus className="h-3 w-3 mr-1" />
+                                                    {displayProducts.length > 0 ? "Editar" : "Adicionar"}
+                                                </Button>
+                                            )}
                                         </div>
                                         {displayProducts.length === 0 ? (
                                             <p className="text-xs text-muted-foreground text-center py-2">
@@ -1058,6 +1073,7 @@ export function DealDetailModal({ deal, open, onOpenChange, onDealWon, onDealLos
                                                 <CalendarClock className="h-3.5 w-3.5 mr-2" />Criar Agendamento
                                             </Button>
 
+                                            {canEditPerm('crm_deals') && (
                                             <div className="space-y-1.5">
                                                 <Button
                                                     variant="outline"
@@ -1094,6 +1110,7 @@ export function DealDetailModal({ deal, open, onOpenChange, onDealWon, onDealLos
                                                     </div>
                                                 )}
                                             </div>
+                                            )}
                                         </div>
                                     </div>
 
@@ -1137,7 +1154,7 @@ export function DealDetailModal({ deal, open, onOpenChange, onDealWon, onDealLos
                 dealTitle={deal.title}
                 totalValue={pendingWonDeal?.totalValue || 0}
                 productsCount={pendingWonDeal?.productsCount || 0}
-                onConfirm={(pt, inst, rate) => createSalesFromDeal(pt, inst, rate)}
+                onConfirm={(pt, inst, rate, cashAmt) => createSalesFromDeal(pt, inst, rate, cashAmt)}
                 onCancel={() => createSalesFromDeal("pending")}
                 isLoading={isCreatingSales}
             />

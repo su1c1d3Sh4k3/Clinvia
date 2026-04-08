@@ -10,6 +10,7 @@ import { Plus, X, Edit2, Trash2, Zap, Image as ImageIcon, Mic, Video, FileText }
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useOwnerId } from "@/hooks/useOwnerId";
+import { usePermissions } from "@/hooks/usePermissions";
 import { toast } from "sonner";
 
 interface QuickMessage {
@@ -23,6 +24,7 @@ interface QuickMessage {
 export function QuickMessagesMenu() {
     const { user } = useAuth();
     const { data: ownerId } = useOwnerId();
+    const { canCreate, canEdit, canDelete } = usePermissions();
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState<QuickMessage[]>([]);
     const [loading, setLoading] = useState(false);
@@ -192,7 +194,7 @@ export function QuickMessagesMenu() {
                 <DialogHeader>
                     <DialogTitle className="flex items-center justify-between">
                         <span>Mensagens Rápidas</span>
-                        {view === 'list' && (
+                        {view === 'list' && canCreate('quick_messages') && (
                             <Button size="sm" onClick={() => setView('create')}>
                                 <Plus className="w-4 h-4 mr-2" />
                                 Nova
@@ -238,12 +240,16 @@ export function QuickMessagesMenu() {
                                             </p>
                                         </div>
                                         <div className="flex items-center gap-1">
-                                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(msg)}>
-                                                <Edit2 className="w-4 h-4" />
-                                            </Button>
-                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => handleDelete(msg.id)}>
-                                                <Trash2 className="w-4 h-4" />
-                                            </Button>
+                                            {canEdit('quick_messages') && (
+                                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(msg)}>
+                                                    <Edit2 className="w-4 h-4" />
+                                                </Button>
+                                            )}
+                                            {canDelete('quick_messages') && (
+                                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => handleDelete(msg.id)}>
+                                                    <Trash2 className="w-4 h-4" />
+                                                </Button>
+                                            )}
                                         </div>
                                     </div>
                                 ))}

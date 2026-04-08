@@ -18,6 +18,7 @@ interface FollowUpToProcess {
         contact_id: string;
         instance_id: string;
         user_id: string;
+        status: string;
         contact: {
             number: string;
             push_name: string;
@@ -71,6 +72,7 @@ serve(async (req) => {
           contact_id,
           instance_id,
           user_id,
+          status,
           contact:contacts!contact_id (
             number,
             push_name
@@ -109,6 +111,12 @@ serve(async (req) => {
                 if (!conv || !conv.instance || !conv.contact) {
                     console.log(`Skipping follow up ${followUp.id}: missing conversation data`);
                     results.errors.push(`Follow up ${followUp.id}: missing conversation data`);
+                    continue;
+                }
+
+                // Skip follow-ups for non-active conversations
+                if (conv.status && !['pending', 'open'].includes(conv.status)) {
+                    console.log(`Skipping follow up ${followUp.id}: conversation status is ${conv.status}`);
                     continue;
                 }
 
@@ -160,15 +168,32 @@ serve(async (req) => {
                     text: template.message
                 };
 
-                const sendResponse = await fetch(sendUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json',
-                        'token': conv.instance.apikey
-                    },
-                    body: JSON.stringify(payload)
-                });
+                const abortController = new AbortController();
+                const fetchTimeout = setTimeout(() => abortController.abort(), 10000);
+
+                let sendResponse: Response;
+                try {
+                    sendResponse = await fetch(sendUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'token': conv.instance.apikey
+                        },
+                        body: JSON.stringify(payload),
+                        signal: abortController.signal
+                    });
+                } catch (fetchErr: any) {
+                    clearTimeout(fetchTimeout);
+                    const msg = fetchErr.name === 'AbortError'
+                        ? `Follow up ${followUp.id}: request timed out after 10s`
+                        : `Follow up ${followUp.id}: fetch error - ${fetchErr.message}`;
+                    console.error(msg);
+                    results.errors.push(msg);
+                    continue;
+                } finally {
+                    clearTimeout(fetchTimeout);
+                }
 
                 if (!sendResponse.ok) {
                     const errorText = await sendResponse.text();

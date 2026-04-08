@@ -76,26 +76,38 @@ async function sendWhatsApp(
   const url = `${serverUrl}/send/text`;
   console.log(`[send] ${url} → ${phone}`);
 
-  const resp = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Accept": "application/json",
-      "token": apikey,
-    },
-    body: JSON.stringify({
-      number: phone,
-      text,
-    }),
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-  if (!resp.ok) {
-    const errText = await resp.text();
-    console.error(`[send] Error ${resp.status}:`, errText);
-    throw new Error(`UZAPI error: ${errText}`);
+  try {
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "token": apikey,
+      },
+      body: JSON.stringify({
+        number: phone,
+        text,
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      console.error(`[send] Error ${resp.status}:`, errText);
+      throw new Error(`UZAPI error: ${errText}`);
+    }
+
+    return await resp.json();
+  } catch (e: any) {
+    clearTimeout(timeoutId);
+    if (e.name === "AbortError") throw new Error("UZAPI timeout after 10s");
+    throw e;
   }
-
-  return await resp.json();
 }
 
 /** Envia pesquisa de satisfação via send-satisfaction-survey edge function */
@@ -441,11 +453,12 @@ serve(async (req) => {
         if (apptCreatedCfg) {
           const instance = await getInstance(supabase, userId, apptCreatedCfg.instance_id);
           if (instance) {
+            const maxAgeCreated = new Date(now.getTime() - 24 * 60 * 60 * 1000);
             const appts = safeRows(await supabase
               .from("appointments")
               .select("id, start_time, contact_id, contacts(push_name, number), professionals(name), products_services(name)")
               .eq("user_id", userId)
-              .gte("created_at", windowStart.toISOString())
+              .gte("created_at", maxAgeCreated.toISOString())
               .lte("created_at", now.toISOString())
               .not("contact_id", "is", null));
 
@@ -483,17 +496,24 @@ serve(async (req) => {
           if (!instance) continue;
 
           const hoursVal = cfg.timing_value || (reminderType === "appointment_reminder" ? 24 : 2);
-          const targetStart = new Date(now.getTime() + hoursVal * 60 * 60 * 1000);
-          const targetEnd = new Date(targetStart.getTime() + WINDOW_MINUTES * 60 * 1000);
+          // ✅ BROAD WINDOW: busca TODOS os agendamentos que começam nas próximas hoursVal horas.
+          // Deduplicação via auto_message_logs impede envio duplicado.
+          // Assim, o primeiro ciclo do cron que detectar o agendamento na janela envia;
+          // todos os ciclos seguintes pulam via alreadySent().
+          const windowEnd = new Date(now.getTime() + hoursVal * 60 * 60 * 1000);
+
+          console.log(`[${reminderType}] Buscando agendamentos entre NOW (${now.toISOString()}) e ${windowEnd.toISOString()} (${hoursVal}h)`);
 
           const appts = safeRows(await supabase
             .from("appointments")
             .select("id, start_time, contact_id, contacts(push_name, number), professionals(name), products_services(name)")
             .eq("user_id", userId)
-            .gte("start_time", targetStart.toISOString())
-            .lte("start_time", targetEnd.toISOString())
+            .gte("start_time", now.toISOString())
+            .lte("start_time", windowEnd.toISOString())
             .in("status", ["confirmed", "pending"])
             .not("contact_id", "is", null));
+
+          console.log(`[${reminderType}] Encontrados ${appts.length} agendamentos na janela`);
 
           for (const appt of appts) {
             try {
@@ -525,12 +545,13 @@ serve(async (req) => {
         if (cancelledCfg) {
           const instance = await getInstance(supabase, userId, cancelledCfg.instance_id);
           if (instance) {
+            const maxAgeCancelled = new Date(now.getTime() - 24 * 60 * 60 * 1000);
             const appts = safeRows(await supabase
               .from("appointments")
               .select("id, start_time, updated_at, contact_id, contacts(push_name, number), professionals(name)")
               .eq("user_id", userId)
               .eq("status", "canceled")
-              .gte("updated_at", windowStart.toISOString())
+              .gte("updated_at", maxAgeCancelled.toISOString())
               .lte("updated_at", now.toISOString())
               .not("contact_id", "is", null));
 
@@ -565,17 +586,24 @@ serve(async (req) => {
           const instance = await getInstance(supabase, userId, postSvcCfg.instance_id);
           if (instance) {
             const hoursVal = postSvcCfg.timing_value || 2;
-            const targetStart = new Date(now.getTime() - (hoursVal * 60 + WINDOW_MINUTES) * 60 * 1000);
-            const targetEnd = new Date(now.getTime() - hoursVal * 60 * 60 * 1000);
+            // ✅ BROAD WINDOW: busca agendamentos completados há pelo menos hoursVal horas.
+            // Limita a 7 dias para não escanear histórico inteiro.
+            // Deduplicação via auto_message_logs impede envio duplicado.
+            const cutoff = new Date(now.getTime() - hoursVal * 60 * 60 * 1000);
+            const maxAge = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+            console.log(`[post_service] Buscando completados entre ${maxAge.toISOString()} e ${cutoff.toISOString()} (${hoursVal}h após)`);
 
             const appts = safeRows(await supabase
               .from("appointments")
               .select("id, start_time, updated_at, contact_id, contacts(push_name, number), professionals(name), products_services(name)")
               .eq("user_id", userId)
               .eq("status", "completed")
-              .gte("updated_at", targetStart.toISOString())
-              .lte("updated_at", targetEnd.toISOString())
+              .gte("updated_at", maxAge.toISOString())
+              .lte("updated_at", cutoff.toISOString())
               .not("contact_id", "is", null));
+
+            console.log(`[post_service] Encontrados ${appts.length} agendamentos completados na janela`);
 
             for (const appt of appts) {
               try {
@@ -608,12 +636,13 @@ serve(async (req) => {
           const instance = await getInstance(supabase, userId, cfg.instance_id);
           if (!instance) continue;
 
+          const maxAgeStageEnter = new Date(now.getTime() - 24 * 60 * 60 * 1000);
           const deals = safeRows(await supabase
             .from("crm_deals")
             .select("id, contact_id, stage_id, stage_changed_at, contacts(push_name, number), crm_stages(name), crm_funnels(name)")
             .eq("user_id", userId)
             .eq("stage_id", cfg.stage_id)
-            .gte("stage_changed_at", windowStart.toISOString())
+            .gte("stage_changed_at", maxAgeStageEnter.toISOString())
             .lte("stage_changed_at", now.toISOString())
             .not("contact_id", "is", null));
 
@@ -647,16 +676,14 @@ serve(async (req) => {
           const instance = await getInstance(supabase, userId, cfg.instance_id);
           if (!instance) continue;
 
-          const targetDate = new Date(now.getTime() - cfg.timing_value * 24 * 60 * 60 * 1000);
-          const targetStart = new Date(targetDate.getTime() - WINDOW_MINUTES * 60 * 1000);
+          const cutoffDate = new Date(now.getTime() - cfg.timing_value * 24 * 60 * 60 * 1000);
 
           const deals = safeRows(await supabase
             .from("crm_deals")
             .select("id, contact_id, stage_changed_at, contacts(push_name, number), crm_stages(name), crm_funnels(name)")
             .eq("user_id", userId)
             .eq("stage_id", cfg.stage_id)
-            .gte("stage_changed_at", targetStart.toISOString())
-            .lte("stage_changed_at", targetDate.toISOString())
+            .lte("stage_changed_at", cutoffDate.toISOString())
             .not("contact_id", "is", null));
 
           for (const deal of deals) {
@@ -727,7 +754,7 @@ serve(async (req) => {
         if (satisfactionCfg) {
           const delayMs = (satisfactionCfg.timing_value || 0) * 60 * 1000;
           const resolvedBefore = new Date(now.getTime() - delayMs);
-          const resolvedAfter = new Date(resolvedBefore.getTime() - WINDOW_MINUTES * 60 * 1000);
+          const maxAgeSatisfaction = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
           const convs = safeRows(await supabase
             .from("conversations")
@@ -735,7 +762,7 @@ serve(async (req) => {
             .eq("user_id", userId)
             .eq("status", "resolved")
             .is("nps_sent_at", null)
-            .gte("updated_at", resolvedAfter.toISOString())
+            .gte("updated_at", maxAgeSatisfaction.toISOString())
             .lte("updated_at", resolvedBefore.toISOString())
             .not("contact_id", "is", null));
 

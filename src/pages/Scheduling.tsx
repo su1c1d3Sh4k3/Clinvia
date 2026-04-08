@@ -20,9 +20,11 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { generateDailyReport } from "@/utils/generateDailyReport";
 import { useOwnerId } from "@/hooks/useOwnerId";
+import { usePermissions } from "@/hooks/usePermissions";
 
 export default function Scheduling() {
     const { toast } = useToast();
+    const { canCreate, canEdit, canDelete } = usePermissions();
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
     const queryClient = useQueryClient();
@@ -390,13 +392,15 @@ export default function Scheduling() {
                             </CardContent>
                         </Card>
 
-                        <Button onClick={() => {
-                            setProfessionalToEdit(null);
-                            setIsProfessionalModalOpen(true);
-                        }} variant="outline" className="w-full justify-start bg-white dark:bg-transparent border border-[#D4D5D6] dark:border-border">
-                            <Plus className="w-4 h-4 mr-2" />
-                            Adicionar Profissional
-                        </Button>
+                        {canCreate('professionals') && (
+                            <Button onClick={() => {
+                                setProfessionalToEdit(null);
+                                setIsProfessionalModalOpen(true);
+                            }} variant="outline" className="w-full justify-start bg-white dark:bg-transparent border border-[#D4D5D6] dark:border-border">
+                                <Plus className="w-4 h-4 mr-2" />
+                                Adicionar Profissional
+                            </Button>
+                        )}
 
                         <Button
                             onClick={handleGenerateDailyReport}
@@ -506,14 +510,16 @@ export default function Scheduling() {
                             </div>
                         </div>
 
-                        <Button onClick={() => {
-                            setSelectedSlot(undefined);
-                            setAppointmentToEdit(null);
-                            setIsAppointmentModalOpen(true);
-                        }} className="h-9 text-xs md:text-sm">
-                            <Plus className="w-4 h-4 md:mr-2" />
-                            <span className="hidden md:inline">Criar Agendamento</span>
-                        </Button>
+                        {canCreate('appointments') && (
+                            <Button onClick={() => {
+                                setSelectedSlot(undefined);
+                                setAppointmentToEdit(null);
+                                setIsAppointmentModalOpen(true);
+                            }} className="h-9 text-xs md:text-sm">
+                                <Plus className="w-4 h-4 md:mr-2" />
+                                <span className="hidden md:inline">Criar Agendamento</span>
+                            </Button>
+                        )}
                     </div>
 
                     {/* Mobile search bar */}
@@ -546,6 +552,9 @@ export default function Scheduling() {
                         onEventClick={handleEventClick}
                         onStatusChange={handleStatusChange}
                         onEditProfessional={handleEditProfessional}
+                        canCreateAppointment={canCreate('appointments')}
+                        canEditAppointment={canEdit('appointments')}
+                        canEditProfessional={canEdit('professionals')}
                     />
                 )}
             </div>
@@ -565,6 +574,7 @@ export default function Scheduling() {
                     setSelectedSlot(undefined);
                     setIsAppointmentModalOpen(true);
                 }}
+                canEdit={canEdit('appointments')}
             />
 
             <AppointmentModal

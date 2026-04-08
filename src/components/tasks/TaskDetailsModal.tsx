@@ -14,6 +14,7 @@ import { ptBR } from "date-fns/locale";
 import { Pencil, Calendar, Clock, AlertCircle, Tag, Link as LinkIcon, User, AlignLeft, CheckCircle2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { usePermissions } from "@/hooks/usePermissions";
 
 const TIMEZONE = "America/Sao_Paulo";
 
@@ -25,6 +26,7 @@ interface TaskDetailsModalProps {
 }
 
 export function TaskDetailsModal({ taskId, open, onOpenChange, onEdit }: TaskDetailsModalProps) {
+    const { canEdit } = usePermissions();
     const queryClient = useQueryClient();
 
     const { data: task, isLoading } = useQuery({
@@ -107,7 +109,7 @@ export function TaskDetailsModal({ taskId, open, onOpenChange, onEdit }: TaskDet
                     <DialogTitle className="text-xl font-bold truncate pr-4">
                         {isLoading ? "Carregando..." : task?.title}
                     </DialogTitle>
-                    {!isLoading && task && (
+                    {!isLoading && task && canEdit('tasks') && (
                         <Button
                             variant="ghost"
                             size="icon"

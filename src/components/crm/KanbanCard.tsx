@@ -22,6 +22,7 @@ import { DealDetailModal } from "./DealDetailModal";
 import { TaskModal } from "../tasks/TaskModal";
 import { toast } from "sonner";
 import { useState, useRef } from "react";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface KanbanCardProps {
     deal: CRMDeal;
@@ -35,6 +36,7 @@ interface KanbanCardProps {
 
 export function KanbanCard({ deal, index, stagnationLimitDays, onDealWon, onDealLost }: KanbanCardProps) {
     const navigate = useNavigate();
+    const { canDelete } = usePermissions();
     const [showViewModal, setShowViewModal] = useState(false);
     const [showTaskModal, setShowTaskModal] = useState(false);
 
@@ -136,16 +138,18 @@ export function KanbanCard({ deal, index, stagnationLimitDays, onDealWon, onDeal
                                             <DropdownMenuItem onClick={() => setShowViewModal(true)}>
                                                 Visualizar
                                             </DropdownMenuItem>
-                                            <DropdownMenuItem
-                                                className="text-destructive"
-                                                onClick={() => {
-                                                    if (confirm("Tem certeza que deseja excluir esta negociação?")) {
-                                                        deleteDealMutation.mutate();
-                                                    }
-                                                }}
-                                            >
-                                                Excluir
-                                            </DropdownMenuItem>
+                                            {canDelete('crm_deals') && (
+                                                <DropdownMenuItem
+                                                    className="text-destructive"
+                                                    onClick={() => {
+                                                        if (confirm("Tem certeza que deseja excluir esta negociação?")) {
+                                                            deleteDealMutation.mutate();
+                                                        }
+                                                    }}
+                                                >
+                                                    Excluir
+                                                </DropdownMenuItem>
+                                            )}
                                         </DropdownMenuContent>
                                     </DropdownMenu>
                                 </div>

@@ -512,13 +512,15 @@ export default function Team() {
                         Profissionais cadastrados
                     </p>
                 </div>
-                <Button size="sm" className="h-8 md:h-9 text-xs md:text-sm w-fit" onClick={() => {
-                    setSelectedProfessional(null);
-                    setIsProfessionalModalOpen(true);
-                }}>
-                    <Plus className="mr-1 md:mr-2 h-4 w-4" />
-                    <span className="hidden sm:inline">Adicionar </span>Prof.
-                </Button>
+                {canCreate('professionals') && (
+                    <Button size="sm" className="h-8 md:h-9 text-xs md:text-sm w-fit" onClick={() => {
+                        setSelectedProfessional(null);
+                        setIsProfessionalModalOpen(true);
+                    }}>
+                        <Plus className="mr-1 md:mr-2 h-4 w-4" />
+                        <span className="hidden sm:inline">Adicionar </span>Prof.
+                    </Button>
+                )}
             </div>
 
             <div className="rounded-md border overflow-x-auto bg-white dark:bg-transparent border-[#D4D5D6] dark:border-border">
@@ -579,29 +581,33 @@ export default function Team() {
                                     </TableCell>
                                     <TableCell className="text-right py-2 md:py-4">
                                         <div className="flex justify-end gap-1">
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-7 w-7 md:h-8 md:w-8"
-                                                onClick={() => {
-                                                    setSelectedProfessional(professional);
-                                                    setIsProfessionalModalOpen(true);
-                                                }}
-                                            >
-                                                <Pencil className="h-3.5 w-3.5 md:h-4 md:w-4" />
-                                            </Button>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="text-destructive hover:text-destructive h-7 w-7 md:h-8 md:w-8"
-                                                onClick={() => {
-                                                    if (confirm("Remover este profissional?")) {
-                                                        deleteProfessionalMutation.mutate(professional.id);
-                                                    }
-                                                }}
-                                            >
-                                                <Trash2 className="h-3.5 w-3.5 md:h-4 md:w-4" />
-                                            </Button>
+                                            {canEdit('professionals') && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-7 w-7 md:h-8 md:w-8"
+                                                    onClick={() => {
+                                                        setSelectedProfessional(professional);
+                                                        setIsProfessionalModalOpen(true);
+                                                    }}
+                                                >
+                                                    <Pencil className="h-3.5 w-3.5 md:h-4 md:w-4" />
+                                                </Button>
+                                            )}
+                                            {canDelete('professionals') && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="text-destructive hover:text-destructive h-7 w-7 md:h-8 md:w-8"
+                                                    onClick={() => {
+                                                        if (confirm("Remover este profissional?")) {
+                                                            deleteProfessionalMutation.mutate(professional.id);
+                                                        }
+                                                    }}
+                                                >
+                                                    <Trash2 className="h-3.5 w-3.5 md:h-4 md:w-4" />
+                                                </Button>
+                                            )}
                                         </div>
                                     </TableCell>
                                 </TableRow>

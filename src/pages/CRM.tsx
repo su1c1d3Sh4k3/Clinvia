@@ -23,9 +23,11 @@ import {
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "react-router-dom";
+import { usePermissions } from "@/hooks/usePermissions";
 
 const CRM = () => {
     const location = useLocation();
+    const { canCreate, canEdit, canDelete } = usePermissions();
     const [selectedFunnelId, setSelectedFunnelId] = useState<string | null>(null);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const queryClient = useQueryClient();
@@ -113,14 +115,14 @@ const CRM = () => {
                                     ))}
                                 </SelectContent>
                             </Select>
-                            {selectedFunnelId && (
+                            {selectedFunnelId && canEdit('crm_deals') && (
                                 <ManageStagesModal
                                     funnelId={selectedFunnelId}
                                     isSystemFunnel={selectedFunnel?.is_system ?? false}
                                 />
                             )}
                             {/* Botão sem portal — AlertDialog é sempre montado separadamente */}
-                            {selectedFunnel && !selectedFunnel.is_system && (
+                            {canDelete('crm_deals') && selectedFunnel && !selectedFunnel.is_system && (
                                 <Button
                                     variant="outline"
                                     size="icon"
@@ -135,8 +137,8 @@ const CRM = () => {
                 </div>
                 <div className="flex gap-1 md:gap-2 items-center flex-wrap">
                     <CRMFilters filters={filters} onFiltersChange={setFilters} />
-                    <CreateFunnelModal />
-                    <CreateDealModal defaultFunnelId={selectedFunnelId || undefined} />
+                    {canCreate('crm_deals') && <CreateFunnelModal />}
+                    {canCreate('crm_deals') && <CreateDealModal defaultFunnelId={selectedFunnelId || undefined} />}
                 </div>
             </div>
 
@@ -172,7 +174,7 @@ const CRM = () => {
             ) : !funnels || funnels.length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center border-2 border-dashed rounded-lg bg-muted/10">
                     <p className="text-muted-foreground mb-4">Nenhum funil encontrado. Crie seu primeiro funil para começar.</p>
-                    <CreateFunnelModal />
+                    {canCreate('crm_deals') && <CreateFunnelModal />}
                 </div>
             ) : (
                 <div className="flex-1 overflow-hidden">

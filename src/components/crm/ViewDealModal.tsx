@@ -13,6 +13,7 @@ import { DealNotesModal } from "./DealNotesModal";
 import { format } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 import { ptBR } from "date-fns/locale";
+import { usePermissions } from "@/hooks/usePermissions";
 
 const TIMEZONE = "America/Sao_Paulo";
 
@@ -24,6 +25,7 @@ interface ViewDealModalProps {
 }
 
 export function ViewDealModal({ deal, open, onOpenChange, onEdit }: ViewDealModalProps) {
+    const { canEdit } = usePermissions();
     const priorityColor = {
         low: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
         medium: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300",
@@ -41,7 +43,7 @@ export function ViewDealModal({ deal, open, onOpenChange, onEdit }: ViewDealModa
             <DialogContent className="max-w-md">
                 <DialogHeader className="flex flex-row items-center justify-between pr-8">
                     <DialogTitle className="text-xl font-bold truncate pr-4">{deal.title}</DialogTitle>
-                    {onEdit && (
+                    {onEdit && canEdit('crm_deals') && (
                         <Button
                             variant="ghost"
                             size="icon"

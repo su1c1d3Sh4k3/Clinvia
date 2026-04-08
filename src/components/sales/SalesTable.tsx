@@ -320,6 +320,10 @@ export function SalesTable({ month, year }: SalesTableProps) {
                                                         <Badge variant="secondary" className="bg-orange-100 text-orange-700 hover:bg-orange-200">
                                                             Pendente
                                                         </Badge>
+                                                    ) : sale.payment_type === 'mixed' ? (
+                                                        <Badge variant="secondary" className="bg-purple-100 text-purple-700 hover:bg-purple-200 dark:bg-purple-950/30 dark:text-purple-300">
+                                                            Misto
+                                                        </Badge>
                                                     ) : (
                                                         PaymentTypeLabels[sale.payment_type]
                                                     )}

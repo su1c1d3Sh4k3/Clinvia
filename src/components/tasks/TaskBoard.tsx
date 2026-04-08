@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useCurrentTeamMember, useStaff } from "@/hooks/useStaff";
+import { usePermissions } from "@/hooks/usePermissions";
 
 const TIMEZONE = "America/Sao_Paulo";
 
@@ -35,6 +36,9 @@ export function TaskBoard({ boardId }: TaskBoardProps) {
     const [isDealModalOpen, setIsDealModalOpen] = useState(false);
     const [selectedContact, setSelectedContact] = useState<any>(null);
     const [isContactModalOpen, setIsContactModalOpen] = useState(false);
+
+    // Permission hooks
+    const { canCreate, canEdit } = usePermissions();
 
     // Hooks para filtro por responsável (agentes veem apenas suas tasks)
     const { data: userRole } = useUserRole();
@@ -185,6 +189,8 @@ export function TaskBoard({ boardId }: TaskBoardProps) {
     const handleToday = () => setCurrentDate(new Date());
 
     const handleSlotClick = (date: Date, time: string) => {
+        if (!canCreate('tasks')) return;
+
         const [hours, minutes] = time.split(':').map(Number);
         const slotDate = new Date(date);
         slotDate.setHours(hours, minutes, 0, 0);
@@ -585,7 +591,7 @@ export function TaskBoard({ boardId }: TaskBoardProps) {
                                                 />
                                             )}
 
-                                            {!isPast && (
+                                            {!isPast && canEdit('tasks') && (
                                                 <div
                                                     className="absolute top-1 right-1 z-30 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer p-0.5 hover:bg-black/5 rounded-sm"
                                                     onClick={(e) => {

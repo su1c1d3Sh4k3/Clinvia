@@ -14,13 +14,16 @@ interface SchedulingCalendarProps {
     onEventClick: (event: any) => void;
     onStatusChange: (appointmentId: string, newStatus: string, event?: any) => void;
     onEditProfessional?: (professional: any) => void;
+    canCreateAppointment?: boolean;
+    canEditAppointment?: boolean;
+    canEditProfessional?: boolean;
 }
 
 const START_HOUR = 8;
 const END_HOUR = 22;
 const HOUR_HEIGHT = 60;
 
-export function SchedulingCalendar({ date, professionals, appointments, settings, onSlotClick, onEventClick, onStatusChange, onEditProfessional }: SchedulingCalendarProps) {
+export function SchedulingCalendar({ date, professionals, appointments, settings, onSlotClick, onEventClick, onStatusChange, onEditProfessional, canCreateAppointment = true, canEditAppointment = true, canEditProfessional = true }: SchedulingCalendarProps) {
     const startHour = settings?.start_hour ?? 8;
     const endHour = settings?.end_hour ?? 22;
     const workDays = settings?.work_days ?? [0, 1, 2, 3, 4, 5, 6];
@@ -129,14 +132,16 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                 </span>
                             )}
                         </div>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover/header:opacity-100 transition-opacity"
-                            onClick={() => onEditProfessional && onEditProfessional(professional)}
-                        >
-                            <Pen className="h-3 w-3" />
-                        </Button>
+                        {canEditProfessional && (
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover/header:opacity-100 transition-opacity"
+                                onClick={() => onEditProfessional && onEditProfessional(professional)}
+                            >
+                                <Pen className="h-3 w-3" />
+                            </Button>
+                        )}
                     </div>
                 ))}
             </div>
@@ -189,7 +194,8 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                         key={hour}
                                         className={cn(
                                             "absolute w-full border-t border-dashed border-muted/50 transition-colors",
-                                            !isPast && !isBlocked && "bg-white dark:bg-transparent hover:bg-accent/50 dark:hover:bg-[#353A44] cursor-pointer",
+                                            !isPast && !isBlocked && canCreateAppointment && "bg-white dark:bg-transparent hover:bg-accent/50 dark:hover:bg-[#353A44] cursor-pointer",
+                                            !isPast && !isBlocked && !canCreateAppointment && "bg-white dark:bg-transparent",
                                             isBlocked && "bg-muted/30 dark:bg-muted/30",
                                             isPast && "bg-[#C6C8CA] dark:bg-[#22262E]"
                                         )}
@@ -200,7 +206,7 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                             backgroundImage: isBlocked && !isPast ? "repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.05) 10px, rgba(0,0,0,0.05) 20px)" : undefined
                                         }}
                                         onClick={() => {
-                                            if (!isPast && !isBlocked) {
+                                            if (!isPast && !isBlocked && canCreateAppointment) {
                                                 onSlotClick(professional.id, slotDate);
                                             }
                                         }}
@@ -256,7 +262,7 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                             {/* Actions Overlay - Floating Above */}
                                             {apt.type !== "absence" && (
                                                 <div className="absolute -top-9 right-0 flex items-center gap-1 opacity-0 group-hover/card:opacity-100 transition-all duration-200 bg-background/95 backdrop-blur-sm border shadow-sm rounded-full p-1 z-50">
-                                                    {!isFinalStatus && (
+                                                    {!isFinalStatus && canEditAppointment && (
                                                         <>
                                                             <div className="relative group/btn">
                                                                 <Button

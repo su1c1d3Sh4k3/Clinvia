@@ -17,7 +17,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { useState } from "react";
-import { CreditCard, DollarSign, Loader2 } from "lucide-react";
+import { CreditCard, DollarSign, Loader2, Split } from "lucide-react";
 
 interface PaymentTypeModalProps {
     open: boolean;
@@ -25,7 +25,7 @@ interface PaymentTypeModalProps {
     dealTitle: string;
     totalValue: number;
     productsCount: number;
-    onConfirm: (paymentType: 'cash' | 'installment', installments?: number, interestRate?: number) => void;
+    onConfirm: (paymentType: 'cash' | 'installment' | 'mixed', installments?: number, interestRate?: number, cashAmount?: number) => void;
     onCancel: () => void; // Cria vendas como 'pending'
     isLoading?: boolean;
 }
@@ -47,13 +47,16 @@ export function PaymentTypeModal({
     onCancel,
     isLoading = false
 }: PaymentTypeModalProps) {
-    const [paymentType, setPaymentType] = useState<'cash' | 'installment'>('cash');
+    const [paymentType, setPaymentType] = useState<'cash' | 'installment' | 'mixed'>('cash');
     const [installments, setInstallments] = useState(2);
     const [interestRate, setInterestRate] = useState(0);
+    const [cashAmount, setCashAmount] = useState(0);
 
     const handleConfirm = () => {
         if (paymentType === 'cash') {
             onConfirm('cash');
+        } else if (paymentType === 'mixed') {
+            onConfirm('mixed', installments, interestRate, cashAmount);
         } else {
             onConfirm('installment', installments, interestRate);
         }
@@ -106,7 +109,10 @@ export function PaymentTypeModal({
                         <Label>Tipo de Pagamento</Label>
                         <Select
                             value={paymentType}
-                            onValueChange={(v) => setPaymentType(v as 'cash' | 'installment')}
+                            onValueChange={(v) => {
+                                setPaymentType(v as 'cash' | 'installment' | 'mixed');
+                                if (v !== 'mixed') setCashAmount(0);
+                            }}
                         >
                             <SelectTrigger>
                                 <SelectValue />
@@ -124,12 +130,40 @@ export function PaymentTypeModal({
                                         Parcelado
                                     </div>
                                 </SelectItem>
+                                <SelectItem value="mixed">
+                                    <div className="flex items-center gap-2">
+                                        <Split className="w-4 h-4" />
+                                        Misto (Vista + Parcelado)
+                                    </div>
+                                </SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
 
-                    {/* Parcelas (se parcelado) */}
-                    {paymentType === 'installment' && (
+                    {/* Valor à vista (se misto) */}
+                    {paymentType === 'mixed' && (
+                        <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                            <div className="space-y-2">
+                                <Label>Valor à Vista (R$)</Label>
+                                <Input
+                                    type="number"
+                                    min="0"
+                                    max={totalValue}
+                                    step="0.01"
+                                    value={cashAmount}
+                                    onChange={(e) => setCashAmount(Math.min(parseFloat(e.target.value) || 0, totalValue))}
+                                    autoComplete="off"
+                                />
+                            </div>
+                            <div className="flex justify-between text-sm p-2 rounded bg-muted/50">
+                                <span className="text-muted-foreground">Restante a parcelar:</span>
+                                <span className="font-medium">{formatCurrency(totalValue - cashAmount)}</span>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Parcelas (se parcelado ou misto) */}
+                    {(paymentType === 'installment' || paymentType === 'mixed') && (
                         <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-200">
                             <div className="space-y-2">
                                 <Label>Parcelas</Label>
@@ -161,6 +195,20 @@ export function PaymentTypeModal({
                                     onChange={(e) => setInterestRate(parseFloat(e.target.value) || 0)}
                                     autoComplete="off"
                                 />
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Resumo misto */}
+                    {paymentType === 'mixed' && cashAmount > 0 && (
+                        <div className="p-3 rounded-lg border border-dashed space-y-1 animate-in fade-in slide-in-from-top-2 duration-200">
+                            <div className="flex justify-between text-sm">
+                                <span className="text-muted-foreground">A Vista:</span>
+                                <span className="font-medium">{formatCurrency(cashAmount)}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                                <span className="text-muted-foreground">Parcelado:</span>
+                                <span className="font-medium">{formatCurrency(totalValue - cashAmount)}</span>
                             </div>
                         </div>
                     )}

@@ -49,6 +49,7 @@ import { NpsFeedbackModal } from "@/components/NpsFeedbackModal";
 import { Sparkles, FileText } from "lucide-react";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useOwnerId } from "@/hooks/useOwnerId";
+import { usePermissions } from "@/hooks/usePermissions";
 import { cn } from "@/lib/utils";
 
 interface Contact {
@@ -78,6 +79,7 @@ interface Contact {
 
 
 const Contacts = () => {
+    const { canCreate, canEdit, canDelete } = usePermissions();
     const { data: userRole } = useUserRole();
     const isAgent = userRole === 'agent';
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -458,23 +460,29 @@ const Contacts = () => {
                             </p>
                         </div>
                         <div className="flex items-center gap-2 flex-wrap">
-                            <Button onClick={handleDownloadTemplate} variant="outline" size="sm" className="h-8 md:h-9 text-xs md:text-sm gap-1" title="Baixar planilha modelo">
-                                <FileSpreadsheet className="w-4 h-4" />
-                                <span className="hidden lg:inline">Modelo</span>
-                            </Button>
-                            <Button onClick={() => fileInputRef.current?.click()} variant="outline" size="sm" className="h-8 md:h-9 text-xs md:text-sm gap-1" disabled={isImporting} title="Importar contatos de planilha">
-                                <Upload className="w-4 h-4" />
-                                <span className="hidden lg:inline">{isImporting ? "Importando..." : "Importar"}</span>
-                            </Button>
-                            <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleImportContacts} />
+                            {canCreate('contacts') && (
+                                <>
+                                    <Button onClick={handleDownloadTemplate} variant="outline" size="sm" className="h-8 md:h-9 text-xs md:text-sm gap-1" title="Baixar planilha modelo">
+                                        <FileSpreadsheet className="w-4 h-4" />
+                                        <span className="hidden lg:inline">Modelo</span>
+                                    </Button>
+                                    <Button onClick={() => fileInputRef.current?.click()} variant="outline" size="sm" className="h-8 md:h-9 text-xs md:text-sm gap-1" disabled={isImporting} title="Importar contatos de planilha">
+                                        <Upload className="w-4 h-4" />
+                                        <span className="hidden lg:inline">{isImporting ? "Importando..." : "Importar"}</span>
+                                    </Button>
+                                    <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleImportContacts} />
+                                </>
+                            )}
                             <Button onClick={handleExportContacts} variant="outline" size="sm" className="h-8 md:h-9 text-xs md:text-sm gap-1" title="Exportar contatos para planilha">
                                 <Download className="w-4 h-4" />
                                 <span className="hidden lg:inline">Exportar</span>
                             </Button>
-                            <Button onClick={handleAddNew} size="sm" className="h-8 md:h-9 text-xs md:text-sm">
-                                <Plus className="w-4 h-4 mr-1 md:mr-2" />
-                                <span className="hidden sm:inline">Novo </span>Contato
-                            </Button>
+                            {canCreate('contacts') && (
+                                <Button onClick={handleAddNew} size="sm" className="h-8 md:h-9 text-xs md:text-sm">
+                                    <Plus className="w-4 h-4 mr-1 md:mr-2" />
+                                    <span className="hidden sm:inline">Novo </span>Contato
+                                </Button>
+                            )}
                         </div>
                     </div>
 
@@ -622,15 +630,17 @@ const Contacts = () => {
 
                                 <div className="flex-1" />
 
-                                <Button
-                                    variant="destructive"
-                                    size="sm"
-                                    className="gap-1 md:gap-2 h-7 md:h-8 text-xs"
-                                    onClick={() => setIsBulkDeleteModalOpen(true)}
-                                >
-                                    <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                                    <span className="hidden sm:inline">Excluir</span>
-                                </Button>
+                                {canDelete('contacts') && (
+                                    <Button
+                                        variant="destructive"
+                                        size="sm"
+                                        className="gap-1 md:gap-2 h-7 md:h-8 text-xs"
+                                        onClick={() => setIsBulkDeleteModalOpen(true)}
+                                    >
+                                        <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                                        <span className="hidden sm:inline">Excluir</span>
+                                    </Button>
+                                )}
                             </div>
                         )}
                     </div>
@@ -868,7 +878,7 @@ const Contacts = () => {
                                                     >
                                                         <Instagram className="w-3.5 h-3.5 md:w-4 md:h-4" />
                                                     </Button>
-                                                    {(userRole === "admin" || userRole === "supervisor") && (
+                                                    {canEdit('contacts') && (
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
@@ -879,7 +889,7 @@ const Contacts = () => {
                                                             <Pencil className="w-3.5 h-3.5 md:w-4 md:h-4" />
                                                         </Button>
                                                     )}
-                                                    {userRole === "admin" && (
+                                                    {canDelete('contacts') && (
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"

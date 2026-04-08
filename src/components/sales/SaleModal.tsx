@@ -18,7 +18,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Plus, X, User } from "lucide-react";
+import { Loader2, Plus, X, User, Split } from "lucide-react";
 import { useCreateSale } from "@/hooks/useSales";
 import { useProductsServices, useTeamMembers, useProfessionals } from "@/hooks/useFinancial";
 import type { SaleCategory, PaymentType } from "@/types/sales";
@@ -67,6 +67,7 @@ export function SaleModal({ open, onOpenChange, fixedContactId, appointmentData 
     const [paymentType, setPaymentType] = useState<PaymentType>('cash');
     const [installments, setInstallments] = useState(2);
     const [interestRate, setInterestRate] = useState(0);
+    const [cashAmount, setCashAmount] = useState(0);
     const [saleDate, setSaleDate] = useState(new Date().toISOString().split('T')[0]);
     const [teamMemberId, setTeamMemberId] = useState('');
     const [professionalId, setProfessionalId] = useState('');
@@ -93,6 +94,7 @@ export function SaleModal({ open, onOpenChange, fixedContactId, appointmentData 
                 setPaymentType('pending'); // Always pending for appointments
                 setInstallments(1);
                 setInterestRate(0);
+                setCashAmount(0);
                 setTeamMemberId('');
 
                 // Pre-fill product with service from appointment
@@ -114,6 +116,7 @@ export function SaleModal({ open, onOpenChange, fixedContactId, appointmentData 
                 setPaymentType('cash');
                 setInstallments(2);
                 setInterestRate(0);
+                setCashAmount(0);
                 setSaleDate(new Date().toISOString().split('T')[0]);
                 setTeamMemberId('');
                 setProfessionalId('');
@@ -170,13 +173,14 @@ export function SaleModal({ open, onOpenChange, fixedContactId, appointmentData 
         if (paymentType === 'cash' || installments <= 1) {
             return totalAmount;
         }
+        const base = paymentType === 'mixed' ? Math.max(totalAmount - cashAmount, 0) : totalAmount;
         const avgTime = (installments + 1) / 2;
-        const totalWithInterest = totalAmount * (1 + (interestRate / 100) * avgTime);
+        const totalWithInterest = base * (1 + (interestRate / 100) * avgTime);
         return totalWithInterest / installments;
     };
 
     const installmentValue = calculateInstallmentValue();
-    const totalWithInterest = paymentType === 'installment' && installments > 1
+    const totalWithInterest = (paymentType === 'installment' || paymentType === 'mixed') && installments > 1
         ? installmentValue * installments
         : totalAmount;
 
@@ -198,16 +202,18 @@ export function SaleModal({ open, onOpenChange, fixedContactId, appointmentData 
         try {
             // Create one sale for each product
             for (const product of validProducts) {
+                const productTotal = product.quantity * product.unitPrice;
                 await createSale.mutateAsync({
                     category: product.category,
                     product_service_id: product.productServiceId,
                     product_name: product.productName || 'Item Personalizado', // Pass name
                     quantity: product.quantity,
                     unit_price: product.unitPrice,
-                    total_amount: product.quantity * product.unitPrice,
+                    total_amount: productTotal,
                     payment_type: paymentType,
                     installments: paymentType === 'cash' ? 1 : installments,
                     interest_rate: paymentType === 'cash' ? 0 : interestRate,
+                    cash_amount: paymentType === 'mixed' ? cashAmount : paymentType === 'cash' ? productTotal : 0,
                     sale_date: saleDate,
                     team_member_id: teamMemberId || undefined,
                     professional_id: professionalId || undefined,
@@ -387,6 +393,10 @@ export function SaleModal({ open, onOpenChange, fixedContactId, appointmentData 
                                     if (value === 'cash') {
                                         setInstallments(2);
                                         setInterestRate(0);
+                                        setCashAmount(0);
+                                    }
+                                    if (value !== 'mixed') {
+                                        setCashAmount(0);
                                     }
                                 }}
                             >
@@ -396,12 +406,43 @@ export function SaleModal({ open, onOpenChange, fixedContactId, appointmentData 
                                 <SelectContent>
                                     <SelectItem value="cash">À Vista</SelectItem>
                                     <SelectItem value="installment">Parcelado</SelectItem>
+                                    <SelectItem value="mixed">
+                                        <span className="flex items-center gap-2">
+                                            <Split className="w-4 h-4" />
+                                            Misto (Vista + Parcelado)
+                                        </span>
+                                    </SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
 
+                        {/* Mixed: cash amount field */}
+                        {paymentType === 'mixed' && (
+                            <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                                <div className="space-y-2">
+                                    <Label>Valor à Vista (R$)</Label>
+                                    <Input
+                                        type="number"
+                                        min={0}
+                                        max={totalAmount > 0 ? totalAmount - 0.01 : 0}
+                                        step={0.01}
+                                        value={cashAmount}
+                                        onChange={(e) => {
+                                            const val = parseFloat(e.target.value) || 0;
+                                            setCashAmount(Math.min(Math.max(val, 0), totalAmount > 0 ? totalAmount - 0.01 : 0));
+                                        }}
+                                    />
+                                </div>
+                                <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-md text-sm">
+                                    <p className="text-muted-foreground">
+                                        Restante a parcelar: <span className="font-medium text-foreground">{formatCurrency(Math.max(totalAmount - cashAmount, 0))}</span>
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Installment fields */}
-                        {paymentType === 'installment' && (
+                        {(paymentType === 'installment' || paymentType === 'mixed') && (
                             <>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">

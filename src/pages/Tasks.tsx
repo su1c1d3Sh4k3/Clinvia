@@ -14,8 +14,10 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { usePermissions } from "@/hooks/usePermissions";
 
 export default function Tasks() {
+    const { canCreate, canEdit, canDelete } = usePermissions();
     const [selectedBoardId, setSelectedBoardId] = useState<string | null>(null);
     const [isConfigOpen, setIsConfigOpen] = useState(false);
     const [editingBoardId, setEditingBoardId] = useState<string | null>(null); // null = create new, string = edit existing
@@ -83,26 +85,30 @@ export default function Tasks() {
                     </div>
                 </div>
                 <div className="flex items-center gap-1 md:gap-2 flex-wrap">
-                    <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8 md:h-9 md:w-9"
-                        onClick={handleEditBoard}
-                        disabled={!selectedBoardId}
-                        title="Configurar Quadro"
-                    >
-                        <Settings className="h-3.5 w-3.5 md:h-4 md:w-4" />
-                    </Button>
-                    <Button
-                        onClick={handleNewBoard}
-                        variant={boards?.length === 0 ? "default" : "outline"}
-                        size="sm"
-                        className="h-8 md:h-9 text-xs md:text-sm"
-                    >
-                        <span className="hidden sm:inline">{boards?.length === 0 ? "Criar Primeiro Quadro" : "Novo Quadro"}</span>
-                        <span className="sm:hidden">{boards?.length === 0 ? "Criar" : "Quadro"}</span>
-                    </Button>
-                    {selectedBoardId && (
+                    {canEdit('tasks') && (
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-8 w-8 md:h-9 md:w-9"
+                            onClick={handleEditBoard}
+                            disabled={!selectedBoardId}
+                            title="Configurar Quadro"
+                        >
+                            <Settings className="h-3.5 w-3.5 md:h-4 md:w-4" />
+                        </Button>
+                    )}
+                    {canCreate('tasks') && (
+                        <Button
+                            onClick={handleNewBoard}
+                            variant={boards?.length === 0 ? "default" : "outline"}
+                            size="sm"
+                            className="h-8 md:h-9 text-xs md:text-sm"
+                        >
+                            <span className="hidden sm:inline">{boards?.length === 0 ? "Criar Primeiro Quadro" : "Novo Quadro"}</span>
+                            <span className="sm:hidden">{boards?.length === 0 ? "Criar" : "Quadro"}</span>
+                        </Button>
+                    )}
+                    {canCreate('tasks') && selectedBoardId && (
                         <Button onClick={() => setIsCreateTaskOpen(true)} size="sm" className="h-8 md:h-9 text-xs md:text-sm">
                             <Plus className="h-4 w-4 mr-1 md:mr-2" />
                             <span className="hidden sm:inline">Nova </span>Tarefa
@@ -121,9 +127,11 @@ export default function Tasks() {
                     <div className="h-full border rounded-lg bg-card/50 flex flex-col items-center justify-center text-muted-foreground gap-4">
                         <CalendarIcon className="h-12 w-12 opacity-20" />
                         <p>Selecione ou crie um quadro para começar</p>
-                        <Button onClick={handleNewBoard}>
-                            Criar Quadro
-                        </Button>
+                        {canCreate('tasks') && (
+                            <Button onClick={handleNewBoard}>
+                                Criar Quadro
+                            </Button>
+                        )}
                     </div>
                 )}
             </main>
