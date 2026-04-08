@@ -1049,7 +1049,10 @@ const Contacts = () => {
                 selectedContactForReport && (
                     <ClientReportModal
                         open={isClientReportOpen}
-                        onOpenChange={setIsClientReportOpen}
+                        onOpenChange={(open) => {
+                            setIsClientReportOpen(open);
+                            if (!open) setSelectedContactForReport(null);
+                        }}
                         contact={selectedContactForReport}
                     />
                 )

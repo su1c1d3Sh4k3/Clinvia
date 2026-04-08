@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
     Dialog,
     DialogContent,
@@ -28,6 +28,13 @@ export const ClientReportModal = ({
     const [isGenerating, setIsGenerating] = useState(false);
     const [report, setReport] = useState<string | null>(contact?.report || null);
     const reportRef = useRef<HTMLDivElement>(null);
+
+    // Reset report state when contact changes or modal opens
+    useEffect(() => {
+        if (open) {
+            setReport(contact?.report || null);
+        }
+    }, [open, contact?.id]);
 
     const handleDownloadPDF = async () => {
         if (!reportRef.current || !report) return;
@@ -81,10 +88,6 @@ export const ClientReportModal = ({
             setIsGenerating(false);
         }
     };
-
-    // Update local report if contact prop changes and has a report (initial load)
-    // But careful not to overwrite generated report if prop hasn't updated yet
-    // We'll rely on state 'report' initialized with contact.report
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
