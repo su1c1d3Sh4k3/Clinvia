@@ -51,7 +51,8 @@ export function useSales(startDate?: string, endDate?: string) {
                     *,
                     product_service:products_services(id, name, type, price),
                     team_member:team_members(id, name, avatar_url),
-                    professional:professionals(id, name, photo_url)
+                    professional:professionals(id, name, photo_url),
+                    installments_data:sale_installments(id, installment_number, due_date, amount, status, paid_date)
                 `);
 
             if (startDate && endDate) {
@@ -412,26 +413,30 @@ export function useCreateSale() {
     });
 }
 
-// Atualizar Venda
+// Atualizar Venda (trigger AFTER UPDATE regenera parcelas automaticamente)
 export function useUpdateSale() {
     const queryClient = useQueryClient();
     return useMutation({
         mutationFn: async ({ id, data }: { id: string; data: Partial<SaleFormData> }) => {
-            // First delete existing installments
-            await supabase
-                .from('sale_installments' as any)
-                .delete()
-                .eq('sale_id', id);
-
-            // Update sale - trigger will regenerate installments
             const isCashOrPending = data.payment_type === 'cash' || data.payment_type === 'pending';
             const { data: result, error } = await supabase
                 .from('sales' as any)
                 .update({
-                    ...data,
+                    category: data.category,
+                    product_service_id: data.product_service_id || null,
+                    product_name: data.product_name,
+                    quantity: data.quantity,
+                    unit_price: data.unit_price,
+                    total_amount: data.total_amount,
+                    payment_type: data.payment_type,
                     installments: isCashOrPending ? 1 : data.installments,
                     interest_rate: isCashOrPending ? 0 : data.interest_rate,
                     cash_amount: data.payment_type === 'mixed' ? (data.cash_amount || 0) : (data.payment_type === 'cash' ? data.total_amount : 0),
+                    sale_date: data.sale_date,
+                    team_member_id: data.team_member_id || null,
+                    professional_id: data.professional_id || null,
+                    notes: data.notes || null,
+                    contact_id: data.contact_id || null,
                 })
                 .eq('id', id)
                 .select()
@@ -445,6 +450,9 @@ export function useUpdateSale() {
             queryClient.invalidateQueries({ queryKey: ['sales-summary'] });
             queryClient.invalidateQueries({ queryKey: ['annual-sales'] });
             queryClient.invalidateQueries({ queryKey: ['sales-projection'] });
+            queryClient.invalidateQueries({ queryKey: ['sales-by-agent'] });
+            queryClient.invalidateQueries({ queryKey: ['sales-by-professional'] });
+            queryClient.invalidateQueries({ queryKey: ['sale-installments'] });
             toast.success('Venda atualizada com sucesso');
         },
         onError: (error) => {

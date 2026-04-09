@@ -19,10 +19,11 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { Loader2, Plus, X, User, Split } from "lucide-react";
-import { useCreateSale } from "@/hooks/useSales";
+import { useCreateSale, useUpdateSale } from "@/hooks/useSales";
 import { useProductsServices, useTeamMembers, useProfessionals } from "@/hooks/useFinancial";
-import type { SaleCategory, PaymentType } from "@/types/sales";
+import type { Sale, SaleCategory, PaymentType } from "@/types/sales";
 import { SaleCategoryLabels, PaymentTypeLabels } from "@/types/sales";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { toast } from "sonner";
 
 // Interface para item da lista de produtos
@@ -51,11 +52,13 @@ interface SaleModalProps {
     onOpenChange: (open: boolean) => void;
     fixedContactId?: string; // Lock client from conversation context
     appointmentData?: AppointmentSaleData; // Pre-filled data from appointment completion
+    sale?: Sale | null; // Existing sale for edit mode
 }
 
-export function SaleModal({ open, onOpenChange, fixedContactId, appointmentData }: SaleModalProps) {
+export function SaleModal({ open, onOpenChange, fixedContactId, appointmentData, sale }: SaleModalProps) {
     // Track if this is an appointment-based sale (fields locked)
     const isFromAppointment = !!appointmentData;
+    const isEditing = !!sale?.id;
 
     // Client selection
     const [contactId, setContactId] = useState('');
@@ -81,12 +84,32 @@ export function SaleModal({ open, onOpenChange, fixedContactId, appointmentData 
 
     // Mutations
     const createSale = useCreateSale();
+    const updateSale = useUpdateSale();
 
     // Reset form when modal opens
     useEffect(() => {
         if (open) {
-            // If appointmentData is provided, pre-fill the form with appointment data
-            if (appointmentData) {
+            if (sale) {
+                // Edit mode - populate from existing sale
+                setContactId(sale.contact_id || '');
+                setProducts([{
+                    id: sale.id,
+                    category: sale.category,
+                    productServiceId: sale.product_service_id || '',
+                    productName: sale.product_name,
+                    quantity: sale.quantity,
+                    unitPrice: sale.unit_price,
+                }]);
+                setPaymentType(sale.payment_type);
+                setInstallments(sale.installments > 1 ? sale.installments : 2);
+                setInterestRate(sale.interest_rate || 0);
+                setCashAmount(sale.cash_amount || 0);
+                setSaleDate(sale.sale_date);
+                setTeamMemberId(sale.team_member_id || '');
+                setProfessionalId(sale.professional_id || '');
+                setNotes(sale.notes || '');
+            } else if (appointmentData) {
+                // If appointmentData is provided, pre-fill the form with appointment data
                 setContactId(appointmentData.contact_id || '');
                 setProfessionalId(appointmentData.professional_id || '');
                 setSaleDate(appointmentData.sale_date || new Date().toISOString().split('T')[0]);
@@ -123,7 +146,7 @@ export function SaleModal({ open, onOpenChange, fixedContactId, appointmentData 
                 setNotes('');
             }
         }
-    }, [open, fixedContactId, appointmentData]);
+    }, [open, fixedContactId, appointmentData, sale]);
 
     // Add a new empty product
     const addProduct = useCallback(() => {
@@ -184,7 +207,7 @@ export function SaleModal({ open, onOpenChange, fixedContactId, appointmentData 
         ? installmentValue * installments
         : totalAmount;
 
-    // Submit - create one sale per product
+    // Submit - create one sale per product, or update single sale in edit mode
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -199,38 +222,92 @@ export function SaleModal({ open, onOpenChange, fixedContactId, appointmentData 
             return;
         }
 
-        try {
-            // Create one sale for each product
-            for (const product of validProducts) {
-                const productTotal = product.quantity * product.unitPrice;
-                await createSale.mutateAsync({
-                    category: product.category,
-                    product_service_id: product.productServiceId,
-                    product_name: product.productName || 'Item Personalizado', // Pass name
-                    quantity: product.quantity,
-                    unit_price: product.unitPrice,
-                    total_amount: productTotal,
-                    payment_type: paymentType,
-                    installments: paymentType === 'cash' ? 1 : installments,
-                    interest_rate: paymentType === 'cash' ? 0 : interestRate,
-                    cash_amount: paymentType === 'mixed' ? cashAmount : paymentType === 'cash' ? productTotal : 0,
-                    sale_date: saleDate,
-                    team_member_id: teamMemberId || undefined,
-                    professional_id: professionalId || undefined,
-                    notes: notes || undefined,
-                    contact_id: contactId || undefined,
-                });
+        // Mixed payment validation
+        if (paymentType === 'mixed') {
+            if (cashAmount <= 0) {
+                toast.error('Informe o valor à vista');
+                return;
             }
+            if (cashAmount >= totalAmount) {
+                toast.error('Valor à vista deve ser menor que o total');
+                return;
+            }
+        }
 
-            toast.success(`${validProducts.length} ${validProducts.length === 1 ? 'venda criada' : 'vendas criadas'} com sucesso!`);
-            onOpenChange(false);
+        try {
+            if (isEditing && sale) {
+                // Edit mode - update single sale
+                const product = validProducts[0];
+                const productTotal = product.quantity * product.unitPrice;
+                await updateSale.mutateAsync({
+                    id: sale.id,
+                    data: {
+                        category: product.category,
+                        product_service_id: product.productServiceId,
+                        product_name: product.productName || 'Item Personalizado',
+                        quantity: product.quantity,
+                        unit_price: product.unitPrice,
+                        total_amount: productTotal,
+                        payment_type: paymentType,
+                        installments: paymentType === 'cash' || paymentType === 'pending' ? 1 : installments,
+                        interest_rate: paymentType === 'cash' || paymentType === 'pending' ? 0 : interestRate,
+                        cash_amount: paymentType === 'mixed' ? cashAmount : paymentType === 'cash' ? productTotal : 0,
+                        sale_date: saleDate,
+                        team_member_id: teamMemberId || undefined,
+                        professional_id: professionalId || undefined,
+                        notes: notes || undefined,
+                        contact_id: contactId || undefined,
+                    },
+                });
+                onOpenChange(false);
+            } else {
+                // Create mode - one sale per product
+                let cashDistributed = 0;
+                for (let i = 0; i < validProducts.length; i++) {
+                    const product = validProducts[i];
+                    const productTotal = product.quantity * product.unitPrice;
+                    const isLast = i === validProducts.length - 1;
+
+                    // Distribute cash proportionally for mixed payments
+                    let productCash = 0;
+                    if (paymentType === 'mixed') {
+                        productCash = isLast
+                            ? Math.round((cashAmount - cashDistributed) * 100) / 100
+                            : Math.round((cashAmount * productTotal / totalAmount) * 100) / 100;
+                        cashDistributed += productCash;
+                    } else if (paymentType === 'cash') {
+                        productCash = productTotal;
+                    }
+
+                    await createSale.mutateAsync({
+                        category: product.category,
+                        product_service_id: product.productServiceId,
+                        product_name: product.productName || 'Item Personalizado',
+                        quantity: product.quantity,
+                        unit_price: product.unitPrice,
+                        total_amount: productTotal,
+                        payment_type: paymentType,
+                        installments: paymentType === 'cash' || paymentType === 'pending' ? 1 : installments,
+                        interest_rate: paymentType === 'cash' || paymentType === 'pending' ? 0 : interestRate,
+                        cash_amount: productCash,
+                        sale_date: saleDate,
+                        team_member_id: teamMemberId || undefined,
+                        professional_id: professionalId || undefined,
+                        notes: notes || undefined,
+                        contact_id: contactId || undefined,
+                    });
+                }
+
+                toast.success(`${validProducts.length} ${validProducts.length === 1 ? 'venda criada' : 'vendas criadas'} com sucesso!`);
+                onOpenChange(false);
+            }
         } catch (error) {
-            console.error('Error creating sales:', error);
-            toast.error('Erro ao criar vendas');
+            console.error('Error saving sale:', error);
+            toast.error(isEditing ? 'Erro ao atualizar venda' : 'Erro ao criar vendas');
         }
     };
 
-    const isPending = createSale.isPending;
+    const isPending = createSale.isPending || updateSale.isPending;
 
     const formatCurrency = (value: number) => {
         return new Intl.NumberFormat('pt-BR', {
@@ -248,7 +325,7 @@ export function SaleModal({ open, onOpenChange, fixedContactId, appointmentData 
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
                 <DialogHeader>
-                    <DialogTitle>{isFromAppointment ? 'Venda de Agendamento' : 'Nova Venda'}</DialogTitle>
+                    <DialogTitle>{isEditing ? 'Editar Venda' : isFromAppointment ? 'Venda de Agendamento' : 'Nova Venda'}</DialogTitle>
                 </DialogHeader>
 
                 <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
@@ -326,15 +403,11 @@ export function SaleModal({ open, onOpenChange, fixedContactId, appointmentData 
                                             placeholder="Qtd"
                                         />
 
-                                        {/* Unit Price - NOVO */}
-                                        <Input
-                                            type="number"
-                                            step="0.01"
-                                            min={0}
+                                        {/* Unit Price */}
+                                        <CurrencyInput
                                             value={product.unitPrice}
-                                            onChange={(e) => updateProduct(product.id, 'unitPrice', parseFloat(e.target.value) || 0)}
+                                            onChange={(val) => updateProduct(product.id, 'unitPrice', val)}
                                             className="h-9"
-                                            placeholder="R$ 0,00"
                                         />
                                     </div>
 
@@ -343,21 +416,23 @@ export function SaleModal({ open, onOpenChange, fixedContactId, appointmentData 
                                         <span className="text-sm font-medium text-green-600 min-w-[80px] text-right">
                                             {formatCurrency(product.quantity * product.unitPrice)}
                                         </span>
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-8 w-8 text-destructive hover:bg-destructive/10"
-                                            onClick={() => removeProduct(product.id)}
-                                        >
-                                            <X className="w-4 h-4" />
-                                        </Button>
+                                        {!isEditing && (
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                                                onClick={() => removeProduct(product.id)}
+                                            >
+                                                <X className="w-4 h-4" />
+                                            </Button>
+                                        )}
                                     </div>
                                 </div>
                             ))}
 
-                            {/* Add Product Button - Hidden when from appointment */}
-                            {!isFromAppointment && (
+                            {/* Add Product Button - Hidden when from appointment or editing */}
+                            {!isFromAppointment && !isEditing && (
                                 <Button
                                     type="button"
                                     variant="outline"
@@ -420,16 +495,12 @@ export function SaleModal({ open, onOpenChange, fixedContactId, appointmentData 
                         {paymentType === 'mixed' && (
                             <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
                                 <div className="space-y-2">
-                                    <Label>Valor à Vista (R$)</Label>
-                                    <Input
-                                        type="number"
-                                        min={0}
-                                        max={totalAmount > 0 ? totalAmount - 0.01 : 0}
-                                        step={0.01}
+                                    <Label>Valor à Vista</Label>
+                                    <CurrencyInput
                                         value={cashAmount}
-                                        onChange={(e) => {
-                                            const val = parseFloat(e.target.value) || 0;
-                                            setCashAmount(Math.min(Math.max(val, 0), totalAmount > 0 ? totalAmount - 0.01 : 0));
+                                        onChange={(val) => {
+                                            const maxCash = totalAmount > 0 ? totalAmount - 0.01 : 0;
+                                            setCashAmount(Math.min(Math.max(val, 0), maxCash));
                                         }}
                                     />
                                 </div>
@@ -565,7 +636,7 @@ export function SaleModal({ open, onOpenChange, fixedContactId, appointmentData 
                             disabled={isPending || products.length === 0}
                         >
                             {isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                            Registrar {products.length > 1 ? `${products.length} Vendas` : 'Venda'}
+                            {isEditing ? 'Salvar Alterações' : `Registrar ${products.length > 1 ? `${products.length} Vendas` : 'Venda'}`}
                         </Button>
                     </DialogFooter>
                 </form>

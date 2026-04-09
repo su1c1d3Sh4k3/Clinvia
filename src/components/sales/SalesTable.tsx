@@ -35,7 +35,15 @@ import {
     Trash2,
     ChevronLeft,
     ChevronRight,
+    Check,
+    Clock,
+    AlertCircle,
 } from "lucide-react";
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
 import { useSales, useDeleteSale } from "@/hooks/useSales";
 import { usePermissions } from "@/hooks/usePermissions";
 import type { Sale } from "@/types/sales";
@@ -321,9 +329,57 @@ export function SalesTable({ month, year }: SalesTableProps) {
                                                             Pendente
                                                         </Badge>
                                                     ) : sale.payment_type === 'mixed' ? (
-                                                        <Badge variant="secondary" className="bg-purple-100 text-purple-700 hover:bg-purple-200 dark:bg-purple-950/30 dark:text-purple-300">
-                                                            Misto
-                                                        </Badge>
+                                                        <Popover>
+                                                            <PopoverTrigger asChild>
+                                                                <Badge variant="secondary" className="bg-purple-100 text-purple-700 hover:bg-purple-200 dark:bg-purple-950/30 dark:text-purple-300 cursor-pointer">
+                                                                    Misto
+                                                                </Badge>
+                                                            </PopoverTrigger>
+                                                            <PopoverContent className="w-72 p-3" side="bottom" align="start">
+                                                                <div className="space-y-2">
+                                                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Detalhes do Pagamento</p>
+                                                                    <div className="flex items-center justify-between p-2 rounded bg-green-500/10">
+                                                                        <div className="flex items-center gap-1.5">
+                                                                            <Check className="w-3.5 h-3.5 text-green-600" />
+                                                                            <span className="text-sm">À Vista</span>
+                                                                        </div>
+                                                                        <span className="text-sm font-semibold text-green-600">{formatCurrency(sale.cash_amount)}</span>
+                                                                    </div>
+                                                                    <div className="flex items-center justify-between p-2 rounded bg-blue-500/10">
+                                                                        <div className="flex items-center gap-1.5">
+                                                                            <Clock className="w-3.5 h-3.5 text-blue-600" />
+                                                                            <span className="text-sm">Parcelado ({sale.installments}x)</span>
+                                                                        </div>
+                                                                        <span className="text-sm font-semibold text-blue-600">{formatCurrency(sale.total_amount - sale.cash_amount)}</span>
+                                                                    </div>
+                                                                    {sale.installments_data && sale.installments_data.length > 0 && (
+                                                                        <div className="pt-1 border-t space-y-1">
+                                                                            {sale.installments_data
+                                                                                .sort((a, b) => a.installment_number - b.installment_number)
+                                                                                .map((inst) => (
+                                                                                <div key={inst.id} className="flex items-center justify-between text-xs">
+                                                                                    <span className="text-muted-foreground">
+                                                                                        {inst.installment_number === 1 && sale.payment_type === 'mixed'
+                                                                                            ? 'Entrada'
+                                                                                            : `Parcela ${inst.installment_number}`}
+                                                                                    </span>
+                                                                                    <div className="flex items-center gap-1.5">
+                                                                                        <span>{formatCurrency(inst.amount)}</span>
+                                                                                        {inst.status === 'paid' ? (
+                                                                                            <Check className="w-3 h-3 text-green-500" />
+                                                                                        ) : inst.status === 'overdue' ? (
+                                                                                            <AlertCircle className="w-3 h-3 text-red-500" />
+                                                                                        ) : (
+                                                                                            <Clock className="w-3 h-3 text-yellow-500" />
+                                                                                        )}
+                                                                                    </div>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </PopoverContent>
+                                                        </Popover>
                                                     ) : (
                                                         PaymentTypeLabels[sale.payment_type]
                                                     )}
@@ -376,10 +432,14 @@ export function SalesTable({ month, year }: SalesTableProps) {
                 </CardContent>
             </Card>
 
-            {/* Sale Modal - Edição desativada temporariamente para refatoração multi-produto */}
+            {/* Sale Modal - Create & Edit */}
             <SaleModal
                 open={modalOpen}
-                onOpenChange={setModalOpen}
+                onOpenChange={(open) => {
+                    setModalOpen(open);
+                    if (!open) setEditingSale(null);
+                }}
+                sale={editingSale}
             />
 
             {/* Delete Confirmation */}

@@ -1,965 +1,748 @@
+#!/usr/bin/env python3
 """
-Testes Automatizados do Sistema de Vendas - Clinvia
-====================================================
-Testa o sistema de vendas end-to-end:
-1. Tipos e interfaces (sales.ts)
-2. Hooks de mutacao (useSales.ts)
-3. SaleModal (frontend - venda manual)
-4. PaymentTypeModal (CRM - venda de negociacao ganha)
-5. KanbanBoard (criacao de vendas do CRM)
-6. DealDetailModal (criacao de vendas do CRM)
-7. SalesTable (exibicao de vendas)
-8. DB migration (tabelas, constraints, triggers)
+Testes automatizados para o sistema de vendas.
+Análise estática de código — verifica estrutura, tipos, hooks, componentes e migrações.
 
-Rodar: python tests/test_sales.py
+Execução: python tests/test_sales.py
 """
 
 import os
-import sys
 import re
-from dataclasses import dataclass
-from typing import List, Tuple
+import sys
+from dataclasses import dataclass, field
+from typing import List
+
+# =============================================
+# TEST INFRASTRUCTURE
+# =============================================
 
 @dataclass
 class TestResult:
-    test_name: str
+    name: str
     passed: bool
-    details: str
-    severity: str = "info"  # info, warning, critical
+    message: str
+    severity: str = "error"  # error, warning, info
+
+@dataclass
+class TestCategory:
+    name: str
+    results: List[TestResult] = field(default_factory=list)
+
+    @property
+    def passed(self) -> int:
+        return sum(1 for r in self.results if r.passed)
+
+    @property
+    def failed(self) -> int:
+        return sum(1 for r in self.results if not r.passed)
 
 
-# ============================================================================
-# EXPECTED STATE
-# ============================================================================
+# Resolve project root
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 
-PAYMENT_TYPES = ["cash", "installment", "pending", "mixed"]
-SALE_CATEGORIES = ["product", "service"]
-INSTALLMENT_STATUSES = ["pending", "paid", "overdue"]
+def read_file(relative_path: str) -> str:
+    """Read file content relative to project root."""
+    full_path = os.path.join(PROJECT_ROOT, relative_path.replace("/", os.sep))
+    if not os.path.exists(full_path):
+        return ""
+    with open(full_path, "r", encoding="utf-8") as f:
+        return f.read()
 
-EXPECTED_VARIABLES_APPOINTMENT = [
-    "{nome_cliente}", "{primeiro_nome}", "{data_agendamento}",
-    "{hora_agendamento}", "{nome_profissional}", "{nome_servico}"
-]
+def file_exists(relative_path: str) -> bool:
+    """Check if file exists relative to project root."""
+    full_path = os.path.join(PROJECT_ROOT, relative_path.replace("/", os.sep))
+    return os.path.exists(full_path)
 
 
-# ============================================================================
-# TEST: Types (sales.ts)
-# ============================================================================
+# =============================================
+# 1. FILE STRUCTURE TESTS
+# =============================================
 
-def test_types(project_dir: str) -> List[TestResult]:
-    results = []
-    filepath = os.path.join(project_dir, "src", "types", "sales.ts")
+def test_file_structure() -> TestCategory:
+    cat = TestCategory("Estrutura de Arquivos")
 
-    if not os.path.exists(filepath):
-        results.append(TestResult("Types: arquivo", False, "sales.ts nao encontrado", "critical"))
-        return results
+    required_files = [
+        ("src/components/sales/SaleModal.tsx", "Modal de criação/edição de vendas"),
+        ("src/components/sales/SalesTable.tsx", "Tabela de vendas"),
+        ("src/components/sales/SalesCards.tsx", "Cards de métricas de vendas"),
+        ("src/components/sales/SalesCharts.tsx", "Gráficos de vendas"),
+        ("src/hooks/useSales.ts", "Hooks de vendas"),
+        ("src/types/sales.ts", "Tipos do módulo de vendas"),
+        ("src/components/ui/currency-input.tsx", "Componente CurrencyInput"),
+    ]
 
-    with open(filepath, "r", encoding="utf-8") as f:
-        content = f.read()
-
-    # 1. PaymentType includes 'mixed'
-    has_mixed_type = "'mixed'" in content and "PaymentType" in content
-    results.append(TestResult(
-        "Types: PaymentType inclui 'mixed'",
-        has_mixed_type,
-        "PaymentType " + ("inclui 'mixed'" if has_mixed_type else "NAO inclui 'mixed'!"),
-        "critical" if not has_mixed_type else "info"
-    ))
-
-    # 2. All payment types present
-    for pt in PAYMENT_TYPES:
-        has_pt = f"'{pt}'" in content
-        results.append(TestResult(
-            f"Types: payment type '{pt}'",
-            has_pt,
-            f"Tipo '{pt}' {'encontrado' if has_pt else 'NAO encontrado'}",
-            "critical" if not has_pt else "info"
+    for path, desc in required_files:
+        exists = file_exists(path)
+        cat.results.append(TestResult(
+            name=f"Arquivo existe: {path}",
+            passed=exists,
+            message=f"{desc} encontrado" if exists else f"{desc} NÃO encontrado em {path}"
         ))
 
-    # 3. PaymentTypeLabels has 'mixed' label
-    has_mixed_label = "mixed:" in content and "Misto" in content
-    results.append(TestResult(
-        "Types: label para 'mixed'",
-        has_mixed_label,
-        "Label 'Misto' " + ("encontrado" if has_mixed_label else "NAO encontrado"),
-        "critical" if not has_mixed_label else "info"
+    # Migration file for trigger fix
+    migration_exists = file_exists("supabase/migrations/20260409120000_fix_installment_trigger_on_update.sql")
+    cat.results.append(TestResult(
+        name="Migration de fix do trigger existe",
+        passed=migration_exists,
+        message="Migration encontrada" if migration_exists else "Migration de fix do trigger não encontrada"
     ))
 
-    # 4. cash_amount field in Sale interface
-    has_cash_amount_sale = "cash_amount" in content
-    results.append(TestResult(
-        "Types: cash_amount na interface Sale",
-        has_cash_amount_sale,
-        "Campo cash_amount " + ("encontrado" if has_cash_amount_sale else "NAO encontrado na interface"),
-        "critical" if not has_cash_amount_sale else "info"
+    return cat
+
+
+# =============================================
+# 2. SALE MODAL TESTS
+# =============================================
+
+def test_sale_modal() -> TestCategory:
+    cat = TestCategory("SaleModal")
+    content = read_file("src/components/sales/SaleModal.tsx")
+
+    if not content:
+        cat.results.append(TestResult("Arquivo lido", False, "SaleModal.tsx não encontrado"))
+        return cat
+
+    # Test: accepts sale prop for edit mode
+    cat.results.append(TestResult(
+        name="Aceita prop 'sale' para edição",
+        passed="sale?: Sale" in content or "sale?: Sale | null" in content,
+        message="Prop sale encontrada" if "sale?" in content else "SaleModal não aceita prop 'sale' para modo de edição"
     ))
 
-    # 5. cash_amount field in SaleFormData
-    # Check it appears twice (in Sale AND SaleFormData)
-    cash_amount_count = content.count("cash_amount")
-    has_in_both = cash_amount_count >= 2
-    results.append(TestResult(
-        "Types: cash_amount em Sale e SaleFormData",
-        has_in_both,
-        f"cash_amount encontrado {cash_amount_count} vezes (esperado >= 2)",
-        "critical" if not has_in_both else "info"
+    # Test: imports useUpdateSale
+    cat.results.append(TestResult(
+        name="Importa useUpdateSale",
+        passed="useUpdateSale" in content,
+        message="useUpdateSale importado" if "useUpdateSale" in content else "useUpdateSale NÃO importado no SaleModal"
     ))
 
-    # 6. All categories present
-    for cat in SALE_CATEGORIES:
-        has_cat = f"'{cat}'" in content
-        results.append(TestResult(
-            f"Types: categoria '{cat}'",
-            has_cat,
-            f"Categoria '{cat}' {'encontrada' if has_cat else 'NAO encontrada'}",
-            "critical" if not has_cat else "info"
+    # Test: imports CurrencyInput
+    cat.results.append(TestResult(
+        name="Importa CurrencyInput",
+        passed="CurrencyInput" in content,
+        message="CurrencyInput importado" if "CurrencyInput" in content else "CurrencyInput NÃO importado no SaleModal"
+    ))
+
+    # Test: uses CurrencyInput component (not Input type=number for money)
+    has_currency_input = "<CurrencyInput" in content
+    cat.results.append(TestResult(
+        name="Usa componente CurrencyInput para valores",
+        passed=has_currency_input,
+        message="CurrencyInput utilizado" if has_currency_input else "CurrencyInput NÃO utilizado para campos de valor"
+    ))
+
+    # Test: unit price uses CurrencyInput (check that CurrencyInput follows the Unit Price comment)
+    unit_price_uses_currency = re.search(r'Unit Price.*?<CurrencyInput', content, re.DOTALL)
+    cat.results.append(TestResult(
+        name="Preço unitário usa CurrencyInput",
+        passed=unit_price_uses_currency is not None,
+        message="Preço unitário usa CurrencyInput" if unit_price_uses_currency else "Preço unitário NÃO usa CurrencyInput"
+    ))
+
+    # Test: cash amount uses CurrencyInput (check that CurrencyInput follows the Valor à Vista label)
+    cash_uses_currency = re.search(r'Valor à Vista.*?<CurrencyInput', content, re.DOTALL)
+    cat.results.append(TestResult(
+        name="Valor à vista usa CurrencyInput",
+        passed=cash_uses_currency is not None,
+        message="Valor à vista usa CurrencyInput" if cash_uses_currency else "Valor à vista NÃO usa CurrencyInput"
+    ))
+
+    # Test: has isEditing flag
+    cat.results.append(TestResult(
+        name="Tem flag isEditing",
+        passed="isEditing" in content,
+        message="Flag isEditing encontrada" if "isEditing" in content else "Flag isEditing NÃO encontrada"
+    ))
+
+    # Test: edit mode populates form from sale data
+    cat.results.append(TestResult(
+        name="Modo edição popula formulário com dados da venda",
+        passed="sale.payment_type" in content or "sale?.payment_type" in content,
+        message="Formulário populado a partir de sale" if "sale.payment_type" in content or "sale?.payment_type" in content else "Formulário NÃO é populado com dados da venda"
+    ))
+
+    # Test: title changes between create and edit
+    cat.results.append(TestResult(
+        name="Título muda entre 'Nova Venda' e 'Editar Venda'",
+        passed="Editar Venda" in content and "Nova Venda" in content,
+        message="Títulos encontrados" if "Editar Venda" in content else "Título 'Editar Venda' não encontrado"
+    ))
+
+    # Test: submit button text changes
+    cat.results.append(TestResult(
+        name="Botão submit muda entre criar e editar",
+        passed="Salvar Alterações" in content,
+        message="Texto 'Salvar Alterações' encontrado" if "Salvar Alterações" in content else "Texto do botão de edição não encontrado"
+    ))
+
+    # Test: mixed payment validation
+    has_cash_validation = "cashAmount <= 0" in content
+    has_max_validation = "cashAmount >= totalAmount" in content
+    cat.results.append(TestResult(
+        name="Validação de pagamento misto (cashAmount > 0)",
+        passed=has_cash_validation,
+        message="Validação de cashAmount > 0 encontrada" if has_cash_validation else "Validação de cashAmount mínimo NÃO encontrada"
+    ))
+    cat.results.append(TestResult(
+        name="Validação de pagamento misto (cashAmount < totalAmount)",
+        passed=has_max_validation,
+        message="Validação cashAmount < totalAmount encontrada" if has_max_validation else "Validação de cashAmount máximo NÃO encontrada"
+    ))
+
+    # Test: proportional cash distribution for multi-product
+    has_proportional = "cashDistributed" in content
+    cat.results.append(TestResult(
+        name="Distribuição proporcional do cash em multi-produto",
+        passed=has_proportional,
+        message="Distribuição proporcional encontrada" if has_proportional else "Distribuição proporcional do cash NÃO implementada"
+    ))
+
+    # Test: hides add product button in edit mode
+    has_edit_hide = "isEditing" in content and "!isEditing" in content
+    cat.results.append(TestResult(
+        name="Esconde botão 'Adicionar Produto' em modo edição",
+        passed=has_edit_hide,
+        message="Botão escondido em edição" if has_edit_hide else "Botão 'Adicionar Produto' não é escondido em edição"
+    ))
+
+    # Test: uses updateSale.mutateAsync in edit mode
+    cat.results.append(TestResult(
+        name="Usa updateSale.mutateAsync em modo edição",
+        passed="updateSale.mutateAsync" in content,
+        message="updateSale.mutateAsync encontrado" if "updateSale.mutateAsync" in content else "updateSale.mutateAsync NÃO encontrado"
+    ))
+
+    # Test: Sale type imported
+    cat.results.append(TestResult(
+        name="Tipo Sale importado",
+        passed="Sale," in content or "Sale }" in content,
+        message="Tipo Sale importado" if "Sale" in content else "Tipo Sale NÃO importado"
+    ))
+
+    return cat
+
+
+# =============================================
+# 3. SALES TABLE TESTS
+# =============================================
+
+def test_sales_table() -> TestCategory:
+    cat = TestCategory("SalesTable")
+    content = read_file("src/components/sales/SalesTable.tsx")
+
+    if not content:
+        cat.results.append(TestResult("Arquivo lido", False, "SalesTable.tsx não encontrado"))
+        return cat
+
+    # Test: passes sale/editingSale to SaleModal
+    passes_sale = "sale={editingSale}" in content
+    cat.results.append(TestResult(
+        name="Passa editingSale ao SaleModal",
+        passed=passes_sale,
+        message="editingSale passado ao SaleModal" if passes_sale else "editingSale NÃO passado ao SaleModal"
+    ))
+
+    # Test: clears editingSale on modal close
+    clears_on_close = "setEditingSale(null)" in content
+    cat.results.append(TestResult(
+        name="Limpa editingSale ao fechar modal",
+        passed=clears_on_close,
+        message="setEditingSale(null) encontrado no onOpenChange" if clears_on_close else "editingSale NÃO é limpo ao fechar modal"
+    ))
+
+    # Test: imports Popover
+    has_popover = "Popover" in content
+    cat.results.append(TestResult(
+        name="Importa Popover para display de pagamento misto",
+        passed=has_popover,
+        message="Popover importado" if has_popover else "Popover NÃO importado"
+    ))
+
+    # Test: has PopoverContent with mixed payment breakdown
+    has_breakdown = "cash_amount" in content and "PopoverContent" in content
+    cat.results.append(TestResult(
+        name="Mostra breakdown de pagamento misto no Popover",
+        passed=has_breakdown,
+        message="Breakdown de pagamento misto encontrado" if has_breakdown else "Breakdown de pagamento misto NÃO encontrado"
+    ))
+
+    # Test: shows installment details in popover
+    has_installment_detail = "installments_data" in content
+    cat.results.append(TestResult(
+        name="Exibe detalhes de parcelas no popover",
+        passed=has_installment_detail,
+        message="installments_data utilizado" if has_installment_detail else "installments_data NÃO utilizado no popover"
+    ))
+
+    # Test: shows status icons (paid/pending/overdue)
+    has_status_icons = "status === 'paid'" in content and "status === 'overdue'" in content
+    cat.results.append(TestResult(
+        name="Exibe ícones de status das parcelas",
+        passed=has_status_icons,
+        message="Ícones de status encontrados" if has_status_icons else "Ícones de status NÃO encontrados"
+    ))
+
+    # Test: no old disabled comment
+    old_comment = "Edição desativada temporariamente" in content
+    cat.results.append(TestResult(
+        name="Comentário de edição desativada removido",
+        passed=not old_comment,
+        message="Comentário antigo removido" if not old_comment else "Comentário 'Edição desativada' ainda presente"
+    ))
+
+    # Test: edit button exists and calls handleEditClick
+    has_edit_btn = "handleEditClick" in content and "Pencil" in content
+    cat.results.append(TestResult(
+        name="Botão de edição funcional",
+        passed=has_edit_btn,
+        message="Botão de edição com handleEditClick encontrado" if has_edit_btn else "Botão de edição não está funcional"
+    ))
+
+    return cat
+
+
+# =============================================
+# 4. useSales HOOK TESTS
+# =============================================
+
+def test_use_sales_hook() -> TestCategory:
+    cat = TestCategory("useSales Hook")
+    content = read_file("src/hooks/useSales.ts")
+
+    if not content:
+        cat.results.append(TestResult("Arquivo lido", False, "useSales.ts não encontrado"))
+        return cat
+
+    # Test: useUpdateSale does NOT manually delete installments
+    update_section = ""
+    match = re.search(r'export function useUpdateSale\(\).*?^}', content, re.MULTILINE | re.DOTALL)
+    if match:
+        update_section = match.group(0)
+
+    has_manual_delete = "from('sale_installments'" in update_section and ".delete()" in update_section
+    cat.results.append(TestResult(
+        name="useUpdateSale NÃO deleta parcelas manualmente",
+        passed=not has_manual_delete,
+        message="Trigger cuida da regeneração" if not has_manual_delete else "useUpdateSale ainda deleta parcelas manualmente — trigger deveria cuidar disso"
+    ))
+
+    # Test: useSales joins installments_data
+    has_installments_join = "installments_data:sale_installments" in content
+    cat.results.append(TestResult(
+        name="useSales faz join com sale_installments",
+        passed=has_installments_join,
+        message="Join com installments_data encontrado" if has_installments_join else "useSales NÃO faz join com sale_installments"
+    ))
+
+    # Test: useUpdateSale updates all editable fields
+    required_fields = ["category", "product_service_id", "product_name", "quantity",
+                       "unit_price", "total_amount", "payment_type", "installments",
+                       "interest_rate", "cash_amount", "sale_date",
+                       "team_member_id", "professional_id", "notes", "contact_id"]
+    missing = [f for f in required_fields if f not in update_section]
+    cat.results.append(TestResult(
+        name="useUpdateSale atualiza todos os campos editáveis",
+        passed=len(missing) == 0,
+        message="Todos os campos incluídos" if not missing else f"Campos faltando no update: {', '.join(missing)}"
+    ))
+
+    # Test: useCreateSale exists
+    cat.results.append(TestResult(
+        name="useCreateSale exportado",
+        passed="export function useCreateSale" in content,
+        message="useCreateSale encontrado" if "export function useCreateSale" in content else "useCreateSale NÃO encontrado"
+    ))
+
+    # Test: useDeleteSale exists
+    cat.results.append(TestResult(
+        name="useDeleteSale exportado",
+        passed="export function useDeleteSale" in content,
+        message="useDeleteSale encontrado" if "export function useDeleteSale" in content else "useDeleteSale NÃO encontrado"
+    ))
+
+    # Test: usePayInstallment exists
+    cat.results.append(TestResult(
+        name="usePayInstallment exportado",
+        passed="export function usePayInstallment" in content,
+        message="usePayInstallment encontrado" if "export function usePayInstallment" in content else "usePayInstallment NÃO encontrado"
+    ))
+
+    # Test: useUpdateSale invalidates sale-installments cache
+    cat.results.append(TestResult(
+        name="useUpdateSale invalida cache de parcelas",
+        passed="sale-installments" in update_section,
+        message="Cache de parcelas invalidado" if "sale-installments" in update_section else "Cache de parcelas NÃO invalidado após update"
+    ))
+
+    # Test: cash_amount handling in create
+    create_section = ""
+    match = re.search(r'export function useCreateSale\(\).*?^}', content, re.MULTILINE | re.DOTALL)
+    if match:
+        create_section = match.group(0)
+    cat.results.append(TestResult(
+        name="useCreateSale calcula cash_amount corretamente",
+        passed="cash_amount" in create_section and "mixed" in create_section,
+        message="cash_amount tratado para mixed" if "cash_amount" in create_section else "cash_amount NÃO tratado em useCreateSale"
+    ))
+
+    # Test: getOwnerId helper exists
+    cat.results.append(TestResult(
+        name="Helper getOwnerId existe",
+        passed="async function getOwnerId" in content,
+        message="getOwnerId encontrado" if "async function getOwnerId" in content else "getOwnerId NÃO encontrado"
+    ))
+
+    # Test: useSales accepts date range
+    cat.results.append(TestResult(
+        name="useSales aceita range de datas",
+        passed="startDate" in content and "endDate" in content and "gte" in content and "lte" in content,
+        message="Filtro por range de datas implementado" if "gte" in content else "Filtro por range de datas NÃO encontrado"
+    ))
+
+    return cat
+
+
+# =============================================
+# 5. TYPES TESTS
+# =============================================
+
+def test_types() -> TestCategory:
+    cat = TestCategory("Types (sales.ts)")
+    content = read_file("src/types/sales.ts")
+
+    if not content:
+        cat.results.append(TestResult("Arquivo lido", False, "sales.ts não encontrado"))
+        return cat
+
+    # Test: Sale interface has installments_data
+    cat.results.append(TestResult(
+        name="Sale.installments_data existe",
+        passed="installments_data" in content,
+        message="Campo installments_data encontrado" if "installments_data" in content else "Campo installments_data NÃO encontrado na interface Sale"
+    ))
+
+    # Test: Sale interface has cash_amount
+    cat.results.append(TestResult(
+        name="Sale.cash_amount existe",
+        passed="cash_amount" in content,
+        message="Campo cash_amount encontrado" if "cash_amount" in content else "Campo cash_amount NÃO encontrado"
+    ))
+
+    # Test: PaymentType includes 'mixed'
+    cat.results.append(TestResult(
+        name="PaymentType inclui 'mixed'",
+        passed="'mixed'" in content,
+        message="Tipo mixed encontrado" if "'mixed'" in content else "Tipo mixed NÃO encontrado em PaymentType"
+    ))
+
+    # Test: SaleFormData exists with required fields
+    form_fields = ["category", "product_service_id", "product_name", "quantity",
+                   "unit_price", "total_amount", "payment_type", "installments",
+                   "interest_rate", "cash_amount", "sale_date"]
+    missing = [f for f in form_fields if f not in content]
+    cat.results.append(TestResult(
+        name="SaleFormData tem todos os campos necessários",
+        passed=len(missing) == 0,
+        message="Todos os campos presentes" if not missing else f"Campos faltando: {', '.join(missing)}"
+    ))
+
+    # Test: SaleInstallment interface exists
+    cat.results.append(TestResult(
+        name="Interface SaleInstallment existe",
+        passed="interface SaleInstallment" in content,
+        message="SaleInstallment encontrada" if "interface SaleInstallment" in content else "Interface SaleInstallment NÃO encontrada"
+    ))
+
+    return cat
+
+
+# =============================================
+# 6. MIGRATION / TRIGGER TESTS
+# =============================================
+
+def test_migration() -> TestCategory:
+    cat = TestCategory("Migration / Trigger")
+    content = read_file("supabase/migrations/20260409120000_fix_installment_trigger_on_update.sql")
+
+    if not content:
+        cat.results.append(TestResult("Arquivo lido", False, "Migration de fix do trigger não encontrada"))
+        return cat
+
+    # Test: trigger fires on INSERT OR UPDATE
+    has_insert_or_update = "AFTER INSERT OR UPDATE ON sales" in content
+    cat.results.append(TestResult(
+        name="Trigger é AFTER INSERT OR UPDATE",
+        passed=has_insert_or_update,
+        message="Trigger atualizado" if has_insert_or_update else "Trigger NÃO inclui OR UPDATE"
+    ))
+
+    # Test: function checks TG_OP
+    has_tg_op = "TG_OP" in content
+    cat.results.append(TestResult(
+        name="Função verifica TG_OP",
+        passed=has_tg_op,
+        message="TG_OP verificado" if has_tg_op else "TG_OP NÃO verificado na função"
+    ))
+
+    # Test: skip condition for unchanged payment fields
+    has_skip = "RETURN NEW" in content and "OLD.payment_type = NEW.payment_type" in content
+    cat.results.append(TestResult(
+        name="Skip condition para campos não alterados",
+        passed=has_skip,
+        message="Skip condition encontrada" if has_skip else "Skip condition NÃO encontrada"
+    ))
+
+    # Test: checks if installments exist before skipping
+    has_exists_check = "EXISTS (SELECT 1 FROM sale_installments" in content
+    cat.results.append(TestResult(
+        name="Verifica se parcelas existem antes de skip",
+        passed=has_exists_check,
+        message="EXISTS check encontrado" if has_exists_check else "EXISTS check NÃO encontrado — pode pular vendas sem parcelas"
+    ))
+
+    # Test: deletes old installments on UPDATE
+    has_delete = "DELETE FROM sale_installments WHERE sale_id = NEW.id" in content
+    cat.results.append(TestResult(
+        name="Deleta parcelas antigas no UPDATE",
+        passed=has_delete,
+        message="DELETE encontrado" if has_delete else "DELETE de parcelas NÃO encontrado"
+    ))
+
+    # Test: handles mixed payment type
+    has_mixed = "mixed" in content and "cash_amount" in content
+    cat.results.append(TestResult(
+        name="Lida com payment_type mixed",
+        passed=has_mixed,
+        message="Tratamento de mixed encontrado" if has_mixed else "Tratamento de mixed NÃO encontrado"
+    ))
+
+    # Test: has repair step for orphaned sales
+    has_repair = "LEFT JOIN sale_installments" in content or "WHERE si.id IS NULL" in content
+    cat.results.append(TestResult(
+        name="Repair step para vendas sem parcelas",
+        passed=has_repair,
+        message="Repair step encontrado" if has_repair else "Repair step NÃO encontrado"
+    ))
+
+    # Test: SECURITY DEFINER
+    has_security = "SECURITY DEFINER" in content
+    cat.results.append(TestResult(
+        name="Função usa SECURITY DEFINER",
+        passed=has_security,
+        message="SECURITY DEFINER encontrado" if has_security else "SECURITY DEFINER NÃO encontrado"
+    ))
+
+    return cat
+
+
+# =============================================
+# 7. CURRENCY INPUT TESTS
+# =============================================
+
+def test_currency_input() -> TestCategory:
+    cat = TestCategory("CurrencyInput")
+    content = read_file("src/components/ui/currency-input.tsx")
+
+    if not content:
+        cat.results.append(TestResult("Arquivo lido", False, "currency-input.tsx não encontrado"))
+        return cat
+
+    # Test: component exported
+    cat.results.append(TestResult(
+        name="Componente exportado",
+        passed="export { CurrencyInput" in content or "export default" in content,
+        message="CurrencyInput exportado" if "export" in content else "CurrencyInput NÃO exportado"
+    ))
+
+    # Test: uses inputMode="numeric"
+    cat.results.append(TestResult(
+        name="Usa inputMode='numeric'",
+        passed='inputMode="numeric"' in content,
+        message="inputMode numeric encontrado" if 'inputMode="numeric"' in content else "inputMode numeric NÃO encontrado"
+    ))
+
+    # Test: formats as centavos (divides by 100)
+    has_centavos = "/ 100" in content or "centavos" in content
+    cat.results.append(TestResult(
+        name="Formata como centavos (divide por 100)",
+        passed=has_centavos,
+        message="Conversão de centavos encontrada" if has_centavos else "Conversão de centavos NÃO encontrada"
+    ))
+
+    # Test: has R$ prefix
+    has_prefix = "R$" in content
+    cat.results.append(TestResult(
+        name="Tem prefixo R$",
+        passed=has_prefix,
+        message="Prefixo R$ encontrado" if has_prefix else "Prefixo R$ NÃO encontrado"
+    ))
+
+    # Test: strips non-numeric characters
+    has_strip = r"replace(/\D/g" in content or "replace(/[^0-9]/g" in content
+    cat.results.append(TestResult(
+        name="Remove caracteres não numéricos",
+        passed=has_strip,
+        message="Strip de caracteres encontrado" if has_strip else "Strip NÃO encontrado"
+    ))
+
+    return cat
+
+
+# =============================================
+# 8. SECURITY TESTS
+# =============================================
+
+def test_security() -> TestCategory:
+    cat = TestCategory("Segurança")
+
+    # Test: RLS on sales table
+    migration_content = read_file("supabase/migrations/20260113150000_create_sales_module.sql")
+    has_rls = "ENABLE ROW LEVEL SECURITY" in migration_content and "sales" in migration_content
+    cat.results.append(TestResult(
+        name="RLS habilitado na tabela sales",
+        passed=has_rls,
+        message="RLS encontrado" if has_rls else "RLS NÃO encontrado para sales"
+    ))
+
+    # Test: CASCADE delete on installments
+    has_cascade = "ON DELETE CASCADE" in migration_content
+    cat.results.append(TestResult(
+        name="CASCADE delete nas parcelas",
+        passed=has_cascade,
+        message="ON DELETE CASCADE encontrado" if has_cascade else "ON DELETE CASCADE NÃO encontrado em sale_installments"
+    ))
+
+    # Test: trigger uses SECURITY DEFINER
+    trigger_content = read_file("supabase/migrations/20260409120000_fix_installment_trigger_on_update.sql")
+    has_sec_def = "SECURITY DEFINER" in trigger_content
+    cat.results.append(TestResult(
+        name="Trigger function usa SECURITY DEFINER",
+        passed=has_sec_def,
+        message="SECURITY DEFINER encontrado" if has_sec_def else "Trigger function sem SECURITY DEFINER"
+    ))
+
+    # Test: no raw SQL in frontend hooks
+    hooks_content = read_file("src/hooks/useSales.ts")
+    has_direct_sql = "sql`" in hooks_content or ".query(" in hooks_content
+    cat.results.append(TestResult(
+        name="Sem SQL direto nos hooks (usa supabase client)",
+        passed=not has_direct_sql,
+        message="Nenhum SQL direto encontrado" if not has_direct_sql else "SQL direto encontrado nos hooks — risco de injeção"
+    ))
+
+    return cat
+
+
+# =============================================
+# 9. INTEGRATION / CONSISTENCY TESTS
+# =============================================
+
+def test_integration() -> TestCategory:
+    cat = TestCategory("Integração e Consistência")
+
+    modal_content = read_file("src/components/sales/SaleModal.tsx")
+    table_content = read_file("src/components/sales/SalesTable.tsx")
+
+    # Test: SaleModal and SalesTable use same PaymentTypeLabels
+    modal_uses = "PaymentTypeLabels" in modal_content
+    table_uses = "PaymentTypeLabels" in table_content
+    cat.results.append(TestResult(
+        name="Modal e Tabela usam PaymentTypeLabels consistente",
+        passed=modal_uses and table_uses,
+        message="Ambos usam PaymentTypeLabels" if modal_uses and table_uses else "Inconsistência no uso de PaymentTypeLabels"
+    ))
+
+    # Test: SaleModal imports from useSales (not inline queries)
+    cat.results.append(TestResult(
+        name="SaleModal usa hooks de useSales (não queries inline)",
+        passed='from "@/hooks/useSales"' in modal_content or "from '@/hooks/useSales'" in modal_content,
+        message="Hooks importados corretamente" if "useSales" in modal_content else "SaleModal não importa de useSales"
+    ))
+
+    # Test: formatCurrency used consistently
+    modal_format = "formatCurrency" in modal_content
+    table_format = "formatCurrency" in table_content
+    cat.results.append(TestResult(
+        name="formatCurrency usado em ambos modal e tabela",
+        passed=modal_format and table_format,
+        message="Formatação consistente" if modal_format and table_format else "Inconsistência em formatCurrency"
+    ))
+
+    # Test: mixed payment creates proportional cash for multi-product
+    cat.results.append(TestResult(
+        name="Multi-produto misto distribui cash proporcionalmente",
+        passed="cashDistributed" in modal_content,
+        message="Distribuição proporcional implementada" if "cashDistributed" in modal_content else "Distribuição proporcional NÃO implementada"
+    ))
+
+    # Test: all payment types handled in table display
+    for ptype in ["pending", "mixed", "cash", "installment"]:
+        cat.results.append(TestResult(
+            name=f"Tabela exibe payment_type '{ptype}'",
+            passed=ptype in table_content,
+            message=f"Tipo {ptype} tratado na tabela" if ptype in table_content else f"Tipo {ptype} NÃO tratado na tabela"
         ))
 
-    # 7. InstallmentStatus types
-    for status in INSTALLMENT_STATUSES:
-        has_status = f"'{status}'" in content
-        results.append(TestResult(
-            f"Types: installment status '{status}'",
-            has_status,
-            f"Status '{status}' {'encontrado' if has_status else 'NAO encontrado'}",
-            "critical" if not has_status else "info"
-        ))
-
-    return results
-
-
-# ============================================================================
-# TEST: Hooks (useSales.ts)
-# ============================================================================
-
-def test_hooks(project_dir: str) -> List[TestResult]:
-    results = []
-    filepath = os.path.join(project_dir, "src", "hooks", "useSales.ts")
-
-    if not os.path.exists(filepath):
-        results.append(TestResult("Hooks: arquivo", False, "useSales.ts nao encontrado", "critical"))
-        return results
-
-    with open(filepath, "r", encoding="utf-8") as f:
-        content = f.read()
-
-    # 1. useCreateSale exists
-    has_create = "useCreateSale" in content
-    results.append(TestResult(
-        "Hooks: useCreateSale",
-        has_create,
-        "Hook useCreateSale " + ("encontrado" if has_create else "NAO encontrado"),
-        "critical" if not has_create else "info"
+    # Test: SalesTable passes proper props to SaleModal
+    has_proper_props = "sale={editingSale}" in table_content
+    cat.results.append(TestResult(
+        name="SalesTable passa props corretas ao SaleModal",
+        passed=has_proper_props,
+        message="Props corretas passadas" if has_proper_props else "Props incorretas ou incompletas para SaleModal"
     ))
 
-    # 2. useUpdateSale exists
-    has_update = "useUpdateSale" in content
-    results.append(TestResult(
-        "Hooks: useUpdateSale",
-        has_update,
-        "Hook useUpdateSale " + ("encontrado" if has_update else "NAO encontrado"),
-        "critical" if not has_update else "info"
-    ))
-
-    # 3. useDeleteSale exists
-    has_delete = "useDeleteSale" in content
-    results.append(TestResult(
-        "Hooks: useDeleteSale",
-        has_delete,
-        "Hook useDeleteSale " + ("encontrado" if has_delete else "NAO encontrado"),
-        "critical" if not has_delete else "info"
-    ))
-
-    # 4. usePayInstallment exists
-    has_pay = "usePayInstallment" in content
-    results.append(TestResult(
-        "Hooks: usePayInstallment",
-        has_pay,
-        "Hook usePayInstallment " + ("encontrado" if has_pay else "NAO encontrado"),
-        "critical" if not has_pay else "info"
-    ))
-
-    # 5. cash_amount handled in create
-    has_cash_create = "cash_amount" in content and "useCreateSale" in content
-    results.append(TestResult(
-        "Hooks: cash_amount no create",
-        has_cash_create,
-        "cash_amount " + ("passado no insert" if has_cash_create else "NAO passado!"),
-        "critical" if not has_cash_create else "info"
-    ))
-
-    # 6. cash_amount handled in update
-    # Check if cash_amount appears in the update mutation section
-    update_section = content[content.find("useUpdateSale"):] if "useUpdateSale" in content else ""
-    has_cash_update = "cash_amount" in update_section
-    results.append(TestResult(
-        "Hooks: cash_amount no update",
-        has_cash_update,
-        "cash_amount " + ("passado no update" if has_cash_update else "NAO passado!"),
-        "critical" if not has_cash_update else "info"
-    ))
-
-    # 7. mixed handling in create - installments for mixed
-    has_mixed_handling = "mixed" in content or "isCashOrPending" in content
-    results.append(TestResult(
-        "Hooks: tratamento de 'mixed' no create",
-        has_mixed_handling,
-        "Logica para 'mixed' " + ("encontrada" if has_mixed_handling else "NAO encontrada"),
-        "critical" if not has_mixed_handling else "info"
-    ))
-
-    # 8. Owner ID resolution
-    has_owner_id = "getOwnerId" in content or "useOwnerId" in content
-    results.append(TestResult(
-        "Hooks: resolucao de owner_id",
-        has_owner_id,
-        "getOwnerId/useOwnerId " + ("usado" if has_owner_id else "NAO encontrado"),
-        "critical" if not has_owner_id else "info"
-    ))
-
-    # 9. Query invalidation on create
-    has_invalidation = "invalidateQueries" in content
-    results.append(TestResult(
-        "Hooks: invalidacao de queries",
-        has_invalidation,
-        "invalidateQueries " + ("chamado" if has_invalidation else "NAO chamado"),
-        "warning" if not has_invalidation else "info"
-    ))
-
-    # 10. useSales query hook
-    has_list = "useSales" in content
-    results.append(TestResult(
-        "Hooks: useSales (listagem)",
-        has_list,
-        "Hook useSales " + ("encontrado" if has_list else "NAO encontrado"),
-        "critical" if not has_list else "info"
-    ))
-
-    # 11. useSaleInstallments
-    has_installments_hook = "useSaleInstallments" in content
-    results.append(TestResult(
-        "Hooks: useSaleInstallments",
-        has_installments_hook,
-        "Hook useSaleInstallments " + ("encontrado" if has_installments_hook else "NAO encontrado"),
-        "warning" if not has_installments_hook else "info"
-    ))
-
-    return results
-
-
-# ============================================================================
-# TEST: SaleModal (frontend - manual sales)
-# ============================================================================
-
-def test_sale_modal(project_dir: str) -> List[TestResult]:
-    results = []
-    filepath = os.path.join(project_dir, "src", "components", "sales", "SaleModal.tsx")
-
-    if not os.path.exists(filepath):
-        results.append(TestResult("SaleModal: arquivo", False, "SaleModal.tsx nao encontrado", "critical"))
-        return results
-
-    with open(filepath, "r", encoding="utf-8") as f:
-        content = f.read()
-
-    # 1. Mixed payment option exists
-    has_mixed_option = "'mixed'" in content and "Misto" in content
-    results.append(TestResult(
-        "SaleModal: opcao 'Misto'",
-        has_mixed_option,
-        "Opcao Misto " + ("encontrada no select" if has_mixed_option else "NAO encontrada!"),
-        "critical" if not has_mixed_option else "info"
-    ))
-
-    # 2. cashAmount state
-    has_cash_state = "cashAmount" in content and "setCashAmount" in content
-    results.append(TestResult(
-        "SaleModal: state cashAmount",
-        has_cash_state,
-        "State cashAmount/setCashAmount " + ("encontrado" if has_cash_state else "NAO encontrado!"),
-        "critical" if not has_cash_state else "info"
-    ))
-
-    # 3. Cash amount input field for mixed
-    has_cash_input = "Vista" in content and "cashAmount" in content
-    results.append(TestResult(
-        "SaleModal: campo 'Valor a Vista'",
-        has_cash_input,
-        "Campo de valor a vista " + ("encontrado" if has_cash_input else "NAO encontrado!"),
-        "critical" if not has_cash_input else "info"
-    ))
-
-    # 4. Remaining amount display
-    has_remaining = "parcelar" in content.lower() or "restante" in content.lower()
-    results.append(TestResult(
-        "SaleModal: display 'Restante a parcelar'",
-        has_remaining,
-        "Display de restante " + ("encontrado" if has_remaining else "NAO encontrado"),
-        "warning" if not has_remaining else "info"
-    ))
-
-    # 5. Mixed calculation uses base = totalAmount - cashAmount
-    has_mixed_calc = "totalAmount - cashAmount" in content or "totalAmount-cashAmount" in content
-    results.append(TestResult(
-        "SaleModal: calculo base misto",
-        has_mixed_calc,
-        "Calculo 'totalAmount - cashAmount' " + ("encontrado" if has_mixed_calc else "NAO encontrado!"),
-        "critical" if not has_mixed_calc else "info"
-    ))
-
-    # 6. cash_amount passed in submit
-    has_cash_submit = "cash_amount" in content
-    results.append(TestResult(
-        "SaleModal: cash_amount no submit",
-        has_cash_submit,
-        "cash_amount " + ("passado na criacao" if has_cash_submit else "NAO passado!"),
-        "critical" if not has_cash_submit else "info"
-    ))
-
-    # 7. Installment fields show for both installment AND mixed
-    has_both_condition = "mixed" in content and "installment" in content
-    results.append(TestResult(
-        "SaleModal: parcelas para installment e mixed",
-        has_both_condition,
-        "Campos de parcela " + ("aparecem para ambos" if has_both_condition else "condicao incompleta"),
-        "critical" if not has_both_condition else "info"
-    ))
-
-    # 8. Cash vs installment vs mixed payment options in Select
-    has_cash = "'cash'" in content
-    has_installment = "'installment'" in content
-    has_mixed = "'mixed'" in content
-    all_options = has_cash and has_installment and has_mixed
-    results.append(TestResult(
-        "SaleModal: todas as opcoes de pagamento",
-        all_options,
-        f"cash={has_cash}, installment={has_installment}, mixed={has_mixed}",
-        "critical" if not all_options else "info"
-    ))
-
-    # 9. Multi-product support
-    has_multi = "addProduct" in content or "products" in content
-    results.append(TestResult(
-        "SaleModal: suporte multi-produto",
-        has_multi,
-        "Multi-produto " + ("implementado" if has_multi else "NAO encontrado"),
-        "warning" if not has_multi else "info"
-    ))
-
-    # 10. Contact picker
-    has_contact = "contact" in content.lower() and ("ContactPicker" in content or "contactId" in content)
-    results.append(TestResult(
-        "SaleModal: seletor de cliente",
-        has_contact,
-        "Seletor de cliente " + ("encontrado" if has_contact else "NAO encontrado"),
-        "warning" if not has_contact else "info"
-    ))
-
-    return results
-
-
-# ============================================================================
-# TEST: PaymentTypeModal (CRM - deal won payment)
-# ============================================================================
-
-def test_payment_type_modal(project_dir: str) -> List[TestResult]:
-    results = []
-    filepath = os.path.join(project_dir, "src", "components", "crm", "PaymentTypeModal.tsx")
-
-    if not os.path.exists(filepath):
-        results.append(TestResult("PaymentTypeModal: arquivo", False, "PaymentTypeModal.tsx nao encontrado", "critical"))
-        return results
-
-    with open(filepath, "r", encoding="utf-8") as f:
-        content = f.read()
-
-    # 1. Mixed option in select
-    has_mixed = "'mixed'" in content and "Misto" in content
-    results.append(TestResult(
-        "PaymentTypeModal: opcao 'Misto'",
-        has_mixed,
-        "Opcao Misto " + ("encontrada" if has_mixed else "NAO encontrada!"),
-        "critical" if not has_mixed else "info"
-    ))
-
-    # 2. cashAmount state
-    has_cash_state = "cashAmount" in content and "setCashAmount" in content
-    results.append(TestResult(
-        "PaymentTypeModal: state cashAmount",
-        has_cash_state,
-        "State cashAmount " + ("encontrado" if has_cash_state else "NAO encontrado!"),
-        "critical" if not has_cash_state else "info"
-    ))
-
-    # 3. Cash amount input
-    has_cash_input = "Vista" in content and "cashAmount" in content
-    results.append(TestResult(
-        "PaymentTypeModal: campo valor a vista",
-        has_cash_input,
-        "Campo valor a vista " + ("encontrado" if has_cash_input else "NAO encontrado!"),
-        "critical" if not has_cash_input else "info"
-    ))
-
-    # 4. onConfirm passes cashAmount for mixed
-    has_confirm_cash = "onConfirm" in content and "cashAmount" in content
-    results.append(TestResult(
-        "PaymentTypeModal: onConfirm passa cashAmount",
-        has_confirm_cash,
-        "onConfirm com cashAmount " + ("implementado" if has_confirm_cash else "NAO implementado!"),
-        "critical" if not has_confirm_cash else "info"
-    ))
-
-    # 5. Interface accepts 'mixed' type
-    has_mixed_interface = "'mixed'" in content and "onConfirm" in content
-    results.append(TestResult(
-        "PaymentTypeModal: interface aceita 'mixed'",
-        has_mixed_interface,
-        "Interface PaymentTypeModalProps " + ("aceita mixed" if has_mixed_interface else "NAO aceita mixed!"),
-        "critical" if not has_mixed_interface else "info"
-    ))
-
-    # 6. Remaining amount display
-    has_remaining = "parcelar" in content.lower() or "restante" in content.lower()
-    results.append(TestResult(
-        "PaymentTypeModal: display restante a parcelar",
-        has_remaining,
-        "Display restante " + ("encontrado" if has_remaining else "NAO encontrado"),
-        "warning" if not has_remaining else "info"
-    ))
-
-    # 7. Mixed summary breakdown
-    has_breakdown = "Vista" in content and "Parcelado" in content
-    results.append(TestResult(
-        "PaymentTypeModal: resumo misto (breakdown)",
-        has_breakdown,
-        "Resumo vista/parcelado " + ("exibido" if has_breakdown else "NAO exibido"),
-        "warning" if not has_breakdown else "info"
-    ))
-
-    # 8. Decidir depois button
-    has_pending = "Decidir Depois" in content
-    results.append(TestResult(
-        "PaymentTypeModal: botao 'Decidir Depois'",
-        has_pending,
-        "Botao Decidir Depois " + ("encontrado" if has_pending else "NAO encontrado"),
-        "warning" if not has_pending else "info"
-    ))
-
-    # 9. Split icon for mixed
-    has_split = "Split" in content
-    results.append(TestResult(
-        "PaymentTypeModal: icone Split para misto",
-        has_split,
-        "Icone Split " + ("importado" if has_split else "NAO importado"),
-        "info"
-    ))
-
-    return results
-
-
-# ============================================================================
-# TEST: KanbanBoard (CRM - createSalesFromDeal)
-# ============================================================================
-
-def test_kanban_board(project_dir: str) -> List[TestResult]:
-    results = []
-    filepath = os.path.join(project_dir, "src", "components", "crm", "KanbanBoard.tsx")
-
-    if not os.path.exists(filepath):
-        results.append(TestResult("KanbanBoard: arquivo", False, "KanbanBoard.tsx nao encontrado", "critical"))
-        return results
-
-    with open(filepath, "r", encoding="utf-8") as f:
-        content = f.read()
-
-    # 1. createSalesFromDeal accepts 'mixed'
-    has_mixed_sig = "mixed" in content and "createSalesFromDeal" in content
-    results.append(TestResult(
-        "KanbanBoard: createSalesFromDeal aceita 'mixed'",
-        has_mixed_sig,
-        "createSalesFromDeal " + ("aceita mixed" if has_mixed_sig else "NAO aceita mixed!"),
-        "critical" if not has_mixed_sig else "info"
-    ))
-
-    # 2. cash_amount field in sale creation
-    has_cash_amount = "cash_amount" in content
-    results.append(TestResult(
-        "KanbanBoard: cash_amount no insert",
-        has_cash_amount,
-        "Campo cash_amount " + ("incluido no insert" if has_cash_amount else "NAO incluido!"),
-        "critical" if not has_cash_amount else "info"
-    ))
-
-    # 3. cashAmount parameter in function
-    has_cash_param = "cashAmount" in content
-    results.append(TestResult(
-        "KanbanBoard: parametro cashAmount",
-        has_cash_param,
-        "Parametro cashAmount " + ("presente" if has_cash_param else "NAO presente!"),
-        "critical" if not has_cash_param else "info"
-    ))
-
-    # 4. handlePaymentConfirm accepts mixed
-    has_confirm_mixed = "handlePaymentConfirm" in content and "mixed" in content
-    results.append(TestResult(
-        "KanbanBoard: handlePaymentConfirm aceita mixed",
-        has_confirm_mixed,
-        "handlePaymentConfirm " + ("aceita mixed" if has_confirm_mixed else "NAO aceita mixed!"),
-        "critical" if not has_confirm_mixed else "info"
-    ))
-
-    # 5. Installments for mixed type
-    has_mixed_installments = "mixed" in content and "installments" in content
-    results.append(TestResult(
-        "KanbanBoard: parcelas para tipo misto",
-        has_mixed_installments,
-        "Parcelas para misto " + ("configuradas" if has_mixed_installments else "NAO configuradas"),
-        "critical" if not has_mixed_installments else "info"
-    ))
-
-    # 6. PaymentTypeModal used
-    has_modal = "PaymentTypeModal" in content
-    results.append(TestResult(
-        "KanbanBoard: usa PaymentTypeModal",
-        has_modal,
-        "PaymentTypeModal " + ("utilizado" if has_modal else "NAO encontrado"),
-        "critical" if not has_modal else "info"
-    ))
-
-    # 7. Delivery launch after sale
-    has_delivery = "DeliveryLaunch" in content or "deliveryLaunch" in content
-    results.append(TestResult(
-        "KanbanBoard: lancamento de entrega",
-        has_delivery,
-        "DeliveryLaunchModal " + ("integrado" if has_delivery else "NAO encontrado"),
-        "warning" if not has_delivery else "info"
-    ))
-
-    return results
-
-
-# ============================================================================
-# TEST: DealDetailModal (CRM - createSalesFromDeal)
-# ============================================================================
-
-def test_deal_detail_modal(project_dir: str) -> List[TestResult]:
-    results = []
-    filepath = os.path.join(project_dir, "src", "components", "crm", "DealDetailModal.tsx")
-
-    if not os.path.exists(filepath):
-        results.append(TestResult("DealDetailModal: arquivo", False, "DealDetailModal.tsx nao encontrado", "critical"))
-        return results
-
-    with open(filepath, "r", encoding="utf-8") as f:
-        content = f.read()
-
-    # 1. createSalesFromDeal accepts 'mixed'
-    has_mixed = "mixed" in content and "createSalesFromDeal" in content
-    results.append(TestResult(
-        "DealDetailModal: createSalesFromDeal aceita 'mixed'",
-        has_mixed,
-        "createSalesFromDeal " + ("aceita mixed" if has_mixed else "NAO aceita mixed!"),
-        "critical" if not has_mixed else "info"
-    ))
-
-    # 2. cash_amount in insert
-    has_cash = "cash_amount" in content
-    results.append(TestResult(
-        "DealDetailModal: cash_amount no insert",
-        has_cash,
-        "Campo cash_amount " + ("incluido" if has_cash else "NAO incluido!"),
-        "critical" if not has_cash else "info"
-    ))
-
-    # 3. cashAmount parameter
-    has_cash_param = "cashAmount" in content
-    results.append(TestResult(
-        "DealDetailModal: parametro cashAmount",
-        has_cash_param,
-        "Parametro cashAmount " + ("presente" if has_cash_param else "NAO presente!"),
-        "critical" if not has_cash_param else "info"
-    ))
-
-    # 4. PaymentTypeModal onConfirm passes cashAmt
-    has_callback = "cashAmt" in content or ("onConfirm" in content and "cashAmount" in content)
-    results.append(TestResult(
-        "DealDetailModal: PaymentTypeModal passa cashAmount",
-        has_callback,
-        "Callback " + ("passa cashAmount" if has_callback else "NAO passa cashAmount!"),
-        "critical" if not has_callback else "info"
-    ))
-
-    # 5. handleWon function
-    has_won = "handleWon" in content
-    results.append(TestResult(
-        "DealDetailModal: funcao handleWon",
-        has_won,
-        "handleWon " + ("encontrada" if has_won else "NAO encontrada"),
-        "critical" if not has_won else "info"
-    ))
-
-    # 6. PaymentTypeModal used
-    has_modal = "PaymentTypeModal" in content
-    results.append(TestResult(
-        "DealDetailModal: usa PaymentTypeModal",
-        has_modal,
-        "PaymentTypeModal " + ("utilizado" if has_modal else "NAO encontrado"),
-        "critical" if not has_modal else "info"
-    ))
-
-    return results
-
-
-# ============================================================================
-# TEST: SalesTable (display)
-# ============================================================================
-
-def test_sales_table(project_dir: str) -> List[TestResult]:
-    results = []
-    filepath = os.path.join(project_dir, "src", "components", "sales", "SalesTable.tsx")
-
-    if not os.path.exists(filepath):
-        results.append(TestResult("SalesTable: arquivo", False, "SalesTable.tsx nao encontrado", "critical"))
-        return results
-
-    with open(filepath, "r", encoding="utf-8") as f:
-        content = f.read()
-
-    # 1. PaymentTypeLabels used
-    has_labels = "PaymentTypeLabels" in content
-    results.append(TestResult(
-        "SalesTable: usa PaymentTypeLabels",
-        has_labels,
-        "PaymentTypeLabels " + ("utilizado" if has_labels else "NAO utilizado"),
-        "critical" if not has_labels else "info"
-    ))
-
-    # 2. Mixed badge display
-    has_mixed_badge = "mixed" in content and ("Misto" in content or "mixed" in content)
-    results.append(TestResult(
-        "SalesTable: badge para tipo misto",
-        has_mixed_badge,
-        "Badge Misto " + ("encontrado" if has_mixed_badge else "NAO encontrado"),
-        "warning" if not has_mixed_badge else "info"
-    ))
-
-    # 3. Pending badge display
-    has_pending = "Pendente" in content
-    results.append(TestResult(
-        "SalesTable: badge para pendente",
-        has_pending,
-        "Badge Pendente " + ("encontrado" if has_pending else "NAO encontrado"),
-        "warning" if not has_pending else "info"
-    ))
-
-    # 4. SaleModal integration for create/edit
-    has_sale_modal = "SaleModal" in content
-    results.append(TestResult(
-        "SalesTable: integra SaleModal",
-        has_sale_modal,
-        "SaleModal " + ("integrado" if has_sale_modal else "NAO integrado"),
-        "critical" if not has_sale_modal else "info"
-    ))
-
-    # 5. Delete action
-    has_delete = "useDeleteSale" in content or "delete" in content.lower()
-    results.append(TestResult(
-        "SalesTable: acao de exclusao",
-        has_delete,
-        "Delete " + ("implementado" if has_delete else "NAO implementado"),
-        "warning" if not has_delete else "info"
-    ))
-
-    # 6. Permission checks
-    has_perms = "usePermissions" in content or "canCreate" in content or "canEdit" in content
-    results.append(TestResult(
-        "SalesTable: verificacao de permissoes",
-        has_perms,
-        "Permissoes " + ("verificadas" if has_perms else "NAO verificadas"),
-        "warning" if not has_perms else "info"
-    ))
-
-    return results
-
-
-# ============================================================================
-# TEST: DB Migration
-# ============================================================================
-
-def test_db_migration(project_dir: str) -> List[TestResult]:
-    results = []
-
-    # Find migration files
-    migrations_dir = os.path.join(project_dir, "supabase", "migrations")
-    if not os.path.exists(migrations_dir):
-        results.append(TestResult("DB: migrations dir", False, "Diretorio de migrations nao encontrado", "critical"))
-        return results
-
-    # Check for mixed payment migration
-    mixed_migration_found = False
-    mixed_content = ""
-    original_content = ""
-
-    for fname in sorted(os.listdir(migrations_dir)):
-        fpath = os.path.join(migrations_dir, fname)
-        if not os.path.isfile(fpath):
-            continue
-        with open(fpath, "r", encoding="utf-8") as f:
-            fcontent = f.read()
-
-        if "mixed" in fcontent and "cash_amount" in fcontent:
-            mixed_migration_found = True
-            mixed_content = fcontent
-
-        if "create_sales_module" in fname or "generate_sale_installments" in fcontent:
-            original_content += fcontent
-
-    # Combine for checking trigger function (could be in original or override)
-    all_content = original_content + mixed_content
-
-    # 1. Mixed migration exists
-    results.append(TestResult(
-        "DB: migration para 'mixed'",
-        mixed_migration_found,
-        "Migration para mixed payment " + ("encontrada" if mixed_migration_found else "NAO encontrada!"),
-        "critical" if not mixed_migration_found else "info"
-    ))
-
-    # 2. cash_amount column
-    has_cash_col = "cash_amount" in all_content
-    results.append(TestResult(
-        "DB: coluna cash_amount",
-        has_cash_col,
-        "Coluna cash_amount " + ("criada" if has_cash_col else "NAO encontrada!"),
-        "critical" if not has_cash_col else "info"
-    ))
-
-    # 3. CHECK constraint includes 'mixed'
-    has_mixed_check = "'mixed'" in all_content and "payment_type" in all_content
-    results.append(TestResult(
-        "DB: constraint aceita 'mixed'",
-        has_mixed_check,
-        "CHECK constraint " + ("inclui mixed" if has_mixed_check else "NAO inclui mixed!"),
-        "critical" if not has_mixed_check else "info"
-    ))
-
-    # 4. Trigger handles mixed type
-    has_mixed_trigger = "mixed" in all_content and "generate_sale_installments" in all_content
-    results.append(TestResult(
-        "DB: trigger trata 'mixed'",
-        has_mixed_trigger,
-        "Trigger generate_sale_installments " + ("trata mixed" if has_mixed_trigger else "NAO trata mixed!"),
-        "critical" if not has_mixed_trigger else "info"
-    ))
-
-    # 5. Mixed creates cash installment (#1) as paid
-    has_cash_installment = "paid" in all_content and "cash_amount" in all_content
-    results.append(TestResult(
-        "DB: parcela a vista marcada como paga",
-        has_cash_installment,
-        "Parcela #1 a vista " + ("marcada como paid" if has_cash_installment else "NAO marcada!"),
-        "critical" if not has_cash_installment else "info"
-    ))
-
-    # 6. Mixed remaining split into installments
-    has_remaining_split = "remaining" in all_content.lower() or "v_remaining" in all_content
-    results.append(TestResult(
-        "DB: restante dividido em parcelas",
-        has_remaining_split,
-        "Valor restante " + ("dividido em parcelas" if has_remaining_split else "NAO dividido!"),
-        "critical" if not has_remaining_split else "info"
-    ))
-
-    # 7. Original tables exist (sales + sale_installments)
-    has_sales_table = "CREATE TABLE" in all_content and "sales" in all_content
-    results.append(TestResult(
-        "DB: tabela sales",
-        has_sales_table,
-        "Tabela sales " + ("criada" if has_sales_table else "NAO encontrada"),
-        "critical" if not has_sales_table else "info"
-    ))
-
-    has_installments_table = "sale_installments" in all_content
-    results.append(TestResult(
-        "DB: tabela sale_installments",
-        has_installments_table,
-        "Tabela sale_installments " + ("criada" if has_installments_table else "NAO encontrada"),
-        "critical" if not has_installments_table else "info"
-    ))
-
-    # 8. Trigger re-created after mixed update
-    has_trigger_recreate = "trigger_generate_sale_installments" in all_content
-    results.append(TestResult(
-        "DB: trigger recriado",
-        has_trigger_recreate,
-        "Trigger " + ("recriado" if has_trigger_recreate else "NAO recriado!"),
-        "critical" if not has_trigger_recreate else "info"
-    ))
-
-    # 9. Interest rate in trigger
-    has_interest = "interest_rate" in all_content
-    results.append(TestResult(
-        "DB: juros no trigger",
-        has_interest,
-        "Calculo de juros " + ("implementado" if has_interest else "NAO encontrado"),
-        "warning" if not has_interest else "info"
-    ))
-
-    return results
-
-
-# ============================================================================
-# TEST: Consistency across all files
-# ============================================================================
-
-def test_consistency(project_dir: str) -> List[TestResult]:
-    results = []
-
-    # Files that should all have 'mixed' support
-    files_to_check = {
-        "types/sales.ts": os.path.join(project_dir, "src", "types", "sales.ts"),
-        "hooks/useSales.ts": os.path.join(project_dir, "src", "hooks", "useSales.ts"),
-        "sales/SaleModal.tsx": os.path.join(project_dir, "src", "components", "sales", "SaleModal.tsx"),
-        "crm/PaymentTypeModal.tsx": os.path.join(project_dir, "src", "components", "crm", "PaymentTypeModal.tsx"),
-        "crm/KanbanBoard.tsx": os.path.join(project_dir, "src", "components", "crm", "KanbanBoard.tsx"),
-        "crm/DealDetailModal.tsx": os.path.join(project_dir, "src", "components", "crm", "DealDetailModal.tsx"),
-    }
-
-    # All should have 'mixed'
-    for name, filepath in files_to_check.items():
-        if os.path.exists(filepath):
-            with open(filepath, "r", encoding="utf-8") as f:
-                content = f.read()
-            has_mixed = "mixed" in content
-            results.append(TestResult(
-                f"Consistencia: {name} suporta 'mixed'",
-                has_mixed,
-                f"{'Sim' if has_mixed else 'NAO'} - mixed " + ("presente" if has_mixed else "AUSENTE!"),
-                "critical" if not has_mixed else "info"
-            ))
-
-    # All CRM + hooks should have cash_amount
-    cash_amount_files = {
-        "hooks/useSales.ts": files_to_check["hooks/useSales.ts"],
-        "crm/KanbanBoard.tsx": files_to_check["crm/KanbanBoard.tsx"],
-        "crm/DealDetailModal.tsx": files_to_check["crm/DealDetailModal.tsx"],
-        "sales/SaleModal.tsx": files_to_check["sales/SaleModal.tsx"],
-    }
-
-    for name, filepath in cash_amount_files.items():
-        if os.path.exists(filepath):
-            with open(filepath, "r", encoding="utf-8") as f:
-                content = f.read()
-            has_cash = "cash_amount" in content
-            results.append(TestResult(
-                f"Consistencia: {name} envia cash_amount",
-                has_cash,
-                f"{'Sim' if has_cash else 'NAO'} - cash_amount " + ("presente" if has_cash else "AUSENTE!"),
-                "critical" if not has_cash else "info"
-            ))
-
-    return results
-
-
-# ============================================================================
-# MAIN
-# ============================================================================
-
-def run_all_tests(project_dir: str):
-    all_results: List[TestResult] = []
+    return cat
+
+
+# =============================================
+# RUNNER
+# =============================================
+
+def run_all_tests():
+    categories = [
+        test_file_structure(),
+        test_sale_modal(),
+        test_sales_table(),
+        test_use_sales_hook(),
+        test_types(),
+        test_migration(),
+        test_currency_input(),
+        test_security(),
+        test_integration(),
+    ]
+
+    total_passed = 0
+    total_failed = 0
 
     print("=" * 70)
-    print("  CLINVIA - Teste Completo do Sistema de Vendas")
+    print("  TESTES DO SISTEMA DE VENDAS")
     print("=" * 70)
 
-    print("\n[1/8] Testando tipos (sales.ts)...")
-    all_results.extend(test_types(project_dir))
+    for cat in categories:
+        total_passed += cat.passed
+        total_failed += cat.failed
 
-    print("[2/8] Testando hooks (useSales.ts)...")
-    all_results.extend(test_hooks(project_dir))
+        status = "PASS" if cat.failed == 0 else "FAIL"
+        icon = "+" if cat.failed == 0 else "x"
+        print(f"\n{icon} {cat.name} [{cat.passed}/{cat.passed + cat.failed}] -- {status}")
 
-    print("[3/8] Testando SaleModal (venda manual)...")
-    all_results.extend(test_sale_modal(project_dir))
+        for result in cat.results:
+            icon = "  +" if result.passed else "  x"
+            print(f"  {icon} {result.name}")
+            if not result.passed:
+                print(f"      -> {result.message}")
 
-    print("[4/8] Testando PaymentTypeModal (CRM)...")
-    all_results.extend(test_payment_type_modal(project_dir))
+    print("\n" + "=" * 70)
+    total = total_passed + total_failed
+    pct = (total_passed / total * 100) if total > 0 else 0
+    status = "ALL PASSED" if total_failed == 0 else f"{total_failed} FAILED"
+    print(f"  RESULTADO: {total_passed}/{total} testes passaram ({pct:.0f}%) -- {status}")
+    print("=" * 70)
 
-    print("[5/8] Testando KanbanBoard (CRM sales)...")
-    all_results.extend(test_kanban_board(project_dir))
-
-    print("[6/8] Testando DealDetailModal (CRM sales)...")
-    all_results.extend(test_deal_detail_modal(project_dir))
-
-    print("[7/8] Testando SalesTable (exibicao)...")
-    all_results.extend(test_sales_table(project_dir))
-
-    print("[8/8] Testando DB migrations...")
-    all_results.extend(test_db_migration(project_dir))
-
-    print("[BONUS] Testando consistencia entre arquivos...")
-    all_results.extend(test_consistency(project_dir))
-
-    passed = sum(1 for r in all_results if r.passed)
-    failed = sum(1 for r in all_results if not r.passed)
-    warnings = sum(1 for r in all_results if not r.passed and r.severity == "warning")
-    critical = sum(1 for r in all_results if not r.passed and r.severity == "critical")
-
-    return all_results, {
-        "total": len(all_results),
-        "passed": passed,
-        "failed": failed,
-        "warnings": warnings,
-        "critical": critical,
-    }
-
-
-def print_results(results: List[TestResult], summary: dict):
-    failures = [r for r in results if not r.passed]
-    passes = [r for r in results if r.passed]
-
-    if failures:
-        print(f"\n{'='*70}")
-        print(f"  FALHAS ({len(failures)})")
-        print(f"{'='*70}")
-        for r in sorted(failures, key=lambda x: 0 if x.severity == "critical" else 1):
-            icon = "CRIT" if r.severity == "critical" else "WARN"
-            print(f"  [{icon}] {r.test_name}")
-            print(f"        {r.details}")
-
-    print(f"\n{'='*70}")
-    print(f"  PASSOU ({len(passes)})")
-    print(f"{'='*70}")
-    for r in passes:
-        print(f"  [OK] {r.test_name}")
-        if "--verbose" in sys.argv:
-            print(f"       {r.details}")
-
-    print(f"\n{'='*70}")
-    print(f"  SUMARIO")
-    print(f"{'='*70}")
-    print(f"  Total:    {summary['total']}")
-    print(f"  Passou:   {summary['passed']}")
-    print(f"  Falhou:   {summary['failed']}")
-    print(f"  Avisos:   {summary['warnings']}")
-    print(f"  Criticos: {summary['critical']}")
-    print(f"{'='*70}")
-
-    if summary['critical'] > 0:
-        print("\n  !! ATENCAO: Existem falhas CRITICAS!")
-    elif summary['warnings'] > 0:
-        print("\n  ! Existem avisos que devem ser verificados.")
-    else:
-        print("\n  Todos os testes passaram!")
+    return total_failed == 0
 
 
 if __name__ == "__main__":
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    project_dir = os.path.dirname(script_dir)
-
-    if not os.path.exists(os.path.join(project_dir, "supabase")):
-        print(f"ERRO: Diretorio supabase nao encontrado em {project_dir}")
-        sys.exit(1)
-
-    results, summary = run_all_tests(project_dir)
-    print_results(results, summary)
-    sys.exit(1 if summary['critical'] > 0 else 0)
+    success = run_all_tests()
+    sys.exit(0 if success else 1)
