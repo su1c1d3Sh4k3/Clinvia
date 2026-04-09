@@ -2,7 +2,7 @@ import {
   ListOrdered, Users, Settings, LayoutDashboard, MessageSquare, Briefcase, Wrench, Grid3X3,
   Smartphone, LogOut, Tag as TagIcon, BookUser, Calendar, ClipboardList,
   Package, Bot, ChevronDown, PieChart, Clock, MessageCircle,
-  ShoppingCart, Headphones, UserRound, Sun, Moon, ClipboardCheck, Layers, Megaphone, MessageSquareText
+  ShoppingCart, Headphones, UserRound, Sun, Moon, ClipboardCheck, Layers, Megaphone, MessageSquareText, BarChart3
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -68,6 +68,7 @@ const menuStructure: MenuItem[] = [
       { icon: ShoppingCart, label: "Vendas", id: "sales", path: "/sales" },
       { icon: Headphones, label: "Suporte", id: "support", path: "/support" },
       { icon: Users, label: "Equipe", id: "team", path: "/team" },
+      { icon: BarChart3, label: "Relatórios", id: "business-reports", path: "/business-reports" },
     ]
   },
 ];

@@ -46,6 +46,7 @@ const AdminAuth = React.lazy(() => import("./pages/AdminAuth"));
 const DevManager = React.lazy(() => import("./pages/DevManager"));
 const Reports = React.lazy(() => import("./pages/Reports"));
 const AutoMessages = React.lazy(() => import("./pages/AutoMessages"));
+const BusinessReports = React.lazy(() => import("./pages/BusinessReports"));
 
 // Fallback de loading enquanto o chunk da página carrega
 const PageLoader = () => (
@@ -145,6 +146,7 @@ const App = () => (
                   <Route path="/delivery" element={<Delivery />} />
                   <Route path="/reports" element={<Reports />} />
                   <Route path="/auto-messages" element={<AutoMessages />} />
+                  <Route path="/business-reports" element={<BusinessReports />} />
                 </Route>
                 <Route path="*" element={<NotFound />} />
               </Routes>
