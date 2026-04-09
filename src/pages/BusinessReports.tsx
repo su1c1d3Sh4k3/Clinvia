@@ -1,4 +1,5 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useReportData, calcEvolution } from "@/hooks/useReportData";
 import { useFinancialAccess } from "@/hooks/useFinancialAccess";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -50,9 +51,17 @@ export default function BusinessReports() {
     const [compEnd, setCompEnd] = useState("");
     const [exporting, setExporting] = useState(false);
     const reportRef = useRef<HTMLDivElement>(null);
+    const navigate = useNavigate();
 
     const { data: userRole } = useUserRole();
     const { data: hasFinancialAccess } = useFinancialAccess();
+
+    // Admin-only guard
+    useEffect(() => {
+        if (userRole && userRole !== "admin") {
+            navigate("/");
+        }
+    }, [userRole, navigate]);
 
     // Main period query
     const startISO = startDate ? `${startDate}T00:00:00` : null;

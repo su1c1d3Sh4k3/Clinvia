@@ -254,6 +254,7 @@ export const NavigationSidebar = () => {
       if (child.id === "ia-config" && !hasAnyAccess('ia_config')) return null;
       if (child.id === "sales" && !hasAnyAccess('sales')) return null;
       if (child.id === "financial" && !hasAnyAccess('financial')) return null;
+      if (child.id === "business-reports") return null;
     }
 
     // CRM badge - same style as Dashboard
@@ -403,6 +404,7 @@ export const NavigationSidebar = () => {
                 if (child.id === "ia-config" && !hasAnyAccess('ia_config')) return null;
                 if (child.id === "sales" && !hasAnyAccess('sales')) return null;
                 if (child.id === "financial" && !hasAnyAccess('financial')) return null;
+                if (child.id === "business-reports") return null;
               }
 
               // CRM badge in collapsed mode
