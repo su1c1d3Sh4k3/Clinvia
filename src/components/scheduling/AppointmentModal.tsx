@@ -723,9 +723,15 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                                 <FormField
                                     control={form.control}
                                     name="start_time"
-                                    render={() => (
+                                    render={({ field }) => (
                                         <FormItem>
                                             <FormLabel>Início</FormLabel>
+                                            {appointmentToEdit ? (
+                                                /* Modo edição: input simples de time (evita bug de slots filtrados por duração) */
+                                                <FormControl>
+                                                    <Input type="time" {...field} disabled={isPast} />
+                                                </FormControl>
+                                            ) : (
                                             <div className="flex gap-1">
                                                 {/* Hora: quando travada, elemento estático (evita bug Radix placeholder) */}
                                                 {isHourLocked ? (
@@ -772,6 +778,7 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                                                     </SelectContent>
                                                 </Select>
                                             </div>
+                                            )}
                                             <FormMessage />
                                         </FormItem>
                                     )}
