@@ -47,6 +47,7 @@ import { AnalysisHistoryModal } from "@/components/AnalysisHistoryModal";
 import { ClientReportModal } from "@/components/ClientReportModal";
 import { NpsFeedbackModal } from "@/components/NpsFeedbackModal";
 import { TagAssignment } from "@/components/TagAssignment";
+import { WhatsAppImportModal } from "@/components/WhatsAppImportModal";
 import { Sparkles, FileText } from "lucide-react";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useOwnerId } from "@/hooks/useOwnerId";
@@ -112,6 +113,7 @@ const Contacts = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(20);
     const [isImporting, setIsImporting] = useState(false);
+    const [isWppImportOpen, setIsWppImportOpen] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const { toast } = useToast();
@@ -472,6 +474,10 @@ const Contacts = () => {
                                         <span className="hidden lg:inline">{isImporting ? "Importando..." : "Importar"}</span>
                                     </Button>
                                     <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleImportContacts} />
+                                    <Button onClick={() => setIsWppImportOpen(true)} variant="outline" size="sm" className="h-8 md:h-9 text-xs md:text-sm gap-1 border-green-500/30 text-green-600 hover:bg-green-500/10 hover:text-green-600" title="Importar contatos do WhatsApp">
+                                        <FaWhatsapp className="w-4 h-4" />
+                                        <span className="hidden lg:inline">Importar do Wpp</span>
+                                    </Button>
                                 </>
                             )}
                             <Button onClick={handleExportContacts} variant="outline" size="sm" className="h-8 md:h-9 text-xs md:text-sm gap-1" title="Exportar contatos para planilha">
@@ -1074,6 +1080,11 @@ const Contacts = () => {
                     npsEntries={selectedContactForNps.nps || []}
                 />
             )}
+
+            <WhatsAppImportModal
+                open={isWppImportOpen}
+                onClose={() => setIsWppImportOpen(false)}
+            />
         </div >
 
     );
