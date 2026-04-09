@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-Testes automatizados para edição rápida de duração de agendamentos.
-Análise estática de código — verifica estrutura, imports, lógica de validação,
-integração com Google Calendar e overlap check.
+Testes automatizados para edicao de duracao de agendamentos.
+Analise estatica de codigo -- verifica que a duracao eh editavel no modal
+de edicao (AppointmentModal) e que o card de visualizacao (ViewAppointmentModal)
+permanece limpo sem logica de edicao inline.
 
-Execução: python tests/test_scheduling_duration.py
+Execucao: python tests/test_scheduling_duration.py
 """
 
 import os
@@ -54,17 +55,17 @@ def file_exists(relative_path: str) -> bool:
 
 
 # =============================================
-# 1. FILE STRUCTURE TESTS
+# 1. FILE STRUCTURE
 # =============================================
 
 def test_file_structure() -> TestCategory:
     cat = TestCategory("Estrutura de Arquivos")
 
     required_files = [
-        ("src/components/scheduling/ViewAppointmentModal.tsx", "Modal de visualização com edição rápida"),
-        ("src/components/scheduling/AppointmentModal.tsx", "Modal completo de agendamento"),
-        ("src/components/scheduling/SchedulingCalendar.tsx", "Calendário visual"),
-        ("src/components/scheduling/NotifyAppointmentModal.tsx", "Modal de notificação"),
+        ("src/components/scheduling/ViewAppointmentModal.tsx", "Card de visualizacao do agendamento"),
+        ("src/components/scheduling/AppointmentModal.tsx", "Modal completo de criacao/edicao"),
+        ("src/components/scheduling/SchedulingCalendar.tsx", "Calendario visual"),
+        ("src/components/scheduling/NotifyAppointmentModal.tsx", "Modal de notificacao"),
     ]
 
     for path, desc in required_files:
@@ -79,650 +80,435 @@ def test_file_structure() -> TestCategory:
 
 
 # =============================================
-# 2. VIEWAPPOINTMENTMODAL IMPORTS
+# 2. VIEW MODAL - SEM EDICAO INLINE
 # =============================================
 
-def test_view_modal_imports() -> TestCategory:
-    cat = TestCategory("ViewAppointmentModal - Imports")
+def test_view_modal_clean() -> TestCategory:
+    cat = TestCategory("ViewAppointmentModal - Sem Edicao Inline")
     code = read_file("src/components/scheduling/ViewAppointmentModal.tsx")
 
     if not code:
-        cat.results.append(TestResult("Arquivo legível", False, "Não foi possível ler ViewAppointmentModal.tsx"))
+        cat.results.append(TestResult("Arquivo legivel", False, "Nao foi possivel ler ViewAppointmentModal.tsx"))
         return cat
 
-    required_imports = [
-        ("useState", r"import\s*\{[^}]*useState[^}]*\}\s*from\s*['\"]react['\"]"),
-        ("supabase client", r"import\s*\{[^}]*supabase[^}]*\}\s*from\s*['\"]@/integrations/supabase/client['\"]"),
-        ("useOwnerId", r"import\s*\{[^}]*useOwnerId[^}]*\}\s*from\s*['\"]@/hooks/useOwnerId['\"]"),
-        ("useQueryClient", r"import\s*\{[^}]*useQueryClient[^}]*\}\s*from\s*['\"]@tanstack/react-query['\"]"),
-        ("useToast", r"import\s*\{[^}]*useToast[^}]*\}\s*from\s*['\"]@/hooks/use-toast['\"]"),
-        ("Input component", r"import\s*\{[^}]*Input[^}]*\}\s*from\s*['\"]@/components/ui/input['\"]"),
-        ("Check icon", r"import\s*\{[^}]*Check[^}]*\}\s*from\s*['\"]lucide-react['\"]"),
-        ("X icon", r"import\s*\{[^}]*\bX\b[^}]*\}\s*from\s*['\"]lucide-react['\"]"),
-        ("Loader2 icon", r"import\s*\{[^}]*Loader2[^}]*\}\s*from\s*['\"]lucide-react['\"]"),
-        ("toZonedTime", r"import\s*\{[^}]*toZonedTime[^}]*\}\s*from\s*['\"]date-fns-tz['\"]"),
-    ]
-
-    for name, pattern in required_imports:
-        found = bool(re.search(pattern, code))
-        cat.results.append(TestResult(
-            name=f"Import: {name}",
-            passed=found,
-            message=f"{'OK' if found else f'Import de {name} não encontrado'}",
-        ))
-
-    return cat
-
-
-# =============================================
-# 3. STATE MANAGEMENT
-# =============================================
-
-def test_state_management() -> TestCategory:
-    cat = TestCategory("Gerenciamento de Estado")
-    code = read_file("src/components/scheduling/ViewAppointmentModal.tsx")
-
-    if not code:
-        cat.results.append(TestResult("Arquivo legível", False, "Não foi possível ler"))
-        return cat
-
-    # Required state variables
-    states = [
-        ("isEditingEnd", r"useState.*false.*\).*isEditingEnd|isEditingEnd.*useState"),
-        ("newEndTime", r"useState.*\"\"|newEndTime.*useState"),
-        ("isSaving", r"useState.*false.*\).*isSaving|isSaving.*useState"),
-    ]
-
-    for name, pattern in states:
-        found = bool(re.search(pattern, code))
-        cat.results.append(TestResult(
-            name=f"State: {name}",
-            passed=found,
-            message=f"{'OK' if found else f'Estado {name} não encontrado'}",
-        ))
-
-    # Hooks
-    hooks = [
-        ("useOwnerId", r"useOwnerId\(\)"),
-        ("useQueryClient", r"useQueryClient\(\)"),
-        ("useToast", r"useToast\(\)"),
-    ]
-
-    for name, pattern in hooks:
-        found = bool(re.search(pattern, code))
-        cat.results.append(TestResult(
-            name=f"Hook: {name}",
-            passed=found,
-            message=f"{'OK' if found else f'Hook {name} não chamado'}",
-        ))
-
-    return cat
-
-
-# =============================================
-# 4. EDIT END TIME HANDLERS
-# =============================================
-
-def test_edit_handlers() -> TestCategory:
-    cat = TestCategory("Handlers de Edição")
-    code = read_file("src/components/scheduling/ViewAppointmentModal.tsx")
-
-    if not code:
-        cat.results.append(TestResult("Arquivo legível", False, "Não foi possível ler"))
-        return cat
-
-    # handleStartEditEnd
-    found = bool(re.search(r"const\s+handleStartEditEnd\s*=", code))
+    # Nao deve ter imports de edicao
+    no_supabase = "import { supabase }" not in code and "from \"@/integrations/supabase/client\"" not in code
     cat.results.append(TestResult(
-        name="handleStartEditEnd definido",
-        passed=found,
-        message="OK" if found else "Função handleStartEditEnd não encontrada",
+        name="Sem import de supabase client",
+        passed=no_supabase,
+        message="OK" if no_supabase else "ViewModal nao deve importar supabase diretamente",
     ))
 
-    # Sets editing state
-    found = bool(re.search(r"setIsEditingEnd\(true\)", code))
+    no_query_client = "useQueryClient" not in code
     cat.results.append(TestResult(
-        name="handleStartEditEnd ativa edição",
-        passed=found,
-        message="OK" if found else "setIsEditingEnd(true) não encontrado",
+        name="Sem import de useQueryClient",
+        passed=no_query_client,
+        message="OK" if no_query_client else "ViewModal nao deve usar useQueryClient",
     ))
 
-    # Populates newEndTime from appointment
-    found = bool(re.search(r"setNewEndTime.*format.*toZoned.*end_time", code))
+    no_owner_id = "useOwnerId" not in code
     cat.results.append(TestResult(
-        name="handleStartEditEnd popula horário atual",
-        passed=found,
-        message="OK" if found else "Não popula newEndTime com horário atual do appointment",
+        name="Sem import de useOwnerId",
+        passed=no_owner_id,
+        message="OK" if no_owner_id else "ViewModal nao deve usar useOwnerId",
     ))
 
-    # handleCancelEditEnd
-    found = bool(re.search(r"const\s+handleCancelEditEnd\s*=", code))
+    no_use_toast = "useToast" not in code
     cat.results.append(TestResult(
-        name="handleCancelEditEnd definido",
-        passed=found,
-        message="OK" if found else "Função handleCancelEditEnd não encontrada",
+        name="Sem import de useToast",
+        passed=no_use_toast,
+        message="OK" if no_use_toast else "ViewModal nao deve usar useToast",
     ))
 
-    found = bool(re.search(r"setIsEditingEnd\(false\)", code))
+    # Nao deve ter estados de edicao
+    no_editing_state = "isEditingEnd" not in code
     cat.results.append(TestResult(
-        name="handleCancelEditEnd desativa edição",
-        passed=found,
-        message="OK" if found else "setIsEditingEnd(false) não encontrado",
+        name="Sem estado isEditingEnd",
+        passed=no_editing_state,
+        message="OK" if no_editing_state else "ViewModal nao deve ter estado de edicao",
     ))
 
-    # handleSaveEndTime
-    found = bool(re.search(r"const\s+handleSaveEndTime\s*=\s*async", code))
+    no_saving_state = "isSaving" not in code
     cat.results.append(TestResult(
-        name="handleSaveEndTime é async",
-        passed=found,
-        message="OK" if found else "handleSaveEndTime deve ser async",
+        name="Sem estado isSaving",
+        passed=no_saving_state,
+        message="OK" if no_saving_state else "ViewModal nao deve ter estado de saving",
+    ))
+
+    # Nao deve ter handlers de save
+    no_save_handler = "handleSaveEndTime" not in code
+    cat.results.append(TestResult(
+        name="Sem handleSaveEndTime",
+        passed=no_save_handler,
+        message="OK" if no_save_handler else "ViewModal nao deve ter handler de save",
+    ))
+
+    # Nao deve ter chamada RPC
+    no_rpc = "supabase.rpc" not in code
+    cat.results.append(TestResult(
+        name="Sem chamada RPC",
+        passed=no_rpc,
+        message="OK" if no_rpc else "ViewModal nao deve chamar RPCs",
+    ))
+
+    # Nao deve ter chamada de edge function
+    no_edge = "google-calendar-sync" not in code
+    cat.results.append(TestResult(
+        name="Sem chamada google-calendar-sync",
+        passed=no_edge,
+        message="OK" if no_edge else "ViewModal nao deve chamar edge functions",
+    ))
+
+    # Deve manter exibicao simples do horario
+    simple_time = bool(re.search(r'format\(toZoned\(appointment\.start_time\),\s*"HH:mm"\)', code))
+    cat.results.append(TestResult(
+        name="Exibe horario de inicio formatado",
+        passed=simple_time,
+        message="OK" if simple_time else "Falta exibicao do start_time",
+    ))
+
+    simple_end = bool(re.search(r'format\(toZoned\(appointment\.end_time\),\s*"HH:mm"\)', code))
+    cat.results.append(TestResult(
+        name="Exibe horario de termino formatado",
+        passed=simple_end,
+        message="OK" if simple_end else "Falta exibicao do end_time",
+    ))
+
+    # Deve manter o botao de editar (pencil) que abre o AppointmentModal
+    has_edit_button = bool(re.search(r"onEdit\(appointment\)", code))
+    cat.results.append(TestResult(
+        name="Mantem botao de editar (abre AppointmentModal)",
+        passed=has_edit_button,
+        message="OK" if has_edit_button else "Falta botao que abre modal de edicao",
     ))
 
     return cat
 
 
 # =============================================
-# 5. VALIDATION LOGIC
+# 3. APPOINTMENT MODAL - DURACAO EDITAVEL
 # =============================================
 
-def test_validation() -> TestCategory:
-    cat = TestCategory("Validações")
-    code = read_file("src/components/scheduling/ViewAppointmentModal.tsx")
+def test_duration_field() -> TestCategory:
+    cat = TestCategory("AppointmentModal - Campo Duracao")
+    code = read_file("src/components/scheduling/AppointmentModal.tsx")
 
     if not code:
-        cat.results.append(TestResult("Arquivo legível", False, "Não foi possível ler"))
+        cat.results.append(TestResult("Arquivo legivel", False, "Nao foi possivel ler AppointmentModal.tsx"))
         return cat
 
-    # End > Start validation
-    found = bool(re.search(r"newEndZoned\s*<=\s*startZoned", code))
+    # Campo de duracao existe
+    has_duration = bool(re.search(r'name="duration"', code))
     cat.results.append(TestResult(
-        name="Validação: end > start",
-        passed=found,
-        message="OK" if found else "Falta validação de que end_time > start_time",
+        name="Campo duration existe no form",
+        passed=has_duration,
+        message="OK" if has_duration else "Campo duration nao encontrado",
     ))
 
-    # Minimum 10 minutes
-    found = bool(re.search(r"diffMin\s*<\s*10", code))
+    # Input type=number para duracao
+    has_input = bool(re.search(r'type="number"\s+min=\{10\}', code))
     cat.results.append(TestResult(
-        name="Validação: mínimo 10 minutos",
-        passed=found,
-        message="OK" if found else "Falta validação de duração mínima de 10 min",
+        name="Input type=number com min=10",
+        passed=has_input,
+        message="OK" if has_input else "Input de duracao deve ser number com min 10",
     ))
 
-    # Toast for invalid end time
-    found = bool(re.search(r"Horário inválido", code))
+    # CRITICO: Duracao EDITAVEL em modo edicao (appointmentToEdit condiciona o disabled)
+    # O disabled deve conter !appointmentToEdit para que no modo edicao fique habilitado
+    edit_enabled = bool(re.search(r'disabled=\{.*!appointmentToEdit.*&&.*service_id.*\|\|\s*isPast', code))
     cat.results.append(TestResult(
-        name="Toast: horário inválido",
-        passed=found,
-        message="OK" if found else "Falta mensagem de erro para horário inválido",
+        name="Duracao editavel quando appointmentToEdit existe",
+        passed=edit_enabled,
+        message="OK" if edit_enabled else "Duracao deve estar liberada no modo edicao (!appointmentToEdit && service_id)",
     ))
 
-    # Toast for minimum duration
-    found = bool(re.search(r"Duração mínima", code))
+    # CRITICO: Duracao BLOQUEADA na criacao quando servico selecionado
+    # Mesma regex - se !appointmentToEdit esta na condicao, criacao com service bloqueia
+    create_locked = edit_enabled  # mesma logica, se o padrao correto existe
     cat.results.append(TestResult(
-        name="Toast: duração mínima",
-        passed=found,
-        message="OK" if found else "Falta mensagem de erro para duração mínima",
-    ))
-
-    # isSaving guard
-    found = bool(re.search(r"setIsSaving\(true\)", code))
-    cat.results.append(TestResult(
-        name="Guard: setIsSaving(true) no início",
-        passed=found,
-        message="OK" if found else "Falta setIsSaving(true) no início do save",
-    ))
-
-    found = bool(re.search(r"setIsSaving\(false\)", code))
-    cat.results.append(TestResult(
-        name="Guard: setIsSaving(false) no finally",
-        passed=found,
-        message="OK" if found else "Falta setIsSaving(false) no finally",
+        name="Duracao bloqueada na criacao com servico selecionado",
+        passed=create_locked,
+        message="OK" if create_locked else "Na criacao, duracao deve ser bloqueada quando servico selecionado",
     ))
 
     return cat
 
 
 # =============================================
-# 6. OVERLAP CHECK (RPC)
+# 4. DURACAO CALCULA END_TIME NO SUBMIT
 # =============================================
 
-def test_overlap_check() -> TestCategory:
-    cat = TestCategory("Verificação de Overlap")
-    code = read_file("src/components/scheduling/ViewAppointmentModal.tsx")
+def test_duration_calculates_end() -> TestCategory:
+    cat = TestCategory("Duracao -> End Time no Submit")
+    code = read_file("src/components/scheduling/AppointmentModal.tsx")
 
     if not code:
-        cat.results.append(TestResult("Arquivo legível", False, "Não foi possível ler"))
+        cat.results.append(TestResult("Arquivo legivel", False, "Nao foi possivel ler"))
         return cat
 
-    # Calls check_appointment_overlap RPC
+    # addMinutes(startDateTime, values.duration)
+    found = bool(re.search(r"addMinutes\(startDateTime,\s*values\.duration\s*\|\|\s*\d+\)", code))
+    cat.results.append(TestResult(
+        name="end_time calculado via addMinutes(start, duration)",
+        passed=found,
+        message="OK" if found else "Falta calculo de end_time a partir de duration",
+    ))
+
+    # duration no schema zod
+    found = bool(re.search(r"duration:\s*z\.coerce\.number", code))
+    cat.results.append(TestResult(
+        name="Schema Zod: duration eh number",
+        passed=found,
+        message="OK" if found else "duration deve ser z.coerce.number no schema",
+    ))
+
+    # Validacao minima de 10 min no schema
+    found = bool(re.search(r"duration\s*<\s*10", code))
+    cat.results.append(TestResult(
+        name="Validacao: duracao minima 10 min",
+        passed=found,
+        message="OK" if found else "Falta validacao de duracao minima no schema",
+    ))
+
+    return cat
+
+
+# =============================================
+# 5. OVERLAP CHECK NO SUBMIT
+# =============================================
+
+def test_overlap_on_submit() -> TestCategory:
+    cat = TestCategory("Overlap Check no Submit")
+    code = read_file("src/components/scheduling/AppointmentModal.tsx")
+
+    if not code:
+        cat.results.append(TestResult("Arquivo legivel", False, "Nao foi possivel ler"))
+        return cat
+
     found = bool(re.search(r'supabase\.rpc\(\s*["\']check_appointment_overlap["\']', code))
     cat.results.append(TestResult(
         name="Chama RPC check_appointment_overlap",
         passed=found,
-        message="OK" if found else "Não chama check_appointment_overlap RPC",
+        message="OK" if found else "Nao chama check_appointment_overlap",
     ))
 
-    # Passes p_professional_id
-    found = bool(re.search(r"p_professional_id:\s*appointment\.professional_id", code))
+    found = bool(re.search(r"p_exclude_id:\s*appointmentToEdit\?\.id", code))
     cat.results.append(TestResult(
-        name="Parâmetro: p_professional_id",
+        name="Exclui proprio agendamento no overlap check",
         passed=found,
-        message="OK" if found else "Não passa p_professional_id",
+        message="OK" if found else "Falta p_exclude_id para auto-exclusao",
     ))
 
-    # Passes p_start_time
-    found = bool(re.search(r"p_start_time:\s*appointment\.start_time", code))
+    found = bool(re.search(r"p_end_time:\s*endDateTime\.toISOString", code))
     cat.results.append(TestResult(
-        name="Parâmetro: p_start_time (original)",
+        name="end_time enviado ao overlap (calculado pela duracao)",
         passed=found,
-        message="OK" if found else "Não passa p_start_time",
-    ))
-
-    # Passes p_end_time with new value
-    found = bool(re.search(r"p_end_time:\s*newEndISO", code))
-    cat.results.append(TestResult(
-        name="Parâmetro: p_end_time (novo)",
-        passed=found,
-        message="OK" if found else "Não passa p_end_time com novo horário",
-    ))
-
-    # Passes p_exclude_id
-    found = bool(re.search(r"p_exclude_id:\s*appointment\.id", code))
-    cat.results.append(TestResult(
-        name="Parâmetro: p_exclude_id (self-exclusion)",
-        passed=found,
-        message="OK" if found else "Não exclui o próprio agendamento do overlap check",
-    ))
-
-    # Handles overlap result
-    found = bool(re.search(r"if\s*\(isOverlap\)", code))
-    cat.results.append(TestResult(
-        name="Trata resultado de overlap",
-        passed=found,
-        message="OK" if found else "Não verifica resultado de isOverlap",
-    ))
-
-    # Toast for overlap
-    found = bool(re.search(r"Horário indisponível", code))
-    cat.results.append(TestResult(
-        name="Toast: conflito de horário",
-        passed=found,
-        message="OK" if found else "Falta mensagem de conflito de horário",
+        message="OK" if found else "Falta p_end_time no overlap check",
     ))
 
     return cat
 
 
 # =============================================
-# 7. DATABASE UPDATE
-# =============================================
-
-def test_db_update() -> TestCategory:
-    cat = TestCategory("Atualização no Banco de Dados")
-    code = read_file("src/components/scheduling/ViewAppointmentModal.tsx")
-
-    if not code:
-        cat.results.append(TestResult("Arquivo legível", False, "Não foi possível ler"))
-        return cat
-
-    # Updates appointments table
-    found = bool(re.search(r'supabase\s*\.\s*from\(\s*["\']appointments["\']\s*\)\s*\.\s*update', code))
-    cat.results.append(TestResult(
-        name="UPDATE na tabela appointments",
-        passed=found,
-        message="OK" if found else "Não faz update na tabela appointments",
-    ))
-
-    # Updates end_time field
-    found = bool(re.search(r'\.update\(\s*\{\s*end_time:\s*newEndISO\s*\}', code))
-    cat.results.append(TestResult(
-        name="Atualiza campo end_time",
-        passed=found,
-        message="OK" if found else "Não atualiza end_time com novo valor",
-    ))
-
-    # Filters by appointment ID
-    found = bool(re.search(r'\.eq\(\s*["\']id["\']\s*,\s*appointment\.id\s*\)', code))
-    cat.results.append(TestResult(
-        name="Filtra por appointment.id",
-        passed=found,
-        message="OK" if found else "Não filtra update por ID do agendamento",
-    ))
-
-    # Error handling
-    found = bool(re.search(r"if\s*\(error\)\s*throw\s*error", code))
-    cat.results.append(TestResult(
-        name="Tratamento de erro do update",
-        passed=found,
-        message="OK" if found else "Não trata erro do update",
-    ))
-
-    return cat
-
-
-# =============================================
-# 8. GOOGLE CALENDAR SYNC
+# 6. GOOGLE CALENDAR SYNC
 # =============================================
 
 def test_google_calendar_sync() -> TestCategory:
-    cat = TestCategory("Sincronização Google Calendar")
-    code = read_file("src/components/scheduling/ViewAppointmentModal.tsx")
+    cat = TestCategory("Sincronizacao Google Calendar")
+    code = read_file("src/components/scheduling/AppointmentModal.tsx")
 
     if not code:
-        cat.results.append(TestResult("Arquivo legível", False, "Não foi possível ler"))
+        cat.results.append(TestResult("Arquivo legivel", False, "Nao foi possivel ler"))
         return cat
 
-    # Calls google-calendar-sync edge function
     found = bool(re.search(r'supabase\.functions\.invoke\(\s*["\']google-calendar-sync["\']', code))
     cat.results.append(TestResult(
         name="Invoca edge function google-calendar-sync",
         passed=found,
-        message="OK" if found else "Não invoca google-calendar-sync",
+        message="OK" if found else "Nao invoca google-calendar-sync",
     ))
 
-    # action: sync_appointment
     found = bool(re.search(r'action:\s*["\']sync_appointment["\']', code))
     cat.results.append(TestResult(
         name="Action: sync_appointment",
         passed=found,
-        message="OK" if found else "Não usa action sync_appointment",
+        message="OK" if found else "Falta action sync_appointment",
     ))
 
-    # Passes appointment_id
-    found = bool(re.search(r"appointment_id:\s*appointment\.id", code))
-    cat.results.append(TestResult(
-        name="Passa appointment_id",
-        passed=found,
-        message="OK" if found else "Não passa appointment_id para sync",
-    ))
-
-    # Passes user_id (ownerId)
-    found = bool(re.search(r"user_id:\s*ownerId", code))
-    cat.results.append(TestResult(
-        name="Passa user_id (ownerId)",
-        passed=found,
-        message="OK" if found else "Não passa user_id para sync",
-    ))
-
-    # Fire-and-forget (.catch)
     found = bool(re.search(r'\.catch\(\s*\(\)\s*=>\s*\{\s*\}\s*\)', code))
     cat.results.append(TestResult(
         name="Fire-and-forget (.catch vazio)",
         passed=found,
-        message="OK" if found else "Sync não é fire-and-forget (falta .catch)",
-    ))
-
-    # Guarded by ownerId
-    found = bool(re.search(r"if\s*\(ownerId\)\s*\{?\s*\n?\s*supabase\.functions\.invoke", code))
-    cat.results.append(TestResult(
-        name="Sync protegido por if(ownerId)",
-        passed=found,
-        message="OK" if found else "Sync não é protegido por verificação de ownerId",
+        message="OK" if found else "Sync nao eh fire-and-forget",
     ))
 
     return cat
 
 
 # =============================================
-# 9. QUERY INVALIDATION
+# 7. EDIT MODE POPULATES DURATION
+# =============================================
+
+def test_edit_mode_populates() -> TestCategory:
+    cat = TestCategory("Modo Edicao Popula Duracao")
+    code = read_file("src/components/scheduling/AppointmentModal.tsx")
+
+    if not code:
+        cat.results.append(TestResult("Arquivo legivel", False, "Nao foi possivel ler"))
+        return cat
+
+    # Duration calculated from end_time - start_time on edit
+    found = bool(re.search(r"duration:.*end_time.*getTime.*start_time.*getTime.*60000", code))
+    cat.results.append(TestResult(
+        name="Duration calculada de (end - start) / 60000 no edit",
+        passed=found,
+        message="OK" if found else "Falta calculo de duracao a partir do agendamento existente",
+    ))
+
+    # appointmentToEdit populates form
+    found = bool(re.search(r"if\s*\(appointmentToEdit\)\s*\{", code))
+    cat.results.append(TestResult(
+        name="Modo edicao popula formulario",
+        passed=found,
+        message="OK" if found else "Falta branch de edicao no useEffect",
+    ))
+
+    # isPast disables everything
+    found = bool(re.search(r"isPast.*appointmentToEdit.*end_time.*new Date", code))
+    cat.results.append(TestResult(
+        name="isPast detecta agendamento passado",
+        passed=found,
+        message="OK" if found else "Falta deteccao de agendamento passado",
+    ))
+
+    return cat
+
+
+# =============================================
+# 8. QUERY INVALIDATION
 # =============================================
 
 def test_query_invalidation() -> TestCategory:
-    cat = TestCategory("Invalidação de Cache (React Query)")
-    code = read_file("src/components/scheduling/ViewAppointmentModal.tsx")
+    cat = TestCategory("Invalidacao de Cache")
+    code = read_file("src/components/scheduling/AppointmentModal.tsx")
 
     if not code:
-        cat.results.append(TestResult("Arquivo legível", False, "Não foi possível ler"))
+        cat.results.append(TestResult("Arquivo legivel", False, "Nao foi possivel ler"))
         return cat
 
-    # Invalidates appointments query
     found = bool(re.search(r'invalidateQueries.*queryKey.*\[.*["\']appointments["\']', code))
     cat.results.append(TestResult(
         name="Invalida cache: appointments",
         passed=found,
-        message="OK" if found else "Não invalida query 'appointments'",
+        message="OK" if found else "Nao invalida query 'appointments'",
     ))
 
-    # Invalidates contact-appointments query
     found = bool(re.search(r'invalidateQueries.*queryKey.*\[.*["\']contact-appointments["\']', code))
     cat.results.append(TestResult(
         name="Invalida cache: contact-appointments",
         passed=found,
-        message="OK" if found else "Não invalida query 'contact-appointments'",
+        message="OK" if found else "Nao invalida query 'contact-appointments'",
     ))
 
     return cat
 
 
 # =============================================
-# 10. UI ELEMENTS
+# 9. SECURITY
 # =============================================
 
-def test_ui_elements() -> TestCategory:
-    cat = TestCategory("Elementos de UI")
-    code = read_file("src/components/scheduling/ViewAppointmentModal.tsx")
+def test_security() -> TestCategory:
+    cat = TestCategory("Seguranca")
 
-    if not code:
-        cat.results.append(TestResult("Arquivo legível", False, "Não foi possível ler"))
-        return cat
+    # ViewAppointmentModal - sem logica perigosa
+    view_code = read_file("src/components/scheduling/ViewAppointmentModal.tsx")
+    if view_code:
+        no_dangerous = "dangerouslySetInnerHTML" not in view_code
+        cat.results.append(TestResult(
+            name="ViewModal: sem dangerouslySetInnerHTML",
+            passed=no_dangerous,
+            message="OK" if no_dangerous else "dangerouslySetInnerHTML detectado",
+        ))
 
-    # Time input
-    found = bool(re.search(r'type="time"', code))
-    cat.results.append(TestResult(
-        name="Input type=time para edição",
-        passed=found,
-        message="OK" if found else "Falta input type=time",
-    ))
+        has_can_edit = "canEdit" in view_code
+        cat.results.append(TestResult(
+            name="ViewModal: protegido por canEdit",
+            passed=has_can_edit,
+            message="OK" if has_can_edit else "Falta verificacao canEdit",
+        ))
 
-    # Conditional rendering (isEditingEnd)
-    found = bool(re.search(r"isEditingEnd\s*\?", code))
-    cat.results.append(TestResult(
-        name="Renderização condicional (isEditingEnd)",
-        passed=found,
-        message="OK" if found else "Falta ternário isEditingEnd",
-    ))
+    # AppointmentModal - validacoes server-side
+    modal_code = read_file("src/components/scheduling/AppointmentModal.tsx")
+    if modal_code:
+        has_rpc = "supabase.rpc" in modal_code
+        cat.results.append(TestResult(
+            name="AppointmentModal: validacao server-side via RPC",
+            passed=has_rpc,
+            message="OK" if has_rpc else "Falta validacao server-side",
+        ))
 
-    # Save button (Check icon)
-    found = bool(re.search(r"onClick=\{handleSaveEndTime\}", code))
-    cat.results.append(TestResult(
-        name="Botão salvar com handleSaveEndTime",
-        passed=found,
-        message="OK" if found else "Falta botão de salvar",
-    ))
+        has_catch = bool(re.search(r"catch\s*\(error", modal_code))
+        cat.results.append(TestResult(
+            name="AppointmentModal: error handling com try-catch",
+            passed=has_catch,
+            message="OK" if has_catch else "Falta tratamento de erro",
+        ))
 
-    # Cancel button
-    found = bool(re.search(r"onClick=\{handleCancelEditEnd\}", code))
-    cat.results.append(TestResult(
-        name="Botão cancelar com handleCancelEditEnd",
-        passed=found,
-        message="OK" if found else "Falta botão de cancelar",
-    ))
-
-    # Edit pencil button on hover
-    found = bool(re.search(r"onClick=\{handleStartEditEnd\}", code))
-    cat.results.append(TestResult(
-        name="Botão de edição (pencil) no horário",
-        passed=found,
-        message="OK" if found else "Falta botão de editar no horário",
-    ))
-
-    # Hover opacity transition
-    found = bool(re.search(r"opacity-0\s+group-hover:opacity-100", code))
-    cat.results.append(TestResult(
-        name="Pencil com hover transition",
-        passed=found,
-        message="OK" if found else "Falta transição de opacidade no hover",
-    ))
-
-    # Loading state (Loader2 spinner)
-    found = bool(re.search(r"isSaving.*Loader2|Loader2.*animate-spin", code))
-    cat.results.append(TestResult(
-        name="Loading spinner durante save",
-        passed=found,
-        message="OK" if found else "Falta indicador de loading",
-    ))
-
-    # Only for appointments (not absences)
-    found = bool(re.search(r"canEdit\s*&&\s*isAppointment", code))
-    cat.results.append(TestResult(
-        name="Edição apenas para agendamentos (não ausências)",
-        passed=found,
-        message="OK" if found else "Botão de edição deve aparecer só para agendamentos",
-    ))
-
-    # Disabled during save
-    found = bool(re.search(r"disabled=\{isSaving\}", code))
-    cat.results.append(TestResult(
-        name="Inputs desabilitados durante save",
-        passed=found,
-        message="OK" if found else "Inputs não são desabilitados durante save",
-    ))
+        has_auth = "supabase.auth.getUser" in modal_code
+        cat.results.append(TestResult(
+            name="AppointmentModal: verifica autenticacao",
+            passed=has_auth,
+            message="OK" if has_auth else "Falta verificacao de autenticacao",
+        ))
 
     return cat
 
 
 # =============================================
-# 11. TIMEZONE HANDLING
+# 10. CONSISTENCY
 # =============================================
 
-def test_timezone_handling() -> TestCategory:
-    cat = TestCategory("Tratamento de Timezone")
-    code = read_file("src/components/scheduling/ViewAppointmentModal.tsx")
-
-    if not code:
-        cat.results.append(TestResult("Arquivo legível", False, "Não foi possível ler"))
-        return cat
-
-    # Uses TIMEZONE constant
-    found = bool(re.search(r'TIMEZONE\s*=\s*["\']America/Sao_Paulo["\']', code))
-    cat.results.append(TestResult(
-        name="Constante TIMEZONE = America/Sao_Paulo",
-        passed=found,
-        message="OK" if found else "Falta constante TIMEZONE",
-    ))
-
-    # Uses toZonedTime for display
-    found = bool(re.search(r"toZonedTime\(", code))
-    cat.results.append(TestResult(
-        name="Usa toZonedTime para conversão",
-        passed=found,
-        message="OK" if found else "Não usa toZonedTime",
-    ))
-
-    # Converts back to UTC for DB
-    found = bool(re.search(r"offsetMs.*getTime.*toZoned|toISOString", code))
-    cat.results.append(TestResult(
-        name="Converte de volta para UTC/ISO para DB",
-        passed=found,
-        message="OK" if found else "Não converte de volta para UTC",
-    ))
-
-    # Generates ISO string for update
-    found = bool(re.search(r"newEndISO.*toISOString\(\)|toISOString\(\).*newEndISO", code))
-    cat.results.append(TestResult(
-        name="Gera ISO string (newEndISO)",
-        passed=found,
-        message="OK" if found else "Não gera ISO string para o novo end_time",
-    ))
-
-    return cat
-
-
-# =============================================
-# 12. OVERLAP RPC CONSISTENCY
-# =============================================
-
-def test_overlap_rpc_consistency() -> TestCategory:
-    cat = TestCategory("Consistência com AppointmentModal")
+def test_consistency() -> TestCategory:
+    cat = TestCategory("Consistencia entre Modais")
     view_code = read_file("src/components/scheduling/ViewAppointmentModal.tsx")
     modal_code = read_file("src/components/scheduling/AppointmentModal.tsx")
 
     if not view_code or not modal_code:
-        cat.results.append(TestResult("Arquivos legíveis", False, "Não foi possível ler os arquivos"))
+        cat.results.append(TestResult("Arquivos legiveis", False, "Nao foi possivel ler os arquivos"))
         return cat
 
-    # Both use check_appointment_overlap
-    view_has = bool(re.search(r"check_appointment_overlap", view_code))
-    modal_has = bool(re.search(r"check_appointment_overlap", modal_code))
+    # ViewModal redireciona para AppointmentModal via onEdit
+    view_has_on_edit = "onEdit" in view_code
     cat.results.append(TestResult(
-        name="Ambos modais usam check_appointment_overlap",
-        passed=view_has and modal_has,
-        message="OK" if view_has and modal_has else f"View: {view_has}, Modal: {modal_has}",
+        name="ViewModal usa onEdit para abrir AppointmentModal",
+        passed=view_has_on_edit,
+        message="OK" if view_has_on_edit else "Falta callback onEdit no ViewModal",
     ))
 
-    # Both use google-calendar-sync
-    view_has = bool(re.search(r"google-calendar-sync", view_code))
-    modal_has = bool(re.search(r"google-calendar-sync", modal_code))
+    # AppointmentModal aceita appointmentToEdit
+    modal_has_edit_prop = "appointmentToEdit" in modal_code
     cat.results.append(TestResult(
-        name="Ambos modais sincronizam Google Calendar",
-        passed=view_has and modal_has,
-        message="OK" if view_has and modal_has else f"View: {view_has}, Modal: {modal_has}",
+        name="AppointmentModal aceita appointmentToEdit prop",
+        passed=modal_has_edit_prop,
+        message="OK" if modal_has_edit_prop else "Falta prop appointmentToEdit",
     ))
 
-    # Both invalidate appointments query
-    view_has = bool(re.search(r'invalidateQueries.*appointments', view_code))
-    modal_has = bool(re.search(r'invalidateQueries.*appointments', modal_code))
+    # Toda logica de edicao esta centralizada no AppointmentModal
+    modal_has_update = bool(re.search(r'\.update\(payload\)', modal_code))
+    view_no_update = ".update(" not in view_code
     cat.results.append(TestResult(
-        name="Ambos invalidam cache de appointments",
-        passed=view_has and modal_has,
-        message="OK" if view_has and modal_has else f"View: {view_has}, Modal: {modal_has}",
+        name="Logica de update centralizada no AppointmentModal",
+        passed=modal_has_update and view_no_update,
+        message="OK" if modal_has_update and view_no_update else "Update deve estar apenas no AppointmentModal",
     ))
 
-    # Both use fire-and-forget pattern
-    view_has = bool(re.search(r'\.catch\(\s*\(\)', view_code))
-    modal_has = bool(re.search(r'\.catch\(\s*\(\)', modal_code))
+    # Google Calendar sync apenas no AppointmentModal
+    modal_has_sync = "google-calendar-sync" in modal_code
+    view_no_sync = "google-calendar-sync" not in view_code
     cat.results.append(TestResult(
-        name="Ambos usam fire-and-forget para sync",
-        passed=view_has and modal_has,
-        message="OK" if view_has and modal_has else f"View: {view_has}, Modal: {modal_has}",
-    ))
-
-    return cat
-
-
-# =============================================
-# 13. SECURITY
-# =============================================
-
-def test_security() -> TestCategory:
-    cat = TestCategory("Segurança")
-    code = read_file("src/components/scheduling/ViewAppointmentModal.tsx")
-
-    if not code:
-        cat.results.append(TestResult("Arquivo legível", False, "Não foi possível ler"))
-        return cat
-
-    # No dangerouslySetInnerHTML
-    found = "dangerouslySetInnerHTML" not in code
-    cat.results.append(TestResult(
-        name="Sem dangerouslySetInnerHTML",
-        passed=found,
-        message="OK" if found else "Uso de dangerouslySetInnerHTML detectado",
-    ))
-
-    # canEdit guard
-    found = bool(re.search(r"canEdit\s*&&", code))
-    cat.results.append(TestResult(
-        name="Edição protegida por canEdit",
-        passed=found,
-        message="OK" if found else "Falta verificação canEdit para edição",
-    ))
-
-    # Uses supabase RPC (server-side validation)
-    found = bool(re.search(r"supabase\.rpc", code))
-    cat.results.append(TestResult(
-        name="Validação server-side via RPC",
-        passed=found,
-        message="OK" if found else "Falta validação server-side",
-    ))
-
-    # Error handling in try-catch
-    found = bool(re.search(r"catch\s*\(error", code))
-    cat.results.append(TestResult(
-        name="Error handling com try-catch",
-        passed=found,
-        message="OK" if found else "Falta tratamento de erro",
+        name="Google Calendar sync apenas no AppointmentModal",
+        passed=modal_has_sync and view_no_sync,
+        message="OK" if modal_has_sync and view_no_sync else "Sync deve estar apenas no AppointmentModal",
     ))
 
     return cat
@@ -735,25 +521,22 @@ def test_security() -> TestCategory:
 def main():
     categories = [
         test_file_structure(),
-        test_view_modal_imports(),
-        test_state_management(),
-        test_edit_handlers(),
-        test_validation(),
-        test_overlap_check(),
-        test_db_update(),
+        test_view_modal_clean(),
+        test_duration_field(),
+        test_duration_calculates_end(),
+        test_overlap_on_submit(),
         test_google_calendar_sync(),
+        test_edit_mode_populates(),
         test_query_invalidation(),
-        test_ui_elements(),
-        test_timezone_handling(),
-        test_overlap_rpc_consistency(),
         test_security(),
+        test_consistency(),
     ]
 
     total_passed = 0
     total_failed = 0
 
     print("=" * 60)
-    print("  TESTES: Edição Rápida de Duração de Agendamentos")
+    print("  TESTES: Edicao de Duracao de Agendamentos")
     print("=" * 60)
 
     for cat in categories:

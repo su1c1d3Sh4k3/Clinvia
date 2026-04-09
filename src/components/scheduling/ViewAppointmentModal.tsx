@@ -6,18 +6,13 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 import { ptBR } from "date-fns/locale";
-import { Pencil, Calendar, Clock, User, DollarSign, FileText, Briefcase, Bell, Check, X, Loader2 } from "lucide-react";
+import { Pencil, Calendar, Clock, User, DollarSign, FileText, Briefcase, Bell } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
 import { NotifyAppointmentModal } from "./NotifyAppointmentModal";
-import { supabase } from "@/integrations/supabase/client";
-import { useOwnerId } from "@/hooks/useOwnerId";
-import { useQueryClient } from "@tanstack/react-query";
-import { useToast } from "@/hooks/use-toast";
 
 const TIMEZONE = "America/Sao_Paulo";
 
@@ -31,12 +26,6 @@ interface ViewAppointmentModalProps {
 
 export function ViewAppointmentModal({ appointment, open, onOpenChange, onEdit, canEdit = true }: ViewAppointmentModalProps) {
     const [notifyOpen, setNotifyOpen] = useState(false);
-    const [isEditingEnd, setIsEditingEnd] = useState(false);
-    const [newEndTime, setNewEndTime] = useState("");
-    const [isSaving, setIsSaving] = useState(false);
-    const { data: ownerId } = useOwnerId();
-    const queryClient = useQueryClient();
-    const { toast } = useToast();
 
     if (!appointment) return null;
 
@@ -47,86 +36,6 @@ export function ViewAppointmentModal({ appointment, open, onOpenChange, onEdit, 
     const isPast = new Date(appointment.end_time) < new Date();
     const hasContact = !!appointment.contacts && !!appointment.contact_id;
     const isAppointment = appointment.type !== 'absence';
-
-    const handleStartEditEnd = () => {
-        setNewEndTime(format(toZoned(appointment.end_time), "HH:mm"));
-        setIsEditingEnd(true);
-    };
-
-    const handleCancelEditEnd = () => {
-        setIsEditingEnd(false);
-        setNewEndTime("");
-    };
-
-    const handleSaveEndTime = async () => {
-        setIsSaving(true);
-        try {
-            const [hours, minutes] = newEndTime.split(":").map(Number);
-
-            // Reconstruct in zoned space (Sao Paulo)
-            const startZoned = toZoned(appointment.start_time);
-            const newEndZoned = new Date(startZoned);
-            newEndZoned.setHours(hours, minutes, 0, 0);
-
-            // Validate: end must be after start
-            if (newEndZoned <= startZoned) {
-                toast({ title: "Horário inválido", description: "O término deve ser depois do início.", variant: "destructive" });
-                return;
-            }
-
-            // Minimum 10 minutes
-            const diffMin = (newEndZoned.getTime() - startZoned.getTime()) / 60000;
-            if (diffMin < 10) {
-                toast({ title: "Duração mínima", description: "O agendamento deve ter pelo menos 10 minutos.", variant: "destructive" });
-                return;
-            }
-
-            // Convert zoned time back to UTC ISO
-            const offsetMs = new Date(appointment.end_time).getTime() - toZoned(appointment.end_time).getTime();
-            const newEndISO = new Date(newEndZoned.getTime() + offsetMs).toISOString();
-
-            // Check overlap
-            const { data: isOverlap, error: overlapError } = await supabase.rpc("check_appointment_overlap", {
-                p_professional_id: appointment.professional_id,
-                p_start_time: appointment.start_time,
-                p_end_time: newEndISO,
-                p_exclude_id: appointment.id,
-            });
-            if (overlapError) throw overlapError;
-            if (isOverlap) {
-                toast({ title: "Horário indisponível", description: "Existe conflito com outro agendamento.", variant: "destructive" });
-                return;
-            }
-
-            // Update DB
-            const { error } = await supabase
-                .from("appointments")
-                .update({ end_time: newEndISO })
-                .eq("id", appointment.id);
-            if (error) throw error;
-
-            // Fire-and-forget: sync Google Calendar
-            if (ownerId) {
-                supabase.functions.invoke("google-calendar-sync", {
-                    body: { action: "sync_appointment", appointment_id: appointment.id, user_id: ownerId },
-                }).catch(() => {});
-            }
-
-            // Invalidate queries
-            queryClient.invalidateQueries({ queryKey: ["appointments"] });
-            queryClient.invalidateQueries({ queryKey: ["contact-appointments"] });
-
-            // Update local appointment object for immediate UI feedback
-            appointment.end_time = newEndISO;
-
-            toast({ title: "Horário atualizado!" });
-            setIsEditingEnd(false);
-        } catch (error: any) {
-            toast({ title: "Erro ao atualizar", description: error.message, variant: "destructive" });
-        } finally {
-            setIsSaving(false);
-        }
-    };
 
     return (
         <>
@@ -183,41 +92,9 @@ export function ViewAppointmentModal({ appointment, open, onOpenChange, onEdit, 
                                 <Clock className="h-3 w-3" />
                                 Horário
                             </div>
-                            {isEditingEnd ? (
-                                <div className="flex items-center gap-1.5">
-                                    <span className="font-medium">{format(toZoned(appointment.start_time), "HH:mm")} -</span>
-                                    <Input
-                                        type="time"
-                                        value={newEndTime}
-                                        onChange={(e) => setNewEndTime(e.target.value)}
-                                        className="w-24 h-8 text-sm"
-                                        disabled={isSaving}
-                                    />
-                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleSaveEndTime} disabled={isSaving}>
-                                        {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5 text-green-600" />}
-                                    </Button>
-                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleCancelEditEnd} disabled={isSaving}>
-                                        <X className="h-3.5 w-3.5 text-red-500" />
-                                    </Button>
-                                </div>
-                            ) : (
-                                <div className="flex items-center gap-1.5 group">
-                                    <p className="font-medium">
-                                        {format(toZoned(appointment.start_time), "HH:mm")} - {format(toZoned(appointment.end_time), "HH:mm")}
-                                    </p>
-                                    {canEdit && isAppointment && (
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                                            onClick={handleStartEditEnd}
-                                            title="Ajustar horário de término"
-                                        >
-                                            <Pencil className="h-3 w-3 text-muted-foreground" />
-                                        </Button>
-                                    )}
-                                </div>
-                            )}
+                            <p className="font-medium">
+                                {format(toZoned(appointment.start_time), "HH:mm")} - {format(toZoned(appointment.end_time), "HH:mm")}
+                            </p>
                         </div>
                     </div>
 

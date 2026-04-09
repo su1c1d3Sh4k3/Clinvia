@@ -787,7 +787,7 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                                             <FormItem>
                                                 <FormLabel>Duração (min)</FormLabel>
                                                 <FormControl>
-                                                    <Input type="number" min={10} {...field} disabled={!!form.watch('service_id') || isPast} />
+                                                    <Input type="number" min={10} {...field} disabled={(!appointmentToEdit && !!form.watch('service_id')) || isPast} />
                                                 </FormControl>
                                                 <FormMessage />
                                             </FormItem>
