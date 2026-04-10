@@ -58,7 +58,7 @@ export function MacroFunnelsPanel() {
 
     // 1. Fetch All Data (Funnels, Stages, Deals)
     const { data: allData, isLoading } = useQuery({
-        queryKey: ["macro-funnels-data"],
+        queryKey: ["macro-funnels-data", ownerId],
         queryFn: async () => {
             const [funnelsResult, stagesResult, dealsResult] = await Promise.all([
                 supabase.from("crm_funnels" as any).select("*").order("created_at", { ascending: true }),
@@ -71,7 +71,8 @@ export function MacroFunnelsPanel() {
                 stages: (stagesResult.data || []) as unknown as CRMStage[],
                 deals: (dealsResult.data || []) as unknown as CRMDeal[]
             };
-        }
+        },
+        enabled: !!ownerId
     });
 
     // 2. Filter Deals by Date and Agent assigned
