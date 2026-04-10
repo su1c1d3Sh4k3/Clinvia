@@ -9,9 +9,10 @@ interface ReportCardProps {
     prefix?: string;
     suffix?: string;
     className?: string;
+    featured?: boolean;
 }
 
-export function ReportCard({ label, value, icon, evolution, prefix, suffix, className }: ReportCardProps) {
+export function ReportCard({ label, value, icon, evolution, prefix, suffix, className, featured }: ReportCardProps) {
     const formattedValue = typeof value === "number"
         ? (prefix === "R$"
             ? value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -20,35 +21,51 @@ export function ReportCard({ label, value, icon, evolution, prefix, suffix, clas
 
     return (
         <div className={cn(
-            "rounded-xl border bg-card p-4 flex flex-col gap-2 transition-all hover:shadow-md",
+            "group relative overflow-hidden rounded-2xl border p-5 transition-all duration-300",
+            featured
+                ? "bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border-primary/20 shadow-md hover:shadow-lg"
+                : "bg-white dark:bg-card/50 backdrop-blur-sm border-border/50 shadow-sm hover:shadow-md hover:border-border/80",
             className
         )}>
-            <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{label}</span>
-                {icon && <div className="text-muted-foreground">{icon}</div>}
-            </div>
-            <div className="flex items-end gap-2">
-                <span className="text-2xl font-bold leading-none">
-                    {prefix && <span className="text-lg font-semibold text-muted-foreground mr-1">{prefix}</span>}
-                    {formattedValue}
-                    {suffix && <span className="text-sm font-medium text-muted-foreground ml-1">{suffix}</span>}
-                </span>
-            </div>
-            {evolution !== undefined && evolution !== null && (
-                <div className={cn(
-                    "flex items-center gap-1 text-xs font-medium",
-                    evolution > 0 && "text-green-500",
-                    evolution < 0 && "text-red-500",
-                    evolution === 0 && "text-muted-foreground"
-                )}>
-                    {evolution > 0 && <TrendingUp className="w-3.5 h-3.5" />}
-                    {evolution < 0 && <TrendingDown className="w-3.5 h-3.5" />}
-                    {evolution === 0 && <Minus className="w-3.5 h-3.5" />}
-                    <span>
-                        {evolution > 0 ? "+" : ""}{evolution.toFixed(1)}% vs período anterior
-                    </span>
-                </div>
+            {featured && (
+                <div className="absolute -top-8 -right-8 w-24 h-24 bg-primary/10 rounded-full blur-2xl pointer-events-none" />
             )}
+            <div className="relative z-10">
+                <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</span>
+                    {icon && (
+                        <div className={cn(
+                            "p-2 rounded-xl transition-transform duration-300 group-hover:scale-110",
+                            featured ? "bg-primary/15 text-primary" : "bg-muted/50 text-muted-foreground"
+                        )}>
+                            {icon}
+                        </div>
+                    )}
+                </div>
+                <div className="flex items-baseline gap-1.5">
+                    {prefix && <span className="text-sm font-semibold text-muted-foreground">{prefix}</span>}
+                    <span className={cn(
+                        "font-black tracking-tight",
+                        featured ? "text-2xl md:text-3xl" : "text-xl md:text-2xl"
+                    )}>
+                        {formattedValue}
+                    </span>
+                    {suffix && <span className="text-sm font-semibold text-muted-foreground">{suffix}</span>}
+                </div>
+                {evolution !== undefined && evolution !== null && (
+                    <div className={cn(
+                        "mt-3 inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full",
+                        evolution > 0 && "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10",
+                        evolution < 0 && "text-red-600 dark:text-red-400 bg-red-500/10",
+                        evolution === 0 && "text-muted-foreground bg-muted/50"
+                    )}>
+                        {evolution > 0 && <TrendingUp className="w-3 h-3" />}
+                        {evolution < 0 && <TrendingDown className="w-3 h-3" />}
+                        {evolution === 0 && <Minus className="w-3 h-3" />}
+                        <span>{evolution > 0 ? "+" : ""}{evolution.toFixed(1)}%</span>
+                    </div>
+                )}
+            </div>
         </div>
     );
 }
