@@ -53,7 +53,7 @@ EXPECTED_METRICS = {
     "sales": ["totalCount", "totalRevenue", "averageTicket", "cashCount", "installmentCount", "topProducts", "overdueInstallments"],
     "crm": ["byFunnel", "totalDeals", "totalValue"],
     "queues": ["byQueue"],
-    "financials": ["totalRevenue", "totalExpenses", "netProfit", "teamCosts"],
+    "financials": ["totalRevenue", "totalReceived", "totalPending", "totalOverdue"],
 }
 
 # Tabelas consultadas pelo hook
@@ -61,7 +61,6 @@ QUERIED_TABLES = [
     "conversations", "contacts", "crm_deals", "appointments",
     "sales", "sale_installments", "products_services", "professionals",
     "crm_funnels", "crm_stages", "queues", "team_members",
-    "revenues", "expenses", "team_costs",
 ]
 
 # Tabs que devem existir na pagina
@@ -457,7 +456,7 @@ def test_report_components(project_dir: str) -> List[TestResult]:
         },
         "FinancialReport": {
             "file": "FinancialReport.tsx",
-            "must_have": ["totalRevenue", "totalExpenses", "netProfit", "teamCosts"],
+            "must_have": ["totalRevenue", "totalReceived", "totalPending", "totalOverdue"],
             "description": "Financeiro"
         },
     }
@@ -567,8 +566,6 @@ def test_database_tables(project_dir: str) -> List[TestResult]:
         "crm_deals": ["created_at"],
         "appointments": ["start_time"],
         "sales": ["sale_date"],
-        "revenues": ["paid_date"],
-        "expenses": ["paid_date"],
     }
 
     for table, date_fields in date_filtered_tables.items():

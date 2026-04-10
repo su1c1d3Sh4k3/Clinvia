@@ -61,9 +61,9 @@ export interface QueueMetrics {
 
 export interface FinancialMetrics {
     totalRevenue: number;
-    totalExpenses: number;
-    netProfit: number;
-    teamCosts: number;
+    totalReceived: number;
+    totalPending: number;
+    totalOverdue: number;
 }
 
 export interface ReportData {
@@ -425,52 +425,54 @@ async function fetchQueueMetrics(start: string, end: string): Promise<QueueMetri
 }
 
 async function fetchFinancialMetrics(start: string, end: string): Promise<FinancialMetrics> {
-    const [revenueRes, expenseRes] = await Promise.all([
+    // Busca vendas e parcelas no período — dados reais do módulo de vendas
+    const [salesRes, installmentsRes] = await Promise.all([
         supabase
-            .from("revenues" as any)
-            .select("amount")
-            .eq("status", "paid")
-            .gte("paid_date", start)
-            .lte("paid_date", end),
+            .from("sales" as any)
+            .select("id, total_amount, payment_type")
+            .gte("sale_date", start)
+            .lte("sale_date", end),
         supabase
-            .from("expenses" as any)
-            .select("amount")
-            .eq("status", "paid")
-            .gte("paid_date", start)
-            .lte("paid_date", end),
+            .from("sale_installments" as any)
+            .select("amount, status, sale_id")
+            .gte("due_date", start)
+            .lte("due_date", end),
     ]);
 
-    if (revenueRes.error) throw revenueRes.error;
-    if (expenseRes.error) throw expenseRes.error;
+    if (salesRes.error) throw salesRes.error;
+    if (installmentsRes.error) throw installmentsRes.error;
 
-    const totalRevenue = (revenueRes.data || []).reduce((sum, r: any) => sum + (Number(r.amount) || 0), 0);
-    const totalExpenses = (expenseRes.data || []).reduce((sum, e: any) => sum + (Number(e.amount) || 0), 0);
+    const sales = (salesRes.data || []) as any[];
+    const installments = (installmentsRes.data || []) as any[];
 
-    // Team costs - parse months from date range
-    const startMonth = new Date(start).getMonth() + 1;
-    const startYear = new Date(start).getFullYear();
-    const endMonth = new Date(end).getMonth() + 1;
-    const endYear = new Date(end).getFullYear();
+    // Receita total: soma de todas as vendas no período
+    const totalRevenue = sales.reduce((sum, s) => sum + (Number(s.total_amount) || 0), 0);
 
-    const { data: costs, error: costsErr } = await supabase
-        .from("team_costs" as any)
-        .select("base_salary, commission, bonus, deductions")
-        .gte("reference_year", startYear)
-        .lte("reference_year", endYear);
+    // Vendas à vista (recebido imediatamente)
+    const cashRevenue = sales
+        .filter(s => s.payment_type === "cash")
+        .reduce((sum, s) => sum + (Number(s.total_amount) || 0), 0);
 
-    if (costsErr) throw costsErr;
+    // Parcelas pagas
+    const paidInstallments = installments
+        .filter(i => i.status === "paid")
+        .reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
 
-    // Filter by month range
-    const teamCosts = (costs || [])
-        .reduce((sum, c: any) => {
-            return sum + (Number(c.base_salary) || 0) + (Number(c.commission) || 0) + (Number(c.bonus) || 0) - (Number(c.deductions) || 0);
-        }, 0);
+    // Parcelas pendentes (ainda não vencidas ou aguardando)
+    const pendingInstallments = installments
+        .filter(i => i.status === "pending")
+        .reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
+
+    // Parcelas em atraso
+    const overdueInstallments = installments
+        .filter(i => i.status === "overdue")
+        .reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
 
     return {
         totalRevenue,
-        totalExpenses,
-        netProfit: totalRevenue - totalExpenses - teamCosts,
-        teamCosts,
+        totalReceived: cashRevenue + paidInstallments,
+        totalPending: pendingInstallments,
+        totalOverdue: overdueInstallments,
     };
 }
 
