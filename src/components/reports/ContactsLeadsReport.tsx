@@ -42,7 +42,7 @@ export function ContactsLeadsReport({ data, comparison }: ContactsLeadsReportPro
     const comparisonData = comparison ? [
         { name: "Novos Contatos", atual: data.totalNew, anterior: comparison.totalNew },
         { name: "Leads", atual: data.totalLeads, anterior: comparison.totalLeads },
-        { name: "Conversao %", atual: data.conversionRate, anterior: comparison.conversionRate },
+        { name: "Conversão %", atual: data.conversionRate, anterior: comparison.conversionRate },
     ] : [];
 
     const convColor = data.conversionRate >= 50 ? "#10b981" : data.conversionRate >= 25 ? "#f59e0b" : "#ef4444";
@@ -58,7 +58,7 @@ export function ContactsLeadsReport({ data, comparison }: ContactsLeadsReportPro
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <ReportCard label="Novos Contatos" value={data.totalNew} icon={<UserPlus className="w-4 h-4" />} evolution={comparison ? calcEvolution(data.totalNew, comparison.totalNew) : undefined} featured />
                     <ReportCard label="Contatos para Leads" value={data.totalLeads} icon={<Target className="w-4 h-4" />} evolution={comparison ? calcEvolution(data.totalLeads, comparison.totalLeads) : undefined} />
-                    <ReportCard label="Taxa de Conversao" value={data.conversionRate} suffix="%" icon={<TrendingUp className="w-4 h-4" />} evolution={comparison ? calcEvolution(data.conversionRate, comparison.conversionRate) : undefined} className={data.conversionRate >= 30 ? "border-emerald-500/20 hover:border-emerald-500/40" : ""} />
+                    <ReportCard label="Taxa de Conversão" value={data.conversionRate} suffix="%" icon={<TrendingUp className="w-4 h-4" />} evolution={comparison ? calcEvolution(data.conversionRate, comparison.conversionRate) : undefined} className={data.conversionRate >= 30 ? "border-emerald-500/20 hover:border-emerald-500/40" : ""} />
                 </div>
             </section>
 
@@ -66,7 +66,7 @@ export function ContactsLeadsReport({ data, comparison }: ContactsLeadsReportPro
             <section className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: '100ms', animationFillMode: 'backwards' }}>
                 <div className="flex items-center gap-2 mb-4">
                     <div className="p-1.5 rounded-lg bg-purple-500/10"><Target className="w-4 h-4 text-purple-500" /></div>
-                    <h3 className="text-sm font-semibold tracking-tight">Funil de Conversao</h3>
+                    <h3 className="text-sm font-semibold tracking-tight">Funil de Conversão</h3>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Bar Chart */}
@@ -74,7 +74,7 @@ export function ContactsLeadsReport({ data, comparison }: ContactsLeadsReportPro
                         <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-transparent to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                         <div className="relative z-10">
                             <h4 className="text-sm font-semibold mb-1">Contatos vs Leads</h4>
-                            <p className="text-xs text-muted-foreground mb-4">Volume captado e convertido no periodo</p>
+                            <p className="text-xs text-muted-foreground mb-4">Volume captado e convertido no período</p>
                             {data.totalNew > 0 ? (
                                 <ResponsiveContainer width="100%" height={220}>
                                     <BarChart data={barData} margin={{ left: 0, right: 8 }}>
@@ -101,7 +101,7 @@ export function ContactsLeadsReport({ data, comparison }: ContactsLeadsReportPro
                             ) : (
                                 <div className="flex flex-col items-center justify-center h-[220px] text-muted-foreground">
                                     <UserPlus className="w-10 h-10 mb-2 opacity-20" />
-                                    <p className="text-sm">Sem contatos no periodo</p>
+                                    <p className="text-sm">Sem contatos no período</p>
                                 </div>
                             )}
                         </div>
@@ -111,7 +111,7 @@ export function ContactsLeadsReport({ data, comparison }: ContactsLeadsReportPro
                     <div className={CARD}>
                         <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                         <div className="relative z-10 flex flex-col items-center justify-center h-full">
-                            <h4 className="text-sm font-semibold mb-1">Taxa de Conversao</h4>
+                            <h4 className="text-sm font-semibold mb-1">Taxa de Conversão</h4>
                             <p className="text-xs text-muted-foreground mb-6">Percentual de contatos convertidos em leads</p>
                             <div className="relative w-40 h-40">
                                 <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
@@ -120,7 +120,7 @@ export function ContactsLeadsReport({ data, comparison }: ContactsLeadsReportPro
                                 </svg>
                                 <div className="absolute inset-0 flex flex-col items-center justify-center">
                                     <span className="text-4xl font-black tracking-tight">{data.conversionRate}%</span>
-                                    <span className="text-xs text-muted-foreground font-medium mt-1">conversao</span>
+                                    <span className="text-xs text-muted-foreground font-medium mt-1">conversão</span>
                                 </div>
                             </div>
                             <div className="flex items-center gap-3 mt-6 text-xs text-muted-foreground">
@@ -138,7 +138,7 @@ export function ContactsLeadsReport({ data, comparison }: ContactsLeadsReportPro
                 <section className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: '200ms', animationFillMode: 'backwards' }}>
                     <div className="flex items-center gap-2 mb-4">
                         <div className="p-1.5 rounded-lg bg-blue-500/10"><TrendingUp className="w-4 h-4 text-blue-500" /></div>
-                        <h3 className="text-sm font-semibold tracking-tight">Comparativo de Periodos</h3>
+                        <h3 className="text-sm font-semibold tracking-tight">Comparativo de Períodos</h3>
                     </div>
                     <div className={CARD}>
                         <ResponsiveContainer width="100%" height={280}>
@@ -158,8 +158,8 @@ export function ContactsLeadsReport({ data, comparison }: ContactsLeadsReportPro
                                 <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} allowDecimals={false} axisLine={false} tickLine={false} />
                                 <Tooltip content={<ChartTooltip />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.08 }} />
                                 <Legend wrapperStyle={{ fontSize: 12, paddingTop: 12 }} />
-                                <Bar dataKey="atual" name="Periodo Atual" fill="url(#cl-comp-atual)" radius={[6, 6, 0, 0]} />
-                                <Bar dataKey="anterior" name="Periodo Anterior" fill="url(#cl-comp-ant)" radius={[6, 6, 0, 0]} />
+                                <Bar dataKey="atual" name="Período Atual" fill="url(#cl-comp-atual)" radius={[6, 6, 0, 0]} />
+                                <Bar dataKey="anterior" name="Período Anterior" fill="url(#cl-comp-ant)" radius={[6, 6, 0, 0]} />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>

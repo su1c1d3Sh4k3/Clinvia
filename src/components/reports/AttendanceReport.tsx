@@ -87,8 +87,8 @@ export function AttendanceReport({ data, queues, comparison }: AttendanceReportP
                     <ReportCard label="Fechados" value={data.closed} evolution={comparison ? calcEvolution(data.closed, comparison.closed) : undefined} />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                    <ReportCard label="Tempo Medio de Resolucao" value={data.avgResolutionHours !== null ? `${data.avgResolutionHours}h` : "N/A"} icon={<Clock className="w-4 h-4" />} evolution={comparison?.avgResolutionHours != null && data.avgResolutionHours != null ? calcEvolution(data.avgResolutionHours, comparison.avgResolutionHours!) : undefined} />
-                    <ReportCard label="Taxa de Resolucao" value={data.total > 0 ? `${((data.resolved / data.total) * 100).toFixed(1)}` : "0"} suffix="%" icon={<CheckCircle className="w-4 h-4" />} />
+                    <ReportCard label="Tempo Médio de Resolução" value={data.avgResolutionHours !== null ? `${data.avgResolutionHours}h` : "N/A"} icon={<Clock className="w-4 h-4" />} evolution={comparison?.avgResolutionHours != null && data.avgResolutionHours != null ? calcEvolution(data.avgResolutionHours, comparison.avgResolutionHours!) : undefined} />
+                    <ReportCard label="Taxa de Resolução" value={data.total > 0 ? `${((data.resolved / data.total) * 100).toFixed(1)}` : "0"} suffix="%" icon={<CheckCircle className="w-4 h-4" />} />
                 </div>
             </section>
 
@@ -96,7 +96,7 @@ export function AttendanceReport({ data, queues, comparison }: AttendanceReportP
             <section className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: '100ms', animationFillMode: 'backwards' }}>
                 <div className="flex items-center gap-2 mb-4">
                     <div className="p-1.5 rounded-lg bg-amber-500/10"><AlertCircle className="w-4 h-4 text-amber-500" /></div>
-                    <h3 className="text-sm font-semibold tracking-tight">Distribuicao de Status</h3>
+                    <h3 className="text-sm font-semibold tracking-tight">Distribuição de Status</h3>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {/* Status Donut */}
@@ -104,7 +104,7 @@ export function AttendanceReport({ data, queues, comparison }: AttendanceReportP
                         <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 via-transparent to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                         <div className="relative z-10">
                             <h4 className="text-sm font-semibold mb-1">Status dos Tickets</h4>
-                            <p className="text-xs text-muted-foreground mb-4">Visao geral por situacao</p>
+                            <p className="text-xs text-muted-foreground mb-4">Visão geral por situação</p>
                             {statusPie.length > 0 ? (
                                 <>
                                     <ResponsiveContainer width="100%" height={220}>
@@ -185,7 +185,7 @@ export function AttendanceReport({ data, queues, comparison }: AttendanceReportP
                     <div className={CARD}>
                         <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                         <div className="relative z-10 flex flex-col items-center justify-center h-full">
-                            <h4 className="text-sm font-semibold mb-1">Taxa de Resolucao</h4>
+                            <h4 className="text-sm font-semibold mb-1">Taxa de Resolução</h4>
                             <p className="text-xs text-muted-foreground mb-5">Tickets resolvidos sobre o total</p>
                             <div className="relative w-32 h-32">
                                 <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
@@ -209,7 +209,7 @@ export function AttendanceReport({ data, queues, comparison }: AttendanceReportP
                 <section className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: '200ms', animationFillMode: 'backwards' }}>
                     <div className="flex items-center gap-2 mb-4">
                         <div className="p-1.5 rounded-lg bg-blue-500/10"><MessageSquare className="w-4 h-4 text-blue-500" /></div>
-                        <h3 className="text-sm font-semibold tracking-tight">Comparativo de Periodos</h3>
+                        <h3 className="text-sm font-semibold tracking-tight">Comparativo de Períodos</h3>
                     </div>
                     <div className={CARD}>
                         <ResponsiveContainer width="100%" height={300}>
@@ -229,8 +229,8 @@ export function AttendanceReport({ data, queues, comparison }: AttendanceReportP
                                 <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} allowDecimals={false} axisLine={false} tickLine={false} />
                                 <Tooltip content={<ChartTooltip />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.08 }} />
                                 <Legend wrapperStyle={{ fontSize: 12, paddingTop: 12 }} />
-                                <Bar dataKey="atual" name="Periodo Atual" fill="url(#att-comp-atual)" radius={[6, 6, 0, 0]} />
-                                <Bar dataKey="anterior" name="Periodo Anterior" fill="url(#att-comp-ant)" radius={[6, 6, 0, 0]} />
+                                <Bar dataKey="atual" name="Período Atual" fill="url(#att-comp-atual)" radius={[6, 6, 0, 0]} />
+                                <Bar dataKey="anterior" name="Período Anterior" fill="url(#att-comp-ant)" radius={[6, 6, 0, 0]} />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
@@ -247,7 +247,7 @@ export function AttendanceReport({ data, queues, comparison }: AttendanceReportP
                     <div className="rounded-2xl bg-white dark:bg-card/50 backdrop-blur-sm border border-border/50 overflow-hidden shadow-sm">
                         <div className="p-5 border-b border-border/50">
                             <h4 className="text-sm font-semibold flex items-center gap-2"><Layers className="w-4 h-4 text-purple-500" /> Conversas por Fila</h4>
-                            <p className="text-xs text-muted-foreground mt-0.5">Distribuicao de atendimentos entre as filas</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">Distribuição de atendimentos entre as filas</p>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm">

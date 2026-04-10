@@ -14,7 +14,7 @@ interface AppointmentsReportProps {
 const STATUS_COLORS: Record<string, string> = {
     Pendentes: "#f59e0b",
     Confirmados: "#3b82f6",
-    Concluidos: "#10b981",
+    Concluídos: "#10b981",
     Reagendados: "#8b5cf6",
     Cancelados: "#ef4444",
 };
@@ -43,7 +43,7 @@ export function AppointmentsReport({ data, comparison }: AppointmentsReportProps
     const statusPie = [
         { name: "Pendentes", value: data.pending },
         { name: "Confirmados", value: data.confirmed },
-        { name: "Concluidos", value: data.completed },
+        { name: "Concluídos", value: data.completed },
         { name: "Reagendados", value: data.rescheduled },
         { name: "Cancelados", value: data.canceled },
     ].filter(d => d.value > 0);
@@ -52,14 +52,14 @@ export function AppointmentsReport({ data, comparison }: AppointmentsReportProps
         { name: "Total", atual: data.total, anterior: comparison.total },
         { name: "Pendentes", atual: data.pending, anterior: comparison.pending },
         { name: "Confirmados", atual: data.confirmed, anterior: comparison.confirmed },
-        { name: "Concluidos", atual: data.completed, anterior: comparison.completed },
+        { name: "Concluídos", atual: data.completed, anterior: comparison.completed },
         { name: "Reagendados", atual: data.rescheduled, anterior: comparison.rescheduled },
         { name: "Cancelados", atual: data.canceled, anterior: comparison.canceled },
     ] : [];
 
     const occupancyChart = data.occupancyByProfessional.slice(0, 8).map(p => ({
         name: p.professional_name.length > 14 ? p.professional_name.slice(0, 12) + "..." : p.professional_name,
-        Ocupacao: p.occupancy,
+        Ocupação: p.occupancy,
         fullName: p.professional_name,
     }));
 
@@ -77,7 +77,7 @@ export function AppointmentsReport({ data, comparison }: AppointmentsReportProps
                     <ReportCard label="Total" value={data.total} icon={<Calendar className="w-4 h-4" />} evolution={comparison ? calcEvolution(data.total, comparison.total) : undefined} featured />
                     <ReportCard label="Pendentes" value={data.pending} icon={<Clock className="w-4 h-4" />} evolution={comparison ? calcEvolution(data.pending, comparison.pending) : undefined} />
                     <ReportCard label="Confirmados" value={data.confirmed} icon={<CheckCircle className="w-4 h-4" />} evolution={comparison ? calcEvolution(data.confirmed, comparison.confirmed) : undefined} />
-                    <ReportCard label="Concluidos" value={data.completed} evolution={comparison ? calcEvolution(data.completed, comparison.completed) : undefined} />
+                    <ReportCard label="Concluídos" value={data.completed} evolution={comparison ? calcEvolution(data.completed, comparison.completed) : undefined} />
                     <ReportCard label="Reagendados" value={data.rescheduled} icon={<RefreshCw className="w-4 h-4" />} evolution={comparison ? calcEvolution(data.rescheduled, comparison.rescheduled) : undefined} />
                     <ReportCard label="Cancelados" value={data.canceled} icon={<XCircle className="w-4 h-4" />} evolution={comparison ? calcEvolution(data.canceled, comparison.canceled) : undefined} />
                 </div>
@@ -87,15 +87,15 @@ export function AppointmentsReport({ data, comparison }: AppointmentsReportProps
             <section className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: '100ms', animationFillMode: 'backwards' }}>
                 <div className="flex items-center gap-2 mb-4">
                     <div className="p-1.5 rounded-lg bg-amber-500/10"><Clock className="w-4 h-4 text-amber-500" /></div>
-                    <h3 className="text-sm font-semibold tracking-tight">Visualizacao</h3>
+                    <h3 className="text-sm font-semibold tracking-tight">Visualização</h3>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {/* Status Donut */}
                     <div className={CARD}>
                         <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 via-transparent to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                         <div className="relative z-10">
-                            <h4 className="text-sm font-semibold mb-1">Distribuicao por Status</h4>
-                            <p className="text-xs text-muted-foreground mb-4">Agendamentos segmentados por situacao</p>
+                            <h4 className="text-sm font-semibold mb-1">Distribuição por Status</h4>
+                            <p className="text-xs text-muted-foreground mb-4">Agendamentos segmentados por situação</p>
                             {statusPie.length > 0 ? (
                                 <>
                                     <ResponsiveContainer width="100%" height={220}>
@@ -136,8 +136,8 @@ export function AppointmentsReport({ data, comparison }: AppointmentsReportProps
                     <div className={CARD}>
                         <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-transparent to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                         <div className="relative z-10">
-                            <h4 className="text-sm font-semibold mb-1">Ocupacao por Profissional</h4>
-                            <p className="text-xs text-muted-foreground mb-4">Taxa de ocupacao da agenda</p>
+                            <h4 className="text-sm font-semibold mb-1">Ocupação por Profissional</h4>
+                            <p className="text-xs text-muted-foreground mb-4">Taxa de ocupação da agenda</p>
                             {occupancyChart.length > 0 ? (
                                 <ResponsiveContainer width="100%" height={220}>
                                     <BarChart data={occupancyChart} layout="vertical" margin={{ left: 0, right: 12 }}>
@@ -150,13 +150,13 @@ export function AppointmentsReport({ data, comparison }: AppointmentsReportProps
                                             return (
                                                 <div className="rounded-xl border border-border/50 bg-card/95 backdrop-blur-md px-4 py-3 shadow-[0_8px_32px_rgba(0,0,0,0.12)]">
                                                     <p className="text-xs font-medium text-muted-foreground mb-1">{d.fullName}</p>
-                                                    <p className="text-sm font-semibold">{d.Ocupacao}% ocupado</p>
+                                                    <p className="text-sm font-semibold">{d.Ocupação}% ocupado</p>
                                                 </div>
                                             );
                                         }} />
-                                        <Bar dataKey="Ocupacao" radius={[0, 6, 6, 0]}>
+                                        <Bar dataKey="Ocupação" radius={[0, 6, 6, 0]}>
                                             {occupancyChart.map((d, i) => (
-                                                <Cell key={i} fill={d.Ocupacao >= 80 ? "#10b981" : d.Ocupacao >= 50 ? "#f59e0b" : "#ef4444"} />
+                                                <Cell key={i} fill={d.Ocupação >= 80 ? "#10b981" : d.Ocupação >= 50 ? "#f59e0b" : "#ef4444"} />
                                             ))}
                                         </Bar>
                                     </BarChart>
@@ -174,8 +174,8 @@ export function AppointmentsReport({ data, comparison }: AppointmentsReportProps
                     <div className={CARD}>
                         <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                         <div className="relative z-10 flex flex-col items-center justify-center h-full">
-                            <h4 className="text-sm font-semibold mb-1">Taxa de Conclusao</h4>
-                            <p className="text-xs text-muted-foreground mb-5">Agendamentos concluidos sobre o total</p>
+                            <h4 className="text-sm font-semibold mb-1">Taxa de Conclusão</h4>
+                            <p className="text-xs text-muted-foreground mb-5">Agendamentos concluídos sobre o total</p>
                             <div className="relative w-32 h-32">
                                 <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
                                     <circle cx="50" cy="50" r="42" fill="none" stroke="currentColor" className="text-muted/20" strokeWidth="8" />
@@ -198,7 +198,7 @@ export function AppointmentsReport({ data, comparison }: AppointmentsReportProps
                 <section className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: '200ms', animationFillMode: 'backwards' }}>
                     <div className="flex items-center gap-2 mb-4">
                         <div className="p-1.5 rounded-lg bg-blue-500/10"><Calendar className="w-4 h-4 text-blue-500" /></div>
-                        <h3 className="text-sm font-semibold tracking-tight">Comparativo de Periodos</h3>
+                        <h3 className="text-sm font-semibold tracking-tight">Comparativo de Períodos</h3>
                     </div>
                     <div className={CARD}>
                         <ResponsiveContainer width="100%" height={300}>
@@ -218,8 +218,8 @@ export function AppointmentsReport({ data, comparison }: AppointmentsReportProps
                                 <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} allowDecimals={false} axisLine={false} tickLine={false} />
                                 <Tooltip content={<ChartTooltip />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.08 }} />
                                 <Legend wrapperStyle={{ fontSize: 12, paddingTop: 12 }} />
-                                <Bar dataKey="atual" name="Periodo Atual" fill="url(#appt-comp-atual)" radius={[6, 6, 0, 0]} />
-                                <Bar dataKey="anterior" name="Periodo Anterior" fill="url(#appt-comp-ant)" radius={[6, 6, 0, 0]} />
+                                <Bar dataKey="atual" name="Período Atual" fill="url(#appt-comp-atual)" radius={[6, 6, 0, 0]} />
+                                <Bar dataKey="anterior" name="Período Anterior" fill="url(#appt-comp-ant)" radius={[6, 6, 0, 0]} />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>

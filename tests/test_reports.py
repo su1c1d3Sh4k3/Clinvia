@@ -64,7 +64,7 @@ QUERIED_TABLES = [
 ]
 
 # Tabs que devem existir na pagina
-EXPECTED_TABS = ["atendimento", "contatos", "agendamentos", "vendas", "crm", "financeiro"]
+EXPECTED_TABS = ["atendimento", "contatos", "agendamentos", "vendas", "crm"]
 
 
 # ============================================================================
@@ -226,16 +226,7 @@ def test_business_reports_page(project_dir: str) -> List[TestResult]:
             "critical" if not has_tab else "info"
         ))
 
-    # 4. Financeiro condicional
-    has_financial_guard = "showFinancial" in content or "hasFinancialAccess" in content
-    results.append(TestResult(
-        "Pagina: financeiro condicional",
-        has_financial_guard,
-        "Secao financeiro visivel condicionalmente" if has_financial_guard else "Financeiro visivel para todos!",
-        "warning" if not has_financial_guard else "info"
-    ))
-
-    # 5. Filtros de data
+    # 4. Filtros de data
     has_date_inputs = 'type="date"' in content
     results.append(TestResult(
         "Pagina: inputs de data",

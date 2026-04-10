@@ -53,8 +53,8 @@ export function SalesReport({ data, comparison }: SalesReportProps) {
     const comparisonData = comparison ? [
         { name: "Vendas", atual: data.totalCount, anterior: comparison.totalCount },
         { name: "Receita", atual: data.totalRevenue, anterior: comparison.totalRevenue },
-        { name: "Ticket Medio", atual: data.averageTicket, anterior: comparison.averageTicket },
-        { name: "Inadimplencia", atual: data.overdueAmount, anterior: comparison.overdueAmount },
+        { name: "Ticket Médio", atual: data.averageTicket, anterior: comparison.averageTicket },
+        { name: "Inadimplência", atual: data.overdueAmount, anterior: comparison.overdueAmount },
     ] : [];
 
     return (
@@ -68,8 +68,8 @@ export function SalesReport({ data, comparison }: SalesReportProps) {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <ReportCard label="Total de Vendas" value={data.totalCount} icon={<ShoppingCart className="w-4 h-4" />} evolution={comparison ? calcEvolution(data.totalCount, comparison.totalCount) : undefined} featured />
                     <ReportCard label="Receita Total" value={data.totalRevenue} prefix="R$" icon={<DollarSign className="w-4 h-4" />} evolution={comparison ? calcEvolution(data.totalRevenue, comparison.totalRevenue) : undefined} />
-                    <ReportCard label="Ticket Medio" value={data.averageTicket} prefix="R$" evolution={comparison ? calcEvolution(data.averageTicket, comparison.averageTicket) : undefined} />
-                    <ReportCard label="Inadimplencia" value={data.overdueAmount} prefix="R$" icon={<AlertTriangle className="w-4 h-4" />} evolution={comparison ? calcEvolution(data.overdueAmount, comparison.overdueAmount) : undefined} className={data.overdueAmount > 0 ? "border-red-500/20 hover:border-red-500/40" : ""} />
+                    <ReportCard label="Ticket Médio" value={data.averageTicket} prefix="R$" evolution={comparison ? calcEvolution(data.averageTicket, comparison.averageTicket) : undefined} />
+                    <ReportCard label="Inadimplência" value={data.overdueAmount} prefix="R$" icon={<AlertTriangle className="w-4 h-4" />} evolution={comparison ? calcEvolution(data.overdueAmount, comparison.overdueAmount) : undefined} className={data.overdueAmount > 0 ? "border-red-500/20 hover:border-red-500/40" : ""} />
                 </div>
             </section>
 
@@ -77,7 +77,7 @@ export function SalesReport({ data, comparison }: SalesReportProps) {
             <section className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: '100ms', animationFillMode: 'backwards' }}>
                 <div className="flex items-center gap-2 mb-4">
                     <div className="p-1.5 rounded-lg bg-emerald-500/10"><DollarSign className="w-4 h-4 text-emerald-500" /></div>
-                    <h3 className="text-sm font-semibold tracking-tight">Distribuicao</h3>
+                    <h3 className="text-sm font-semibold tracking-tight">Distribuição</h3>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Payment Pie */}
@@ -85,7 +85,7 @@ export function SalesReport({ data, comparison }: SalesReportProps) {
                         <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                         <div className="relative z-10">
                             <h4 className="text-sm font-semibold mb-1">Formas de Pagamento</h4>
-                            <p className="text-xs text-muted-foreground mb-4">Distribuicao entre a vista e parcelado</p>
+                            <p className="text-xs text-muted-foreground mb-4">Distribuição entre à vista e parcelado</p>
                             {paymentPie.length > 0 ? (
                                 <>
                                     <ResponsiveContainer width="100%" height={220}>
@@ -131,7 +131,7 @@ export function SalesReport({ data, comparison }: SalesReportProps) {
                         <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                         <div className="relative z-10">
                             <h4 className="text-sm font-semibold mb-1">Mais Vendidos</h4>
-                            <p className="text-xs text-muted-foreground mb-4">Top produtos e servicos por receita</p>
+                            <p className="text-xs text-muted-foreground mb-4">Top produtos e serviços por receita</p>
                             {topProductsChart.length > 0 ? (
                                 <ResponsiveContainer width="100%" height={220}>
                                     <BarChart data={topProductsChart} layout="vertical" margin={{ left: 0, right: 12 }}>
@@ -174,7 +174,7 @@ export function SalesReport({ data, comparison }: SalesReportProps) {
                 <section className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: '200ms', animationFillMode: 'backwards' }}>
                     <div className="flex items-center gap-2 mb-4">
                         <div className="p-1.5 rounded-lg bg-blue-500/10"><ShoppingCart className="w-4 h-4 text-blue-500" /></div>
-                        <h3 className="text-sm font-semibold tracking-tight">Comparativo de Periodos</h3>
+                        <h3 className="text-sm font-semibold tracking-tight">Comparativo de Períodos</h3>
                     </div>
                     <div className={CARD}>
                         <ResponsiveContainer width="100%" height={300}>
@@ -194,8 +194,8 @@ export function SalesReport({ data, comparison }: SalesReportProps) {
                                 <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} />
                                 <Tooltip content={<ChartTooltip />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.08 }} />
                                 <Legend wrapperStyle={{ fontSize: 12, paddingTop: 12 }} />
-                                <Bar dataKey="atual" name="Periodo Atual" fill="url(#sales-comp-atual)" radius={[6, 6, 0, 0]} />
-                                <Bar dataKey="anterior" name="Periodo Anterior" fill="url(#sales-comp-ant)" radius={[6, 6, 0, 0]} />
+                                <Bar dataKey="atual" name="Período Atual" fill="url(#sales-comp-atual)" radius={[6, 6, 0, 0]} />
+                                <Bar dataKey="anterior" name="Período Anterior" fill="url(#sales-comp-ant)" radius={[6, 6, 0, 0]} />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
@@ -211,7 +211,7 @@ export function SalesReport({ data, comparison }: SalesReportProps) {
                     </div>
                     <div className="rounded-2xl bg-white dark:bg-card/50 backdrop-blur-sm border border-border/50 overflow-hidden shadow-sm">
                         <div className="p-5 border-b border-border/50">
-                            <h4 className="text-sm font-semibold">Produtos e Servicos Mais Vendidos</h4>
+                            <h4 className="text-sm font-semibold">Produtos e Serviços Mais Vendidos</h4>
                             <p className="text-xs text-muted-foreground mt-0.5">Ranking completo por receita gerada</p>
                         </div>
                         <div className="overflow-x-auto">
@@ -230,7 +230,7 @@ export function SalesReport({ data, comparison }: SalesReportProps) {
                                             <td className="p-3 px-5 font-medium">{p.name}</td>
                                             <td className="p-3 text-center">
                                                 <span className={`inline-flex items-center text-xs px-2.5 py-1 rounded-full font-medium ${p.type === "product" ? "bg-blue-500/10 text-blue-600 dark:text-blue-400" : "bg-purple-500/10 text-purple-600 dark:text-purple-400"}`}>
-                                                    {p.type === "product" ? "Produto" : "Servico"}
+                                                    {p.type === "product" ? "Produto" : "Serviço"}
                                                 </span>
                                             </td>
                                             <td className="p-3 text-right font-semibold">{p.quantity}</td>

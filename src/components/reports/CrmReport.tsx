@@ -49,7 +49,7 @@ export function CrmReport({ data, sales, contacts, comparison, comparisonSales }
         : undefined;
 
     const comparisonData = comparison ? [
-        { name: "Negociacoes", atual: data.totalDeals, anterior: comparison.totalDeals },
+        { name: "Negociações", atual: data.totalDeals, anterior: comparison.totalDeals },
         { name: "Valor (R$)", atual: data.totalValue, anterior: comparison.totalValue },
     ] : [];
 
@@ -62,7 +62,7 @@ export function CrmReport({ data, sales, contacts, comparison, comparisonSales }
                     <h3 className="text-sm font-semibold tracking-tight">Resumo do CRM</h3>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <ReportCard label="Total de Negociacoes" value={data.totalDeals} icon={<Briefcase className="w-4 h-4" />} evolution={comparison ? calcEvolution(data.totalDeals, comparison.totalDeals) : undefined} featured />
+                    <ReportCard label="Total de Negociações" value={data.totalDeals} icon={<Briefcase className="w-4 h-4" />} evolution={comparison ? calcEvolution(data.totalDeals, comparison.totalDeals) : undefined} featured />
                     <ReportCard label="Valor Total" value={data.totalValue} prefix="R$" icon={<DollarSign className="w-4 h-4" />} evolution={comparison ? calcEvolution(data.totalValue, comparison.totalValue) : undefined} />
                     <ReportCard label="Taxa Leads para Vendas" value={leadsToSalesRate} suffix="%" icon={<TrendingUp className="w-4 h-4" />} evolution={compLeadsToSalesRate !== undefined ? calcEvolution(leadsToSalesRate, compLeadsToSalesRate) : undefined} />
                 </div>
@@ -80,7 +80,7 @@ export function CrmReport({ data, sales, contacts, comparison, comparisonSales }
                             const stageChart = funnel.stages.map((s, i) => ({
                                 name: s.stage_name.length > 16 ? s.stage_name.slice(0, 14) + "..." : s.stage_name,
                                 fullName: s.stage_name,
-                                Negociacoes: s.count,
+                                Negociações: s.count,
                                 Valor: s.value,
                                 color: STAGE_COLORS[i % STAGE_COLORS.length],
                             }));
@@ -96,7 +96,7 @@ export function CrmReport({ data, sales, contacts, comparison, comparisonSales }
                                                 {funnel.funnel_name}
                                             </h4>
                                             <div className="flex items-center gap-3 text-xs">
-                                                <span className="px-2.5 py-1 rounded-full bg-primary/10 text-primary font-semibold">{totalDeals} negociacoes</span>
+                                                <span className="px-2.5 py-1 rounded-full bg-primary/10 text-primary font-semibold">{totalDeals} negociações</span>
                                                 <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold">{fBRL(totalValue)}</span>
                                             </div>
                                         </div>
@@ -125,12 +125,12 @@ export function CrmReport({ data, sales, contacts, comparison, comparisonSales }
                                                                 return (
                                                                     <div className="rounded-xl border border-border/50 bg-card/95 backdrop-blur-md px-4 py-3 shadow-[0_8px_32px_rgba(0,0,0,0.12)]">
                                                                         <p className="text-xs font-medium text-muted-foreground mb-2">{d.fullName}</p>
-                                                                        <p className="text-sm"><span className="text-muted-foreground">Negociacoes:</span> <span className="font-semibold">{d.Negociacoes}</span></p>
+                                                                        <p className="text-sm"><span className="text-muted-foreground">Negociações:</span> <span className="font-semibold">{d.Negociações}</span></p>
                                                                         <p className="text-sm"><span className="text-muted-foreground">Valor:</span> <span className="font-semibold">{fBRL(d.Valor)}</span></p>
                                                                     </div>
                                                                 );
                                                             }} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.08 }} />
-                                                            <Bar dataKey="Negociacoes" radius={[6, 6, 0, 0]}>
+                                                            <Bar dataKey="Negociações" radius={[6, 6, 0, 0]}>
                                                                 {stageChart.map((_, i) => <Cell key={i} fill={`url(#crm-stage-${funnelIdx}-${i})`} />)}
                                                             </Bar>
                                                         </BarChart>
@@ -177,7 +177,7 @@ export function CrmReport({ data, sales, contacts, comparison, comparisonSales }
                 <section className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: '200ms', animationFillMode: 'backwards' }}>
                     <div className="flex items-center gap-2 mb-4">
                         <div className="p-1.5 rounded-lg bg-blue-500/10"><TrendingUp className="w-4 h-4 text-blue-500" /></div>
-                        <h3 className="text-sm font-semibold tracking-tight">Comparativo de Periodos</h3>
+                        <h3 className="text-sm font-semibold tracking-tight">Comparativo de Períodos</h3>
                     </div>
                     <div className={CARD}>
                         <ResponsiveContainer width="100%" height={280}>
@@ -197,8 +197,8 @@ export function CrmReport({ data, sales, contacts, comparison, comparisonSales }
                                 <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} />
                                 <Tooltip content={<ChartTooltip />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.08 }} />
                                 <Legend wrapperStyle={{ fontSize: 12, paddingTop: 12 }} />
-                                <Bar dataKey="atual" name="Periodo Atual" fill="url(#crm-comp-atual)" radius={[6, 6, 0, 0]} />
-                                <Bar dataKey="anterior" name="Periodo Anterior" fill="url(#crm-comp-ant)" radius={[6, 6, 0, 0]} />
+                                <Bar dataKey="atual" name="Período Atual" fill="url(#crm-comp-atual)" radius={[6, 6, 0, 0]} />
+                                <Bar dataKey="anterior" name="Período Anterior" fill="url(#crm-comp-ant)" radius={[6, 6, 0, 0]} />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
@@ -210,7 +210,7 @@ export function CrmReport({ data, sales, contacts, comparison, comparisonSales }
                     <div className="p-4 rounded-2xl bg-muted/30 mb-4">
                         <Briefcase className="w-12 h-12 opacity-30" />
                     </div>
-                    <p className="text-sm font-medium">Nenhuma negociacao encontrada no periodo</p>
+                    <p className="text-sm font-medium">Nenhuma negociação encontrada no período</p>
                     <p className="text-xs mt-1">Tente ajustar o periodo ou os filtros selecionados</p>
                 </div>
             )}

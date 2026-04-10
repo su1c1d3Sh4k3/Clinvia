@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useReportData, calcEvolution } from "@/hooks/useReportData";
-import { useFinancialAccess } from "@/hooks/useFinancialAccess";
+
 import { useUserRole } from "@/hooks/useUserRole";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -13,10 +13,10 @@ import { ContactsLeadsReport } from "@/components/reports/ContactsLeadsReport";
 import { AppointmentsReport } from "@/components/reports/AppointmentsReport";
 import { SalesReport } from "@/components/reports/SalesReport";
 import { CrmReport } from "@/components/reports/CrmReport";
-import { FinancialReport } from "@/components/reports/FinancialReport";
+
 import {
     BarChart3, Download, Loader2, MessageSquare, UserPlus,
-    Calendar, ShoppingCart, Briefcase, DollarSign, ArrowLeftRight
+    Calendar, ShoppingCart, Briefcase, ArrowLeftRight
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -54,8 +54,6 @@ export default function BusinessReports() {
     const navigate = useNavigate();
 
     const { data: userRole } = useUserRole();
-    const { data: hasFinancialAccess } = useFinancialAccess();
-
     // Admin-only guard
     useEffect(() => {
         if (userRole && userRole !== "admin") {
@@ -107,8 +105,6 @@ export default function BusinessReports() {
             setExporting(false);
         }
     };
-
-    const showFinancial = userRole === "admin" || hasFinancialAccess;
 
     return (
         <div className="flex flex-col h-full overflow-auto">
@@ -224,12 +220,6 @@ export default function BusinessReports() {
                                 <Briefcase className="w-3.5 h-3.5" />
                                 CRM
                             </TabsTrigger>
-                            {showFinancial && (
-                                <TabsTrigger value="financeiro" className="flex items-center gap-1.5 text-xs">
-                                    <DollarSign className="w-3.5 h-3.5" />
-                                    Financeiro
-                                </TabsTrigger>
-                            )}
                         </TabsList>
 
                         <TabsContent value="atendimento">
@@ -272,14 +262,6 @@ export default function BusinessReports() {
                             />
                         </TabsContent>
 
-                        {showFinancial && (
-                            <TabsContent value="financeiro">
-                                <FinancialReport
-                                    data={data.financials}
-                                    comparison={compareEnabled ? compData?.financials : undefined}
-                                />
-                            </TabsContent>
-                        )}
                     </Tabs>
                 )}
             </div>
