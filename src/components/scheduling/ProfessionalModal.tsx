@@ -211,15 +211,22 @@ export function ProfessionalModal({ open, onOpenChange, professionalToEdit }: Pr
             };
 
             if (professionalToEdit) {
-                const { error } = await supabase
-                    .from("professionals")
+                const { data: updated, error } = await supabase
+                    .from("professionals" as any)
                     .update(payload)
-                    .eq("id", professionalToEdit.id);
-                if (error) throw error;
+                    .eq("id", professionalToEdit.id)
+                    .select()
+                    .single();
+                if (error) {
+                    if (error.code === "PGRST116") {
+                        throw new Error("Não foi possível atualizar o profissional. Verifique suas permissões.");
+                    }
+                    throw error;
+                }
                 toast({ title: "Profissional atualizado com sucesso!" });
             } else {
                 const { data: newProf, error } = await supabase
-                    .from("professionals")
+                    .from("professionals" as any)
                     .insert(payload)
                     .select("id")
                     .single();
