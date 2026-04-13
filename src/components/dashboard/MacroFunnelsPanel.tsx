@@ -113,6 +113,14 @@ export function MacroFunnelsPanel() {
         return deals;
     }, [allData?.deals, dateFilter, customDateRange, userRole, currentTeamMember]);
 
+    // Helper: tenta achar o melhor funil para cada slot pela convenção de nome
+    const findBestFunnelForSlot = (slotIndex: number, candidates: CRMFunnel[]): CRMFunnel | undefined => {
+        if (slotIndex === 0) return candidates.find(f => f.name.toLowerCase().includes('qualifica'));
+        if (slotIndex === 1) return candidates.find(f => f.name.toLowerCase().includes('ia') || f.name.toLowerCase().includes('atendimento'));
+        if (slotIndex === 2) return candidates.find(f => f.name.toLowerCase().includes('recorr') || f.name.toLowerCase().includes('reten'));
+        return undefined;
+    };
+
     // 3. Inicializar os 4 slots — carrega do localStorage ou faz auto-assign
     useEffect(() => {
         if (!allData?.funnels || allData.funnels.length === 0 || slotsInitialized) return;
@@ -128,8 +136,28 @@ export function MacroFunnelsPanel() {
                     let parsed = JSON.parse(saved) as (string | null)[];
                     // Migração: se tinha 4 slots salvos, trunca para 3 (Delivery é fixo)
                     if (parsed.length > 3) parsed = parsed.slice(0, 3);
+                    // Garante que tenha exatamente 3 slots
+                    while (parsed.length < 3) parsed.push(null);
                     // Valida se os IDs salvos ainda existem (funil pode ter sido deletado)
                     const validated = parsed.map(id => (id && availableIds.has(id)) ? id : null);
+
+                    // Preenche slots vazios com funis ainda não atribuídos
+                    // (ex: Recorrência criada depois que o usuário já tinha slots salvos)
+                    const assignedIds = new Set(validated.filter(Boolean) as string[]);
+                    const unassigned = funnels.filter(f => !assignedIds.has(f.id));
+
+                    for (let i = 0; i < validated.length; i++) {
+                        if (validated[i] === null && unassigned.length > 0) {
+                            const bestMatch = findBestFunnelForSlot(i, unassigned);
+                            const chosen = bestMatch || unassigned[0];
+                            if (chosen) {
+                                validated[i] = chosen.id;
+                                const idx = unassigned.indexOf(chosen);
+                                if (idx > -1) unassigned.splice(idx, 1);
+                            }
+                        }
+                    }
+
                     if (validated.some(id => id !== null)) {
                         setFunnelSlots(validated);
                         setSlotsInitialized(true);
@@ -145,15 +173,17 @@ export function MacroFunnelsPanel() {
         // Auto-assign padrão (nenhuma escolha salva ou inválida)
         // 3 slots CRM + Delivery fixo = 4 funis no total (MÁXIMO)
         const newSlots = [null, null, null] as (string | null)[];
+        const remaining = [...funnels];
 
-        const qF = funnels.find(f => f.name.toLowerCase().includes('qualifica'));
-        newSlots[0] = qF ? qF.id : funnels[0]?.id || null;
-
-        const iaF = funnels.find(f => f.name.toLowerCase().includes('ia') || f.name.toLowerCase().includes('atendimento'));
-        newSlots[1] = iaF ? iaF.id : funnels[1]?.id || null;
-
-        const rF = funnels.find(f => f.name.toLowerCase().includes('recorr') || f.name.toLowerCase().includes('reten'));
-        newSlots[2] = rF ? rF.id : funnels[2]?.id || null;
+        for (let i = 0; i < 3; i++) {
+            const bestMatch = findBestFunnelForSlot(i, remaining);
+            const chosen = bestMatch || remaining[0] || null;
+            newSlots[i] = chosen ? chosen.id : null;
+            if (chosen) {
+                const idx = remaining.indexOf(chosen);
+                if (idx > -1) remaining.splice(idx, 1);
+            }
+        }
 
         setFunnelSlots(newSlots);
         setSlotsInitialized(true);
