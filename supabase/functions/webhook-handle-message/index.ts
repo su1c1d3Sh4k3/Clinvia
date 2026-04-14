@@ -56,6 +56,55 @@ async function fetchProfilePicFromEvolution(
     }
 }
 
+/**
+ * Persiste a foto de perfil de um contato no Supabase Storage.
+ * Baixa a imagem da URL temporária (pps.whatsapp.net), faz upload
+ * no bucket 'avatars' e retorna a URL pública permanente.
+ * Retorna null se falhar (o chamador deve manter a URL original como fallback).
+ */
+async function persistContactPhoto(
+    supabase: any,
+    contactId: string,
+    photoUrl: string
+): Promise<string | null> {
+    try {
+        // Só persiste URLs externas (WhatsApp, etc). URLs já do Storage são permanentes.
+        const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+        if (photoUrl.includes(supabaseUrl)) return photoUrl;
+
+        const imageResponse = await fetch(photoUrl);
+        if (!imageResponse.ok) {
+            console.warn(`[persistContactPhoto] Failed to download image (${imageResponse.status}):`, photoUrl.substring(0, 80));
+            return null;
+        }
+
+        const imageBlob = await imageResponse.blob();
+        if (imageBlob.size < 100) {
+            console.warn('[persistContactPhoto] Image too small, likely invalid');
+            return null;
+        }
+
+        const fileName = `contact_${contactId}.jpg`;
+        const { error: uploadError } = await supabase.storage
+            .from('avatars')
+            .upload(fileName, imageBlob, { contentType: 'image/jpeg', upsert: true });
+
+        if (uploadError) {
+            console.error('[persistContactPhoto] Upload error:', uploadError);
+            return null;
+        }
+
+        const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(fileName);
+        // Cache-bust para forçar atualização no browser
+        const permanentUrl = `${publicUrlData.publicUrl}?t=${Date.now()}`;
+        console.log(`[persistContactPhoto] Persisted photo for contact ${contactId}`);
+        return permanentUrl;
+    } catch (err) {
+        console.error('[persistContactPhoto] Exception:', err);
+        return null;
+    }
+}
+
 serve(async (req) => {
     // Handle CORS preflight
     if (req.method === 'OPTIONS') {
@@ -344,16 +393,34 @@ serve(async (req) => {
             if (contact) {
                 // Contato existe - atualizar foto se mudou (payload tem foto nova)
                 if (profilePicUrl && profilePicUrl !== contact.profile_pic_url) {
+                    // Persistir no Storage para URL permanente
+                    const permanentUrl = await persistContactPhoto(supabase, contact.id, profilePicUrl);
+                    const urlToSave = permanentUrl || profilePicUrl;
+
                     const { error: photoError } = await supabase
                         .from('contacts')
-                        .update({ profile_pic_url: profilePicUrl })
+                        .update({ profile_pic_url: urlToSave })
                         .eq('id', contact.id);
 
                     if (photoError) {
                         console.error('[webhook-handle-message] Error updating profile picture:', photoError);
                     } else {
-                        contact.profile_pic_url = profilePicUrl;
+                        contact.profile_pic_url = urlToSave;
                     }
+                }
+
+                // Foto atual é URL temporária do WhatsApp → persistir no Storage (fire-and-forget)
+                const currentPic = contact.profile_pic_url;
+                if (currentPic && currentPic.includes('pps.whatsapp.net')) {
+                    const contactId_ = contact.id;
+                    persistContactPhoto(supabase, contactId_, currentPic)
+                        .then(permanentUrl => {
+                            if (permanentUrl) {
+                                supabase.from('contacts').update({ profile_pic_url: permanentUrl }).eq('id', contactId_)
+                                    .then(({ error }: any) => { if (error) console.error('[webhook] Error persisting existing pic:', error); });
+                            }
+                        })
+                        .catch(err => console.error('[webhook] persistContactPhoto error:', err));
                 }
 
                 // Sem foto no payload E contato não tem foto salva → buscar na Evolution API (fire-and-forget)
@@ -361,10 +428,12 @@ serve(async (req) => {
                     const contactId_ = contact.id;
                     const numberToFetch = waNumber;
                     fetchProfilePicFromEvolution(instance.server_url, instanceName, instance.apikey, numberToFetch)
-                        .then(fetchedUrl => {
+                        .then(async (fetchedUrl) => {
                             if (fetchedUrl) {
-                                supabase.from('contacts').update({ profile_pic_url: fetchedUrl }).eq('id', contactId_)
-                                    .then(({ error }) => { if (error) console.error('[webhook] Error saving fetched pic:', error); });
+                                const permanentUrl = await persistContactPhoto(supabase, contactId_, fetchedUrl);
+                                const urlToSave = permanentUrl || fetchedUrl;
+                                supabase.from('contacts').update({ profile_pic_url: urlToSave }).eq('id', contactId_)
+                                    .then(({ error }: any) => { if (error) console.error('[webhook] Error saving fetched pic:', error); });
                             }
                         })
                         .catch(err => console.error('[webhook] fetchProfilePic error:', err));
@@ -419,15 +488,31 @@ serve(async (req) => {
                     }
                 } else {
                     contact = newContact;
-                    // Novo contato sem foto no payload → buscar na Evolution API (fire-and-forget)
+
+                    // Foto do payload → persistir no Storage (fire-and-forget)
+                    if (profilePicUrl && newContact) {
+                        const contactId_ = newContact.id;
+                        persistContactPhoto(supabase, contactId_, profilePicUrl)
+                            .then(permanentUrl => {
+                                if (permanentUrl) {
+                                    supabase.from('contacts').update({ profile_pic_url: permanentUrl }).eq('id', contactId_)
+                                        .then(({ error }: any) => { if (error) console.error('[webhook] Error persisting new contact pic:', error); });
+                                }
+                            })
+                            .catch(err => console.error('[webhook] persistContactPhoto error (new):', err));
+                    }
+
+                    // Sem foto no payload → buscar na Evolution API e persistir (fire-and-forget)
                     if (!profilePicUrl && instance.server_url && instance.apikey && newContact) {
                         const contactId_ = newContact.id;
                         const numberToFetch = waNumber;
                         fetchProfilePicFromEvolution(instance.server_url, instanceName, instance.apikey, numberToFetch)
-                            .then(fetchedUrl => {
+                            .then(async (fetchedUrl) => {
                                 if (fetchedUrl) {
-                                    supabase.from('contacts').update({ profile_pic_url: fetchedUrl }).eq('id', contactId_)
-                                        .then(({ error }) => { if (error) console.error('[webhook] Error saving fetched pic (new):', error); });
+                                    const permanentUrl = await persistContactPhoto(supabase, contactId_, fetchedUrl);
+                                    const urlToSave = permanentUrl || fetchedUrl;
+                                    supabase.from('contacts').update({ profile_pic_url: urlToSave }).eq('id', contactId_)
+                                        .then(({ error }: any) => { if (error) console.error('[webhook] Error saving fetched pic (new):', error); });
                                 }
                             })
                             .catch(err => console.error('[webhook] fetchProfilePic error (new):', err));
