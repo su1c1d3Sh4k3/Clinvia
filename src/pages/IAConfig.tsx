@@ -23,7 +23,8 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Building2, Ban, Target, HelpCircle, Settings, Plus, Trash2, Loader2, Play, Heart } from "lucide-react";
+import { Building2, Ban, Target, HelpCircle, Settings, Plus, Trash2, Loader2, Play, Heart, FlaskConical, X, Phone } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { BiaWizard } from "@/components/ia-wizard/BiaWizard";
 import { BiaWizardTrigger } from "@/components/ia-wizard/BiaWizardTrigger";
 
@@ -62,6 +63,8 @@ interface IAConfigData {
     voice: boolean;
     genre: string;
     convenio: string;
+    test_mode: boolean;
+    test_numbers: string[];
 }
 
 interface QualifyItem {
@@ -116,6 +119,8 @@ const defaultConfig: IAConfigData = {
     voice: false,
     genre: "female",
     convenio: "",
+    test_mode: false,
+    test_numbers: [],
 };
 
 export default function IAConfig() {
@@ -147,6 +152,7 @@ export default function IAConfig() {
     const [togglingIA, setTogglingIA] = useState(false); // Loading do toggle de IA
     const [showWizard, setShowWizard] = useState(false); // Wizard Bia
     const [wizardAutoOpened, setWizardAutoOpened] = useState(false); // Controla auto-abertura do wizard
+    const [testNumberInput, setTestNumberInput] = useState(""); // Input para número de teste
 
     // Buscar configuração existente
     const { data: existingConfig, isLoading: isLoadingConfig } = useQuery({
@@ -214,7 +220,11 @@ export default function IAConfig() {
     // Carregar dados existentes
     useEffect(() => {
         if (existingConfig) {
-            setConfig(existingConfig);
+            setConfig({
+                ...existingConfig,
+                test_mode: existingConfig.test_mode ?? false,
+                test_numbers: existingConfig.test_numbers ?? [],
+            });
 
             // Parse restrictions
             if (existingConfig.restrictions) {
@@ -533,6 +543,50 @@ export default function IAConfig() {
     const handleCurrencyChange = (index: number, field: "valorPrimeira" | "valorDemais", value: string) => {
         const formatted = formatCurrency(value);
         updateConvenioItem(index, field, formatted);
+    };
+
+    // Handlers para números de teste
+    const addTestNumber = () => {
+        const cleaned = testNumberInput.replace(/\D/g, "");
+        if (!cleaned || cleaned.length < 10) {
+            toast.error("Digite um número válido com DDD (ex: 11999998888)");
+            return;
+        }
+        const numbers = config.test_numbers || [];
+        // Verificar duplicata (considerando variantes com/sem 9)
+        const isDuplicate = numbers.some(n => {
+            const nClean = n.replace(/\D/g, "");
+            return nClean === cleaned;
+        });
+        if (isDuplicate) {
+            toast.error("Número já adicionado");
+            return;
+        }
+        setConfig({ ...config, test_numbers: [...numbers, cleaned] });
+        setTestNumberInput("");
+    };
+
+    const removeTestNumber = (index: number) => {
+        const numbers = [...(config.test_numbers || [])];
+        numbers.splice(index, 1);
+        setConfig({ ...config, test_numbers: numbers });
+    };
+
+    const formatPhoneDisplay = (phone: string): string => {
+        const digits = phone.replace(/\D/g, "");
+        if (digits.length === 13 && digits.startsWith("55")) {
+            return `+${digits.slice(0, 2)} (${digits.slice(2, 4)}) ${digits.slice(4, 9)}-${digits.slice(9)}`;
+        }
+        if (digits.length === 12 && digits.startsWith("55")) {
+            return `+${digits.slice(0, 2)} (${digits.slice(2, 4)}) ${digits.slice(4, 8)}-${digits.slice(8)}`;
+        }
+        if (digits.length === 11) {
+            return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+        }
+        if (digits.length === 10) {
+            return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+        }
+        return phone;
     };
 
     // Handler do switch "Ligar IA" - apenas abre a lista de instâncias (não dispara webhook)
@@ -1278,6 +1332,86 @@ export default function IAConfig() {
                                     </div>
                                 )}
                             </div>
+
+                            {/* Modo de Testes */}
+                            {config.ia_on && (
+                                <div className="space-y-3 md:space-y-4 p-3 md:p-4 border rounded-lg border-amber-500/30 bg-amber-500/5">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div className="flex items-center gap-2">
+                                            <FlaskConical className="h-4 w-4 text-amber-500" />
+                                            <div className="space-y-0.5">
+                                                <h4 className="font-medium text-sm md:text-base">Modo de Testes</h4>
+                                                <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">
+                                                    Quando ativado, a IA responde apenas aos números abaixo.
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <Switch
+                                            checked={config.test_mode || false}
+                                            onCheckedChange={(checked) => setConfig({ ...config, test_mode: checked })}
+                                        />
+                                    </div>
+
+                                    {config.test_mode && (
+                                        <div className="space-y-3 pt-3 border-t border-amber-500/20">
+                                            <p className="text-xs text-muted-foreground">
+                                                Adicione os números que podem interagir com a IA no modo de testes. Os demais contatos não receberão resposta automática.
+                                            </p>
+
+                                            {/* Input para adicionar número */}
+                                            <div className="flex gap-2">
+                                                <div className="relative flex-1">
+                                                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                                    <Input
+                                                        placeholder="Ex: 11999998888"
+                                                        value={testNumberInput}
+                                                        onChange={(e) => setTestNumberInput(e.target.value.replace(/[^\d+\s()-]/g, ""))}
+                                                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTestNumber(); } }}
+                                                        className="pl-9"
+                                                    />
+                                                </div>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={addTestNumber}
+                                                    className="shrink-0"
+                                                >
+                                                    <Plus className="h-4 w-4 mr-1" />
+                                                    Adicionar
+                                                </Button>
+                                            </div>
+
+                                            {/* Lista de números adicionados */}
+                                            {(config.test_numbers?.length ?? 0) > 0 ? (
+                                                <div className="flex flex-wrap gap-2">
+                                                    {config.test_numbers.map((number, index) => (
+                                                        <Badge
+                                                            key={index}
+                                                            variant="secondary"
+                                                            className="flex items-center gap-1.5 px-3 py-1.5 text-sm"
+                                                        >
+                                                            <Phone className="h-3 w-3" />
+                                                            {formatPhoneDisplay(number)}
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => removeTestNumber(index)}
+                                                                className="ml-1 rounded-full hover:bg-destructive/20 p-0.5 transition-colors"
+                                                            >
+                                                                <X className="h-3 w-3" />
+                                                            </button>
+                                                        </Badge>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <p className="text-xs text-amber-600 italic">
+                                                    Nenhum número adicionado. A IA não responderá ninguém enquanto o modo de testes estiver ativo sem números.
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
 
                             {/* Delay de Resposta */}
                             <div className="space-y-2 p-3 md:p-4 border rounded-lg">
