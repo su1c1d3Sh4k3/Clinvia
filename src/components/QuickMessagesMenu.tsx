@@ -183,6 +183,8 @@ export function QuickMessagesMenu() {
 
             fetchMessages();
             resetForm();
+            // Notifica ChatArea para atualizar a lista de mensagens rápidas no dropdown "/"
+            window.dispatchEvent(new Event('quick-messages-updated'));
         } catch (error: any) {
             toast.error("Erro ao salvar mensagem: " + error.message);
         } finally {
@@ -204,6 +206,8 @@ export function QuickMessagesMenu() {
         } else {
             toast.success("Mensagem excluída");
             fetchMessages();
+            // Notifica ChatArea para atualizar a lista de mensagens rápidas no dropdown "/"
+            window.dispatchEvent(new Event('quick-messages-updated'));
         }
         setLoading(false);
     };

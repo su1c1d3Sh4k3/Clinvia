@@ -187,10 +187,17 @@ export const ChatArea = ({
       if (data) setQuickMessages(data as QuickMessage[]);
     };
     fetchQuickMessages();
+    // Realtime subscription para mudanças no banco
     const channel = supabase.channel('quick_messages_changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'quick_messages', filter: `user_id=eq.${ownerId}` }, fetchQuickMessages)
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    // Listener para quando QuickMessagesMenu salva/deleta mensagens (sincronia imediata)
+    const handleQuickMessagesUpdated = () => fetchQuickMessages();
+    window.addEventListener('quick-messages-updated', handleQuickMessagesUpdated);
+    return () => {
+      supabase.removeChannel(channel);
+      window.removeEventListener('quick-messages-updated', handleQuickMessagesUpdated);
+    };
   }, [ownerId]);
 
 
