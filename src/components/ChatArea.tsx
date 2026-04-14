@@ -617,33 +617,43 @@ export const ChatArea = ({
     setIsQuickMessageConfirmOpen(true);
   };
 
+  /** Substitui variáveis {nome} e {primeiro_nome} pelo nome real do contato */
+  const replaceQuickMessageVars = (text: string | null): string => {
+    if (!text) return "";
+    const contactName = contact?.push_name || contact?.phone || contact?.number?.split("@")[0] || "Cliente";
+    const firstName = contactName.split(" ")[0] || contactName;
+    return text
+      .replace(/\{nome\}/g, contactName)
+      .replace(/\{primeiro_nome\}/g, firstName);
+  };
+
   const handleConfirmQuickMessage = async () => {
     if (!selectedQuickMessage) return;
 
     const { content, media_url, message_type } = selectedQuickMessage;
 
-    // Se tiver anexo, precisamos carregar como se fosse um upload? 
-    // Ou apenas enviar como URL de mídia?
-    // O endpoint sendMessage aceita mediaUrl.
-
     const messageTypeMap: any = {
       'image': 'image',
       'audio': 'audio',
       'video': 'video',
-      'text': 'text' // Fallback
+      'text': 'text'
     };
 
     const type = messageTypeMap[message_type] || 'text';
+
+    // Substituir variáveis {nome} e {primeiro_nome} pelo nome real do contato
+    const resolvedContent = replaceQuickMessageVars(content);
+    const resolvedCaption = replaceQuickMessageVars(content);
 
     sendMessageMutation.mutate({
       conversationId: conversationId!,
       contactId: conversation?.contact_id,
       groupId: conversation?.group_id,
-      body: content || (media_url ? "Mídia" : ""), // Body is required usually
+      body: resolvedContent || (media_url ? "Mídia" : ""),
       direction: "outbound",
       messageType: type,
       mediaUrl: media_url || undefined,
-      caption: content || undefined,
+      caption: resolvedCaption || undefined,
     }, {
       onSuccess: () => {
         toast.success("Mensagem rápida enviada");
@@ -841,6 +851,7 @@ export const ChatArea = ({
         onOpenChange={setIsQuickMessageConfirmOpen}
         message={selectedQuickMessage}
         onConfirm={handleConfirmQuickMessage}
+        contactName={displayName}
       />
       {showEmojiPicker && (
         <div className="absolute bottom-20 right-4 z-50 flex flex-col items-center gap-2 bg-popover border shadow-lg rounded-lg p-2">

@@ -23,15 +23,25 @@ interface QuickMessageConfirmationModalProps {
     onOpenChange: (open: boolean) => void;
     message: QuickMessage | null;
     onConfirm: () => void;
+    contactName?: string;
 }
 
 export function QuickMessageConfirmationModal({
     open,
     onOpenChange,
     message,
-    onConfirm
+    onConfirm,
+    contactName
 }: QuickMessageConfirmationModalProps) {
     if (!message) return null;
+
+    /** Substitui variáveis para mostrar preview real no modal */
+    const resolveVars = (text: string | null): string => {
+        if (!text) return "";
+        const name = contactName || "Cliente";
+        const firstName = name.split(" ")[0] || name;
+        return text.replace(/\{nome\}/g, name).replace(/\{primeiro_nome\}/g, firstName);
+    };
 
     return (
         <AlertDialog open={open} onOpenChange={onOpenChange}>
@@ -58,7 +68,7 @@ export function QuickMessageConfirmationModal({
 
                         {message.content && (
                             <p className="text-sm text-foreground whitespace-pre-wrap mb-2">
-                                {message.content}
+                                {resolveVars(message.content)}
                             </p>
                         )}
 

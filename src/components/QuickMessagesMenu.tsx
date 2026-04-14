@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -6,12 +6,26 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Plus, X, Edit2, Trash2, Zap, Image as ImageIcon, Mic, Video, FileText } from "lucide-react";
+import { Plus, X, Edit2, Trash2, Zap, Image as ImageIcon, Mic, Video, FileText, User } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { usePermissions } from "@/hooks/usePermissions";
 import { toast } from "sonner";
+
+/** Botão de variável clicável */
+const VarChip = ({ label, onClick }: { label: string; onClick?: () => void }) => (
+    <button
+        type="button"
+        onMouseDown={e => e.preventDefault()}
+        onClick={onClick}
+        className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-primary/10 text-primary text-xs font-mono border border-primary/20 hover:bg-primary/20 hover:border-primary/40 active:scale-95 transition-all cursor-pointer select-none"
+        title={`Clique para inserir {${label}}`}
+    >
+        <User className="w-3 h-3" />
+        {"{" + label + "}"}
+    </button>
+);
 
 interface QuickMessage {
     id: string;
@@ -37,6 +51,26 @@ export function QuickMessagesMenu() {
     const [content, setContent] = useState("");
     const [mediaFile, setMediaFile] = useState<File | null>(null);
     const [existingMediaUrl, setExistingMediaUrl] = useState<string | null>(null);
+
+    // Ref do textarea para inserção de variáveis na posição do cursor
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const insertVariable = useCallback((variable: string) => {
+        const ta = textareaRef.current;
+        const varText = `{${variable}}`;
+        if (!ta) {
+            setContent(prev => prev + varText);
+            return;
+        }
+        const start = ta.selectionStart ?? ta.value.length;
+        const end = ta.selectionEnd ?? start;
+        const text = ta.value;
+        const newText = text.substring(0, start) + varText + text.substring(end);
+        setContent(newText);
+        requestAnimationFrame(() => {
+            ta.focus();
+            ta.selectionStart = ta.selectionEnd = start + varText.length;
+        });
+    }, []);
 
     useEffect(() => {
         if (isOpen && ownerId) {
@@ -297,11 +331,20 @@ export function QuickMessagesMenu() {
                             <div className="space-y-2">
                                 <Label>Mensagem</Label>
                                 <Textarea
+                                    ref={textareaRef}
                                     value={content}
                                     onChange={(e) => setContent(e.target.value)}
-                                    placeholder="Digite a mensagem..."
+                                    placeholder="Digite a mensagem... Use {nome} ou {primeiro_nome} para personalizar"
                                     rows={5}
                                 />
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                    <span className="text-xs text-muted-foreground">Variáveis:</span>
+                                    <VarChip label="nome" onClick={() => insertVariable("nome")} />
+                                    <VarChip label="primeiro_nome" onClick={() => insertVariable("primeiro_nome")} />
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                    Clique nas variáveis para inserir no texto. Serão substituídas pelo nome do contato ao enviar.
+                                </p>
                             </div>
                         )}
 
