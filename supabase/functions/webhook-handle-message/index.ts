@@ -57,6 +57,42 @@ async function fetchProfilePicFromEvolution(
 }
 
 /**
+ * Verifica se uma URL é considerada "temporária" / externa — ou seja,
+ * precisa ser persistida no Storage para não expirar.
+ */
+function isTemporaryPhotoUrl(url: string | null | undefined): boolean {
+    if (!url) return false;
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+    if (supabaseUrl && url.includes(supabaseUrl)) return false;
+    // Qualquer URL externa (WhatsApp CDN, Evolution, etc.) é considerada temporária
+    return /^https?:\/\//i.test(url);
+}
+
+/**
+ * Extrai a URL da foto de perfil a partir do payload do webhook,
+ * verificando MÚLTIPLOS campos possíveis que diferentes versões
+ * do Evolution API podem enviar.
+ */
+function extractProfilePicFromPayload(payload: any): string | null {
+    const chatData = payload?.chat || payload?.body?.chat || {};
+    return (
+        chatData.imagePreview ||
+        chatData.image ||
+        chatData.profilePicUrl ||
+        chatData.profile_pic_url ||
+        payload?.sender?.profilePicUrl ||
+        payload?.sender?.image ||
+        payload?.sender?.profile_pic_url ||
+        payload?.message?.senderProfilePic ||
+        payload?.message?.profilePicUrl ||
+        payload?.profilePicUrl ||
+        payload?.profile_pic_url ||
+        payload?.pushName?.profilePic ||
+        null
+    );
+}
+
+/**
  * Persiste a foto de perfil de um contato no Supabase Storage.
  * Baixa a imagem da URL temporária (pps.whatsapp.net), faz upload
  * no bucket 'avatars' e retorna a URL pública permanente.
@@ -70,9 +106,16 @@ async function persistContactPhoto(
     try {
         // Só persiste URLs externas (WhatsApp, etc). URLs já do Storage são permanentes.
         const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
-        if (photoUrl.includes(supabaseUrl)) return photoUrl;
+        if (supabaseUrl && photoUrl.includes(supabaseUrl)) {
+            // Já está no Storage — apenas retorna com cache-bust atualizado
+            const cleanUrl = photoUrl.split('?')[0];
+            return `${cleanUrl}?t=${Date.now()}`;
+        }
 
-        const imageResponse = await fetch(photoUrl);
+        const imageResponse = await fetch(photoUrl, {
+            // timeout implícito, mas adicionamos headers para evitar bloqueio de CDN
+            headers: { 'User-Agent': 'Mozilla/5.0 (Clinvia Webhook)' },
+        });
         if (!imageResponse.ok) {
             console.warn(`[persistContactPhoto] Failed to download image (${imageResponse.status}):`, photoUrl.substring(0, 80));
             return null;
@@ -102,6 +145,87 @@ async function persistContactPhoto(
     } catch (err) {
         console.error('[persistContactPhoto] Exception:', err);
         return null;
+    }
+}
+
+/**
+ * Garante que a foto do contato esteja persistida no Supabase Storage.
+ * Regra: TODO webhook recebido deve atualizar a foto — nunca pular.
+ *
+ * 1. Se o payload tem foto nova → persiste e atualiza o banco
+ * 2. Se o contato tem foto temporária (WhatsApp CDN) → re-persiste no Storage
+ * 3. Se o contato não tem foto → busca da Evolution API
+ *
+ * Usa `await` (não fire-and-forget) para garantir que a foto seja persistida
+ * antes do webhook retornar, evitando que o Deno Deploy mate a task.
+ */
+async function ensureContactPhotoPersisted(
+    supabase: any,
+    contact: { id: string; profile_pic_url?: string | null },
+    payloadPhotoUrl: string | null,
+    instance: { server_url?: string | null; apikey?: string | null },
+    instanceName: string,
+    contactNumber: string
+): Promise<string | null> {
+    try {
+        // Prioridade 1: foto do payload (sempre persistir se for temporária)
+        if (payloadPhotoUrl && isTemporaryPhotoUrl(payloadPhotoUrl)) {
+            const permanentUrl = await persistContactPhoto(supabase, contact.id, payloadPhotoUrl);
+            if (permanentUrl) {
+                const { error } = await supabase
+                    .from('contacts')
+                    .update({ profile_pic_url: permanentUrl })
+                    .eq('id', contact.id);
+                if (error) console.error('[ensureContactPhoto] Error saving payload photo:', error);
+                return permanentUrl;
+            }
+            // Falhou o download — salva URL bruta como fallback para não perder referência
+            const { error } = await supabase
+                .from('contacts')
+                .update({ profile_pic_url: payloadPhotoUrl })
+                .eq('id', contact.id);
+            if (error) console.error('[ensureContactPhoto] Error saving fallback photo:', error);
+            return payloadPhotoUrl;
+        }
+
+        // Prioridade 2: foto atual é temporária → re-persistir no Storage
+        const currentPic = contact.profile_pic_url;
+        if (currentPic && isTemporaryPhotoUrl(currentPic)) {
+            const permanentUrl = await persistContactPhoto(supabase, contact.id, currentPic);
+            if (permanentUrl) {
+                const { error } = await supabase
+                    .from('contacts')
+                    .update({ profile_pic_url: permanentUrl })
+                    .eq('id', contact.id);
+                if (error) console.error('[ensureContactPhoto] Error persisting existing photo:', error);
+                return permanentUrl;
+            }
+        }
+
+        // Prioridade 3: contato sem foto → buscar da Evolution API
+        if (!currentPic && instance.server_url && instance.apikey) {
+            const fetchedUrl = await fetchProfilePicFromEvolution(
+                instance.server_url,
+                instanceName,
+                instance.apikey,
+                contactNumber
+            );
+            if (fetchedUrl) {
+                const permanentUrl = await persistContactPhoto(supabase, contact.id, fetchedUrl);
+                const urlToSave = permanentUrl || fetchedUrl;
+                const { error } = await supabase
+                    .from('contacts')
+                    .update({ profile_pic_url: urlToSave })
+                    .eq('id', contact.id);
+                if (error) console.error('[ensureContactPhoto] Error saving fetched photo:', error);
+                return urlToSave;
+            }
+        }
+
+        return currentPic || null;
+    } catch (err) {
+        console.error('[ensureContactPhoto] Exception:', err);
+        return contact.profile_pic_url || null;
     }
 }
 
@@ -372,7 +496,8 @@ serve(async (req) => {
             const contactName = chatData.wa_name || chatData.name || chatData.phone;
 
             // ========== PROFILE_PIC_URL (Foto do perfil) ==========
-            const profilePicUrl = chatData.imagePreview || null;
+            // Extrai a foto de TODOS os campos possíveis do payload (não só imagePreview)
+            const profilePicUrl = extractProfilePicFromPayload(payload);
 
             if (!waNumber) {
                 console.error('[webhook-handle-message] No waNumber found in payload');
@@ -391,53 +516,20 @@ serve(async (req) => {
                 .maybeSingle();
 
             if (contact) {
-                // Contato existe - atualizar foto se mudou (payload tem foto nova)
-                if (profilePicUrl && profilePicUrl !== contact.profile_pic_url) {
-                    // Persistir no Storage para URL permanente
-                    const permanentUrl = await persistContactPhoto(supabase, contact.id, profilePicUrl);
-                    const urlToSave = permanentUrl || profilePicUrl;
-
-                    const { error: photoError } = await supabase
-                        .from('contacts')
-                        .update({ profile_pic_url: urlToSave })
-                        .eq('id', contact.id);
-
-                    if (photoError) {
-                        console.error('[webhook-handle-message] Error updating profile picture:', photoError);
-                    } else {
-                        contact.profile_pic_url = urlToSave;
-                    }
-                }
-
-                // Foto atual é URL temporária do WhatsApp → persistir no Storage (fire-and-forget)
-                const currentPic = contact.profile_pic_url;
-                if (currentPic && currentPic.includes('pps.whatsapp.net')) {
-                    const contactId_ = contact.id;
-                    persistContactPhoto(supabase, contactId_, currentPic)
-                        .then(permanentUrl => {
-                            if (permanentUrl) {
-                                supabase.from('contacts').update({ profile_pic_url: permanentUrl }).eq('id', contactId_)
-                                    .then(({ error }: any) => { if (error) console.error('[webhook] Error persisting existing pic:', error); });
-                            }
-                        })
-                        .catch(err => console.error('[webhook] persistContactPhoto error:', err));
-                }
-
-                // Sem foto no payload E contato não tem foto salva → buscar na Evolution API (fire-and-forget)
-                if (!profilePicUrl && !contact.profile_pic_url && instance.server_url && instance.apikey) {
-                    const contactId_ = contact.id;
-                    const numberToFetch = waNumber;
-                    fetchProfilePicFromEvolution(instance.server_url, instanceName, instance.apikey, numberToFetch)
-                        .then(async (fetchedUrl) => {
-                            if (fetchedUrl) {
-                                const permanentUrl = await persistContactPhoto(supabase, contactId_, fetchedUrl);
-                                const urlToSave = permanentUrl || fetchedUrl;
-                                supabase.from('contacts').update({ profile_pic_url: urlToSave }).eq('id', contactId_)
-                                    .then(({ error }: any) => { if (error) console.error('[webhook] Error saving fetched pic:', error); });
-                            }
-                        })
-                        .catch(err => console.error('[webhook] fetchProfilePic error:', err));
-                }
+                // REGRA: TODO webhook deve garantir a persistência da foto.
+                // `ensureContactPhotoPersisted` cobre os 3 cenários:
+                //   1) payload traz foto nova → persiste no Storage
+                //   2) foto atual é temporária (qualquer CDN externa) → re-persiste
+                //   3) contato sem foto → busca na Evolution API
+                const persistedUrl = await ensureContactPhotoPersisted(
+                    supabase,
+                    contact,
+                    profilePicUrl,
+                    instance,
+                    instanceName,
+                    waNumber
+                );
+                if (persistedUrl) contact.profile_pic_url = persistedUrl;
 
                 // Atualizar nome APENAS se não foi editado manualmente e não é grupo
                 if (!contact.edited && !contact.is_group && contactName && contactName !== 'Desconhecido' && contactName !== contact.push_name) {
@@ -484,39 +576,32 @@ serve(async (req) => {
 
                         if (existingContact) {
                             contact = existingContact;
+                            // Mesmo contato duplicado: ainda precisa garantir foto persistida
+                            const persistedUrl = await ensureContactPhotoPersisted(
+                                supabase,
+                                contact,
+                                profilePicUrl,
+                                instance,
+                                instanceName,
+                                waNumber
+                            );
+                            if (persistedUrl) contact.profile_pic_url = persistedUrl;
                         }
                     }
                 } else {
                     contact = newContact;
 
-                    // Foto do payload → persistir no Storage (fire-and-forget)
-                    if (profilePicUrl && newContact) {
-                        const contactId_ = newContact.id;
-                        persistContactPhoto(supabase, contactId_, profilePicUrl)
-                            .then(permanentUrl => {
-                                if (permanentUrl) {
-                                    supabase.from('contacts').update({ profile_pic_url: permanentUrl }).eq('id', contactId_)
-                                        .then(({ error }: any) => { if (error) console.error('[webhook] Error persisting new contact pic:', error); });
-                                }
-                            })
-                            .catch(err => console.error('[webhook] persistContactPhoto error (new):', err));
-                    }
-
-                    // Sem foto no payload → buscar na Evolution API e persistir (fire-and-forget)
-                    if (!profilePicUrl && instance.server_url && instance.apikey && newContact) {
-                        const contactId_ = newContact.id;
-                        const numberToFetch = waNumber;
-                        fetchProfilePicFromEvolution(instance.server_url, instanceName, instance.apikey, numberToFetch)
-                            .then(async (fetchedUrl) => {
-                                if (fetchedUrl) {
-                                    const permanentUrl = await persistContactPhoto(supabase, contactId_, fetchedUrl);
-                                    const urlToSave = permanentUrl || fetchedUrl;
-                                    supabase.from('contacts').update({ profile_pic_url: urlToSave }).eq('id', contactId_)
-                                        .then(({ error }: any) => { if (error) console.error('[webhook] Error saving fetched pic (new):', error); });
-                                }
-                            })
-                            .catch(err => console.error('[webhook] fetchProfilePic error (new):', err));
-                    }
+                    // Garante persistência da foto para novo contato
+                    // (cobre payload com foto, foto temporária e fallback para Evolution API)
+                    const persistedUrl = await ensureContactPhotoPersisted(
+                        supabase,
+                        contact,
+                        profilePicUrl,
+                        instance,
+                        instanceName,
+                        waNumber
+                    );
+                    if (persistedUrl) contact.profile_pic_url = persistedUrl;
                 }
             }
 
