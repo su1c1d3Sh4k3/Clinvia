@@ -91,15 +91,15 @@ export const ConnectInstanceDialog = ({
                 <div className="py-4">
                     {pairCode ? (
                         <div className="space-y-6">
-                            <div className="bg-muted text-primary-foreground p-4 rounded-lg text-center space-y-2">
-                                <p className="text-sm">
+                            <div className="bg-muted p-4 rounded-lg text-center space-y-2">
+                                <p className="text-sm text-muted-foreground">
                                     Código de Pareamento
                                 </p>
                                 <div className="flex items-center justify-center gap-2">
-                                    <span className="text-3xl font-mono font-bold tracking-wider">
+                                    <span className="text-3xl font-mono font-bold tracking-wider text-black dark:text-white">
                                         {pairCode}
                                     </span>
-                                    <Button size="icon" variant="ghost" onClick={copyToClipboard}>
+                                    <Button size="icon" variant="ghost" onClick={copyToClipboard} className="text-black dark:text-white">
                                         <Copy className="h-4 w-4" />
                                     </Button>
                                 </div>
