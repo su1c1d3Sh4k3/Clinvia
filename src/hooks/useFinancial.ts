@@ -325,7 +325,7 @@ export function useProfessionals() {
             console.log('DEBUG: Fetching professionals...');
             const { data, error } = await supabase
                 .from('professionals')
-                .select('id, name, photo_url, role, service_ids, work_days, commission')
+                .select('id, name, photo_url, role, service_ids, work_days, work_hours, commission')
                 .order('name');
 
             console.log('DEBUG: Professionals query result:', { data, error });
