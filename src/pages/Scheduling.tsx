@@ -430,20 +430,22 @@ export default function Scheduling() {
                                     Filtrar por Serviço
                                 </CardTitle>
                             </CardHeader>
-                            <CardContent className="space-y-2">
-                                {services?.map((service) => (
-                                    <div key={service.id} className="flex items-center space-x-2">
-                                        <Checkbox
-                                            id={`filter-${service.id}`}
-                                            checked={selectedServices.includes(service.id)}
-                                            onCheckedChange={() => toggleServiceFilter(service.id)}
-                                        />
-                                        <Label htmlFor={`filter-${service.id}`} className="text-sm font-normal cursor-pointer">
-                                            {service.name}
-                                        </Label>
-                                    </div>
-                                ))}
-                                {services?.length === 0 && <span className="text-muted-foreground text-xs">Nenhum serviço cadastrado</span>}
+                            <CardContent className="p-0">
+                                <div className="max-h-48 overflow-y-auto px-6 pb-4 pt-0 space-y-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-track]:bg-transparent">
+                                    {services?.map((service) => (
+                                        <div key={service.id} className="flex items-center space-x-2">
+                                            <Checkbox
+                                                id={`filter-${service.id}`}
+                                                checked={selectedServices.includes(service.id)}
+                                                onCheckedChange={() => toggleServiceFilter(service.id)}
+                                            />
+                                            <Label htmlFor={`filter-${service.id}`} className="text-sm font-normal cursor-pointer">
+                                                {service.name}
+                                            </Label>
+                                        </div>
+                                    ))}
+                                    {services?.length === 0 && <span className="text-muted-foreground text-xs">Nenhum serviço cadastrado</span>}
+                                </div>
                             </CardContent>
                         </Card>
 
