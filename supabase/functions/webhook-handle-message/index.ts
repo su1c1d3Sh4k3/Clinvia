@@ -1201,45 +1201,13 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                     ?? (payload?.chat?.wa_chatid || payload?.message?.chatid || '');
                 const senderDigits = senderRaw.replace(/\D/g, '');
 
-                // Normaliza um número gerando todas as variantes possíveis:
-                // - Com e sem prefixo 55 (Brasil)
-                // - Com e sem o dígito 9 do celular brasileiro
-                // Isso garante que números salvos sem DDI (ex: "35984022575")
-                // sejam corretamente comparados com o formato do WhatsApp (ex: "5535984022575")
-                const normalizePhone = (d: string): string[] => {
-                    const variants = new Set<string>([d]);
+                // Compara apenas os últimos 8 dígitos — ignora DDI, DDD e dígito 9
+                const last8 = (d: string) => d.slice(-8);
 
-                    // Adiciona/remove prefixo 55
-                    if (d.startsWith('55') && d.length >= 12) {
-                        variants.add(d.slice(2)); // remove 55
-                    } else if (!d.startsWith('55') && d.length >= 10) {
-                        variants.add('55' + d); // adiciona 55
-                    }
-
-                    // Para cada variante já gerada, adiciona/remove o dígito 9
-                    for (const v of Array.from(variants)) {
-                        if (v.startsWith('55')) {
-                            if (v.length === 13 && v[4] === '9') {
-                                variants.add(v.slice(0, 4) + v.slice(5)); // remove 9 → 12 dígitos
-                            } else if (v.length === 12) {
-                                variants.add(v.slice(0, 4) + '9' + v.slice(4)); // adiciona 9 → 13 dígitos
-                            }
-                        } else {
-                            if (v.length === 11 && v[2] === '9') {
-                                variants.add(v.slice(0, 2) + v.slice(3)); // remove 9 → 10 dígitos
-                            } else if (v.length === 10) {
-                                variants.add(v.slice(0, 2) + '9' + v.slice(2)); // adiciona 9 → 11 dígitos
-                            }
-                        }
-                    }
-
-                    return Array.from(variants);
-                };
-
-                const senderVariants = normalizePhone(senderDigits);
                 const allowed = testNumbers.map((n: string) => n.replace(/\D/g, '')).filter(Boolean);
-                const isAllowed = allowed.some(n => normalizePhone(n).some(nv => senderVariants.includes(nv)));
-                console.log(`[test_mode] sender=${senderDigits} variants=${JSON.stringify(senderVariants)} allowed=${JSON.stringify(allowed)} isAllowed=${isAllowed}`);
+                const senderLast8 = last8(senderDigits);
+                const isAllowed = allowed.some(n => last8(n) === senderLast8);
+                console.log(`[test_mode] sender=${senderDigits} last8=${senderLast8} allowed=${JSON.stringify(allowed)} isAllowed=${isAllowed}`);
 
                 if (!isAllowed) {
                     console.log(`[webhook-handle-message] test_mode: sender ${senderDigits} not in whitelist — skipping N8N forward`);
