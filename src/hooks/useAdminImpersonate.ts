@@ -25,18 +25,43 @@ export function useAdminImpersonate() {
     const [impersonationData, setImpersonationData] = useState<ImpersonationData | null>(null);
     const [isLoading, setIsLoading] = useState(false);
 
-    // Check impersonation state on mount
+    // Check impersonation state on mount — validate against current auth user
     useEffect(() => {
         const storedData = localStorage.getItem(IMPERSONATION_KEY);
-        if (storedData) {
-            try {
-                const data = JSON.parse(storedData) as ImpersonationData;
-                setImpersonationData(data);
-                setIsImpersonating(true);
-            } catch {
-                localStorage.removeItem(IMPERSONATION_KEY);
-            }
+        if (!storedData) return;
+
+        try {
+            const data = JSON.parse(storedData) as ImpersonationData;
+            // CRITICAL: Only show the banner if the currently authenticated user
+            // IS the impersonated target. Prevents stale localStorage from leaking
+            // the banner to unrelated users logging in on the same browser.
+            supabase.auth.getUser().then(({ data: userData }) => {
+                if (userData.user?.id === data.targetUserId) {
+                    setImpersonationData(data);
+                    setIsImpersonating(true);
+                } else {
+                    // Stale impersonation data — clean up silently
+                    localStorage.removeItem(IMPERSONATION_KEY);
+                    localStorage.removeItem(ADMIN_SESSION_KEY);
+                }
+            });
+        } catch {
+            localStorage.removeItem(IMPERSONATION_KEY);
+            localStorage.removeItem(ADMIN_SESSION_KEY);
         }
+    }, []);
+
+    // Also clear impersonation on auth state changes (logout, session change)
+    useEffect(() => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+            if (event === 'SIGNED_OUT') {
+                localStorage.removeItem(IMPERSONATION_KEY);
+                localStorage.removeItem(ADMIN_SESSION_KEY);
+                setImpersonationData(null);
+                setIsImpersonating(false);
+            }
+        });
+        return () => subscription.unsubscribe();
     }, []);
 
     /**
