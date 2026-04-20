@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Plus, ClipboardCheck, Sparkles, Search } from "lucide-react";
+import { Plus, ClipboardCheck, Sparkles, Search, Info } from "lucide-react";
 
 export default function Delivery() {
     const queryClient = useQueryClient();
@@ -93,7 +93,7 @@ export default function Delivery() {
                             htmlFor="ai-toggle"
                             className="text-sm cursor-pointer select-none"
                         >
-                            Delegar agendamento para IA
+                            Agendamento Automatizado
                         </Label>
                         <Switch
                             id="ai-toggle"
@@ -115,6 +115,20 @@ export default function Delivery() {
                     </Button>
                 </div>
             </div>
+
+            {/* Automated Scheduling Banner */}
+            {aiEnabled && (
+                <div className="flex items-start gap-3 mb-3 px-4 py-3 rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/40 flex-shrink-0">
+                    <Info className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                    <p className="text-sm text-amber-800 dark:text-amber-300 leading-relaxed">
+                        <span className="font-semibold">Agendamento Automatizado ativo.</span>{" "}
+                        Sempre que a data de contato de um procedimento for atingida e ele estiver na etapa{" "}
+                        <span className="font-medium">"Aguardando Agendamento"</span>, o sistema enviará automaticamente
+                        uma mensagem ao paciente propondo o agendamento — e confirmado o interesse, realizará o
+                        agendamento para o próximo dia da semana de preferência do cliente.
+                    </p>
+                </div>
+            )}
 
             {/* Filters + Search */}
             {ownerId && (
