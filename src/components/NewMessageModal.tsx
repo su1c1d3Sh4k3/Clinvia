@@ -12,15 +12,23 @@ import { useOwnerId } from "@/hooks/useOwnerId";
 import { checkActiveConversation } from "@/hooks/useActiveConversation";
 import { ContactPicker } from "@/components/ui/contact-picker";
 import { formatPhoneNumber, unformatPhoneNumber } from "@/utils/formatters";
+import { User } from "lucide-react";
 
+interface PrefilledContact {
+    id: string;
+    push_name?: string | null;
+    number?: string | null;
+    phone?: string | null;
+}
 
 interface NewMessageModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     prefilledPhone?: string;
+    prefilledContact?: PrefilledContact | null;
 }
 
-export const NewMessageModal = ({ open, onOpenChange, prefilledPhone }: NewMessageModalProps) => {
+export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledContact }: NewMessageModalProps) => {
     const [selectedInstance, setSelectedInstance] = useState("");
     const [number, setNumber] = useState(prefilledPhone || "55");
     const [message, setMessage] = useState("");
@@ -28,6 +36,21 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone }: NewMessa
     const [selectedContact, setSelectedContact] = useState<string | null>(null);
     const { toast } = useToast();
     const { data: ownerId } = useOwnerId();
+
+    // Pre-populate from prefilledContact whenever modal opens or contact changes
+    useEffect(() => {
+        if (open && prefilledContact) {
+            setSelectedContact(prefilledContact.id);
+            const phone = prefilledContact.number?.split('@')[0] || prefilledContact.phone || "55";
+            setNumber(phone);
+        } else if (!open) {
+            // Reset state when modal closes
+            setSelectedContact(null);
+            setNumber("55");
+            setMessage("");
+            setSelectedInstance("");
+        }
+    }, [open, prefilledContact]);
 
     // Fetch contacts
 
@@ -238,19 +261,29 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone }: NewMessa
 
                     <div className="space-y-2 flex flex-col">
                         <Label>Selecionar contato</Label>
-                        <ContactPicker
-                            value={selectedContact || ""}
-                            onChange={(val, contact) => {
-                                setSelectedContact(val || null);
-                                if (contact?.number) {
-                                    setNumber(contact.number.split('@')[0]);
-                                } else if (!val) {
-                                    setNumber("");
-                                }
-                            }}
-                            placeholder="Buscar contato..."
-                            className="w-full"
-                        />
+                        {prefilledContact ? (
+                            // Contact locked — show read-only display
+                            <div className="flex items-center gap-2 h-10 w-full rounded-md border border-input bg-muted px-3 py-2 text-sm">
+                                <User className="h-4 w-4 text-muted-foreground shrink-0" />
+                                <span className="font-medium truncate">
+                                    {prefilledContact.push_name || prefilledContact.phone || prefilledContact.number?.split('@')[0] || "Contato"}
+                                </span>
+                            </div>
+                        ) : (
+                            <ContactPicker
+                                value={selectedContact || ""}
+                                onChange={(val, contact) => {
+                                    setSelectedContact(val || null);
+                                    if (contact?.number) {
+                                        setNumber(contact.number.split('@')[0]);
+                                    } else if (!val) {
+                                        setNumber("");
+                                    }
+                                }}
+                                placeholder="Buscar contato..."
+                                className="w-full"
+                            />
+                        )}
                     </div>
 
                     <div className="space-y-2">

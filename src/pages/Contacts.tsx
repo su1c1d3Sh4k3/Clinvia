@@ -1007,7 +1007,7 @@ const Contacts = () => {
             <NewMessageModal
                 open={isMessageModalOpen}
                 onOpenChange={setIsMessageModalOpen}
-                prefilledPhone={selectedContactForMessage?.phone || selectedContactForMessage?.number?.split('@')[0]}
+                prefilledContact={selectedContactForMessage}
             />
 
             {/* Single Delete Confirmation */}
