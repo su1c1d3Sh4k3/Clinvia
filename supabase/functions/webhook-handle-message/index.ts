@@ -1166,6 +1166,58 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
             }
         }
 
+        // ─── Delivery Automation intercept (MUST run BEFORE N8N forward) ───
+        // If an active delivery_automation_sessions row exists for this
+        // conversation, route the inbound message to our own response handler
+        // and skip N8N entirely. The flow is finished when the session reaches
+        // a terminal state (completed / transferred / abandoned / failed),
+        // after which normal N8N forwarding resumes.
+        if (!isGroup && conversation?.id && !fromMe && eventType === 'messages') {
+            try {
+                const { data: activeAutomationSession } = await supabase
+                    .from('delivery_automation_sessions')
+                    .select('id, state')
+                    .eq('conversation_id', conversation.id)
+                    .not('state', 'in', '(completed,transferred,abandoned,failed)')
+                    .maybeSingle();
+
+                if (activeAutomationSession) {
+                    console.log(
+                        `[webhook-handle-message] Active delivery automation session ${activeAutomationSession.id} ` +
+                        `(state=${activeAutomationSession.state}) — routing to respond handler, skipping N8N`
+                    );
+
+                    const fullButtonId =
+                        payload.message?.content?.selectedID ||
+                        payload.message?.content?.buttonOrListid ||
+                        payload.message?.selectedID || null;
+
+                    // Await the response handler so the next outbound prompt is
+                    // sent before we return (avoids "ghost" webhook retries).
+                    await supabase.functions.invoke('delivery-automation-respond', {
+                        body: {
+                            conversationId: conversation.id,
+                            contactId,
+                            userId,
+                            rawMessage: effectiveMessageBody,
+                            buttonId: fullButtonId,
+                            buttonText: selectedDisplayText || voteText || null,
+                            messageId: messageId || null,
+                        },
+                    });
+
+                    return new Response(
+                        JSON.stringify({ success: true, routed: 'delivery_automation' }),
+                        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+                    );
+                }
+            } catch (interceptErr) {
+                console.error('[webhook-handle-message] delivery automation intercept error:', interceptErr);
+                // Fall through to N8N forward on error — safe default.
+            }
+        }
+        // ─── End Delivery Automation intercept ───
+
         // 5. Forward to External Webhook (only for individual contacts, not groups)
         // Additional filters:
         // - conversation.status must be 'pending'
