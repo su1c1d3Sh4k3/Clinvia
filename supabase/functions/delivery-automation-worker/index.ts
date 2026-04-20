@@ -43,10 +43,7 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    const auth = req.headers.get("Authorization") || "";
-    if (!auth.startsWith("Bearer ") || auth.slice(7) !== serviceKey) {
-        return json({ error: "Unauthorized" }, 401);
-    }
+    // Auth gated by verify_jwt=true at the edge runtime
 
     const supabase = createClient(supabaseUrl, serviceKey);
 
