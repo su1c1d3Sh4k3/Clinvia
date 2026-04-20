@@ -73,7 +73,8 @@ export function useOpportunities() {
                 .eq('dismissed', false)
                 .is('claimed_by', null)
                 .lte('alert_date', new Date().toISOString().split('T')[0])
-                .order('alert_date', { ascending: true });
+                .order('alert_date', { ascending: true })
+                .limit(2000);
 
             if (error) throw error;
             return data as Opportunity[];

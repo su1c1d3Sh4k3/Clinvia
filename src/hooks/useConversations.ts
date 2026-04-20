@@ -66,7 +66,7 @@ export const useConversations = (options: UseConversationsOptions = {}) => {
       }
       // if tab === "all", no status filter is applied
 
-      const { data, error } = await query;
+      const { data, error } = await query.limit(5000);
 
       if (error) throw error;
 

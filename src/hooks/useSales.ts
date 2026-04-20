@@ -61,7 +61,7 @@ export function useSales(startDate?: string, endDate?: string) {
                     .lte('sale_date', endDate);
             }
 
-            const { data, error } = await query.order('sale_date', { ascending: false });
+            const { data, error } = await query.order('sale_date', { ascending: false }).limit(5000);
             if (error) throw error;
             return (data || []) as Sale[];
         },
@@ -284,7 +284,7 @@ export function useTopSellers(month?: number, year?: number) {
                 query = query.gte('sale_date', startDate).lte('sale_date', endDate);
             }
 
-            const { data, error } = await query;
+            const { data, error } = await query.limit(5000);
             if (error) throw error;
 
             // Agrupar por produto

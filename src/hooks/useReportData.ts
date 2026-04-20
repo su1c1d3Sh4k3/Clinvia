@@ -85,7 +85,8 @@ async function fetchTicketMetrics(start: string, end: string): Promise<TicketMet
         .from("conversations" as any)
         .select("id, status, created_at, updated_at, assigned_agent_id")
         .gte("created_at", start)
-        .lte("created_at", end);
+        .lte("created_at", end)
+        .limit(10000);
 
     if (error) throw error;
     const items = (conversations || []) as any[];
@@ -146,7 +147,8 @@ async function fetchContactMetrics(start: string, end: string): Promise<ContactM
         .from("crm_deals" as any)
         .select("contact_id")
         .gte("created_at", start)
-        .lte("created_at", end);
+        .lte("created_at", end)
+        .limit(10000);
 
     if (leadError) throw leadError;
 
@@ -166,7 +168,8 @@ async function fetchAppointmentMetrics(start: string, end: string): Promise<Appo
         .select("id, status, professional_id, start_time, end_time, type")
         .gte("start_time", start)
         .lte("start_time", end)
-        .eq("type", "appointment");
+        .eq("type", "appointment")
+        .limit(10000);
 
     if (error) throw error;
     const items = (appointments || []) as any[];
@@ -259,7 +262,8 @@ async function fetchSalesMetrics(start: string, end: string): Promise<SalesMetri
         .from("sales" as any)
         .select("id, total_amount, payment_type, quantity, product_service_id, category")
         .gte("sale_date", start)
-        .lte("sale_date", end);
+        .lte("sale_date", end)
+        .limit(10000);
 
     if (error) throw error;
     const items = (sales || []) as any[];
@@ -331,7 +335,8 @@ async function fetchCrmMetrics(start: string, end: string): Promise<CrmMetrics> 
         .from("crm_deals" as any)
         .select("id, funnel_id, stage_id, value")
         .gte("created_at", start)
-        .lte("created_at", end);
+        .lte("created_at", end)
+        .limit(10000);
 
     if (error) throw error;
     const items = (deals || []) as any[];
@@ -394,7 +399,8 @@ async function fetchQueueMetrics(start: string, end: string): Promise<QueueMetri
         .from("conversations" as any)
         .select("id, queue_id")
         .gte("created_at", start)
-        .lte("created_at", end);
+        .lte("created_at", end)
+        .limit(10000);
 
     if (error) throw error;
     const items = (conversations || []) as any[];
