@@ -1,116 +1,69 @@
 -- =============================================================================
--- Delivery Automation — pg_cron
+-- Delivery Automation — pg_cron (dispatcher 10h BRT + worker per minute)
 -- -----------------------------------------------------------------------------
--- Two scheduled jobs:
---   1. Dispatcher: once a day at 10:00 Brasília (= 13:00 UTC) scans eligible
---      deliveries and enqueues staggered jobs.
---   2. Worker: every minute, picks up ready jobs and sends messages.
---
--- The cron functions respect the kill-switch at delivery_automation_flags:
---   UPDATE delivery_automation_flags SET value=TRUE WHERE key='enabled';
---   UPDATE delivery_automation_flags SET value=FALSE WHERE key='enabled';
+-- Uses vault.decrypted_secrets + net.http_post (same pattern as other cron
+-- jobs in this project, e.g. generate-opportunities-daily).
 -- =============================================================================
 
 CREATE EXTENSION IF NOT EXISTS pg_cron;
+CREATE EXTENSION IF NOT EXISTS pg_net;
 
--- Dispatcher invoker ----------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.invoke_delivery_automation_dispatcher()
-RETURNS void
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE
     enabled BOOLEAN;
-    response TEXT;
+    v_url TEXT;
+    v_key TEXT;
 BEGIN
-    SELECT value INTO enabled
-    FROM public.delivery_automation_flags
-    WHERE key = 'enabled';
-
+    SELECT value INTO enabled FROM public.delivery_automation_flags WHERE key='enabled';
     IF NOT COALESCE(enabled, FALSE) THEN
         RAISE NOTICE 'delivery-automation dispatcher: disabled — skipping';
         RETURN;
     END IF;
-
-    SELECT content::text INTO response
-    FROM http_post(
-        current_setting('app.settings.supabase_url') || '/functions/v1/delivery-automation-dispatcher',
-        '{}',
-        'application/json',
-        ARRAY[
-            ('Authorization', 'Bearer ' || current_setting('app.settings.service_role_key')),
-            ('Content-Type', 'application/json')
-        ]
+    SELECT decrypted_secret INTO v_url FROM vault.decrypted_secrets WHERE name='SUPABASE_URL' LIMIT 1;
+    SELECT decrypted_secret INTO v_key FROM vault.decrypted_secrets WHERE name='SUPABASE_SERVICE_ROLE_KEY' LIMIT 1;
+    PERFORM net.http_post(
+        url := v_url || '/functions/v1/delivery-automation-dispatcher',
+        headers := jsonb_build_object(
+            'Content-Type', 'application/json',
+            'Authorization', 'Bearer ' || v_key
+        ),
+        body := '{}'::jsonb
     );
-
-    RAISE NOTICE 'delivery-automation dispatcher response: %', response;
 EXCEPTION WHEN OTHERS THEN
     RAISE NOTICE 'delivery-automation dispatcher error: %', SQLERRM;
-END;
-$$;
+END $$;
 
--- Worker invoker --------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.invoke_delivery_automation_worker()
-RETURNS void
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE
     enabled BOOLEAN;
-    response TEXT;
+    v_url TEXT;
+    v_key TEXT;
 BEGIN
-    SELECT value INTO enabled
-    FROM public.delivery_automation_flags
-    WHERE key = 'enabled';
-
-    IF NOT COALESCE(enabled, FALSE) THEN
-        -- worker silent skip — avoid log spam
-        RETURN;
-    END IF;
-
-    SELECT content::text INTO response
-    FROM http_post(
-        current_setting('app.settings.supabase_url') || '/functions/v1/delivery-automation-worker',
-        '{}',
-        'application/json',
-        ARRAY[
-            ('Authorization', 'Bearer ' || current_setting('app.settings.service_role_key')),
-            ('Content-Type', 'application/json')
-        ]
+    SELECT value INTO enabled FROM public.delivery_automation_flags WHERE key='enabled';
+    IF NOT COALESCE(enabled, FALSE) THEN RETURN; END IF;
+    SELECT decrypted_secret INTO v_url FROM vault.decrypted_secrets WHERE name='SUPABASE_URL' LIMIT 1;
+    SELECT decrypted_secret INTO v_key FROM vault.decrypted_secrets WHERE name='SUPABASE_SERVICE_ROLE_KEY' LIMIT 1;
+    PERFORM net.http_post(
+        url := v_url || '/functions/v1/delivery-automation-worker',
+        headers := jsonb_build_object(
+            'Content-Type', 'application/json',
+            'Authorization', 'Bearer ' || v_key
+        ),
+        body := '{}'::jsonb
     );
 EXCEPTION WHEN OTHERS THEN
     RAISE NOTICE 'delivery-automation worker error: %', SQLERRM;
-END;
-$$;
+END $$;
 
 GRANT EXECUTE ON FUNCTION public.invoke_delivery_automation_dispatcher() TO service_role;
-GRANT EXECUTE ON FUNCTION public.invoke_delivery_automation_worker()    TO service_role;
+GRANT EXECUTE ON FUNCTION public.invoke_delivery_automation_worker() TO service_role;
 
--- Schedule dispatcher: 10:00 Brasília = 13:00 UTC (no DST in Brazil) ----------
--- Unschedule prior runs defensively before re-creating (idempotent).
-DO $$
-BEGIN
-    PERFORM cron.unschedule('delivery-automation-dispatcher');
-EXCEPTION WHEN OTHERS THEN
-    -- ignore "could not find job"
-    NULL;
-END $$;
+DO $$ BEGIN PERFORM cron.unschedule('delivery-automation-dispatcher'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
+SELECT cron.schedule('delivery-automation-dispatcher','0 13 * * *',
+    $CRON$SELECT public.invoke_delivery_automation_dispatcher()$CRON$);
 
-SELECT cron.schedule(
-    'delivery-automation-dispatcher',
-    '0 13 * * *',
-    $$SELECT public.invoke_delivery_automation_dispatcher()$$
-);
-
-DO $$
-BEGIN
-    PERFORM cron.unschedule('delivery-automation-worker');
-EXCEPTION WHEN OTHERS THEN
-    NULL;
-END $$;
-
-SELECT cron.schedule(
-    'delivery-automation-worker',
-    '* * * * *',
-    $$SELECT public.invoke_delivery_automation_worker()$$
-);
+DO $$ BEGIN PERFORM cron.unschedule('delivery-automation-worker'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
+SELECT cron.schedule('delivery-automation-worker','* * * * *',
+    $CRON$SELECT public.invoke_delivery_automation_worker()$CRON$);

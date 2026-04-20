@@ -32,14 +32,7 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    // Require service-role bearer (matches pg_cron invoker convention)
-    const auth = req.headers.get("Authorization") || "";
-    if (!auth.startsWith("Bearer ") || auth.slice(7) !== serviceKey) {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), {
-            status: 401,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-    }
+    // Auth gated by verify_jwt=true at the edge runtime
 
     const supabase = createClient(supabaseUrl, serviceKey);
 
