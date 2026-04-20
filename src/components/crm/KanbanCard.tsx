@@ -93,13 +93,25 @@ export function KanbanCard({ deal, index, stagnationLimitDays, onDealWon, onDeal
         }
     });
 
-    const priorityColor = {
-        low: "bg-green-500",
-        medium: "bg-yellow-500",
-        high: "bg-red-500",
+    const priorityBorderColor: Record<string, string> = {
+        low: "#22c55e",    // green-500
+        medium: "#eab308", // yellow-500
+        high: "#ef4444",   // red-500
     };
 
-    const priorityLabel = {
+    const priorityBadgeBg: Record<string, string> = {
+        low: "#dcfce7",    // green-100
+        medium: "#fef9c3", // yellow-100
+        high: "#fee2e2",   // red-100
+    };
+
+    const priorityBadgeText: Record<string, string> = {
+        low: "#16a34a",    // green-600
+        medium: "#ca8a04", // yellow-600
+        high: "#dc2626",   // red-600
+    };
+
+    const priorityLabel: Record<string, string> = {
         low: "Baixa",
         medium: "Média",
         high: "Alta",
@@ -117,10 +129,7 @@ export function KanbanCard({ deal, index, stagnationLimitDays, onDealWon, onDeal
                         onMouseDown={handleMouseDown}
                         onMouseUp={handleMouseUp}
                     >
-                        <Card className="hover:shadow-md transition-all cursor-grab active:cursor-grabbing border-l-4 overflow-hidden relative" style={{ borderLeftColor: deal.priority ? undefined : 'transparent' }}>
-                            {deal.priority && (
-                                <div className={`absolute left-0 top-0 bottom-0 w-1 ${priorityColor[deal.priority]}`} />
-                            )}
+                        <Card className="hover:shadow-md transition-all cursor-grab active:cursor-grabbing border-l-4 overflow-hidden relative" style={{ borderLeftColor: deal.priority ? priorityBorderColor[deal.priority] : 'transparent' }}>
 
                             <CardContent className="p-3">
                                 {/* Title + Menu on same line */}
@@ -279,7 +288,13 @@ export function KanbanCard({ deal, index, stagnationLimitDays, onDealWon, onDeal
 
                                     <div className="flex gap-2 mt-1 items-center">
                                         {deal.priority && (
-                                            <span className={`text-[10px] px-1.5 py-0.5 rounded-sm bg-opacity-10 ${priorityColor[deal.priority].replace('bg-', 'text-')} bg-gray-100 dark:bg-gray-800`}>
+                                            <span
+                                                className="text-[10px] px-1.5 py-0.5 rounded-sm font-medium"
+                                                style={{
+                                                    color: priorityBadgeText[deal.priority],
+                                                    backgroundColor: priorityBadgeBg[deal.priority],
+                                                }}
+                                            >
                                                 {priorityLabel[deal.priority]}
                                             </span>
                                         )}
