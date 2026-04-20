@@ -120,20 +120,42 @@ const Contacts = () => {
     const queryClient = useQueryClient();
 
     // Fetch Contacts
+    // Busca server-side para suportar bases com mais de 1000 contatos.
+    // Quando há searchTerm, filtra no Supabase para não limitar pelo teto padrão de linhas.
     const { data: ownerId } = useOwnerId();
     const { data: contacts, isLoading } = useQuery({
-        queryKey: ["contacts", ownerId],
+        queryKey: ["contacts", ownerId, searchTerm, selectedChannelFilter, selectedTagFilter],
         queryFn: async () => {
             if (!ownerId) return [];
-            const { data, error } = await supabase
+
+            let query = supabase
                 .from("contacts" as any)
                 .select("*, contact_tags(tags(*))")
                 .eq("user_id", ownerId)
                 .not("number", "ilike", "%@g.us")
                 .order("push_name");
 
+            // Filtragem server-side por busca (evita o limite de 1000 linhas do Supabase)
+            if (searchTerm.trim()) {
+                const term = `%${searchTerm.trim()}%`;
+                query = query.or(`push_name.ilike.${term},phone.ilike.${term},number.ilike.${term}`);
+            }
+
+            // Canal
+            if (selectedChannelFilter === "leads") {
+                query = query.eq("is_lead", true);
+            } else if (selectedChannelFilter !== "all") {
+                query = query.eq("channel", selectedChannelFilter);
+            }
+
+            // Sem searchTerm carrega até 1500 para cobrir bases grandes
+            if (!searchTerm.trim()) {
+                query = query.limit(1500);
+            }
+
+            const { data, error } = await query;
             if (error) throw error;
-            return data as any[]; // Type assertion needed due to complex join
+            return data as any[];
         },
         enabled: !!ownerId,
     });
@@ -281,21 +303,12 @@ const Contacts = () => {
         setIsMessageModalOpen(true);
     };
 
+    // Busca, canal e lead já são filtrados server-side na query.
+    // Aqui mantemos apenas o filtro de tag que exige o join client-side.
     const filteredContacts = contacts?.filter((contact) => {
-        const matchesSearch =
-            (contact.push_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                contact.phone?.includes(searchTerm) ||
-                contact.number?.includes(searchTerm));
-
-        const matchesTag = selectedTagFilter === "all" || contact.contact_tags?.some((ct: any) => ct.tags.id === selectedTagFilter);
-
-        const matchesChannel = selectedChannelFilter === "all" ||
-            selectedChannelFilter === "leads" ||
-            (contact.channel || 'whatsapp') === selectedChannelFilter;
-
-        const matchesLead = selectedChannelFilter !== "leads" || contact.is_lead === true;
-
-        return matchesSearch && matchesTag && matchesChannel && matchesLead;
+        const matchesTag = selectedTagFilter === "all" ||
+            contact.contact_tags?.some((ct: any) => ct.tags?.id === selectedTagFilter);
+        return matchesTag;
     });
 
     // Calculate pagination
