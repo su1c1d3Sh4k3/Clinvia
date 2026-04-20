@@ -14,7 +14,7 @@ export const useUnreadCounts = (userId?: string, channel?: "whatsapp" | "instagr
                 .gt("unread_count", 0)
                 .in("status", ["open", "pending"]);
 
-            const { data, error } = await query;
+            const { data, error } = await query.limit(5000);
 
             if (error) throw error;
 

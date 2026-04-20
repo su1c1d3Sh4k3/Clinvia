@@ -106,7 +106,8 @@ export function useRevenueByProfessional() {
             const { data: revenues, error: revError } = await supabase
                 .from('revenues')
                 .select('professional_id, amount')
-                .not('professional_id', 'is', null);
+                .not('professional_id', 'is', null)
+                .limit(10000);
 
             if (revError) throw revError;
 
