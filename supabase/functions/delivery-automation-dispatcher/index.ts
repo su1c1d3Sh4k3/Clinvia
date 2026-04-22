@@ -60,6 +60,8 @@ serve(async (req) => {
         //   B) filter client-side for NOT EXISTS active session (PostgREST
         //      can't easily express NOT EXISTS across tables without RPC).
 
+        // CRITICAL: contact_date must be EXACTLY today_BR — never past, never future.
+        // Past = would spam overdue clients. Future = premature contact.
         let q = supabase
             .from("deliveries")
             .select(`
@@ -67,7 +69,7 @@ serve(async (req) => {
                 contact_date, stage, appointment_id
             `)
             .eq("stage", "aguardando_agendamento")
-            .lte("contact_date", today)
+            .eq("contact_date", today)
             .not("patient_id", "is", null)
             .not("service_id", "is", null)
             .not("professional_id", "is", null);
