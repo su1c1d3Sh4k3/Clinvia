@@ -304,11 +304,17 @@ async function resolveConversation(
         }
     }
 
-    // Find or create a conversation for (contact, instance)
+    // Find or create an ACTIVE conversation for (contact, instance).
+    // A 'resolved' conversation must NOT be reused — the unique partial index
+    // `idx_conversations_unique_active` guarantees at most one active row per
+    // (contact_id, instance_id), so creating a new one is always safe when no
+    // pending/open exists.
     const { data: existingConv } = await supabase
         .from("conversations")
         .select("id, status")
         .eq("contact_id", contactId)
+        .eq("instance_id", instanceId)
+        .in("status", ["pending", "open"])
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
