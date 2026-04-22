@@ -1169,10 +1169,12 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
         // ─── Delivery Automation intercept (MUST run BEFORE N8N forward) ───
         // If an active delivery_automation_sessions row exists for this
         // conversation, route the inbound message to our own response handler
-        // and skip N8N entirely. The flow is finished when the session reaches
-        // a terminal state (completed / transferred / abandoned / failed),
-        // after which normal N8N forwarding resumes.
-        if (!isGroup && conversation?.id && !fromMe && eventType === 'messages') {
+        // and skip N8N entirely. Variables are re-derived from `payload` here
+        // because several of them (fromMe, voteText, effectiveMessageBody, …)
+        // are declared inside a nested block higher up and are not visible
+        // in this outer scope.
+        const _da_fromMe = payload.message?.fromMe === true || payload.fromMe === true;
+        if (!isGroup && conversation?.id && !_da_fromMe && eventType === 'messages') {
             try {
                 const { data: activeAutomationSession } = await supabase
                     .from('delivery_automation_sessions')
@@ -1187,10 +1189,26 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                         `(state=${activeAutomationSession.state}) — routing to respond handler, skipping N8N`
                     );
 
-                    const fullButtonId =
+                    const _da_fullButtonId =
                         payload.message?.content?.selectedID ||
                         payload.message?.content?.buttonOrListid ||
                         payload.message?.selectedID || null;
+
+                    const _da_voteText = payload.message?.vote || '';
+                    const _da_selectedDisplayText =
+                        payload.message?.selectedDisplayText ||
+                        payload.message?.buttonsResponseMessage?.selectedDisplayText ||
+                        payload.message?.content?.buttonsResponseMessage?.selectedDisplayText ||
+                        payload.message?.content?.contextInfo?.selectedDisplayText ||
+                        payload.body?.buttonsResponseMessage?.selectedDisplayText ||
+                        payload.message?.content?.selectedDisplayText ||
+                        '';
+                    const _da_messageText =
+                        payload.message?.text || payload.message?.content?.text || '';
+                    const _da_effectiveBody =
+                        _da_voteText || _da_selectedDisplayText || _da_messageText || '';
+                    const _da_messageId =
+                        payload.message?.messageid || payload.message?.id || payload.body?.key?.id || null;
 
                     // Await the response handler so the next outbound prompt is
                     // sent before we return (avoids "ghost" webhook retries).
@@ -1199,10 +1217,10 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                             conversationId: conversation.id,
                             contactId,
                             userId,
-                            rawMessage: effectiveMessageBody,
-                            buttonId: fullButtonId,
-                            buttonText: selectedDisplayText || voteText || null,
-                            messageId: messageId || null,
+                            rawMessage: _da_effectiveBody,
+                            buttonId: _da_fullButtonId,
+                            buttonText: _da_selectedDisplayText || _da_voteText || null,
+                            messageId: _da_messageId,
                         },
                     });
 
