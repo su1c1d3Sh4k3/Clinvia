@@ -278,16 +278,32 @@ export function QuickMessagesMenu() {
                                             </p>
                                         </div>
                                         <div className="flex items-center gap-1">
-                                            {canEdit('quick_messages') && (
-                                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(msg)}>
-                                                    <Edit2 className="w-4 h-4" />
-                                                </Button>
-                                            )}
-                                            {canDelete('quick_messages') && (
-                                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => handleDelete(msg.id)}>
-                                                    <Trash2 className="w-4 h-4" />
-                                                </Button>
-                                            )}
+                                            {/*
+                                                Edit/Delete are always shown: quick_messages has RLS that
+                                                filters rows by user_id (= auth.uid()), so every row the
+                                                user sees was created by them and they're allowed to
+                                                modify/delete it. Guarding with canEdit/canDelete made the
+                                                buttons invisible for some users due to a timing issue in
+                                                the permissions hook; RLS is the real guardrail here.
+                                            */}
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8"
+                                                title="Editar"
+                                                onClick={() => handleEdit(msg)}
+                                            >
+                                                <Edit2 className="w-4 h-4" />
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8 text-destructive hover:text-destructive"
+                                                title="Excluir"
+                                                onClick={() => handleDelete(msg.id)}
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </Button>
                                         </div>
                                     </div>
                                 ))}

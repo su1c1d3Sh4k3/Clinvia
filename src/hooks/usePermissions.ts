@@ -111,7 +111,12 @@ interface CustomPermissionRow {
  */
 export const usePermissions = () => {
     const { data: userRole } = useUserRole();
-    const ownerId = useOwnerId();
+    // BUGFIX: useOwnerId() returns a React Query result object, not the UUID
+    // directly. Must destructure `.data`. Previously `ownerId` was the whole
+    // object and `.eq("user_id", ownerId)` silently fetched 0 custom_permissions,
+    // forcing supervisors/agents onto the default fallback (which is correct
+    // but hid custom overrides from the admin panel).
+    const { data: ownerId } = useOwnerId();
 
     const { data: customPerms } = useQuery<CustomPermissionRow[]>({
         queryKey: ["custom_permissions", ownerId, userRole],
