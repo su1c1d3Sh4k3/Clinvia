@@ -576,6 +576,7 @@ export default function Scheduling() {
                     setSelectedSlot(undefined);
                     setIsAppointmentModalOpen(true);
                 }}
+                onStatusChange={handleStatusChange}
                 canEdit={canEdit('appointments')}
             />
 
