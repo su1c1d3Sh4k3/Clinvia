@@ -67,9 +67,11 @@ export default function Delivery() {
     const { data: connectedInstances = [] } = useQuery({
         queryKey: ["connected-instances-delivery", ownerId],
         queryFn: async () => {
+            // NOTE: the `instances` table has NO `phone` column — use
+            // `client_number` / `cliente_number` for display instead.
             const { data } = await supabase
                 .from("instances")
-                .select("id, name, instance_name, phone")
+                .select("id, name, instance_name, client_number, cliente_number")
                 .eq("user_id", ownerId!)
                 .eq("status", "connected");
             return data || [];
@@ -204,7 +206,7 @@ export default function Delivery() {
                                 <SelectContent>
                                     {connectedInstances.map((inst: any) => (
                                         <SelectItem key={inst.id} value={inst.id}>
-                                            {inst.name || inst.instance_name || inst.phone || inst.id.slice(0, 8)}
+                                            {inst.name || inst.instance_name || inst.client_number || inst.cliente_number || inst.id.slice(0, 8)}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
