@@ -11,7 +11,17 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, ClipboardCheck, Sparkles, Search, Info, Smartphone } from "lucide-react";
+import { Plus, ClipboardCheck, Sparkles, Search, Info, Smartphone, Clock } from "lucide-react";
+
+// 30-min slots from 00:00 through 23:30 (48 options)
+const SEND_TIME_SLOTS: { value: string; label: string; hour: number; minute: number }[] = [];
+for (let h = 0; h < 24; h++) {
+    for (const m of [0, 30]) {
+        const hh = String(h).padStart(2, "0");
+        const mm = String(m).padStart(2, "0");
+        SEND_TIME_SLOTS.push({ value: `${hh}:${mm}`, label: `${hh}:${mm}`, hour: h, minute: m });
+    }
+}
 
 export default function Delivery() {
     const queryClient = useQueryClient();
@@ -45,7 +55,7 @@ export default function Delivery() {
         queryFn: async () => {
             const { data } = await supabase
                 .from("delivery_config")
-                .select("ai_enabled, instance_id")
+                .select("ai_enabled, instance_id, send_hour, send_minute")
                 .eq("user_id", ownerId!)
                 .maybeSingle();
             return data;
@@ -70,9 +80,7 @@ export default function Delivery() {
     const toggleAI = useMutation({
         mutationFn: async (enabled: boolean) => {
             // When turning ON and user has 1 connected instance, auto-select it.
-            // When turning ON and has > 1, leave instance_id as-is (null) so the
-            // UI selector can prompt. When turning OFF, keep the stored instance
-            // to remember the user's preference.
+            // Also default send time to 10:00 BRT if not already set.
             const payload: any = {
                 user_id: ownerId!,
                 ai_enabled: enabled,
@@ -80,6 +88,10 @@ export default function Delivery() {
             };
             if (enabled && connectedInstances.length === 1 && !aiConfig?.instance_id) {
                 payload.instance_id = connectedInstances[0].id;
+            }
+            if (enabled && (aiConfig?.send_hour == null || aiConfig?.send_minute == null)) {
+                payload.send_hour = 10;
+                payload.send_minute = 0;
             }
             const { error } = await supabase
                 .from("delivery_config")
@@ -109,10 +121,41 @@ export default function Delivery() {
         },
     });
 
+    const setSendTime = useMutation({
+        mutationFn: async (timeValue: string) => {
+            // timeValue is "HH:MM" from the 30-min slot select
+            const slot = SEND_TIME_SLOTS.find((s) => s.value === timeValue);
+            if (!slot) throw new Error("invalid slot");
+            const { error } = await supabase
+                .from("delivery_config")
+                .upsert(
+                    {
+                        user_id: ownerId!,
+                        send_hour: slot.hour,
+                        send_minute: slot.minute,
+                        updated_at: new Date().toISOString(),
+                    },
+                    { onConflict: "user_id" }
+                );
+            if (error) throw error;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["delivery-config", ownerId] });
+        },
+    });
+
     const aiEnabled = aiConfig?.ai_enabled ?? false;
     const selectedInstanceId = aiConfig?.instance_id ?? null;
     const hasMultipleInstances = connectedInstances.length > 1;
     const needsInstanceSelection = aiEnabled && hasMultipleInstances && !selectedInstanceId;
+
+    // Send-time config
+    const sendHour = aiConfig?.send_hour ?? null;
+    const sendMinute = aiConfig?.send_minute ?? null;
+    const selectedSendTime = sendHour != null && sendMinute != null
+        ? `${String(sendHour).padStart(2, "0")}:${String(sendMinute).padStart(2, "0")}`
+        : "";
+    const needsSendTimeSelection = aiEnabled && !selectedSendTime;
 
     return (
         <div className="px-3 md:px-6 pt-4 md:pt-6 h-screen flex flex-col overflow-hidden">
@@ -169,6 +212,31 @@ export default function Delivery() {
                         </div>
                     )}
 
+                    {/* Send-time selector — shown whenever switch is ON */}
+                    {aiEnabled && (
+                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-background">
+                            <Clock className="w-3.5 h-3.5 text-primary" />
+                            <Label htmlFor="send-time-select" className="text-sm select-none">
+                                Horário de envio:
+                            </Label>
+                            <Select
+                                value={selectedSendTime}
+                                onValueChange={(val) => setSendTime.mutate(val)}
+                            >
+                                <SelectTrigger id="send-time-select" className="h-7 w-[110px] text-sm">
+                                    <SelectValue placeholder="HH:MM" />
+                                </SelectTrigger>
+                                <SelectContent className="max-h-[280px]">
+                                    {SEND_TIME_SLOTS.map((slot) => (
+                                        <SelectItem key={slot.value} value={slot.value}>
+                                            {slot.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
+
                     {/* Add button */}
                     <Button
                         size="sm"
@@ -182,28 +250,29 @@ export default function Delivery() {
                 </div>
             </div>
 
-            {/* Warning when instance selection is required */}
-            {needsInstanceSelection && (
+            {/* Warning when any required selection is missing */}
+            {(needsInstanceSelection || needsSendTimeSelection) && (
                 <div className="flex items-start gap-3 mb-3 px-4 py-3 rounded-lg border border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-950/40 flex-shrink-0">
                     <Info className="w-4 h-4 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
                     <p className="text-sm text-red-800 dark:text-red-300 leading-relaxed">
-                        <span className="font-semibold">Selecione uma instância</span> no seletor acima para que o
-                        Agendamento Automatizado possa enviar as mensagens aos pacientes. Enquanto nenhuma instância
-                        estiver selecionada, nenhum envio será realizado.
+                        <span className="font-semibold">Configuração pendente:</span>{" "}
+                        {needsInstanceSelection && "selecione uma instância"}
+                        {needsInstanceSelection && needsSendTimeSelection && " e "}
+                        {needsSendTimeSelection && "defina o horário de envio"}
+                        {" "}no controle acima para que o Agendamento Automatizado possa rodar. Enquanto houver configuração pendente, nenhum envio será realizado.
                     </p>
                 </div>
             )}
 
             {/* Automated Scheduling Banner */}
-            {aiEnabled && !needsInstanceSelection && (
+            {aiEnabled && !needsInstanceSelection && !needsSendTimeSelection && (
                 <div className="flex items-start gap-3 mb-3 px-4 py-3 rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/40 flex-shrink-0">
                     <Info className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
                     <p className="text-sm text-amber-800 dark:text-amber-300 leading-relaxed">
-                        <span className="font-semibold">Agendamento Automatizado ativo.</span>{" "}
-                        Sempre que a data de contato de um procedimento for atingida e ele estiver na etapa{" "}
-                        <span className="font-medium">"Aguardando Agendamento"</span>, o sistema enviará automaticamente
-                        uma mensagem ao paciente propondo o agendamento — e confirmado o interesse, realizará o
-                        agendamento para o próximo dia da semana de preferência do cliente.
+                        <span className="font-semibold">Agendamento Automatizado ativo — disparos às {selectedSendTime} (Brasília).</span>{" "}
+                        Todos os dias nesse horário, o sistema verifica procedimentos na etapa{" "}
+                        <span className="font-medium">"Aguardando Agendamento"</span> cuja data de contato é hoje e envia
+                        a mensagem de agendamento ao paciente automaticamente.
                     </p>
                 </div>
             )}
