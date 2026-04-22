@@ -1174,13 +1174,21 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
         // are declared inside a nested block higher up and are not visible
         // in this outer scope.
         const _da_fromMe = payload.message?.fromMe === true || payload.fromMe === true;
-        if (!isGroup && conversation?.id && !_da_fromMe && eventType === 'messages') {
+        if (!isGroup && contactId && !_da_fromMe && eventType === 'messages') {
             try {
+                // Look up by contactId (more resilient than conversation_id —
+                // when the existing conversation becomes 'resolved', a NEW
+                // conversation gets created for the same contact, and the
+                // session's conversation_id becomes stale. Matching by contact
+                // ensures the intercept still fires, and we re-sync the
+                // session's conversation_id to whichever is current.
                 const { data: activeAutomationSession } = await supabase
                     .from('delivery_automation_sessions')
-                    .select('id, state')
-                    .eq('conversation_id', conversation.id)
+                    .select('id, state, conversation_id')
+                    .eq('contact_id', contactId)
                     .not('state', 'in', '(completed,transferred,abandoned,failed)')
+                    .order('created_at', { ascending: false })
+                    .limit(1)
                     .maybeSingle();
 
                 if (activeAutomationSession) {
@@ -1188,6 +1196,21 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                         `[webhook-handle-message] Active delivery automation session ${activeAutomationSession.id} ` +
                         `(state=${activeAutomationSession.state}) — routing to respond handler, skipping N8N`
                     );
+
+                    // If the message arrived on a different conversation than the
+                    // session's cached conversation_id, update the session so the
+                    // respond handler targets the right conversation.
+                    const _da_currentConvId = conversation?.id || null;
+                    if (_da_currentConvId && activeAutomationSession.conversation_id !== _da_currentConvId) {
+                        console.log(
+                            `[webhook-handle-message] Re-pointing session ${activeAutomationSession.id} ` +
+                            `from conv ${activeAutomationSession.conversation_id} to ${_da_currentConvId}`
+                        );
+                        await supabase
+                            .from('delivery_automation_sessions')
+                            .update({ conversation_id: _da_currentConvId })
+                            .eq('id', activeAutomationSession.id);
+                    }
 
                     const _da_fullButtonId =
                         payload.message?.content?.selectedID ||
@@ -1214,7 +1237,7 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                     // sent before we return (avoids "ghost" webhook retries).
                     await supabase.functions.invoke('delivery-automation-respond', {
                         body: {
-                            conversationId: conversation.id,
+                            conversationId: conversation?.id || activeAutomationSession.conversation_id,
                             contactId,
                             userId,
                             rawMessage: _da_effectiveBody,
