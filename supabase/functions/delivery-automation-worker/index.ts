@@ -203,6 +203,16 @@ async function handleStartJob(supabase: any, job: any): Promise<void> {
         supabase, delivery.user_id, instance.id, patient,
     );
 
+    // 3.5. Abandon any OTHER active session for the same contact. Guarantees
+    // at most one session per contact at any time so the respond handler
+    // (and its .limit(1).maybeSingle() pattern) has a deterministic target.
+    await supabase
+        .from("delivery_automation_sessions")
+        .update({ state: "abandoned", ended_at: new Date().toISOString() })
+        .eq("contact_id", contactId)
+        .neq("id", session.id)
+        .not("state", "in", "(completed,transferred,abandoned,failed)");
+
     // 4. Build day-of-week buttons from professional.work_days ∩ {1..5}
     const workDays: number[] = professional.work_days || [];
     const available: WeekdayIndex[] = [];
