@@ -1,6 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { DashboardStats, DashboardHistory, DashboardGlobalMetrics } from "@/hooks/useAtendimentosData";
 import {
     PieChart,
     Pie,
@@ -544,122 +543,13 @@ const DualGaugeCard = ({
 };
 
 
-export const ServiceMetricsGrid = () => {
+interface ServiceMetricsGridProps {
+    stats?: DashboardStats;
+    history?: DashboardHistory;
+    globalMetrics?: DashboardGlobalMetrics;
+}
 
-    const { data: stats, isLoading: isLoadingStats } = useQuery({
-        queryKey: ['dashboard-stats'],
-        queryFn: async () => {
-            const { data, error } = await supabase.rpc('get_dashboard_stats');
-            if (error) throw error;
-            console.log('Dashboard stats:', data);
-            return data;
-        }
-    });
-
-    // Buscar histórico para os gráficos de área
-    const { data: history, isLoading: isLoadingHistory } = useQuery({
-        queryKey: ['dashboard-history'],
-        queryFn: async () => {
-            const { data, error } = await supabase.rpc('get_dashboard_history');
-            if (error) throw error;
-            console.log('Dashboard history:', data);
-            return data;
-        }
-    });
-
-    // Buscar métricas globais (qualidade e velocidade)
-    const { data: globalMetrics } = useQuery({
-        queryKey: ['global-metrics'],
-        refetchOnWindowFocus: true,
-        staleTime: 1000 * 60 * 2,
-        queryFn: async () => {
-            // 1. Pegar o user_id do usuário logado na tabela team_members
-            const { data: userData } = await supabase.auth.getUser();
-            if (!userData.user) return null;
-
-            const { data: teamMember } = await supabase
-                .from('team_members')
-                .select('user_id')
-                .eq('auth_user_id', userData.user.id)
-                .maybeSingle();
-
-            // Se não encontrou por auth_user_id, tenta user_id (admin)
-            let userId = teamMember?.user_id;
-            if (!userId) {
-                const { data: adminMember } = await supabase
-                    .from('team_members')
-                    .select('user_id')
-                    .eq('user_id', userData.user.id)
-                    .maybeSingle();
-                userId = adminMember?.user_id || userData.user.id;
-            }
-
-            console.log('Buscando métricas para user_id:', userId);
-
-            // 2. Buscar ai_analysis JOIN conversations WHERE user_id = userId
-            // Usando RPC para fazer o JOIN corretamente
-            const { data: qualityData, error: qualityError } = await supabase.rpc('get_avg_sentiment_score', {
-                owner_id: userId
-            });
-
-            console.log('Quality data from RPC:', qualityData, qualityError);
-
-            // Se RPC não existir, fazer query manual via SQL
-            let avgQuality = 0;
-            if (qualityError) {
-                // Fallback: buscar via query direta
-                const { data: rawData, error: rawError } = await supabase
-                    .from('ai_analysis')
-                    .select('sentiment_score, conversations!inner(user_id)')
-                    .eq('conversations.user_id', userId)
-                    .not('sentiment_score', 'is', null);
-
-                console.log('Fallback query result:', rawData, rawError);
-
-                if (rawData && rawData.length > 0) {
-                    avgQuality = rawData.reduce((acc, a) => acc + (Number(a.sentiment_score) || 0), 0) / rawData.length;
-                }
-            } else {
-                avgQuality = qualityData || 0;
-            }
-
-            // Buscar tempo de resposta - JOIN com conversations para filtrar por tenant
-            const { data: rtData } = await supabase
-                .from('response_times')
-                .select('response_duration_seconds, conversations!inner(user_id)')
-                .not('response_duration_seconds', 'is', null)
-                .lt('response_duration_seconds', 86400)
-                .eq('conversations.user_id', userId);
-
-            const avgResponseTime = rtData && rtData.length > 0
-                ? rtData.reduce((acc, r) => acc + (r.response_duration_seconds || 0), 0) / rtData.length
-                : 0;
-
-            const result = {
-                avg_quality: Math.round(avgQuality * 10) / 10,
-                avg_response_time_seconds: Math.round(avgResponseTime),
-                quality_change: 0,
-                response_time_change: 0
-            };
-
-            console.log('Global metrics result:', result);
-            return result;
-        }
-    });
-
-    const isLoading = isLoadingStats || isLoadingHistory;
-
-    if (isLoading) {
-        return (
-            <div className="max-w-[60%] space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="h-[420px] bg-muted/20 rounded-xl animate-pulse" />
-                    <div className="h-[420px] bg-muted/20 rounded-xl animate-pulse" />
-                </div>
-            </div>
-        );
-    }
-
+export const ServiceMetricsGrid = ({ stats, history, globalMetrics }: ServiceMetricsGridProps) => {
     if (!stats) return null;
 
     // Calcular totais usando os nomes corretos do banco (pending, open, resolved)

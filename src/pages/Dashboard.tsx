@@ -1,7 +1,5 @@
 import { useState, useEffect } from "react";
-import { ServiceMetricsGrid } from "@/components/dashboard/ServiceMetricsGrid";
-import { HistoryCharts } from "@/components/dashboard/HistoryCharts";
-import { TeamPerformanceTable } from "@/components/dashboard/TeamPerformanceTable";
+import { AtendimentosTab } from "@/components/dashboard/AtendimentosTab";
 import { NotificationsBoard } from "@/components/dashboard/NotificationsBoard";
 import { SalesDashboard } from "@/components/dashboard/SalesDashboard";
 import { MacroFunnelsPanel } from "@/components/dashboard/MacroFunnelsPanel";
@@ -73,11 +71,7 @@ const Dashboard = () => {
 
                 {/* Tab Content */}
                 {activeTab === "atendimentos" && userRole !== 'agent' && (
-                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                        <ServiceMetricsGrid />
-                        <HistoryCharts />
-                        <TeamPerformanceTable />
-                    </div>
+                    <AtendimentosTab />
                 )}
 
                 {activeTab === "leads" && (

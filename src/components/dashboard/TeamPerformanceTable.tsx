@@ -1,29 +1,24 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
-import { Loader2, Sparkles, Clock, CheckCircle2, AlertCircle, Users, Award } from "lucide-react";
+import { Loader2, Sparkles, Users, Award } from "lucide-react";
 import { toast } from "sonner";
+import type { TeamMemberPerformance } from "@/hooks/useAtendimentosData";
 
-export const TeamPerformanceTable = () => {
-    const [selectedAgent, setSelectedAgent] = useState<any>(null);
+interface TeamPerformanceTableProps {
+    team?: TeamMemberPerformance[];
+}
+
+export const TeamPerformanceTable = ({ team }: TeamPerformanceTableProps) => {
+    const [selectedAgent, setSelectedAgent] = useState<TeamMemberPerformance | null>(null);
     const [isEvaluating, setIsEvaluating] = useState(false);
     const [evaluationResult, setEvaluationResult] = useState<string | null>(null);
 
-    const { data: team, isLoading } = useQuery({
-        queryKey: ['team-performance'],
-        queryFn: async () => {
-            const { data, error } = await supabase.rpc('get_team_performance');
-            if (error) throw error;
-            return data;
-        }
-    });
-
-    const handleEvaluate = async (agent: any) => {
+    const handleEvaluate = async (agent: TeamMemberPerformance) => {
         setSelectedAgent(agent);
         setIsEvaluating(true);
         setEvaluationResult(null);
@@ -50,19 +45,6 @@ export const TeamPerformanceTable = () => {
             setIsEvaluating(false);
         }
     };
-
-    if (isLoading) {
-        return (
-            <div className="space-y-4">
-                <div className="h-32 bg-muted/20 rounded-2xl animate-pulse" />
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {[...Array(3)].map((_, i) => (
-                        <div key={i} className="h-48 bg-muted/20 rounded-2xl animate-pulse" />
-                    ))}
-                </div>
-            </div>
-        );
-    }
 
     if (!team || team.length === 0) {
         return (
@@ -99,7 +81,7 @@ export const TeamPerformanceTable = () => {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {sortedTeam.map((agent: any, index: number) => {
+                        {sortedTeam.map((agent: TeamMemberPerformance, index: number) => {
                             const rank = index + 1;
                             const qualityColor = agent.avg_quality >= 8 ? 'text-green-500 bg-green-500/10' : agent.avg_quality >= 5 ? 'text-yellow-500 bg-yellow-500/10' : 'text-red-500 bg-red-500/10';
 
@@ -163,7 +145,7 @@ export const TeamPerformanceTable = () => {
                                             variant="ghost"
                                             size="icon"
                                             className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
-                                            onClick={() => onEvaluate(agent)}
+                                            onClick={() => handleEvaluate(agent)}
                                             title="Avaliar Desempenho (IA)"
                                         >
                                             <Sparkles className="w-4 h-4 text-yellow-500" />

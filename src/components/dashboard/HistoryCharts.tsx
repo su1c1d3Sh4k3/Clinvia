@@ -1,5 +1,3 @@
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import {
     AreaChart,
     Area,
@@ -12,6 +10,7 @@ import {
     Bar,
     Legend
 } from "recharts";
+import type { DashboardHistory } from "@/hooks/useAtendimentosData";
 
 // Card de gráfico de área com gradiente moderno
 const ModernAreaChart = ({
@@ -181,27 +180,11 @@ const QuickStatCard = ({
     );
 };
 
-export const HistoryCharts = () => {
-    const { data: metrics, isLoading } = useQuery({
-        queryKey: ['dashboard-history'],
-        queryFn: async () => {
-            const { data, error } = await supabase.rpc('get_dashboard_history');
-            if (error) throw error;
-            return data;
-        }
-    });
+interface HistoryChartsProps {
+    metrics?: DashboardHistory;
+}
 
-    if (isLoading) {
-        return (
-            <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="h-[320px] bg-muted/20 rounded-2xl animate-pulse" />
-                    <div className="h-[320px] bg-muted/20 rounded-2xl animate-pulse" />
-                </div>
-            </div>
-        );
-    }
-
+export const HistoryCharts = ({ metrics }: HistoryChartsProps) => {
     if (!metrics) return null;
 
     // Calcular totais para as estatísticas rápidas
