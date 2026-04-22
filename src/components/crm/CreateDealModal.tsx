@@ -34,6 +34,7 @@ import {
 import { Plus } from "lucide-react";
 import { CRMFunnel, CRMStage } from "@/types/crm";
 import { useStaff, useCurrentTeamMember } from "@/hooks/useStaff";
+import { useOwnerId } from "@/hooks/useOwnerId";
 import { DealProductsForm, ProductItem } from "./DealProductsForm";
 
 const formSchema = z.object({
@@ -92,6 +93,7 @@ export function CreateDealModal({
     const queryClient = useQueryClient();
     const { data: staffMembers } = useStaff();
     const { data: currentTeamMember } = useCurrentTeamMember();
+    const { data: ownerId } = useOwnerId();
 
     // Estado para produtos múltiplos — inicializado com defaultProducts se fornecidos
     const [products, setProducts] = useState<ProductItem[]>(defaultProducts ?? []);
@@ -190,13 +192,21 @@ export function CreateDealModal({
             const { data: userData } = await supabase.auth.getUser();
             if (!userData.user) throw new Error("Usuário não autenticado");
 
+            // CRITICAL: user_id must be the ACCOUNT OWNER, not the auth user.
+            // When a supervisor/agent creates a deal, their auth.uid() differs
+            // from the owner's user_id. The RLS policy on crm_deals requires
+            // `user_id = get_owner_id()` — passing the auth user directly
+            // triggers a silent RLS violation and the toast "Erro ao criar
+            // negociação".
+            const effectiveOwnerId = ownerId ?? userData.user.id;
+
             // Preparar dados do Deal
             // Para compatibilidade com KanbanCard antigo (se não atualizarmos),
             // podemos preencher product_service_id com o primeiro item da lista.
             const firstProduct = products[0];
 
             const dealData = {
-                user_id: userData.user.id,
+                user_id: effectiveOwnerId,
                 title: values.title,
                 contact_id: values.contact_id || null,
                 funnel_id: values.funnel_id,
