@@ -1166,22 +1166,20 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
             }
         }
 
-        // ─── Delivery Automation intercept (MUST run BEFORE N8N forward) ───
-        // If an active delivery_automation_sessions row exists for this
-        // conversation, route the inbound message to our own response handler
-        // and skip N8N entirely. Variables are re-derived from `payload` here
-        // because several of them (fromMe, voteText, effectiveMessageBody, …)
-        // are declared inside a nested block higher up and are not visible
-        // in this outer scope.
+        // ─── Delivery Automation intercept — BLOCK N8N ONLY ───
+        // The actual response processing is handled by the DB trigger
+        // `trg_delivery_automation_on_inbound` on messages INSERT (see migration
+        // 20260422150000_delivery_automation_inbound_trigger.sql). That path is
+        // guaranteed to fire exactly once per inbound; invoking delivery-
+        // automation-respond here ALSO would cause duplicate sends (observed
+        // in production).
+        //
+        // Here we only: (1) re-point the session's conversation_id to the
+        // current conversation if it drifted, (2) short-circuit this handler
+        // so N8N does NOT receive the forward.
         const _da_fromMe = payload.message?.fromMe === true || payload.fromMe === true;
         if (!isGroup && contactId && !_da_fromMe && eventType === 'messages') {
             try {
-                // Look up by contactId (more resilient than conversation_id —
-                // when the existing conversation becomes 'resolved', a NEW
-                // conversation gets created for the same contact, and the
-                // session's conversation_id becomes stale. Matching by contact
-                // ensures the intercept still fires, and we re-sync the
-                // session's conversation_id to whichever is current.
                 const { data: activeAutomationSession } = await supabase
                     .from('delivery_automation_sessions')
                     .select('id, state, conversation_id')
@@ -1194,61 +1192,22 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                 if (activeAutomationSession) {
                     console.log(
                         `[webhook-handle-message] Active delivery automation session ${activeAutomationSession.id} ` +
-                        `(state=${activeAutomationSession.state}) — routing to respond handler, skipping N8N`
+                        `(state=${activeAutomationSession.state}) — blocking N8N forward; DB trigger will drive the flow`
                     );
 
-                    // If the message arrived on a different conversation than the
-                    // session's cached conversation_id, update the session so the
-                    // respond handler targets the right conversation.
+                    // Re-sync session.conversation_id if it drifted
                     const _da_currentConvId = conversation?.id || null;
                     if (_da_currentConvId && activeAutomationSession.conversation_id !== _da_currentConvId) {
-                        console.log(
-                            `[webhook-handle-message] Re-pointing session ${activeAutomationSession.id} ` +
-                            `from conv ${activeAutomationSession.conversation_id} to ${_da_currentConvId}`
-                        );
                         await supabase
                             .from('delivery_automation_sessions')
                             .update({ conversation_id: _da_currentConvId })
                             .eq('id', activeAutomationSession.id);
                     }
 
-                    const _da_fullButtonId =
-                        payload.message?.content?.selectedID ||
-                        payload.message?.content?.buttonOrListid ||
-                        payload.message?.selectedID || null;
-
-                    const _da_voteText = payload.message?.vote || '';
-                    const _da_selectedDisplayText =
-                        payload.message?.selectedDisplayText ||
-                        payload.message?.buttonsResponseMessage?.selectedDisplayText ||
-                        payload.message?.content?.buttonsResponseMessage?.selectedDisplayText ||
-                        payload.message?.content?.contextInfo?.selectedDisplayText ||
-                        payload.body?.buttonsResponseMessage?.selectedDisplayText ||
-                        payload.message?.content?.selectedDisplayText ||
-                        '';
-                    const _da_messageText =
-                        payload.message?.text || payload.message?.content?.text || '';
-                    const _da_effectiveBody =
-                        _da_voteText || _da_selectedDisplayText || _da_messageText || '';
-                    const _da_messageId =
-                        payload.message?.messageid || payload.message?.id || payload.body?.key?.id || null;
-
-                    // Await the response handler so the next outbound prompt is
-                    // sent before we return (avoids "ghost" webhook retries).
-                    await supabase.functions.invoke('delivery-automation-respond', {
-                        body: {
-                            conversationId: conversation?.id || activeAutomationSession.conversation_id,
-                            contactId,
-                            userId,
-                            rawMessage: _da_effectiveBody,
-                            buttonId: _da_fullButtonId,
-                            buttonText: _da_selectedDisplayText || _da_voteText || null,
-                            messageId: _da_messageId,
-                        },
-                    });
-
+                    // Do NOT invoke delivery-automation-respond here — the DB
+                    // trigger on messages INSERT handles it. Just block N8N.
                     return new Response(
-                        JSON.stringify({ success: true, routed: 'delivery_automation' }),
+                        JSON.stringify({ success: true, routed: 'delivery_automation', path: 'db_trigger' }),
                         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
                     );
                 }
@@ -1256,6 +1215,7 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                 console.error('[webhook-handle-message] delivery automation intercept error:', interceptErr);
                 // Fall through to N8N forward on error — safe default.
             }
+
         }
         // ─── End Delivery Automation intercept ───
 
