@@ -17,7 +17,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
-import { todayInBrasilia } from "../_shared/timezone.ts";
+import { todayInBrasilia, utcToBrasiliaParts } from "../_shared/timezone.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -37,10 +37,19 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, serviceKey);
 
     try {
-        // Optional payload for manual testing: { dryRun?: boolean, forceUserId?: string }
+        // Optional payload for manual testing:
+        //   { dryRun?: boolean, forceUserId?: string, ignoreSendWindow?: boolean }
+        // When ignoreSendWindow=true (or forceUserId set), we process regardless of
+        // the configured send_hour/send_minute — useful for manual / cron-less runs.
         const body = await req.json().catch(() => ({}));
         const dryRun: boolean = body?.dryRun === true;
         const forceUserId: string | undefined = body?.forceUserId;
+        const ignoreSendWindow: boolean = body?.ignoreSendWindow === true || !!forceUserId;
+
+        // Current BRT hour + minute, rounded to the active 30-min slot.
+        const brNow = utcToBrasiliaParts(new Date());
+        const slotMinute = brNow.minute < 30 ? 0 : 30;
+        console.log(`[dispatcher] BRT now=${brNow.hour}:${String(brNow.minute).padStart(2, "0")} slot=${brNow.hour}:${String(slotMinute).padStart(2, "0")} ignoreSendWindow=${ignoreSendWindow}`);
 
         // Kill switch
         const { data: flag } = await supabase
@@ -83,18 +92,33 @@ serve(async (req) => {
             return json({ success: true, matched: 0, jobsCreated: 0 });
         }
 
-        // Pull delivery_config (ai_enabled + chosen instance_id) for all involved users
+        // Pull delivery_config (ai_enabled + chosen instance_id + send_hour/minute)
         const userIds = Array.from(new Set(deliveries.map((d) => d.user_id)));
         const { data: configs } = await supabase
             .from("delivery_config")
-            .select("user_id, ai_enabled, instance_id")
+            .select("user_id, ai_enabled, instance_id, send_hour, send_minute")
             .in("user_id", userIds);
         const aiEnabledBy = new Map<string, boolean>();
         const configuredInstanceBy = new Map<string, string | null>();
+        const sendWindowBy = new Map<string, { hour: number | null; minute: number | null }>();
         for (const c of configs || []) {
             aiEnabledBy.set(c.user_id, c.ai_enabled === true);
             configuredInstanceBy.set(c.user_id, c.instance_id || null);
+            sendWindowBy.set(c.user_id, {
+                hour: c.send_hour ?? null,
+                minute: c.send_minute ?? null,
+            });
         }
+
+        // Users whose send window matches the current 30-min slot (or all when
+        // ignoreSendWindow is true). Users with NULL send_hour/minute are skipped
+        // unless ignoreSendWindow is true — the UI forces them to configure.
+        const windowMatchesUser = (userId: string): boolean => {
+            if (ignoreSendWindow) return true;
+            const win = sendWindowBy.get(userId);
+            if (!win || win.hour == null || win.minute == null) return false;
+            return win.hour === brNow.hour && win.minute === slotMinute;
+        };
 
         // Existing active sessions
         const deliveryIds = deliveries.map((d) => d.id);
@@ -143,6 +167,7 @@ serve(async (req) => {
         for (let i = 0; i < deliveries.length; i++) {
             const d = deliveries[i];
             if (!aiEnabledBy.get(d.user_id)) continue;
+            if (!windowMatchesUser(d.user_id)) continue;
             if (hasActive.has(d.id)) continue;
             const instanceId = instanceBy.get(d.user_id);
             if (!instanceId) {
