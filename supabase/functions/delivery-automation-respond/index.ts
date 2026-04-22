@@ -48,6 +48,48 @@ const TERMINAL = new Set(["completed", "transferred", "abandoned", "failed"]);
 const MAX_ROLLOVER_WEEKS = 8;
 const MAX_TIME_BUTTONS = 8;
 
+/**
+ * Infer a buttonId from free text. Used when the DB trigger dispatches us and
+ * we only have the message body, OR when the webhook intercept failed to
+ * extract the structured selectedID from the UazAPI payload.
+ * Returns "" if no match — caller treats that as invalid input.
+ */
+function inferButtonIdFromText(raw: string | null): string {
+    if (!raw) return "";
+    const s = raw.trim().toLowerCase();
+    if (!s) return "";
+
+    // Day-of-week matches (accepts "segunda", "segunda-feira", "Segunda-feira", etc.)
+    if (/^segunda/.test(s) || s.includes("segunda-feira")) return "day_1";
+    if (/^ter[çc]a/.test(s) || s.includes("terça-feira") || s.includes("terca-feira")) return "day_2";
+    if (/^quarta/.test(s) || s.includes("quarta-feira")) return "day_3";
+    if (/^quinta/.test(s) || s.includes("quinta-feira")) return "day_4";
+    if (/^sexta/.test(s) || s.includes("sexta-feira")) return "day_5";
+    if (s.includes("não quero agendar") || s.includes("nao quero agendar")) return "day_no";
+
+    // Periods
+    if (s.includes("manh") || s === "manha" || s === "manhã") return "period_morning";
+    if (s.includes("tarde")) return "period_afternoon";
+
+    // Navigation
+    if (s.includes("outro dia da semana")) return "nav_week";
+    if (s.includes("outro dia do m")) return "nav_month"; // "do mês"/"do mes"
+
+    // Final confirmation
+    if (s.includes("encerrar") || s === "finalizar" || s === "ok") return "final_close";
+    if (s.includes("dúvida") || s.includes("duvida") || s.includes("especialista")) return "final_human";
+
+    // Time HH:MM → time_HH_MM (accept "09:00", "9:00", "9h", "09h00")
+    const timeMatch = s.match(/^(\d{1,2})[:h](\d{0,2})$/);
+    if (timeMatch) {
+        const hh = timeMatch[1].padStart(2, "0");
+        const mm = (timeMatch[2] || "00").padStart(2, "0");
+        return `time_${hh}_${mm}`;
+    }
+
+    return "";
+}
+
 serve(async (req) => {
     if (req.method === "OPTIONS") {
         return new Response("ok", { headers: corsHeaders });
@@ -61,20 +103,31 @@ serve(async (req) => {
         const body: RespondInput = await req.json();
         if (!body?.conversationId) return json({ error: "conversationId required" }, 400);
 
-        // Load active session
-        const { data: session, error: sErr } = await supabase
+        // Load the MOST RECENT active session. When the same contact has
+        // multiple deliveries hitting the same conversation (e.g. two cron
+        // rounds on different days for the same patient), several active
+        // sessions may coexist. We always drive the newest one.
+        const { data: sessions, error: sErr } = await supabase
             .from("delivery_automation_sessions")
             .select("*")
             .eq("conversation_id", body.conversationId)
             .not("state", "in", `(${Array.from(TERMINAL).join(",")})`)
-            .maybeSingle();
+            .order("created_at", { ascending: false })
+            .limit(1);
         if (sErr) throw sErr;
+        const session = Array.isArray(sessions) && sessions.length > 0 ? sessions[0] : null;
         if (!session) {
             return json({ success: true, skipped: true, reason: "no active session" });
         }
 
         const ctx = await loadContext(supabase, session);
-        const buttonId = (body.buttonId || "").trim();
+        // Prefer structured buttonId from webhook; fallback to inferring from
+        // button text OR raw message body (handles DB-trigger invocations).
+        let buttonId = (body.buttonId || "").trim();
+        if (!buttonId) {
+            buttonId = inferButtonIdFromText(body.buttonText) || inferButtonIdFromText(body.rawMessage);
+        }
+        console.log(`[respond] session=${session.id} state=${session.state} buttonId='${buttonId}' rawMsg='${(body.rawMessage || '').slice(0, 60)}'`);
 
         // Route by state
         let result: { newState: string; action: string };
