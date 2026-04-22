@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Plus, ClipboardCheck, Sparkles, Search, Info } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Plus, ClipboardCheck, Sparkles, Search, Info, Smartphone } from "lucide-react";
 
 export default function Delivery() {
     const queryClient = useQueryClient();
@@ -38,13 +39,13 @@ export default function Delivery() {
         enabled: !!ownerId,
     });
 
-    // --- AI toggle ---
+    // --- AI toggle + instance selection ---
     const { data: aiConfig } = useQuery({
         queryKey: ["delivery-config", ownerId],
         queryFn: async () => {
             const { data } = await supabase
                 .from("delivery_config")
-                .select("ai_enabled")
+                .select("ai_enabled, instance_id")
                 .eq("user_id", ownerId!)
                 .maybeSingle();
             return data;
@@ -52,26 +53,66 @@ export default function Delivery() {
         enabled: !!ownerId,
     });
 
+    // Connected instances for this owner (for selector when > 1)
+    const { data: connectedInstances = [] } = useQuery({
+        queryKey: ["connected-instances-delivery", ownerId],
+        queryFn: async () => {
+            const { data } = await supabase
+                .from("instances")
+                .select("id, name, instance_name, phone")
+                .eq("user_id", ownerId!)
+                .eq("status", "connected");
+            return data || [];
+        },
+        enabled: !!ownerId,
+    });
+
     const toggleAI = useMutation({
         mutationFn: async (enabled: boolean) => {
+            // When turning ON and user has 1 connected instance, auto-select it.
+            // When turning ON and has > 1, leave instance_id as-is (null) so the
+            // UI selector can prompt. When turning OFF, keep the stored instance
+            // to remember the user's preference.
+            const payload: any = {
+                user_id: ownerId!,
+                ai_enabled: enabled,
+                updated_at: new Date().toISOString(),
+            };
+            if (enabled && connectedInstances.length === 1 && !aiConfig?.instance_id) {
+                payload.instance_id = connectedInstances[0].id;
+            }
             const { error } = await supabase
                 .from("delivery_config")
-                .upsert(
-                    { user_id: ownerId!, ai_enabled: enabled, updated_at: new Date().toISOString() },
-                    { onConflict: "user_id" }
-                );
+                .upsert(payload, { onConflict: "user_id" });
             if (error) throw error;
         },
-        onMutate: async (enabled) => {
-            await queryClient.cancelQueries({ queryKey: ["delivery-config", ownerId] });
-            queryClient.setQueryData(["delivery-config", ownerId], { ai_enabled: enabled });
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["delivery-config", ownerId] });
         },
         onError: () => {
             queryClient.invalidateQueries({ queryKey: ["delivery-config", ownerId] });
         },
     });
 
+    const setInstance = useMutation({
+        mutationFn: async (instanceId: string) => {
+            const { error } = await supabase
+                .from("delivery_config")
+                .upsert(
+                    { user_id: ownerId!, instance_id: instanceId, updated_at: new Date().toISOString() },
+                    { onConflict: "user_id" }
+                );
+            if (error) throw error;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["delivery-config", ownerId] });
+        },
+    });
+
     const aiEnabled = aiConfig?.ai_enabled ?? false;
+    const selectedInstanceId = aiConfig?.instance_id ?? null;
+    const hasMultipleInstances = connectedInstances.length > 1;
+    const needsInstanceSelection = aiEnabled && hasMultipleInstances && !selectedInstanceId;
 
     return (
         <div className="px-3 md:px-6 pt-4 md:pt-6 h-screen flex flex-col overflow-hidden">
@@ -103,6 +144,31 @@ export default function Delivery() {
                         />
                     </div>
 
+                    {/* Instance selector — only shown when switch is ON and user has > 1 connected instance */}
+                    {aiEnabled && hasMultipleInstances && (
+                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-background">
+                            <Smartphone className="w-3.5 h-3.5 text-primary" />
+                            <Label htmlFor="instance-select" className="text-sm select-none">
+                                Instância:
+                            </Label>
+                            <Select
+                                value={selectedInstanceId || ""}
+                                onValueChange={(val) => setInstance.mutate(val)}
+                            >
+                                <SelectTrigger id="instance-select" className="h-7 w-[180px] text-sm">
+                                    <SelectValue placeholder="Selecione..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {connectedInstances.map((inst: any) => (
+                                        <SelectItem key={inst.id} value={inst.id}>
+                                            {inst.name || inst.instance_name || inst.phone || inst.id.slice(0, 8)}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
+
                     {/* Add button */}
                     <Button
                         size="sm"
@@ -116,8 +182,20 @@ export default function Delivery() {
                 </div>
             </div>
 
+            {/* Warning when instance selection is required */}
+            {needsInstanceSelection && (
+                <div className="flex items-start gap-3 mb-3 px-4 py-3 rounded-lg border border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-950/40 flex-shrink-0">
+                    <Info className="w-4 h-4 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
+                    <p className="text-sm text-red-800 dark:text-red-300 leading-relaxed">
+                        <span className="font-semibold">Selecione uma instância</span> no seletor acima para que o
+                        Agendamento Automatizado possa enviar as mensagens aos pacientes. Enquanto nenhuma instância
+                        estiver selecionada, nenhum envio será realizado.
+                    </p>
+                </div>
+            )}
+
             {/* Automated Scheduling Banner */}
-            {aiEnabled && (
+            {aiEnabled && !needsInstanceSelection && (
                 <div className="flex items-start gap-3 mb-3 px-4 py-3 rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/40 flex-shrink-0">
                     <Info className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
                     <p className="text-sm text-amber-800 dark:text-amber-300 leading-relaxed">

@@ -314,11 +314,12 @@ async function resolveConversation(
         }
     }
 
-    // Find or create an ACTIVE conversation for (contact, instance).
-    // A 'resolved' conversation must NOT be reused — the unique partial index
-    // `idx_conversations_unique_active` guarantees at most one active row per
-    // (contact_id, instance_id), so creating a new one is always safe when no
-    // pending/open exists.
+    // Find/create conversation for (contact, instance) per product rules:
+    //   • status='open'      → reuse as-is
+    //   • status='pending'   → reuse AND bump to 'open'
+    //   • none or 'resolved' → create new with status='open'
+    // Query captures pending+open and picks newest (only one can be active due
+    // to idx_conversations_unique_active partial unique index).
     const { data: existingConv } = await supabase
         .from("conversations")
         .select("id, status")
@@ -330,16 +331,26 @@ async function resolveConversation(
         .maybeSingle();
 
     if (existingConv?.id) {
+        if (existingConv.status === "pending") {
+            // Bump pending → open so N8N forward is disabled and delivery
+            // automation has clear ownership of the conversation.
+            await supabase
+                .from("conversations")
+                .update({ status: "open", updated_at: new Date().toISOString() })
+                .eq("id", existingConv.id);
+        }
         return { contactId, conversationId: existingConv.id };
     }
 
+    // No open/pending → create new with status='open'. Resolved conversations
+    // (if any) remain untouched in history.
     const { data: newConv, error: convErr } = await supabase
         .from("conversations")
         .insert({
             contact_id: contactId,
             user_id: userId,
             instance_id: instanceId,
-            status: "open", // 'open' avoids N8N forward; intercept will handle responses
+            status: "open",
             unread_count: 0,
             last_message_at: new Date().toISOString(),
         })
