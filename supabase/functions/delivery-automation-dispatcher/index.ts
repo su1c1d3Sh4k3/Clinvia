@@ -83,14 +83,18 @@ serve(async (req) => {
             return json({ success: true, matched: 0, jobsCreated: 0 });
         }
 
-        // Pull delivery_config flags for all involved users
+        // Pull delivery_config (ai_enabled + chosen instance_id) for all involved users
         const userIds = Array.from(new Set(deliveries.map((d) => d.user_id)));
         const { data: configs } = await supabase
             .from("delivery_config")
-            .select("user_id, ai_enabled")
+            .select("user_id, ai_enabled, instance_id")
             .in("user_id", userIds);
         const aiEnabledBy = new Map<string, boolean>();
-        for (const c of configs || []) aiEnabledBy.set(c.user_id, c.ai_enabled === true);
+        const configuredInstanceBy = new Map<string, string | null>();
+        for (const c of configs || []) {
+            aiEnabledBy.set(c.user_id, c.ai_enabled === true);
+            configuredInstanceBy.set(c.user_id, c.instance_id || null);
+        }
 
         // Existing active sessions
         const deliveryIds = deliveries.map((d) => d.id);
@@ -101,15 +105,35 @@ serve(async (req) => {
             .not("state", "in", "(completed,transferred,abandoned,failed)");
         const hasActive = new Set((activeSess || []).map((s) => s.delivery_id));
 
-        // Resolve an instance per user (first connected)
+        // Resolve instance per user. Priority:
+        //   1. delivery_config.instance_id (if still connected)
+        //   2. first connected instance (legacy fallback)
+        // If > 1 connected instance AND no explicit choice, SKIP the user —
+        // the UI forces them to pick.
         const { data: instances } = await supabase
             .from("instances")
             .select("id, user_id, status")
             .in("user_id", userIds)
             .eq("status", "connected");
-        const instanceBy = new Map<string, string>();
+        const connectedByUser = new Map<string, string[]>();
         for (const i of instances || []) {
-            if (!instanceBy.has(i.user_id)) instanceBy.set(i.user_id, i.id);
+            const list = connectedByUser.get(i.user_id) || [];
+            list.push(i.id);
+            connectedByUser.set(i.user_id, list);
+        }
+        const instanceBy = new Map<string, string>();
+        for (const userId of userIds) {
+            const connected = connectedByUser.get(userId) || [];
+            if (connected.length === 0) continue;
+            const configured = configuredInstanceBy.get(userId);
+            if (configured && connected.includes(configured)) {
+                instanceBy.set(userId, configured);
+            } else if (connected.length === 1) {
+                instanceBy.set(userId, connected[0]);
+            } else {
+                // Multiple connected and no valid choice → skip this user
+                console.warn(`[dispatcher] user=${userId} has ${connected.length} connected instances and no valid delivery_config.instance_id — skipping`);
+            }
         }
 
         let matched = 0;
