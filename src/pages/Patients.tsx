@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Pencil, Trash2, Search, UserRound } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, UserRound, ChevronLeft, ChevronRight } from "lucide-react";
 import {
     Table,
     TableBody,
@@ -24,10 +24,20 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { PatientModal } from "@/components/patients/PatientModal";
 import { PatientDetailsCard } from "@/components/patients/PatientDetailsCard";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+
+const PAGE_SIZE_OPTIONS = [10, 50, 100] as const;
+type PageSize = (typeof PAGE_SIZE_OPTIONS)[number];
 
 export interface Patient {
     id: string;
@@ -69,6 +79,8 @@ const Patients = () => {
     const [patientToDelete, setPatientToDelete] = useState<Patient | null>(null);
     const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
     const [searchTerm, setSearchTerm] = useState("");
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState<PageSize>(10);
 
     const { toast } = useToast();
     const queryClient = useQueryClient();
@@ -212,9 +224,45 @@ const Patients = () => {
         setSelectedPatient(patient);
     };
 
-    const filteredPatients = patients?.filter((patient) =>
-        patient.nome?.toLowerCase().includes(searchTerm.toLowerCase())
+    const filteredPatients = useMemo(
+        () =>
+            patients?.filter((patient) =>
+                patient.nome?.toLowerCase().includes(searchTerm.toLowerCase())
+            ) ?? [],
+        [patients, searchTerm]
     );
+
+    // Reset para a primeira página quando o termo de busca ou page size mudar
+    useEffect(() => {
+        setPage(1);
+    }, [searchTerm, pageSize]);
+
+    const totalItems = filteredPatients.length;
+    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+
+    // Clamp page se totalPages diminuiu (ex: após deletar itens)
+    useEffect(() => {
+        if (page > totalPages) setPage(totalPages);
+    }, [page, totalPages]);
+
+    const startIndex = (page - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    const paginatedPatients = filteredPatients.slice(startIndex, endIndex);
+
+    // Gera os números de páginas a exibir (com ellipsis quando necessário)
+    const pageNumbers = useMemo<(number | "ellipsis")[]>(() => {
+        if (totalPages <= 7) {
+            return Array.from({ length: totalPages }, (_, i) => i + 1);
+        }
+        const pages: (number | "ellipsis")[] = [1];
+        if (page > 3) pages.push("ellipsis");
+        const start = Math.max(2, page - 1);
+        const end = Math.min(totalPages - 1, page + 1);
+        for (let i = start; i <= end; i++) pages.push(i);
+        if (page < totalPages - 2) pages.push("ellipsis");
+        pages.push(totalPages);
+        return pages;
+    }, [page, totalPages]);
 
     const formatCPF = (cpf?: string) => {
         if (!cpf) return "-";
@@ -282,14 +330,14 @@ const Patients = () => {
                                             Carregando...
                                         </TableCell>
                                     </TableRow>
-                                ) : filteredPatients?.length === 0 ? (
+                                ) : totalItems === 0 ? (
                                     <TableRow>
                                         <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                                             Nenhum paciente encontrado
                                         </TableCell>
                                     </TableRow>
                                 ) : (
-                                    filteredPatients?.map((patient) => (
+                                    paginatedPatients.map((patient) => (
                                         <TableRow
                                             key={patient.id}
                                             className="cursor-pointer hover:bg-muted/50"
@@ -351,6 +399,79 @@ const Patients = () => {
                             </TableBody>
                         </Table>
                     </div>
+
+                    {/* Controles de paginação */}
+                    {!isLoading && totalItems > 0 && (
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <span className="whitespace-nowrap">Itens por página:</span>
+                                <Select
+                                    value={String(pageSize)}
+                                    onValueChange={(v) => setPageSize(Number(v) as PageSize)}
+                                >
+                                    <SelectTrigger className="h-8 w-[80px]">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {PAGE_SIZE_OPTIONS.map((size) => (
+                                            <SelectItem key={size} value={String(size)}>
+                                                {size}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <span className="whitespace-nowrap hidden sm:inline">
+                                    {startIndex + 1}-{Math.min(endIndex, totalItems)} de {totalItems}
+                                </span>
+                            </div>
+
+                            <div className="flex items-center gap-1">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                                    disabled={page === 1}
+                                    aria-label="Página anterior"
+                                >
+                                    <ChevronLeft className="h-4 w-4" />
+                                </Button>
+
+                                {pageNumbers.map((p, idx) =>
+                                    p === "ellipsis" ? (
+                                        <span
+                                            key={`ellipsis-${idx}`}
+                                            className="flex h-8 w-8 items-center justify-center text-muted-foreground text-sm"
+                                        >
+                                            …
+                                        </span>
+                                    ) : (
+                                        <Button
+                                            key={p}
+                                            variant={p === page ? "outline" : "ghost"}
+                                            size="icon"
+                                            className="h-8 w-8 text-sm"
+                                            onClick={() => setPage(p)}
+                                            aria-current={p === page ? "page" : undefined}
+                                        >
+                                            {p}
+                                        </Button>
+                                    )
+                                )}
+
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                                    disabled={page === totalPages}
+                                    aria-label="Próxima página"
+                                >
+                                    <ChevronRight className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 
