@@ -17,7 +17,10 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Loader2, Upload, X } from "lucide-react";
 
+const MIN_SERVICE_DURATION = 5;
+
 const formSchema = z.object({
+    type: z.enum(["product", "service"]),
     name: z.string().min(1, "Nome é obrigatório"),
     description: z.string().optional(),
     price: z.coerce.number().min(0, "Valor deve ser positivo"),
@@ -25,6 +28,20 @@ const formSchema = z.object({
     duration_minutes: z.coerce.number().optional(),
     opportunity_alert_days: z.coerce.number().min(0, "Dias deve ser positivo").default(0),
     color: z.string().nullable().optional(),
+}).superRefine((data, ctx) => {
+    // Para serviços, a duração precisa ser pelo menos MIN_SERVICE_DURATION minutos.
+    // Motivo: a constraint appointments.valid_time_range (end_time > start_time)
+    // quebra quando duration=0, e valores muito baixos não fazem sentido para
+    // agendar um atendimento real.
+    if (data.type === "service") {
+        if (!data.duration_minutes || data.duration_minutes < MIN_SERVICE_DURATION) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: `Duração mínima de um serviço é ${MIN_SERVICE_DURATION} minutos`,
+                path: ["duration_minutes"],
+            });
+        }
+    }
 });
 
 interface ProductServiceModalProps {
@@ -47,11 +64,12 @@ export function ProductServiceModal({ open, onOpenChange, itemToEdit }: ProductS
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
         defaultValues: {
+            type: "product",
             name: "",
             description: "",
             price: 0,
             stock_quantity: 0,
-            duration_minutes: 0,
+            duration_minutes: 30,
             opportunity_alert_days: 0,
             color: null,
         },
@@ -61,11 +79,19 @@ export function ProductServiceModal({ open, onOpenChange, itemToEdit }: ProductS
         if (itemToEdit) {
             setActiveTab(itemToEdit.type);
             form.reset({
+                type: itemToEdit.type,
                 name: itemToEdit.name,
                 description: itemToEdit.description || "",
                 price: itemToEdit.price,
                 stock_quantity: itemToEdit.stock_quantity || 0,
-                duration_minutes: itemToEdit.duration_minutes || 0,
+                // Se o serviço existente estiver com duração inválida (0 ou vazio),
+                // subimos para o mínimo válido para que o usuário veja o erro
+                // claramente em vez de um 0 silencioso.
+                duration_minutes: itemToEdit.type === "service"
+                    ? (itemToEdit.duration_minutes && itemToEdit.duration_minutes >= MIN_SERVICE_DURATION
+                        ? itemToEdit.duration_minutes
+                        : MIN_SERVICE_DURATION)
+                    : (itemToEdit.duration_minutes || 0),
                 opportunity_alert_days: itemToEdit.opportunity_alert_days || 0,
                 color: itemToEdit.color ?? null,
             });
@@ -74,20 +100,28 @@ export function ProductServiceModal({ open, onOpenChange, itemToEdit }: ProductS
             setVisibleForAi(itemToEdit.visible_for_ai ?? true);
         } else {
             form.reset({
+                type: "product",
                 name: "",
                 description: "",
                 price: 0,
                 stock_quantity: 0,
-                duration_minutes: 0,
+                duration_minutes: 30,
                 opportunity_alert_days: 0,
                 color: null,
             });
+            setActiveTab("product");
             setExistingImages([]);
             setImageFiles([]);
             setAvailableForAi(true);
             setVisibleForAi(true);
         }
     }, [itemToEdit, open, form]);
+
+    // Mantém o campo `type` do form sincronizado com a aba ativa — o schema
+    // usa esse campo para validar duração mínima somente quando é serviço.
+    useEffect(() => {
+        form.setValue("type", activeTab);
+    }, [activeTab, form]);
 
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
@@ -263,8 +297,17 @@ export function ProductServiceModal({ open, onOpenChange, itemToEdit }: ProductS
                                             <FormItem>
                                                 <FormLabel>Duração (minutos)</FormLabel>
                                                 <FormControl>
-                                                    <Input autoComplete="off" type="number" {...field} />
+                                                    <Input
+                                                        autoComplete="off"
+                                                        type="number"
+                                                        min={MIN_SERVICE_DURATION}
+                                                        step={5}
+                                                        {...field}
+                                                    />
                                                 </FormControl>
+                                                <FormDescription>
+                                                    Mínimo {MIN_SERVICE_DURATION} minutos
+                                                </FormDescription>
                                                 <FormMessage />
                                             </FormItem>
                                         )}
