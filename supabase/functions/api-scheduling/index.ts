@@ -185,7 +185,40 @@ serve(async (req) => {
 
             // appointment_data should have: professional_id, contact_id, service_id, date, start_time, duration, price
             // We need to construct the payload
-            const { professional_id, contact_id, service_id, date, start_time, duration, price, description } = appointment_data;
+            const { professional_id, contact_id, service_id, date, start_time, price, description } = appointment_data;
+            let { duration } = appointment_data;
+
+            // Resolve duration: se o payload mandou 0/undefined, tenta buscar do serviço.
+            // Motivo: a constraint valid_time_range (end_time > start_time) falha
+            // silenciosamente quando duration é 0 — a mensagem que volta ao
+            // cliente é críptica ("check constraint violated"), impossível
+            // debugar no N8N. Aqui devolvemos erro legível.
+            if (!duration || duration <= 0) {
+                if (service_id) {
+                    const { data: svc } = await supabase
+                        .from("products_services")
+                        .select("duration_minutes, name")
+                        .eq("id", service_id)
+                        .maybeSingle();
+                    if (svc?.duration_minutes && svc.duration_minutes > 0) {
+                        duration = svc.duration_minutes;
+                    } else {
+                        return new Response(
+                            JSON.stringify({
+                                error: `O serviço "${svc?.name ?? service_id}" está cadastrado com duração 0. Atualize a duração do serviço antes de criar o agendamento, ou informe 'duration' (em minutos) no payload.`
+                            }),
+                            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+                        );
+                    }
+                } else {
+                    return new Response(
+                        JSON.stringify({
+                            error: "Campo 'duration' é obrigatório (em minutos) quando o service_id não é informado ou não possui duração cadastrada."
+                        }),
+                        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+                    );
+                }
+            }
 
             // Manual timezone adjustment for Brazil (UTC-3)
             // Input: "2025-12-08 10:00" -> Parsed as 10:00 UTC
