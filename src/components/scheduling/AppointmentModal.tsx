@@ -397,11 +397,19 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                     duration: 30,
                     price: 0,
                     description: "",
-                    type: activeTab,
+                    type: "appointment",
                 });
+                // Reseta a aba para "appointment" apenas ao abrir o modal,
+                // não quando o usuário alterna manualmente entre abas.
+                setActiveTab("appointment");
             }
         }
-    }, [open, defaultDate, defaultProfessionalId, defaultServiceId, appointmentToEdit, activeTab, form, defaultContactId, defaultContactName, defaultContactPhone]);
+    // NOTE: `activeTab` foi removido das dependências de propósito — antes
+    // causava form.reset() toda vez que o usuário trocava de aba, apagando
+    // o profissional selecionado. Trocar de aba agora apenas atualiza o
+    // campo `type` via onValueChange do Tabs (ver abaixo).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open, defaultDate, defaultProfessionalId, defaultServiceId, appointmentToEdit, form, defaultContactId, defaultContactName, defaultContactPhone]);
 
     // Quando o profissional muda, limpar serviço e duração (serviço pode ser inválido para o novo profissional)
     useEffect(() => {
@@ -609,7 +617,7 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                                         <FormLabel>Profissional</FormLabel>
                                         <Select
                                             onValueChange={field.onChange}
-                                            defaultValue={field.value}
+                                            value={field.value || ""}
                                             disabled={!!defaultProfessionalId || !!appointmentToEdit || isPast}
                                         >
                                             <FormControl>
