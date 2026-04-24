@@ -9,9 +9,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, Building2, CheckCircle2, Unlink, CalendarDays, RefreshCw, Bell, RotateCcw } from "lucide-react";
+import { Loader2, Building2, CheckCircle2, Unlink, CalendarDays, RefreshCw, Bell, RotateCcw, Target } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useOwnerId } from "@/hooks/useOwnerId";
+import { useCurrentMonthGoal, useSetAppointmentGoal } from "@/hooks/useAppointmentGoal";
+import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -359,10 +361,91 @@ export function SchedulingSettingsModal({ open, onOpenChange, currentSettings }:
                     </form>
                 </Form>
 
+                {/* Meta Mensal de Agendamentos */}
+                <MonthlyGoalSection />
+
                 {/* Agenda Global da Clínica */}
                 <ClinicCalendarSection />
             </DialogContent>
         </Dialog>
+    );
+}
+
+// ─── Meta Mensal de Agendamentos ──────────────────────────────────────────────
+
+function MonthlyGoalSection() {
+    const { toast } = useToast();
+    const { data: currentGoal, isLoading } = useCurrentMonthGoal();
+    const setGoal = useSetAppointmentGoal();
+    const [target, setTarget] = useState<string>("");
+
+    useEffect(() => {
+        if (currentGoal) setTarget(String(currentGoal.target));
+        else setTarget("");
+    }, [currentGoal]);
+
+    const handleSave = async () => {
+        const parsed = parseInt(target, 10);
+        if (isNaN(parsed) || parsed < 0) {
+            toast({
+                title: "Valor inválido",
+                description: "Informe um número inteiro ≥ 0",
+                variant: "destructive",
+            });
+            return;
+        }
+        try {
+            const now = new Date();
+            await setGoal.mutateAsync({
+                month: now.getMonth() + 1,
+                year: now.getFullYear(),
+                target: parsed,
+            });
+            toast({ title: "Meta atualizada!" });
+        } catch (err: any) {
+            toast({
+                title: "Erro ao salvar meta",
+                description: err.message,
+                variant: "destructive",
+            });
+        }
+    };
+
+    const monthName = new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+
+    return (
+        <>
+            <Separator className="my-4" />
+            <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                    <Target className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">Meta Mensal de Agendamentos</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                    Usada no relatório para acompanhar o crescimento. Meta para <strong>{monthName}</strong>.
+                </p>
+                <div className="flex items-center gap-2">
+                    <Input
+                        type="number"
+                        min={0}
+                        placeholder="Ex: 200"
+                        value={target}
+                        onChange={(e) => setTarget(e.target.value)}
+                        disabled={isLoading || setGoal.isPending}
+                        className="max-w-[160px]"
+                    />
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleSave}
+                        disabled={isLoading || setGoal.isPending}
+                    >
+                        {setGoal.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Salvar Meta"}
+                    </Button>
+                </div>
+            </div>
+        </>
     );
 }
 
