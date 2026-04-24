@@ -71,6 +71,42 @@ export const useAuth = () => {
 
       if (error) throw error;
 
+      // ─── Bloqueio pós-login para contas desativadas ────────────────────
+      // A conta foi marcada como "desativada" pelo admin (falta de pagamento).
+      // O signInWithPassword devolve sessão válida, mas precisamos derrubar
+      // imediatamente e mostrar a mensagem de bloqueio com os dias restantes.
+      try {
+        const { data: deactData, error: deactErr } = await (supabase.rpc as any)(
+          "check_account_deactivation",
+        );
+        if (!deactErr && deactData?.is_deactivated) {
+          const daysRemaining: number = deactData.days_remaining ?? 0;
+          const isExpired: boolean = !!deactData.is_expired;
+
+          // Derruba a sessão antes de qualquer navegação
+          await supabase.auth.signOut();
+
+          const message = isExpired
+            ? "Sua conta está bloqueada por falta de pagamento e o prazo de 30 dias foi encerrado. Entre em contato com nosso time urgentemente para evitar a exclusão definitiva dos dados."
+            : `Sua conta está bloqueada por falta de pagamento, entre em contato com nosso time para reativar sua conta. Em ${daysRemaining} ${daysRemaining === 1 ? "dia" : "dias"} sua conta será excluída em definitivo, para evitar a perda dos dados regularize sua situação.`;
+
+          // Toast longo para dar tempo de ler
+          toast({
+            title: "Conta bloqueada",
+            description: message,
+            variant: "destructive",
+            duration: 15000,
+          });
+
+          return { error: new Error(message), data: null };
+        }
+      } catch (checkErr) {
+        // Se a RPC falhar (ex: migration ainda não aplicada), não bloqueia
+        // o login para não quebrar contas ativas por erro transiente.
+        console.warn("[useAuth] check_account_deactivation failed:", checkErr);
+      }
+      // ─── Fim do bloqueio ───────────────────────────────────────────────
+
       toast({
         title: "Login realizado!",
         description: "Bem-vindo de volta.",
