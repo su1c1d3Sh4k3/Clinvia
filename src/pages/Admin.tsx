@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { ChevronDown, ChevronUp, Search, LogOut, ShieldAlert, Users, Briefcase, Calendar, MessageSquare, UserCheck, UserX, Clock, Check, X, Phone, Instagram, MapPin, Mail, Coins, Eye, Megaphone, Plus, RefreshCw, TrendingUp, Wrench, AlertTriangle, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Search, LogOut, ShieldAlert, Users, Briefcase, Calendar, MessageSquare, UserCheck, UserX, Clock, Check, X, Phone, Instagram, MapPin, Mail, Coins, Eye, Megaphone, Plus, RefreshCw, TrendingUp, Wrench, AlertTriangle, Trash2, Ban, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -34,6 +34,21 @@ interface Profile {
     openai_token: string | null;
     openai_token_invalid: boolean | null;
     avatar_url: string | null;
+    deactivated_at: string | null;
+}
+
+const DEACTIVATION_RETENTION_DAYS = 30;
+
+/**
+ * Retorna dias restantes até a conta expirar definitivamente.
+ * Quando chega a 0, o admin deve excluir manualmente.
+ */
+function daysRemainingUntilDeletion(deactivatedAt: string | null): number | null {
+    if (!deactivatedAt) return null;
+    const start = new Date(deactivatedAt).getTime();
+    const elapsedMs = Date.now() - start;
+    const elapsedDays = Math.floor(elapsedMs / (1000 * 60 * 60 * 24));
+    return Math.max(0, DEACTIVATION_RETENTION_DAYS - elapsedDays);
 }
 
 interface TeamMember {
@@ -94,6 +109,8 @@ const Admin = () => {
     const [expandedProfileData, setExpandedProfileData] = useState<{ openai_token: string | null; openai_token_invalid: boolean } | null>(null);
     const [profileToDelete, setProfileToDelete] = useState<Profile | null>(null);
     const [deletingAccount, setDeletingAccount] = useState(false);
+    const [profileToDeactivate, setProfileToDeactivate] = useState<Profile | null>(null);
+    const [deactivateLoadingId, setDeactivateLoadingId] = useState<string | null>(null);
 
     const { convertToReal } = useExchangeRate();
     const { impersonate, isLoading: impersonateLoading } = useAdminImpersonate();
@@ -373,6 +390,44 @@ const Admin = () => {
         }
     };
 
+    const handleConfirmDeactivate = async () => {
+        if (!profileToDeactivate) return;
+        setDeactivateLoadingId(profileToDeactivate.id);
+        try {
+            const { data, error } = await (supabase.rpc as any)("admin_deactivate_profile", {
+                p_profile_id: profileToDeactivate.id,
+            });
+            if (error) throw error;
+            if (!data?.success) throw new Error(data?.error || "Falha ao desativar");
+
+            toast.success(`Conta de "${profileToDeactivate.full_name || profileToDeactivate.email}" foi desativada. Cliente não conseguirá mais fazer login.`);
+            setProfileToDeactivate(null);
+            fetchProfiles();
+        } catch (err: any) {
+            toast.error("Erro ao desativar conta: " + err.message);
+        } finally {
+            setDeactivateLoadingId(null);
+        }
+    };
+
+    const handleReactivate = async (profile: Profile) => {
+        setDeactivateLoadingId(profile.id);
+        try {
+            const { data, error } = await (supabase.rpc as any)("admin_reactivate_profile", {
+                p_profile_id: profile.id,
+            });
+            if (error) throw error;
+            if (!data?.success) throw new Error(data?.error || "Falha ao reativar");
+
+            toast.success(`Conta de "${profile.full_name || profile.email}" foi reativada. Cliente já pode fazer login.`);
+            fetchProfiles();
+        } catch (err: any) {
+            toast.error("Erro ao reativar conta: " + err.message);
+        } finally {
+            setDeactivateLoadingId(null);
+        }
+    };
+
     const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
 
     if (isLoading) {
@@ -474,35 +529,95 @@ const Admin = () => {
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-3">
-                                                {profile.role !== "super-admin" && (
-                                                    <>
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            className="border-orange-500/50 text-orange-400 hover:bg-orange-500/20 hover:text-orange-300"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                impersonate(profile.id);
-                                                            }}
-                                                            disabled={impersonateLoading}
-                                                        >
-                                                            <Eye className="w-4 h-4 mr-2" />
-                                                            Acessar
-                                                        </Button>
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            className="border-red-500/50 text-red-400 hover:bg-red-500/20 hover:text-red-300"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setProfileToDelete(profile);
-                                                            }}
-                                                        >
-                                                            <Trash2 className="w-4 h-4 mr-2" />
-                                                            Excluir
-                                                        </Button>
-                                                    </>
-                                                )}
+                                                {profile.role !== "super-admin" && (() => {
+                                                    const isDeactivated = !!profile.deactivated_at;
+                                                    const daysLeft = daysRemainingUntilDeletion(profile.deactivated_at);
+                                                    const isExpired = isDeactivated && daysLeft === 0;
+                                                    return (
+                                                        <>
+                                                            {/* Badge de contagem regressiva quando a conta está desativada */}
+                                                            {isDeactivated && (
+                                                                <Badge
+                                                                    className={
+                                                                        isExpired
+                                                                            ? "bg-red-600 text-white border-red-700"
+                                                                            : "bg-amber-500/20 text-amber-300 border border-amber-500/50"
+                                                                    }
+                                                                >
+                                                                    {isExpired ? (
+                                                                        <>
+                                                                            <AlertTriangle className="w-3.5 h-3.5 mr-1" />
+                                                                            Conta Vencida
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            <Clock className="w-3.5 h-3.5 mr-1" />
+                                                                            {daysLeft}{daysLeft === 1 ? " dia restante" : " dias restantes"}
+                                                                        </>
+                                                                    )}
+                                                                </Badge>
+                                                            )}
+
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                className="border-orange-500/50 text-orange-400 hover:bg-orange-500/20 hover:text-orange-300"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    impersonate(profile.id);
+                                                                }}
+                                                                disabled={impersonateLoading}
+                                                            >
+                                                                <Eye className="w-4 h-4 mr-2" />
+                                                                Acessar
+                                                            </Button>
+
+                                                            {/* Desativar / Reativar */}
+                                                            {isDeactivated ? (
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                    className="border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/20 hover:text-emerald-300"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleReactivate(profile);
+                                                                    }}
+                                                                    disabled={deactivateLoadingId === profile.id}
+                                                                >
+                                                                    <RotateCcw className="w-4 h-4 mr-2" />
+                                                                    Reativar
+                                                                </Button>
+                                                            ) : (
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                    className="border-amber-500/50 text-amber-400 hover:bg-amber-500/20 hover:text-amber-300"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setProfileToDeactivate(profile);
+                                                                    }}
+                                                                    disabled={deactivateLoadingId === profile.id}
+                                                                >
+                                                                    <Ban className="w-4 h-4 mr-2" />
+                                                                    Desativar
+                                                                </Button>
+                                                            )}
+
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                className="border-red-500/50 text-red-400 hover:bg-red-500/20 hover:text-red-300"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setProfileToDelete(profile);
+                                                                }}
+                                                            >
+                                                                <Trash2 className="w-4 h-4 mr-2" />
+                                                                Excluir
+                                                            </Button>
+                                                        </>
+                                                    );
+                                                })()}
                                                 {profile.role && (
                                                     <Badge variant={profile.role === "super-admin" ? "destructive" : "secondary"}>
                                                         {profile.role}
@@ -950,6 +1065,54 @@ const Admin = () => {
                             disabled={deletingAccount}
                         >
                             {deletingAccount ? "Excluindo..." : "Sim, excluir conta"}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Deactivate Account Confirmation Dialog */}
+            <AlertDialog open={!!profileToDeactivate} onOpenChange={(open) => { if (!open) setProfileToDeactivate(null); }}>
+                <AlertDialogContent className="bg-gray-800 border-gray-700 text-white">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="flex items-center gap-2 text-amber-400">
+                            <Ban className="w-5 h-5" />
+                            Desativar conta
+                        </AlertDialogTitle>
+                        <AlertDialogDescription className="text-gray-300 space-y-2">
+                            <p>
+                                Você está prestes a desativar a conta de{" "}
+                                <span className="font-semibold text-white">
+                                    {profileToDeactivate?.full_name || profileToDeactivate?.email}
+                                </span>
+                                {profileToDeactivate?.company_name && (
+                                    <span> ({profileToDeactivate.company_name})</span>
+                                )}
+                                .
+                            </p>
+                            <p>
+                                O cliente <span className="font-semibold text-amber-300">não conseguirá mais fazer login</span> e verá a mensagem de conta bloqueada por falta de pagamento.
+                            </p>
+                            <p className="text-amber-300">
+                                Começará a contagem regressiva de <span className="font-semibold">{DEACTIVATION_RETENTION_DAYS} dias</span>. Ao fim do prazo, a conta ficará marcada como "Conta Vencida" para exclusão manual. Os dados permanecem preservados durante esse período.
+                            </p>
+                            <p className="text-gray-400 text-sm">
+                                Você pode reverter a qualquer momento usando o botão "Reativar".
+                            </p>
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel
+                            className="bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600"
+                            disabled={deactivateLoadingId !== null}
+                        >
+                            Cancelar
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                            className="bg-amber-600 hover:bg-amber-700 text-white"
+                            onClick={handleConfirmDeactivate}
+                            disabled={deactivateLoadingId !== null}
+                        >
+                            {deactivateLoadingId ? "Desativando..." : "Sim, desativar conta"}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
