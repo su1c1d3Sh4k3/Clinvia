@@ -858,6 +858,17 @@ serve(async (req) => {
                     }
                 }
 
+                // Heurística de detecção de resposta da IA (N8N):
+                //   outbound + sem senderName humano + conversa em 'pending' (ainda na fila IA)
+                // Agente humano tem senderName preenchido (nome do team_member);
+                // N8N envia via Evolution API sem identidade humana.
+                let isAiResponse = false;
+                if (fromMe) {
+                    const noHumanSender = !senderName || senderName.trim() === '';
+                    const conversationPending = conversation?.status === 'pending';
+                    isAiResponse = noHumanSender && conversationPending;
+                }
+
                 // Save Message
                 const { data: savedMessage, error: msgError } = await supabase
                     .from('messages')
@@ -876,7 +887,8 @@ serve(async (req) => {
                         media_mimetype: mediaMimetype,
                         reply_to_id: replyToId,
                         quoted_body: quotedBody,
-                        quoted_sender: quotedSender
+                        quoted_sender: quotedSender,
+                        is_ai_response: isAiResponse
                     })
                     .select()
                     .single();
