@@ -5,6 +5,7 @@ import { ChatArea } from "@/components/ChatArea";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AIIntelligenceSidebar } from "@/components/AIIntelligenceSidebar";
 import { NewMessageModal } from "@/components/NewMessageModal";
+import { DisconnectedInstancesBanner } from "@/components/DisconnectedInstancesBanner";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -232,9 +233,10 @@ const Index = () => {
   }
 
   return (
-    <div className="flex h-full w-full overflow-hidden bg-background">
+    <div className="flex flex-col h-full w-full overflow-hidden bg-background">
+      <DisconnectedInstancesBanner />
       {/* Desktop Layout - Original */}
-      <div className="hidden md:flex h-full w-full min-w-0">
+      <div className="hidden md:flex flex-1 w-full min-w-0 overflow-hidden">
         <ConversationsList
           onSelectConversation={setSelectedConversationId}
           selectedId={selectedConversationId}
@@ -269,6 +271,7 @@ const Index = () => {
 
       {/* Mobile Layout - Fixed full screen */}
       <div className="md:hidden fixed inset-0 flex flex-col bg-background min-w-0">
+        <DisconnectedInstancesBanner />
         {/* Mobile: Conversations List View - Only render when active */}
         {mobileView === "list" && (
           <div className="flex-1 flex flex-col overflow-hidden">

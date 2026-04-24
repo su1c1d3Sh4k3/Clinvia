@@ -340,7 +340,71 @@ serve(async (req) => {
 
       if (!sendResponse.ok) {
         const errorText = await sendResponse.text();
-        console.error('Uzapi error:', errorText);
+        console.error('Uzapi error:', errorText, 'status:', sendResponse.status);
+
+        // 401/403/404 = token invalido / instancia nao existe na UZAPI
+        // → auto-marca como disconnected + cria notificacao + retorna erro amigavel
+        if (sendResponse.status === 401 || sendResponse.status === 403 || sendResponse.status === 404) {
+          try {
+            await supabaseClient
+              .from('instances')
+              .update({
+                status: 'disconnected',
+                last_health_check: new Date().toISOString(),
+              })
+              .eq('id', instance.id);
+
+            // Silencia spam: só notifica se não houve notificação nas últimas 24h
+            const { data: existingInstance } = await supabaseClient
+              .from('instances')
+              .select('last_disconnect_notified_at, name, user_id')
+              .eq('id', instance.id)
+              .maybeSingle();
+
+            const lastNotified = existingInstance?.last_disconnect_notified_at
+              ? new Date(existingInstance.last_disconnect_notified_at).getTime()
+              : 0;
+            const hoursSince = (Date.now() - lastNotified) / 3600_000;
+
+            if (hoursSince >= 24 && existingInstance) {
+              await supabaseClient.from('notifications').insert({
+                type: 'instance_disconnected',
+                title: `Instância "${existingInstance.name}" desconectada`,
+                description:
+                  `Detectamos que a instância ${existingInstance.name} perdeu conexão com o WhatsApp ` +
+                  `ao tentar enviar uma mensagem. Vá em Conexões e reconecte.`,
+                metadata: {
+                  instance_id: instance.id,
+                  instance_name: existingInstance.name,
+                  http_code: sendResponse.status,
+                  detected_by: 'send-message',
+                },
+                related_user_id: existingInstance.user_id,
+              });
+              await supabaseClient
+                .from('instances')
+                .update({ last_disconnect_notified_at: new Date().toISOString() })
+                .eq('id', instance.id);
+            }
+          } catch (markErr) {
+            console.error('[evolution-send-message] failed to mark instance as disconnected:', markErr);
+          }
+
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: 'instance_disconnected',
+              message:
+                'Sua instância do WhatsApp está desconectada. Vá em Conexões e reconecte para voltar a enviar mensagens.',
+              http_code: sendResponse.status,
+            }),
+            {
+              status: 502,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            },
+          );
+        }
+
         throw new Error(`Failed to send message via Uzapi: ${errorText}`);
       }
 
