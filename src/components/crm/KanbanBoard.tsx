@@ -15,6 +15,7 @@ import { CRMFiltersState } from "./CRMFilters";
 import { isWithinInterval, startOfDay, endOfDay } from "date-fns";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useCurrentTeamMember } from "@/hooks/useStaff";
+import { useFetchDealsProfilePictures } from "@/hooks/useFetchDealsProfilePictures";
 
 interface KanbanBoardProps {
     funnelId: string;
@@ -98,8 +99,8 @@ export function KanbanBoard({ funnelId, filters }: KanbanBoardProps) {
             const { data, error } = await supabase
                 .from("crm_deals" as any)
                 .select(`
-                    *, 
-                    contacts(push_name, number, profile_pic_url, instagram_id, contact_tags(tags(id, name, color))),
+                    *,
+                    contacts(id, push_name, number, profile_pic_url, instagram_id, remote_jid, updated_at, contact_tags(tags(id, name, color))),
                     product_service:products_services(id, name, type, price),
                     assigned_professional:professionals(id, name),
                     deal_products:crm_deal_products(*, product_service:products_services(id, name, type, price))
@@ -109,7 +110,15 @@ export function KanbanBoard({ funnelId, filters }: KanbanBoardProps) {
             if (error) throw error;
             return data as unknown as CRMDeal[];
         },
+        // staleTime baixo: ao reabrir o CRM ou mudar de aba, revalida fotos rapidamente
+        staleTime: 30_000,
+        refetchOnWindowFocus: true,
     });
+
+    // Mantém as fotos dos contatos atrelados aos deals sempre atualizadas:
+    //  - persiste URLs temporárias do WhatsApp no Storage
+    //  - invalida o cache em tempo real quando contacts.profile_pic_url muda
+    useFetchDealsProfilePictures(funnelId, deals);
 
     const filteredDeals = deals?.filter(deal => {
         // FILTRO OBRIGATÓRIO PARA AGENTES:

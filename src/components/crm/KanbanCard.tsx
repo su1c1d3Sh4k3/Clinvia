@@ -168,9 +168,22 @@ export function KanbanCard({ deal, index, stagnationLimitDays, onDealWon, onDeal
                                     <div className="flex items-center gap-2">
                                         {deal.contacts?.profile_pic_url ? (
                                             <img
-                                                src={deal.contacts.profile_pic_url}
+                                                src={(() => {
+                                                    const base = deal.contacts.profile_pic_url;
+                                                    // Cache-bust ligado ao updated_at do contato — força o navegador a buscar
+                                                    // imagem nova quando o registro é atualizado, sem invalidar o cache do Storage.
+                                                    const v = (deal.contacts as any).updated_at
+                                                        ? new Date((deal.contacts as any).updated_at).getTime()
+                                                        : null;
+                                                    if (!v) return base;
+                                                    return base.includes("?") ? `${base}&v=${v}` : `${base}?v=${v}`;
+                                                })()}
                                                 alt={deal.contacts.push_name}
                                                 className="w-6 h-6 rounded-full object-cover"
+                                                onError={(e) => {
+                                                    // Foto quebrada → esconde img para mostrar fallback
+                                                    (e.currentTarget as HTMLImageElement).style.display = "none";
+                                                }}
                                             />
                                         ) : (
                                             <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary">
