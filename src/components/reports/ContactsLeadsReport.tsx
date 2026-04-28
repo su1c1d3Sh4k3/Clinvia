@@ -1,9 +1,9 @@
 import { ReportCard } from "./ReportCard";
 import { ContactMetrics, calcEvolution } from "@/hooks/useReportData";
-import { UserPlus, Target, TrendingUp } from "lucide-react";
+import { UserPlus, Target, TrendingUp, MessageCircle, Instagram, Heart, Users } from "lucide-react";
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-    ResponsiveContainer, Cell,
+    ResponsiveContainer, Cell, PieChart, Pie, ReferenceLine,
 } from "recharts";
 
 interface ContactsLeadsReportProps {
@@ -12,6 +12,10 @@ interface ContactsLeadsReportProps {
 }
 
 const FUNNEL_COLORS = ["#3b82f6", "#8b5cf6"];
+const ORIGIN_COLORS: Record<string, string> = {
+    WhatsApp: "#10b981",
+    Instagram: "#8b5cf6",
+};
 
 const CARD = "relative group rounded-2xl bg-white dark:bg-card/50 backdrop-blur-sm border border-border/50 p-6 hover:shadow-md hover:border-border/80 transition-all duration-300";
 
@@ -33,15 +37,38 @@ const ChartTooltip = ({ active, payload, label }: any) => {
     );
 };
 
+// Card classe utilitária com cor dinâmica baseada em taxa de conversão
+function leadToPatientClass(rate: number): string {
+    if (rate >= 30) return "border-emerald-500/30 hover:border-emerald-500/50";
+    if (rate >= 15) return "border-amber-500/30 hover:border-amber-500/50";
+    return "border-red-500/30 hover:border-red-500/50";
+}
+
 export function ContactsLeadsReport({ data, comparison }: ContactsLeadsReportProps) {
     const barData = [
         { name: "Contatos", Quantidade: data.totalNew },
         { name: "Leads", Quantidade: data.totalLeads },
     ];
 
+    // Origem — donut data (filtra fatias zeradas para não poluir o gráfico)
+    const originData = [
+        { name: "WhatsApp", value: data.whatsappCount },
+        { name: "Instagram", value: data.instagramCount },
+    ].filter(d => d.value > 0);
+    const totalOrigin = data.whatsappCount + data.instagramCount;
+
+    // Lead → Paciente — bar data
+    const leadPatientBarData = [
+        { name: "Leads", value: data.leadCount, fill: "#3b82f6" },
+        { name: "Pacientes", value: data.patientCount, fill: "#10b981" },
+    ];
+
     const comparisonData = comparison ? [
         { name: "Novos Contatos", atual: data.totalNew, anterior: comparison.totalNew },
-        { name: "Leads", atual: data.totalLeads, anterior: comparison.totalLeads },
+        { name: "WhatsApp", atual: data.whatsappCount, anterior: comparison.whatsappCount },
+        { name: "Instagram", atual: data.instagramCount, anterior: comparison.instagramCount },
+        { name: "Leads", atual: data.leadCount, anterior: comparison.leadCount },
+        { name: "Pacientes", atual: data.patientCount, anterior: comparison.patientCount },
         { name: "Conversão %", atual: data.conversionRate, anterior: comparison.conversionRate },
     ] : [];
 
@@ -62,8 +89,153 @@ export function ContactsLeadsReport({ data, comparison }: ContactsLeadsReportPro
                 </div>
             </section>
 
+            {/* Origem dos Contatos */}
+            <section className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: '80ms', animationFillMode: 'backwards' }}>
+                <div className="flex items-center gap-2 mb-4">
+                    <div className="p-1.5 rounded-lg bg-emerald-500/10"><Users className="w-4 h-4 text-emerald-500" /></div>
+                    <h3 className="text-sm font-semibold tracking-tight">Origem dos Contatos</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Cards numéricos */}
+                    <div className="grid grid-cols-1 gap-4 content-start">
+                        <ReportCard
+                            label="WhatsApp"
+                            value={data.whatsappCount}
+                            icon={<MessageCircle className="w-4 h-4" />}
+                            evolution={comparison ? calcEvolution(data.whatsappCount, comparison.whatsappCount) : undefined}
+                            suffix={totalOrigin > 0 ? `(${Math.round((data.whatsappCount / totalOrigin) * 100)}%)` : undefined}
+                        />
+                        <ReportCard
+                            label="Instagram"
+                            value={data.instagramCount}
+                            icon={<Instagram className="w-4 h-4" />}
+                            evolution={comparison ? calcEvolution(data.instagramCount, comparison.instagramCount) : undefined}
+                            suffix={totalOrigin > 0 ? `(${Math.round((data.instagramCount / totalOrigin) * 100)}%)` : undefined}
+                        />
+                    </div>
+
+                    {/* Donut */}
+                    <div className={CARD}>
+                        <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+                        <div className="relative z-10">
+                            <h4 className="text-sm font-semibold mb-1">Distribuição por Canal</h4>
+                            <p className="text-xs text-muted-foreground mb-4">De onde vêm os novos contatos</p>
+                            {originData.length > 0 ? (
+                                <>
+                                    <ResponsiveContainer width="100%" height={220}>
+                                        <PieChart>
+                                            <defs>
+                                                {originData.map((d, i) => (
+                                                    <linearGradient key={i} id={`origin-pie-${i}`} x1="0" y1="0" x2="1" y2="1">
+                                                        <stop offset="0%" stopColor={ORIGIN_COLORS[d.name] || "#6366f1"} stopOpacity={1} />
+                                                        <stop offset="100%" stopColor={ORIGIN_COLORS[d.name] || "#6366f1"} stopOpacity={0.7} />
+                                                    </linearGradient>
+                                                ))}
+                                            </defs>
+                                            <Pie
+                                                data={originData}
+                                                cx="50%" cy="50%"
+                                                innerRadius={55} outerRadius={85}
+                                                paddingAngle={3} dataKey="value"
+                                                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                                                labelLine={{ stroke: '#94a3b8', strokeWidth: 1 }}
+                                            >
+                                                {originData.map((_, i) => <Cell key={i} fill={`url(#origin-pie-${i})`} />)}
+                                            </Pie>
+                                            <Tooltip content={<ChartTooltip />} />
+                                        </PieChart>
+                                    </ResponsiveContainer>
+                                    <div className="flex flex-wrap justify-center gap-2 mt-3">
+                                        {originData.map(d => (
+                                            <span
+                                                key={d.name}
+                                                className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium bg-muted/50"
+                                            >
+                                                <div className="w-2 h-2 rounded-full" style={{ background: ORIGIN_COLORS[d.name] }} />
+                                                {d.name}: {d.value}
+                                            </span>
+                                        ))}
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center h-[220px] text-muted-foreground">
+                                    <Users className="w-10 h-10 mb-2 opacity-20" />
+                                    <p className="text-sm">Sem contatos no período</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            {/* Leads × Pacientes */}
+            <section className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: '160ms', animationFillMode: 'backwards' }}>
+                <div className="flex items-center gap-2 mb-4">
+                    <div className="p-1.5 rounded-lg bg-pink-500/10"><Heart className="w-4 h-4 text-pink-500" /></div>
+                    <h3 className="text-sm font-semibold tracking-tight">Leads × Pacientes</h3>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <ReportCard
+                        label="Leads"
+                        value={data.leadCount}
+                        icon={<Target className="w-4 h-4" />}
+                        evolution={comparison ? calcEvolution(data.leadCount, comparison.leadCount) : undefined}
+                    />
+                    <ReportCard
+                        label="Pacientes"
+                        value={data.patientCount}
+                        icon={<Heart className="w-4 h-4" />}
+                        evolution={comparison ? calcEvolution(data.patientCount, comparison.patientCount) : undefined}
+                    />
+                    <ReportCard
+                        label="Taxa Lead → Paciente"
+                        value={data.leadToPatientRate}
+                        suffix="%"
+                        icon={<TrendingUp className="w-4 h-4" />}
+                        evolution={comparison ? calcEvolution(data.leadToPatientRate, comparison.leadToPatientRate) : undefined}
+                        className={leadToPatientClass(data.leadToPatientRate)}
+                    />
+                </div>
+
+                <div className={CARD}>
+                    <div className="absolute inset-0 bg-gradient-to-br from-pink-500/5 via-transparent to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+                    <div className="relative z-10">
+                        <h4 className="text-sm font-semibold mb-1">Funil Lead → Paciente</h4>
+                        <p className="text-xs text-muted-foreground mb-4">Volume comparativo no período (linha tracejada = meta de 30%)</p>
+                        {data.leadCount > 0 || data.patientCount > 0 ? (
+                            <ResponsiveContainer width="100%" height={240}>
+                                <BarChart data={leadPatientBarData} margin={{ left: 0, right: 8 }}>
+                                    <CartesianGrid strokeDasharray="4 4" strokeOpacity={0.08} vertical={false} />
+                                    <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                                    <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} allowDecimals={false} axisLine={false} tickLine={false} />
+                                    <Tooltip content={<ChartTooltip />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.08 }} />
+                                    {/* ReferenceLine = meta de 30% sobre a quantidade de leads */}
+                                    {data.leadCount > 0 && (
+                                        <ReferenceLine
+                                            y={Math.round(data.leadCount * 0.3)}
+                                            stroke="#10b981"
+                                            strokeDasharray="4 4"
+                                            label={{ value: "Meta 30%", position: "insideTopRight", fill: "#10b981", fontSize: 11 }}
+                                        />
+                                    )}
+                                    <Bar dataKey="value" name="Quantidade" radius={[6, 6, 0, 0]}>
+                                        {leadPatientBarData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        ) : (
+                            <div className="flex flex-col items-center justify-center h-[240px] text-muted-foreground">
+                                <Heart className="w-10 h-10 mb-2 opacity-20" />
+                                <p className="text-sm">Nenhum lead ou paciente no período</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </section>
+
             {/* Funnel Visualization */}
-            <section className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: '100ms', animationFillMode: 'backwards' }}>
+            <section className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: '240ms', animationFillMode: 'backwards' }}>
                 <div className="flex items-center gap-2 mb-4">
                     <div className="p-1.5 rounded-lg bg-purple-500/10"><Target className="w-4 h-4 text-purple-500" /></div>
                     <h3 className="text-sm font-semibold tracking-tight">Funil de Conversão</h3>
@@ -135,13 +307,13 @@ export function ContactsLeadsReport({ data, comparison }: ContactsLeadsReportPro
 
             {/* Comparison */}
             {comparison && comparisonData.length > 0 && (
-                <section className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: '200ms', animationFillMode: 'backwards' }}>
+                <section className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: '320ms', animationFillMode: 'backwards' }}>
                     <div className="flex items-center gap-2 mb-4">
                         <div className="p-1.5 rounded-lg bg-blue-500/10"><TrendingUp className="w-4 h-4 text-blue-500" /></div>
                         <h3 className="text-sm font-semibold tracking-tight">Comparativo de Períodos</h3>
                     </div>
                     <div className={CARD}>
-                        <ResponsiveContainer width="100%" height={280}>
+                        <ResponsiveContainer width="100%" height={300}>
                             <BarChart data={comparisonData} margin={{ left: 8, right: 8, top: 8 }}>
                                 <defs>
                                     <linearGradient id="cl-comp-atual" x1="0" y1="0" x2="0" y2="1">
@@ -154,7 +326,7 @@ export function ContactsLeadsReport({ data, comparison }: ContactsLeadsReportPro
                                     </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="4 4" strokeOpacity={0.08} vertical={false} />
-                                <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                                <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} interval={0} angle={-15} textAnchor="end" height={60} />
                                 <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} allowDecimals={false} axisLine={false} tickLine={false} />
                                 <Tooltip content={<ChartTooltip />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.08 }} />
                                 <Legend wrapperStyle={{ fontSize: 12, paddingTop: 12 }} />

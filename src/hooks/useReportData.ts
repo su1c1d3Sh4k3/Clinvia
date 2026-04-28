@@ -31,6 +31,13 @@ export interface ContactMetrics {
     totalNew: number;
     totalLeads: number;
     conversionRate: number;
+    // Origem dos contatos (contacts.channel)
+    whatsappCount: number;
+    instagramCount: number;
+    // Funil Lead → Paciente (contacts.is_lead / contacts.patient)
+    leadCount: number;
+    patientCount: number;
+    leadToPatientRate: number;
 }
 
 export interface AppointmentMetrics {
@@ -180,30 +187,49 @@ async function fetchTicketMetrics(start: string, end: string): Promise<TicketMet
 }
 
 async function fetchContactMetrics(start: string, end: string): Promise<ContactMetrics> {
-    const { count: totalNew, error: contactError } = await supabase
-        .from("contacts" as any)
-        .select("id", { count: "exact", head: true })
-        .gte("created_at", start)
-        .lte("created_at", end);
+    // Todas as queries em paralelo — RLS já filtra por user_id, índices em (user_id, created_at).
+    // count: 'exact' + head: true → não traz rows, só o número.
+    const [
+        contactsAgg,
+        dealsAgg,
+        whatsappAgg,
+        instagramAgg,
+        leadAgg,
+        patientAgg,
+    ] = await Promise.all([
+        supabase.from("contacts" as any).select("id", { count: "exact", head: true })
+            .gte("created_at", start).lte("created_at", end),
+        supabase.from("crm_deals" as any).select("contact_id")
+            .gte("created_at", start).lte("created_at", end).limit(10000),
+        supabase.from("contacts" as any).select("id", { count: "exact", head: true })
+            .eq("channel", "whatsapp").gte("created_at", start).lte("created_at", end),
+        supabase.from("contacts" as any).select("id", { count: "exact", head: true })
+            .eq("channel", "instagram").gte("created_at", start).lte("created_at", end),
+        supabase.from("contacts" as any).select("id", { count: "exact", head: true })
+            .eq("is_lead", true).gte("created_at", start).lte("created_at", end),
+        supabase.from("contacts" as any).select("id", { count: "exact", head: true })
+            .eq("patient", true).gte("created_at", start).lte("created_at", end),
+    ]);
 
-    if (contactError) throw contactError;
+    if (contactsAgg.error) throw contactsAgg.error;
+    if (dealsAgg.error) throw dealsAgg.error;
 
-    const { data: leads, error: leadError } = await supabase
-        .from("crm_deals" as any)
-        .select("contact_id")
-        .gte("created_at", start)
-        .lte("created_at", end)
-        .limit(10000);
-
-    if (leadError) throw leadError;
-
-    const uniqueLeads = new Set((leads || []).map((l: any) => l.contact_id)).size;
-    const total = totalNew || 0;
+    const total = contactsAgg.count || 0;
+    const uniqueLeads = new Set((dealsAgg.data || []).map((l: any) => l.contact_id)).size;
+    const leadCount = leadAgg.count || 0;
+    const patientCount = patientAgg.count || 0;
 
     return {
         totalNew: total,
         totalLeads: uniqueLeads,
         conversionRate: total > 0 ? Math.round((uniqueLeads / total) * 100 * 10) / 10 : 0,
+        whatsappCount: whatsappAgg.count || 0,
+        instagramCount: instagramAgg.count || 0,
+        leadCount,
+        patientCount,
+        leadToPatientRate: leadCount > 0
+            ? Math.round((patientCount / leadCount) * 100 * 10) / 10
+            : 0,
     };
 }
 
