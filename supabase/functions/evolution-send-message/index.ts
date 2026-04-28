@@ -321,6 +321,7 @@ serve(async (req) => {
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const sendStartedAt = Date.now();
 
     try {
       const sendResponse = await fetch(sendUrl, {
@@ -340,7 +341,22 @@ serve(async (req) => {
 
       if (!sendResponse.ok) {
         const errorText = await sendResponse.text();
-        console.error('Uzapi error:', errorText, 'status:', sendResponse.status);
+        const elapsedMs = Date.now() - sendStartedAt;
+        console.error('[evolution-send-message] UZAPI error:', JSON.stringify({
+          status: sendResponse.status,
+          body: errorText,
+          elapsed_ms: elapsedMs,
+          sendUrl,
+          payload,
+          instance_id: instance.id,
+          instance_name: instance.name,
+          instance_status: instance.status,
+          conversation_id: conversationId,
+          contact_id: conversation.contact_id,
+          group_id: conversation.group_id,
+          target_number: targetNumber,
+          message_type: messageType,
+        }));
 
         // 401/403/404 = token invalido / instancia nao existe na UZAPI
         // → auto-marca como disconnected + cria notificacao + retorna erro amigavel
@@ -486,22 +502,64 @@ serve(async (req) => {
       );
     } catch (fetchError: any) {
       clearTimeout(timeoutId);
+      const elapsedMs = Date.now() - sendStartedAt;
+      console.error('[evolution-send-message] UZAPI fetch error:', JSON.stringify({
+        name: fetchError?.name,
+        message: fetchError?.message,
+        elapsed_ms: elapsedMs,
+        instance_id: instance.id,
+        instance_name: instance.name,
+        conversation_id: conversationId,
+        target_number: targetNumber,
+        message_type: messageType,
+        sendUrl,
+      }));
       if (fetchError.name === 'AbortError') {
-        throw new Error('Uzapi timeout: Request aborted after 10 seconds');
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'uzapi_timeout',
+            message: 'O servidor de WhatsApp não respondeu em 10s. Tente novamente em instantes.',
+          }),
+          { status: 504, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
       throw fetchError;
     }
   } catch (error: any) {
-    console.error('=== [UZAPI SEND MESSAGE] ERROR ===');
-    console.error('Error:', error.message);
+    console.error('=== [UZAPI SEND MESSAGE] ERROR ===', JSON.stringify({
+      message: error?.message,
+      stack: error?.stack,
+    }));
+
+    const msg: string = error?.message ?? 'Erro desconhecido';
+    let status = 500;
+    let errorCode = 'internal_error';
+
+    if (msg.includes('Conversation ID is required')) {
+      status = 400; errorCode = 'missing_conversation_id';
+    } else if (msg.includes('Conversation not found')) {
+      status = 404; errorCode = 'conversation_not_found';
+    } else if (msg.includes('Instance configuration missing')) {
+      status = 422; errorCode = 'instance_not_configured';
+    } else if (msg.includes('Group JID not found') || msg.includes('Contact number not found')) {
+      status = 422; errorCode = 'recipient_not_found';
+    } else if (msg.includes('Invalid conversation')) {
+      status = 422; errorCode = 'invalid_conversation';
+    } else if (msg.startsWith('Failed to send message via Uzapi')) {
+      status = 502; errorCode = 'uzapi_error';
+    } else if (msg.includes('Uzapi timeout')) {
+      status = 504; errorCode = 'uzapi_timeout';
+    }
 
     return new Response(
       JSON.stringify({
-        error: error.message,
-        details: error.stack
+        success: false,
+        error: errorCode,
+        message: msg,
       }),
       {
-        status: 500,
+        status,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
