@@ -23,7 +23,7 @@ export function DisconnectedInstancesBanner() {
             if (!ownerId) return [];
             const { data, error } = await supabase
                 .from("instances")
-                .select("id, name, status")
+                .select("id, name, status, last_disconnect_reason")
                 .eq("user_id", ownerId)
                 .eq("status", "disconnected");
             if (error) throw error;
@@ -38,6 +38,9 @@ export function DisconnectedInstancesBanner() {
 
     const names = disconnected.map((i) => i.name).join(", ");
     const plural = disconnected.length > 1;
+    // Pega o motivo da primeira instância com motivo populado (caso comum: 1 só)
+    const reason = disconnected.find((i) => (i as any).last_disconnect_reason)
+        ?.["last_disconnect_reason" as keyof (typeof disconnected)[number]] as string | undefined;
 
     return (
         <div className="flex items-center gap-3 px-4 py-2.5 bg-red-500/10 border-b border-red-500/30 text-sm animate-in slide-in-from-top-2 duration-300">
@@ -49,7 +52,7 @@ export function DisconnectedInstancesBanner() {
                         : "Instância desconectada"}
                 </span>
                 <span className="text-red-700/80 dark:text-red-300/80 ml-2 truncate">
-                    {names} — mensagens não serão entregues até reconectar
+                    {names} — {reason ?? "mensagens não serão entregues até reconectar"}
                 </span>
             </div>
             <Button

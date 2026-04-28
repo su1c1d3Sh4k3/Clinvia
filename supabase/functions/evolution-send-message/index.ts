@@ -6,6 +6,74 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const FAILURE_THRESHOLD = 3;
+
+// Auto-disconnect proativo: incrementa contador de falhas consecutivas e,
+// ao atingir o threshold, marca a instância como disconnected + cria notificação.
+// Captura o cenário do WhatsApp Multi-Device em que UZAPI continua reportando
+// 'connected' mas falha em todos os envios (timeout/5xx).
+async function bumpFailureAndMaybeDisconnect(
+  supabaseClient: any,
+  instance: { id: string; name: string; user_id: string; status: string },
+  errorCode: 'uzapi_error' | 'uzapi_timeout',
+): Promise<void> {
+  try {
+    // Lê valor atual + atualiza atomicamente via RPC seria ideal, mas como não
+    // temos uma RPC dedicada, fazemos read-modify-write tolerante a corrida
+    // (no pior caso, conta a mais — não é crítico).
+    const { data: cur } = await supabaseClient
+      .from('instances')
+      .select('consecutive_send_failures, status, last_disconnect_notified_at')
+      .eq('id', instance.id)
+      .maybeSingle();
+
+    const prevCount: number = cur?.consecutive_send_failures ?? 0;
+    const newCount = prevCount + 1;
+
+    const updates: Record<string, unknown> = { consecutive_send_failures: newCount };
+
+    if (newCount >= FAILURE_THRESHOLD && cur?.status === 'connected') {
+      updates.status = 'disconnected';
+      updates.last_disconnect_reason =
+        errorCode === 'uzapi_timeout'
+          ? 'WhatsApp parou de responder (timeouts consecutivos). Reconecte escaneando o QR code.'
+          : 'WhatsApp está rejeitando envios (erros consecutivos). Reconecte escaneando o QR code.';
+
+      // Notificação 1x/24h (mesma regra do health-check)
+      const lastNotified = cur?.last_disconnect_notified_at
+        ? new Date(cur.last_disconnect_notified_at).getTime()
+        : 0;
+      const hoursSince = (Date.now() - lastNotified) / 3_600_000;
+      if (hoursSince >= 24) {
+        try {
+          await supabaseClient.from('notifications').insert({
+            type: 'instance_disconnected',
+            title: `Instância "${instance.name}" desconectada`,
+            description:
+              `${updates.last_disconnect_reason} ` +
+              `Vá em Conexões e reconecte para voltar a enviar mensagens.`,
+            metadata: {
+              instance_id: instance.id,
+              instance_name: instance.name,
+              detected_by: 'send-message-threshold',
+              error_code: errorCode,
+              consecutive_failures: newCount,
+            },
+            related_user_id: instance.user_id,
+          });
+          updates.last_disconnect_notified_at = new Date().toISOString();
+        } catch (notifErr) {
+          console.error('[bumpFailure] failed to insert notification:', notifErr);
+        }
+      }
+    }
+
+    await supabaseClient.from('instances').update(updates).eq('id', instance.id);
+  } catch (err) {
+    console.error('[bumpFailure] failed to update consecutive_send_failures:', err);
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -421,6 +489,10 @@ serve(async (req) => {
           );
         }
 
+        // Auto-disconnect proativo: bump contador de falhas; após 3 seguidas
+        // marca instância como disconnected mesmo sem 401/403/404 da UZAPI.
+        await bumpFailureAndMaybeDisconnect(supabaseClient, instance, 'uzapi_error');
+
         throw new Error(`Failed to send message via Uzapi: ${errorText}`);
       }
 
@@ -485,8 +557,16 @@ serve(async (req) => {
 
       console.log('Message saved to database:', message.id);
 
-      // ✅ OTIMIZAÇÃO: Conversation update automático via trigger
-      // Ver: 20250203_auto_update_conversation_timestamp.sql
+      // ✅ Sucesso: zera contador de falhas consecutivas (se houver)
+      try {
+        await supabaseClient
+          .from('instances')
+          .update({ consecutive_send_failures: 0 })
+          .eq('id', instance.id)
+          .gt('consecutive_send_failures', 0);
+      } catch (resetErr) {
+        console.warn('[evolution-send-message] failed to reset consecutive_send_failures:', resetErr);
+      }
 
       console.log('=== [UZAPI SEND MESSAGE] SUCCESS ===');
 
@@ -515,6 +595,7 @@ serve(async (req) => {
         sendUrl,
       }));
       if (fetchError.name === 'AbortError') {
+        await bumpFailureAndMaybeDisconnect(supabaseClient, instance, 'uzapi_timeout');
         return new Response(
           JSON.stringify({
             success: false,
@@ -534,7 +615,7 @@ serve(async (req) => {
 
     const msg: string = error?.message ?? 'Erro desconhecido';
     let status = 500;
-    let errorCode = 'internal_error';
+    let errorCode: string = 'internal_error';
 
     if (msg.includes('Conversation ID is required')) {
       status = 400; errorCode = 'missing_conversation_id';

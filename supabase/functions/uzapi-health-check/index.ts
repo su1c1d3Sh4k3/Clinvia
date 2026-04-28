@@ -1,14 +1,26 @@
 // =====================================================
 // uzapi-health-check
 // =====================================================
-// Itera todas as instâncias ATIVAS no DB, faz ping em GET /instance/status
-// na UZAPI, atualiza instances.status + last_health_check.
+// Itera todas as instâncias ATIVAS no DB, faz GET /instance/status na UZAPI,
+// atualiza instances.status + last_health_check + last_disconnect_reason.
 //
-// Quando o status muda para 'disconnected':
-//   - cria notification type='instance_disconnected' (1x a cada 24h por instância)
+// Detecção de desconexão (qualquer um basta):
+//   1. HTTP 401/403/404 → token inválido / instância não existe
+//   2. campo data.instance.status / data.status normalizado para 'disconnected'
+//   3. data.instance.current_presence === 'unavailable' (WhatsApp offline,
+//      mesmo quando UZAPI reporta status='connected' em cache antigo)
+//   4. data.instance.lastDisconnectReason populado E recente (≤7 dias) E
+//      mais novo que o last_health_check anterior — captura o caso
+//      "logged out from another device with recentMessage" do WhatsApp
+//      Multi-Device, que NÃO altera o flag connected na UZAPI.
 //
-// Quando o status muda de volta para 'connected':
+// Quando vira 'disconnected':
+//   - cria notification type='instance_disconnected' (1x a cada 24h)
+//   - persiste last_disconnect_reason para o banner exibir motivo amigável
+//
+// Quando volta para 'connected':
 //   - cria notification type='instance_reconnected'
+//   - limpa last_disconnect_reason e zera consecutive_send_failures
 //
 // Invocado pelo cron a cada 10 minutos.
 // =====================================================
@@ -27,10 +39,19 @@ interface Instance {
     server_url: string;
     apikey: string;
     last_disconnect_notified_at: string | null;
+    last_health_check: string | null;
 }
 
-// Mapa UZAPI status → enum instance_status
-function mapUzapiStatus(uzapiStatus: unknown): 'connected' | 'disconnected' | 'connecting' | 'error' {
+type HealthStatus = 'connected' | 'disconnected' | 'connecting' | 'error';
+
+interface PingResult {
+    status: HealthStatus;
+    httpCode: number;
+    reason: string | null;
+    raw?: unknown;
+}
+
+function mapUzapiStatus(uzapiStatus: unknown): HealthStatus {
     const s = String(uzapiStatus || '').toLowerCase();
     if (s === 'connected' || s === 'online') return 'connected';
     if (s === 'connecting' || s === 'pairing') return 'connecting';
@@ -38,43 +59,91 @@ function mapUzapiStatus(uzapiStatus: unknown): 'connected' | 'disconnected' | 'c
     return 'error';
 }
 
-// Ping UZAPI /instance/status. Retorna status normalizado ou 'disconnected'/'error'.
-async function pingUzapi(
-    serverUrl: string, apikey: string,
-): Promise<{ status: 'connected' | 'disconnected' | 'connecting' | 'error'; httpCode: number; raw?: unknown }> {
+// Mapeia razões cruas da UZAPI para mensagens amigáveis em pt-BR
+function friendlyReason(raw: string | null | undefined): string | null {
+    if (!raw) return null;
+    const r = raw.toLowerCase();
+    if (r.includes('logged out from another device') || r.includes('multi-device')) {
+        return 'WhatsApp foi deslogado por outro dispositivo. Reconecte escaneando o QR code.';
+    }
+    if (r.includes('401') && r.includes('logged out')) {
+        return 'Sessão do WhatsApp expirou. Reconecte escaneando o QR code.';
+    }
+    if (r.includes('unavailable')) {
+        return 'WhatsApp está offline. Verifique o telefone e reconecte se necessário.';
+    }
+    if (r.includes('banned') || r.includes('blocked')) {
+        return 'Número foi bloqueado pelo WhatsApp. Entre em contato com o suporte.';
+    }
+    return raw;
+}
+
+async function pingUzapi(serverUrl: string, apikey: string, prevHealthCheck: string | null): Promise<PingResult> {
     const url = `${serverUrl.replace(/\/$/, '')}/instance/status`;
     try {
         const response = await fetch(url, {
             method: 'GET',
-            headers: {
-                'token': apikey,
-                'Content-Type': 'application/json',
-            },
-            // Evita travar o cron em instâncias mortas
+            headers: { 'token': apikey, 'Content-Type': 'application/json' },
             signal: AbortSignal.timeout(10_000),
         });
 
         const httpCode = response.status;
 
         if (httpCode === 401 || httpCode === 403 || httpCode === 404) {
-            // Token inválido ou instância não existe → disconnected
-            return { status: 'disconnected', httpCode };
+            return { status: 'disconnected', httpCode, reason: `HTTP ${httpCode}: token/instância inválida na UZAPI` };
         }
 
         if (!response.ok) {
-            return { status: 'error', httpCode };
+            return { status: 'error', httpCode, reason: `HTTP ${httpCode} da UZAPI` };
         }
 
-        const data = await response.json().catch(() => null);
-        const uzapiStatus = data?.instance?.status
-            ?? data?.instance?.state
-            ?? data?.status
-            ?? data?.state;
+        const data = await response.json().catch(() => null) as any;
 
-        return { status: mapUzapiStatus(uzapiStatus), httpCode, raw: data };
+        // 1) Status declarado pela UZAPI
+        const declaredStatus = mapUzapiStatus(
+            data?.instance?.status ?? data?.instance?.state ?? data?.status ?? data?.state,
+        );
+
+        // 2) current_presence === 'unavailable' indica WhatsApp offline na prática,
+        //    mesmo que o "status" declarado pela UZAPI seja 'connected' (cache antigo).
+        const currentPresence = String(data?.instance?.current_presence ?? '').toLowerCase();
+        const presenceUnavailable = currentPresence === 'unavailable';
+
+        // 3) lastDisconnectReason recente — captura logout silencioso do WhatsApp
+        const lastDisconnectRaw = data?.instance?.lastDisconnect ?? null;
+        const lastDisconnectReason: string | null = data?.instance?.lastDisconnectReason ?? null;
+        let disconnectIsRecent = false;
+        if (lastDisconnectReason && lastDisconnectRaw) {
+            const dt = new Date(lastDisconnectRaw).getTime();
+            if (!Number.isNaN(dt)) {
+                const ageHours = (Date.now() - dt) / 3_600_000;
+                const prevHealthMs = prevHealthCheck ? new Date(prevHealthCheck).getTime() : 0;
+                // Recente E mais novo do que a última verificação que vimos como saudável
+                disconnectIsRecent = ageHours <= 24 * 7 && dt > prevHealthMs;
+            }
+        }
+
+        if (declaredStatus === 'disconnected') {
+            return { status: 'disconnected', httpCode, reason: lastDisconnectReason ?? 'UZAPI reporta disconnected', raw: data };
+        }
+
+        if (presenceUnavailable) {
+            return {
+                status: 'disconnected',
+                httpCode,
+                reason: lastDisconnectReason ?? 'WhatsApp offline (current_presence=unavailable)',
+                raw: data,
+            };
+        }
+
+        if (disconnectIsRecent) {
+            return { status: 'disconnected', httpCode, reason: lastDisconnectReason, raw: data };
+        }
+
+        return { status: declaredStatus, httpCode, reason: null, raw: data };
     } catch (err) {
         console.error(`[uzapi-health-check] ping failed for ${serverUrl}:`, err);
-        return { status: 'error', httpCode: 0 };
+        return { status: 'error', httpCode: 0, reason: `ping error: ${(err as Error)?.message ?? err}` };
     }
 }
 
@@ -89,10 +158,9 @@ Deno.serve(async (req) => {
     );
 
     try {
-        // Busca todas as instâncias que têm apikey (pulamos "órfãs")
         const { data: instances, error: fetchErr } = await supabase
             .from('instances')
-            .select('id, name, user_id, status, server_url, apikey, last_disconnect_notified_at')
+            .select('id, name, user_id, status, server_url, apikey, last_disconnect_notified_at, last_health_check')
             .not('apikey', 'is', null)
             .not('server_url', 'is', null);
 
@@ -112,10 +180,9 @@ Deno.serve(async (req) => {
             errors: 0,
         };
 
-        // Processa em paralelo (com limite implícito pelo timeout individual)
         await Promise.all((instances as Instance[]).map(async (inst) => {
             summary.checked++;
-            const ping = await pingUzapi(inst.server_url, inst.apikey);
+            const ping = await pingUzapi(inst.server_url, inst.apikey, inst.last_health_check);
 
             const newStatus = ping.status;
             const prevStatus = inst.status;
@@ -125,7 +192,6 @@ Deno.serve(async (req) => {
             if (newStatus === 'disconnected') summary.disconnected++;
             if (newStatus === 'error') summary.errors++;
 
-            // Atualiza status + last_health_check SEMPRE
             const updates: Record<string, unknown> = {
                 last_health_check: now,
             };
@@ -133,31 +199,37 @@ Deno.serve(async (req) => {
                 updates.status = newStatus;
                 summary.changed++;
             }
+            // Persiste motivo na desconexão; limpa em reconexão
+            if (newStatus === 'disconnected' && ping.reason) {
+                updates.last_disconnect_reason = friendlyReason(ping.reason);
+            } else if (newStatus === 'connected' && prevStatus !== 'connected') {
+                updates.last_disconnect_reason = null;
+                updates.consecutive_send_failures = 0;
+            }
 
             await supabase.from('instances').update(updates).eq('id', inst.id);
 
-            // Notificações: só em transições de estado
             const justDisconnected = prevStatus === 'connected' && newStatus === 'disconnected';
             const justReconnected = prevStatus !== 'connected' && newStatus === 'connected';
 
             if (justDisconnected) {
-                // Evita spam: só notifica se não notificou nas últimas 24h
                 const lastNotified = inst.last_disconnect_notified_at
                     ? new Date(inst.last_disconnect_notified_at).getTime()
                     : 0;
                 const hoursSince = (Date.now() - lastNotified) / 3600_000;
 
                 if (hoursSince >= 24) {
+                    const friendly = friendlyReason(ping.reason) ?? 'A instância perdeu conexão com o WhatsApp.';
                     await supabase.from('notifications').insert({
                         type: 'instance_disconnected',
                         title: `Instância "${inst.name}" desconectada`,
-                        description:
-                            `A instância ${inst.name} perdeu conexão com o WhatsApp. ` +
-                            `Vá em Conexões e reconecte para voltar a enviar/receber mensagens.`,
+                        description: `${friendly} Vá em Conexões e reconecte para voltar a enviar/receber mensagens.`,
                         metadata: {
                             instance_id: inst.id,
                             instance_name: inst.name,
                             http_code: ping.httpCode,
+                            raw_reason: ping.reason,
+                            detected_by: 'health-check',
                         },
                         related_user_id: inst.user_id,
                     });
@@ -191,10 +263,7 @@ Deno.serve(async (req) => {
         console.error('[uzapi-health-check] fatal:', err);
         return new Response(
             JSON.stringify({ success: false, error: String(err) }),
-            {
-                status: 500,
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            },
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
         );
     }
 });
