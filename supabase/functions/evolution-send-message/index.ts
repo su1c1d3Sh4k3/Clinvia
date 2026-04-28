@@ -8,6 +8,61 @@ const corsHeaders = {
 
 const FAILURE_THRESHOLD = 3;
 
+// Parseia o body de erro retornado pela UZAPI e extrai a mensagem mais
+// amigável possível para o usuário final, junto com metadados úteis.
+//
+// Exemplo de body real (provider_code=463, WHATSAPP_REACHOUT_TIMELOCK):
+//   { provider_message_ptbr: "O WhatsApp está sob uma restrição temporária...",
+//     provider_code: 463, error_key: "WHATSAPP_REACHOUT_TIMELOCK", ... }
+//
+// Restrições de policy do WhatsApp (qualidade/quota/timelock) NÃO indicam que
+// a instância UZAPI está desconectada — a sessão WhatsApp está saudável, é o
+// WhatsApp que está limitando o número. Por isso retornamos isPolicyRestriction
+// para o caller decidir se deve incrementar consecutive_send_failures.
+function parseUzapiErrorBody(errorText: string): {
+  friendly: string;
+  providerCode: number | null;
+  errorKey: string | null;
+  isPolicyRestriction: boolean;
+} {
+  let parsed: any = null;
+  try {
+    parsed = JSON.parse(errorText);
+  } catch {
+    return {
+      friendly: (errorText || '').trim() || 'Erro desconhecido da UZAPI',
+      providerCode: null,
+      errorKey: null,
+      isPolicyRestriction: false,
+    };
+  }
+
+  const friendly: string =
+    parsed?.provider_message_ptbr ||
+    parsed?.provider_message ||
+    parsed?.message ||
+    parsed?.error ||
+    parsed?.details?.message ||
+    (errorText || '').trim() ||
+    'Erro desconhecido da UZAPI';
+
+  const providerCode: number | null =
+    typeof parsed?.provider_code === 'number' ? parsed.provider_code : null;
+  const errorKey: string | null = parsed?.error_key ?? null;
+
+  // Heurísticas: erros de policy/quota/qualidade do WhatsApp.
+  // Códigos comuns: 463 (REACHOUT_TIMELOCK), 470 (re-engagement window),
+  // 471 (spam rate limit), 472 (number quality issue).
+  const policyCodes = new Set([463, 470, 471, 472, 473]);
+  const policyKeyHints = ['REACHOUT', 'QUOTA', 'RATE', 'TIMELOCK', 'QUALITY', 'BLOCKED', 'TEMPLATE_LIMIT'];
+  const isPolicyRestriction =
+    (providerCode !== null && policyCodes.has(providerCode)) ||
+    (errorKey !== null && policyKeyHints.some((k) => errorKey.toUpperCase().includes(k))) ||
+    /restri[cç][aã]o/i.test(friendly);
+
+  return { friendly, providerCode, errorKey, isPolicyRestriction };
+}
+
 // Auto-disconnect proativo: incrementa contador de falhas consecutivas e,
 // ao atingir o threshold, marca a instância como disconnected + cria notificação.
 // Captura o cenário do WhatsApp Multi-Device em que UZAPI continua reportando
@@ -489,11 +544,21 @@ serve(async (req) => {
           );
         }
 
-        // Auto-disconnect proativo: bump contador de falhas; após 3 seguidas
-        // marca instância como disconnected mesmo sem 401/403/404 da UZAPI.
-        await bumpFailureAndMaybeDisconnect(supabaseClient, instance, 'uzapi_error');
+        // Parse para extrair mensagem amigável + identificar policy restriction
+        const parsed = parseUzapiErrorBody(errorText);
 
-        throw new Error(`Failed to send message via Uzapi: ${errorText}`);
+        // Auto-disconnect proativo APENAS para falhas de infra (timeout/5xx UZAPI).
+        // Policy restriction do WhatsApp (quota/qualidade/timelock) significa que
+        // a sessão UZAPI está OK — é o número que está restrito. NÃO bump.
+        if (!parsed.isPolicyRestriction) {
+          await bumpFailureAndMaybeDisconnect(supabaseClient, instance, 'uzapi_error');
+        }
+
+        const err = new Error(`Failed to send message via Uzapi: ${parsed.friendly}`);
+        (err as any).uzapiProviderCode = parsed.providerCode;
+        (err as any).uzapiErrorKey = parsed.errorKey;
+        (err as any).isPolicyRestriction = parsed.isPolicyRestriction;
+        throw err;
       }
 
       const sendData = await sendResponse.json();
@@ -610,34 +675,55 @@ serve(async (req) => {
   } catch (error: any) {
     console.error('=== [UZAPI SEND MESSAGE] ERROR ===', JSON.stringify({
       message: error?.message,
+      uzapiProviderCode: error?.uzapiProviderCode,
+      uzapiErrorKey: error?.uzapiErrorKey,
+      isPolicyRestriction: error?.isPolicyRestriction,
       stack: error?.stack,
     }));
 
-    const msg: string = error?.message ?? 'Erro desconhecido';
+    const rawMsg: string = error?.message ?? 'Erro desconhecido';
     let status = 500;
     let errorCode: string = 'internal_error';
+    // userMessage = mensagem que vai para o toast no frontend.
+    // Por padrão, é igual a rawMsg, mas para erros de UZAPI removemos o
+    // prefixo "Failed to send message via Uzapi: " e categorizamos policy
+    // restriction do WhatsApp separadamente.
+    let userMessage: string = rawMsg;
 
-    if (msg.includes('Conversation ID is required')) {
+    if (rawMsg.includes('Conversation ID is required')) {
       status = 400; errorCode = 'missing_conversation_id';
-    } else if (msg.includes('Conversation not found')) {
+      userMessage = 'ID da conversa não informado.';
+    } else if (rawMsg.includes('Conversation not found')) {
       status = 404; errorCode = 'conversation_not_found';
-    } else if (msg.includes('Instance configuration missing')) {
+      userMessage = 'Conversa não encontrada.';
+    } else if (rawMsg.includes('Instance configuration missing')) {
       status = 422; errorCode = 'instance_not_configured';
-    } else if (msg.includes('Group JID not found') || msg.includes('Contact number not found')) {
+      userMessage = 'Instância do WhatsApp não está configurada.';
+    } else if (rawMsg.includes('Group JID not found') || rawMsg.includes('Contact number not found')) {
       status = 422; errorCode = 'recipient_not_found';
-    } else if (msg.includes('Invalid conversation')) {
+      userMessage = 'Número do destinatário não encontrado.';
+    } else if (rawMsg.includes('Invalid conversation')) {
       status = 422; errorCode = 'invalid_conversation';
-    } else if (msg.startsWith('Failed to send message via Uzapi')) {
-      status = 502; errorCode = 'uzapi_error';
-    } else if (msg.includes('Uzapi timeout')) {
+      userMessage = 'Conversa inválida.';
+    } else if (rawMsg.startsWith('Failed to send message via Uzapi')) {
+      const uzapiPrefix = 'Failed to send message via Uzapi: ';
+      const friendly = rawMsg.startsWith(uzapiPrefix) ? rawMsg.slice(uzapiPrefix.length) : rawMsg;
+      const isPolicy = (error as any)?.isPolicyRestriction === true;
+      status = 502;
+      errorCode = isPolicy ? 'whatsapp_policy_restriction' : 'uzapi_error';
+      userMessage = friendly;
+    } else if (rawMsg.includes('Uzapi timeout')) {
       status = 504; errorCode = 'uzapi_timeout';
+      userMessage = 'O servidor de WhatsApp não respondeu em 10s. Tente novamente.';
     }
 
     return new Response(
       JSON.stringify({
         success: false,
         error: errorCode,
-        message: msg,
+        message: userMessage,
+        provider_code: (error as any)?.uzapiProviderCode ?? null,
+        error_key: (error as any)?.uzapiErrorKey ?? null,
       }),
       {
         status,
