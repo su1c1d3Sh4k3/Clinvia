@@ -100,7 +100,7 @@ export function KanbanBoard({ funnelId, filters }: KanbanBoardProps) {
                 .from("crm_deals" as any)
                 .select(`
                     *,
-                    contacts(id, push_name, number, profile_pic_url, instagram_id, remote_jid, updated_at, contact_tags(tags(id, name, color))),
+                    contacts(id, push_name, number, profile_pic_url, instagram_id, updated_at, contact_tags(tags(id, name, color))),
                     product_service:products_services(id, name, type, price),
                     assigned_professional:professionals(id, name),
                     deal_products:crm_deal_products(*, product_service:products_services(id, name, type, price))
