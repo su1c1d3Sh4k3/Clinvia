@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, useRef } from "react";
+import React, { Suspense, useCallback, useEffect, useRef } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -13,6 +13,8 @@ import { TypingProvider } from "./contexts/TypingContext";
 import { ImpersonationBanner } from "./components/ImpersonationBanner";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { supabase } from "./integrations/supabase/client";
+import { useSessionLock, clearSessionId } from "./hooks/useSessionLock";
+import { useToast } from "@/hooks/use-toast";
 
 // ============================================
 // LAZY LOADING — Code Splitting por página
@@ -68,6 +70,28 @@ const queryClient = new QueryClient();
 function AuthCacheManager() {
   const qc = useQueryClient();
   const prevUserIdRef = useRef<string | null>(null);
+  const { toast } = useToast();
+
+  // Heartbeat single-session — força logout se outra sessão tomou o slot
+  const handleSessionLost = useCallback(async (reason: string) => {
+    try {
+      // Limpa state local e desloga sem chamar release (já não somos donos do slot)
+      clearSessionId();
+      await supabase.auth.signOut();
+      toast({
+        title: "Sessão encerrada",
+        description:
+          reason === "session_lost"
+            ? "Sua conta foi acessada em outro dispositivo. Faça login novamente para continuar."
+            : "Sua sessão expirou. Faça login novamente.",
+        variant: "destructive",
+        duration: 12000,
+      });
+    } catch (e) {
+      console.error('[AuthCacheManager] forced signOut failed:', e);
+    }
+  }, [toast]);
+  useSessionLock(handleSessionLost);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(

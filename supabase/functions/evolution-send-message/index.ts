@@ -24,6 +24,14 @@ function parseUzapiErrorBody(errorText: string): {
   providerCode: number | null;
   errorKey: string | null;
   isPolicyRestriction: boolean;
+  // Reachout timelock (RESTRICT_ALL_COMPANIONS) — extraído do JSON quando presente.
+  // Quando o WhatsApp restringe um companion (pareamento Multi-Device novo),
+  // ele devolve a data de expiração da restrição em details.reachout_timelock.until.
+  reachoutTimelock: {
+    active: boolean;
+    enforcementType: string | null; // ex: RESTRICT_ALL_COMPANIONS
+    until: string | null;           // ISO timestamp
+  } | null;
 } {
   let parsed: any = null;
   try {
@@ -34,6 +42,7 @@ function parseUzapiErrorBody(errorText: string): {
       providerCode: null,
       errorKey: null,
       isPolicyRestriction: false,
+      reachoutTimelock: null,
     };
   }
 
@@ -51,8 +60,6 @@ function parseUzapiErrorBody(errorText: string): {
   const errorKey: string | null = parsed?.error_key ?? null;
 
   // Heurísticas: erros de policy/quota/qualidade do WhatsApp.
-  // Códigos comuns: 463 (REACHOUT_TIMELOCK), 470 (re-engagement window),
-  // 471 (spam rate limit), 472 (number quality issue).
   const policyCodes = new Set([463, 470, 471, 472, 473]);
   const policyKeyHints = ['REACHOUT', 'QUOTA', 'RATE', 'TIMELOCK', 'QUALITY', 'BLOCKED', 'TEMPLATE_LIMIT'];
   const isPolicyRestriction =
@@ -60,7 +67,41 @@ function parseUzapiErrorBody(errorText: string): {
     (errorKey !== null && policyKeyHints.some((k) => errorKey.toUpperCase().includes(k))) ||
     /restri[cç][aã]o/i.test(friendly);
 
-  return { friendly, providerCode, errorKey, isPolicyRestriction };
+  // Captura reachout_timelock se presente
+  let reachoutTimelock: ReturnType<typeof parseUzapiErrorBody>['reachoutTimelock'] = null;
+  const rt = parsed?.details?.reachout_timelock;
+  if (rt && typeof rt === 'object') {
+    reachoutTimelock = {
+      active: rt.active === true,
+      enforcementType: typeof rt.enforcement_type === 'string' ? rt.enforcement_type : null,
+      until: typeof rt.until === 'string' ? rt.until : null,
+    };
+  }
+
+  return { friendly, providerCode, errorKey, isPolicyRestriction, reachoutTimelock };
+}
+
+// Persiste a restrição RESTRICT_ALL_COMPANIONS na instance para o banner do
+// frontend exibir countdown até a liberação.
+async function recordWhatsAppRestriction(
+  supabaseClient: any,
+  instance: { id: string },
+  rt: { active: boolean; enforcementType: string | null; until: string | null },
+): Promise<void> {
+  if (!rt.active || !rt.until) return;
+  try {
+    await supabaseClient
+      .from('instances')
+      .update({
+        restriction_active: true,
+        restriction_until: rt.until,
+        restriction_type: rt.enforcementType ?? 'RESTRICT_ALL_COMPANIONS',
+        restriction_detected_at: new Date().toISOString(),
+      })
+      .eq('id', instance.id);
+  } catch (err) {
+    console.error('[recordWhatsAppRestriction] failed:', err);
+  }
 }
 
 // Auto-disconnect proativo: incrementa contador de falhas consecutivas e,
@@ -554,10 +595,17 @@ serve(async (req) => {
           await bumpFailureAndMaybeDisconnect(supabaseClient, instance, 'uzapi_error');
         }
 
+        // Se for RESTRICT_ALL_COMPANIONS / WHATSAPP_REACHOUT_TIMELOCK, persiste
+        // metadados na instance para o banner do frontend exibir countdown.
+        if (parsed.reachoutTimelock?.active && parsed.reachoutTimelock.until) {
+          await recordWhatsAppRestriction(supabaseClient, instance, parsed.reachoutTimelock);
+        }
+
         const err = new Error(`Failed to send message via Uzapi: ${parsed.friendly}`);
         (err as any).uzapiProviderCode = parsed.providerCode;
         (err as any).uzapiErrorKey = parsed.errorKey;
         (err as any).isPolicyRestriction = parsed.isPolicyRestriction;
+        (err as any).reachoutTimelock = parsed.reachoutTimelock;
         throw err;
       }
 
@@ -622,15 +670,20 @@ serve(async (req) => {
 
       console.log('Message saved to database:', message.id);
 
-      // ✅ Sucesso: zera contador de falhas consecutivas (se houver)
+      // ✅ Sucesso: zera contador de falhas + limpa restriction (se houver)
       try {
         await supabaseClient
           .from('instances')
-          .update({ consecutive_send_failures: 0 })
-          .eq('id', instance.id)
-          .gt('consecutive_send_failures', 0);
+          .update({
+            consecutive_send_failures: 0,
+            restriction_active: false,
+            restriction_until: null,
+            restriction_type: null,
+            restriction_detected_at: null,
+          })
+          .eq('id', instance.id);
       } catch (resetErr) {
-        console.warn('[evolution-send-message] failed to reset consecutive_send_failures:', resetErr);
+        console.warn('[evolution-send-message] failed to reset failure/restriction state:', resetErr);
       }
 
       console.log('=== [UZAPI SEND MESSAGE] SUCCESS ===');

@@ -2,6 +2,20 @@ import { useState, useEffect } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { getOrCreateSessionId, clearSessionId, detectDeviceLabel } from "@/hooks/useSessionLock";
+
+function formatLastHeartbeat(iso: string | null | undefined): string {
+    if (!iso) return "agora há pouco";
+    try {
+        const dt = new Date(iso);
+        const ago = Math.floor((Date.now() - dt.getTime()) / 1000);
+        if (ago < 60) return `${ago}s atrás`;
+        if (ago < 3600) return `${Math.floor(ago / 60)}min atrás`;
+        return dt.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
+    } catch {
+        return iso;
+    }
+}
 
 export const useAuth = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -107,6 +121,51 @@ export const useAuth = () => {
       }
       // ─── Fim do bloqueio ───────────────────────────────────────────────
 
+      // ─── Single-session enforcement ────────────────────────────────────
+      // Bloqueia login se já existe outra sessão ATIVA na mesma conta em
+      // outro dispositivo (heartbeat < 2 min). Mesmo browser/PC compartilha
+      // o session_id no localStorage e passa direto.
+      try {
+        const sessionId = getOrCreateSessionId();
+        const deviceLabel = detectDeviceLabel();
+
+        const { data: lockData, error: lockErr } = await (supabase.rpc as any)(
+          "acquire_session",
+          {
+            p_session_id: sessionId,
+            p_device_label: deviceLabel,
+            p_ip: null,
+          },
+        );
+
+        if (lockErr) {
+          // Falha de RPC não bloqueia login (não quebra usuários por erro transiente).
+          console.warn("[useAuth] acquire_session failed:", lockErr);
+        } else if (lockData && (lockData as any).acquired === false) {
+          const otherDevice = (lockData as any).device_label || "outro dispositivo";
+          const lastSeen = formatLastHeartbeat((lockData as any).last_heartbeat_at);
+
+          // Outra sessão ATIVA — derruba este login imediatamente
+          await supabase.auth.signOut();
+
+          const message =
+            `Esta conta já está em uso em ${otherDevice} (atividade ${lastSeen}). ` +
+            `Faça logout no outro dispositivo ou aguarde 2 minutos sem atividade para liberar o acesso.`;
+
+          toast({
+            title: "Conta em uso",
+            description: message,
+            variant: "destructive",
+            duration: 15000,
+          });
+
+          return { error: new Error(message), data: null };
+        }
+      } catch (lockExc) {
+        console.warn("[useAuth] single-session check exception:", lockExc);
+      }
+      // ─── Fim do single-session ─────────────────────────────────────────
+
       toast({
         title: "Login realizado!",
         description: "Bem-vindo de volta.",
@@ -125,6 +184,16 @@ export const useAuth = () => {
 
   const signOut = async () => {
     try {
+      // Libera o slot single-session ANTES do signOut para que outro device
+      // possa logar imediatamente sem precisar esperar os 2min de stale.
+      try {
+        const sid = getOrCreateSessionId();
+        await (supabase.rpc as any)("release_session", { p_session_id: sid });
+      } catch (releaseErr) {
+        console.warn("[useAuth] release_session failed:", releaseErr);
+      }
+      clearSessionId();
+
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
 
