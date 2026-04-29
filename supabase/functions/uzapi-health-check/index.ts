@@ -40,6 +40,8 @@ interface Instance {
     apikey: string;
     last_disconnect_notified_at: string | null;
     last_health_check: string | null;
+    restriction_active: boolean | null;
+    restriction_until: string | null;
 }
 
 type HealthStatus = 'connected' | 'disconnected' | 'connecting' | 'error';
@@ -160,7 +162,7 @@ Deno.serve(async (req) => {
     try {
         const { data: instances, error: fetchErr } = await supabase
             .from('instances')
-            .select('id, name, user_id, status, server_url, apikey, last_disconnect_notified_at, last_health_check')
+            .select('id, name, user_id, status, server_url, apikey, last_disconnect_notified_at, last_health_check, restriction_active, restriction_until')
             .not('apikey', 'is', null)
             .not('server_url', 'is', null);
 
@@ -182,7 +184,22 @@ Deno.serve(async (req) => {
 
         await Promise.all((instances as Instance[]).map(async (inst) => {
             summary.checked++;
-            const ping = await pingUzapi(inst.server_url, inst.apikey, inst.last_health_check);
+            let ping = await pingUzapi(inst.server_url, inst.apikey, inst.last_health_check);
+
+            // Se a instância está em RESTRIÇÃO TEMPORÁRIA ativa (RESTRICT_ALL_COMPANIONS)
+            // e ainda dentro do prazo, NÃO rebaixamos para 'disconnected'. A sessão
+            // UZAPI está saudável — current_presence='unavailable' é parte do estado
+            // de warmup do companion, não desconexão real.
+            const restrictionActive =
+                inst.restriction_active === true &&
+                inst.restriction_until &&
+                new Date(inst.restriction_until).getTime() > Date.now();
+            if (restrictionActive && ping.status === 'disconnected') {
+                console.log(
+                    `[uzapi-health-check] instance ${inst.id} would be disconnected, but restriction is active until ${inst.restriction_until} — keeping connected`,
+                );
+                ping = { ...ping, status: 'connected' as HealthStatus };
+            }
 
             const newStatus = ping.status;
             const prevStatus = inst.status;

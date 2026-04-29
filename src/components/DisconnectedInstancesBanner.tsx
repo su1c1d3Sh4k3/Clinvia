@@ -23,11 +23,18 @@ export function DisconnectedInstancesBanner() {
             if (!ownerId) return [];
             const { data, error } = await supabase
                 .from("instances")
-                .select("id, name, status, last_disconnect_reason")
+                .select("id, name, status, last_disconnect_reason, restriction_active, restriction_until")
                 .eq("user_id", ownerId)
                 .eq("status", "disconnected");
             if (error) throw error;
-            return data ?? [];
+            // Exclusividade: se a instância está em restrição temporária ATIVA E ainda
+            // dentro do prazo, o RestrictedInstancesBanner cuida dela — não exibimos
+            // o banner de desconexão para evitar dois banners simultâneos.
+            return (data ?? []).filter((i: any) => {
+                if (!i.restriction_active) return true;
+                if (!i.restriction_until) return true;
+                return new Date(i.restriction_until).getTime() <= Date.now();
+            });
         },
         enabled: !!user && !!ownerId,
         refetchInterval: 60_000, // re-consulta a cada 1 min
