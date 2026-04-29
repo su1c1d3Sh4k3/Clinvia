@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { getOrCreateSessionId, detectDeviceLabel } from './useSessionLock';
 
 const IMPERSONATION_KEY = 'clinvia_impersonation';
 const ADMIN_SESSION_KEY = 'clinvia_admin_session';
@@ -158,9 +159,23 @@ export function useAdminImpersonate() {
             setImpersonationData(null);
             setIsImpersonating(false);
 
+            // 4. Re-adquire o slot single-session do admin. Durante a
+            // impersonação o heartbeat foi pausado; se outro device tentou
+            // logar como admin nesse intervalo, o slot pode ter sido tomado.
+            // Aqui forçamos a recuperação para o session_id atual deste browser.
+            try {
+                await (supabase.rpc as any)("acquire_session", {
+                    p_session_id: getOrCreateSessionId(),
+                    p_device_label: detectDeviceLabel(),
+                    p_ip: null,
+                });
+            } catch (acqErr) {
+                console.warn("[exitImpersonation] acquire_session failed:", acqErr);
+            }
+
             toast.success('Voltou ao painel de admin');
 
-            // 4. Navigate back to admin
+            // 5. Navigate back to admin
             navigate('/admin');
             return true;
 

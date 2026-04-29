@@ -2,7 +2,19 @@ import { useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 const SESSION_KEY = "clinvia_session_id";
+const IMPERSONATION_KEY = "clinvia_impersonation";
 const HEARTBEAT_INTERVAL_MS = 30_000; // 30s — banco considera stale após 2min
+
+/**
+ * Verdadeiro quando o admin está em modo "Acessar como cliente".
+ * Durante a impersonação, a sessão Supabase atual é a do CLIENTE, mas o
+ * session_id no localStorage é o que foi gerado quando o ADMIN logou. O
+ * heartbeat com `auth.uid()` = cliente + session_id = admin sempre retorna
+ * valid:false e derruba a sessão. Por isso pulamos a checagem nesse modo.
+ */
+export function isImpersonating(): boolean {
+    return !!localStorage.getItem(IMPERSONATION_KEY);
+}
 
 /**
  * Gera/recupera o session_id deste tab/browser. Persiste em localStorage para
@@ -70,6 +82,10 @@ export function useSessionLock(onSessionLost: (reason: string) => void): void {
         const start = () => {
             stop();
             intervalRef.current = window.setInterval(async () => {
+                // Pula heartbeat durante impersonação — auth.uid() é do cliente
+                // e o session_id é do admin; o RPC sempre retornaria valid:false.
+                if (isImpersonating()) return;
+
                 const sid = getOrCreateSessionId();
                 try {
                     const { data, error } = await supabase.rpc("heartbeat_session", {

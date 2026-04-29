@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { getOrCreateSessionId, clearSessionId, detectDeviceLabel } from "@/hooks/useSessionLock";
+import { getOrCreateSessionId, clearSessionId, detectDeviceLabel, isImpersonating } from "@/hooks/useSessionLock";
 
 function formatLastHeartbeat(iso: string | null | undefined): string {
     if (!iso) return "agora há pouco";
@@ -125,6 +125,11 @@ export const useAuth = () => {
       // Bloqueia login se já existe outra sessão ATIVA na mesma conta em
       // outro dispositivo (heartbeat < 2 min). Mesmo browser/PC compartilha
       // o session_id no localStorage e passa direto.
+      // Skip durante impersonação (admin "Acessar como cliente") — a sessão
+      // muda via magic link e a verificação não se aplica.
+      if (isImpersonating()) {
+        return { error: null, data };
+      }
       try {
         const sessionId = getOrCreateSessionId();
         const deviceLabel = detectDeviceLabel();
