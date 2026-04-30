@@ -26,7 +26,7 @@ import { makeOpenAIRequest, trackTokenUsage } from "../_shared/token-tracker.ts"
  */
 
 /**
- * Busca a foto de perfil de um contato na Evolution API.
+ * Busca a foto de perfil de um contato na Evolution API (formato antigo).
  * Retorna a URL da foto ou null se não encontrada.
  */
 async function fetchProfilePicFromEvolution(
@@ -46,6 +46,7 @@ async function fetchProfilePicFromEvolution(
                     'apikey': apikey,
                 },
                 body: JSON.stringify({ number }),
+                signal: AbortSignal.timeout(8_000),
             }
         );
         if (!response.ok) return null;
@@ -54,6 +55,65 @@ async function fetchProfilePicFromEvolution(
     } catch {
         return null;
     }
+}
+
+/**
+ * Busca a foto de perfil via UZAPI (uazapi). Endpoint: POST /chat/details
+ * Resposta inclui `image` (URL completa, recém-assinada) e `imagePreview`.
+ * Use quando a URL atual estiver expirada e o payload do webhook não trouxer
+ * uma nova — re-emite uma URL fresca do CDN do WhatsApp.
+ */
+async function fetchProfilePicFromUzapi(
+    serverUrl: string,
+    apikey: string,
+    number: string,
+): Promise<string | null> {
+    try {
+        const response = await fetch(`${serverUrl.replace(/\/$/, '')}/chat/details`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'token': apikey,
+            },
+            body: JSON.stringify({ number }),
+            signal: AbortSignal.timeout(8_000),
+        });
+        if (!response.ok) return null;
+        const data = await response.json().catch(() => null) as any;
+        if (!data) return null;
+        // Prioriza `image` (alta resolução); cai pra `imagePreview` se necessário
+        return (typeof data.image === 'string' && data.image)
+            || (typeof data.imagePreview === 'string' && data.imagePreview)
+            || null;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Tenta buscar uma URL fresca da foto de perfil. UZAPI primeiro (uazapi.com),
+ * Evolution como fallback. A heurística do server_url decide qual tentar primeiro.
+ */
+async function fetchFreshProfilePicUrl(
+    serverUrl: string,
+    instanceName: string,
+    apikey: string,
+    number: string,
+): Promise<string | null> {
+    const isUzapi = /uazapi\.com|uzapi/i.test(serverUrl);
+    if (isUzapi) {
+        const fromUzapi = await fetchProfilePicFromUzapi(serverUrl, apikey, number);
+        if (fromUzapi) return fromUzapi;
+    }
+    const fromEvolution = await fetchProfilePicFromEvolution(serverUrl, instanceName, apikey, number);
+    if (fromEvolution) return fromEvolution;
+    // Se não detectamos UZAPI mas Evolution falhou, tenta UZAPI como último recurso
+    if (!isUzapi) {
+        const fromUzapi = await fetchProfilePicFromUzapi(serverUrl, apikey, number);
+        if (fromUzapi) return fromUzapi;
+    }
+    return null;
 }
 
 /**
@@ -150,14 +210,23 @@ async function persistContactPhoto(
 
 /**
  * Garante que a foto do contato esteja persistida no Supabase Storage.
- * Regra: TODO webhook recebido deve atualizar a foto — nunca pular.
  *
- * 1. Se o payload tem foto nova → persiste e atualiza o banco
- * 2. Se o contato tem foto temporária (WhatsApp CDN) → re-persiste no Storage
- * 3. Se o contato não tem foto → busca da Evolution API
+ * Regra-chave: a foto NUNCA fica como URL temporária (WhatsApp CDN) salva no
+ * banco. Ou está como URL permanente do Storage, ou está NULL — assim o
+ * frontend nunca exibe imagem quebrada por URL expirada. Atualiza apenas
+ * quando o cliente envia/recebe mensagem (via webhook), nunca por cron.
  *
- * Usa `await` (não fire-and-forget) para garantir que a foto seja persistida
- * antes do webhook retornar, evitando que o Deno Deploy mate a task.
+ * Tenta na ordem:
+ *   1. URL do payload do webhook → persiste no Storage. Se OK, salva.
+ *   2. URL atual do banco se for temporária → re-persiste (URL pode ainda
+ *      estar válida se o tempo desde a última atualização for curto).
+ *   3. Se 1 e 2 falharem (download 4xx — URL expirou de fato) ou se a foto
+ *      atual está NULL: busca URL fresca via UZAPI /chat/details (ou Evolution)
+ *      → persiste no Storage.
+ *   4. Se TUDO falhar: mantém o que tinha antes (sem corromper o banco com
+ *      URL temp expirada).
+ *
+ * Usa await — garantia de persistência antes do webhook retornar.
  */
 async function ensureContactPhotoPersisted(
     supabase: any,
@@ -167,65 +236,71 @@ async function ensureContactPhotoPersisted(
     instanceName: string,
     contactNumber: string
 ): Promise<string | null> {
+    const currentPic = contact.profile_pic_url || null;
+
+    const saveAndReturn = async (newUrl: string): Promise<string> => {
+        const { error } = await supabase
+            .from('contacts')
+            .update({ profile_pic_url: newUrl })
+            .eq('id', contact.id);
+        if (error) console.error('[ensureContactPhoto] DB update error:', error);
+        return newUrl;
+    };
+
     try {
-        // Prioridade 1: foto do payload (sempre persistir se for temporária)
+        // Tentativa 1: URL do payload — persistir no Storage
         if (payloadPhotoUrl && isTemporaryPhotoUrl(payloadPhotoUrl)) {
             const permanentUrl = await persistContactPhoto(supabase, contact.id, payloadPhotoUrl);
-            if (permanentUrl) {
-                const { error } = await supabase
-                    .from('contacts')
-                    .update({ profile_pic_url: permanentUrl })
-                    .eq('id', contact.id);
-                if (error) console.error('[ensureContactPhoto] Error saving payload photo:', error);
-                return permanentUrl;
-            }
-            // Falhou o download — salva URL bruta como fallback para não perder referência
-            const { error } = await supabase
-                .from('contacts')
-                .update({ profile_pic_url: payloadPhotoUrl })
-                .eq('id', contact.id);
-            if (error) console.error('[ensureContactPhoto] Error saving fallback photo:', error);
-            return payloadPhotoUrl;
+            if (permanentUrl) return await saveAndReturn(permanentUrl);
+            // Download falhou — NÃO salvamos a URL temporária no banco (ela vai
+            // expirar e quebrar o avatar). Cai pras tentativas seguintes.
         }
 
-        // Prioridade 2: foto atual é temporária → re-persistir no Storage
-        const currentPic = contact.profile_pic_url;
+        // Tentativa 2: URL atual é temporária → re-persistir
         if (currentPic && isTemporaryPhotoUrl(currentPic)) {
             const permanentUrl = await persistContactPhoto(supabase, contact.id, currentPic);
-            if (permanentUrl) {
-                const { error } = await supabase
-                    .from('contacts')
-                    .update({ profile_pic_url: permanentUrl })
-                    .eq('id', contact.id);
-                if (error) console.error('[ensureContactPhoto] Error persisting existing photo:', error);
-                return permanentUrl;
-            }
+            if (permanentUrl) return await saveAndReturn(permanentUrl);
+            // Falhou (URL temp do banco já expirou) — cai pra tentativa 3
         }
 
-        // Prioridade 3: contato sem foto → buscar da Evolution API
-        if (!currentPic && instance.server_url && instance.apikey) {
-            const fetchedUrl = await fetchProfilePicFromEvolution(
+        // Tentativa 3: buscar URL fresca via UZAPI / Evolution API e persistir
+        if (instance.server_url && instance.apikey) {
+            const freshUrl = await fetchFreshProfilePicUrl(
                 instance.server_url,
                 instanceName,
                 instance.apikey,
-                contactNumber
+                contactNumber,
             );
-            if (fetchedUrl) {
-                const permanentUrl = await persistContactPhoto(supabase, contact.id, fetchedUrl);
-                const urlToSave = permanentUrl || fetchedUrl;
-                const { error } = await supabase
-                    .from('contacts')
-                    .update({ profile_pic_url: urlToSave })
-                    .eq('id', contact.id);
-                if (error) console.error('[ensureContactPhoto] Error saving fetched photo:', error);
-                return urlToSave;
+            if (freshUrl) {
+                const permanentUrl = await persistContactPhoto(supabase, contact.id, freshUrl);
+                if (permanentUrl) return await saveAndReturn(permanentUrl);
+                // Não conseguiu persistir mas tem URL fresca — última opção: salva
+                // a URL fresca direto. Vai ficar válida por ~7 dias e na próxima
+                // mensagem será re-persistida.
+                return await saveAndReturn(freshUrl);
             }
         }
 
-        return currentPic || null;
+        // Se a URL atual é temporária E todas as tentativas falharam, MELHOR
+        // limpar (NULL) que deixar URL expirada quebrando o avatar. Frontend
+        // exibe o fallback de iniciais via Radix Avatar.
+        if (currentPic && isTemporaryPhotoUrl(currentPic)) {
+            const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+            const isStorageUrl = supabaseUrl && currentPic.includes(supabaseUrl);
+            if (!isStorageUrl) {
+                console.warn(`[ensureContactPhoto] All sources failed for contact ${contact.id}; clearing temporary URL to avoid broken avatar`);
+                await supabase
+                    .from('contacts')
+                    .update({ profile_pic_url: null })
+                    .eq('id', contact.id);
+                return null;
+            }
+        }
+
+        return currentPic;
     } catch (err) {
         console.error('[ensureContactPhoto] Exception:', err);
-        return contact.profile_pic_url || null;
+        return currentPic;
     }
 }
 
