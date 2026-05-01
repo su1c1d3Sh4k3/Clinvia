@@ -83,8 +83,9 @@ export function RestrictedInstancesBanner() {
             return (data ?? []) as RestrictedInstance[];
         },
         enabled: !!user && !!ownerId,
-        refetchInterval: 60_000,
-        staleTime: 30_000,
+        refetchInterval: 15_000,
+        refetchOnWindowFocus: true,
+        staleTime: 5_000,
     });
 
     // Filtra entradas cuja data já passou (restrição expirou) — defesa em profundidade

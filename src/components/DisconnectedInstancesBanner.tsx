@@ -1,11 +1,11 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { AlertTriangle, Wifi, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 /**
  * Banner mostrado quando existem instâncias desconectadas do owner atual.
@@ -15,6 +15,7 @@ export function DisconnectedInstancesBanner() {
     const { user } = useAuth();
     const { data: ownerId } = useOwnerId();
     const navigate = useNavigate();
+    const queryClient = useQueryClient();
     const [dismissed, setDismissed] = useState(false);
 
     const { data: disconnected } = useQuery({
@@ -37,9 +38,35 @@ export function DisconnectedInstancesBanner() {
             });
         },
         enabled: !!user && !!ownerId,
-        refetchInterval: 60_000, // re-consulta a cada 1 min
-        staleTime: 30_000,
+        refetchInterval: 15_000, // re-consulta a cada 15s
+        refetchOnWindowFocus: true,
+        staleTime: 5_000,
     });
+
+    // Realtime: invalida o cache imediatamente quando qualquer instance do
+    // owner muda de status, evitando que o banner mostre estado obsoleto.
+    useEffect(() => {
+        if (!ownerId) return;
+        const channel = supabase
+            .channel(`instances-realtime-${ownerId}`)
+            .on(
+                "postgres_changes",
+                {
+                    event: "*",
+                    schema: "public",
+                    table: "instances",
+                    filter: `user_id=eq.${ownerId}`,
+                },
+                () => {
+                    queryClient.invalidateQueries({ queryKey: ["instances-disconnected", ownerId] });
+                    queryClient.invalidateQueries({ queryKey: ["instances-restricted", ownerId] });
+                },
+            )
+            .subscribe();
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [ownerId, queryClient]);
 
     if (dismissed || !disconnected || disconnected.length === 0) return null;
 
