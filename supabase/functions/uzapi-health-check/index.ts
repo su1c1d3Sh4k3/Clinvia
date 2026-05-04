@@ -160,11 +160,29 @@ Deno.serve(async (req) => {
     );
 
     try {
-        const { data: instances, error: fetchErr } = await supabase
+        // Aceita owner_id como filtro (POST body OU query param) — quando o
+        // frontend dispara uma validação on-login, só precisa checar as
+        // instâncias do owner logado, não todas (cron full-sweep continua
+        // funcionando sem owner_id).
+        let ownerIdFilter: string | null = null;
+        try {
+            const url = new URL(req.url);
+            ownerIdFilter = url.searchParams.get('owner_id');
+            if (!ownerIdFilter && (req.method === 'POST' || req.method === 'PUT')) {
+                const body = await req.clone().json().catch(() => null) as any;
+                if (body?.owner_id) ownerIdFilter = String(body.owner_id);
+            }
+        } catch { /* ignore parse errors */ }
+
+        let listQuery = supabase
             .from('instances')
             .select('id, name, user_id, status, server_url, apikey, last_disconnect_notified_at, last_health_check, restriction_active, restriction_until')
             .not('apikey', 'is', null)
             .not('server_url', 'is', null);
+        if (ownerIdFilter) {
+            listQuery = listQuery.eq('user_id', ownerIdFilter);
+        }
+        const { data: instances, error: fetchErr } = await listQuery;
 
         if (fetchErr) throw fetchErr;
         if (!instances || instances.length === 0) {

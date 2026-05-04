@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useOwnerId } from "@/hooks/useOwnerId";
+import { useInitialInstanceValidation } from "@/hooks/useInitialInstanceValidation";
 import { AlertTriangle, Wifi, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
@@ -17,6 +18,10 @@ export function DisconnectedInstancesBanner() {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const [dismissed, setDismissed] = useState(false);
+
+    // Valida o status real das instâncias com a UZAPI ANTES de renderizar.
+    // Evita o "flash" do banner vermelho logo após o login com estado obsoleto.
+    const { validated } = useInitialInstanceValidation(ownerId);
 
     const { data: disconnected } = useQuery({
         queryKey: ["instances-disconnected", ownerId],
@@ -37,7 +42,9 @@ export function DisconnectedInstancesBanner() {
                 return new Date(i.restriction_until).getTime() <= Date.now();
             });
         },
-        enabled: !!user && !!ownerId,
+        // Só roda após a validação inicial — o estado no banco pode estar
+        // desatualizado até o cron / o on-login health-check rodar.
+        enabled: !!user && !!ownerId && validated,
         refetchInterval: 15_000, // re-consulta a cada 15s
         refetchOnWindowFocus: true,
         staleTime: 5_000,
@@ -68,6 +75,9 @@ export function DisconnectedInstancesBanner() {
         };
     }, [ownerId, queryClient]);
 
+    // Não renderiza nada enquanto a validação inicial não conclui — evita
+    // mostrar banner vermelho com estado obsoleto durante o login.
+    if (!validated) return null;
     if (dismissed || !disconnected || disconnected.length === 0) return null;
 
     const names = disconnected.map((i) => i.name).join(", ");

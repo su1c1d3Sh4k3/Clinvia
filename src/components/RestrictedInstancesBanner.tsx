@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useOwnerId } from "@/hooks/useOwnerId";
+import { useInitialInstanceValidation } from "@/hooks/useInitialInstanceValidation";
 import { Clock, X, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
@@ -70,6 +71,10 @@ export function RestrictedInstancesBanner() {
         return () => clearInterval(id);
     }, []);
 
+    // Aguarda validação on-login para alinhar com o DisconnectedInstancesBanner
+    // — banners renderizam só após o estado real ser sincronizado com a UZAPI.
+    const { validated } = useInitialInstanceValidation(ownerId);
+
     const { data: restricted } = useQuery({
         queryKey: ["instances-restricted", ownerId],
         queryFn: async () => {
@@ -82,7 +87,7 @@ export function RestrictedInstancesBanner() {
             if (error) throw error;
             return (data ?? []) as RestrictedInstance[];
         },
-        enabled: !!user && !!ownerId,
+        enabled: !!user && !!ownerId && validated,
         refetchInterval: 15_000,
         refetchOnWindowFocus: true,
         staleTime: 5_000,
@@ -95,6 +100,7 @@ export function RestrictedInstancesBanner() {
         return new Date(r.restriction_until).getTime() > Date.now();
     });
 
+    if (!validated) return null;
     if (dismissed || stillRestricted.length === 0) return null;
 
     // Pega a restrição mais longa (worst case)

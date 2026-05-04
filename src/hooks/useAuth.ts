@@ -3,6 +3,7 @@ import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { getOrCreateSessionId, clearSessionId, detectDeviceLabel, isImpersonating } from "@/hooks/useSessionLock";
+import { clearInstanceValidationCache } from "@/hooks/useInitialInstanceValidation";
 
 function formatLastHeartbeat(iso: string | null | undefined): string {
     if (!iso) return "agora há pouco";
@@ -198,6 +199,8 @@ export const useAuth = () => {
         console.warn("[useAuth] release_session failed:", releaseErr);
       }
       clearSessionId();
+      // Força nova validação de instâncias no próximo login
+      clearInstanceValidationCache();
 
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
