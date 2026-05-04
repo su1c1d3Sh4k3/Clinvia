@@ -101,48 +101,54 @@ async function pingUzapi(serverUrl: string, apikey: string, prevHealthCheck: str
 
         const data = await response.json().catch(() => null) as any;
 
-        // 1) Status declarado pela UZAPI
+        // FONTE DE VERDADE da conexão UZAPI ↔ WhatsApp:
+        //   data.status.connected (boolean) — sessão UZAPI ativa
+        //   data.status.loggedIn  (boolean) — WhatsApp logado
+        //
+        // ⚠️ NÃO usar `instance.current_presence`: esse campo reporta a
+        //   presença do user no app (foreground/background) — `unavailable`
+        //   é o normal quando o WhatsApp Web não está com a tela em foco,
+        //   mesmo com a conexão totalmente saudável.
+        const statusConnected = data?.status?.connected === true;
+        const statusLoggedIn = data?.status?.loggedIn === true;
+
         const declaredStatus = mapUzapiStatus(
-            data?.instance?.status ?? data?.instance?.state ?? data?.status ?? data?.state,
+            data?.instance?.status ?? data?.instance?.state ?? data?.status?.status,
         );
 
-        // 2) current_presence === 'unavailable' indica WhatsApp offline na prática,
-        //    mesmo que o "status" declarado pela UZAPI seja 'connected' (cache antigo).
-        const currentPresence = String(data?.instance?.current_presence ?? '').toLowerCase();
-        const presenceUnavailable = currentPresence === 'unavailable';
-
-        // 3) lastDisconnectReason recente — captura logout silencioso do WhatsApp
+        // Reachout/disconnect history — usado SOMENTE quando há sinal
+        // adicional de problema (ou seja: status.connected=false OU
+        // declaredStatus=disconnected). Caso contrário, ignoramos o histórico.
         const lastDisconnectRaw = data?.instance?.lastDisconnect ?? null;
-        const lastDisconnectReason: string | null = data?.instance?.lastDisconnectReason ?? null;
-        let disconnectIsRecent = false;
-        if (lastDisconnectReason && lastDisconnectRaw) {
-            const dt = new Date(lastDisconnectRaw).getTime();
-            if (!Number.isNaN(dt)) {
-                const ageHours = (Date.now() - dt) / 3_600_000;
-                const prevHealthMs = prevHealthCheck ? new Date(prevHealthCheck).getTime() : 0;
-                // Recente E mais novo do que a última verificação que vimos como saudável
-                disconnectIsRecent = ageHours <= 24 * 7 && dt > prevHealthMs;
-            }
+        const lastDisconnectReason: string | null =
+            (typeof data?.instance?.lastDisconnectReason === 'string' && data.instance.lastDisconnectReason.trim())
+                ? data.instance.lastDisconnectReason
+                : null;
+
+        // Conectado de verdade: status.connected E loggedIn (+ não está com
+        // status declarado 'disconnected')
+        const isHealthy = statusConnected && statusLoggedIn && declaredStatus !== 'disconnected';
+
+        if (isHealthy) {
+            return { status: 'connected', httpCode, reason: null, raw: data };
         }
 
-        if (declaredStatus === 'disconnected') {
-            return { status: 'disconnected', httpCode, reason: lastDisconnectReason ?? 'UZAPI reporta disconnected', raw: data };
+        // Não-saudável: monta razão amigável priorizando o lastDisconnectReason
+        // se houver, senão um sumário do que falhou.
+        let reason = lastDisconnectReason;
+        if (!reason) {
+            if (!statusConnected) reason = 'UZAPI reporta sessão WhatsApp desconectada (status.connected=false)';
+            else if (!statusLoggedIn) reason = 'WhatsApp não está logado (status.loggedIn=false)';
+            else if (declaredStatus === 'connecting') reason = 'WhatsApp em pareamento';
+            else reason = 'UZAPI reporta status anormal';
         }
 
-        if (presenceUnavailable) {
-            return {
-                status: 'disconnected',
-                httpCode,
-                reason: lastDisconnectReason ?? 'WhatsApp offline (current_presence=unavailable)',
-                raw: data,
-            };
-        }
+        const finalStatus: HealthStatus =
+            declaredStatus === 'connecting' ? 'connecting'
+                : declaredStatus === 'error' ? 'error'
+                    : 'disconnected';
 
-        if (disconnectIsRecent) {
-            return { status: 'disconnected', httpCode, reason: lastDisconnectReason, raw: data };
-        }
-
-        return { status: declaredStatus, httpCode, reason: null, raw: data };
+        return { status: finalStatus, httpCode, reason, raw: data };
     } catch (err) {
         console.error(`[uzapi-health-check] ping failed for ${serverUrl}:`, err);
         return { status: 'error', httpCode: 0, reason: `ping error: ${(err as Error)?.message ?? err}` };
