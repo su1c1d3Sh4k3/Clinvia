@@ -47,6 +47,8 @@ const DevManager = React.lazy(() => import("./pages/DevManager"));
 const Reports = React.lazy(() => import("./pages/Reports"));
 const AutoMessages = React.lazy(() => import("./pages/AutoMessages"));
 const BusinessReports = React.lazy(() => import("./pages/BusinessReports"));
+// BETA — Instagram via Facebook Login for Business (página standalone, sem menu)
+const WhatsAppConnectionTeste = React.lazy(() => import("./pages/WhatsAppConnectionTeste"));
 
 // Fallback de loading enquanto o chunk da página carrega
 const PageLoader = () => (
@@ -121,6 +123,8 @@ const App = () => (
                 <Route path="/admin-oath" element={<AdminAuth />} />
                 <Route path="/admin" element={<Admin />} />
                 <Route path="/dev-manager" element={<DevManager />} />
+                {/* BETA — página standalone, fora do Layout (sem menu lateral) */}
+                <Route path="/whatsapp-connection-teste" element={<WhatsAppConnectionTeste />} />
                 <Route element={<ErrorBoundary name="MainLayout"><Layout /></ErrorBoundary>}>
                   <Route path="/" element={<Index />} />
                   <Route path="/internal_inbox" element={<InternalInbox />} />
