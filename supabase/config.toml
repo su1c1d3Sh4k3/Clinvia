@@ -97,6 +97,13 @@ verify_jwt = false
 [functions.instagram-refresh-token]
 verify_jwt = false
 
+# Instagram FB (BETA - Facebook Login for Business flow)
+[functions.instagram-fb-oauth-callback]
+verify_jwt = false
+
+[functions.instagram-fb-webhook]
+verify_jwt = false
+
 # Dev Manager Functions
 # infra-get-metrics: requires super-admin JWT (validated inside the function)
 [functions.infra-get-metrics]
