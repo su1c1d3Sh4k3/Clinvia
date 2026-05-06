@@ -97,14 +97,7 @@ verify_jwt = false
 [functions.instagram-refresh-token]
 verify_jwt = false
 
-# Instagram FB (BETA - Facebook Login for Business flow)
-[functions.instagram-fb-oauth-callback]
-verify_jwt = false
-
-[functions.instagram-fb-webhook]
-verify_jwt = false
-
-[functions.instagram-fb-manual-connect]
+[functions.instagram-enrich-profiles]
 verify_jwt = false
 
 # Dev Manager Functions
