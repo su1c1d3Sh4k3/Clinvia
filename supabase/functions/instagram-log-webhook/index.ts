@@ -2,13 +2,16 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 // =============================================
-// Instagram Log Webhook (proxy + per-message enrichment)
+// Instagram Log Webhook (proxy + tenant guard + per-message enrichment)
 // =============================================
 // Para CADA evento de mensagem que chega do Meta:
-//   1. Loga payload bruto completo (raw_body + http_headers + full_payload + payload-do-evento)
-//   2. Encaminha request inalterada para instagram-webhook (lógica original)
-//   3. Dispara enrichment (fire-and-forget) buscando nome+foto do sender
-//      via User Profile API e fallback Conversations API
+//   1. Loga payload bruto completo
+//   2. VALIDA que entry.id é uma instance cadastrada no banco — se NÃO for,
+//      NÃO encaminha (previne vazamento cruzado entre tenants do app antigo
+//      que tem fallback destrutivo "Method 3b")
+//   3. Se válido, encaminha para instagram-webhook
+//   4. Dispara enrichment per-sender (fire-and-forget): User Profile API
+//      + Conversations API + persiste foto no Storage
 // =============================================
 
 const corsHeaders = {
@@ -23,6 +26,24 @@ const GRAPH_VERSION = "v25.0";
 
 const enrichedRecently = new Map<string, number>();
 const ENRICH_DEDUP_MS = 60_000;
+
+// Cache de IGSIDs válidos (instances no banco) — evita query a cada webhook
+let validIgsidsCache: Set<string> | null = null;
+let validIgsidsCacheAt = 0;
+const IGSID_CACHE_TTL_MS = 60_000;
+
+async function getValidIgsids(supabase: SupabaseClient): Promise<Set<string>> {
+    if (validIgsidsCache && Date.now() - validIgsidsCacheAt < IGSID_CACHE_TTL_MS) {
+        return validIgsidsCache;
+    }
+    const { data } = await supabase
+        .from("instagram_instances")
+        .select("instagram_account_id")
+        .eq("status", "connected");
+    validIgsidsCache = new Set((data || []).map((r: any) => String(r.instagram_account_id)));
+    validIgsidsCacheAt = Date.now();
+    return validIgsidsCache;
+}
 
 serve(async (req) => {
     if (req.method === "OPTIONS") {
@@ -44,30 +65,26 @@ serve(async (req) => {
         return new Response("Method not allowed", { status: 405, headers: corsHeaders });
     }
 
-    // ─── Captura body bruto + headers ANTES de qualquer parse ──────────
     const rawBody = await req.text();
     const headersObj: Record<string, string> = {};
     for (const [k, v] of req.headers.entries()) headersObj[k.toLowerCase()] = v;
 
     let payload: any = null;
-    try { payload = JSON.parse(rawBody); } catch (_e) { /* keep going, log mesmo assim */ }
+    try { payload = JSON.parse(rawBody); } catch (_e) { /* keep going */ }
 
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
-    // ─── 1) LOG completo de cada evento ────────────────────────────────
-    // Cada messaging event vira uma row. Cada row contém:
-    //   raw_body       — body cru exatamente como o Meta enviou
-    //   http_headers   — todos os headers HTTP da request
-    //   full_payload   — JSON envelope completo (object + entry[])
-    //   payload        — só o evento individual (pra indexar/query rápida)
+    // ─── 1) LOG completo de cada evento + identifica entry IDs ──────────
     const senderIds: string[] = [];
+    const entryIds = new Set<string>();
     if (payload) {
         try {
             const inserts: any[] = [];
             for (const e of payload.entry || []) {
+                const eid = e.id ? String(e.id) : null;
+                if (eid) entryIds.add(eid);
                 const messaging = e.messaging || [];
                 if (messaging.length === 0) {
-                    // Webhook sem messaging[] (ex: changes-only) — loga 1 row vazia
                     inserts.push({
                         sender_id: null,
                         recipient_id: null,
@@ -123,7 +140,6 @@ serve(async (req) => {
             console.warn("[IG-LOG] log block failed:", logErr);
         }
     } else {
-        // Body não-JSON: ainda loga pra debug
         try {
             await supabase.from("instagram_webhook_logs").insert({
                 event_type: "non_json_body",
@@ -131,10 +147,25 @@ serve(async (req) => {
                 http_headers: headersObj,
                 payload: { _non_json: true },
             });
-        } catch (_e) { /* ignore */ }
+        } catch (_e) {}
     }
 
-    // ─── 2) FORWARD pro webhook real ────────────────────────────────────
+    // ─── 2) TENANT GUARD ─────────────────────────────────────────────────
+    // Só encaminhamos se PELO MENOS UM entry.id corresponde a uma instance
+    // cadastrada. Isso bloqueia o vazamento cruzado do fallback antigo.
+    const validIgsids = await getValidIgsids(supabase);
+    const hasKnownEntry = Array.from(entryIds).some((id) => validIgsids.has(id));
+
+    if (!hasKnownEntry) {
+        console.warn("[IG-LOG] BLOCKED — entry.id desconhecido:", Array.from(entryIds));
+        // Responde 200 pra Meta não retransmitir, mas NÃO encaminha
+        return new Response(JSON.stringify({ success: true, ignored: "unknown_tenant" }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+    }
+
+    // ─── 3) FORWARD pro webhook real ────────────────────────────────────
     const fwdHeaders: Record<string, string> = { "Content-Type": "application/json" };
     const sig1 = req.headers.get("x-hub-signature");
     const sig256 = req.headers.get("x-hub-signature-256");
@@ -144,7 +175,7 @@ serve(async (req) => {
     const fwd = await fetch(TARGET_URL, { method: "POST", headers: fwdHeaders, body: rawBody });
     const respBody = await fwd.text();
 
-    // ─── 3) ENRICHMENT (fire-and-forget) ────────────────────────────────
+    // ─── 4) ENRICHMENT (fire-and-forget) ────────────────────────────────
     const uniqueSenders = Array.from(new Set(senderIds.filter(Boolean)));
     if (uniqueSenders.length > 0) {
         const enrichPromise = (async () => {
@@ -178,9 +209,6 @@ async function enrichSender(supabase: SupabaseClient, igsid: string) {
     if (!contact) return;
 
     const hasRealName = contact.push_name && contact.push_name !== "Instagram User";
-    // Nota: NÃO pulamos quando já tem foto. URLs do CDN do Instagram expiram
-    // em ~30 dias (oe=... no querystring). Refrescar foto a cada mensagem
-    // (com dedup de 1 min via enrichedRecently) mantém a URL válida.
 
     let token: string | null = null;
     if (contact.instagram_instance_id) {
@@ -216,7 +244,7 @@ async function enrichSender(supabase: SupabaseClient, igsid: string) {
             resolvedPic = d.profile_pic || null;
             resolvedUsername = d.username || null;
         }
-    } catch (_e) { /* ignore */ }
+    } catch (_e) {}
 
     if (!resolvedName && !resolvedUsername) {
         try {
@@ -233,7 +261,7 @@ async function enrichSender(supabase: SupabaseClient, igsid: string) {
                     }
                 }
             }
-        } catch (_e) { /* ignore */ }
+        } catch (_e) {}
     }
 
     const updates: Record<string, any> = {};
@@ -241,12 +269,9 @@ async function enrichSender(supabase: SupabaseClient, igsid: string) {
     if (newName && (!hasRealName || contact.push_name === "Instagram User")) {
         updates.push_name = newName;
     }
-    // Persiste a foto NO STORAGE (bucket 'avatars') — URLs do CDN do
-    // Instagram expiram em ~30 dias, então baixamos e armazenamos
-    // permanentemente. Mesmo padrão do WhatsApp (webhook-handle-message).
     if (resolvedPic) {
         const permanentUrl = await persistContactPhoto(supabase, contact.id, resolvedPic);
-        updates.profile_pic_url = permanentUrl || resolvedPic; // fallback pra URL crua
+        updates.profile_pic_url = permanentUrl || resolvedPic;
     }
     if (Object.keys(updates).length > 0) {
         await supabase.from("contacts").update(updates).eq("id", contact.id);
@@ -254,20 +279,12 @@ async function enrichSender(supabase: SupabaseClient, igsid: string) {
     }
 }
 
-/**
- * Baixa a foto de perfil da URL externa (CDN do Instagram) e armazena
- * no bucket 'avatars' do Supabase Storage. Retorna URL pública permanente
- * com cache-bust. Retorna null se falhar.
- *
- * Mesma lógica usada pelo WhatsApp (webhook-handle-message/persistContactPhoto).
- */
 async function persistContactPhoto(
     supabase: SupabaseClient,
     contactId: string,
     photoUrl: string
 ): Promise<string | null> {
     try {
-        // Se já está no nosso Storage, só retorna com cache-bust novo
         if (SUPABASE_URL && photoUrl.includes(SUPABASE_URL)) {
             const cleanUrl = photoUrl.split("?")[0];
             return `${cleanUrl}?t=${Date.now()}`;
