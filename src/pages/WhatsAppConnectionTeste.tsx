@@ -234,16 +234,34 @@ const WhatsAppConnectionTeste = () => {
             const { data, error } = await supabase.functions.invoke("instagram-fb-manual-connect", {
                 body: { user_id: user.id, page_access_token: manualToken.trim() },
             });
-            if (error || !data?.success) {
-                throw new Error(data?.error || error?.message || "Falha na conexão manual");
+
+            // Quando a edge function retorna 4xx, o body fica em error.context (Response)
+            if (error) {
+                let bodyJson: any = null;
+                try {
+                    if ((error as any).context && typeof (error as any).context.json === "function") {
+                        bodyJson = await (error as any).context.json();
+                    }
+                } catch (_e) { /* ignore */ }
+                setManualResult({
+                    success: false,
+                    error: bodyJson?.error || error.message || "Edge function falhou",
+                    details: bodyJson?.details ?? bodyJson,
+                });
+                throw new Error(bodyJson?.error || error.message);
             }
+
+            if (!data?.success) {
+                setManualResult(data);
+                throw new Error(data?.error || "Falha desconhecida");
+            }
+
             setManualResult(data);
             setManualToken("");
             toast({ title: "Conectado!", description: data.message });
             queryClient.invalidateQueries({ queryKey: ["instagram-fb-instances"] });
         } catch (err: any) {
             toast({ title: "Erro", description: err.message, variant: "destructive" });
-            setManualResult({ success: false, error: err.message });
         } finally {
             setIsManualConnecting(false);
         }
@@ -473,7 +491,14 @@ const WhatsAppConnectionTeste = () => {
                                     </>
                                 )}
                                 {!manualResult.success && (
-                                    <div className="text-red-600">{manualResult.error}</div>
+                                    <>
+                                        <div className="text-red-600">{manualResult.error}</div>
+                                        {manualResult.details && (
+                                            <pre className="text-[10px] mt-2 whitespace-pre-wrap break-all bg-muted/50 p-2 rounded">
+                                                {JSON.stringify(manualResult.details, null, 2)}
+                                            </pre>
+                                        )}
+                                    </>
                                 )}
                             </div>
                         )}
