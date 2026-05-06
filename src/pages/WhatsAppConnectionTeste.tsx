@@ -44,12 +44,16 @@ const FB_APP_ID =
     "";
 const GRAPH_VERSION = "v25.0";
 
-// Permissões EXATAS conforme docs Meta 2026 para Messenger Platform Instagram
+// Permissões EXATAS conforme Meta Dashboard 2026 ("API setup with
+// Facebook login" → "Enviar mensagens no Instagram"):
+//   instagram_basic, instagram_manage_messages, pages_read_engagement,
+//   pages_show_list, business_management
 const SCOPES = [
     "instagram_basic",
     "instagram_manage_messages",
-    "pages_manage_metadata",
+    "pages_read_engagement",
     "pages_show_list",
+    "business_management",
 ].join(",");
 
 interface FBInstance {
