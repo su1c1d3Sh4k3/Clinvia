@@ -231,36 +231,55 @@ const WhatsAppConnectionTeste = () => {
         setIsManualConnecting(true);
         setManualResult(null);
         try {
-            const { data, error } = await supabase.functions.invoke("instagram-fb-manual-connect", {
-                body: { user_id: user.id, page_access_token: manualToken.trim() },
+            // Bypass do supabase.functions.invoke para conseguir ler o body
+            // cru da resposta (o wrapper do supabase-js engole 4xx).
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://swfshqvvbohnahdyndch.supabase.co";
+            const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY || "";
+            const { data: { session } } = await supabase.auth.getSession();
+            const userJwt = session?.access_token || supabaseAnonKey;
+
+            const resp = await fetch(`${supabaseUrl}/functions/v1/instagram-fb-manual-connect`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${userJwt}`,
+                    apikey: supabaseAnonKey,
+                },
+                body: JSON.stringify({
+                    user_id: user.id,
+                    page_access_token: manualToken.trim(),
+                }),
             });
 
-            // Quando a edge function retorna 4xx, o body fica em error.context (Response)
-            if (error) {
-                let bodyJson: any = null;
-                try {
-                    if ((error as any).context && typeof (error as any).context.json === "function") {
-                        bodyJson = await (error as any).context.json();
-                    }
-                } catch (_e) { /* ignore */ }
+            const bodyText = await resp.text();
+            let body: any = null;
+            try {
+                body = JSON.parse(bodyText);
+            } catch {
+                body = { raw: bodyText };
+            }
+
+            if (!resp.ok || !body?.success) {
                 setManualResult({
                     success: false,
-                    error: bodyJson?.error || error.message || "Edge function falhou",
-                    details: bodyJson?.details ?? bodyJson,
+                    http_status: resp.status,
+                    error: body?.error || body?.raw || `HTTP ${resp.status}`,
+                    details: body?.details ?? body,
                 });
-                throw new Error(bodyJson?.error || error.message);
+                toast({
+                    title: `Erro HTTP ${resp.status}`,
+                    description: body?.error || "Veja detalhes abaixo do botão",
+                    variant: "destructive",
+                });
+                return;
             }
 
-            if (!data?.success) {
-                setManualResult(data);
-                throw new Error(data?.error || "Falha desconhecida");
-            }
-
-            setManualResult(data);
+            setManualResult(body);
             setManualToken("");
-            toast({ title: "Conectado!", description: data.message });
+            toast({ title: "Conectado!", description: body.message });
             queryClient.invalidateQueries({ queryKey: ["instagram-fb-instances"] });
         } catch (err: any) {
+            setManualResult({ success: false, error: err.message });
             toast({ title: "Erro", description: err.message, variant: "destructive" });
         } finally {
             setIsManualConnecting(false);
@@ -492,6 +511,9 @@ const WhatsAppConnectionTeste = () => {
                                 )}
                                 {!manualResult.success && (
                                     <>
+                                        {manualResult.http_status && (
+                                            <div className="text-red-600">HTTP {manualResult.http_status}</div>
+                                        )}
                                         <div className="text-red-600">{manualResult.error}</div>
                                         {manualResult.details && (
                                             <pre className="text-[10px] mt-2 whitespace-pre-wrap break-all bg-muted/50 p-2 rounded">
