@@ -6,6 +6,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { FaInstagram, FaFacebook } from "react-icons/fa";
 import { AlertCircle, CheckCircle2, Loader2, RefreshCw, Trash2 } from "lucide-react";
@@ -77,6 +80,9 @@ const WhatsAppConnectionTeste = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const [isExchanging, setIsExchanging] = useState(false);
+    const [manualToken, setManualToken] = useState("");
+    const [isManualConnecting, setIsManualConnecting] = useState(false);
+    const [manualResult, setManualResult] = useState<any>(null);
 
     // Construído dinamicamente para que funcione em dev/staging também
     const redirectUri = useMemo(
@@ -214,6 +220,33 @@ const WhatsAppConnectionTeste = () => {
 
         console.log("[IG-FB-OAUTH] Redirecionando para:", authUrl);
         window.location.href = authUrl;
+    };
+
+    const handleManualConnect = async () => {
+        if (!user?.id) return;
+        if (!manualToken.trim()) {
+            toast({ title: "Token vazio", variant: "destructive" });
+            return;
+        }
+        setIsManualConnecting(true);
+        setManualResult(null);
+        try {
+            const { data, error } = await supabase.functions.invoke("instagram-fb-manual-connect", {
+                body: { user_id: user.id, page_access_token: manualToken.trim() },
+            });
+            if (error || !data?.success) {
+                throw new Error(data?.error || error?.message || "Falha na conexão manual");
+            }
+            setManualResult(data);
+            setManualToken("");
+            toast({ title: "Conectado!", description: data.message });
+            queryClient.invalidateQueries({ queryKey: ["instagram-fb-instances"] });
+        } catch (err: any) {
+            toast({ title: "Erro", description: err.message, variant: "destructive" });
+            setManualResult({ success: false, error: err.message });
+        } finally {
+            setIsManualConnecting(false);
+        }
     };
 
     const handleDisconnect = async (instance: FBInstance) => {
@@ -384,6 +417,68 @@ const WhatsAppConnectionTeste = () => {
                     <RefreshCw className="w-3.5 h-3.5" />
                     Atualizar
                 </Button>
+
+                {/* Conexão manual via Page Access Token */}
+                <Card className="border-blue-300 bg-blue-50/40 dark:bg-blue-950/20">
+                    <CardHeader>
+                        <CardTitle className="text-base flex items-center gap-2">
+                            <FaFacebook className="text-blue-600" />
+                            Conexão manual (atalho enquanto Facebook Login não está disponível)
+                        </CardTitle>
+                        <CardDescription className="text-xs">
+                            Cole abaixo o <strong>Page Access Token</strong> que você gerou em
+                            "Mensagens do Instagram" → "Tokens de acesso" → "Gerar token". O sistema
+                            descobre sozinho a Page e a conta IG vinculada, salva e subscreve o webhook.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                        <div>
+                            <Label htmlFor="manual-token">Page Access Token</Label>
+                            <Textarea
+                                id="manual-token"
+                                value={manualToken}
+                                onChange={(e) => setManualToken(e.target.value)}
+                                placeholder="EAA..."
+                                className="font-mono text-xs"
+                                rows={3}
+                                autoComplete="off"
+                            />
+                        </div>
+                        <Button
+                            onClick={handleManualConnect}
+                            disabled={isManualConnecting || !manualToken.trim()}
+                            className="w-full"
+                        >
+                            {isManualConnecting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                            Conectar com este token
+                        </Button>
+
+                        {manualResult && (
+                            <div className="text-xs bg-card border rounded p-3 space-y-1 font-mono whitespace-pre-wrap break-all">
+                                <div className={manualResult.success ? "text-emerald-600 font-bold" : "text-red-600 font-bold"}>
+                                    {manualResult.success ? "✅ Sucesso" : "❌ Erro"}
+                                </div>
+                                {manualResult.success && (
+                                    <>
+                                        <div>Page: <strong>{manualResult.page_name}</strong> ({manualResult.page_id})</div>
+                                        <div>IG: <strong>@{manualResult.instagram_username}</strong> ({manualResult.instagram_business_account_id})</div>
+                                        <div>Webhook subscrito: <strong>{String(manualResult.webhook_subscribed)}</strong></div>
+                                        <div className="pt-2 border-t mt-2">
+                                            <div className="font-bold mb-1">Teste do User Profile API contra a própria business:</div>
+                                            <div>HTTP {manualResult.self_profile_test?.status_code}</div>
+                                            <pre className="text-[10px] whitespace-pre-wrap break-all mt-1">
+                                                {JSON.stringify(manualResult.self_profile_test?.response, null, 2)}
+                                            </pre>
+                                        </div>
+                                    </>
+                                )}
+                                {!manualResult.success && (
+                                    <div className="text-red-600">{manualResult.error}</div>
+                                )}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
 
                 {/* Painel de diagnóstico simples */}
                 <Card>
