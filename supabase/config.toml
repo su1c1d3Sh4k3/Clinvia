@@ -100,6 +100,9 @@ verify_jwt = false
 [functions.instagram-enrich-profiles]
 verify_jwt = false
 
+[functions.instagram-log-webhook]
+verify_jwt = false
+
 # Dev Manager Functions
 # infra-get-metrics: requires super-admin JWT (validated inside the function)
 [functions.infra-get-metrics]

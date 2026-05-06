@@ -123,48 +123,6 @@ serve(async (req) => {
             const objectType = payload.object;
             console.log('[INSTAGRAM WEBHOOK] Object type:', objectType);
 
-            // ─── LOG: salva payload bruto para auditoria de canal de origem ───
-            // Cada entry/evento gera um log separado para facilitar debugging
-            // de quais senders chegam de comments-to-DM, story-reply, ads, etc.
-            try {
-                const entries = payload.entry || [];
-                for (const e of entries) {
-                    for (const evt of e.messaging || []) {
-                        const evtType = evt.message?.is_echo
-                            ? 'echo'
-                            : evt.message
-                              ? 'message'
-                              : evt.postback
-                                ? 'postback'
-                                : evt.reaction
-                                  ? 'reaction'
-                                  : evt.referral
-                                    ? 'referral'
-                                    : evt.read
-                                      ? 'seen'
-                                      : 'unknown';
-                        const referralSource =
-                            evt.referral?.source ||
-                            evt.referral?.type ||
-                            evt.message?.referral?.source ||
-                            null;
-                        await supabase.from('instagram_webhook_logs').insert({
-                            sender_id: evt.sender?.id ? String(evt.sender.id) : null,
-                            recipient_id: evt.recipient?.id ? String(evt.recipient.id) : null,
-                            event_type: evtType,
-                            has_text: !!evt.message?.text,
-                            has_attachment: (evt.message?.attachments?.length ?? 0) > 0,
-                            referral_source: referralSource,
-                            payload: evt,
-                        });
-                    }
-                }
-            } catch (logErr) {
-                // Logging falhou — NÃO interrompe o processamento principal
-                console.warn('[INSTAGRAM WEBHOOK] payload log failed:', logErr);
-            }
-            // ─── /LOG ──────────────────────────────────────────────────────
-
             if (objectType === 'instagram') {
                 const entries = payload.entry || [];
 
