@@ -178,8 +178,9 @@ async function enrichSender(supabase: SupabaseClient, igsid: string) {
     if (!contact) return;
 
     const hasRealName = contact.push_name && contact.push_name !== "Instagram User";
-    const hasPhoto = !!contact.profile_pic_url;
-    if (hasRealName && hasPhoto) return;
+    // Nota: NÃO pulamos quando já tem foto. URLs do CDN do Instagram expiram
+    // em ~30 dias (oe=... no querystring). Refrescar foto a cada mensagem
+    // (com dedup de 1 min via enrichedRecently) mantém a URL válida.
 
     let token: string | null = null;
     if (contact.instagram_instance_id) {
@@ -240,11 +241,74 @@ async function enrichSender(supabase: SupabaseClient, igsid: string) {
     if (newName && (!hasRealName || contact.push_name === "Instagram User")) {
         updates.push_name = newName;
     }
-    if (resolvedPic && !hasPhoto) {
-        updates.profile_pic_url = resolvedPic;
+    // Persiste a foto NO STORAGE (bucket 'avatars') — URLs do CDN do
+    // Instagram expiram em ~30 dias, então baixamos e armazenamos
+    // permanentemente. Mesmo padrão do WhatsApp (webhook-handle-message).
+    if (resolvedPic) {
+        const permanentUrl = await persistContactPhoto(supabase, contact.id, resolvedPic);
+        updates.profile_pic_url = permanentUrl || resolvedPic; // fallback pra URL crua
     }
     if (Object.keys(updates).length > 0) {
         await supabase.from("contacts").update(updates).eq("id", contact.id);
-        console.log("[IG-LOG] enriched contact", contact.id, updates);
+        console.log("[IG-LOG] enriched contact", contact.id, Object.keys(updates));
+    }
+}
+
+/**
+ * Baixa a foto de perfil da URL externa (CDN do Instagram) e armazena
+ * no bucket 'avatars' do Supabase Storage. Retorna URL pública permanente
+ * com cache-bust. Retorna null se falhar.
+ *
+ * Mesma lógica usada pelo WhatsApp (webhook-handle-message/persistContactPhoto).
+ */
+async function persistContactPhoto(
+    supabase: SupabaseClient,
+    contactId: string,
+    photoUrl: string
+): Promise<string | null> {
+    try {
+        // Se já está no nosso Storage, só retorna com cache-bust novo
+        if (SUPABASE_URL && photoUrl.includes(SUPABASE_URL)) {
+            const cleanUrl = photoUrl.split("?")[0];
+            return `${cleanUrl}?t=${Date.now()}`;
+        }
+
+        const imageResponse = await fetch(photoUrl, {
+            headers: { "User-Agent": "Mozilla/5.0 (Clinvia Webhook)" },
+        });
+        if (!imageResponse.ok) {
+            console.warn(
+                `[IG-LOG persistContactPhoto] Failed download (${imageResponse.status})`,
+                photoUrl.substring(0, 80)
+            );
+            return null;
+        }
+
+        const imageBlob = await imageResponse.blob();
+        if (imageBlob.size < 100) {
+            console.warn("[IG-LOG persistContactPhoto] Image too small, likely invalid");
+            return null;
+        }
+
+        const fileName = `contact_${contactId}.jpg`;
+        const { error: uploadError } = await supabase.storage
+            .from("avatars")
+            .upload(fileName, imageBlob, {
+                contentType: "image/jpeg",
+                upsert: true,
+            });
+
+        if (uploadError) {
+            console.error("[IG-LOG persistContactPhoto] Upload error:", uploadError);
+            return null;
+        }
+
+        const { data: publicUrlData } = supabase.storage.from("avatars").getPublicUrl(fileName);
+        const permanentUrl = `${publicUrlData.publicUrl}?t=${Date.now()}`;
+        console.log(`[IG-LOG persistContactPhoto] Persisted photo for contact ${contactId}`);
+        return permanentUrl;
+    } catch (err) {
+        console.error("[IG-LOG persistContactPhoto] Exception:", err);
+        return null;
     }
 }
