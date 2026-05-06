@@ -35,7 +35,13 @@ import { AlertCircle, CheckCircle2, Loader2, RefreshCw, Trash2 } from "lucide-re
 //      messaging_reactions, messaging_seen, messaging_referrals
 // =============================================
 
-const FB_APP_ID = import.meta.env.VITE_INSTAGRAM_APP_ID || "746674508461826";
+// Permite usar um App ID dedicado para o teste (se VITE_FB_APP_ID estiver
+// definido) — útil quando o app de Facebook Login for Business é diferente
+// do app usado para o Instagram Business Login em produção.
+const FB_APP_ID =
+    import.meta.env.VITE_FB_APP_ID ||
+    import.meta.env.VITE_INSTAGRAM_APP_ID ||
+    "";
 const GRAPH_VERSION = "v25.0";
 
 // Permissões EXATAS conforme docs Meta 2026 para Messenger Platform Instagram
@@ -168,6 +174,17 @@ const WhatsAppConnectionTeste = () => {
     const handleConnect = () => {
         if (!user?.id) {
             navigate("/auth");
+            return;
+        }
+
+        // Validação do App ID antes de redirecionar
+        if (!FB_APP_ID || FB_APP_ID.length < 14) {
+            toast({
+                title: "App ID não configurado",
+                description:
+                    "VITE_FB_APP_ID (ou VITE_INSTAGRAM_APP_ID) não está definido. Adicione o App ID do Meta no .env e refaça o build.",
+                variant: "destructive",
+            });
             return;
         }
 
@@ -370,7 +387,10 @@ const WhatsAppConnectionTeste = () => {
                         <CardTitle className="text-base">Resumo técnico</CardTitle>
                     </CardHeader>
                     <CardContent className="text-xs space-y-2 font-mono">
-                        <div>FB_APP_ID: <code>{FB_APP_ID}</code></div>
+                        <div className={!FB_APP_ID ? "text-red-600 font-bold" : ""}>
+                            FB_APP_ID: <code>{FB_APP_ID || "❌ NÃO CONFIGURADO"}</code>
+                        </div>
+                        <div>Fonte: <code>{import.meta.env.VITE_FB_APP_ID ? "VITE_FB_APP_ID" : (import.meta.env.VITE_INSTAGRAM_APP_ID ? "VITE_INSTAGRAM_APP_ID (fallback)" : "nenhuma")}</code></div>
                         <div>Graph version: <code>{GRAPH_VERSION}</code></div>
                         <div>redirect_uri: <code>{redirectUri}</code></div>
                         <div>Scopes: <code>{SCOPES}</code></div>
