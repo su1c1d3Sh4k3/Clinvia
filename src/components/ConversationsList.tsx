@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Search, Filter, Plus, MessageSquare, Send, Tag as TagIcon, Eye, Check, CheckCheck, Clock, FileText, Mic, Image as ImageIcon, Video, StickyNote } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -139,7 +139,32 @@ export const ConversationsList = ({
   const [selectedConversationForDetails, setSelectedConversationForDetails] = useState<any>(null);
   const [editingContact, setEditingContact] = useState<any>(null);
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<"people" | "groups">("people");
-  const [selectedChannelFilter, setSelectedChannelFilter] = useState<"whatsapp" | "instagram">("whatsapp");
+
+  // Aba do Inbox (WhatsApp/Instagram) persistida em sessionStorage:
+  // - F5 / refresh mantém a aba (sessionStorage sobrevive ao reload)
+  // - Navegar pra outra rota → cleanup limpa o storage → default WhatsApp ao voltar
+  // - Fechar a aba do navegador → sessionStorage some sozinho → default WhatsApp
+  const CHANNEL_FILTER_SESSION_KEY = "inbox.channelFilter";
+  const [selectedChannelFilter, _setSelectedChannelFilter] = useState<"whatsapp" | "instagram">(() => {
+    if (typeof window === "undefined") return "whatsapp";
+    const saved = sessionStorage.getItem(CHANNEL_FILTER_SESSION_KEY);
+    return saved === "instagram" ? "instagram" : "whatsapp";
+  });
+  const setSelectedChannelFilter = useCallback((value: "whatsapp" | "instagram") => {
+    _setSelectedChannelFilter(value);
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem(CHANNEL_FILTER_SESSION_KEY, value);
+    }
+  }, []);
+  // Cleanup ao desmontar o componente (SPA navigation pra outra rota).
+  // Importante: NÃO roda em F5 — nesse caso o app inteiro descarta sem cleanup.
+  useEffect(() => {
+    return () => {
+      if (typeof window !== "undefined") {
+        sessionStorage.removeItem(CHANNEL_FILTER_SESSION_KEY);
+      }
+    };
+  }, []);
 
   // Passar role e teamMemberId para filtrar por agente
   const { conversations, isLoading } = useConversations({
