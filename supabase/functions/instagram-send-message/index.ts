@@ -615,6 +615,12 @@ serve(async (req) => {
             // Janela 24h expirou + app não tem human_agent aprovado pela Meta.
             // Mensagem específica explicando o que aconteceu, sem jargão técnico.
             if (humanAgentNeedsReview) {
+                // Marca conversa como fora da janela imediatamente (não espera a cron)
+                if (resolvedConversationId) {
+                    await supabase.from('conversations')
+                        .update({ instagram_window_expired: true })
+                        .eq('id', resolvedConversationId);
+                }
                 return new Response(
                     JSON.stringify({
                         success: false,
@@ -627,6 +633,12 @@ serve(async (req) => {
 
             // Window error mesmo após o HUMAN_AGENT retry → mensagem amigável
             if (isWindowError(responseData)) {
+                // Marca conversa como fora da janela imediatamente (não espera a cron)
+                if (resolvedConversationId) {
+                    await supabase.from('conversations')
+                        .update({ instagram_window_expired: true })
+                        .eq('id', resolvedConversationId);
+                }
                 return new Response(
                     JSON.stringify({
                         success: false,
