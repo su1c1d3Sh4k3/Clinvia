@@ -512,58 +512,65 @@ serve(async (req) => {
         const igUserId = instance.instagram_account_id || 'me';
         const apiUrl = `https://graph.instagram.com/v21.0/${igUserId}/messages`;
 
-        let messagePayload: any;
-        let messageBody = '';
+        // Helper que monta o payload da Graph API com messaging_type variável.
+        // - 'RESPONSE'  → mensagem dentro da janela de 24h da última msg do user (default)
+        // - 'MESSAGE_TAG' + tag 'HUMAN_AGENT' → estende a janela pra 7 dias quando
+        //   o atendente humano precisa responder fora das 24h
+        const buildPayload = (mode: 'RESPONSE' | 'HUMAN_AGENT') => {
+            const base: any = {
+                recipient: { id: recipientId },
+                messaging_type: mode === 'HUMAN_AGENT' ? 'MESSAGE_TAG' : 'RESPONSE',
+            };
+            if (mode === 'HUMAN_AGENT') base.tag = 'HUMAN_AGENT';
 
-        if (message_type === 'audio') {
-            // Audio message via attachment
-            messagePayload = {
-                recipient: { id: recipientId },
-                message: {
-                    attachment: {
-                        type: 'audio',
-                        payload: {
-                            url: finalAudioUrl,
-                            is_reusable: false
-                        }
-                    }
-                }
-            };
-            messageBody = '[Áudio]';
-        } else if (message_type === 'image') {
-            // Image message via attachment
-            messagePayload = {
-                recipient: { id: recipientId },
-                message: {
-                    attachment: {
-                        type: 'image',
-                        payload: {
-                            url: image_url,
-                            is_reusable: false
-                        }
-                    }
-                }
-            };
-            messageBody = '[Imagem]';
-        } else {
-            // Text message
-            messagePayload = {
-                recipient: { id: recipientId },
-                message: { text: message_text }
-            };
-            messageBody = message_text || '';
+            if (message_type === 'audio') {
+                base.message = { attachment: { type: 'audio', payload: { url: finalAudioUrl, is_reusable: false } } };
+            } else if (message_type === 'image') {
+                base.message = { attachment: { type: 'image', payload: { url: image_url, is_reusable: false } } };
+            } else {
+                base.message = { text: message_text };
+            }
+            return base;
+        };
+
+        const messageBody = message_type === 'audio' ? '[Áudio]'
+            : message_type === 'image' ? '[Imagem]'
+            : (message_text || '');
+
+        const callGraph = async (payload: any) => {
+            const r = await fetch(apiUrl, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${instance.access_token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+            return { ok: r.ok, status: r.status, data: await r.json() };
+        };
+
+        // 1) Primeira tentativa — RESPONSE (válido dentro da janela de 24h)
+        let attempt = await callGraph(buildPayload('RESPONSE'));
+        let response = { ok: attempt.ok, status: attempt.status };
+        let responseData = attempt.data;
+
+        // 2) Detectar erro de janela expirada e re-tentar com HUMAN_AGENT (até 7 dias)
+        // Códigos do Meta:
+        //   - error.code = 10 + subcode 2018278 → "outside the allowed window"
+        //   - error.code = 100 com mensagem similar (varia por versão do Graph)
+        const isWindowError = !attempt.ok && (
+            attempt.data?.error?.code === 10 ||
+            attempt.data?.error?.error_subcode === 2018278 ||
+            /outside.*allowed.*window/i.test(attempt.data?.error?.message || '') ||
+            /messaging window/i.test(attempt.data?.error?.message || '')
+        );
+
+        if (isWindowError) {
+            console.warn('[INSTAGRAM SEND] 24h window expired — retrying with HUMAN_AGENT tag');
+            const retry = await callGraph(buildPayload('HUMAN_AGENT'));
+            response = { ok: retry.ok, status: retry.status };
+            responseData = retry.data;
         }
-
-        const response = await fetch(apiUrl, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${instance.access_token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(messagePayload)
-        });
-
-        const responseData = await response.json();
 
         if (!response.ok) {
             // Check if token expired
@@ -577,6 +584,24 @@ serve(async (req) => {
                 return new Response(
                     JSON.stringify({ success: false, error: 'Access token expired', code: 'TOKEN_EXPIRED' }),
                     { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                );
+            }
+
+            // Window error mesmo após o HUMAN_AGENT retry → mensagem amigável
+            const stillWindowError =
+                responseData.error?.code === 10 ||
+                responseData.error?.error_subcode === 2018278 ||
+                /outside.*allowed.*window/i.test(responseData.error?.message || '') ||
+                /messaging window/i.test(responseData.error?.message || '');
+
+            if (stillWindowError) {
+                return new Response(
+                    JSON.stringify({
+                        success: false,
+                        error: 'Janela de 7 dias expirada. O cliente precisa enviar uma nova mensagem antes que possamos responder.',
+                        code: 'WINDOW_EXPIRED'
+                    }),
+                    { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
                 );
             }
 
