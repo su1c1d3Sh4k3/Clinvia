@@ -459,19 +459,99 @@ serve(async (req) => {
         // =============================================
         // Get Instagram instance with access token
         // =============================================
-        const { data: instance, error: instanceError } = await supabase
+        let { data: instance, error: instanceError } = await supabase
             .from('instagram_instances')
             .select('*')
             .eq('id', instagramInstanceId)
             .single();
 
-        if (instanceError || !instance) {
-            console.error('[INSTAGRAM SEND] Instance not found:', instanceError);
-            return new Response(
-                JSON.stringify({ success: false, error: 'Instagram instance not found', code: 'INSTANCE_NOT_FOUND' }),
-                { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
+        // ───────────────────────────────────────────────────────────────────
+        // RECONNECT HANDLING — quando o cliente desconecta o Instagram e
+        // gera nova conexão, o instagram_instance_id do contato/conversa
+        // fica apontando pra instância antiga. Detectamos e tratamos:
+        //   • Cenário A — mesma conta IG reconectada (mesmo
+        //     instagram_account_id) → migra refs do contato/conversa pra
+        //     a instância ativa atual e segue enviando normalmente.
+        //   • Cenário B — conta IG diferente (account_id divergente) →
+        //     resolve a conversa e devolve mensagem clara: PSID antigo
+        //     não existe na nova Page, é tecnicamente impossível enviar.
+        // ───────────────────────────────────────────────────────────────────
+        const tenantUserId = (conversation as any)?.user_id || (contact as any)?.user_id || null;
+
+        // Resolver "conta de Instagram" (= account_id, comum entre versões da Page)
+        let activeInstance: any = null;
+        if (tenantUserId) {
+            const { data: ai } = await supabase
+                .from('instagram_instances')
+                .select('id, user_id, instagram_account_id, account_name, access_token, status')
+                .eq('user_id', tenantUserId)
+                .eq('status', 'connected')
+                .order('updated_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+            activeInstance = ai;
         }
+
+        const concludeAsForeignAccount = async () => {
+            if (resolvedConversationId) {
+                await supabase
+                    .from('conversations')
+                    .update({ status: 'resolved', updated_at: new Date().toISOString() })
+                    .eq('id', resolvedConversationId);
+            }
+            return new Response(
+                JSON.stringify({
+                    success: false,
+                    error: 'Essa conversa foi iniciada por outra conta de Instagram e não pode ser continuada.',
+                    code: 'CONVERSATION_FROM_OTHER_INSTAGRAM'
+                }),
+                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        };
+
+        // Caso 1: instância vinculada SUMIU (foi deletada). Tenta usar a ativa
+        // — se for a mesma conta, dá certo; se não, vamos cair no post-check
+        // do Meta (subcode 2534014) e tratar como Cenário B latente.
+        if (instanceError || !instance) {
+            console.warn('[INSTAGRAM SEND] Linked instance missing — falling back to active', { instagramInstanceId });
+            if (!activeInstance) {
+                return new Response(
+                    JSON.stringify({ success: false, error: 'Instagram instance not found', code: 'INSTANCE_NOT_FOUND' }),
+                    { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                );
+            }
+            instance = activeInstance;
+            instagramInstanceId = activeInstance.id;
+        }
+        // Caso 2: instância vinculada existe MAS é diferente da ativa (reconexão)
+        else if (activeInstance && activeInstance.id !== instance.id) {
+            if (activeInstance.instagram_account_id === instance.instagram_account_id) {
+                // Cenário A — mesma conta Instagram, novo token: migra refs e usa a ativa
+                console.log('[INSTAGRAM SEND] Same IG account reconnected — migrating refs', {
+                    from: instance.id, to: activeInstance.id
+                });
+                if (contact?.id) {
+                    await supabase.from('contacts')
+                        .update({ instagram_instance_id: activeInstance.id })
+                        .eq('id', contact.id);
+                }
+                if (resolvedConversationId) {
+                    await supabase.from('conversations')
+                        .update({ instagram_instance_id: activeInstance.id })
+                        .eq('id', resolvedConversationId);
+                }
+                instance = activeInstance;
+                instagramInstanceId = activeInstance.id;
+            } else {
+                // Cenário B — conta Instagram diferente: PSID antigo é inválido
+                console.warn('[INSTAGRAM SEND] Different IG account connected — concluding ticket', {
+                    contact_account: instance.instagram_account_id,
+                    active_account: activeInstance.instagram_account_id
+                });
+                return await concludeAsForeignAccount();
+            }
+        }
+        // Caso 3: vinculada == ativa → fluxo normal
 
         console.log('[INSTAGRAM SEND] Using instance:', instance.account_name);
 
@@ -576,6 +656,14 @@ serve(async (req) => {
             /human agent.*review/i.test(err?.error?.message || '') ||
             /must be reviewed and approved/i.test(err?.error?.message || '');
 
+        // Subcode 2534014 = "Cannot find user" — recipient PSID não existe na
+        // Page atual. Indica Cenário B latente (conta Instagram trocou e a
+        // antiga já foi deletada do banco, então o pre-check não pegou).
+        const isUserNotFound = (err: any) =>
+            err?.error?.error_subcode === 2534014 ||
+            /Cannot find user/i.test(err?.error?.message || '') ||
+            /n[ãa]o foi poss[íi]vel encontrar o usu[áa]rio/i.test(err?.error?.message || '');
+
         // 1) Primeira tentativa — payload mínimo (sem messaging_type)
         let attempt = await callGraph(buildPayload('DEFAULT'));
         let response = { ok: attempt.ok, status: attempt.status };
@@ -610,6 +698,16 @@ serve(async (req) => {
                     JSON.stringify({ success: false, error: 'Access token expired', code: 'TOKEN_EXPIRED' }),
                     { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
                 );
+            }
+
+            // Cenário B latente — PSID não reconhecível pela Page atual.
+            // Acontece quando a instância antiga (de outra conta IG) já foi
+            // deletada e o pre-check não conseguiu detectar antes de enviar.
+            if (isUserNotFound(responseData)) {
+                console.warn('[INSTAGRAM SEND] subcode 2534014 — concluding ticket as foreign account', {
+                    conversation_id: resolvedConversationId
+                });
+                return await concludeAsForeignAccount();
             }
 
             // Janela 24h expirou + app não tem human_agent aprovado pela Meta.
