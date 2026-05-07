@@ -512,17 +512,15 @@ serve(async (req) => {
         const igUserId = instance.instagram_account_id || 'me';
         const apiUrl = `https://graph.instagram.com/v21.0/${igUserId}/messages`;
 
-        // Helper que monta o payload da Graph API com messaging_type variável.
-        // - 'RESPONSE'  → mensagem dentro da janela de 24h da última msg do user (default)
-        // - 'MESSAGE_TAG' + tag 'HUMAN_AGENT' → estende a janela pra 7 dias quando
-        //   o atendente humano precisa responder fora das 24h
-        const buildPayload = (mode: 'RESPONSE' | 'HUMAN_AGENT') => {
-            const base: any = {
-                recipient: { id: recipientId },
-                messaging_type: mode === 'HUMAN_AGENT' ? 'MESSAGE_TAG' : 'RESPONSE',
-            };
-            if (mode === 'HUMAN_AGENT') base.tag = 'HUMAN_AGENT';
-
+        // Helper que monta o payload da Graph API.
+        // - 'DEFAULT'      → payload mínimo (Instagram Login API não exige messaging_type)
+        // - 'HUMAN_AGENT'  → adiciona tag pra estender janela quando expirou (24h → 7d)
+        const buildPayload = (mode: 'DEFAULT' | 'HUMAN_AGENT') => {
+            const base: any = { recipient: { id: recipientId } };
+            if (mode === 'HUMAN_AGENT') {
+                base.messaging_type = 'MESSAGE_TAG';
+                base.tag = 'HUMAN_AGENT';
+            }
             if (message_type === 'audio') {
                 base.message = { attachment: { type: 'audio', payload: { url: finalAudioUrl, is_reusable: false } } };
             } else if (message_type === 'image') {
@@ -546,26 +544,34 @@ serve(async (req) => {
                 },
                 body: JSON.stringify(payload)
             });
-            return { ok: r.ok, status: r.status, data: await r.json() };
+            const data = await r.json();
+            if (!r.ok) {
+                // Loga payload + erro completo do Meta pra diagnóstico
+                console.error('[INSTAGRAM SEND] Meta returned error', {
+                    status: r.status,
+                    payload_sent: payload,
+                    meta_error: data?.error
+                });
+            }
+            return { ok: r.ok, status: r.status, data };
         };
 
-        // 1) Primeira tentativa — RESPONSE (válido dentro da janela de 24h)
-        let attempt = await callGraph(buildPayload('RESPONSE'));
+        // Detector ESTRITO de window error.
+        // Subcode 2018278 é o canônico pra "outside the allowed messaging window".
+        // Não usamos `error.code === 10` puro porque ele é "Application does not have
+        // permission" — genérico, pega muito ruído.
+        const isWindowError = (err: any) =>
+            err?.error?.error_subcode === 2018278 ||
+            /outside.*allowed.*window/i.test(err?.error?.message || '') ||
+            /messaging window/i.test(err?.error?.message || '');
+
+        // 1) Primeira tentativa — payload mínimo (sem messaging_type)
+        let attempt = await callGraph(buildPayload('DEFAULT'));
         let response = { ok: attempt.ok, status: attempt.status };
         let responseData = attempt.data;
 
-        // 2) Detectar erro de janela expirada e re-tentar com HUMAN_AGENT (até 7 dias)
-        // Códigos do Meta:
-        //   - error.code = 10 + subcode 2018278 → "outside the allowed window"
-        //   - error.code = 100 com mensagem similar (varia por versão do Graph)
-        const isWindowError = !attempt.ok && (
-            attempt.data?.error?.code === 10 ||
-            attempt.data?.error?.error_subcode === 2018278 ||
-            /outside.*allowed.*window/i.test(attempt.data?.error?.message || '') ||
-            /messaging window/i.test(attempt.data?.error?.message || '')
-        );
-
-        if (isWindowError) {
+        // 2) Se janela 24h estourou (subcode específico), tenta HUMAN_AGENT (7 dias)
+        if (!attempt.ok && isWindowError(attempt.data)) {
             console.warn('[INSTAGRAM SEND] 24h window expired — retrying with HUMAN_AGENT tag');
             const retry = await callGraph(buildPayload('HUMAN_AGENT'));
             response = { ok: retry.ok, status: retry.status };
@@ -573,7 +579,7 @@ serve(async (req) => {
         }
 
         if (!response.ok) {
-            // Check if token expired
+            // Token expirado
             if (responseData.error?.code === 190) {
                 console.error('[INSTAGRAM SEND] Access token expired');
                 await supabase
@@ -588,13 +594,7 @@ serve(async (req) => {
             }
 
             // Window error mesmo após o HUMAN_AGENT retry → mensagem amigável
-            const stillWindowError =
-                responseData.error?.code === 10 ||
-                responseData.error?.error_subcode === 2018278 ||
-                /outside.*allowed.*window/i.test(responseData.error?.message || '') ||
-                /messaging window/i.test(responseData.error?.message || '');
-
-            if (stillWindowError) {
+            if (isWindowError(responseData)) {
                 return new Response(
                     JSON.stringify({
                         success: false,
@@ -605,8 +605,18 @@ serve(async (req) => {
                 );
             }
 
+            // Outros erros — propaga a mensagem real do Meta pro front (com subcode/type pra debug)
+            const metaErr = responseData.error || {};
+            const detailedMessage = [
+                metaErr.message,
+                metaErr.error_user_msg,
+                metaErr.type ? `(${metaErr.type})` : null,
+                metaErr.code != null ? `code=${metaErr.code}` : null,
+                metaErr.error_subcode != null ? `subcode=${metaErr.error_subcode}` : null
+            ].filter(Boolean).join(' · ') || 'Failed to send message';
+
             return new Response(
-                JSON.stringify({ success: false, error: responseData.error?.message || 'Failed to send message', code: 'SEND_FAILED' }),
+                JSON.stringify({ success: false, error: detailedMessage, code: 'SEND_FAILED', meta_error: metaErr }),
                 { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
         }
