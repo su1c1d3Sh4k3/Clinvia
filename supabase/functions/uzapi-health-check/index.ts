@@ -137,10 +137,10 @@ async function pingUzapi(serverUrl: string, apikey: string, prevHealthCheck: str
         // se houver, senão um sumário do que falhou.
         let reason = lastDisconnectReason;
         if (!reason) {
-            if (!statusConnected) reason = 'UZAPI reporta sessão WhatsApp desconectada (status.connected=false)';
+            if (!statusConnected) reason = 'CLINBIA reporta sessão WhatsApp desconectada (status.connected=false)';
             else if (!statusLoggedIn) reason = 'WhatsApp não está logado (status.loggedIn=false)';
             else if (declaredStatus === 'connecting') reason = 'WhatsApp em pareamento';
-            else reason = 'UZAPI reporta status anormal';
+            else reason = 'CLINBIA reporta status anormal';
         }
 
         const finalStatus: HealthStatus =
