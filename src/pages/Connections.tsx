@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { ConnectInstanceDialog } from "@/components/ConnectInstanceDialog";
 import { InstanceRow } from "@/components/InstanceRow";
@@ -81,6 +82,19 @@ const Connections = () => {
 
             if (error) throw error;
             return data as any[];
+        },
+    });
+
+    // Queues Query — usado pelos selects de fila default (WhatsApp e Instagram)
+    const { data: queues } = useQuery({
+        queryKey: ["queues"],
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from("queues")
+                .select("*")
+                .eq("is_active", true);
+            if (error) throw error;
+            return data;
         },
     });
 
@@ -423,6 +437,31 @@ const Connections = () => {
         }
     });
 
+    // Atualiza a fila default da instância Instagram (paridade com InstanceRow do WhatsApp)
+    const updateInstagramQueueMutation = useMutation({
+        mutationFn: async ({ instanceId, queueId }: { instanceId: string, queueId: string | null }) => {
+            const { error } = await supabase
+                .from("instagram_instances" as any)
+                .update({ default_queue_id: queueId === "none" ? null : queueId })
+                .eq("id", instanceId);
+
+            if (error) throw error;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["instagram-instances"] });
+            toast({
+                title: "Fila padrão atualizada",
+            });
+        },
+        onError: (error: any) => {
+            toast({
+                title: "Erro ao atualizar fila",
+                description: error.message,
+                variant: "destructive",
+            });
+        }
+    });
+
     useEffect(() => {
         if (!pollingInstanceId) return;
 
@@ -619,15 +658,15 @@ const Connections = () => {
                                         {instagramInstances.map((instance: any) => (
                                             <div
                                                 key={instance.id}
-                                                className="flex items-center justify-between p-4 border rounded-lg bg-card"
+                                                className="flex flex-col md:flex-row md:items-center md:justify-between p-3 md:p-4 border rounded-lg bg-card gap-3 md:gap-4"
                                             >
-                                                <div className="flex items-center gap-4">
-                                                    <div className="p-2 bg-gradient-to-br from-purple-500 via-pink-500 to-orange-500 rounded-full">
+                                                <div className="flex items-center gap-4 min-w-0">
+                                                    <div className="p-2 bg-gradient-to-br from-purple-500 via-pink-500 to-orange-500 rounded-full shrink-0">
                                                         <FaInstagram className="h-5 w-5 text-white" />
                                                     </div>
-                                                    <div>
-                                                        <h4 className="font-medium">{instance.account_name}</h4>
-                                                        <p className="text-xs text-muted-foreground">
+                                                    <div className="min-w-0">
+                                                        <h4 className="font-medium truncate">{instance.account_name}</h4>
+                                                        <p className="text-xs text-muted-foreground truncate">
                                                             ID: {instance.instagram_account_id}
                                                         </p>
                                                         {instance.token_expires_at && (
@@ -637,34 +676,57 @@ const Connections = () => {
                                                         )}
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-2">
-                                                    {getStatusBadge(instance.status)}
-                                                    {(canEdit('connections') || canDelete('connections')) && (
-                                                        <>
-                                                            {canEdit('connections') && (
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    onClick={() => refreshInstagramTokenMutation.mutate(instance.id)}
-                                                                    disabled={refreshInstagramTokenMutation.isPending}
-                                                                    title="Atualizar token"
-                                                                >
-                                                                    <RefreshCw className={`h-4 w-4 text-green-500 ${refreshInstagramTokenMutation.isPending ? 'animate-spin' : ''}`} />
-                                                                </Button>
-                                                            )}
-                                                            {canDelete('connections') && (
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    onClick={() => deleteInstagramMutation.mutate(instance.id)}
-                                                                    disabled={deleteInstagramMutation.isPending}
-                                                                    title="Remover conta"
-                                                                >
-                                                                    <Trash2 className="h-4 w-4 text-destructive" />
-                                                                </Button>
-                                                            )}
-                                                        </>
+                                                <div className="flex flex-col sm:flex-row sm:items-center gap-2 md:gap-4">
+                                                    {canEdit('connections') && (
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-xs md:text-sm text-muted-foreground whitespace-nowrap">Fila:</span>
+                                                            <Select
+                                                                value={instance.default_queue_id || "none"}
+                                                                onValueChange={(value) => updateInstagramQueueMutation.mutate({ instanceId: instance.id, queueId: value })}
+                                                            >
+                                                                <SelectTrigger className="w-full sm:w-[140px] md:w-[180px] h-8 md:h-9 text-xs md:text-sm">
+                                                                    <SelectValue placeholder="Selecione" />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    <SelectItem value="none">Nenhuma</SelectItem>
+                                                                    {queues?.map((queue) => (
+                                                                        <SelectItem key={queue.id} value={queue.id}>
+                                                                            {queue.name}
+                                                                        </SelectItem>
+                                                                    ))}
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </div>
                                                     )}
+                                                    <div className="flex items-center gap-2">
+                                                        {getStatusBadge(instance.status)}
+                                                        {(canEdit('connections') || canDelete('connections')) && (
+                                                            <>
+                                                                {canEdit('connections') && (
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        onClick={() => refreshInstagramTokenMutation.mutate(instance.id)}
+                                                                        disabled={refreshInstagramTokenMutation.isPending}
+                                                                        title="Atualizar token"
+                                                                    >
+                                                                        <RefreshCw className={`h-4 w-4 text-green-500 ${refreshInstagramTokenMutation.isPending ? 'animate-spin' : ''}`} />
+                                                                    </Button>
+                                                                )}
+                                                                {canDelete('connections') && (
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        onClick={() => deleteInstagramMutation.mutate(instance.id)}
+                                                                        disabled={deleteInstagramMutation.isPending}
+                                                                        title="Remover conta"
+                                                                    >
+                                                                        <Trash2 className="h-4 w-4 text-destructive" />
+                                                                    </Button>
+                                                                )}
+                                                            </>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
                                         ))}

@@ -75,7 +75,10 @@ serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
     // ─── 1) LOG completo de cada evento + identifica entry IDs ──────────
-    const senderIds: string[] = [];
+    // Pares (senderIgsid, recipientIgsid) — recipientIgsid identifica
+    // qual tenant deve processar (já que mesmo igsid de cliente pode existir
+    // em múltiplos tenants).
+    const senderEvents: Array<{ sender: string; recipient: string }> = [];
     const entryIds = new Set<string>();
     if (payload) {
         try {
@@ -114,9 +117,12 @@ serve(async (req) => {
                         evt.postback?.referral?.source ||
                         null;
                     const sId = evt.sender?.id ? String(evt.sender.id) : null;
+                    const rId = evt.recipient?.id ? String(evt.recipient.id) : null;
                     const isEcho = evt.message?.is_echo === true;
-                    if (sId && !isEcho) senderIds.push(sId);
-                    if (isEcho && evt.recipient?.id) senderIds.push(String(evt.recipient.id));
+                    // Para inbound: o cliente é o sender, business é o recipient
+                    // Para echo: o cliente é o recipient, business é o sender
+                    if (!isEcho && sId && rId) senderEvents.push({ sender: sId, recipient: rId });
+                    if (isEcho && rId && sId) senderEvents.push({ sender: rId, recipient: sId });
                     inserts.push({
                         sender_id: sId,
                         recipient_id: evt.recipient?.id ? String(evt.recipient.id) : null,
@@ -175,21 +181,28 @@ serve(async (req) => {
     const fwd = await fetch(TARGET_URL, { method: "POST", headers: fwdHeaders, body: rawBody });
     const respBody = await fwd.text();
 
-    // ─── 4) ENRICHMENT (fire-and-forget) ────────────────────────────────
-    const uniqueSenders = Array.from(new Set(senderIds.filter(Boolean)));
-    if (uniqueSenders.length > 0) {
-        const enrichPromise = (async () => {
-            await new Promise((r) => setTimeout(r, 1500));
-            for (const sid of uniqueSenders) {
-                const last = enrichedRecently.get(sid);
-                if (last && Date.now() - last < ENRICH_DEDUP_MS) continue;
-                enrichedRecently.set(sid, Date.now());
-                try { await enrichSender(supabase, sid); }
-                catch (e) { console.warn("[IG-LOG] enrich failed for", sid, e); }
-            }
-        })();
-        // deno-lint-ignore no-explicit-any
-        (globalThis as any).EdgeRuntime?.waitUntil?.(enrichPromise);
+    // ─── 4) ENRICHMENT SÍNCRONO ────────────────────────────────────────
+    // Fazemos await antes de retornar pra garantir que rode mesmo em
+    // ambientes onde EdgeRuntime.waitUntil é truncado (observado: o
+    // worker era encerrado antes do enrichment completar).
+    // Meta aceita até 20s de resposta — tempo suficiente.
+    // Dedup pela combinação sender+recipient (multi-tenant aware: o mesmo
+    // igsid de cliente pode ter contato em múltiplos tenants e enriqueceríamos
+    // o tenant errado se filtrássemos só por sender)
+    const seenPairs = new Set<string>();
+    const uniqueEvents = senderEvents.filter((e) => {
+        const k = `${e.sender}|${e.recipient}`;
+        if (seenPairs.has(k)) return false;
+        seenPairs.add(k);
+        return true;
+    });
+    for (const { sender, recipient } of uniqueEvents) {
+        const dedupKey = `${sender}|${recipient}`;
+        const last = enrichedRecently.get(dedupKey);
+        if (last && Date.now() - last < ENRICH_DEDUP_MS) continue;
+        enrichedRecently.set(dedupKey, Date.now());
+        try { await enrichSender(supabase, sender, recipient); }
+        catch (e) { console.warn("[IG-LOG] enrich failed for", sender, e); }
     }
 
     return new Response(respBody, {
@@ -198,37 +211,37 @@ serve(async (req) => {
     });
 });
 
-async function enrichSender(supabase: SupabaseClient, igsid: string) {
+async function enrichSender(supabase: SupabaseClient, igsid: string, recipientIgsid: string) {
+    // 1) Resolve a INSTANCE pelo recipient_id (a Page que recebeu/enviou).
+    //    Isso identifica o tenant correto.
+    const { data: instance } = await supabase
+        .from("instagram_instances")
+        .select("id, user_id, access_token, status")
+        .eq("instagram_account_id", recipientIgsid)
+        .eq("status", "connected")
+        .maybeSingle();
+
+    if (!instance) {
+        console.log("[IG-LOG enrich] no instance for recipient", recipientIgsid);
+        return;
+    }
+
+    // 2) Acha o CONTACT do tenant correto (multi-tenant safe)
     const { data: contact } = await supabase
         .from("contacts")
-        .select("id, user_id, push_name, profile_pic_url, instagram_instance_id")
+        .select("id, user_id, push_name, profile_pic_url")
         .eq("instagram_id", igsid)
+        .eq("user_id", instance.user_id)
         .eq("channel", "instagram")
         .maybeSingle();
 
-    if (!contact) return;
+    if (!contact) {
+        console.log("[IG-LOG enrich] contact not found for igsid", igsid, "user", instance.user_id);
+        return;
+    }
 
     const hasRealName = contact.push_name && contact.push_name !== "Instagram User";
-
-    let token: string | null = null;
-    if (contact.instagram_instance_id) {
-        const { data: inst } = await supabase
-            .from("instagram_instances")
-            .select("access_token")
-            .eq("id", contact.instagram_instance_id)
-            .maybeSingle();
-        token = inst?.access_token ?? null;
-    }
-    if (!token) {
-        const { data: anyInst } = await supabase
-            .from("instagram_instances")
-            .select("access_token")
-            .eq("user_id", contact.user_id)
-            .eq("status", "connected")
-            .limit(1)
-            .maybeSingle();
-        token = anyInst?.access_token ?? null;
-    }
+    const token = instance.access_token;
     if (!token) return;
 
     let resolvedName: string | null = null;

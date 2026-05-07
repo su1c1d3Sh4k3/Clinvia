@@ -78,40 +78,58 @@ export const useMessages = (conversationId?: string) => {
     enabled: !!conversationId,
   });
 
-  // Set up realtime subscriptions for new messages
+  // Set up realtime subscriptions for new messages.
+  //
+  // ⚠️ Histórico do bug:
+  //   O filtro server-side `conversation_id=eq.${conversationId}` em Realtime
+  //   estava silenciosamente falhando para conversas Instagram (mensagens chegavam
+  //   no banco normalmente mas o invalidate nunca disparava no front).
+  //   useConversations (sem filter, channel global) funcionava — confirmando que
+  //   o problema era específico do filtro server-side em messages.
+  //
+  // Fix: usamos channel SEM filter e validamos o conversation_id no callback,
+  //   que é estável em qualquer canal/instância. Trade-off: cada cliente recebe
+  //   eventos de todas as suas conversas (volume baixo dado o RLS user-scoped).
   useEffect(() => {
     if (!conversationId) return;
 
     const channel = supabase
-      .channel(`messages-${conversationId}`)
-      // Primary: listen to direct message inserts/updates for this conversation
+      .channel(`messages-rt-${conversationId}`)
+      // 1) Insert/update/delete em messages — filtro client-side por conversation_id
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
           table: "messages",
-          filter: `conversation_id=eq.${conversationId}`,
         },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
+        (payload: any) => {
+          const row = payload.new ?? payload.old;
+          if (row?.conversation_id === conversationId) {
+            queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
+          }
         }
       )
-      // Fallback: listen to conversation row updates (webhook always updates last_message_at)
-      // This channel is confirmed to work and fires on every new inbound/outbound message
+      // 2) Fallback redundante: update na conversa atual (webhook sempre toca
+      //    last_message_at, então isso fire toda vez que chega/sai mensagem)
       .on(
         "postgres_changes",
         {
           event: "UPDATE",
           schema: "public",
           table: "conversations",
-          filter: `id=eq.${conversationId}`,
         },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
+        (payload: any) => {
+          if (payload.new?.id === conversationId) {
+            queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
+          }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.warn(`[useMessages] Realtime ${status} for ${conversationId}`);
+        }
+      });
 
     channelRef.current = channel;
 

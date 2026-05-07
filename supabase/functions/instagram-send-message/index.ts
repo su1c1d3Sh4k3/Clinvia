@@ -93,6 +93,9 @@ interface SendMessagePayload {
     // Legacy fields (still supported)
     instagram_instance_id?: string;
     recipient_id?: string;
+    // Flag: mensagem enviada pela IA/API externa (n8n etc).
+    // Quando true, NÃO transiciona conversa de 'pending' → 'open'.
+    wasSentByApi?: boolean;
 }
 
 serve(async (req) => {
@@ -117,8 +120,42 @@ serve(async (req) => {
             audio_base64,
             audio_mime_type = 'audio/mpeg',
             instagram_instance_id: legacyInstanceId,
-            recipient_id: legacyRecipientId
+            recipient_id: legacyRecipientId,
+            wasSentByApi
         } = payload;
+
+        // =============================================
+        // Auth: detectar JWT do agente logado
+        // (paridade com evolution-send-message — necessário pra
+        // transicionar status pending → open e atribuir conversa)
+        // =============================================
+        const authHeader = req.headers.get('Authorization');
+        let authenticatedAgentId: string | null = null;
+
+        if (authHeader) {
+            try {
+                const token = authHeader.replace('Bearer ', '');
+                const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+
+                if (user && !userError) {
+                    const { data: teamMember } = await supabase
+                        .from('team_members')
+                        .select('id')
+                        .eq('auth_user_id', user.id)
+                        .single();
+
+                    if (teamMember) {
+                        authenticatedAgentId = teamMember.id;
+                        console.log('[INSTAGRAM SEND] Authenticated agent:', authenticatedAgentId);
+                    }
+                }
+            } catch (authErr) {
+                console.warn('[INSTAGRAM SEND] Auth lookup failed:', authErr);
+            }
+        }
+
+        // Mensagem vinda da IA/API externa NÃO atende a conversa
+        const isApiMessage = wasSentByApi === true;
 
         // =============================================
         // Validate required fields
@@ -359,6 +396,41 @@ serve(async (req) => {
             if (conversations && conversations.length > 0) {
                 conversation = conversations[0];
                 resolvedConversationId = conversation.id;
+            } else if (authenticatedAgentId && instagramInstanceId) {
+                // Atendente iniciando conversa pelo painel (paridade com
+                // evolution-send-message:101-122). Cria com status='open' +
+                // assigned_agent_id + queue_id default.
+                const { data: igInst } = await supabase
+                    .from('instagram_instances')
+                    .select('user_id, default_queue_id')
+                    .eq('id', instagramInstanceId)
+                    .single();
+
+                if (igInst) {
+                    const { data: newConv, error: createErr } = await supabase
+                        .from('conversations')
+                        .insert({
+                            contact_id: contact_id,
+                            channel: 'instagram',
+                            instagram_instance_id: instagramInstanceId,
+                            user_id: igInst.user_id,
+                            status: 'open',
+                            queue_id: igInst.default_queue_id || null,
+                            assigned_agent_id: authenticatedAgentId,
+                            unread_count: 0,
+                            last_message_at: new Date().toISOString()
+                        })
+                        .select()
+                        .single();
+
+                    if (createErr) {
+                        console.error('[INSTAGRAM SEND] Failed to create panel conversation:', createErr);
+                    } else if (newConv) {
+                        conversation = newConv;
+                        resolvedConversationId = newConv.id;
+                        console.log('[INSTAGRAM SEND] Panel conversation created (status=open):', newConv.id);
+                    }
+                }
             }
         }
         // Option 3: Legacy mode with direct instance/recipient
@@ -402,6 +474,34 @@ serve(async (req) => {
         }
 
         console.log('[INSTAGRAM SEND] Using instance:', instance.account_name);
+
+        // =============================================
+        // AUTO-OPEN: se a conversa estava 'pending' e a mensagem é
+        // de um atendente humano (não da IA/API), transiciona pra 'open'
+        // e atribui ao agente logado.
+        // Paridade com evolution-send-message:213-240.
+        // =============================================
+        if (conversation && conversation.status === 'pending' && !isApiMessage) {
+            const updates: Record<string, any> = { status: 'open' };
+            if (authenticatedAgentId) {
+                updates.assigned_agent_id = authenticatedAgentId;
+            }
+
+            const { error: updateError } = await supabase
+                .from('conversations')
+                .update(updates)
+                .eq('id', conversation.id);
+
+            if (updateError) {
+                console.error('[INSTAGRAM SEND] Failed to auto-open conversation:', updateError);
+            } else {
+                conversation.status = 'open';
+                if (updates.assigned_agent_id) {
+                    conversation.assigned_agent_id = updates.assigned_agent_id;
+                }
+                console.log('[INSTAGRAM SEND] Conversation auto-opened:', conversation.id);
+            }
+        }
 
         // =============================================
         // Build message payload based on type
