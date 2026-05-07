@@ -148,7 +148,7 @@ serve(async (req) => {
 
                         const { data: foundInstance } = await supabase
                             .from('instagram_instances')
-                            .select('id, user_id, access_token, instagram_account_id, ia_on_insta')
+                            .select('id, user_id, access_token, instagram_account_id, ia_on_insta, default_queue_id')
                             .eq('instagram_account_id', tryId)
                             .single();
 
@@ -162,7 +162,7 @@ serve(async (req) => {
                     if (!instagramInstance) {
                         const { data: allInstances } = await supabase
                             .from('instagram_instances')
-                            .select('id, user_id, instagram_account_id, account_name, access_token')
+                            .select('id, user_id, instagram_account_id, account_name, access_token, default_queue_id')
                             .eq('status', 'connected');
 
                         console.log('[INSTAGRAM WEBHOOK] No match found. Entry ID:', entryId);
@@ -212,7 +212,7 @@ serve(async (req) => {
                             if (!instagramInstance) {
                                 const { data: recentInstances } = await supabase
                                     .from('instagram_instances')
-                                    .select('id, user_id, access_token, instagram_account_id, created_at, updated_at')
+                                    .select('id, user_id, access_token, instagram_account_id, created_at, updated_at, default_queue_id')
                                     .eq('status', 'connected')
                                     .order('updated_at', { ascending: false })
                                     .limit(1);
@@ -476,6 +476,7 @@ serve(async (req) => {
                                         user_id: userId,
                                         status: 'pending',
                                         unread_count: 1,
+                                        queue_id: instagramInstance.default_queue_id || null,
                                         last_message: messageText || 'Mídia',
                                         last_message_at: new Date().toISOString()
                                     })
