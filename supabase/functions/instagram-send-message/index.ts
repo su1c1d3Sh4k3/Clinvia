@@ -556,14 +556,19 @@ serve(async (req) => {
             return { ok: r.ok, status: r.status, data };
         };
 
-        // Detector ESTRITO de window error.
-        // Subcode 2018278 é o canônico pra "outside the allowed messaging window".
-        // Não usamos `error.code === 10` puro porque ele é "Application does not have
-        // permission" — genérico, pega muito ruído.
+        // Detector ESTRITO de window error em ambas as variantes da Meta:
+        //   - subcode 2018278 → Messenger Platform clássico (Facebook Page Login),
+        //     erro: "outside the allowed window"
+        //   - subcode 2534022 → Instagram Graph API com Instagram Login,
+        //     erro: "Essa mensagem foi enviada fora do período permitido" (IGApiException)
+        // Não usamos `error.code === 10` puro porque é genérico
+        // ("Application does not have permission") e pega muito ruído.
         const isWindowError = (err: any) =>
             err?.error?.error_subcode === 2018278 ||
+            err?.error?.error_subcode === 2534022 ||
             /outside.*allowed.*window/i.test(err?.error?.message || '') ||
-            /messaging window/i.test(err?.error?.message || '');
+            /messaging window/i.test(err?.error?.message || '') ||
+            /fora do per[ií]odo permitido/i.test(err?.error?.message || '');
 
         // 1) Primeira tentativa — payload mínimo (sem messaging_type)
         let attempt = await callGraph(buildPayload('DEFAULT'));
