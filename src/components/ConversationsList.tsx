@@ -562,6 +562,10 @@ export const ConversationsList = ({
               const lastMsg = (conversation as any).last_message_obj;
               const isOutbound = lastMsg?.direction === 'outbound';
               const isSystem = lastMsg?.direction === 'system';
+              // Instagram only: bolinha vermelha quando janela de 24h expirou
+              const isInstagramWindowExpired =
+                (conversation as any).channel === 'instagram' &&
+                (conversation as any).instagram_window_expired === true;
 
               let timeDisplay = "";
               if (conversation.last_message_at) {
@@ -607,12 +611,25 @@ export const ConversationsList = ({
                           <span className="font-semibold text-[15px] truncate text-foreground/90" title={displayName}>
                             {displayName}
                           </span>
-                          {/* Bolinha de Remetente da última mensagem */}
+                          {/* Bolinha de Remetente da última mensagem
+                              - Vermelha (Instagram only): janela de 24h da Meta expirou
+                              - Verde: você enviou a última
+                              - Laranja: cliente enviou a última */}
                           {lastMsg && !isSystem && (
                             <span className={cn(
                               "w-2 h-2 rounded-full flex-shrink-0 shadow-sm",
-                              isOutbound ? "bg-green-500" : "bg-orange-500"
-                            )} title={isOutbound ? "Você enviou a última mensagem" : "Cliente enviou a última mensagem"} />
+                              isInstagramWindowExpired
+                                ? "bg-red-500"
+                                : isOutbound
+                                  ? "bg-green-500"
+                                  : "bg-orange-500"
+                            )} title={
+                              isInstagramWindowExpired
+                                ? "Mensagem fora do intervalo de 24h"
+                                : isOutbound
+                                  ? "Você enviou a última mensagem"
+                                  : "Cliente enviou a última mensagem"
+                            } />
                           )}
                         </div>
                         {/* Row 2: Ticket ID + Tags */}
