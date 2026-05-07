@@ -36,6 +36,16 @@ interface ContactPickerProps {
     className?: string
 }
 
+// Limite por consulta — suficiente para autocomplete sem custo de baixar a lista inteira.
+// Buscas server-side garantem que QUALQUER contato seja encontrado, independente do total.
+const PAGE_SIZE = 50
+
+// Escapa caracteres especiais do PostgREST para uso em ilike pattern (.or() filter values).
+// Vírgulas e parênteses precisam ser escapados pra não quebrar o or().
+function escapePostgrestValue(s: string): string {
+    return s.replace(/[(),"]/g, " ").trim()
+}
+
 export function ContactPicker({
     value,
     onChange,
@@ -46,30 +56,74 @@ export function ContactPicker({
     className
 }: ContactPickerProps) {
     const [open, setOpen] = React.useState(false)
+    const [searchTerm, setSearchTerm] = React.useState("")
+    const [debouncedSearch, setDebouncedSearch] = React.useState("")
     const { data: ownerId, isLoading: isLoadingOwner } = useOwnerId()
 
-    const { data: contacts = [], isLoading: isLoadingContacts } = useQuery({
-        queryKey: ["contacts-picker", ownerId],
+    // Debounce do termo de busca: evita disparar query a cada tecla
+    React.useEffect(() => {
+        const t = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 200)
+        return () => clearTimeout(t)
+    }, [searchTerm])
+
+    // 1) Busca server-side: PAGE_SIZE resultados que casam com o termo (ou últimos PAGE_SIZE quando vazio)
+    const { data: contacts = [], isLoading: isLoadingContacts, isFetching } = useQuery({
+        queryKey: ["contacts-picker", ownerId, debouncedSearch],
         queryFn: async () => {
             if (!ownerId) return []
 
-            const { data, error } = await supabase
+            let query = supabase
                 .from("contacts")
                 .select("id, push_name, number")
                 .eq("user_id", ownerId)
-                .order("push_name")
+                // Exclui grupos no servidor — mais rápido e correto
+                .not("number", "ilike", "%@g.us")
 
+            if (debouncedSearch) {
+                const term = escapePostgrestValue(debouncedSearch)
+                if (term) {
+                    // Busca em push_name OU number — case-insensitive
+                    query = query.or(`push_name.ilike.%${term}%,number.ilike.%${term}%`)
+                }
+                // Quando o usuário busca, ordena alfabeticamente para resultados consistentes
+                query = query.order("push_name", { ascending: true, nullsFirst: false })
+            } else {
+                // Sem termo: mostra os mais recentes (faz sentido pra contatos novos serem visíveis)
+                query = query.order("updated_at", { ascending: false, nullsFirst: false })
+            }
+
+            const { data, error } = await query.limit(PAGE_SIZE)
             if (error) throw error
-            // Filter out groups client-side if needed, but preferably server-side
-            // We also add a server-side filter for @g.us just in case
-            return (data as Contact[]).filter(c => !c.number?.endsWith('@g.us'))
+            return (data as Contact[]) || []
         },
         enabled: !!ownerId,
+        staleTime: 30_000,
+        // Mantém os resultados anteriores enquanto a próxima busca carrega — evita flicker
+        placeholderData: (prev) => prev,
     })
 
-    // Find selected contact object
-    const selectedContact = contacts.find((contact) => contact.id === value)
+    // 2) Garante que o contato SELECIONADO esteja sempre disponível (mesmo se não cair na lista atual)
+    const { data: selectedContactRemote } = useQuery({
+        queryKey: ["contacts-picker-selected", value],
+        queryFn: async () => {
+            if (!value) return null
+            const { data, error } = await supabase
+                .from("contacts")
+                .select("id, push_name, number")
+                .eq("id", value)
+                .maybeSingle()
+            if (error) throw error
+            return data as Contact | null
+        },
+        enabled: !!value,
+        staleTime: 60_000,
+    })
+
+    const selectedContact =
+        contacts.find((c) => c.id === value) || selectedContactRemote || null
+
     const isLoading = isLoadingOwner || isLoadingContacts
+    const showFetchingHint = isFetching && !isLoading
 
     return (
         <Popover open={open} onOpenChange={setOpen} modal={modal}>
@@ -102,19 +156,36 @@ export function ContactPicker({
                 </Button>
             </PopoverTrigger>
             <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                <Command filter={(value, search) => {
-                    // Custom filter to match against the displayed text in CommandItem
-                    if (value.toLowerCase().includes(search.toLowerCase())) return 1;
-                    return 0;
-                }}>
-                    <CommandInput placeholder="Buscar por nome ou número..." />
+                {/*
+                  shouldFilter={false} desabilita o filtro client-side do cmdk.
+                  Toda a busca é server-side via debouncedSearch — assim qualquer contato
+                  do banco é alcançável, sem o limite implícito de 1000 do Supabase.
+                */}
+                <Command shouldFilter={false}>
+                    <CommandInput
+                        placeholder="Buscar por nome ou número..."
+                        value={searchTerm}
+                        onValueChange={setSearchTerm}
+                    />
                     <CommandList className="max-h-[500px] nav-scrollbar">
-                        <CommandEmpty>Nenhum contato encontrado.</CommandEmpty>
+                        {showFetchingHint && (
+                            <div className="flex items-center justify-center gap-2 py-2 text-xs text-muted-foreground">
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                Buscando...
+                            </div>
+                        )}
+                        {!isFetching && contacts.length === 0 && (
+                            <CommandEmpty>
+                                {debouncedSearch
+                                    ? `Nenhum contato encontrado para "${debouncedSearch}".`
+                                    : "Nenhum contato cadastrado."}
+                            </CommandEmpty>
+                        )}
                         <CommandGroup>
                             {contacts.map((contact) => (
                                 <CommandItem
                                     key={contact.id}
-                                    value={`${contact.push_name} ${contact.number}`} // Searchable string
+                                    value={contact.id}
                                     onSelect={() => {
                                         onChange(contact.id === value ? "" : contact.id, contact)
                                         setOpen(false)
@@ -135,6 +206,11 @@ export function ContactPicker({
                                 </CommandItem>
                             ))}
                         </CommandGroup>
+                        {!isFetching && contacts.length === PAGE_SIZE && (
+                            <div className="px-3 py-1.5 text-[11px] text-muted-foreground border-t">
+                                Mostrando os primeiros {PAGE_SIZE} resultados — refine a busca para ver mais.
+                            </div>
+                        )}
                     </CommandList>
                 </Command>
             </PopoverContent>

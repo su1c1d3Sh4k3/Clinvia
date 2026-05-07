@@ -355,9 +355,14 @@ export default function IAConfig() {
 
         // Adicionar itens de produto/serviço
         items
-            .filter((item) => item.productName && item.text.trim())
+            .filter((item) => item.text.trim())
             .forEach((item) => {
-                allItems.push(`${index}. - ${item.productName}:\n${item.text}`);
+                // Garante que productName nunca seja vazio: busca pelo productId como fallback
+                const name = item.productName
+                    || productsServices?.find((p) => p.id === item.productId)?.name
+                    || "";
+                if (!name) return;
+                allItems.push(`${index}. - ${name}:\n${item.text}`);
                 index++;
             });
 
@@ -1042,7 +1047,7 @@ export default function IAConfig() {
                                         </Select>
                                     </div>
 
-                                    {item.productId && (
+                                    {(item.productId || item.productName) && (
                                         <div className="space-y-2">
                                             <Label>Fluxo de qualificação</Label>
                                             <Textarea
@@ -1128,7 +1133,7 @@ export default function IAConfig() {
                                         </Select>
                                     </div>
 
-                                    {item.productId && (
+                                    {(item.productId || item.productName) && (
                                         <div className="space-y-2">
                                             <Label>Perguntas e respostas sobre esse item</Label>
                                             <Textarea

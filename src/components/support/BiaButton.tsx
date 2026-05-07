@@ -12,7 +12,9 @@ export const BiaButton = ({ onClick, isOpen, hasNewMessage }: BiaButtonProps) =>
         <button
             onClick={onClick}
             className={cn(
-                "fixed bottom-4 right-4 z-50 w-14 h-14 rounded-full flex items-center justify-center",
+                // Oculto em telas mobile (<md). Disponível apenas em desktop/tablet a partir de 768px.
+                "hidden md:flex",
+                "fixed bottom-4 right-4 z-50 w-14 h-14 rounded-full items-center justify-center",
                 "transition-all duration-300 ease-in-out",
                 "hover:scale-105 active:scale-95",
                 "focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0175EC]"

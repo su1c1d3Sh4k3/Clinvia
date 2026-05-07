@@ -1,6 +1,9 @@
 import { ReportCard } from "./ReportCard";
 import { TicketMetrics, QueueMetrics, calcEvolution } from "@/hooks/useReportData";
-import { MessageSquare, Clock, CheckCircle, AlertCircle, Users, Layers } from "lucide-react";
+import {
+    MessageSquare, Clock, CheckCircle, AlertCircle, Users, Layers,
+    Bot, User, Moon, XCircle, Sparkles, Star, Zap,
+} from "lucide-react";
 import {
     BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid,
     Tooltip, Legend, ResponsiveContainer,
@@ -27,6 +30,32 @@ const STATUS_BG: Record<string, string> = {
 };
 
 const CARD = "relative group rounded-2xl bg-white dark:bg-card/50 backdrop-blur-sm border border-border/50 p-6 hover:shadow-md hover:border-border/80 transition-all duration-300";
+
+// Formata segundos em string amigável (ex: "2m 30s", "45s", "1h 5m")
+function formatDuration(seconds: number): string {
+    if (!seconds || seconds < 0) return "0s";
+    if (seconds < 60) return `${Math.round(seconds)}s`;
+    const minutes = Math.floor(seconds / 60);
+    const s = Math.round(seconds % 60);
+    if (minutes < 60) return s > 0 ? `${minutes}m ${s}s` : `${minutes}m`;
+    const hours = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return m > 0 ? `${hours}h ${m}m` : `${hours}h`;
+}
+
+// Retorna cor baseada em faixa de sentiment (0-10)
+function sentimentColor(score: number): string {
+    if (score >= 7) return "text-emerald-600 dark:text-emerald-400";
+    if (score >= 4) return "text-amber-600 dark:text-amber-400";
+    return "text-red-600 dark:text-red-400";
+}
+
+// Retorna cor baseada em NPS (1-5)
+function npsColor(score: number): string {
+    if (score >= 4) return "text-emerald-600 dark:text-emerald-400";
+    if (score >= 3) return "text-amber-600 dark:text-amber-400";
+    return "text-red-600 dark:text-red-400";
+}
 
 const ChartTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
@@ -71,9 +100,24 @@ export function AttendanceReport({ data, queues, comparison }: AttendanceReportP
 
     const resolutionRate = data.total > 0 ? Math.round((data.resolved / data.total) * 100) : 0;
 
+    // Novos charts
+    const iaVsHumanData = [
+        { name: "IA", value: data.countAiHandled, fill: "#8b5cf6" },
+        { name: "Humano", value: data.countHumanHandled, fill: "#3b82f6" },
+    ].filter(d => d.value > 0);
+
+    const hoursData = [
+        { name: "Dentro do Expediente", value: data.countInsideBusinessHours, fill: "#10b981" },
+        { name: "Fora do Expediente", value: data.countOutsideBusinessHours, fill: "#f59e0b" },
+    ].filter(d => d.value > 0);
+
+    const aiPct = data.total > 0 ? Math.round((data.countAiHandled / data.total) * 100) : 0;
+    const humanPct = data.total > 0 ? Math.round((data.countHumanHandled / data.total) * 100) : 0;
+    const outsidePct = data.total > 0 ? Math.round((data.countOutsideBusinessHours / data.total) * 100) : 0;
+
     return (
         <div className="space-y-8">
-            {/* KPIs */}
+            {/* KPIs — Status básico */}
             <section className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="flex items-center gap-2 mb-4">
                     <div className="p-1.5 rounded-lg bg-primary/10"><MessageSquare className="w-4 h-4 text-primary" /></div>
@@ -92,8 +136,170 @@ export function AttendanceReport({ data, queues, comparison }: AttendanceReportP
                 </div>
             </section>
 
+            {/* Performance & Eficiência — novos KPIs */}
+            <section className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: '80ms', animationFillMode: 'backwards' }}>
+                <div className="flex items-center gap-2 mb-4">
+                    <div className="p-1.5 rounded-lg bg-violet-500/10"><Zap className="w-4 h-4 text-violet-500" /></div>
+                    <h3 className="text-sm font-semibold tracking-tight">Performance &amp; Eficiência</h3>
+                </div>
+
+                {/* Tempo 1ª resposta */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <ReportCard
+                        label="1ª Resposta — IA"
+                        value={formatDuration(data.avgFirstResponseSecondsAi)}
+                        icon={<Bot className="w-4 h-4" />}
+                        evolution={comparison ? calcEvolution(data.avgFirstResponseSecondsAi, comparison.avgFirstResponseSecondsAi) : undefined}
+                    />
+                    <ReportCard
+                        label="1ª Resposta — Humano"
+                        value={formatDuration(data.avgFirstResponseSecondsHuman)}
+                        icon={<User className="w-4 h-4" />}
+                        evolution={comparison ? calcEvolution(data.avgFirstResponseSecondsHuman, comparison.avgFirstResponseSecondsHuman) : undefined}
+                    />
+                </div>
+
+                {/* IA vs Humano / Fora Expediente / Abandono */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+                    <ReportCard
+                        label="Atendidos pela IA"
+                        value={data.countAiHandled}
+                        suffix={data.total > 0 ? `(${aiPct}%)` : undefined}
+                        icon={<Bot className="w-4 h-4" />}
+                        evolution={comparison ? calcEvolution(data.countAiHandled, comparison.countAiHandled) : undefined}
+                    />
+                    <ReportCard
+                        label="Atendidos por Humano"
+                        value={data.countHumanHandled}
+                        suffix={data.total > 0 ? `(${humanPct}%)` : undefined}
+                        icon={<User className="w-4 h-4" />}
+                        evolution={comparison ? calcEvolution(data.countHumanHandled, comparison.countHumanHandled) : undefined}
+                    />
+                    <ReportCard
+                        label="Fora do Expediente"
+                        value={data.countOutsideBusinessHours}
+                        suffix={data.total > 0 ? `(${outsidePct}%)` : undefined}
+                        icon={<Moon className="w-4 h-4" />}
+                        evolution={comparison ? calcEvolution(data.countOutsideBusinessHours, comparison.countOutsideBusinessHours) : undefined}
+                    />
+                    <ReportCard
+                        label="Taxa de Abandono"
+                        value={data.abandonmentRate.toFixed(1)}
+                        suffix="%"
+                        icon={<XCircle className="w-4 h-4" />}
+                        evolution={comparison ? calcEvolution(data.abandonmentRate, comparison.abandonmentRate) : undefined}
+                    />
+                </div>
+
+                {/* Satisfação — Sentiment IA + NPS Cliente */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                    <div className={CARD}>
+                        <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 via-transparent to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+                        <div className="relative z-10 flex items-center justify-between">
+                            <div>
+                                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Nota IA (Sentiment)</span>
+                                <div className="flex items-baseline gap-1.5 mt-2">
+                                    <span className={`text-2xl md:text-3xl font-black tracking-tight ${sentimentColor(data.avgSentimentScore)}`}>
+                                        {data.avgSentimentScore.toFixed(1)}
+                                    </span>
+                                    <span className="text-sm font-semibold text-muted-foreground">/10</span>
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-2">IA avalia cada conversa 0-10</p>
+                            </div>
+                            <div className="p-2 rounded-xl bg-violet-500/10 text-violet-500">
+                                <Sparkles className="w-4 h-4" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className={CARD}>
+                        <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 via-transparent to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+                        <div className="relative z-10 flex items-center justify-between">
+                            <div>
+                                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">NPS (Cliente)</span>
+                                <div className="flex items-baseline gap-1.5 mt-2">
+                                    <span className={`text-2xl md:text-3xl font-black tracking-tight ${npsColor(data.avgNps)}`}>
+                                        {data.avgNps.toFixed(2)}
+                                    </span>
+                                    <span className="text-sm font-semibold text-muted-foreground">/5</span>
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-2">
+                                    {data.totalNpsResponses} {data.totalNpsResponses === 1 ? "resposta" : "respostas"} no período
+                                </p>
+                            </div>
+                            <div className="p-2 rounded-xl bg-amber-500/10 text-amber-500">
+                                <Star className="w-4 h-4" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            {/* Distribuição IA vs Humano + Dentro vs Fora */}
+            <section className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: '160ms', animationFillMode: 'backwards' }}>
+                <div className="flex items-center gap-2 mb-4">
+                    <div className="p-1.5 rounded-lg bg-blue-500/10"><Bot className="w-4 h-4 text-blue-500" /></div>
+                    <h3 className="text-sm font-semibold tracking-tight">Distribuição de Atendimento</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* IA vs Humano */}
+                    <div className={CARD}>
+                        <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 via-transparent to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+                        <div className="relative z-10">
+                            <h4 className="text-sm font-semibold mb-1">IA vs Humano</h4>
+                            <p className="text-xs text-muted-foreground mb-4">Conversas atendidas por cada canal</p>
+                            {iaVsHumanData.length > 0 ? (
+                                <ResponsiveContainer width="100%" height={220}>
+                                    <BarChart data={iaVsHumanData} margin={{ left: 0, right: 8 }}>
+                                        <CartesianGrid strokeDasharray="4 4" strokeOpacity={0.08} vertical={false} />
+                                        <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                                        <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} allowDecimals={false} axisLine={false} tickLine={false} />
+                                        <Tooltip content={<ChartTooltip />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.08 }} />
+                                        <Bar dataKey="value" name="Conversas" radius={[6, 6, 0, 0]}>
+                                            {iaVsHumanData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+                                        </Bar>
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center h-[220px] text-muted-foreground">
+                                    <Bot className="w-10 h-10 mb-2 opacity-20" />
+                                    <p className="text-sm">Sem dados no período</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Dentro vs Fora Expediente */}
+                    <div className={CARD}>
+                        <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 via-transparent to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+                        <div className="relative z-10">
+                            <h4 className="text-sm font-semibold mb-1">Dentro vs Fora do Expediente</h4>
+                            <p className="text-xs text-muted-foreground mb-4">Volume por horário de atendimento</p>
+                            {hoursData.length > 0 ? (
+                                <ResponsiveContainer width="100%" height={220}>
+                                    <BarChart data={hoursData} margin={{ left: 0, right: 8 }}>
+                                        <CartesianGrid strokeDasharray="4 4" strokeOpacity={0.08} vertical={false} />
+                                        <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} interval={0} />
+                                        <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} allowDecimals={false} axisLine={false} tickLine={false} />
+                                        <Tooltip content={<ChartTooltip />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.08 }} />
+                                        <Bar dataKey="value" name="Conversas" radius={[6, 6, 0, 0]}>
+                                            {hoursData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+                                        </Bar>
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center h-[220px] text-muted-foreground">
+                                    <Moon className="w-10 h-10 mb-2 opacity-20" />
+                                    <p className="text-sm">Configure horário de expediente em Agendamento</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             {/* Charts */}
-            <section className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: '100ms', animationFillMode: 'backwards' }}>
+            <section className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: '240ms', animationFillMode: 'backwards' }}>
                 <div className="flex items-center gap-2 mb-4">
                     <div className="p-1.5 rounded-lg bg-amber-500/10"><AlertCircle className="w-4 h-4 text-amber-500" /></div>
                     <h3 className="text-sm font-semibold tracking-tight">Distribuição de Status</h3>
@@ -206,7 +412,7 @@ export function AttendanceReport({ data, queues, comparison }: AttendanceReportP
 
             {/* Comparison */}
             {comparison && comparisonData.length > 0 && (
-                <section className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: '200ms', animationFillMode: 'backwards' }}>
+                <section className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: '320ms', animationFillMode: 'backwards' }}>
                     <div className="flex items-center gap-2 mb-4">
                         <div className="p-1.5 rounded-lg bg-blue-500/10"><MessageSquare className="w-4 h-4 text-blue-500" /></div>
                         <h3 className="text-sm font-semibold tracking-tight">Comparativo de Períodos</h3>
@@ -239,7 +445,7 @@ export function AttendanceReport({ data, queues, comparison }: AttendanceReportP
 
             {/* Queue Table */}
             {queues.byQueue.length > 0 && (
-                <section className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: '300ms', animationFillMode: 'backwards' }}>
+                <section className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: '400ms', animationFillMode: 'backwards' }}>
                     <div className="flex items-center gap-2 mb-4">
                         <div className="p-1.5 rounded-lg bg-purple-500/10"><Layers className="w-4 h-4 text-purple-500" /></div>
                         <h3 className="text-sm font-semibold tracking-tight">Detalhamento por Fila</h3>

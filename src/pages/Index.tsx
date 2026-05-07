@@ -232,9 +232,9 @@ const Index = () => {
   }
 
   return (
-    <div className="flex h-full w-full overflow-hidden bg-background">
+    <div className="flex flex-col h-full w-full overflow-hidden bg-background">
       {/* Desktop Layout - Original */}
-      <div className="hidden md:flex h-full w-full min-w-0">
+      <div className="hidden md:flex flex-1 w-full min-w-0 overflow-hidden">
         <ConversationsList
           onSelectConversation={setSelectedConversationId}
           selectedId={selectedConversationId}

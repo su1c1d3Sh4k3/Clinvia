@@ -91,9 +91,10 @@ async function processWebhookNotification(
 
     const calendarId = connection.calendar_id || "primary";
 
-    // Buscar eventos modificados nas últimas 24h
-    const timeMin = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const eventsUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?timeMin=${encodeURIComponent(timeMin)}&singleEvents=true&orderBy=updated&maxResults=50`;
+    // Buscar eventos modificados nas últimas 2h (updatedMin filtra por data de modificação,
+    // não por horário do evento — correto para detectar edições recentes)
+    const updatedMin = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    const eventsUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?updatedMin=${encodeURIComponent(updatedMin)}&singleEvents=true&showDeleted=true&maxResults=100`;
 
     const eventsRes = await fetch(eventsUrl, {
       headers: { Authorization: `Bearer ${accessToken}` },

@@ -60,12 +60,14 @@ export interface CRMDeal {
     responsible_id?: string;
     // Joined fields
     contacts?: {
+        id?: string;
         push_name: string;
         remote_jid?: string;
         email?: string;
         profile_pic_url?: string;
         number?: string;
         instagram_id?: string;  // Para determinar origem do contato (Instagram vs WhatsApp)
+        updated_at?: string;    // Usado como cache-bust visual da foto
         contact_tags?: {
             tags: {
                 id: string;

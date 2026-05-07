@@ -323,7 +323,7 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                                 <div className="flex items-center gap-1 truncate h-full" style={{ fontSize: '9px', lineHeight: 1 }}>
                                                     <X className="h-2.5 w-2.5 shrink-0" />
                                                     <span className="font-semibold truncate">
-                                                        {(apt.contacts?.push_name || apt.contact_name || 'Cliente').split(' ')[0]}
+                                                        {apt.contacts?.push_name || apt.contact_name || 'Cliente'}
                                                     </span>
                                                     <span className="opacity-60 truncate">· {apt.products_services?.name || 'Serviço'}</span>
                                                     <span className="opacity-50 shrink-0">{format(new Date(apt.start_time), 'HH:mm')}</span>
@@ -343,7 +343,6 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                                     ? apt.description.replace(/^Bloqueio importado do Google Calendar:\s*/i, "").trim() || "Bloqueio GCal"
                                                     : null;
                                                 const fullName = gcalTitle ?? (apt.type === "absence" ? "Ausência" : (apt.contacts?.push_name || apt.contact_name || "Cliente"));
-                                                const firstName = fullName.split(' ')[0];
                                                 const serviceName = apt.products_services?.name || "Serviço";
 
                                                 return (
@@ -354,7 +353,7 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                                         {isCompact ? (
                                                             // Compact mode (< 40 min): single line
                                                             <div className="flex items-center gap-1 truncate">
-                                                                <span className="font-bold shrink-0">{firstName}</span>
+                                                                <span className="font-bold shrink-0">{fullName}</span>
                                                                 {apt.type === "appointment" && (
                                                                     <>
                                                                         <span className="opacity-50">|</span>
@@ -378,7 +377,7 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                                             // Normal mode (>= 40 min): two lines
                                                             <div className="flex flex-col justify-center h-full">
                                                                 <div className="font-bold truncate flex items-center gap-1">
-                                                                    <span className="truncate">{firstName} {apt.type === "appointment" && `| ${serviceName}`}</span>
+                                                                    <span className="truncate">{fullName} {apt.type === "appointment" && `| ${serviceName}`}</span>
                                                                     {apt.google_event_id && (
                                                                         <svg className="w-3 h-3 shrink-0 opacity-70" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                                                                             <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>

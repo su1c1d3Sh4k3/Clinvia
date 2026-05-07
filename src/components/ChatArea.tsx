@@ -520,7 +520,15 @@ export const ChatArea = ({
         setIsUploading(false);
 
         if (error || !data?.success) {
-          toast.error(`Erro ao enviar: ${data?.error || error?.message || 'Erro desconhecido'}`);
+          let serverMessage: string | undefined;
+          if (error && 'context' in (error as any) && (error as any).context) {
+            try {
+              const body = await (error as any).context.json();
+              serverMessage = body?.message || body?.error;
+              console.error("[ChatArea/instagram] Edge Function body:", body);
+            } catch { /* ignore */ }
+          }
+          toast.error(`Erro ao enviar: ${serverMessage || data?.error || error?.message || 'Erro desconhecido'}`);
           return;
         }
 
@@ -701,8 +709,18 @@ export const ChatArea = ({
           message: { wasSentByApi: false }
         },
       });
-      if (error) throw new Error(error.message);
-      if (data?.error) throw new Error(data.error);
+      if (error) {
+        let serverMessage: string | undefined;
+        if ('context' in (error as any) && (error as any).context) {
+          try {
+            const body = await (error as any).context.json();
+            serverMessage = body?.message || body?.error;
+            console.error("[handleSendContact] Edge Function body:", body);
+          } catch { /* ignore */ }
+        }
+        throw new Error(serverMessage || error.message || "Erro ao enviar contato");
+      }
+      if (data?.error) throw new Error(data.message || data.error);
 
       queryClient.setQueryData(["messages", conversationId], (old: any) => {
         if (!old) return old;

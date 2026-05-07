@@ -1,0 +1,550 @@
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
+import { FaInstagram, FaFacebook } from "react-icons/fa";
+import { AlertCircle, CheckCircle2, Loader2, RefreshCw, Trash2 } from "lucide-react";
+
+// =============================================
+// PÁGINA DE TESTE — INSTAGRAM via FACEBOOK LOGIN FOR BUSINESS
+// =============================================
+// Esta é uma versão BETA, isolada da página de conexões oficial.
+// Não é exibida no menu lateral. Acesso só pela URL direta:
+//   https://app.clinbia.ai/whatsapp-connection-teste
+//
+// Diferenças vs. fluxo de produção (`/connections`):
+//   - OAuth via graph.facebook.com (não graph.instagram.com)
+//   - Token recebido é Page Access Token (não Instagram User Token)
+//   - Permite que o User Profile API funcione corretamente,
+//     resolvendo o problema de novos contatos sem nome/foto.
+//
+// Pré-requisitos no Meta App Dashboard:
+//   1. Produto "Facebook Login for Business" instalado no app
+//   2. Permissões aprovadas: instagram_basic, instagram_manage_messages,
+//      pages_manage_metadata, pages_show_list
+//   3. URL de redirecionamento adicionada:
+//      https://app.clinbia.ai/whatsapp-connection-teste
+//   4. Webhook configurado para o objeto "Page" apontando para:
+//      https://swfshqvvbohnahdyndch.supabase.co/functions/v1/instagram-fb-webhook
+//      Subscrito aos campos: messages, messaging_postbacks,
+//      messaging_reactions, messaging_seen, messaging_referrals
+// =============================================
+
+// Permite usar um App ID dedicado para o teste (se VITE_FB_APP_ID estiver
+// definido) — útil quando o app de Facebook Login for Business é diferente
+// do app usado para o Instagram Business Login em produção.
+const FB_APP_ID =
+    import.meta.env.VITE_FB_APP_ID ||
+    import.meta.env.VITE_INSTAGRAM_APP_ID ||
+    "";
+const GRAPH_VERSION = "v25.0";
+
+// Permissões EXATAS conforme Meta Dashboard 2026 ("API setup with
+// Facebook login" → "Enviar mensagens no Instagram"):
+//   instagram_basic, instagram_manage_messages, pages_read_engagement,
+//   pages_show_list, business_management
+const SCOPES = [
+    "instagram_basic",
+    "instagram_manage_messages",
+    "pages_read_engagement",
+    "pages_show_list",
+    "business_management",
+].join(",");
+
+interface FBInstance {
+    id: string;
+    facebook_page_id: string;
+    facebook_page_name: string | null;
+    instagram_business_account_id: string;
+    instagram_username: string | null;
+    status: string;
+    webhook_subscribed: boolean;
+    last_error: string | null;
+    user_token_expires_at: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
+const WhatsAppConnectionTeste = () => {
+    const { user } = useAuth();
+    const { toast } = useToast();
+    const queryClient = useQueryClient();
+    const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const [isExchanging, setIsExchanging] = useState(false);
+    const [manualToken, setManualToken] = useState("");
+    const [isManualConnecting, setIsManualConnecting] = useState(false);
+    const [manualResult, setManualResult] = useState<any>(null);
+
+    // Construído dinamicamente para que funcione em dev/staging também
+    const redirectUri = useMemo(
+        () => `${window.location.origin}/whatsapp-connection-teste`,
+        []
+    );
+
+    // Lista das instâncias BETA já conectadas para este user
+    const { data: instances, isLoading } = useQuery({
+        queryKey: ["instagram-fb-instances", user?.id],
+        queryFn: async () => {
+            if (!user?.id) return [];
+            const { data, error } = await supabase
+                .from("instagram_fb_instances" as any)
+                .select("*")
+                .eq("user_id", user.id)
+                .order("created_at", { ascending: false });
+            if (error) throw error;
+            return (data || []) as FBInstance[];
+        },
+        enabled: !!user?.id,
+    });
+
+    // Handler do callback OAuth (chega ?code=... ou ?error=...)
+    useEffect(() => {
+        const code = searchParams.get("code");
+        const errorParam = searchParams.get("error");
+        const returnedState = searchParams.get("state");
+
+        if (errorParam) {
+            toast({
+                title: "Erro na autorização",
+                description:
+                    searchParams.get("error_description") ||
+                    "Login cancelado ou rejeitado.",
+                variant: "destructive",
+            });
+            localStorage.removeItem("ig_fb_oauth_state");
+            navigate("/whatsapp-connection-teste", { replace: true });
+            return;
+        }
+
+        if (!code || !user?.id || isExchanging) return;
+
+        // Validação CSRF do state
+        const storedState = localStorage.getItem("ig_fb_oauth_state");
+        if (!storedState || storedState !== returnedState) {
+            toast({
+                title: "Falha de segurança",
+                description: "Parâmetro state inválido. Tente novamente.",
+                variant: "destructive",
+            });
+            localStorage.removeItem("ig_fb_oauth_state");
+            navigate("/whatsapp-connection-teste", { replace: true });
+            return;
+        }
+
+        // Troca code → tokens via edge function
+        (async () => {
+            try {
+                setIsExchanging(true);
+                const { data, error } = await supabase.functions.invoke(
+                    "instagram-fb-oauth-callback",
+                    {
+                        body: {
+                            code,
+                            redirect_uri: redirectUri,
+                            user_id: user.id,
+                        },
+                    }
+                );
+
+                if (error || !data?.success) {
+                    const detail = data?.error || error?.message || "Falha no callback";
+                    throw new Error(detail);
+                }
+
+                toast({
+                    title: "Conectado!",
+                    description: data?.message || "Conexão BETA criada com sucesso.",
+                });
+                queryClient.invalidateQueries({ queryKey: ["instagram-fb-instances"] });
+            } catch (err: any) {
+                console.error("[IG-FB-OAUTH-CB] Erro:", err);
+                toast({
+                    title: "Erro ao trocar token",
+                    description: err.message,
+                    variant: "destructive",
+                });
+            } finally {
+                setIsExchanging(false);
+                localStorage.removeItem("ig_fb_oauth_state");
+                navigate("/whatsapp-connection-teste", { replace: true });
+            }
+        })();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchParams, user?.id]);
+
+    const handleConnect = () => {
+        if (!user?.id) {
+            navigate("/auth");
+            return;
+        }
+
+        // Validação do App ID antes de redirecionar
+        if (!FB_APP_ID || FB_APP_ID.length < 14) {
+            toast({
+                title: "App ID não configurado",
+                description:
+                    "VITE_FB_APP_ID (ou VITE_INSTAGRAM_APP_ID) não está definido. Adicione o App ID do Meta no .env e refaça o build.",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        // Gera state CSRF
+        const state = btoa(
+            JSON.stringify({
+                user_id: user.id,
+                ts: Date.now(),
+                nonce: Math.random().toString(36).substring(2),
+            })
+        );
+        localStorage.setItem("ig_fb_oauth_state", state);
+
+        // OAuth dialog do Facebook (NÃO instagram.com)
+        // https://developers.facebook.com/docs/facebook-login/guides/access-tokens/
+        const authUrl =
+            `https://www.facebook.com/${GRAPH_VERSION}/dialog/oauth` +
+            `?client_id=${encodeURIComponent(FB_APP_ID)}` +
+            `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+            `&state=${encodeURIComponent(state)}` +
+            `&response_type=code` +
+            `&scope=${encodeURIComponent(SCOPES)}`;
+
+        console.log("[IG-FB-OAUTH] Redirecionando para:", authUrl);
+        window.location.href = authUrl;
+    };
+
+    const handleManualConnect = async () => {
+        if (!user?.id) return;
+        if (!manualToken.trim()) {
+            toast({ title: "Token vazio", variant: "destructive" });
+            return;
+        }
+        setIsManualConnecting(true);
+        setManualResult(null);
+        try {
+            // Bypass do supabase.functions.invoke para conseguir ler o body
+            // cru da resposta (o wrapper do supabase-js engole 4xx).
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://swfshqvvbohnahdyndch.supabase.co";
+            const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY || "";
+            const { data: { session } } = await supabase.auth.getSession();
+            const userJwt = session?.access_token || supabaseAnonKey;
+
+            const resp = await fetch(`${supabaseUrl}/functions/v1/instagram-fb-manual-connect`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${userJwt}`,
+                    apikey: supabaseAnonKey,
+                },
+                body: JSON.stringify({
+                    user_id: user.id,
+                    page_access_token: manualToken.trim(),
+                }),
+            });
+
+            const bodyText = await resp.text();
+            let body: any = null;
+            try {
+                body = JSON.parse(bodyText);
+            } catch {
+                body = { raw: bodyText };
+            }
+
+            if (!resp.ok || !body?.success) {
+                setManualResult({
+                    success: false,
+                    http_status: resp.status,
+                    error: body?.error || body?.raw || `HTTP ${resp.status}`,
+                    details: body?.details ?? body,
+                });
+                toast({
+                    title: `Erro HTTP ${resp.status}`,
+                    description: body?.error || "Veja detalhes abaixo do botão",
+                    variant: "destructive",
+                });
+                return;
+            }
+
+            setManualResult(body);
+            setManualToken("");
+            toast({ title: "Conectado!", description: body.message });
+            queryClient.invalidateQueries({ queryKey: ["instagram-fb-instances"] });
+        } catch (err: any) {
+            setManualResult({ success: false, error: err.message });
+            toast({ title: "Erro", description: err.message, variant: "destructive" });
+        } finally {
+            setIsManualConnecting(false);
+        }
+    };
+
+    const handleDisconnect = async (instance: FBInstance) => {
+        if (!confirm(`Desconectar @${instance.instagram_username || "conta"}?`)) return;
+
+        const { error } = await supabase
+            .from("instagram_fb_instances" as any)
+            .delete()
+            .eq("id", instance.id);
+
+        if (error) {
+            toast({ title: "Erro ao desconectar", description: error.message, variant: "destructive" });
+            return;
+        }
+        toast({ title: "Conta desconectada" });
+        queryClient.invalidateQueries({ queryKey: ["instagram-fb-instances"] });
+    };
+
+    if (!user) {
+        return (
+            <div className="flex items-center justify-center min-h-screen p-6">
+                <Card className="max-w-md">
+                    <CardHeader>
+                        <CardTitle>Login necessário</CardTitle>
+                        <CardDescription>
+                            Faça login na plataforma para acessar esta página de teste.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Button onClick={() => navigate("/auth")}>Ir para login</Button>
+                    </CardContent>
+                </Card>
+            </div>
+        );
+    }
+
+    return (
+        <div className="min-h-screen bg-background p-4 md:p-8">
+            <div className="max-w-3xl mx-auto space-y-6">
+                {/* Banner BETA */}
+                <Card className="border-amber-300 bg-amber-50 dark:bg-amber-950/30">
+                    <CardContent className="p-4 flex items-start gap-3">
+                        <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                        <div className="text-sm">
+                            <p className="font-semibold text-amber-900 dark:text-amber-200">
+                                Página BETA — Conexão Instagram via Facebook Login for Business
+                            </p>
+                            <p className="text-amber-800 dark:text-amber-300/80 mt-1">
+                                Este fluxo é um teste isolado. As conexões aqui criadas vão para
+                                uma tabela separada (<code>instagram_fb_instances</code>) e não
+                                afetam a integração de produção. O objetivo é validar se o User
+                                Profile API com Page Access Token resolve o problema de novos
+                                contatos chegarem sem nome e foto.
+                            </p>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* Header */}
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-3">
+                            <FaInstagram className="text-pink-600" />
+                            <span>Instagram (BETA)</span>
+                        </h1>
+                        <p className="text-muted-foreground text-sm mt-1">
+                            Conexão via Facebook Login for Business — fluxo recomendado pelo Meta em 2026.
+                        </p>
+                    </div>
+                    <Button onClick={handleConnect} disabled={isExchanging} className="gap-2">
+                        {isExchanging ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                            <FaFacebook className="w-4 h-4" />
+                        )}
+                        Conectar via Facebook
+                    </Button>
+                </div>
+
+                {/* Loading state */}
+                {(isLoading || isExchanging) && (
+                    <Card>
+                        <CardContent className="p-6 flex items-center gap-3">
+                            <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                            <span className="text-sm text-muted-foreground">
+                                {isExchanging
+                                    ? "Trocando código por token e listando suas Páginas…"
+                                    : "Carregando contas conectadas…"}
+                            </span>
+                        </CardContent>
+                    </Card>
+                )}
+
+                {/* Lista de instâncias BETA */}
+                {!isLoading && instances && instances.length === 0 && !isExchanging && (
+                    <Card>
+                        <CardContent className="p-12 text-center text-muted-foreground">
+                            <FaInstagram className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                            <p className="font-medium">Nenhuma conta conectada (BETA)</p>
+                            <p className="text-sm mt-1">
+                                Clique em <strong>Conectar via Facebook</strong> para iniciar o fluxo.
+                            </p>
+                        </CardContent>
+                    </Card>
+                )}
+
+                {!isLoading &&
+                    instances &&
+                    instances.length > 0 &&
+                    instances.map((inst) => (
+                        <Card key={inst.id}>
+                            <CardHeader className="flex flex-row items-start justify-between gap-3 pb-3">
+                                <div className="flex items-start gap-3">
+                                    <FaInstagram className="w-8 h-8 text-pink-600 flex-shrink-0" />
+                                    <div>
+                                        <CardTitle className="text-lg flex items-center gap-2">
+                                            @{inst.instagram_username || inst.instagram_business_account_id}
+                                            {inst.status === "connected" && inst.webhook_subscribed ? (
+                                                <Badge className="bg-emerald-500 hover:bg-emerald-500 text-xs gap-1">
+                                                    <CheckCircle2 className="w-3 h-3" />
+                                                    Conectado
+                                                </Badge>
+                                            ) : inst.status === "connected" && !inst.webhook_subscribed ? (
+                                                <Badge variant="outline" className="text-amber-600 border-amber-400 text-xs">
+                                                    Conectado, webhook não confirmado
+                                                </Badge>
+                                            ) : (
+                                                <Badge variant="destructive" className="text-xs">
+                                                    {inst.status}
+                                                </Badge>
+                                            )}
+                                        </CardTitle>
+                                        <CardDescription className="text-xs mt-0.5">
+                                            Página: <strong>{inst.facebook_page_name}</strong>
+                                            {" · "}
+                                            ID: <code className="text-[10px]">{inst.facebook_page_id}</code>
+                                        </CardDescription>
+                                    </div>
+                                </div>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleDisconnect(inst)}
+                                    className="text-destructive hover:text-destructive"
+                                    title="Desconectar"
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                </Button>
+                            </CardHeader>
+                            {inst.last_error && (
+                                <CardContent className="pt-0">
+                                    <div className="text-xs bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/40 rounded p-2 text-red-700 dark:text-red-300">
+                                        <strong>Último erro:</strong> {inst.last_error}
+                                    </div>
+                                </CardContent>
+                            )}
+                        </Card>
+                    ))}
+
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                        queryClient.invalidateQueries({ queryKey: ["instagram-fb-instances"] })
+                    }
+                    className="gap-2"
+                >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Atualizar
+                </Button>
+
+                {/* Conexão manual via Page Access Token */}
+                <Card className="border-blue-300 bg-blue-50/40 dark:bg-blue-950/20">
+                    <CardHeader>
+                        <CardTitle className="text-base flex items-center gap-2">
+                            <FaFacebook className="text-blue-600" />
+                            Conexão manual (atalho enquanto Facebook Login não está disponível)
+                        </CardTitle>
+                        <CardDescription className="text-xs">
+                            Cole abaixo o <strong>Page Access Token</strong> que você gerou em
+                            "Mensagens do Instagram" → "Tokens de acesso" → "Gerar token". O sistema
+                            descobre sozinho a Page e a conta IG vinculada, salva e subscreve o webhook.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                        <div>
+                            <Label htmlFor="manual-token">Page Access Token</Label>
+                            <Textarea
+                                id="manual-token"
+                                value={manualToken}
+                                onChange={(e) => setManualToken(e.target.value)}
+                                placeholder="EAA..."
+                                className="font-mono text-xs"
+                                rows={3}
+                                autoComplete="off"
+                            />
+                        </div>
+                        <Button
+                            onClick={handleManualConnect}
+                            disabled={isManualConnecting || !manualToken.trim()}
+                            className="w-full"
+                        >
+                            {isManualConnecting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                            Conectar com este token
+                        </Button>
+
+                        {manualResult && (
+                            <div className="text-xs bg-card border rounded p-3 space-y-1 font-mono whitespace-pre-wrap break-all">
+                                <div className={manualResult.success ? "text-emerald-600 font-bold" : "text-red-600 font-bold"}>
+                                    {manualResult.success ? "✅ Sucesso" : "❌ Erro"}
+                                </div>
+                                {manualResult.success && (
+                                    <>
+                                        <div>Page: <strong>{manualResult.page_name}</strong> ({manualResult.page_id})</div>
+                                        <div>IG: <strong>@{manualResult.instagram_username}</strong> ({manualResult.instagram_business_account_id})</div>
+                                        <div>Webhook subscrito: <strong>{String(manualResult.webhook_subscribed)}</strong></div>
+                                        <div className="pt-2 border-t mt-2">
+                                            <div className="font-bold mb-1">Teste do User Profile API contra a própria business:</div>
+                                            <div>HTTP {manualResult.self_profile_test?.status_code}</div>
+                                            <pre className="text-[10px] whitespace-pre-wrap break-all mt-1">
+                                                {JSON.stringify(manualResult.self_profile_test?.response, null, 2)}
+                                            </pre>
+                                        </div>
+                                    </>
+                                )}
+                                {!manualResult.success && (
+                                    <>
+                                        {manualResult.http_status && (
+                                            <div className="text-red-600">HTTP {manualResult.http_status}</div>
+                                        )}
+                                        <div className="text-red-600">{manualResult.error}</div>
+                                        {manualResult.details && (
+                                            <pre className="text-[10px] mt-2 whitespace-pre-wrap break-all bg-muted/50 p-2 rounded">
+                                                {JSON.stringify(manualResult.details, null, 2)}
+                                            </pre>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {/* Painel de diagnóstico simples */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-base">Resumo técnico</CardTitle>
+                    </CardHeader>
+                    <CardContent className="text-xs space-y-2 font-mono">
+                        <div className={!FB_APP_ID ? "text-red-600 font-bold" : ""}>
+                            FB_APP_ID: <code>{FB_APP_ID || "❌ NÃO CONFIGURADO"}</code>
+                        </div>
+                        <div>Fonte: <code>{import.meta.env.VITE_FB_APP_ID ? "VITE_FB_APP_ID" : (import.meta.env.VITE_INSTAGRAM_APP_ID ? "VITE_INSTAGRAM_APP_ID (fallback)" : "nenhuma")}</code></div>
+                        <div>Graph version: <code>{GRAPH_VERSION}</code></div>
+                        <div>redirect_uri: <code>{redirectUri}</code></div>
+                        <div>Scopes: <code>{SCOPES}</code></div>
+                    </CardContent>
+                </Card>
+            </div>
+        </div>
+    );
+};
+
+export default WhatsAppConnectionTeste;

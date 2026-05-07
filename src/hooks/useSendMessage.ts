@@ -107,12 +107,33 @@ export const useSendMessage = () => {
           });
 
           if (error) {
-            console.error("Erro na Edge Function evolution-send-message:", error);
-            throw new Error(error.message || "Erro ao enviar mensagem via servidor.");
+            let serverMessage: string | undefined;
+            let serverErrorCode: string | undefined;
+            try {
+              if ('context' in (error as any) && (error as any).context) {
+                const body = await (error as any).context.json();
+                serverMessage = body?.message || body?.error;
+                serverErrorCode = body?.error;
+                console.error(
+                  "[useSendMessage] Edge Function body:",
+                  body,
+                  "status:",
+                  (error as any).context?.status
+                );
+              }
+            } catch (parseErr) {
+              console.error("[useSendMessage] Falha ao parsear context body:", parseErr);
+            }
+            console.error("[useSendMessage] SDK error raw:", error);
+            const e = new Error(
+              serverMessage || error.message || "Erro ao enviar mensagem via servidor."
+            );
+            if (serverErrorCode) (e as any).code = serverErrorCode;
+            throw e;
           }
 
           if (data?.error) {
-            throw new Error(data.error);
+            throw new Error(data.message || data.error);
           }
 
           // ✨ SUBSTITUIR mensagem temporária pela mensagem real do servidor
