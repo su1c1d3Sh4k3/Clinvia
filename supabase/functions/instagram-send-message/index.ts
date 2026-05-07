@@ -570,10 +570,17 @@ serve(async (req) => {
             /messaging window/i.test(err?.error?.message || '') ||
             /fora do per[ií]odo permitido/i.test(err?.error?.message || '');
 
+        // Detector: HUMAN_AGENT requer App Review pela Meta. Quando a app não
+        // tem essa permissão aprovada, o retry falha com mensagem específica.
+        const isHumanAgentNotApproved = (err: any) =>
+            /human agent.*review/i.test(err?.error?.message || '') ||
+            /must be reviewed and approved/i.test(err?.error?.message || '');
+
         // 1) Primeira tentativa — payload mínimo (sem messaging_type)
         let attempt = await callGraph(buildPayload('DEFAULT'));
         let response = { ok: attempt.ok, status: attempt.status };
         let responseData = attempt.data;
+        let humanAgentNeedsReview = false;
 
         // 2) Se janela 24h estourou (subcode específico), tenta HUMAN_AGENT (7 dias)
         if (!attempt.ok && isWindowError(attempt.data)) {
@@ -581,6 +588,13 @@ serve(async (req) => {
             const retry = await callGraph(buildPayload('HUMAN_AGENT'));
             response = { ok: retry.ok, status: retry.status };
             responseData = retry.data;
+
+            // Se o retry HUMAN_AGENT também falhou por falta de App Review,
+            // a app não tem permissão `human_agent` aprovada pela Meta.
+            // Sem isso, a janela 24h é limite duro — não dá pra estender via código.
+            if (!retry.ok && isHumanAgentNotApproved(retry.data)) {
+                humanAgentNeedsReview = true;
+            }
         }
 
         if (!response.ok) {
@@ -595,6 +609,19 @@ serve(async (req) => {
                 return new Response(
                     JSON.stringify({ success: false, error: 'Access token expired', code: 'TOKEN_EXPIRED' }),
                     { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                );
+            }
+
+            // Janela 24h expirou + app não tem human_agent aprovado pela Meta.
+            // Mensagem específica explicando o que aconteceu, sem jargão técnico.
+            if (humanAgentNeedsReview) {
+                return new Response(
+                    JSON.stringify({
+                        success: false,
+                        error: 'O cliente não envia mensagem há mais de 24h. O Instagram só permite responder dentro dessa janela. Aguarde o cliente enviar uma nova mensagem para retomar o atendimento.',
+                        code: 'WINDOW_EXPIRED_NO_HUMAN_AGENT'
+                    }),
+                    { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
                 );
             }
 
