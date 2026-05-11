@@ -18,14 +18,48 @@ function formatLastHeartbeat(iso: string | null | undefined): string {
     }
 }
 
+/**
+ * Lê a sessão Supabase SINCRONAMENTE do localStorage para evitar o flash
+ * de "user=null" durante o reload. Sem isso, o useAuth começa com user=null
+ * e só popula ~50-500ms depois quando getSession() resolve — o que faz a
+ * UI "piscar" mostrando estado deslogado, depois logado.
+ *
+ * Formato do storage do Supabase: `sb-<projectRef>-auth-token` contendo
+ * JSON com { access_token, refresh_token, user, expires_at, ... }.
+ * Se o token estiver expirado, retorna null (deixa o getSession lidar).
+ */
+const SUPABASE_PROJECT_REF = "swfshqvvbohnahdyndch";
+const SUPABASE_AUTH_STORAGE_KEY = `sb-${SUPABASE_PROJECT_REF}-auth-token`;
+
+function readSessionFromStorage(): Session | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(SUPABASE_AUTH_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    // Token expirado → vai precisar de refresh, deixa o caminho assíncrono cuidar
+    if (parsed?.expires_at && Number(parsed.expires_at) * 1000 < Date.now()) {
+      return null;
+    }
+    if (!parsed?.user || !parsed?.access_token) return null;
+    return parsed as Session;
+  } catch {
+    return null;
+  }
+}
+
 export const useAuth = () => {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Bootstrap SÍNCRONO: inicializa com a sessão do localStorage (se houver).
+  // Componentes que dependem de `user` renderizam imediatamente com o estado
+  // correto, sem flash de "deslogado". O getSession() abaixo revalida em
+  // background e atualiza caso o token tenha expirado / sido revogado.
+  const [session, setSession] = useState<Session | null>(() => readSessionFromStorage());
+  const [user, setUser] = useState<User | null>(() => readSessionFromStorage()?.user ?? null);
+  const [loading, setLoading] = useState<boolean>(() => readSessionFromStorage() === null);
   const { toast } = useToast();
 
   useEffect(() => {
-    // Set up auth state listener FIRST
+    // Listener para mudanças (login, logout, refresh de token, etc.)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         setSession(session);
@@ -34,7 +68,9 @@ export const useAuth = () => {
       }
     );
 
-    // THEN check for existing session
+    // Revalida sessão em background. Se o token bootstrap do localStorage
+    // estiver inválido, o supabase faz signOut automaticamente e o listener
+    // acima atualiza para null.
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
