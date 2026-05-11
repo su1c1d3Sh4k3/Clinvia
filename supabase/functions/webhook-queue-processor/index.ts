@@ -116,6 +116,15 @@ serve(async (req) => {
                     throw new Error(invokeError.message);
                 }
 
+                // CRÍTICO: validar success semântico, não só HTTP status.
+                // Antes, o handler podia retornar { success: false } com HTTP 500
+                // (msgError) e o processor marcava como done — a mensagem sumia.
+                // Agora qualquer { success: false } dispara retry/failed.
+                if (data && data.success === false) {
+                    const errMsg = data.message || data.error || 'Handler reported success=false';
+                    throw new Error(`[handler ${targetFunction}] ${errMsg}`);
+                }
+
                 // 4. Marcar como 'done'
                 await supabase
                     .from('webhook_queue')

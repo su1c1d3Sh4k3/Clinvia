@@ -13,6 +13,14 @@ import {
 } from "../_shared/utils.ts";
 import { makeOpenAIRequest, trackTokenUsage } from "../_shared/token-tracker.ts";
 
+// EdgeRuntime.waitUntil mantém o processo vivo após o return 200 para que
+// tasks de background (persistir foto, download de mídia) terminem mesmo
+// depois do handler retornar. Crítico para evitar perda de mensagens quando
+// o WhatsApp CDN está lento.
+declare const EdgeRuntime: {
+    waitUntil: (promise: Promise<any>) => void;
+};
+
 /**
  * webhook-handle-message
  *
@@ -46,7 +54,9 @@ async function fetchProfilePicFromEvolution(
                     'apikey': apikey,
                 },
                 body: JSON.stringify({ number }),
-                signal: AbortSignal.timeout(8_000),
+                // 3s timeout (era 8s) — em background, mas evita travar quando
+                // CDN do WhatsApp está indisponível.
+                signal: AbortSignal.timeout(3_000),
             }
         );
         if (!response.ok) return null;
@@ -77,7 +87,8 @@ async function fetchProfilePicFromUzapi(
                 'token': apikey,
             },
             body: JSON.stringify({ number }),
-            signal: AbortSignal.timeout(8_000),
+            // 3s timeout (era 8s) — em background, mas evita travar quando UZAPI lenta.
+            signal: AbortSignal.timeout(3_000),
         });
         if (!response.ok) return null;
         const data = await response.json().catch(() => null) as any;
@@ -340,6 +351,21 @@ serve(async (req) => {
 
         const payload = JSON.parse(rawBody);
 
+        // Tasks que devem rodar mas que NÃO podem bloquear o INSERT da mensagem.
+        // Coletadas durante o handler e disparadas via EdgeRuntime.waitUntil no
+        // final, antes do return. Mantém a mensagem sendo salva mesmo quando
+        // WhatsApp CDN está lento (causa principal de drop silencioso ~8.5%).
+        const backgroundTasks: Promise<any>[] = [];
+        const flushBackgroundTasks = () => {
+            if (backgroundTasks.length === 0) return;
+            if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime?.waitUntil) {
+                EdgeRuntime.waitUntil(Promise.allSettled(backgroundTasks));
+            } else {
+                // Fallback (dev local): apenas dispara, sem garantia de conclusão
+                Promise.allSettled(backgroundTasks).catch(() => { });
+            }
+        };
+
         // ✅ INPUT VALIDATION
         const validationError = validateWebhookPayload(payload);
         if (validationError) {
@@ -591,20 +617,22 @@ serve(async (req) => {
                 .maybeSingle();
 
             if (contact) {
-                // REGRA: TODO webhook deve garantir a persistência da foto.
-                // `ensureContactPhotoPersisted` cobre os 3 cenários:
-                //   1) payload traz foto nova → persiste no Storage
-                //   2) foto atual é temporária (qualquer CDN externa) → re-persiste
-                //   3) contato sem foto → busca na Evolution API
-                const persistedUrl = await ensureContactPhotoPersisted(
-                    supabase,
-                    contact,
-                    profilePicUrl,
-                    instance,
-                    instanceName,
-                    waNumber
+                // BACKGROUND: persistência de foto agora roda em background via
+                // EdgeRuntime.waitUntil — não bloqueia o INSERT da mensagem.
+                // Anteriormente, fetches HTTP pro WhatsApp CDN (até 24s com timeouts)
+                // estouravam o tempo do edge function, causando perda silenciosa
+                // da mensagem em 8.5% dos casos.
+                const contactRef = contact;
+                backgroundTasks.push(
+                    ensureContactPhotoPersisted(
+                        supabase,
+                        contactRef,
+                        profilePicUrl,
+                        instance,
+                        instanceName,
+                        waNumber
+                    ).catch(e => console.warn('[webhook-handle-message] bg photo error:', e))
                 );
-                if (persistedUrl) contact.profile_pic_url = persistedUrl;
 
                 // Atualizar nome APENAS se não foi editado manualmente e não é grupo
                 if (!contact.edited && !contact.is_group && contactName && contactName !== 'Desconhecido' && contactName !== contact.push_name) {
@@ -651,32 +679,37 @@ serve(async (req) => {
 
                         if (existingContact) {
                             contact = existingContact;
-                            // Mesmo contato duplicado: ainda precisa garantir foto persistida
-                            const persistedUrl = await ensureContactPhotoPersisted(
-                                supabase,
-                                contact,
-                                profilePicUrl,
-                                instance,
-                                instanceName,
-                                waNumber
+                            // BACKGROUND: garante persistência sem bloquear o INSERT.
+                            const contactRef = contact;
+                            backgroundTasks.push(
+                                ensureContactPhotoPersisted(
+                                    supabase,
+                                    contactRef,
+                                    profilePicUrl,
+                                    instance,
+                                    instanceName,
+                                    waNumber
+                                ).catch(e => console.warn('[webhook-handle-message] bg photo error (dup):', e))
                             );
-                            if (persistedUrl) contact.profile_pic_url = persistedUrl;
                         }
                     }
                 } else {
                     contact = newContact;
 
-                    // Garante persistência da foto para novo contato
-                    // (cobre payload com foto, foto temporária e fallback para Evolution API)
-                    const persistedUrl = await ensureContactPhotoPersisted(
-                        supabase,
-                        contact,
-                        profilePicUrl,
-                        instance,
-                        instanceName,
-                        waNumber
+                    // BACKGROUND: novo contato. Foto temp já foi salva no INSERT
+                    // acima (profile_pic_url: profilePicUrl). Background re-persiste
+                    // como URL permanente do Storage quando der.
+                    const contactRef = contact;
+                    backgroundTasks.push(
+                        ensureContactPhotoPersisted(
+                            supabase,
+                            contactRef,
+                            profilePicUrl,
+                            instance,
+                            instanceName,
+                            waNumber
+                        ).catch(e => console.warn('[webhook-handle-message] bg photo error (new):', e))
                     );
-                    if (persistedUrl) contact.profile_pic_url = persistedUrl;
                 }
             }
 
@@ -927,6 +960,7 @@ serve(async (req) => {
 
                     if (existingMsg) {
                         console.log('[webhook-handle-message] Duplicate webhook skipped, evolution_id:', messageId);
+                        flushBackgroundTasks();
                         return new Response(JSON.stringify({ success: true, duplicate: true }), {
                             headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200
                         });
@@ -970,6 +1004,18 @@ serve(async (req) => {
 
                 if (msgError) {
                     console.error('[webhook-handle-message] Error saving message:', msgError);
+                    // CRÍTICO: retornar 500 para o processor marcar como pending
+                    // e retentar. Anteriormente engolíamos esse erro silenciosamente
+                    // e a mensagem sumia da plataforma (issue diagnóstico 2026-05-11).
+                    return new Response(
+                        JSON.stringify({
+                            success: false,
+                            error: 'message_insert_failed',
+                            message: msgError.message || 'Failed to save message',
+                            code: msgError.code
+                        }),
+                        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                    );
                 } else {
                     console.log('[webhook-handle-message] Message saved:', savedMessage.id);
 
@@ -1293,6 +1339,7 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
 
                     // Do NOT invoke delivery-automation-respond here — the DB
                     // trigger on messages INSERT handles it. Just block N8N.
+                    flushBackgroundTasks();
                     return new Response(
                         JSON.stringify({ success: true, routed: 'delivery_automation', path: 'db_trigger' }),
                         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
@@ -1433,6 +1480,10 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
             }
         }
 
+        // Dispara tasks de background (persistir fotos) ANTES de retornar.
+        // O processo do edge function permanece vivo até elas terminarem,
+        // mas o INSERT da mensagem já foi feito — não pode mais ser perdido.
+        flushBackgroundTasks();
         return new Response(
             JSON.stringify({ success: true, message: "Processed" }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
