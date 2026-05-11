@@ -166,13 +166,19 @@ export const ConversationsList = ({
     };
   }, []);
 
-  // Passar role e teamMemberId para filtrar por agente
-  const { conversations, isLoading } = useConversations({
+  // Passar role e teamMemberId para filtrar por agente.
+  // Filtros queue/instance/type/channel agora vão direto para o server (paginação).
+  // searchQuery dispara branch de busca server-side (LIMIT 100, atravessa TUDO).
+  const { conversations, isLoading, hasMore, isLoadingMore, isSearching, loadMore } = useConversations({
     tab: selectedTypeFilter === "groups" ? "all" : tab,
     userId: user?.id,
     role: userRole,
     teamMemberId: currentTeamMember?.id,
-    channel: selectedChannelFilter
+    channel: selectedChannelFilter,
+    searchQuery,
+    queueId: selectedQueueFilter,
+    instanceId: selectedInstanceFilter,
+    typeFilter: selectedTypeFilter,
   });
 
   // Buscar lista de membros da equipe para exibir nome do atendente atribuído
@@ -230,44 +236,16 @@ export const ConversationsList = ({
   // DEBUG: Log unreadCounts to see if channel separation is working
   console.log('[DEBUG] unreadCounts:', unreadCounts, 'selectedChannelFilter:', selectedChannelFilter);
 
-  const filteredConversations = conversations.filter((conv) => {
-    const contact = conv.contacts;
-    const group = (conv as any).groups;
-    const isGroup = !!(conv as any).group_id;
-
-    // Get display name safely
-    let displayName = "";
-    if (isGroup && group) {
-      displayName = group.group_name || "Grupo sem Nome";
-    } else if (contact) {
-      displayName = contact.push_name || contact.phone || contact.number || "";
-    }
-
-    const matchesSearch =
-      displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (contact?.number?.includes(searchQuery)) ||
-      (contact?.phone?.includes(searchQuery)) ||
-      (group?.remote_jid?.includes(searchQuery)) ||
-      (conv as any).ticket_id?.toString().includes(searchQuery) ||
-      conv.id.includes(searchQuery);
-
-    const matchesQueue = selectedQueueFilter
-      ? (conv as any).queue_id === selectedQueueFilter
-      : true;
-
-    const matchesTag = selectedTagFilter
-      ? contact?.contact_tags?.some((ct: any) => ct.tags.id === selectedTagFilter)
-      : true;
-
-    const matchesInstance = selectedInstanceFilter
-      ? (conv as any).instance_id === selectedInstanceFilter
-      : true;
-
-    // Filter by People vs Groups
-    const matchesType = selectedTypeFilter === "groups" ? isGroup : !isGroup;
-
-    return matchesSearch && matchesQueue && matchesTag && matchesInstance && matchesType;
-  });
+  // Filtros server-side já cobrem: search, queue, instance, type (people/groups),
+  // channel e role (agent). Aqui só fica o filtro de TAG, que envolve subquery
+  // em contact_tags — mantido client-side por enquanto, aplicado nas conversas
+  // já carregadas.
+  const filteredConversations = selectedTagFilter
+    ? conversations.filter((conv) => {
+      const contact = conv.contacts;
+      return contact?.contact_tags?.some((ct: any) => ct.tags?.id === selectedTagFilter);
+    })
+    : conversations;
 
   const selectedConversation = conversations.find(c => c.id === selectedId);
 
@@ -554,7 +532,9 @@ export const ConversationsList = ({
         {isLoading ? (
           <div className="p-4 text-center text-muted-foreground">Carregando...</div>
         ) : filteredConversations.length === 0 ? (
-          <div className="p-4 text-center text-muted-foreground">Nenhuma conversa encontrada</div>
+          <div className="p-4 text-center text-muted-foreground">
+            {isSearching ? "Nenhum resultado para a busca" : "Nenhuma conversa encontrada"}
+          </div>
         ) : (
           <div className="p-2 space-y-1">
             {filteredConversations.map((conversation, index) => {
@@ -779,6 +759,20 @@ export const ConversationsList = ({
                 </button>
               );
             })}
+            {/* Botão "Carregar mais" — só aparece quando NÃO estamos em modo busca
+                E ainda há páginas a carregar. Carrega +20 a cada clique. */}
+            {hasMore && !isSearching && (
+              <div className="pt-2 pb-4">
+                <Button
+                  variant="outline"
+                  className="w-full max-w-[340px] mx-auto block"
+                  onClick={() => loadMore()}
+                  disabled={isLoadingMore}
+                >
+                  {isLoadingMore ? "Carregando..." : "Carregar mais"}
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </ScrollArea>
