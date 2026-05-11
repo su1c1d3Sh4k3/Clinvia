@@ -54,6 +54,10 @@ export const useUserRole = () => {
             return null; // Usuário não registrado em team_members
         },
         enabled: !!user,
-        staleTime: 1000 * 60 * 10, // Cache for 10 minutes
+        // 30min de cache (era 10min). Role de um user muda raramente — quando
+        // muda (admin promove/demote), o componente que faz a mudança invalida
+        // a query explicitamente.
+        staleTime: 1000 * 60 * 30,
+        gcTime: 1000 * 60 * 60,
     });
 };

@@ -88,9 +88,11 @@ export function RestrictedInstancesBanner() {
             return (data ?? []) as RestrictedInstance[];
         },
         enabled: !!user && !!ownerId && validated,
-        refetchInterval: 15_000,
+        // 60s de polling (era 15s). Restrições WhatsApp duram horas/dias —
+        // checagem a cada minuto é mais que suficiente. Alívio de 4x na carga.
+        refetchInterval: 60_000,
         refetchOnWindowFocus: true,
-        staleTime: 5_000,
+        staleTime: 30_000,
     });
 
     // Filtra entradas cuja data já passou (restrição expirou) — defesa em profundidade

@@ -56,6 +56,10 @@ export function useOwnerId() {
             return ownerId as string;
         },
         enabled: !!user,
-        staleTime: 1000 * 60 * 10, // Cache por 10 minutos
+        // 60min de cache (era 10min). owner_id de um user NUNCA muda durante
+        // a sessão — é constante. Refetch só faz sentido após logout/login,
+        // que invalida tudo pelo queryKey user.id.
+        staleTime: 1000 * 60 * 60,
+        gcTime: 1000 * 60 * 60 * 2,
     });
 }

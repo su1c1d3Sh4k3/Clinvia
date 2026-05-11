@@ -66,6 +66,11 @@ export const useUnreadCounts = (userId?: string, channel?: "whatsapp" | "instagr
             return result;
         },
         enabled: !!userId,
+        // 30s de cache. O realtime já invalida imediatamente quando uma
+        // conversation muda (nova msg, marcar como lida) — o staleTime evita
+        // refetch redundante em re-mounts (troca de tab/canal) que não
+        // mudaram o estado real.
+        staleTime: 30_000,
     });
 
     useEffect(() => {

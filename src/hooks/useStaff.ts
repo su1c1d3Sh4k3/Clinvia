@@ -70,7 +70,12 @@ export function useStaff() {
 
             return staff;
         },
-        staleTime: 1000 * 60 * 5, // 5 minutes
+        // 30min de cache (era 5min). Lista de equipe muda raramente (admin
+        // adiciona/remove membros manualmente). Mutations no Team.tsx já
+        // invalidam essa query explicitamente, então não precisamos refetch
+        // automático curto. Alívio: ~6x menos hits nessa query no boot.
+        staleTime: 1000 * 60 * 30,
+        gcTime: 1000 * 60 * 60, // 1h em memória após unmount
     });
 }
 
@@ -118,7 +123,11 @@ export function useCurrentTeamMember() {
 
             return teamMember as StaffMember | null;
         },
-        staleTime: 1000 * 60 * 5,
+        // 30min de cache (era 5min). O team_member do user logado muda
+        // raramente (role/configurações). Operações que alteram esses
+        // dados invalidam a query explicitamente.
+        staleTime: 1000 * 60 * 30,
+        gcTime: 1000 * 60 * 60,
     });
 }
 

@@ -45,9 +45,12 @@ export function DisconnectedInstancesBanner() {
         // Só roda após a validação inicial — o estado no banco pode estar
         // desatualizado até o cron / o on-login health-check rodar.
         enabled: !!user && !!ownerId && validated,
-        refetchInterval: 15_000, // re-consulta a cada 15s
+        // 60s de polling (era 15s). Mudanças reais de status chegam imediatamente
+        // via realtime subscription abaixo — o poll só serve como fallback caso o
+        // realtime caia. Alívio de carga: 4x menos requests/min por cliente ativo.
+        refetchInterval: 60_000,
         refetchOnWindowFocus: true,
-        staleTime: 5_000,
+        staleTime: 30_000,
     });
 
     // Realtime: invalida o cache imediatamente quando qualquer instance do
