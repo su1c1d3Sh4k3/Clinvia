@@ -14,19 +14,7 @@ type Conversation = Tables<"conversations"> & {
     queues: { name: string } | null;
 };
 
-type ConversationWithLastMsg = Conversation & {
-    last_message_obj: {
-        direction: string | null;
-        body: string | null;
-        created_at: string | null;
-        status: string | null;
-        message_type: string | null;
-    } | null;
-    last_message_body?: string | null;
-    last_message_direction?: string | null;
-    last_message_status?: string | null;
-    last_message_type?: string | null;
-};
+type ConversationWithLastMsg = Conversation & { last_message_obj: any };
 
 type TabFilter = "open" | "pending" | "resolved" | "all";
 
@@ -71,47 +59,47 @@ const CONVERSATION_SELECT = `
   )
 `;
 
-/**
- * Mapeia as colunas denormalizadas `last_message_*` da tabela conversations
- * para o shape `last_message_obj` que o frontend já espera. Zero query extra
- * — as colunas são populadas por trigger AFTER INSERT messages (ver migration
- * 20260506140000_denormalize_last_message.sql).
- *
- * Para conversas com `messages_history` JSONB (resolved) e sem last_message_body
- * (backfill antigo), faz fallback síncrono lendo o último item do array.
- */
-function attachLastMessages(rows: Conversation[]): ConversationWithLastMsg[] {
-    return rows.map((conv) => {
-        const r = conv as any;
-        // Prioridade 1: colunas denormalizadas (trigger ON INSERT messages)
-        if (r.last_message_body !== null && r.last_message_body !== undefined) {
-            return {
-                ...conv,
-                last_message_obj: {
-                    direction: r.last_message_direction ?? null,
-                    body: r.last_message_body,
-                    created_at: r.last_message_at ?? null,
-                    status: r.last_message_status ?? null,
-                    message_type: r.last_message_type ?? null,
-                },
-            } as ConversationWithLastMsg;
-        }
-        // Prioridade 2: messages_history JSONB (resolved sem trigger antigo)
-        if (Array.isArray(r.messages_history) && r.messages_history.length > 0) {
-            const last = r.messages_history[r.messages_history.length - 1];
-            return {
-                ...conv,
-                last_message_obj: {
-                    direction: last.role === 'user' ? 'inbound' : 'outbound',
-                    body: last.content || '',
-                    created_at: last.created_at ?? null,
-                    status: 'read',
-                    message_type: last.type || 'text',
-                },
-            } as ConversationWithLastMsg;
-        }
-        return { ...conv, last_message_obj: null } as ConversationWithLastMsg;
-    });
+/** Resolve a última mensagem de cada conversa em paralelo (N queries). */
+async function attachLastMessages(rows: Conversation[]): Promise<ConversationWithLastMsg[]> {
+    return Promise.all(
+        rows.map(async (conv) => {
+            try {
+                // Para conversas resolvidas, mensagens podem ter sido removidas;
+                // tenta messages_history (JSONB) antes do fallback à tabela.
+                if (conv.status === 'resolved') {
+                    const history = (conv as any).messages_history;
+                    if (Array.isArray(history) && history.length > 0) {
+                        const lastHistMsg = history[history.length - 1];
+                        return {
+                            ...conv,
+                            last_message_obj: {
+                                direction: lastHistMsg.role === 'user' ? 'inbound' : 'outbound',
+                                body: lastHistMsg.content || '',
+                                created_at: lastHistMsg.created_at,
+                                status: 'read',
+                                message_type: lastHistMsg.type || 'text',
+                            },
+                        } as ConversationWithLastMsg;
+                    }
+                }
+
+                const { data: lastMsg } = await supabase
+                    .from('messages')
+                    .select('direction, body, created_at, status, message_type')
+                    .eq('conversation_id', conv.id)
+                    .not('body', 'like', '%transferida de%')
+                    .not('body', 'like', '%transferiu para%')
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+
+                return { ...conv, last_message_obj: lastMsg || null } as ConversationWithLastMsg;
+            } catch (e) {
+                console.error('[useConversations] erro buscando última msg de', conv.id, e);
+                return { ...conv, last_message_obj: null } as ConversationWithLastMsg;
+            }
+        }),
+    );
 }
 
 /** Aplica filtros comuns (status, channel, type, queue, instance, role) à query. */
