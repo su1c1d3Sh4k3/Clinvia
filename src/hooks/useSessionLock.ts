@@ -3,10 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 const SESSION_KEY = "clinvia_session_id";
 const IMPERSONATION_KEY = "clinvia_impersonation";
-const HEARTBEAT_INTERVAL_MS = 60_000; // 60s — banco considera stale após 5min
-// Exige N invalidações consecutivas antes de derrubar a sessão. Evita falsos
-// positivos transitórios (lag de DB, hot deploy, retry inflight, etc.).
-const INVALID_THRESHOLD = 2;
+const HEARTBEAT_INTERVAL_MS = 30_000; // 30s — banco considera stale após 2min
 
 /**
  * Verdadeiro quando o admin está em modo "Acessar como cliente".
@@ -73,7 +70,6 @@ export function detectDeviceLabel(): string {
 export function useSessionLock(onSessionLost: (reason: string) => void): void {
     const intervalRef = useRef<number | null>(null);
     const userIdRef = useRef<string | null>(null);
-    const invalidCountRef = useRef<number>(0);
 
     useEffect(() => {
         const stop = () => {
@@ -85,7 +81,6 @@ export function useSessionLock(onSessionLost: (reason: string) => void): void {
 
         const start = () => {
             stop();
-            invalidCountRef.current = 0;
             intervalRef.current = window.setInterval(async () => {
                 // Pula heartbeat durante impersonação — auth.uid() é do cliente
                 // e o session_id é do admin; o RPC sempre retornaria valid:false.
@@ -97,41 +92,16 @@ export function useSessionLock(onSessionLost: (reason: string) => void): void {
                         p_session_id: sid,
                     });
                     if (error) {
-                        // Erros de rede/RPC NÃO devem derrubar a sessão.
-                        console.warn("[useSessionLock] heartbeat error (tolerado):", error);
+                        console.warn("[useSessionLock] heartbeat error:", error);
                         return;
                     }
                     if (data && (data as any).valid === false) {
-                        invalidCountRef.current += 1;
                         const reason = (data as any).reason ?? "session_lost";
-                        // Só desloga após N invalidações consecutivas — protege
-                        // contra ruído transitório (deploy, replicação atrasada,
-                        // race entre acquire e heartbeat em login recente).
-                        if (invalidCountRef.current >= INVALID_THRESHOLD) {
-                            console.warn(
-                                "[useSessionLock] session invalid em",
-                                invalidCountRef.current,
-                                "heartbeats consecutivos, forçando logout:",
-                                reason,
-                            );
-                            onSessionLost(reason);
-                            invalidCountRef.current = 0;
-                        } else {
-                            console.warn(
-                                "[useSessionLock] heartbeat invalid (",
-                                invalidCountRef.current,
-                                "/",
-                                INVALID_THRESHOLD,
-                                "), aguardando próximo:",
-                                reason,
-                            );
-                        }
-                    } else {
-                        // Heartbeat OK → reseta contador de invalidações.
-                        invalidCountRef.current = 0;
+                        console.warn("[useSessionLock] session invalid, forcing logout:", reason);
+                        onSessionLost(reason);
                     }
                 } catch (err) {
-                    console.warn("[useSessionLock] heartbeat exception (tolerado):", err);
+                    console.warn("[useSessionLock] heartbeat exception:", err);
                 }
             }, HEARTBEAT_INTERVAL_MS);
         };

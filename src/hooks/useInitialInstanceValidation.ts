@@ -23,27 +23,6 @@ import { supabase } from "@/integrations/supabase/client";
 const validatedOwners = new Set<string>();
 const inFlight = new Map<string, Promise<void>>();
 
-// Timeout MÁXIMO da validação on-login. Se a uzapi-health-check estiver lenta
-// (instância travada, UZAPI sem resposta), o app NÃO espera — libera o render
-// dos banners com o estado atual do banco. O cron periódico atualiza depois.
-const VALIDATION_TIMEOUT_MS = 2500;
-
-function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | "timeout"> {
-    return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve("timeout"), ms);
-        p.then(
-            (v) => {
-                clearTimeout(timer);
-                resolve(v);
-            },
-            () => {
-                clearTimeout(timer);
-                resolve("timeout");
-            },
-        );
-    });
-}
-
 async function validateOwnerOnce(ownerId: string): Promise<void> {
     if (validatedOwners.has(ownerId)) return;
     const existing = inFlight.get(ownerId);
@@ -51,15 +30,9 @@ async function validateOwnerOnce(ownerId: string): Promise<void> {
 
     const p = (async () => {
         try {
-            // Limita o tempo de espera: se a edge function demorar mais que o
-            // timeout, abandona em silêncio. Banners renderizam com o estado
-            // do banco e o cron de 10min eventualmente sincroniza.
-            await withTimeout(
-                supabase.functions.invoke("uzapi-health-check", {
-                    body: { owner_id: ownerId },
-                }),
-                VALIDATION_TIMEOUT_MS,
-            );
+            await supabase.functions.invoke("uzapi-health-check", {
+                body: { owner_id: ownerId },
+            });
         } catch (err) {
             console.warn("[useInitialInstanceValidation] health-check failed:", err);
         } finally {
@@ -76,13 +49,15 @@ export function useInitialInstanceValidation(
     ownerId: string | null | undefined,
 ): { validated: boolean } {
     const queryClient = useQueryClient();
-    // Começa validated=true SE já validamos este owner OU se NÃO há ownerId
-    // ainda. Não bloqueamos o render esperando a validação — ela apenas
-    // refresca o estado em background quando termina.
-    const [validated, setValidated] = useState<boolean>(true);
+    const [validated, setValidated] = useState<boolean>(() =>
+        ownerId ? validatedOwners.has(ownerId) : false,
+    );
 
     useEffect(() => {
-        if (!ownerId) return;
+        if (!ownerId) {
+            setValidated(false);
+            return;
+        }
         if (validatedOwners.has(ownerId)) {
             setValidated(true);
             return;
@@ -91,9 +66,6 @@ export function useInitialInstanceValidation(
         let cancelled = false;
         validateOwnerOnce(ownerId).then(() => {
             if (cancelled) return;
-            // Após a validação terminar, invalida queries para refletir estado
-            // fresh — mas os banners JÁ estão renderizando o estado do banco
-            // desde o início (não houve flash de "loading silencioso").
             queryClient.invalidateQueries({
                 queryKey: ["instances-disconnected", ownerId],
             });
