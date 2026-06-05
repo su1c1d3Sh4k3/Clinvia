@@ -7,7 +7,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Trash2, Edit, Image as ImageIcon, Loader2, Download, Upload } from "lucide-react";
+import { Plus, Search, Trash2, Edit, Image as ImageIcon, Loader2, Download, Upload, FileSpreadsheet } from "lucide-react";
+import * as XLSX from "xlsx";
 import { ProductServiceModal } from "@/components/ProductServiceModal";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -160,6 +161,34 @@ service;Exemplo de Serviço;Descrição do serviço aqui;150.00;;60;7`;
             title: "Modelo baixado com sucesso!",
             description: "Abra o arquivo no Excel, preencha e salve como CSV."
         });
+    };
+
+    // Export data to Excel
+    const handleExportExcel = () => {
+        if (!filteredItems || filteredItems.length === 0) {
+            toast({ title: "Nenhum item para exportar", variant: "destructive" });
+            return;
+        }
+
+        const rows = filteredItems.map((item) => ({
+            Tipo: item.type === "product" ? "Produto" : "Serviço",
+            Nome: item.name,
+            Descrição: item.description || "",
+            Valor: item.price,
+            Estoque: item.stock_quantity ?? "",
+            "Duração (min)": item.duration_minutes ?? "",
+            "Alerta Oportunidade (dias)": item.opportunity_alert_days ?? "",
+            "Visível IA": (item.visible_for_ai ?? true) ? "Sim" : "Não",
+            "Disponível IA": (item.available_for_ai ?? true) ? "Sim" : "Não",
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(rows);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Dados");
+        const tabLabel = activeTab === "product" ? "produtos" : "servicos";
+        XLSX.writeFile(wb, `${tabLabel}_clinvia.xlsx`);
+
+        toast({ title: "Exportação concluída!" });
     };
 
     // Handle import button click
@@ -318,6 +347,10 @@ service;Exemplo de Serviço;Descrição do serviço aqui;150.00;;60;7`;
                 </div>
                 {canCreate('products_services') && (
                     <div className="flex gap-2 flex-wrap">
+                        <Button variant="outline" size="sm" onClick={handleExportExcel} className="h-8 md:h-9 text-xs md:text-sm px-2 md:px-3 bg-white dark:bg-transparent border border-[#D4D5D6] dark:border-border">
+                            <FileSpreadsheet className="w-4 h-4 md:mr-2" />
+                            <span className="hidden md:inline">Exportar Excel</span>
+                        </Button>
                         <Button variant="outline" size="sm" onClick={handleDownloadTemplate} className="h-8 md:h-9 text-xs md:text-sm px-2 md:px-3 bg-white dark:bg-transparent border border-[#D4D5D6] dark:border-border">
                             <Download className="w-4 h-4 md:mr-2" />
                             <span className="hidden md:inline">Baixar Modelo</span>
