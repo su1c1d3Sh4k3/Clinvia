@@ -1,9 +1,15 @@
 import { useState } from "react";
-import { useStaff } from "@/hooks/useStaff";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { Users } from "lucide-react";
+
+interface Professional {
+  id: string;
+  name: string;
+  specialty?: string;
+}
 
 interface ProfessionalSelectorProps {
   selected: string[];
@@ -20,8 +26,19 @@ export const ProfessionalSelector = ({
   onApplyToAllChange,
   showApplyToAll = false,
 }: ProfessionalSelectorProps) => {
-  const { data: staff } = useStaff();
   const [open, setOpen] = useState(false);
+
+  const { data: professionals } = useQuery({
+    queryKey: ["professionals"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("professionals")
+        .select("id, name, specialty")
+        .order("name");
+      if (error) throw error;
+      return data as Professional[];
+    },
+  });
 
   const toggle = (id: string) => {
     onChange(
@@ -31,9 +48,9 @@ export const ProfessionalSelector = ({
     );
   };
 
-  const selectedNames = (staff || [])
-    .filter((s) => selected.includes(s.id))
-    .map((s) => s.name);
+  const selectedNames = (professionals || [])
+    .filter((p) => selected.includes(p.id))
+    .map((p) => p.name);
 
   return (
     <div className="space-y-2">
@@ -56,26 +73,24 @@ export const ProfessionalSelector = ({
 
       {open && (
         <div className="border rounded-md bg-popover p-2 space-y-1 max-h-48 overflow-y-auto">
-          {(staff || []).map((member) => (
+          {(professionals || []).map((prof) => (
             <label
-              key={member.id}
+              key={prof.id}
               className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-accent cursor-pointer text-sm"
             >
               <Checkbox
-                checked={selected.includes(member.id)}
-                onCheckedChange={() => toggle(member.id)}
+                checked={selected.includes(prof.id)}
+                onCheckedChange={() => toggle(prof.id)}
               />
-              <span>{member.name}</span>
-              <span className="text-xs text-muted-foreground ml-auto">
-                {member.role === "admin"
-                  ? "Admin"
-                  : member.role === "supervisor"
-                  ? "Supervisor"
-                  : "Atendente"}
-              </span>
+              <span>{prof.name}</span>
+              {prof.specialty && (
+                <span className="text-xs text-muted-foreground ml-auto">
+                  {prof.specialty}
+                </span>
+              )}
             </label>
           ))}
-          {(!staff || staff.length === 0) && (
+          {(!professionals || professionals.length === 0) && (
             <p className="text-sm text-muted-foreground text-center py-2">
               Nenhum profissional cadastrado
             </p>
