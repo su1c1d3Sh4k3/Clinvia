@@ -495,7 +495,7 @@ export default function Settings() {
             <h1 className="text-2xl md:text-3xl font-bold mb-4 md:mb-8 text-foreground">Configurações do Sistema</h1>
 
             <Tabs defaultValue="profile" className="w-full">
-                <TabsList className={`grid w-full mb-4 md:mb-8 h-auto ${userRole === 'admin' ? 'grid-cols-7' : 'grid-cols-4'}`}>
+                <TabsList className="flex w-full justify-center mb-4 md:mb-8 h-auto">
                     <TabsTrigger value="profile" className="flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
                         <User className="h-4 w-4" />
                         <span className="hidden md:inline">Perfil</span>
