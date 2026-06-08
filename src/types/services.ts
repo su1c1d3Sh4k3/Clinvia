@@ -10,6 +10,7 @@ export interface ServiceName {
   category_id: string;
   name: string;
   description: string | null;
+  user_id: string | null;
   created_at: string;
 }
 
@@ -23,6 +24,7 @@ export interface ServiceApplication {
   default_expiry_months: number;
   default_recurrence: boolean;
   default_session_interval: number | null;
+  default_duration_minutes: number | null;
   created_at: string;
 }
 
@@ -40,6 +42,7 @@ export interface ServiceClient {
   expiry_months: number;
   recurrence: boolean;
   session_interval: number | null;
+  duration_minutes: number | null;
   professionals: string[];
   commission_pct: number;
   msg_recurrence_1: string | null;

@@ -5,20 +5,23 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ServiceClient, ServiceName } from "@/types/services";
 import { ServiceApplicationsTable } from "./ServiceApplicationsTable";
-import { toast } from "sonner";
+import { AddServiceModal } from "./AddServiceModal";
 
 interface ServiceCategoryCardProps {
+  categoryId: string;
   categoryName: string;
   serviceNames: ServiceName[];
   applications: ServiceClient[];
 }
 
 export const ServiceCategoryCard = ({
+  categoryId,
   categoryName,
   serviceNames,
   applications,
 }: ServiceCategoryCardProps) => {
   const [expanded, setExpanded] = useState(false);
+  const [showAddService, setShowAddService] = useState(false);
 
   // Get unique services that have applications
   const serviceIds = [...new Set(applications.map((a) => a.service_name_id))];
@@ -65,9 +68,8 @@ export const ServiceCategoryCard = ({
               <Button
                 variant="outline"
                 size="sm"
-                className="gap-1 text-xs opacity-50 cursor-not-allowed"
-                disabled
-                onClick={() => toast.info("Em breve!")}
+                className="gap-1 text-xs"
+                onClick={() => setShowAddService(true)}
               >
                 <Plus className="w-3 h-3" />
                 Adicionar Serviço
@@ -80,7 +82,7 @@ export const ServiceCategoryCard = ({
                   applications={applications.filter(
                     (a) => a.service_name_id === svc.id
                   )}
-                  categoryId={applications[0]?.category_id || ""}
+                  categoryId={categoryId}
                   serviceNameId={svc.id}
                 />
               </TabsContent>
@@ -88,6 +90,13 @@ export const ServiceCategoryCard = ({
           </Tabs>
         </div>
       )}
+
+      <AddServiceModal
+        open={showAddService}
+        onOpenChange={setShowAddService}
+        categoryId={categoryId}
+        existingServiceIds={serviceIds}
+      />
     </div>
   );
 };

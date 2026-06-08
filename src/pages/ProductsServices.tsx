@@ -134,6 +134,7 @@ export default function ProductsServices() {
           {filteredCategories.map(({ categoryId, categoryName, apps }) => (
             <ServiceCategoryCard
               key={categoryId}
+              categoryId={categoryId}
               categoryName={categoryName}
               serviceNames={(serviceNames || []).filter((s) =>
                 apps.some((a) => a.service_name_id === s.id)

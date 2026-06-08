@@ -22,80 +22,81 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Loader2 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { toast } from "sonner";
 import {
-  ServiceCategory,
   ServiceName,
   ServiceApplication,
 } from "@/types/services";
 
-interface AddByCategoryModalProps {
+const CREATE_NEW_VALUE = "__create_new__";
+
+interface AddServiceModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  categoryId: string;
+  existingServiceIds: string[];
 }
 
-export const AddByCategoryModal = ({
+export const AddServiceModal = ({
   open,
   onOpenChange,
-}: AddByCategoryModalProps) => {
-  const { user } = useAuth();
+  categoryId,
+  existingServiceIds,
+}: AddServiceModalProps) => {
   const { data: ownerId } = useOwnerId();
   const queryClient = useQueryClient();
 
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
-  const [selectedServiceId, setSelectedServiceId] = useState<string>("");
+  const [selectedServiceId, setSelectedServiceId] = useState("");
+  const [isCreatingNew, setIsCreatingNew] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newDescription, setNewDescription] = useState("");
+  const [savingNew, setSavingNew] = useState(false);
   const [selectedAppIds, setSelectedAppIds] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
 
-  // Reset state when modal opens
   useEffect(() => {
     if (open) {
-      setSelectedCategoryId("");
       setSelectedServiceId("");
+      setIsCreatingNew(false);
+      setNewName("");
+      setNewDescription("");
       setSelectedAppIds(new Set());
     }
   }, [open]);
 
-  // Fetch categories
-  const { data: categories } = useQuery({
-    queryKey: ["services-categories"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("services_category" as any)
-        .select("*")
-        .order("name");
-      if (error) throw error;
-      return data as ServiceCategory[];
-    },
-  });
-
-  // Fetch service names for selected category
-  const { data: serviceNames } = useQuery({
-    queryKey: ["service-names", selectedCategoryId],
-    enabled: !!selectedCategoryId,
+  // Fetch all service names for this category (template + user's custom)
+  const { data: allServiceNames } = useQuery({
+    queryKey: ["service-names", categoryId],
+    enabled: !!categoryId && open,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("service_name" as any)
         .select("*")
-        .eq("category_id", selectedCategoryId)
+        .eq("category_id", categoryId)
         .order("name");
       if (error) throw error;
       return data as ServiceName[];
     },
   });
 
+  // Available = not yet added by user
+  const availableServices = (allServiceNames || []).filter(
+    (s) => !existingServiceIds.includes(s.id)
+  );
+
   // Fetch template applications for selected service
   const { data: templateApps } = useQuery({
     queryKey: ["service-applications-template", selectedServiceId],
-    enabled: !!selectedServiceId,
+    enabled: !!selectedServiceId && !isCreatingNew,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("service_applications" as any)
@@ -107,23 +108,55 @@ export const AddByCategoryModal = ({
     },
   });
 
-  // Auto-select all when applications load
   useEffect(() => {
     if (templateApps) {
       setSelectedAppIds(new Set(templateApps.map((a) => a.id)));
     }
   }, [templateApps]);
 
-  // Reset service when category changes
-  useEffect(() => {
-    setSelectedServiceId("");
-    setSelectedAppIds(new Set());
-  }, [selectedCategoryId]);
+  const handleServiceChange = (value: string) => {
+    if (value === CREATE_NEW_VALUE) {
+      setIsCreatingNew(true);
+      setSelectedServiceId("");
+      setSelectedAppIds(new Set());
+    } else {
+      setIsCreatingNew(false);
+      setSelectedServiceId(value);
+    }
+  };
 
-  // Reset apps when service changes
-  useEffect(() => {
-    setSelectedAppIds(new Set());
-  }, [selectedServiceId]);
+  const handleCreateService = async () => {
+    if (!ownerId || !newName.trim()) return;
+    setSavingNew(true);
+    try {
+      const { data, error } = await supabase
+        .from("service_name" as any)
+        .insert({
+          category_id: categoryId,
+          user_id: ownerId,
+          name: newName.trim(),
+          description: newDescription.trim() || null,
+        })
+        .select("id")
+        .single();
+
+      if (error) throw error;
+
+      queryClient.invalidateQueries({ queryKey: ["service-names"] });
+      queryClient.invalidateQueries({ queryKey: ["service-names-all"] });
+      toast.success(`Serviço "${newName.trim()}" criado com sucesso`);
+
+      // Switch to the newly created service (no template apps, user will add manually)
+      setIsCreatingNew(false);
+      setSelectedServiceId((data as any).id);
+      setNewName("");
+      setNewDescription("");
+    } catch (err: any) {
+      toast.error("Erro ao criar serviço: " + err.message);
+    } finally {
+      setSavingNew(false);
+    }
+  };
 
   const toggleApp = (id: string) => {
     setSelectedAppIds((prev) => {
@@ -149,13 +182,18 @@ export const AddByCategoryModal = ({
       currency: "BRL",
     }).format(value);
 
-  const handleSave = async () => {
-    if (!ownerId || !selectedCategoryId || !selectedServiceId) return;
+  const handleSaveApplications = async () => {
+    if (!ownerId || !selectedServiceId) return;
     const appsToInsert = (templateApps || []).filter((a) =>
       selectedAppIds.has(a.id)
     );
+
     if (appsToInsert.length === 0) {
-      toast.error("Selecione ao menos uma aplicação");
+      // No template apps to add — just close, the service tab will appear empty
+      // and user can add applications manually
+      queryClient.invalidateQueries({ queryKey: ["services-client"] });
+      toast.success("Serviço adicionado. Use o botão Adicionar para criar aplicações.");
+      onOpenChange(false);
       return;
     }
 
@@ -163,7 +201,7 @@ export const AddByCategoryModal = ({
     try {
       const rows = appsToInsert.map((app) => ({
         user_id: ownerId,
-        category_id: selectedCategoryId,
+        category_id: categoryId,
         service_name_id: selectedServiceId,
         template_app_id: app.id,
         name: app.name,
@@ -177,7 +215,7 @@ export const AddByCategoryModal = ({
         duration_minutes: app.default_duration_minutes,
         professionals: [],
         commission_pct: 0,
-        time_recurrence_2: app.default_expiry_months * 30, // expiry in days
+        time_recurrence_2: app.default_expiry_months * 30,
       }));
 
       const { error } = await supabase
@@ -187,7 +225,8 @@ export const AddByCategoryModal = ({
       if (error) throw error;
 
       queryClient.invalidateQueries({ queryKey: ["services-client"] });
-      toast.success(`${rows.length} aplicações adicionadas com sucesso`);
+      queryClient.invalidateQueries({ queryKey: ["service-names-all"] });
+      toast.success(`${rows.length} aplicações adicionadas`);
       onOpenChange(false);
     } catch (err: any) {
       toast.error("Erro ao salvar: " + err.message);
@@ -199,65 +238,84 @@ export const AddByCategoryModal = ({
   const allSelected =
     templateApps && templateApps.length > 0 && selectedAppIds.size === templateApps.length;
 
+  const showAppsTable = selectedServiceId && !isCreatingNew;
+  const hasTemplateApps = templateApps && templateApps.length > 0;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Adicionar Serviço por Categoria</DialogTitle>
+          <DialogTitle>Adicionar Serviço</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-6 py-4">
-          {/* Step 1: Category */}
+          {/* Service Select */}
           <div className="space-y-2">
-            <Label className="text-sm font-medium">1. Categoria</Label>
+            <Label className="text-sm font-medium">Serviço</Label>
             <Select
-              value={selectedCategoryId}
-              onValueChange={setSelectedCategoryId}
+              value={isCreatingNew ? CREATE_NEW_VALUE : selectedServiceId}
+              onValueChange={handleServiceChange}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Selecione uma categoria..." />
+                <SelectValue placeholder="Selecione um serviço..." />
               </SelectTrigger>
               <SelectContent>
-                {(categories || []).map((cat) => (
-                  <SelectItem key={cat.id} value={cat.id}>
-                    {cat.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Step 2: Service */}
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">2. Serviço</Label>
-            <Select
-              value={selectedServiceId}
-              onValueChange={setSelectedServiceId}
-              disabled={!selectedCategoryId}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder={
-                  !selectedCategoryId
-                    ? "Selecione uma categoria primeiro"
-                    : "Selecione um serviço..."
-                } />
-              </SelectTrigger>
-              <SelectContent>
-                {(serviceNames || []).map((svc) => (
+                {availableServices.map((svc) => (
                   <SelectItem key={svc.id} value={svc.id}>
                     {svc.name}
                   </SelectItem>
                 ))}
+                <SelectItem value={CREATE_NEW_VALUE} className="font-medium text-primary">
+                  + Criar novo serviço
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          {/* Step 3: Applications Table */}
-          {selectedServiceId && (
+          {/* Create New Service Form */}
+          {isCreatingNew && (
+            <div className="space-y-4 p-4 border rounded-md bg-muted/30">
+              <h4 className="text-sm font-medium">Novo Serviço</h4>
+              <div className="space-y-1.5">
+                <Label>Nome</Label>
+                <Input
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="Ex: Laser CO2"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Descrição</Label>
+                <Textarea
+                  value={newDescription}
+                  onChange={(e) => setNewDescription(e.target.value)}
+                  rows={2}
+                  placeholder="Descrição do serviço..."
+                />
+              </div>
+              <Button
+                onClick={handleCreateService}
+                disabled={savingNew || !newName.trim()}
+                size="sm"
+              >
+                {savingNew ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Criando...
+                  </>
+                ) : (
+                  "Criar Serviço"
+                )}
+              </Button>
+            </div>
+          )}
+
+          {/* Template Applications Table */}
+          {showAppsTable && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label className="text-sm font-medium">3. Aplicações</Label>
-                {templateApps && templateApps.length > 0 && (
+                <Label className="text-sm font-medium">Aplicações</Label>
+                {hasTemplateApps && (
                   <Badge variant="secondary" className="text-xs">
                     {selectedAppIds.size}/{templateApps.length} selecionadas
                   </Badge>
@@ -269,8 +327,9 @@ export const AddByCategoryModal = ({
                   <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
                 </div>
               ) : templateApps.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground text-sm border rounded-md">
-                  Nenhuma aplicação template cadastrada para este serviço.
+                <div className="text-center py-6 text-muted-foreground text-sm border rounded-md">
+                  Este serviço não possui aplicações pré-cadastradas.
+                  Após salvar, você pode adicionar aplicações manualmente.
                 </div>
               ) : (
                 <div className="rounded-md border overflow-x-auto">
@@ -284,11 +343,10 @@ export const AddByCategoryModal = ({
                           />
                         </TableHead>
                         <TableHead className="min-w-[200px]">Nome</TableHead>
-                        <TableHead>Descrição</TableHead>
                         <TableHead className="min-w-[110px]">Valor</TableHead>
                         <TableHead className="min-w-[110px]">Preço Mín.</TableHead>
+                        <TableHead className="w-[80px] text-center">Tempo</TableHead>
                         <TableHead className="w-[90px] text-center">Vencimento</TableHead>
-                        <TableHead className="w-[90px] text-center">Recorrência</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -307,9 +365,6 @@ export const AddByCategoryModal = ({
                           <TableCell className="font-medium text-sm">
                             {app.name}
                           </TableCell>
-                          <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">
-                            {app.description || "—"}
-                          </TableCell>
                           <TableCell className="text-sm">
                             {formatCurrency(app.default_price)}
                           </TableCell>
@@ -317,17 +372,10 @@ export const AddByCategoryModal = ({
                             {formatCurrency(app.default_min_price)}
                           </TableCell>
                           <TableCell className="text-center text-sm">
-                            {app.default_expiry_months}m
+                            {app.default_duration_minutes ? `${app.default_duration_minutes}min` : "—"}
                           </TableCell>
-                          <TableCell className="text-center">
-                            <Badge
-                              variant={
-                                app.default_recurrence ? "default" : "secondary"
-                              }
-                              className="text-[10px]"
-                            >
-                              {app.default_recurrence ? "Ativo" : "Inativo"}
-                            </Badge>
+                          <TableCell className="text-center text-sm">
+                            {app.default_expiry_months}m
                           </TableCell>
                         </TableRow>
                       ))}
@@ -343,19 +391,23 @@ export const AddByCategoryModal = ({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button
-            onClick={handleSave}
-            disabled={saving || selectedAppIds.size === 0 || !selectedServiceId}
-          >
-            {saving ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Salvando...
-              </>
-            ) : (
-              `Salvar ${selectedAppIds.size} Aplicação${selectedAppIds.size !== 1 ? "ões" : ""}`
-            )}
-          </Button>
+          {showAppsTable && (
+            <Button
+              onClick={handleSaveApplications}
+              disabled={saving}
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Salvando...
+                </>
+              ) : hasTemplateApps ? (
+                `Salvar ${selectedAppIds.size} Aplicação${selectedAppIds.size !== 1 ? "ões" : ""}`
+              ) : (
+                "Adicionar Serviço"
+              )}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

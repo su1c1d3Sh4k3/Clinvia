@@ -41,6 +41,7 @@ export const EditApplicationModal = ({
     expiry_months: 6,
     recurrence: true,
     session_interval: null as number | null,
+    duration_minutes: null as number | null,
     professionals: [] as string[],
     commission_pct: 0,
   });
@@ -56,6 +57,7 @@ export const EditApplicationModal = ({
         expiry_months: application.expiry_months,
         recurrence: application.recurrence,
         session_interval: application.session_interval,
+        duration_minutes: application.duration_minutes,
         professionals: application.professionals || [],
         commission_pct: application.commission_pct,
       });
@@ -76,6 +78,7 @@ export const EditApplicationModal = ({
         expiry_months: form.expiry_months,
         recurrence: form.recurrence,
         session_interval: form.session_interval,
+        duration_minutes: form.duration_minutes,
         professionals: form.professionals,
         commission_pct: form.commission_pct,
       };
@@ -213,6 +216,23 @@ export const EditApplicationModal = ({
                 onChange={(e) =>
                   setField(
                     "session_interval",
+                    e.target.value ? parseInt(e.target.value) : null
+                  )
+                }
+              />
+            </div>
+          </div>
+
+          {/* Row 5b: Duration */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>Tempo de Aplicação (min)</Label>
+              <Input
+                type="number"
+                value={form.duration_minutes ?? ""}
+                onChange={(e) =>
+                  setField(
+                    "duration_minutes",
                     e.target.value ? parseInt(e.target.value) : null
                   )
                 }

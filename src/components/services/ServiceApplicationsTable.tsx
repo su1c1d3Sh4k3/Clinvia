@@ -9,7 +9,6 @@ import {
 } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Pencil, Trash2, Plus } from "lucide-react";
 import { ServiceClient } from "@/types/services";
 import { supabase } from "@/integrations/supabase/client";
@@ -121,7 +120,7 @@ export const ServiceApplicationsTable = ({
               <TableHead className="w-[100px] text-center">Recorrência</TableHead>
               <TableHead className="w-[100px] text-center">Intervalo</TableHead>
               <TableHead className="w-[100px] text-center">Comissão</TableHead>
-              <TableHead className="w-[90px] text-center">Estágio</TableHead>
+              <TableHead className="w-[90px] text-center">Tempo</TableHead>
               <TableHead className="w-[110px]">
                 <Button
                   variant="outline"
@@ -178,14 +177,8 @@ export const ServiceApplicationsTable = ({
                 <TableCell className="text-center text-sm">
                   {app.commission_pct > 0 ? `${app.commission_pct}%` : "—"}
                 </TableCell>
-                <TableCell className="text-center">
-                  {app.recurrence_stage ? (
-                    <Badge variant="outline" className="text-[10px] px-1.5">
-                      {app.recurrence_stage.replace("_", " ")}
-                    </Badge>
-                  ) : (
-                    <span className="text-muted-foreground text-xs">—</span>
-                  )}
+                <TableCell className="text-center text-sm">
+                  {app.duration_minutes ? `${app.duration_minutes}min` : "—"}
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-1">
