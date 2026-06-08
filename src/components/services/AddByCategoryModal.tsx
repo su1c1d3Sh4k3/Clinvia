@@ -47,7 +47,7 @@ export const AddByCategoryModal = ({
   onOpenChange,
 }: AddByCategoryModalProps) => {
   const { user } = useAuth();
-  const ownerId = useOwnerId();
+  const { data: ownerId } = useOwnerId();
   const queryClient = useQueryClient();
 
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");

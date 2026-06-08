@@ -10,7 +10,7 @@ import { ServiceCategoryCard } from "@/components/services/ServiceCategoryCard";
 import { AddByCategoryModal } from "@/components/services/AddByCategoryModal";
 
 export default function ProductsServices() {
-  const ownerId = useOwnerId();
+  const { data: ownerId } = useOwnerId();
   const [searchTerm, setSearchTerm] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
 
