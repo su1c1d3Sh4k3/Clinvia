@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { User, Building2, Lock, Camera, Loader2, Bell, BellRing, Users, Volume2, DollarSign, Settings as SettingsIcon, Pen, Download, Smartphone, Monitor, CheckCircle2, Calendar, ListTodo, TrendingUp, Lightbulb, ChevronDown, ChevronUp, AlertCircle, ShieldCheck } from "lucide-react";
 import { PermissionsSettings } from "@/components/settings/PermissionsSettings";
+import { TeamSettings } from "@/components/settings/TeamSettings";
 import { FaInstagram } from "react-icons/fa";
 import { Switch } from "@/components/ui/switch";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -511,6 +512,12 @@ export default function Settings() {
                         <SettingsIcon className="h-4 w-4" />
                         <span className="hidden md:inline">Sistema</span>
                     </TabsTrigger>
+                    {userRole === 'admin' && (
+                        <TabsTrigger value="team" className="flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
+                            <Users className="h-4 w-4" />
+                            <span className="hidden md:inline">Equipe</span>
+                        </TabsTrigger>
+                    )}
                     {userRole === 'admin' && (
                         <TabsTrigger value="permissions" className="flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
                             <ShieldCheck className="h-4 w-4" />
@@ -1082,6 +1089,13 @@ export default function Settings() {
                         </CardFooter>
                     </Card>
                 </TabsContent>
+
+                {/* Team Tab — admin only */}
+                {userRole === 'admin' && (
+                    <TabsContent value="team">
+                        <TeamSettings />
+                    </TabsContent>
+                )}
 
                 {/* Permissions Tab — admin only */}
                 {userRole === 'admin' && (
