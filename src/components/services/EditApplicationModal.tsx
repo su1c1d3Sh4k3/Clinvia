@@ -11,13 +11,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { ProfessionalSelector } from "./ProfessionalSelector";
 import { ServiceClient } from "@/types/services";
 import { supabase } from "@/integrations/supabase/client";
@@ -50,13 +43,6 @@ export const EditApplicationModal = ({
     session_interval: null as number | null,
     professionals: [] as string[],
     commission_pct: 0,
-    msg_recurrence_1: "",
-    msg_recurrence_2: "",
-    msg_recurrence_3: "",
-    time_recurrence_1: null as number | null,
-    time_recurrence_2: null as number | null,
-    time_recurrence_3: null as number | null,
-    recurrence_stage: null as string | null,
   });
 
   useEffect(() => {
@@ -72,13 +58,6 @@ export const EditApplicationModal = ({
         session_interval: application.session_interval,
         professionals: application.professionals || [],
         commission_pct: application.commission_pct,
-        msg_recurrence_1: application.msg_recurrence_1 || "",
-        msg_recurrence_2: application.msg_recurrence_2 || "",
-        msg_recurrence_3: application.msg_recurrence_3 || "",
-        time_recurrence_1: application.time_recurrence_1,
-        time_recurrence_2: application.time_recurrence_2,
-        time_recurrence_3: application.time_recurrence_3,
-        recurrence_stage: application.recurrence_stage,
       });
       setApplyProfToAll(false);
     }
@@ -99,13 +78,6 @@ export const EditApplicationModal = ({
         session_interval: form.session_interval,
         professionals: form.professionals,
         commission_pct: form.commission_pct,
-        msg_recurrence_1: form.msg_recurrence_1 || null,
-        msg_recurrence_2: form.msg_recurrence_2 || null,
-        msg_recurrence_3: form.msg_recurrence_3 || null,
-        time_recurrence_1: form.time_recurrence_1,
-        time_recurrence_2: form.time_recurrence_2,
-        time_recurrence_3: form.time_recurrence_3,
-        recurrence_stage: form.recurrence_stage,
       };
 
       const { error } = await supabase
@@ -274,94 +246,6 @@ export const EditApplicationModal = ({
             />
           </div>
 
-          {/* Row 8: Recurrence Messages */}
-          <div className="space-y-3 border-t pt-4">
-            <h4 className="text-sm font-medium text-muted-foreground">
-              Recorrência (configuração futura)
-            </h4>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Msg Recorrência 1</Label>
-                <Textarea
-                  value={form.msg_recurrence_1}
-                  onChange={(e) => setField("msg_recurrence_1", e.target.value)}
-                  rows={2}
-                  className="text-xs"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Msg Recorrência 2</Label>
-                <Textarea
-                  value={form.msg_recurrence_2}
-                  onChange={(e) => setField("msg_recurrence_2", e.target.value)}
-                  rows={2}
-                  className="text-xs"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Msg Recorrência 3</Label>
-                <Textarea
-                  value={form.msg_recurrence_3}
-                  onChange={(e) => setField("msg_recurrence_3", e.target.value)}
-                  rows={2}
-                  className="text-xs"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Tempo Recorrência 1 (dias)</Label>
-                <Input
-                  type="number"
-                  value={form.time_recurrence_1 ?? ""}
-                  onChange={(e) =>
-                    setField("time_recurrence_1", e.target.value ? parseInt(e.target.value) : null)
-                  }
-                  className="text-xs"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Tempo Recorrência 2 (dias)</Label>
-                <Input
-                  type="number"
-                  value={form.time_recurrence_2 ?? ""}
-                  onChange={(e) =>
-                    setField("time_recurrence_2", e.target.value ? parseInt(e.target.value) : null)
-                  }
-                  className="text-xs"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Tempo Recorrência 3 (dias)</Label>
-                <Input
-                  type="number"
-                  value={form.time_recurrence_3 ?? ""}
-                  onChange={(e) =>
-                    setField("time_recurrence_3", e.target.value ? parseInt(e.target.value) : null)
-                  }
-                  className="text-xs"
-                />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Estágio da Recorrência</Label>
-              <Select
-                value={form.recurrence_stage || ""}
-                onValueChange={(v) => setField("recurrence_stage", v || null)}
-              >
-                <SelectTrigger className="text-xs">
-                  <SelectValue placeholder="Selecione..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="stg_1">Stg 1</SelectItem>
-                  <SelectItem value="stg_2">Stg 2</SelectItem>
-                  <SelectItem value="stg_3">Stg 3</SelectItem>
-                  <SelectItem value="recuperado">Recuperado</SelectItem>
-                  <SelectItem value="perdido">Perdido</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
         </div>
 
         <DialogFooter>
