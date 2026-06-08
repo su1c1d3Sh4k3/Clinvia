@@ -48,6 +48,7 @@ import { ClientReportModal } from "@/components/ClientReportModal";
 import { NpsFeedbackModal } from "@/components/NpsFeedbackModal";
 import { TagAssignment } from "@/components/TagAssignment";
 import { WhatsAppImportModal } from "@/components/WhatsAppImportModal";
+import { ClientProfileModal } from "@/components/contacts/ClientProfileModal";
 import { Sparkles, FileText } from "lucide-react";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useOwnerId } from "@/hooks/useOwnerId";
@@ -98,6 +99,7 @@ const Contacts = () => {
     const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
     const [tagsToAssign, setTagsToAssign] = useState<Set<string>>(new Set());
     const [isAssignTagsOpen, setIsAssignTagsOpen] = useState(false);
+    const [profileContact, setProfileContact] = useState<Contact | null>(null);
 
     // New state for analysis features
     const [isAnalysisHistoryOpen, setIsAnalysisHistoryOpen] = useState(false);
@@ -731,8 +733,8 @@ const Contacts = () => {
                                                             )}
                                                         </div>
                                                     </div>
-                                                    <div className="flex flex-col min-w-0 flex-1">
-                                                        <span className="font-medium text-sm truncate">{contact.push_name}</span>
+                                                    <div className="flex flex-col min-w-0 flex-1 cursor-pointer" onClick={() => setProfileContact(contact)}>
+                                                        <span className="font-medium text-sm truncate hover:text-primary transition-colors">{contact.push_name}</span>
                                                         <span className="text-xs text-muted-foreground sm:hidden truncate">
                                                             {contact.phone || contact.number?.split('@')[0]}
                                                         </span>
@@ -1097,6 +1099,12 @@ const Contacts = () => {
             <WhatsAppImportModal
                 open={isWppImportOpen}
                 onClose={() => setIsWppImportOpen(false)}
+            />
+
+            <ClientProfileModal
+                open={!!profileContact}
+                onOpenChange={(o) => !o && setProfileContact(null)}
+                contact={profileContact}
             />
         </div >
 
