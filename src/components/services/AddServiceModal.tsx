@@ -21,6 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,8 +37,18 @@ import {
   ServiceName,
   ServiceApplication,
 } from "@/types/services";
+import { RecurrenceTab, RecurrenceData } from "./RecurrenceTab";
 
 const CREATE_NEW_VALUE = "__create_new__";
+
+const defaultRecurrence: RecurrenceData = {
+  msg_recurrence_1: "",
+  msg_recurrence_2: "",
+  msg_recurrence_3: "",
+  time_recurrence_1: null,
+  time_recurrence_2: null,
+  time_recurrence_3: null,
+};
 
 interface AddServiceModalProps {
   open: boolean;
@@ -61,6 +72,7 @@ export const AddServiceModal = ({
   const [newDescription, setNewDescription] = useState("");
   const [savingNew, setSavingNew] = useState(false);
   const [selectedAppIds, setSelectedAppIds] = useState<Set<string>>(new Set());
+  const [recurrence, setRecurrence] = useState<RecurrenceData>(defaultRecurrence);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -70,10 +82,10 @@ export const AddServiceModal = ({
       setNewName("");
       setNewDescription("");
       setSelectedAppIds(new Set());
+      setRecurrence(defaultRecurrence);
     }
   }, [open]);
 
-  // Fetch all service names for this category (template + user's custom)
   const { data: allServiceNames } = useQuery({
     queryKey: ["service-names", categoryId],
     enabled: !!categoryId && open,
@@ -88,12 +100,10 @@ export const AddServiceModal = ({
     },
   });
 
-  // Available = not yet added by user
   const availableServices = (allServiceNames || []).filter(
     (s) => !existingServiceIds.includes(s.id)
   );
 
-  // Fetch template applications for selected service
   const { data: templateApps } = useQuery({
     queryKey: ["service-applications-template", selectedServiceId],
     enabled: !!selectedServiceId && !isCreatingNew,
@@ -119,9 +129,11 @@ export const AddServiceModal = ({
       setIsCreatingNew(true);
       setSelectedServiceId("");
       setSelectedAppIds(new Set());
+      setRecurrence(defaultRecurrence);
     } else {
       setIsCreatingNew(false);
       setSelectedServiceId(value);
+      setRecurrence(defaultRecurrence);
     }
   };
 
@@ -146,7 +158,6 @@ export const AddServiceModal = ({
       queryClient.invalidateQueries({ queryKey: ["service-names-all"] });
       toast.success(`Serviço "${newName.trim()}" criado com sucesso`);
 
-      // Switch to the newly created service (no template apps, user will add manually)
       setIsCreatingNew(false);
       setSelectedServiceId((data as any).id);
       setNewName("");
@@ -189,8 +200,6 @@ export const AddServiceModal = ({
     );
 
     if (appsToInsert.length === 0) {
-      // No template apps to add — just close, the service tab will appear empty
-      // and user can add applications manually
       queryClient.invalidateQueries({ queryKey: ["services-client"] });
       toast.success("Serviço adicionado. Use o botão Adicionar para criar aplicações.");
       onOpenChange(false);
@@ -215,7 +224,12 @@ export const AddServiceModal = ({
         duration_minutes: app.default_duration_minutes,
         professionals: [],
         commission_pct: 0,
-        time_recurrence_2: app.default_expiry_months * 30,
+        msg_recurrence_1: recurrence.msg_recurrence_1 || null,
+        msg_recurrence_2: recurrence.msg_recurrence_2 || null,
+        msg_recurrence_3: recurrence.msg_recurrence_3 || null,
+        time_recurrence_1: recurrence.time_recurrence_1,
+        time_recurrence_2: recurrence.time_recurrence_2 ?? app.default_expiry_months * 30,
+        time_recurrence_3: recurrence.time_recurrence_3,
       }));
 
       const { error } = await supabase
@@ -238,7 +252,7 @@ export const AddServiceModal = ({
   const allSelected =
     templateApps && templateApps.length > 0 && selectedAppIds.size === templateApps.length;
 
-  const showAppsTable = selectedServiceId && !isCreatingNew;
+  const showContent = selectedServiceId && !isCreatingNew;
   const hasTemplateApps = templateApps && templateApps.length > 0;
 
   return (
@@ -310,80 +324,93 @@ export const AddServiceModal = ({
             </div>
           )}
 
-          {/* Template Applications Table */}
-          {showAppsTable && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="text-sm font-medium">Aplicações</Label>
-                {hasTemplateApps && (
-                  <Badge variant="secondary" className="text-xs">
-                    {selectedAppIds.size}/{templateApps.length} selecionadas
-                  </Badge>
-                )}
-              </div>
+          {/* Tabs: Applications + Recurrence */}
+          {showContent && (
+            <Tabs defaultValue="applications">
+              <TabsList>
+                <TabsTrigger value="applications">Aplicações</TabsTrigger>
+                <TabsTrigger value="recurrence">Recorrência</TabsTrigger>
+              </TabsList>
 
-              {!templateApps ? (
-                <div className="flex justify-center py-8">
-                  <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              <TabsContent value="applications" className="mt-4">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-medium">Aplicações</Label>
+                    {hasTemplateApps && (
+                      <Badge variant="secondary" className="text-xs">
+                        {selectedAppIds.size}/{templateApps.length} selecionadas
+                      </Badge>
+                    )}
+                  </div>
+
+                  {!templateApps ? (
+                    <div className="flex justify-center py-8">
+                      <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : templateApps.length === 0 ? (
+                    <div className="text-center py-6 text-muted-foreground text-sm border rounded-md">
+                      Este serviço não possui aplicações pré-cadastradas.
+                      Após salvar, você pode adicionar aplicações manualmente.
+                    </div>
+                  ) : (
+                    <div className="rounded-md border overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-[40px]">
+                              <Checkbox
+                                checked={allSelected}
+                                onCheckedChange={toggleAll}
+                              />
+                            </TableHead>
+                            <TableHead className="min-w-[200px]">Nome</TableHead>
+                            <TableHead className="min-w-[110px]">Valor</TableHead>
+                            <TableHead className="min-w-[110px]">Preço Mín.</TableHead>
+                            <TableHead className="w-[80px] text-center">Tempo</TableHead>
+                            <TableHead className="w-[90px] text-center">Vencimento</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {templateApps.map((app) => (
+                            <TableRow
+                              key={app.id}
+                              className="cursor-pointer"
+                              onClick={() => toggleApp(app.id)}
+                            >
+                              <TableCell>
+                                <Checkbox
+                                  checked={selectedAppIds.has(app.id)}
+                                  onCheckedChange={() => toggleApp(app.id)}
+                                />
+                              </TableCell>
+                              <TableCell className="font-medium text-sm">
+                                {app.name}
+                              </TableCell>
+                              <TableCell className="text-sm">
+                                {formatCurrency(app.default_price)}
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground">
+                                {formatCurrency(app.default_min_price)}
+                              </TableCell>
+                              <TableCell className="text-center text-sm">
+                                {app.default_duration_minutes ? `${app.default_duration_minutes}min` : "—"}
+                              </TableCell>
+                              <TableCell className="text-center text-sm">
+                                {app.default_expiry_months}m
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
                 </div>
-              ) : templateApps.length === 0 ? (
-                <div className="text-center py-6 text-muted-foreground text-sm border rounded-md">
-                  Este serviço não possui aplicações pré-cadastradas.
-                  Após salvar, você pode adicionar aplicações manualmente.
-                </div>
-              ) : (
-                <div className="rounded-md border overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-[40px]">
-                          <Checkbox
-                            checked={allSelected}
-                            onCheckedChange={toggleAll}
-                          />
-                        </TableHead>
-                        <TableHead className="min-w-[200px]">Nome</TableHead>
-                        <TableHead className="min-w-[110px]">Valor</TableHead>
-                        <TableHead className="min-w-[110px]">Preço Mín.</TableHead>
-                        <TableHead className="w-[80px] text-center">Tempo</TableHead>
-                        <TableHead className="w-[90px] text-center">Vencimento</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {templateApps.map((app) => (
-                        <TableRow
-                          key={app.id}
-                          className="cursor-pointer"
-                          onClick={() => toggleApp(app.id)}
-                        >
-                          <TableCell>
-                            <Checkbox
-                              checked={selectedAppIds.has(app.id)}
-                              onCheckedChange={() => toggleApp(app.id)}
-                            />
-                          </TableCell>
-                          <TableCell className="font-medium text-sm">
-                            {app.name}
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {formatCurrency(app.default_price)}
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground">
-                            {formatCurrency(app.default_min_price)}
-                          </TableCell>
-                          <TableCell className="text-center text-sm">
-                            {app.default_duration_minutes ? `${app.default_duration_minutes}min` : "—"}
-                          </TableCell>
-                          <TableCell className="text-center text-sm">
-                            {app.default_expiry_months}m
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </div>
+              </TabsContent>
+
+              <TabsContent value="recurrence" className="mt-4">
+                <RecurrenceTab data={recurrence} onChange={setRecurrence} />
+              </TabsContent>
+            </Tabs>
           )}
         </div>
 
@@ -391,7 +418,7 @@ export const AddServiceModal = ({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          {showAppsTable && (
+          {showContent && (
             <Button
               onClick={handleSaveApplications}
               disabled={saving}
