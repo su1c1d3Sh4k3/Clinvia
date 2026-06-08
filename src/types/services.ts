@@ -2,6 +2,7 @@ export interface ServiceCategory {
   id: string;
   name: string;
   description: string | null;
+  category_type: 'standard' | 'direct';
   created_at: string;
 }
 

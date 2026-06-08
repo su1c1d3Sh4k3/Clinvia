@@ -7,6 +7,7 @@ import { Loader2, Plus, Search, Package } from "lucide-react";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { ServiceClient, ServiceName, ServiceCategory } from "@/types/services";
 import { ServiceCategoryCard } from "@/components/services/ServiceCategoryCard";
+import { DirectCategoryCard } from "@/components/services/DirectCategoryCard";
 import { AddByCategoryModal } from "@/components/services/AddByCategoryModal";
 
 export default function ProductsServices() {
@@ -14,7 +15,6 @@ export default function ProductsServices() {
   const [searchTerm, setSearchTerm] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
 
-  // Fetch all categories (template)
   const { data: categories } = useQuery({
     queryKey: ["services-categories"],
     queryFn: async () => {
@@ -27,7 +27,6 @@ export default function ProductsServices() {
     },
   });
 
-  // Fetch all service names (template)
   const { data: serviceNames } = useQuery({
     queryKey: ["service-names-all"],
     queryFn: async () => {
@@ -40,7 +39,6 @@ export default function ProductsServices() {
     },
   });
 
-  // Fetch client's services
   const { data: clientServices, isLoading } = useQuery({
     queryKey: ["services-client"],
     enabled: !!ownerId,
@@ -74,9 +72,22 @@ export default function ProductsServices() {
               (a.description || "").toLowerCase().includes(searchTerm.toLowerCase())
           )
         : apps;
-      return { categoryId, categoryName: category?.name || "Sem categoria", apps: filtered };
+      return {
+        categoryId,
+        categoryName: category?.name || "Sem categoria",
+        categoryType: category?.category_type || "standard",
+        apps: filtered,
+      };
     })
     .filter((group) => group.apps.length > 0);
+
+  // Find default service_name_id for a direct category
+  const getDirectServiceNameId = (categoryId: string) => {
+    const svc = (serviceNames || []).find(
+      (s) => s.category_id === categoryId && !s.user_id
+    );
+    return svc?.id || "";
+  };
 
   const totalApplications = (clientServices || []).length;
 
@@ -100,7 +111,7 @@ export default function ProductsServices() {
       <div className="relative max-w-md">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <Input
-          placeholder="Buscar aplicações..."
+          placeholder="Buscar..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="pl-9 h-9 bg-white dark:bg-background border border-[#D4D5D6] dark:border-border"
@@ -113,7 +124,6 @@ export default function ProductsServices() {
           <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
         </div>
       ) : totalApplications === 0 ? (
-        /* Empty State */
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
             <Package className="w-8 h-8 text-muted-foreground" />
@@ -129,19 +139,28 @@ export default function ProductsServices() {
           </Button>
         </div>
       ) : (
-        /* Category Cards */
         <div className="space-y-4">
-          {filteredCategories.map(({ categoryId, categoryName, apps }) => (
-            <ServiceCategoryCard
-              key={categoryId}
-              categoryId={categoryId}
-              categoryName={categoryName}
-              serviceNames={(serviceNames || []).filter((s) =>
-                apps.some((a) => a.service_name_id === s.id)
-              )}
-              applications={apps}
-            />
-          ))}
+          {filteredCategories.map(({ categoryId, categoryName, categoryType, apps }) =>
+            categoryType === "direct" ? (
+              <DirectCategoryCard
+                key={categoryId}
+                categoryId={categoryId}
+                categoryName={categoryName}
+                serviceNameId={getDirectServiceNameId(categoryId)}
+                entries={apps}
+              />
+            ) : (
+              <ServiceCategoryCard
+                key={categoryId}
+                categoryId={categoryId}
+                categoryName={categoryName}
+                serviceNames={(serviceNames || []).filter((s) =>
+                  apps.some((a) => a.service_name_id === s.id)
+                )}
+                applications={apps}
+              />
+            )
+          )}
 
           {filteredCategories.length === 0 && searchTerm && (
             <div className="text-center py-12 text-muted-foreground text-sm">
@@ -151,7 +170,6 @@ export default function ProductsServices() {
         </div>
       )}
 
-      {/* Add By Category Modal */}
       <AddByCategoryModal
         open={showAddModal}
         onOpenChange={setShowAddModal}

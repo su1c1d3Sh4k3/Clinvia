@@ -38,6 +38,7 @@ import {
   ServiceApplication,
 } from "@/types/services";
 import { RecurrenceTab, RecurrenceData } from "./RecurrenceTab";
+import { DirectEntryModal } from "./DirectEntryModal";
 
 const defaultRecurrence: RecurrenceData = {
   msg_recurrence_1: "",
@@ -66,6 +67,7 @@ export const AddByCategoryModal = ({
   const [selectedAppIds, setSelectedAppIds] = useState<Set<string>>(new Set());
   const [recurrence, setRecurrence] = useState<RecurrenceData>(defaultRecurrence);
   const [saving, setSaving] = useState(false);
+  const [directModal, setDirectModal] = useState<{ categoryId: string; categoryName: string; serviceNameId: string } | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -73,6 +75,7 @@ export const AddByCategoryModal = ({
       setSelectedServiceId("");
       setSelectedAppIds(new Set());
       setRecurrence(defaultRecurrence);
+      setDirectModal(null);
     }
   }, [open]);
 
@@ -121,6 +124,36 @@ export const AddByCategoryModal = ({
       setSelectedAppIds(new Set(templateApps.map((a) => a.id)));
     }
   }, [templateApps]);
+
+  const handleCategoryChange = (catId: string) => {
+    const cat = (categories || []).find((c) => c.id === catId);
+    if (cat?.category_type === "direct") {
+      // Find default service_name for this direct category
+      const defaultSvc = (allServiceNames || []).find(
+        (s) => s.category_id === catId && !s.user_id
+      );
+      setDirectModal({
+        categoryId: catId,
+        categoryName: cat.name,
+        serviceNameId: defaultSvc?.id || "",
+      });
+      return;
+    }
+    setSelectedCategoryId(catId);
+  };
+
+  // Fetch all service names upfront for direct category detection
+  const { data: allServiceNames } = useQuery({
+    queryKey: ["service-names-all"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("service_name" as any)
+        .select("*")
+        .order("name");
+      if (error) throw error;
+      return data as ServiceName[];
+    },
+  });
 
   useEffect(() => {
     setSelectedServiceId("");
@@ -213,7 +246,8 @@ export const AddByCategoryModal = ({
     templateApps && templateApps.length > 0 && selectedAppIds.size === templateApps.length;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+    <Dialog open={open && !directModal} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Adicionar Serviço por Categoria</DialogTitle>
@@ -225,7 +259,7 @@ export const AddByCategoryModal = ({
             <Label className="text-sm font-medium">1. Categoria</Label>
             <Select
               value={selectedCategoryId}
-              onValueChange={setSelectedCategoryId}
+              onValueChange={handleCategoryChange}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Selecione uma categoria..." />
@@ -378,5 +412,21 @@ export const AddByCategoryModal = ({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {directModal && (
+      <DirectEntryModal
+        open={!!directModal}
+        onOpenChange={(v) => {
+          if (!v) {
+            setDirectModal(null);
+            onOpenChange(false);
+          }
+        }}
+        categoryId={directModal.categoryId}
+        categoryName={directModal.categoryName}
+        serviceNameId={directModal.serviceNameId}
+      />
+    )}
+    </>
   );
 };
