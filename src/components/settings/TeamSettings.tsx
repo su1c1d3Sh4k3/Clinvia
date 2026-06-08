@@ -266,7 +266,7 @@ export const TeamSettings = () => {
                 </Dialog>
             </div>
 
-            <div className="rounded-md border overflow-x-auto bg-white dark:bg-transparent border-[#D4D5D6] dark:border-border">
+            <div className="rounded-md border overflow-x-auto bg-white dark:bg-[#303541] border-[#D4D5D6] dark:border-border">
                 <Table>
                     <TableHeader>
                         <TableHead className="min-w-[120px]">Nome</TableHead>
@@ -380,7 +380,7 @@ export const TeamSettings = () => {
                 )}
             </div>
 
-            <div className="rounded-md border overflow-x-auto bg-white dark:bg-transparent border-[#D4D5D6] dark:border-border">
+            <div className="rounded-md border overflow-x-auto bg-white dark:bg-[#303541] border-[#D4D5D6] dark:border-border">
                 <Table>
                     <TableHeader>
                         <TableHead className="min-w-[120px]">Nome</TableHead>
