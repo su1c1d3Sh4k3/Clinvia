@@ -1,8 +1,7 @@
 import {
-  ListOrdered, Users, Settings, LayoutDashboard, MessageSquare, Briefcase, Wrench, Grid3X3,
-  Smartphone, LogOut, Tag as TagIcon, BookUser, Calendar, ClipboardList,
-  Package, Bot, ChevronDown, PieChart, Clock, MessageCircle,
-  ShoppingCart, Headphones, UserRound, Sun, Moon, ClipboardCheck, Layers, Megaphone, MessageSquareText, BarChart3
+  Users, Settings, LayoutDashboard, MessageSquare, Briefcase,
+  Smartphone, LogOut, BookUser, Calendar,
+  Package, Bot, ChevronDown
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -18,6 +17,7 @@ import { differenceInDays } from "date-fns";
 import { useState, useEffect } from "react";
 import { useMobileMenu } from "@/contexts/MobileMenuContext";
 import { AnimatedNavIcon } from "@/components/AnimatedNavIcon";
+import { FaWhatsapp, FaInstagram } from "react-icons/fa";
 
 // Menu structure with submenus
 interface MenuItem {
@@ -31,44 +31,16 @@ interface MenuItem {
 const menuStructure: MenuItem[] = [
   { icon: LayoutDashboard, label: "Dashboard", id: "dashboard", path: "/dashboard" },
   { icon: MessageSquare, label: "Inbox", id: "inbox", path: "/" },
-  { icon: MessageCircle, label: "Chat Interno", id: "internal_inbox", path: "/internal_inbox" },
+  { icon: Briefcase, label: "CRM", id: "crm", path: "/crm" },
+  { icon: Package, label: "Serviços", id: "products-services", path: "/products-services" },
+  { icon: BookUser, label: "Clientes", id: "contacts", path: "/contacts" },
+  { icon: Calendar, label: "Agenda", id: "scheduling", path: "/scheduling" },
   {
-    icon: Layers, label: "Gestão", id: "gestao",
+    icon: Settings, label: "Configurações", id: "config",
     children: [
-      { icon: Briefcase, label: "CRM", id: "crm", path: "/crm" },
-      { icon: ClipboardCheck, label: "Delivery", id: "delivery", path: "/delivery" },
-      { icon: ListOrdered, label: "Gestão de Filas", id: "queues-manager", path: "/queues_manager" },
-    ]
-  },
-  {
-    icon: Wrench, label: "Automação", id: "automacao",
-    children: [
-      { icon: Bot, label: "Definições da IA", id: "ia-config", path: "/ia-config" },
+      { icon: Bot, label: "IA", id: "ia-config", path: "/ia-config" },
       { icon: Smartphone, label: "Conexões", id: "whatsapp", path: "/whatsapp-connection" },
-      { icon: MessageSquareText, label: "Mensagens Automáticas", id: "auto-messages", path: "/auto-messages" },
-      { icon: Settings, label: "Configurações", id: "settings", path: "/settings" },
-    ]
-  },
-  {
-    icon: Grid3X3, label: "Operações", id: "operacoes",
-    children: [
-      { icon: Package, label: "Produtos e Serviços", id: "products-services", path: "/products-services" },
-      { icon: BookUser, label: "Contatos", id: "contacts", path: "/contacts" },
-      { icon: UserRound, label: "Pacientes", id: "patients", path: "/patients" },
-      { icon: ListOrdered, label: "Filas", id: "queues", path: "/queues" },
-      { icon: TagIcon, label: "Tags", id: "tags", path: "/tags" },
-      { icon: Clock, label: "Follow Up", id: "follow-up", path: "/follow-up" },
-    ]
-  },
-  {
-    icon: PieChart, label: "Administrativo", id: "administrativo",
-    children: [
-      { icon: Calendar, label: "Agendamentos", id: "scheduling", path: "/scheduling" },
-      { icon: ClipboardList, label: "Tarefas", id: "tasks", path: "/tasks" },
-      { icon: ShoppingCart, label: "Vendas", id: "sales", path: "/sales" },
-      { icon: Headphones, label: "Suporte", id: "support", path: "/support" },
-      { icon: Users, label: "Equipe", id: "team", path: "/team" },
-      { icon: BarChart3, label: "Relatórios", id: "business-reports", path: "/business-reports" },
+      { icon: Settings, label: "Sistema", id: "settings", path: "/settings" },
     ]
   },
 ];
@@ -101,9 +73,7 @@ export const NavigationSidebar = () => {
     }
   }, [location.pathname, isMobile]);
 
-  // Buscar dados do usuário de team_members (não mais de profiles)
   const { data: currentTeamMember } = useCurrentTeamMember();
-  const profile = currentTeamMember as any;
 
   const { data: stagnatedCount } = useQuery({
     queryKey: ["stagnated-deals-count"],
@@ -135,7 +105,7 @@ export const NavigationSidebar = () => {
 
       return count;
     },
-    refetchInterval: 120000, // Check every 2 minutes (optimized from 1 min)
+    refetchInterval: 120000,
   });
 
   const { data: dashboardNotificationsCount } = useQuery({
@@ -157,37 +127,43 @@ export const NavigationSidebar = () => {
       const dismissedIds = new Set(dismissals?.map((d: any) => d.notification_id));
       return notifs?.filter((n: any) => !dismissedIds.has(n.id)).length || 0;
     },
-    refetchInterval: 60000, // Check every 1 minute (optimized from 30s)
+    refetchInterval: 60000,
     enabled: !!user?.id,
   });
 
-  const { data: unreadUpdatesCount } = useQuery({
-    queryKey: ["system-updates-unread"],
+  // Fetch connected instances for footer status
+  const { data: whatsappInstances } = useQuery({
+    queryKey: ["instances"],
     queryFn: async () => {
-      const { data: updates } = await supabase
-        .from('system_updates' as any)
-        .select('id');
-      const { data: reads } = await supabase
-        .from('system_update_reads' as any)
-        .select('update_id')
-        .eq('user_id', user?.id);
-      const readIds = new Set((reads || []).map((r: any) => r.update_id));
-      return (updates || []).filter((u: any) => !readIds.has(u.id)).length;
+      const { data, error } = await supabase
+        .from("instances")
+        .select("id, name, status")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data;
     },
-    refetchInterval: 60000,
-    enabled: !!user?.id,
+  });
+
+  const { data: instagramInstances } = useQuery({
+    queryKey: ["instagram-instances"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("instagram_instances" as any)
+        .select("id, name, status")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data as any[];
+    },
   });
 
   const { data: userRole } = useUserRole();
   const { hasAnyAccess } = usePermissions();
 
-  // Check if a path is active
   const isPathActive = (path?: string) => {
     if (!path) return false;
     return location.pathname === path;
   };
 
-  // Check if any child is active
   const hasActiveChild = (item: MenuItem): boolean => {
     if (item.children) {
       return item.children.some(child => isPathActive(child.path));
@@ -195,10 +171,8 @@ export const NavigationSidebar = () => {
     return false;
   };
 
-  // Auto-open submenu that has active item when collapsed, close others
   useEffect(() => {
     if (!isHovered) {
-      // When collapsed, only keep submenu with active item open
       const newOpen = new Set<string>();
       menuStructure.forEach(item => {
         if (item.children && hasActiveChild(item)) {
@@ -234,11 +208,10 @@ export const NavigationSidebar = () => {
     navigate("/auth");
   };
 
-  // Badge component - reusable for consistent styling (same as Dashboard)
   const NotificationBadge = ({ count }: { count: number }) => {
     if (!count || count <= 0) return null;
     return (
-      <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-red-500 text-[8px] font-bold text-white">
+      <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-red-500 text-[7px] font-bold text-white">
         {count > 9 ? "9+" : count}
       </span>
     );
@@ -248,16 +221,10 @@ export const NavigationSidebar = () => {
     const ChildIcon = child.icon;
     const isActive = isPathActive(child.path);
 
-    // Hide items based on permissions
     if (userRole !== "admin") {
-      if (child.id === "team" && !hasAnyAccess('team_members')) return null;
       if (child.id === "ia-config" && !hasAnyAccess('ia_config')) return null;
-      if (child.id === "sales" && !hasAnyAccess('sales')) return null;
-      if (child.id === "financial" && !hasAnyAccess('financial')) return null;
-      if (child.id === "business-reports") return null;
     }
 
-    // CRM badge - same style as Dashboard
     const crmBadgeCount = child.id === "crm" ? (stagnatedCount || 0) : 0;
 
     return (
@@ -265,21 +232,18 @@ export const NavigationSidebar = () => {
         key={child.id}
         onClick={() => navigate(child.path!)}
         className={cn(
-          "w-full flex items-center gap-3 py-3 transition-all duration-200 relative group/item",
+          "w-full flex items-center gap-2.5 py-2.5 transition-all duration-200 relative group/item",
           "text-sidebar-foreground/70 dark:text-white/70 hover:text-sidebar-foreground dark:hover:text-white hover:bg-sidebar-accent dark:hover:bg-[#1E2229]",
           "pl-6 pr-4"
         )}
       >
-        {/* Submenu vertical line with light beam effect - flush left */}
         <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-sidebar-border dark:bg-[#272C35]">
-          {/* Light beam when active */}
           {isActive && (
             <div
               className="absolute inset-0 w-0.5 bg-primary"
               style={{ boxShadow: '0 0 6px 1px hsl(var(--primary) / 0.5)' }}
             />
           )}
-          {/* Light beam on hover */}
           <div
             className="absolute inset-0 w-0.5 bg-primary opacity-0 group-hover/item:opacity-100 transition-opacity"
             style={{ boxShadow: '0 0 6px 1px hsl(var(--primary) / 0.5)' }}
@@ -288,14 +252,14 @@ export const NavigationSidebar = () => {
 
         <div className="relative shrink-0">
           <ChildIcon className={cn(
-            "w-[18px] h-[18px] transition-colors",
+            "w-[14px] h-[14px] transition-colors",
             isActive && "text-primary"
           )} />
           <NotificationBadge count={crmBadgeCount} />
         </div>
 
         <span className={cn(
-          "whitespace-nowrap text-[15px] font-medium flex-1 text-left transition-opacity duration-300",
+          "whitespace-nowrap text-[12px] font-medium flex-1 text-left transition-opacity duration-300",
           isMobile ? "opacity-100" : "opacity-0 group-hover/sidebar:opacity-100"
         )}>
           {child.label}
@@ -304,8 +268,7 @@ export const NavigationSidebar = () => {
     );
   };
 
-  // IDs that have dedicated AnimatedNavIcon versions
-  const ANIMATED_IDS = new Set(["dashboard", "inbox", "crm", "queues-manager", "automacao", "operacoes", "administrativo"]);
+  const ANIMATED_IDS = new Set(["dashboard", "inbox", "crm"]);
 
   const renderMenuItem = (item: MenuItem) => {
     const Icon = item.icon;
@@ -315,13 +278,11 @@ export const NavigationSidebar = () => {
     const hasActiveInChildren = hasActiveChild(item);
     const useAnimated = ANIMATED_IDS.has(item.id);
 
-    // Badge counts - Dashboard gets notifications, CRM gets stagnated count
     const dashboardBadge = item.id === "dashboard" ? (dashboardNotificationsCount || 0) : 0;
     const crmBadge = item.id === "crm" ? (stagnatedCount || 0) : 0;
     const badgeCount = dashboardBadge || crmBadge;
     const isItemActive = isActive || hasActiveInChildren;
 
-    // Only show collapsed submenu icons for submenu with active item
     const showCollapsedSubmenu = hasChildren && hasActiveInChildren;
 
     return (
@@ -329,7 +290,7 @@ export const NavigationSidebar = () => {
         <button
           onClick={() => handleNavClick(item)}
           className={cn(
-            "w-full flex items-center gap-3 py-3 transition-all duration-200 relative group/item",
+            "w-full flex items-center gap-2.5 py-2.5 transition-all duration-200 relative group/item",
             "text-sidebar-foreground/70 dark:text-white/70 hover:text-sidebar-foreground dark:hover:text-white",
             isItemActive
               ? "bg-sidebar-accent dark:bg-[#22262E] hover:bg-sidebar-accent dark:hover:bg-[#22262E]"
@@ -338,7 +299,6 @@ export const NavigationSidebar = () => {
             "px-4"
           )}
         >
-          {/* Active left accent bar */}
           {isItemActive && (
             <div
               className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full bg-primary"
@@ -352,10 +312,11 @@ export const NavigationSidebar = () => {
                 iconId={item.id as any}
                 isActive={isItemActive}
                 hasUnread={item.id === "inbox" && (badgeCount > 0)}
+                className="w-[14px] h-[14px]"
               />
             ) : (
               <Icon className={cn(
-                "w-[18px] h-[18px] transition-colors",
+                "w-[14px] h-[14px] transition-colors",
                 isItemActive && "text-primary",
                 isItemActive && "drop-shadow-[0_0_4px_hsl(var(--primary)/0.6)]"
               )} />
@@ -364,7 +325,7 @@ export const NavigationSidebar = () => {
           </div>
 
           <span className={cn(
-            "whitespace-nowrap text-[15px] font-medium flex-1 text-left transition-opacity duration-300",
+            "whitespace-nowrap text-[12px] font-medium flex-1 text-left transition-opacity duration-300",
             isItemActive && "text-sidebar-foreground dark:text-white",
             isMobile ? "opacity-100" : "opacity-0 group-hover/sidebar:opacity-100"
           )}>
@@ -373,26 +334,23 @@ export const NavigationSidebar = () => {
 
           {hasChildren && (
             <ChevronDown className={cn(
-              "w-4 h-4 transition-transform",
+              "w-3 h-3 transition-transform",
               isMobile ? "opacity-100" : "opacity-0 group-hover/sidebar:opacity-100",
               isOpen && "rotate-180"
             )} />
           )}
         </button>
 
-        {/* Expanded Submenu - visible when sidebar expanded and submenu open */}
         {hasChildren && isOpen && (
           <div className={cn(
             "relative",
             isMobile ? "block" : "hidden group-hover/sidebar:block"
           )}>
-            {/* Continuous vertical line for all submenu items - flush left */}
             <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-sidebar-border dark:bg-[#272C35]" />
             {item.children!.map(child => renderSubmenuItem(child))}
           </div>
         )}
 
-        {/* Collapsed Submenu - only show icons for submenu with active item (desktop only) */}
         {showCollapsedSubmenu && !isMobile && (
           <div className="group-hover/sidebar:hidden flex flex-col">
             {item.children!.map(child => {
@@ -400,25 +358,20 @@ export const NavigationSidebar = () => {
               const childIsActive = isPathActive(child.path);
 
               if (userRole !== "admin") {
-                if (child.id === "team" && !hasAnyAccess('team_members')) return null;
                 if (child.id === "ia-config" && !hasAnyAccess('ia_config')) return null;
-                if (child.id === "sales" && !hasAnyAccess('sales')) return null;
-                if (child.id === "financial" && !hasAnyAccess('financial')) return null;
-                if (child.id === "business-reports") return null;
               }
 
-              // CRM badge in collapsed mode
               const crmCollapsedBadge = child.id === "crm" ? (stagnatedCount || 0) : 0;
 
               return (
                 <button
                   key={child.id}
                   onClick={() => navigate(child.path!)}
-                  className="w-full flex items-center justify-center py-3 transition-all duration-200 hover:bg-sidebar-accent dark:hover:bg-[#1E2229]"
+                  className="w-full flex items-center justify-center py-2.5 transition-all duration-200 hover:bg-sidebar-accent dark:hover:bg-[#1E2229]"
                 >
                   <div className="relative">
                     <ChildIcon className={cn(
-                      "w-[18px] h-[18px] transition-colors text-sidebar-foreground/50 dark:text-white/50",
+                      "w-[14px] h-[14px] transition-colors text-sidebar-foreground/50 dark:text-white/50",
                       childIsActive && "text-primary"
                     )} />
                     <NotificationBadge count={crmCollapsedBadge} />
@@ -432,9 +385,15 @@ export const NavigationSidebar = () => {
     );
   };
 
+  // Combine all instances for status display
+  const allInstances = [
+    ...(whatsappInstances || []).map((i: any) => ({ ...i, type: 'whatsapp' })),
+    ...(instagramInstances || []).map((i: any) => ({ ...i, type: 'instagram' })),
+  ];
+
   return (
     <>
-      {/* Mobile Floating Button - Only visible on mobile when menu is closed and NOT in chat view */}
+      {/* Mobile Floating Button */}
       {isMobile && !isMobileMenuOpen && !hideFloatingButton && (
         <button
           onClick={() => setIsMobileMenuOpen(true)}
@@ -449,7 +408,7 @@ export const NavigationSidebar = () => {
         </button>
       )}
 
-      {/* Mobile Overlay - Only visible on mobile when menu is open */}
+      {/* Mobile Overlay */}
       {isMobile && isMobileMenuOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-[55] backdrop-blur-sm"
@@ -457,14 +416,12 @@ export const NavigationSidebar = () => {
         />
       )}
 
-      {/* Sidebar - Desktop: normal behavior, Mobile: slide in/out */}
+      {/* Sidebar */}
       <div
         className={cn(
           "bg-[hsl(var(--sidebar-nav))] flex flex-col transition-all duration-300 ease-in-out group/sidebar shadow-xl",
-          // Desktop styles
-          !isMobile && "h-full w-[60px] hover:w-[260px] z-50",
-          // Mobile styles
-          isMobile && "fixed top-0 left-0 h-screen w-[280px] z-[60]",
+          !isMobile && "h-full w-[60px] hover:w-[240px] z-50",
+          isMobile && "fixed top-0 left-0 h-screen w-[260px] z-[60]",
           isMobile && (isMobileMenuOpen ? "translate-x-0" : "-translate-x-full")
         )}
         onMouseEnter={() => !isMobile && setIsHovered(true)}
@@ -472,79 +429,99 @@ export const NavigationSidebar = () => {
       >
         {/* Logo Header */}
         <div className="flex items-center justify-center gap-2 px-3 py-2 border-b border-sidebar-border dark:border-white/10 overflow-hidden">
-          {/* Logo icon - always visible */}
           <img
             src="/logo-icon.png"
             alt="Clinvia"
-            className="h-10 w-10 object-contain shrink-0"
+            className="h-8 w-8 object-contain shrink-0"
           />
-          {/* Brand name - visible when expanded (desktop hover) or mobile */}
           <img
             src="/clinvia-text-dark.png"
             alt="Clinvia"
             className={cn(
-              "h-7 w-auto object-contain",
+              "h-6 w-auto object-contain",
               isMobile ? "block" : "hidden group-hover/sidebar:block"
             )}
           />
         </div>
 
         {/* Scrollable Menu Items */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col py-4 scrollbar-none">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col py-3 scrollbar-none">
           {menuStructure.map(item => renderMenuItem(item))}
         </div>
 
         {/* Fixed Bottom Section */}
-        <div className="flex flex-col py-4 border-t border-sidebar-border dark:border-white/10">
-          <button
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            className="flex items-center gap-3 py-3 px-4 transition-all duration-200 hover:bg-sidebar-accent dark:hover:bg-[#1E2229] text-sidebar-foreground/70 dark:text-white/70 hover:text-sidebar-foreground dark:hover:text-white"
-          >
-            <div className="shrink-0">
-              {theme === "dark" ? (
-                <Moon className="w-[18px] h-[18px]" />
-              ) : (
-                <Sun className="w-[18px] h-[18px]" />
-              )}
-            </div>
-            <span className={cn(
-              "whitespace-nowrap transition-opacity duration-300 text-[15px] font-medium",
-              isMobile ? "opacity-100" : "opacity-0 group-hover/sidebar:opacity-100"
+        <div className="flex flex-col border-t border-sidebar-border dark:border-white/10">
+          {/* Instance Status Section */}
+          {allInstances.length > 0 && (
+            <div className={cn(
+              "px-3 py-2 space-y-1",
+              isMobile ? "block" : "hidden group-hover/sidebar:block"
             )}>
-              Alternar Tema
-            </span>
-          </button>
-
-          <button
-            onClick={() => navigate('/reports')}
-            className={cn(
-              "flex items-center gap-3 py-3 px-4 transition-all duration-200 hover:bg-sidebar-accent dark:hover:bg-[#1E2229]",
-              location.pathname === '/reports'
-                ? "text-primary bg-sidebar-accent dark:bg-[#1E2229]"
-                : "text-sidebar-foreground/70 dark:text-white/70 hover:text-sidebar-foreground dark:hover:text-white"
-            )}
-          >
-            <div className="relative shrink-0">
-              <Megaphone className="w-[18px] h-[18px]" />
-              <NotificationBadge count={unreadUpdatesCount || 0} />
+              <span className="text-[10px] uppercase tracking-wider text-sidebar-foreground/40 dark:text-white/40 font-semibold">
+                Conexões
+              </span>
+              {allInstances.map((instance: any) => {
+                const isConnected = instance.status === 'connected';
+                return (
+                  <div key={`${instance.type}-${instance.id}`} className="flex items-center gap-2 py-0.5">
+                    {instance.type === 'whatsapp' ? (
+                      <FaWhatsapp className={cn(
+                        "w-3 h-3 shrink-0",
+                        isConnected ? "text-green-500" : "text-red-400"
+                      )} />
+                    ) : (
+                      <FaInstagram className={cn(
+                        "w-3 h-3 shrink-0",
+                        isConnected ? "text-pink-500" : "text-red-400"
+                      )} />
+                    )}
+                    <span className="text-[10px] text-sidebar-foreground/70 dark:text-white/70 truncate flex-1">
+                      {instance.name}
+                    </span>
+                    <span className={cn(
+                      "w-1.5 h-1.5 rounded-full shrink-0",
+                      isConnected ? "bg-green-500" : "bg-red-400"
+                    )} />
+                  </div>
+                );
+              })}
             </div>
-            <span className={cn(
-              "whitespace-nowrap transition-opacity duration-300 text-[15px] font-medium",
-              isMobile ? "opacity-100" : "opacity-0 group-hover/sidebar:opacity-100"
-            )}>
-              Atualizações
-            </span>
-          </button>
+          )}
 
+          {/* Collapsed instance indicators (desktop only) */}
+          {allInstances.length > 0 && !isMobile && (
+            <div className="group-hover/sidebar:hidden flex flex-col items-center py-2 gap-1">
+              {allInstances.map((instance: any) => {
+                const isConnected = instance.status === 'connected';
+                return (
+                  <div key={`collapsed-${instance.type}-${instance.id}`} className="relative">
+                    {instance.type === 'whatsapp' ? (
+                      <FaWhatsapp className={cn(
+                        "w-3 h-3",
+                        isConnected ? "text-green-500" : "text-red-400"
+                      )} />
+                    ) : (
+                      <FaInstagram className={cn(
+                        "w-3 h-3",
+                        isConnected ? "text-pink-500" : "text-red-400"
+                      )} />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Logout */}
           <button
             onClick={handleLogout}
-            className="flex items-center gap-3 py-3 px-4 transition-all duration-200 hover:bg-sidebar-accent dark:hover:bg-[#1E2229] text-red-500"
+            className="flex items-center gap-2.5 py-2.5 px-4 transition-all duration-200 hover:bg-sidebar-accent dark:hover:bg-[#1E2229] text-red-500"
           >
             <div className="shrink-0">
-              <LogOut className="w-[18px] h-[18px]" />
+              <LogOut className="w-[14px] h-[14px]" />
             </div>
             <span className={cn(
-              "whitespace-nowrap transition-opacity duration-300 text-[15px] font-medium",
+              "whitespace-nowrap transition-opacity duration-300 text-[12px] font-medium",
               isMobile ? "opacity-100" : "opacity-0 group-hover/sidebar:opacity-100"
             )}>
               Sair
@@ -552,29 +529,29 @@ export const NavigationSidebar = () => {
           </button>
 
           {/* User Profile & Theme Toggle */}
-          <div className="p-4 border-t border-sidebar-border dark:border-[#272C35]">
+          <div className="p-3 border-t border-sidebar-border dark:border-[#272C35]">
             <div className={cn(
-              "flex items-center gap-3 transition-all duration-300",
+              "flex items-center gap-2.5 transition-all duration-300",
               isMobile ? "" : "justify-center group-hover/sidebar:justify-start"
             )}>
               <div className="relative group/avatar">
-                <Avatar className="h-9 w-9 border-2 border-sidebar-border dark:border-[#272C35] transition-all duration-300 group-hover/avatar:border-primary group-hover/avatar:shadow-[0_0_12px_2px_hsl(var(--primary)/0.4)]">
+                <Avatar className="h-8 w-8 border-2 border-sidebar-border dark:border-[#272C35] transition-all duration-300 group-hover/avatar:border-primary group-hover/avatar:shadow-[0_0_12px_2px_hsl(var(--primary)/0.4)]">
                   <AvatarImage src={currentTeamMember?.profile_pic_url || undefined} />
-                  <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+                  <AvatarFallback className="bg-primary text-primary-foreground text-[10px]">
                     {currentTeamMember?.name?.substring(0, 2).toUpperCase() || "US"}
                   </AvatarFallback>
                 </Avatar>
-                <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-sidebar dark:border-[#005FAA] rounded-full animate-gentle-float" />
+                <span className="absolute bottom-0 right-0 w-2 h-2 bg-green-500 border-2 border-sidebar dark:border-[#005FAA] rounded-full animate-gentle-float" />
               </div>
 
               <div className={cn(
                 "flex flex-col overflow-hidden transition-all duration-300",
                 isMobile ? "w-auto opacity-100" : "w-0 opacity-0 group-hover/sidebar:w-auto group-hover/sidebar:opacity-100"
               )}>
-                <span className="text-sm font-medium text-sidebar-foreground/90 dark:text-white/90 truncate max-w-[120px]">
+                <span className="text-[11px] font-medium text-sidebar-foreground/90 dark:text-white/90 truncate max-w-[100px]">
                   {currentTeamMember?.name || "Usuário"}
                 </span>
-                <span className="text-xs text-sidebar-foreground/50 dark:text-white/50 truncate max-w-[120px]">
+                <span className="text-[10px] text-sidebar-foreground/50 dark:text-white/50 truncate max-w-[100px]">
                   {userRole === 'admin' ? 'Administrador' : userRole === 'supervisor' ? 'Supervisor' : 'Atendente'}
                 </span>
               </div>
@@ -585,11 +562,11 @@ export const NavigationSidebar = () => {
               )}>
                 <button
                   onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                  className="p-1.5 rounded-lg text-sidebar-foreground/70 dark:text-white/70 hover:text-sidebar-foreground dark:hover:text-white hover:bg-sidebar-accent dark:hover:bg-[#1E2229]/50 transition-colors"
+                  className="p-1 rounded-lg text-sidebar-foreground/70 dark:text-white/70 hover:text-sidebar-foreground dark:hover:text-white hover:bg-sidebar-accent dark:hover:bg-[#1E2229]/50 transition-colors"
                 >
                   {theme === 'dark' ? (
                     <svg
-                      width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                      width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
                       className="text-yellow-400"
                     >
                       <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
@@ -599,7 +576,7 @@ export const NavigationSidebar = () => {
                     </svg>
                   ) : (
                     <svg
-                      width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                      width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
                       className="text-yellow-400"
                       style={{ animation: "sun-spin 8s linear infinite" }}
                     >
