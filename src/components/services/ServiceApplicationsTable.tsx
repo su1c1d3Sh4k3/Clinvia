@@ -10,23 +10,29 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, Plus } from "lucide-react";
 import { ServiceClient } from "@/types/services";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { EditApplicationModal } from "./EditApplicationModal";
+import { AddApplicationModal } from "./AddApplicationModal";
 import { cn } from "@/lib/utils";
 
 interface ServiceApplicationsTableProps {
   applications: ServiceClient[];
+  categoryId: string;
+  serviceNameId: string;
 }
 
 export const ServiceApplicationsTable = ({
   applications,
+  categoryId,
+  serviceNameId,
 }: ServiceApplicationsTableProps) => {
   const queryClient = useQueryClient();
   const [editApp, setEditApp] = useState<ServiceClient | null>(null);
+  const [showAddModal, setShowAddModal] = useState(false);
 
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat("pt-BR", {
@@ -78,9 +84,26 @@ export const ServiceApplicationsTable = ({
 
   if (applications.length === 0) {
     return (
-      <div className="text-center py-8 text-muted-foreground text-sm">
-        Nenhuma aplicação cadastrada para este serviço.
-      </div>
+      <>
+        <div className="text-center py-8 text-muted-foreground text-sm space-y-3">
+          <p>Nenhuma aplicação cadastrada para este serviço.</p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1"
+            onClick={() => setShowAddModal(true)}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Adicionar Aplicação
+          </Button>
+        </div>
+        <AddApplicationModal
+          open={showAddModal}
+          onOpenChange={setShowAddModal}
+          categoryId={categoryId}
+          serviceNameId={serviceNameId}
+        />
+      </>
     );
   }
 
@@ -99,7 +122,17 @@ export const ServiceApplicationsTable = ({
               <TableHead className="w-[100px] text-center">Intervalo</TableHead>
               <TableHead className="w-[100px] text-center">Comissão</TableHead>
               <TableHead className="w-[90px] text-center">Estágio</TableHead>
-              <TableHead className="w-[80px]" />
+              <TableHead className="w-[110px]">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1 text-xs"
+                  onClick={() => setShowAddModal(true)}
+                >
+                  <Plus className="h-3 w-3" />
+                  Adicionar
+                </Button>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -184,6 +217,13 @@ export const ServiceApplicationsTable = ({
         open={!!editApp}
         onOpenChange={(open) => !open && setEditApp(null)}
         application={editApp}
+      />
+
+      <AddApplicationModal
+        open={showAddModal}
+        onOpenChange={setShowAddModal}
+        categoryId={categoryId}
+        serviceNameId={serviceNameId}
       />
     </>
   );

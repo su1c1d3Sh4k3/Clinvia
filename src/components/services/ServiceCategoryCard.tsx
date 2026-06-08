@@ -80,6 +80,8 @@ export const ServiceCategoryCard = ({
                   applications={applications.filter(
                     (a) => a.service_name_id === svc.id
                   )}
+                  categoryId={applications[0]?.category_id || ""}
+                  serviceNameId={svc.id}
                 />
               </TabsContent>
             ))}
