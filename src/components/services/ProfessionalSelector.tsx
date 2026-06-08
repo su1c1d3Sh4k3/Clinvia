@@ -8,7 +8,7 @@ import { Users } from "lucide-react";
 interface Professional {
   id: string;
   name: string;
-  specialty?: string;
+  role?: string;
 }
 
 interface ProfessionalSelectorProps {
@@ -33,7 +33,7 @@ export const ProfessionalSelector = ({
     queryFn: async () => {
       const { data, error } = await supabase
         .from("professionals")
-        .select("id, name, specialty")
+        .select("id, name, role")
         .order("name");
       if (error) throw error;
       return data as Professional[];
@@ -83,9 +83,9 @@ export const ProfessionalSelector = ({
                 onCheckedChange={() => toggle(prof.id)}
               />
               <span>{prof.name}</span>
-              {prof.specialty && (
+              {prof.role && (
                 <span className="text-xs text-muted-foreground ml-auto">
-                  {prof.specialty}
+                  {prof.role}
                 </span>
               )}
             </label>
