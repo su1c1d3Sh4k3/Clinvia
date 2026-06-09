@@ -56,6 +56,7 @@ export interface CrmClient {
   professional_id: string | null;
   loss_reason: string | null;
   loss_reason_other: string | null;
+  priority: 'low' | 'medium' | 'high' | null;
   notes: string | null;
   is_active: boolean;
   created_at: string;

@@ -60,7 +60,7 @@ export const ClientProfileModal = ({
                 <TabsContent value="historico" className="mt-0"><HistoricoTab contactId={contact.id} /></TabsContent>
                 <TabsContent value="avaliacao" className="mt-0"><AvaliacaoTab contact={contact} /></TabsContent>
                 <TabsContent value="resumos" className="mt-0"><ResumosTab contact={contact} /></TabsContent>
-                <TabsContent value="negociacoes" className="mt-0"><NegociacoesTab /></TabsContent>
+                <TabsContent value="negociacoes" className="mt-0"><NegociacoesTab contactId={contact.id} /></TabsContent>
               </ScrollArea>
             </Tabs>
           </div>
