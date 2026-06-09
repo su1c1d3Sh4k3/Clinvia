@@ -102,8 +102,17 @@ export const NewCreateDealModal = () => {
     },
   });
 
-  useEffect(() => { setSelServiceNameId(""); setSelApplicationId(""); }, [selCategoryId]);
-  useEffect(() => { setSelApplicationId(""); }, [selServiceNameId]);
+  // Only reset child selects when parent changes
+  useEffect(() => {
+    setSelServiceNameId("");
+    setSelApplicationId("");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selCategoryId]);
+
+  useEffect(() => {
+    setSelApplicationId("");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selServiceNameId]);
 
   const handleAddService = () => {
     if (!selApplicationId || !applications) return;
@@ -201,14 +210,14 @@ export const NewCreateDealModal = () => {
               </div>
               <div>
                 <Label className="text-[11px]">Serviço</Label>
-                <Select value={selServiceNameId} onValueChange={setSelServiceNameId} disabled={!selCategoryId}>
+                <Select key={selCategoryId} value={selServiceNameId || undefined} onValueChange={setSelServiceNameId} disabled={!selCategoryId}>
                   <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Serviço" /></SelectTrigger>
                   <SelectContent>{(serviceNames || []).map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div>
                 <Label className="text-[11px]">Aplicação</Label>
-                <Select value={selApplicationId} onValueChange={setSelApplicationId} disabled={!selServiceNameId}>
+                <Select key={selServiceNameId + services.length} value={selApplicationId || undefined} onValueChange={setSelApplicationId} disabled={!selServiceNameId}>
                   <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Aplicação" /></SelectTrigger>
                   <SelectContent>{(applications || []).map((a: any) => <SelectItem key={a.id} value={a.id}>{a.name} — {fmt(a.price)}</SelectItem>)}</SelectContent>
                 </Select>
