@@ -74,45 +74,34 @@ export const NewCreateDealModal = () => {
     },
   });
 
-  // First try user's own services, fallback to templates
   const { data: applications } = useQuery({
     queryKey: ["deal-applications", selServiceNameId],
     enabled: !!selServiceNameId,
     queryFn: async () => {
-      // Try user's services_client first
-      const { data: clientApps, error: clientErr } = await supabase
+      const { data: clientApps } = await supabase
         .from("services_client" as any).select("*")
         .eq("service_name_id", selServiceNameId).eq("status", true).order("name");
-
-      if (!clientErr && clientApps && clientApps.length > 0) {
-        return clientApps.map((a: any) => ({
-          id: a.id, name: a.name, price: a.price, min_price: a.min_price, source: "client",
-        }));
+      if (clientApps && clientApps.length > 0) {
+        return clientApps.map((a: any) => ({ id: a.id, name: a.name, price: a.price, min_price: a.min_price }));
       }
-
-      // Fallback to template applications
-      const { data: templateApps, error: templateErr } = await supabase
+      const { data: tpl, error } = await supabase
         .from("service_applications" as any).select("*")
         .eq("service_name_id", selServiceNameId).order("name");
-
-      if (templateErr) throw templateErr;
-      return (templateApps || []).map((a: any) => ({
-        id: a.id, name: a.name, price: a.default_price, min_price: a.default_min_price, source: "template",
-      }));
+      if (error) throw error;
+      return (tpl || []).map((a: any) => ({ id: a.id, name: a.name, price: a.default_price, min_price: a.default_min_price }));
     },
   });
 
-  // Only reset child selects when parent changes
-  useEffect(() => {
+  const handleCategoryChange = (val: string) => {
+    setSelCategoryId(val);
     setSelServiceNameId("");
     setSelApplicationId("");
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selCategoryId]);
+  };
 
-  useEffect(() => {
+  const handleServiceNameChange = (val: string) => {
+    setSelServiceNameId(val);
     setSelApplicationId("");
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selServiceNameId]);
+  };
 
   const handleAddService = () => {
     if (!selApplicationId || !applications) return;
@@ -144,7 +133,6 @@ export const NewCreateDealModal = () => {
 
   const handleSave = async () => {
     if (!ownerId || !contactId) { toast.error("Selecione um contato"); return; }
-
     const { data: existing } = await supabase
       .from("crm_client" as any).select("id")
       .eq("contact_id", contactId).eq("is_active", true).maybeSingle();
@@ -178,6 +166,9 @@ export const NewCreateDealModal = () => {
     } finally { setSaving(false); }
   };
 
+  // Native select style matching shadcn
+  const nativeSelectClass = "h-8 text-xs w-full rounded-md border border-input bg-background px-2 py-1 focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50";
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -197,37 +188,56 @@ export const NewCreateDealModal = () => {
             <ContactPicker value={contactId} onChange={(val) => setContactId(val || "")} placeholder="Buscar contato..." />
           </div>
 
-          {/* Serviços */}
+          {/* Serviços — native selects to avoid Radix duplication bug */}
           <div className="border rounded-lg p-3 space-y-3 bg-muted/10 dark:bg-white/5">
             <Label className="text-sm font-medium">Adicionar Serviço</Label>
             <div className="grid grid-cols-3 gap-2">
               <div>
                 <Label className="text-[11px]">Categoria</Label>
-                <Select value={selCategoryId} onValueChange={setSelCategoryId}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Categoria" /></SelectTrigger>
-                  <SelectContent>{(categories || []).map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
-                </Select>
+                <select
+                  className={nativeSelectClass}
+                  value={selCategoryId}
+                  onChange={(e) => handleCategoryChange(e.target.value)}
+                >
+                  <option value="">Selecione...</option>
+                  {(categories || []).map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <Label className="text-[11px]">Procedimento</Label>
-                <Select value={selServiceNameId || undefined} onValueChange={setSelServiceNameId} disabled={!selCategoryId}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Procedimento" /></SelectTrigger>
-                  <SelectContent>{(serviceNames || []).map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
-                </Select>
+                <select
+                  className={nativeSelectClass}
+                  value={selServiceNameId}
+                  onChange={(e) => handleServiceNameChange(e.target.value)}
+                  disabled={!selCategoryId}
+                >
+                  <option value="">Selecione...</option>
+                  {(serviceNames || []).map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <Label className="text-[11px]">Aplicação</Label>
-                <Select value={selApplicationId || undefined} onValueChange={setSelApplicationId} disabled={!selServiceNameId}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Aplicação" /></SelectTrigger>
-                  <SelectContent>{(applications || []).map((a: any) => <SelectItem key={a.id} value={a.id}>{a.name} — {fmt(a.price)}</SelectItem>)}</SelectContent>
-                </Select>
+                <select
+                  className={nativeSelectClass}
+                  value={selApplicationId}
+                  onChange={(e) => setSelApplicationId(e.target.value)}
+                  disabled={!selServiceNameId}
+                >
+                  <option value="">Selecione...</option>
+                  {(applications || []).map((a: any) => (
+                    <option key={a.id} value={a.id}>{a.name} — {fmt(a.price)}</option>
+                  ))}
+                </select>
               </div>
             </div>
             <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={handleAddService} disabled={!selApplicationId}>
               <Plus className="w-3 h-3" /> Adicionar
             </Button>
 
-            {/* Lista de serviços adicionados */}
             {services.length > 0 && (
               <div className="space-y-2 border-t pt-3">
                 {services.map((svc, idx) => (
@@ -241,23 +251,17 @@ export const NewCreateDealModal = () => {
                     <div className="grid grid-cols-3 gap-2">
                       <div>
                         <Label className="text-[10px] text-muted-foreground">Quantidade</Label>
-                        <Input
-                          type="number" min={1} value={svc.quantity}
+                        <Input type="number" min={1} value={svc.quantity}
                           onChange={(e) => updateLine(idx, "quantity", parseInt(e.target.value) || 1)}
-                          className="h-8 text-sm"
-                        />
+                          className="h-8 text-sm" />
                       </div>
                       <div>
                         <Label className="text-[10px] text-muted-foreground">Valor Unit. (R$)</Label>
-                        <Input
-                          type="number" step="0.01" min={svc.minPrice} max={svc.maxPrice}
+                        <Input type="number" step="0.01" min={svc.minPrice} max={svc.maxPrice}
                           value={svc.unitPrice}
                           onChange={(e) => updateLine(idx, "unitPrice", parseFloat(e.target.value) || 0)}
-                          className="h-8 text-sm"
-                        />
-                        <span className="text-[9px] text-muted-foreground">
-                          Mín: {fmt(svc.minPrice)}
-                        </span>
+                          className="h-8 text-sm" />
+                        <span className="text-[9px] text-muted-foreground">Mín: {fmt(svc.minPrice)}</span>
                       </div>
                       <div>
                         <Label className="text-[10px] text-muted-foreground">Subtotal</Label>
@@ -266,8 +270,6 @@ export const NewCreateDealModal = () => {
                     </div>
                   </div>
                 ))}
-
-                {/* Total */}
                 <div className="flex items-center justify-between pt-2 border-t">
                   <span className="text-sm font-medium">Valor Total</span>
                   <span className="text-lg font-bold text-primary">{fmt(totalValue)}</span>
