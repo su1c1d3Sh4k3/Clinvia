@@ -93,7 +93,7 @@ export const NewKanbanBoard = ({ onCardClick }: NewKanbanBoardProps) => {
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
   return (
-    <div className="flex-1 overflow-x-auto overflow-y-hidden">
+    <div className="flex-1 overflow-x-auto overflow-y-hidden nav-scrollbar">
       <div className="flex gap-3 h-full min-w-max pb-4 px-1">
         {CRM_STAGES.map((stage) => {
           const cards = grouped[stage] || [];
