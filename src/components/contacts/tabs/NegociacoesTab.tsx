@@ -305,18 +305,32 @@ export const NegociacoesTab = ({ contactId }: NegociacoesTabProps) => {
                   {/* Add service */}
                   {!isTerminal && (
                     <div className="mt-2 grid grid-cols-4 gap-1.5">
-                      <Select value={selCatId} onValueChange={(v) => { setSelCatId(v); setSelSvcId(""); setSelAppId(""); }}>
-                        <SelectTrigger className="h-7 text-[10px]"><SelectValue placeholder="Categ." /></SelectTrigger>
-                        <SelectContent>{(categories || []).map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
-                      </Select>
-                      <Select key={selCatId} value={selSvcId || undefined} onValueChange={(v) => { setSelSvcId(v); setSelAppId(""); }} disabled={!selCatId}>
-                        <SelectTrigger className="h-7 text-[10px]"><SelectValue placeholder="Serviço" /></SelectTrigger>
-                        <SelectContent>{(serviceNames || []).map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
-                      </Select>
-                      <Select key={selSvcId} value={selAppId || undefined} onValueChange={setSelAppId} disabled={!selSvcId}>
-                        <SelectTrigger className="h-7 text-[10px]"><SelectValue placeholder="Aplicação" /></SelectTrigger>
-                        <SelectContent>{(appOptions || []).map((a: any) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}</SelectContent>
-                      </Select>
+                      <select
+                        className="h-7 text-[10px] w-full rounded-md border border-input bg-background px-1.5 focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+                        value={selCatId}
+                        onChange={(e) => { setSelCatId(e.target.value); setSelSvcId(""); setSelAppId(""); }}
+                      >
+                        <option value="">Categoria</option>
+                        {(categories || []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                      <select
+                        className="h-7 text-[10px] w-full rounded-md border border-input bg-background px-1.5 focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+                        value={selSvcId}
+                        onChange={(e) => { setSelSvcId(e.target.value); setSelAppId(""); }}
+                        disabled={!selCatId}
+                      >
+                        <option value="">Procedimento</option>
+                        {(serviceNames || []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      </select>
+                      <select
+                        className="h-7 text-[10px] w-full rounded-md border border-input bg-background px-1.5 focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+                        value={selAppId}
+                        onChange={(e) => setSelAppId(e.target.value)}
+                        disabled={!selSvcId}
+                      >
+                        <option value="">Aplicação</option>
+                        {(appOptions || []).map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                      </select>
                       <Button size="sm" variant="outline" className="h-7 text-[10px] gap-1" onClick={() => addServiceToDeal(deal.id)} disabled={!selAppId}>
                         <Plus className="w-3 h-3" /> Add
                       </Button>
