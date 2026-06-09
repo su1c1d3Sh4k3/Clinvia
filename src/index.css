@@ -157,25 +157,26 @@ All colors MUST be HSL.
 
 @layer utilities {
   .nav-scrollbar {
-    scrollbar-width: thin;
+    scrollbar-width: thin !important;
+    scrollbar-color: hsl(var(--primary) / 0.2) transparent;
   }
 
   .nav-scrollbar::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 6px !important;
+    height: 6px !important;
   }
 
   .nav-scrollbar::-webkit-scrollbar-track {
-    background: transparent;
+    background: transparent !important;
   }
 
   .nav-scrollbar::-webkit-scrollbar-thumb {
-    background: hsl(var(--primary) / 0.2);
+    background: hsl(var(--primary) / 0.2) !important;
     border-radius: 10px;
   }
 
   .nav-scrollbar:hover::-webkit-scrollbar-thumb {
-    background: hsl(var(--primary) / 0.4);
+    background: hsl(var(--primary) / 0.4) !important;
   }
 
   .scrollbar-thin::-webkit-scrollbar {
