@@ -8,12 +8,28 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { STAGE_COLORS, CrmStage } from "@/types/crm-client";
 
 interface ClientSidebarProps {
   contact: any;
 }
 
 export const ClientSidebar = ({ contact }: ClientSidebarProps) => {
+  // Active CRM deal
+  const { data: crmClient } = useQuery({
+    queryKey: ["crm-client-active", contact.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("crm_client" as any)
+        .select("stage")
+        .eq("contact_id", contact.id)
+        .eq("is_active", true)
+        .maybeSingle();
+      if (error) throw error;
+      return data as { stage: CrmStage } | null;
+    },
+  });
+
   // Last open conversation (ticket info + queue + responsible)
   const { data: lastConversation } = useQuery({
     queryKey: ["client-last-conversation", contact.id],
@@ -129,8 +145,8 @@ export const ClientSidebar = ({ contact }: ClientSidebarProps) => {
         <InfoRow
           icon={ListFilter}
           label="Etapa CRM"
-          value="Nenhuma negociação atribuída"
-          className="text-muted-foreground italic"
+          value={crmClient?.stage || "Nenhuma negociação atribuída"}
+          className={crmClient ? "font-medium" : "text-muted-foreground italic"}
         />
 
         <InfoRow
