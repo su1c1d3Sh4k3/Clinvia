@@ -6,12 +6,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useOwnerId } from "@/hooks/useOwnerId";
-import { useAuth } from "@/hooks/useAuth";
+import { useStaff, useCurrentTeamMember } from "@/hooks/useStaff";
 import { ContactPicker } from "@/components/ui/contact-picker";
 import { toast } from "sonner";
 import { CRM_STAGES, TERMINAL_STAGES, CrmStage } from "@/types/crm-client";
@@ -23,17 +24,24 @@ interface ServiceLine {
   quantity: number;
   unitPrice: number;
   minPrice: number;
+  maxPrice: number;
 }
 
 export const NewCreateDealModal = () => {
-  const { user } = useAuth();
   const { data: ownerId } = useOwnerId();
+  const { data: staffMembers } = useStaff();
+  const { data: currentTeamMember } = useCurrentTeamMember();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // Form state
+  const [title, setTitle] = useState("");
   const [contactId, setContactId] = useState("");
   const [stage, setStage] = useState<string>("Qualificado");
+  const [priority, setPriority] = useState("medium");
+  const [responsibleId, setResponsibleId] = useState("");
+  const [description, setDescription] = useState("");
   const [services, setServices] = useState<ServiceLine[]>([]);
 
   // Service selection state
@@ -43,14 +51,13 @@ export const NewCreateDealModal = () => {
 
   useEffect(() => {
     if (!open) {
-      setContactId("");
-      setStage("Qualificado");
-      setServices([]);
-      setSelCategoryId("");
-      setSelServiceNameId("");
-      setSelApplicationId("");
+      setTitle(""); setContactId(""); setStage("Qualificado");
+      setPriority("medium"); setResponsibleId(""); setDescription("");
+      setServices([]); setSelCategoryId(""); setSelServiceNameId(""); setSelApplicationId("");
+    } else {
+      setResponsibleId(currentTeamMember?.id || "");
     }
-  }, [open]);
+  }, [open, currentTeamMember]);
 
   // Categories
   const { data: categories } = useQuery({
@@ -108,6 +115,7 @@ export const NewCreateDealModal = () => {
         quantity: 1,
         unitPrice: app.price,
         minPrice: app.min_price,
+        maxPrice: app.price,
       },
     ]);
     setSelApplicationId("");
@@ -116,12 +124,13 @@ export const NewCreateDealModal = () => {
   const updateServiceLine = (idx: number, field: string, value: any) => {
     setServices((prev) => prev.map((s, i) => {
       if (i !== idx) return s;
-      const updated = { ...s, [field]: value };
-      // Clamp price between min_price and original price
       if (field === "unitPrice") {
-        updated.unitPrice = Math.max(updated.minPrice, Math.min(value, s.unitPrice >= value ? s.unitPrice : value));
+        return { ...s, unitPrice: Math.max(s.minPrice, Math.min(s.maxPrice, value)) };
       }
-      return updated;
+      if (field === "quantity") {
+        return { ...s, quantity: Math.max(1, value) };
+      }
+      return { ...s, [field]: value };
     }));
   };
 
@@ -134,6 +143,10 @@ export const NewCreateDealModal = () => {
   const handleSave = async () => {
     if (!ownerId || !contactId) {
       toast.error("Selecione um contato");
+      return;
+    }
+    if (!title.trim()) {
+      toast.error("Informe o título da negociação");
       return;
     }
 
@@ -159,6 +172,9 @@ export const NewCreateDealModal = () => {
           contact_id: contactId,
           stage,
           value: totalValue,
+          priority,
+          responsible_id: responsibleId || currentTeamMember?.id || null,
+          notes: description || null,
         })
         .select("id")
         .single();
@@ -184,10 +200,10 @@ export const NewCreateDealModal = () => {
       }
 
       queryClient.invalidateQueries({ queryKey: ["crm-clients"] });
-      toast.success("Negociação criada com sucesso");
+      toast.success("Negociação criada com sucesso!");
       setOpen(false);
     } catch (err: any) {
-      toast.error("Erro: " + err.message);
+      toast.error("Erro ao criar negociação: " + err.message);
     } finally {
       setSaving(false);
     }
@@ -198,18 +214,29 @@ export const NewCreateDealModal = () => {
       <DialogTrigger asChild>
         <Button size="sm" className="gap-1 text-xs md:text-sm h-8 md:h-9">
           <Plus className="w-4 h-4" />
-          <span className="hidden sm:inline">Nova Negociação</span>
+          Nova Negociação
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="max-w-xl max-h-[90vh] flex flex-col overflow-hidden">
+        <DialogHeader className="shrink-0">
           <DialogTitle>Nova Negociação</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
-          {/* Contact */}
+        <div className="space-y-4 overflow-y-auto flex-1 px-1 pb-1 nav-scrollbar">
+          {/* Título */}
           <div className="space-y-1.5">
-            <Label>Contato</Label>
+            <Label>Título *</Label>
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Ex: Tratamento Botox - João"
+              autoComplete="off"
+            />
+          </div>
+
+          {/* Contato */}
+          <div className="space-y-1.5">
+            <Label>Contato *</Label>
             <ContactPicker
               value={contactId}
               onChange={(val) => setContactId(val || "")}
@@ -217,22 +244,9 @@ export const NewCreateDealModal = () => {
             />
           </div>
 
-          {/* Stage */}
-          <div className="space-y-1.5">
-            <Label>Etapa Inicial</Label>
-            <Select value={stage} onValueChange={setStage}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {CRM_STAGES.filter((s) => !TERMINAL_STAGES.includes(s)).map((s) => (
-                  <SelectItem key={s} value={s}>{s}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Service Selection: Category → Service → Application */}
-          <div className="space-y-3 border-t pt-4">
-            <h4 className="text-sm font-medium">Serviços</h4>
+          {/* Serviços: Categoria → Serviço → Aplicação */}
+          <div className="border rounded-lg p-3 bg-muted/10 space-y-3">
+            <Label className="text-sm font-medium">Serviços</Label>
             <div className="grid grid-cols-3 gap-2">
               <div>
                 <Label className="text-xs">Categoria</Label>
@@ -271,37 +285,28 @@ export const NewCreateDealModal = () => {
               </div>
             </div>
             <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={handleAddService} disabled={!selApplicationId}>
-              <Plus className="w-3 h-3" /> Adicionar Serviço
+              <Plus className="w-3 h-3" /> Adicionar
             </Button>
 
-            {/* Added services list */}
             {services.length > 0 && (
               <div className="space-y-2 mt-2">
                 {services.map((svc, idx) => (
-                  <div key={idx} className="flex items-center gap-2 p-2 border rounded-md text-sm">
-                    <span className="flex-1 truncate font-medium">{svc.name}</span>
+                  <div key={idx} className="flex items-center gap-2 p-2 border rounded-md text-sm bg-background">
+                    <span className="flex-1 truncate font-medium text-xs">{svc.name}</span>
                     <div className="flex items-center gap-1">
                       <Label className="text-[10px]">Qtd</Label>
                       <Input
-                        type="number"
-                        min={1}
-                        value={svc.quantity}
-                        onChange={(e) => updateServiceLine(idx, "quantity", Math.max(1, parseInt(e.target.value) || 1))}
+                        type="number" min={1} value={svc.quantity}
+                        onChange={(e) => updateServiceLine(idx, "quantity", parseInt(e.target.value) || 1)}
                         className="w-14 h-7 text-xs"
                       />
                     </div>
                     <div className="flex items-center gap-1">
                       <Label className="text-[10px]">R$</Label>
                       <Input
-                        type="number"
-                        step="0.01"
-                        min={svc.minPrice}
-                        max={svc.unitPrice}
+                        type="number" step="0.01" min={svc.minPrice} max={svc.maxPrice}
                         value={svc.unitPrice}
-                        onChange={(e) => {
-                          const val = parseFloat(e.target.value) || 0;
-                          updateServiceLine(idx, "unitPrice", Math.max(svc.minPrice, val));
-                        }}
+                        onChange={(e) => updateServiceLine(idx, "unitPrice", parseFloat(e.target.value) || 0)}
                         className="w-24 h-7 text-xs"
                       />
                     </div>
@@ -310,23 +315,80 @@ export const NewCreateDealModal = () => {
                     </Button>
                   </div>
                 ))}
-                <div className="text-right">
-                  <Badge variant="secondary" className="text-sm">
-                    Total: {fmt(totalValue)}
-                  </Badge>
-                </div>
               </div>
             )}
           </div>
+
+          {/* Etapa + Prioridade */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>Etapa Inicial</Label>
+              <Select value={stage} onValueChange={setStage}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {CRM_STAGES.filter((s) => !TERMINAL_STAGES.includes(s)).map((s) => (
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Prioridade</Label>
+              <Select value={priority} onValueChange={setPriority}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">Baixa</SelectItem>
+                  <SelectItem value="medium">Média</SelectItem>
+                  <SelectItem value="high">Alta</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Valor Total + Responsável */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>Valor Total (R$)</Label>
+              <Input
+                value={fmt(totalValue)}
+                disabled
+                className="bg-muted cursor-not-allowed"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Responsável</Label>
+              <Select value={responsibleId} onValueChange={setResponsibleId}>
+                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent>
+                  {(staffMembers || []).map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name} ({s.role === "admin" ? "Admin" : s.role === "supervisor" ? "Superv." : "Atend."})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Descrição */}
+          <div className="space-y-1.5">
+            <Label>Descrição</Label>
+            <Textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Detalhes da negociação..."
+              rows={3}
+            />
+          </div>
         </div>
 
-        <DialogFooter>
+        <div className="shrink-0 pt-4 border-t flex justify-end gap-2">
           <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-          <Button onClick={handleSave} disabled={saving || !contactId}>
+          <Button onClick={handleSave} disabled={saving || !contactId || !title.trim()}>
             {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
             Criar Negociação
           </Button>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );

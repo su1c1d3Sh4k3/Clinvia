@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { NewKanbanBoard } from "@/components/crm/NewKanbanBoard";
 import { NewCreateDealModal } from "@/components/crm/NewCreateDealModal";
+import { ClientProfileModal } from "@/components/contacts/ClientProfileModal";
 import { CrmClient } from "@/types/crm-client";
 
 const CRM = () => {
@@ -14,6 +15,12 @@ const CRM = () => {
       </div>
 
       <NewKanbanBoard onCardClick={(client) => setSelectedClient(client)} />
+
+      <ClientProfileModal
+        open={!!selectedClient}
+        onOpenChange={(o) => !o && setSelectedClient(null)}
+        contact={selectedClient?.contact || null}
+      />
     </div>
   );
 };
