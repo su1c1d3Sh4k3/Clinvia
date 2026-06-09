@@ -908,6 +908,42 @@ serve(async (req) => {
                 } else {
                     conversation = newConv;
                     console.log('[webhook-handle-message] Conversation created:', conversation.id);
+
+                    // Auto-create crm_client if contact has no active deal
+                    if (contactId && !groupId) {
+                        try {
+                            const { data: existingDeal } = await supabase
+                                .from('crm_client')
+                                .select('id')
+                                .eq('contact_id', contactId)
+                                .eq('is_active', true)
+                                .maybeSingle();
+
+                            if (!existingDeal) {
+                                // Determine CRM stage based on queue
+                                let crmStage = 'Em Atendimento Humano';
+                                if (instance.default_queue_id) {
+                                    const { data: qData } = await supabase
+                                        .from('queues')
+                                        .select('name')
+                                        .eq('id', instance.default_queue_id)
+                                        .single();
+                                    if (qData?.name === 'Atendimento IA') {
+                                        crmStage = 'Em Atendimento IA';
+                                    }
+                                }
+
+                                await supabase.from('crm_client').insert({
+                                    user_id: userId,
+                                    contact_id: contactId,
+                                    stage: crmStage,
+                                });
+                                console.log('[webhook-handle-message] crm_client created:', crmStage);
+                            }
+                        } catch (crmErr) {
+                            console.warn('[webhook-handle-message] crm_client creation skipped:', crmErr);
+                        }
+                    }
                 }
             }
 

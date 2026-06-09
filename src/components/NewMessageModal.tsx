@@ -13,6 +13,7 @@ import { checkActiveConversation } from "@/hooks/useActiveConversation";
 import { ContactPicker } from "@/components/ui/contact-picker";
 import { formatPhoneNumber, unformatPhoneNumber } from "@/utils/formatters";
 import { User } from "lucide-react";
+import { CRM_STAGES, STAGE_QUEUE_MAP, TERMINAL_STAGES, CrmStage } from "@/types/crm-client";
 
 interface PrefilledContact {
     id: string;
@@ -34,6 +35,8 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
     const [message, setMessage] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [selectedContact, setSelectedContact] = useState<string | null>(null);
+    const [selectedCrmStage, setSelectedCrmStage] = useState("");
+    const [selectedQueueId, setSelectedQueueId] = useState("");
     const { toast } = useToast();
     const { data: ownerId } = useOwnerId();
 
@@ -49,6 +52,8 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
             setNumber("55");
             setMessage("");
             setSelectedInstance("");
+            setSelectedCrmStage("");
+            setSelectedQueueId("");
         }
     }, [open, prefilledContact]);
 
@@ -68,6 +73,24 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
             return data;
         },
     });
+
+    // Fetch queues for manual queue selection
+    const { data: queues } = useQuery({
+        queryKey: ["queues-list"],
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from("queues")
+                .select("id, name")
+                .eq("is_active", true)
+                .order("name");
+            if (error) throw error;
+            return data;
+        },
+    });
+
+    // Non-auto-routed stages need manual queue selection
+    const stageHasAutoQueue = selectedCrmStage && STAGE_QUEUE_MAP[selectedCrmStage as CrmStage];
+    const needsManualQueue = selectedCrmStage && !stageHasAutoQueue && !TERMINAL_STAGES.includes(selectedCrmStage as CrmStage);
 
     const handleSend = async () => {
         if (!selectedInstance || !number || !message) {
@@ -204,6 +227,48 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
 
             if (!conversation) throw new Error("Falha ao criar conversa");
 
+            // 2.2b Handle CRM stage + queue assignment
+            if (selectedCrmStage && contact?.id) {
+                try {
+                    // Determine queue_id
+                    let queueId: string | null = null;
+                    const autoQueue = STAGE_QUEUE_MAP[selectedCrmStage as CrmStage];
+                    if (autoQueue && queues) {
+                        const q = queues.find((q: any) => q.name === autoQueue);
+                        if (q) queueId = q.id;
+                    } else if (needsManualQueue && selectedQueueId) {
+                        queueId = selectedQueueId;
+                    }
+
+                    // Update conversation queue if determined
+                    if (queueId) {
+                        await supabase.from("conversations").update({ queue_id: queueId }).eq("id", conversation.id);
+                    }
+
+                    // Create or update crm_client
+                    const { data: existingDeal } = await supabase
+                        .from("crm_client" as any)
+                        .select("id")
+                        .eq("contact_id", contact.id)
+                        .eq("is_active", true)
+                        .maybeSingle();
+
+                    if (existingDeal) {
+                        await supabase.from("crm_client" as any)
+                            .update({ stage: selectedCrmStage })
+                            .eq("id", (existingDeal as any).id);
+                    } else {
+                        await supabase.from("crm_client" as any).insert({
+                            user_id: ownerId,
+                            contact_id: contact.id,
+                            stage: selectedCrmStage,
+                        });
+                    }
+                } catch (crmErr) {
+                    console.warn("CRM assignment skipped:", crmErr);
+                }
+            }
+
             // 2.3 Insert Message
             const { error: messageError } = await supabase
                 .from("messages")
@@ -312,6 +377,36 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
                             rows={4}
                         />
                     </div>
+
+                    <div className="space-y-2">
+                        <Label>Etapa do CRM</Label>
+                        <Select value={selectedCrmStage} onValueChange={(v) => { setSelectedCrmStage(v); setSelectedQueueId(""); }}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Selecione a etapa (opcional)" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {CRM_STAGES.filter((s) => !TERMINAL_STAGES.includes(s)).map((stage) => (
+                                    <SelectItem key={stage} value={stage}>{stage}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    {needsManualQueue && (
+                        <div className="space-y-2">
+                            <Label>Fila de atendimento</Label>
+                            <Select value={selectedQueueId} onValueChange={setSelectedQueueId}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Selecione a fila" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {(queues || []).map((q: any) => (
+                                        <SelectItem key={q.id} value={q.id}>{q.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={() => onOpenChange(false)}>

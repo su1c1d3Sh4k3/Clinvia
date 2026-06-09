@@ -7,6 +7,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { FavoriteMessagesModal } from "./FavoriteMessagesModal";
 import { ConversationMediaModal } from "./ConversationMediaModal";
+import { CloseNegotiationModal } from "./CloseNegotiationModal";
 import { cn } from "@/lib/utils";
 
 interface ChatHeaderProps {
@@ -71,6 +72,7 @@ export const ChatHeader = ({
     onJumpToMessage,
 }: ChatHeaderProps) => {
     const [isFavoritesModalOpen, setIsFavoritesModalOpen] = useState(false);
+    const [isCloseNegotiationOpen, setIsCloseNegotiationOpen] = useState(false);
     const [isMediaModalOpen, setIsMediaModalOpen] = useState(false);
     const queryClient = useQueryClient();
 
@@ -155,7 +157,7 @@ export const ChatHeader = ({
                         <ExpandButton
                             icon={<CircleCheck className="w-4 h-4" />}
                             label={isResolved ? "Resolvido" : "Resolver Ticket"}
-                            onClick={handleResolve}
+                            onClick={() => !isGroup && contact ? setIsCloseNegotiationOpen(true) : handleResolve()}
                             disabled={resolveConversation.isPending || isResolved}
                             className={isResolved ? "opacity-50 cursor-not-allowed" : ""}
                         />
@@ -188,6 +190,14 @@ export const ChatHeader = ({
                 conversationId={conversationId}
                 onJumpToMessage={onJumpToMessage}
             />
+            {contact && !isGroup && (
+                <CloseNegotiationModal
+                    open={isCloseNegotiationOpen}
+                    onOpenChange={setIsCloseNegotiationOpen}
+                    contactId={contact.id}
+                    onConfirm={handleResolve}
+                />
+            )}
         </div>
     );
 };
