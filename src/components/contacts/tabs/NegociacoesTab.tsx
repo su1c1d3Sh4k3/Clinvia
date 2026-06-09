@@ -287,19 +287,66 @@ export const NegociacoesTab = ({ contactId }: NegociacoesTabProps) => {
                   {(!dealServices || dealServices.length === 0) ? (
                     <p className="text-xs text-muted-foreground">Nenhum serviço vinculado.</p>
                   ) : (
-                    <div className="space-y-1.5">
+                    <div className="space-y-2">
                       {dealServices.map((svc: any) => (
-                        <div key={svc.id} className="flex items-center gap-2 text-sm p-2 border rounded">
-                          <span className="flex-1 truncate text-xs">{svc.service_name}</span>
-                          <span className="text-xs text-muted-foreground">x{svc.quantity}</span>
-                          <span className="text-xs font-medium">{fmt(svc.unit_price)}</span>
-                          {!isTerminal && (
-                            <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => deleteService(svc.id, deal.id)}>
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          )}
+                        <div key={svc.id} className="p-2.5 border rounded-md bg-background space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-medium truncate flex-1">{svc.service_name}</span>
+                            {!isTerminal && (
+                              <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive shrink-0" onClick={() => deleteService(svc.id, deal.id)}>
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-3 gap-2">
+                            <div>
+                              <Label className="text-[10px] text-muted-foreground">Quantidade</Label>
+                              {!isTerminal ? (
+                                <Input type="number" min={1} defaultValue={svc.quantity}
+                                  onBlur={async (e) => {
+                                    const qty = Math.max(1, parseInt(e.target.value) || 1);
+                                    await supabase.from("crm_client_services" as any).update({ quantity: qty }).eq("id", svc.id);
+                                    const { data: all } = await supabase.from("crm_client_services" as any).select("unit_price, quantity").eq("crm_client_id", deal.id);
+                                    const total = (all || []).reduce((s: number, r: any) => s + r.unit_price * r.quantity, 0);
+                                    await supabase.from("crm_client" as any).update({ value: total }).eq("id", deal.id);
+                                    invalidateDeal(deal.id);
+                                  }}
+                                  className="h-7 text-xs" />
+                              ) : (
+                                <Input value={svc.quantity} disabled className="h-7 text-xs bg-muted" />
+                              )}
+                            </div>
+                            <div>
+                              <Label className="text-[10px] text-muted-foreground">Valor Unit. (R$)</Label>
+                              {!isTerminal ? (
+                                <>
+                                  <Input type="number" step="0.01" min={svc.min_price} defaultValue={svc.unit_price}
+                                    onBlur={async (e) => {
+                                      const price = Math.max(svc.min_price, parseFloat(e.target.value) || 0);
+                                      await supabase.from("crm_client_services" as any).update({ unit_price: price }).eq("id", svc.id);
+                                      const { data: all } = await supabase.from("crm_client_services" as any).select("unit_price, quantity").eq("crm_client_id", deal.id);
+                                      const total = (all || []).reduce((s: number, r: any) => s + r.unit_price * r.quantity, 0);
+                                      await supabase.from("crm_client" as any).update({ value: total }).eq("id", deal.id);
+                                      invalidateDeal(deal.id);
+                                    }}
+                                    className="h-7 text-xs" />
+                                  <span className="text-[9px] text-muted-foreground">Mín: {fmt(svc.min_price)}</span>
+                                </>
+                              ) : (
+                                <Input value={fmt(svc.unit_price)} disabled className="h-7 text-xs bg-muted" />
+                              )}
+                            </div>
+                            <div>
+                              <Label className="text-[10px] text-muted-foreground">Subtotal</Label>
+                              <Input value={fmt(svc.unit_price * svc.quantity)} disabled className="h-7 text-xs bg-muted" />
+                            </div>
+                          </div>
                         </div>
                       ))}
+                      <div className="flex items-center justify-between pt-2 border-t">
+                        <span className="text-xs font-medium">Valor Total</span>
+                        <span className="text-sm font-bold text-primary">{fmt(deal.value || 0)}</span>
+                      </div>
                     </div>
                   )}
                   {/* Add service */}
