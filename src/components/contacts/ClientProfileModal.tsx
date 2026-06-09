@@ -1,7 +1,6 @@
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { X } from "lucide-react";
 import { ClientSidebar } from "./ClientSidebar";
 import { CadastroTab } from "./tabs/CadastroTab";
 import { VendasTab } from "./tabs/VendasTab";
@@ -29,20 +28,9 @@ export const ClientProfileModal = ({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-6xl h-[90vh] p-0 gap-0 overflow-hidden">
-        <DialogTitle className="sr-only">Perfil do Cliente</DialogTitle>
-
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b bg-muted/30">
-          <h2 className="text-base font-semibold truncate">
-            {contact.push_name || "Cliente"}
-          </h2>
-          <button
-            onClick={() => onOpenChange(false)}
-            className="rounded-full p-1 hover:bg-accent transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+        <DialogTitle className="px-5 py-3 border-b bg-muted/30 text-base font-semibold truncate">
+          {contact.push_name || "Cliente"}
+        </DialogTitle>
 
         {/* Body: 2 columns */}
         <div className="flex flex-1 overflow-hidden">
@@ -50,16 +38,16 @@ export const ClientProfileModal = ({
           <div className="flex-1 flex flex-col overflow-hidden">
             <Tabs defaultValue="cadastro" className="flex flex-col flex-1 overflow-hidden">
               <div className="px-5 pt-3 border-b">
-                <TabsList className="h-auto flex flex-wrap gap-1 bg-transparent p-0">
-                  <TabsTrigger value="cadastro" className="text-xs px-3 py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md">Cadastro</TabsTrigger>
-                  <TabsTrigger value="vendas" className="text-xs px-3 py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md">Vendas</TabsTrigger>
-                  <TabsTrigger value="procedimentos" className="text-xs px-3 py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md">Procedimentos</TabsTrigger>
-                  <TabsTrigger value="agendamentos" className="text-xs px-3 py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md">Agendamentos</TabsTrigger>
-                  <TabsTrigger value="atendimentos" className="text-xs px-3 py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md">Atendimentos</TabsTrigger>
-                  <TabsTrigger value="historico" className="text-xs px-3 py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md">Histórico</TabsTrigger>
-                  <TabsTrigger value="avaliacao" className="text-xs px-3 py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md">Avaliação</TabsTrigger>
-                  <TabsTrigger value="resumos" className="text-xs px-3 py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md">Resumos</TabsTrigger>
-                  <TabsTrigger value="negociacoes" className="text-xs px-3 py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md">Negociações</TabsTrigger>
+                <TabsList className="flex justify-between w-full h-auto">
+                  <TabsTrigger value="cadastro" className="flex-1 text-xs py-2">Cadastro</TabsTrigger>
+                  <TabsTrigger value="vendas" className="flex-1 text-xs py-2">Vendas</TabsTrigger>
+                  <TabsTrigger value="procedimentos" className="flex-1 text-xs py-2">Procedimentos</TabsTrigger>
+                  <TabsTrigger value="agendamentos" className="flex-1 text-xs py-2">Agendamentos</TabsTrigger>
+                  <TabsTrigger value="atendimentos" className="flex-1 text-xs py-2">Atendimentos</TabsTrigger>
+                  <TabsTrigger value="historico" className="flex-1 text-xs py-2">Histórico</TabsTrigger>
+                  <TabsTrigger value="avaliacao" className="flex-1 text-xs py-2">Avaliação</TabsTrigger>
+                  <TabsTrigger value="resumos" className="flex-1 text-xs py-2">Resumos</TabsTrigger>
+                  <TabsTrigger value="negociacoes" className="flex-1 text-xs py-2">Negociações</TabsTrigger>
                 </TabsList>
               </div>
 
