@@ -1,18 +1,11 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { NewKanbanBoard } from "@/components/crm/NewKanbanBoard";
 import { NewCreateDealModal } from "@/components/crm/NewCreateDealModal";
 import { ClientProfileModal } from "@/components/contacts/ClientProfileModal";
 import { CrmClient } from "@/types/crm-client";
 
 const CRM = () => {
-  const navigate = useNavigate();
   const [selectedClient, setSelectedClient] = useState<CrmClient | null>(null);
-
-  const handleChatClick = (contactId: string) => {
-    // Navigate to inbox with the contact's conversation
-    navigate(`/?contact=${contactId}`);
-  };
 
   return (
     <div className="px-3 md:px-6 pt-4 md:pt-6 h-screen flex flex-col overflow-hidden">
@@ -21,10 +14,7 @@ const CRM = () => {
         <NewCreateDealModal />
       </div>
 
-      <NewKanbanBoard
-        onCardClick={(client) => setSelectedClient(client)}
-        onChatClick={handleChatClick}
-      />
+      <NewKanbanBoard onCardClick={(client) => setSelectedClient(client)} />
 
       <ClientProfileModal
         open={!!selectedClient}

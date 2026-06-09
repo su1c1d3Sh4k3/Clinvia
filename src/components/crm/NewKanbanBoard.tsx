@@ -5,6 +5,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, GripVertical, MessageSquare } from "lucide-react";
+import { DealConversationModal } from "./DealConversationModal";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
@@ -19,10 +20,9 @@ const PRIORITY_BORDER: Record<string, string> = {
 
 interface NewKanbanBoardProps {
   onCardClick?: (client: CrmClient) => void;
-  onChatClick?: (contactId: string) => void;
 }
 
-export const NewKanbanBoard = ({ onCardClick, onChatClick }: NewKanbanBoardProps) => {
+export const NewKanbanBoard = ({ onCardClick }: NewKanbanBoardProps) => {
   const queryClient = useQueryClient();
   const [dragging, setDragging] = useState<string | null>(null);
 
@@ -169,16 +169,19 @@ export const NewKanbanBoard = ({ onCardClick, onChatClick }: NewKanbanBoardProps
                               {client.contact?.push_name || "Sem nome"}
                             </span>
                             {/* Chat button */}
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (client.contact_id) onChatClick?.(client.contact_id);
-                              }}
-                              className="shrink-0 p-1 rounded hover:bg-accent transition-colors"
-                              title="Abrir chat"
-                            >
-                              <MessageSquare className="w-3.5 h-3.5 text-muted-foreground" />
-                            </button>
+                            {client.contact_id && (
+                              <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+                                <DealConversationModal
+                                  contactId={client.contact_id}
+                                  contactName={client.contact?.push_name || "Cliente"}
+                                  trigger={
+                                    <button className="p-1 rounded hover:bg-accent transition-colors" title="Abrir chat">
+                                      <MessageSquare className="w-3.5 h-3.5 text-muted-foreground" />
+                                    </button>
+                                  }
+                                />
+                              </div>
+                            )}
                           </div>
                           <div className="flex items-center justify-between ml-5">
                             {client.value > 0 ? (
