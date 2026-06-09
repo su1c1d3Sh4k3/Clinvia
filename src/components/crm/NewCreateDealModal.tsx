@@ -210,14 +210,14 @@ export const NewCreateDealModal = () => {
               </div>
               <div>
                 <Label className="text-[11px]">Procedimento</Label>
-                <Select key={selCategoryId} value={selServiceNameId || undefined} onValueChange={setSelServiceNameId} disabled={!selCategoryId}>
+                <Select value={selServiceNameId || undefined} onValueChange={setSelServiceNameId} disabled={!selCategoryId}>
                   <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Procedimento" /></SelectTrigger>
                   <SelectContent>{(serviceNames || []).map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div>
                 <Label className="text-[11px]">Aplicação</Label>
-                <Select key={selServiceNameId + services.length} value={selApplicationId || undefined} onValueChange={setSelApplicationId} disabled={!selServiceNameId}>
+                <Select value={selApplicationId || undefined} onValueChange={setSelApplicationId} disabled={!selServiceNameId}>
                   <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Aplicação" /></SelectTrigger>
                   <SelectContent>{(applications || []).map((a: any) => <SelectItem key={a.id} value={a.id}>{a.name} — {fmt(a.price)}</SelectItem>)}</SelectContent>
                 </Select>
