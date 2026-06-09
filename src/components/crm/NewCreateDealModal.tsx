@@ -15,7 +15,7 @@ import { useStaff, useCurrentTeamMember } from "@/hooks/useStaff";
 import { ContactPicker } from "@/components/ui/contact-picker";
 import { toast } from "sonner";
 import { CRM_STAGES, TERMINAL_STAGES } from "@/types/crm-client";
-import { ServiceCategory, ServiceName, ServiceClient } from "@/types/services";
+import { ServiceCategory, ServiceName } from "@/types/services";
 
 interface ServiceLine {
   serviceClientId: string;
@@ -74,15 +74,31 @@ export const NewCreateDealModal = () => {
     },
   });
 
+  // First try user's own services, fallback to templates
   const { data: applications } = useQuery({
-    queryKey: ["services-client-by-service", selServiceNameId],
+    queryKey: ["deal-applications", selServiceNameId],
     enabled: !!selServiceNameId,
     queryFn: async () => {
-      const { data, error } = await supabase
+      // Try user's services_client first
+      const { data: clientApps, error: clientErr } = await supabase
         .from("services_client" as any).select("*")
         .eq("service_name_id", selServiceNameId).eq("status", true).order("name");
-      if (error) throw error;
-      return data as ServiceClient[];
+
+      if (!clientErr && clientApps && clientApps.length > 0) {
+        return clientApps.map((a: any) => ({
+          id: a.id, name: a.name, price: a.price, min_price: a.min_price, source: "client",
+        }));
+      }
+
+      // Fallback to template applications
+      const { data: templateApps, error: templateErr } = await supabase
+        .from("service_applications" as any).select("*")
+        .eq("service_name_id", selServiceNameId).order("name");
+
+      if (templateErr) throw templateErr;
+      return (templateApps || []).map((a: any) => ({
+        id: a.id, name: a.name, price: a.default_price, min_price: a.default_min_price, source: "template",
+      }));
     },
   });
 
@@ -91,7 +107,7 @@ export const NewCreateDealModal = () => {
 
   const handleAddService = () => {
     if (!selApplicationId || !applications) return;
-    const app = applications.find((a) => a.id === selApplicationId);
+    const app = applications.find((a: any) => a.id === selApplicationId);
     if (!app) return;
     if (services.some((s) => s.serviceClientId === app.id)) {
       toast.error("Serviço já adicionado");
@@ -194,7 +210,7 @@ export const NewCreateDealModal = () => {
                 <Label className="text-[11px]">Aplicação</Label>
                 <Select value={selApplicationId} onValueChange={setSelApplicationId} disabled={!selServiceNameId}>
                   <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Aplicação" /></SelectTrigger>
-                  <SelectContent>{(applications || []).map((a) => <SelectItem key={a.id} value={a.id}>{a.name} — {fmt(a.price)}</SelectItem>)}</SelectContent>
+                  <SelectContent>{(applications || []).map((a: any) => <SelectItem key={a.id} value={a.id}>{a.name} — {fmt(a.price)}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             </div>
