@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { ImportWizard } from "@/components/import/ImportWizard";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -116,6 +117,7 @@ const Contacts = () => {
     const [itemsPerPage, setItemsPerPage] = useState(20);
     const [isImporting, setIsImporting] = useState(false);
     const [isWppImportOpen, setIsWppImportOpen] = useState(false);
+    const [importWizardOpen, setImportWizardOpen] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const { toast } = useToast();
@@ -499,6 +501,12 @@ const Contacts = () => {
                                 <Download className="w-4 h-4" />
                                 <span className="hidden lg:inline">Exportar</span>
                             </Button>
+                            {canCreate('contacts') && (
+                                <Button onClick={() => setImportWizardOpen(true)} variant="outline" size="sm" className="h-8 md:h-9 text-xs md:text-sm gap-1" title="Importar contatos de planilha">
+                                    <Upload className="w-4 h-4" />
+                                    <span className="hidden lg:inline">Importar</span>
+                                </Button>
+                            )}
                             {canCreate('contacts') && (
                                 <Button onClick={handleAddNew} size="sm" className="h-8 md:h-9 text-xs md:text-sm">
                                     <Plus className="w-4 h-4 mr-1 md:mr-2" />
@@ -1105,6 +1113,12 @@ const Contacts = () => {
                 open={!!profileContact}
                 onOpenChange={(o) => !o && setProfileContact(null)}
                 contact={profileContact}
+            />
+
+            <ImportWizard
+                open={importWizardOpen}
+                onOpenChange={setImportWizardOpen}
+                type="contacts"
             />
         </div >
 

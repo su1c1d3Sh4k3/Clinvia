@@ -3,7 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Plus, Search, Package } from "lucide-react";
+import { Loader2, Plus, Search, Package, Upload } from "lucide-react";
+import { ImportWizard } from "@/components/import/ImportWizard";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { ServiceClient, ServiceName, ServiceCategory } from "@/types/services";
 import { ServiceCategoryCard } from "@/components/services/ServiceCategoryCard";
@@ -13,6 +14,7 @@ import { AddByCategoryModal } from "@/components/services/AddByCategoryModal";
 export default function ProductsServices() {
   const { data: ownerId } = useOwnerId();
   const [searchTerm, setSearchTerm] = useState("");
+  const [importWizardOpen, setImportWizardOpen] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
 
   const { data: categories } = useQuery({
@@ -101,10 +103,16 @@ export default function ProductsServices() {
             Gerencie suas categorias, serviços e aplicações
           </p>
         </div>
-        <Button onClick={() => setShowAddModal(true)} className="gap-2">
-          <Plus className="w-4 h-4" />
-          Adicionar Serviço por Categoria
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setImportWizardOpen(true)} className="gap-2">
+            <Upload className="w-4 h-4" />
+            Importar
+          </Button>
+          <Button onClick={() => setShowAddModal(true)} className="gap-2">
+            <Plus className="w-4 h-4" />
+            Adicionar Serviço por Categoria
+          </Button>
+        </div>
       </div>
 
       {/* Search */}
@@ -173,6 +181,12 @@ export default function ProductsServices() {
       <AddByCategoryModal
         open={showAddModal}
         onOpenChange={setShowAddModal}
+      />
+
+      <ImportWizard
+        open={importWizardOpen}
+        onOpenChange={setImportWizardOpen}
+        type="services"
       />
     </div>
   );
