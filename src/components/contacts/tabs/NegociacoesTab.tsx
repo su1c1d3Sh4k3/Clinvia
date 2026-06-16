@@ -221,9 +221,12 @@ export const NegociacoesTab = ({ contactId }: NegociacoesTabProps) => {
     <div className="space-y-3">
       <input ref={fileInputRef} type="file" className="hidden" onChange={(e) => expandedId && handleFileUpload(e, expandedId)} />
 
-      {deals.map((deal: any) => {
+      {deals.map((deal: any, index: number) => {
         const isExpanded = expandedId === deal.id;
         const isTerminal = TERMINAL_STAGES.includes(deal.stage);
+        const isMostRecent = index === 0;
+        // Apenas a mais recente e não-terminal pode ser editada
+        const isReadOnly = !isMostRecent || isTerminal;
         const stageColor = STAGE_COLORS[deal.stage as CrmStage] || "#6b7280";
         const responsibleName = deal.responsible_id ? teamMap?.get(deal.responsible_id) : null;
 
@@ -237,6 +240,9 @@ export const NegociacoesTab = ({ contactId }: NegociacoesTabProps) => {
                   <div className="flex items-center gap-2 flex-wrap">
                     <Badge variant={isTerminal ? "secondary" : "default"} className="text-[10px]">{deal.stage}</Badge>
                     {deal.value > 0 && <span className="text-sm font-semibold">{fmt(deal.value)}</span>}
+                    {!isMostRecent && (
+                      <Badge variant="outline" className="text-[9px] border-gray-300 bg-gray-50 text-gray-500">Negociação Finalizada</Badge>
+                    )}
                     {deal.priority && (
                       <div className="w-2 h-2 rounded-full" style={{
                         backgroundColor: deal.priority === "high" ? "#ef4444" : deal.priority === "medium" ? "#eab308" : "#22c55e"
@@ -256,7 +262,7 @@ export const NegociacoesTab = ({ contactId }: NegociacoesTabProps) => {
             {isExpanded && (
               <div className="border-t px-4 py-4 space-y-5">
                 {/* Edit Priority / Responsible (active only) */}
-                {!isTerminal && (
+                {!isReadOnly && (
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <Label className="text-xs">Prioridade</Label>
@@ -292,7 +298,7 @@ export const NegociacoesTab = ({ contactId }: NegociacoesTabProps) => {
                         <div key={svc.id} className="p-2.5 border rounded-md bg-background space-y-2">
                           <div className="flex items-center justify-between">
                             <span className="text-xs font-medium truncate flex-1">{svc.service_name}</span>
-                            {!isTerminal && (
+                            {!isReadOnly && (
                               <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive shrink-0" onClick={() => deleteService(svc.id, deal.id)}>
                                 <Trash2 className="h-3 w-3" />
                               </Button>
@@ -301,7 +307,7 @@ export const NegociacoesTab = ({ contactId }: NegociacoesTabProps) => {
                           <div className="grid grid-cols-3 gap-2">
                             <div>
                               <Label className="text-[10px] text-muted-foreground">Quantidade</Label>
-                              {!isTerminal ? (
+                              {!isReadOnly ? (
                                 <Input type="number" min={1} defaultValue={svc.quantity}
                                   onBlur={async (e) => {
                                     const qty = Math.max(1, parseInt(e.target.value) || 1);
@@ -318,7 +324,7 @@ export const NegociacoesTab = ({ contactId }: NegociacoesTabProps) => {
                             </div>
                             <div>
                               <Label className="text-[10px] text-muted-foreground">Valor Unit. (R$)</Label>
-                              {!isTerminal ? (
+                              {!isReadOnly ? (
                                 <>
                                   <Input type="number" step="0.01" min={svc.min_price} defaultValue={svc.unit_price}
                                     onBlur={async (e) => {
@@ -350,7 +356,7 @@ export const NegociacoesTab = ({ contactId }: NegociacoesTabProps) => {
                     </div>
                   )}
                   {/* Add service */}
-                  {!isTerminal && (
+                  {!isReadOnly && (
                     <div className="mt-2 grid grid-cols-4 gap-1.5">
                       <select
                         className="h-7 text-[10px] w-full rounded-md border border-input bg-background px-1.5 focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
@@ -386,7 +392,7 @@ export const NegociacoesTab = ({ contactId }: NegociacoesTabProps) => {
                 </div>
 
                 {/* Notes + Attachments */}
-                {!isTerminal && (
+                {!isReadOnly && (
                   <div className="space-y-2">
                     <h4 className="text-xs font-semibold flex items-center gap-1.5"><StickyNote className="w-3.5 h-3.5" /> Nota / Anexo</h4>
                     <div className="flex gap-2">
