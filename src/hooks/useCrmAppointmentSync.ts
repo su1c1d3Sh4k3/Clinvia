@@ -160,7 +160,37 @@ export function useCrmAppointmentSync() {
       queryClient.invalidateQueries({ queryKey: ["sales"] });
     }
 
-    // 2. Remove the completed service from the active deal
+    // 2. Create a Ganho card (is_active=false) for the completed service
+    if (serviceClientId) {
+      const { data: ganhoCard } = await supabase
+        .from("crm_client" as any)
+        .insert({
+          user_id: ownerId,
+          contact_id: contactId,
+          stage: "Ganho",
+          stage_changed_at: new Date().toISOString(),
+          value: servicePrice,
+          professional_id: professionalId || null,
+          is_active: false,
+        })
+        .select()
+        .single();
+
+      if (ganhoCard) {
+        await supabase
+          .from("crm_client_services" as any)
+          .insert({
+            crm_client_id: ganhoCard.id,
+            service_client_id: serviceClientId,
+            service_name: serviceName || "Serviço",
+            quantity: 1,
+            unit_price: servicePrice,
+            min_price: 0,
+          });
+      }
+    }
+
+    // 3. Remove the completed service from the active deal
     const card = await findActiveCard(contactId);
     if (!card) {
       invalidateCrm();
@@ -168,7 +198,6 @@ export function useCrmAppointmentSync() {
     }
 
     if (serviceClientId) {
-      // Delete the matching service from the deal
       await supabase
         .from("crm_client_services" as any)
         .delete()
@@ -176,31 +205,24 @@ export function useCrmAppointmentSync() {
         .eq("service_client_id", serviceClientId);
     }
 
-    // 3. Check remaining services
+    // 4. Check remaining services in active deal
     const remaining = await findCardServices(card.id);
 
     if (remaining.length > 0) {
       // Still has pending services — recalculate and keep in Agendado
       await recalcValue(card.id);
     } else {
-      // No more services → move to Ganho
+      // No more services in active deal → deactivate it
       await supabase
         .from("crm_client" as any)
         .update({
-          stage: "Ganho",
           is_active: false,
-          stage_changed_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
         .eq("id", card.id);
 
-      // 4. Check if contact still has another active card (shouldn't, but safety check)
-      const anotherActive = await findActiveCard(contactId);
-
-      if (!anotherActive) {
-        // Create Recorrência card with all services from Ganho cards
-        await createRecurrenceCard(contactId, ownerId, professionalId);
-      }
+      // 5. Create Recorrência with all Ganho services (no active card left)
+      await createRecurrenceCard(contactId, ownerId, professionalId);
     }
 
     invalidateCrm();
