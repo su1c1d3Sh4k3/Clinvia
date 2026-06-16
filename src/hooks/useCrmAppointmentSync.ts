@@ -212,17 +212,9 @@ export function useCrmAppointmentSync() {
       // Still has pending services — recalculate and keep in Agendado
       await recalcValue(card.id);
     } else {
-      // No more services in active deal → deactivate it
-      await supabase
-        .from("crm_client" as any)
-        .update({
-          is_active: false,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", card.id);
-
-      // 5. Create Recorrência with all Ganho services (no active card left)
-      await createRecurrenceCard(contactId, ownerId, professionalId);
+      // No more services → MOVE the existing card to Recorrência
+      // (not create a new one — avoids duplicate cards)
+      await moveCardToRecurrence(card.id, contactId, ownerId, professionalId);
     }
 
     invalidateCrm();
@@ -297,10 +289,10 @@ export function useCrmAppointmentSync() {
     invalidateCrm();
   }
 
-  // ─── Helper: Create Recurrence Card ────────────────────────────────────────
+  // ─── Helper: Move existing card to Recorrência ─────────────────────────────
 
-  async function createRecurrenceCard(contactId: string, ownerId: string, professionalId?: string | null) {
-    // Collect all services from the most recent Ganho card(s)
+  async function moveCardToRecurrence(cardId: string, contactId: string, _ownerId: string, _professionalId?: string | null) {
+    // Collect all services from the contact's Ganho cards (deduplicated)
     const { data: ganhoCards } = await supabase
       .from("crm_client" as any)
       .select("id")
@@ -308,13 +300,10 @@ export function useCrmAppointmentSync() {
       .eq("stage", "Ganho")
       .order("stage_changed_at", { ascending: false });
 
-    if (!ganhoCards || ganhoCards.length === 0) return;
-
-    // Get all services from Ganho cards, deduplicate by service_client_id
     const allServiceIds = new Set<string>();
     const uniqueServices: any[] = [];
 
-    for (const gc of ganhoCards) {
+    for (const gc of ganhoCards || []) {
       const { data: svcs } = await supabase
         .from("crm_client_services" as any)
         .select("*")
@@ -329,39 +318,34 @@ export function useCrmAppointmentSync() {
       }
     }
 
-    if (uniqueServices.length === 0) return;
-
     const totalValue = uniqueServices.reduce((sum: number, s: any) => sum + (s.unit_price * s.quantity), 0);
 
-    // Create the recurrence card
-    const { data: recCard } = await supabase
+    // Move the existing card (don't create a new one)
+    await supabase
       .from("crm_client" as any)
-      .insert({
-        user_id: ownerId,
-        contact_id: contactId,
+      .update({
         stage: "Recorrencia",
         stage_changed_at: new Date().toISOString(),
         value: totalValue,
-        professional_id: professionalId || null,
         priority: "medium",
-        is_active: true,
+        updated_at: new Date().toISOString(),
+        // stays is_active: true
       })
-      .select()
-      .single();
+      .eq("id", cardId);
 
-    if (!recCard) return;
+    // Add the deduplicated Ganho services to this card
+    if (uniqueServices.length > 0) {
+      const serviceInserts = uniqueServices.map((s: any) => ({
+        crm_client_id: cardId,
+        service_client_id: s.service_client_id,
+        service_name: s.service_name,
+        quantity: s.quantity,
+        unit_price: s.unit_price,
+        min_price: s.min_price || 0,
+      }));
 
-    // Add deduplicated services
-    const serviceInserts = uniqueServices.map((s: any) => ({
-      crm_client_id: recCard.id,
-      service_client_id: s.service_client_id,
-      service_name: s.service_name,
-      quantity: s.quantity,
-      unit_price: s.unit_price,
-      min_price: s.min_price || 0,
-    }));
-
-    await supabase.from("crm_client_services" as any).insert(serviceInserts);
+      await supabase.from("crm_client_services" as any).insert(serviceInserts);
+    }
   }
 
   return {
