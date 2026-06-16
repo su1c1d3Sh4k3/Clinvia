@@ -170,14 +170,14 @@ export function ViewAppointmentModal({ appointment, open, onOpenChange, onEdit, 
                     )}
 
                     {/* Service Info */}
-                    {appointment.services && (
+                    {appointment.service_name && (
                         <div className="space-y-1 pt-2 border-t">
                             <div className="flex items-center gap-2 text-muted-foreground text-xs uppercase font-bold tracking-wider mb-2">
                                 <DollarSign className="h-3 w-3" />
                                 Serviço
                             </div>
                             <p className="font-medium p-2 bg-muted/30 rounded-md">
-                                {appointment.services.name}
+                                {appointment.service_name}
                             </p>
                         </div>
                     )}

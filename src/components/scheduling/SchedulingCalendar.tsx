@@ -248,12 +248,7 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                                 apt.type === "absence" ? "bg-muted text-muted-foreground border-border" : getStatusColor(apt.status || 'pending'),
                                                 isCanceled && "border-dashed"
                                             )}
-                                            style={{
-                                                ...eventStyle,
-                                                borderLeft: apt.type !== "absence" && apt.products_services?.color
-                                                    ? `6px solid ${apt.products_services.color}`
-                                                    : undefined,
-                                            }}
+                                            style={eventStyle}
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 onEventClick(apt);
@@ -325,7 +320,7 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                                     <span className="font-semibold truncate">
                                                         {apt.contacts?.push_name || apt.contact_name || 'Cliente'}
                                                     </span>
-                                                    <span className="opacity-60 truncate">· {apt.products_services?.name || 'Serviço'}</span>
+                                                    <span className="opacity-60 truncate">· {apt.service_name || 'Serviço'}</span>
                                                     <span className="opacity-50 shrink-0">{format(new Date(apt.start_time), 'HH:mm')}</span>
                                                 </div>
                                             ) : (() => {
@@ -343,7 +338,7 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                                     ? apt.description.replace(/^Bloqueio importado do Google Calendar:\s*/i, "").trim() || "Bloqueio GCal"
                                                     : null;
                                                 const fullName = gcalTitle ?? (apt.type === "absence" ? "Ausência" : (apt.contacts?.push_name || apt.contact_name || "Cliente"));
-                                                const serviceName = apt.products_services?.name || "Serviço";
+                                                const serviceName = apt.service_name || "Serviço";
 
                                                 return (
                                                     <div

@@ -32,6 +32,8 @@ const formSchema = z.object({
     contact_id: z.string().optional(),
     contact_name: z.string().optional(),
     contact_phone: z.string().optional(),
+    category_id: z.string().optional(),
+    service_name_id: z.string().optional(),
     service_id: z.string().optional(),
     price: z.coerce.number().optional(),
     duration: z.coerce.number().optional(),
@@ -103,12 +105,34 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
         },
     });
 
-    const { data: services } = useQuery({
-        queryKey: ["services-list-full"],
+    // ── Novo sistema de serviços: 3 queries separadas ──
+    const { data: categories } = useQuery({
+        queryKey: ["services-categories"],
         queryFn: async () => {
-            const { data, error } = await supabase.from("products_services").select("*").eq("type", "service");
+            const { data, error } = await supabase.from("services_category").select("*");
             if (error) throw error;
-            return data;
+            return data as any[];
+        },
+    });
+
+    const { data: serviceNames } = useQuery({
+        queryKey: ["service-names-all"],
+        queryFn: async () => {
+            const { data, error } = await supabase.from("service_name").select("*");
+            if (error) throw error;
+            return data as any[];
+        },
+    });
+
+    const { data: serviceClients } = useQuery({
+        queryKey: ["services-client-active"],
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from("services_client")
+                .select("*")
+                .eq("status", true);
+            if (error) throw error;
+            return data as any[];
         },
     });
 
@@ -124,6 +148,8 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
             price: 0,
             description: "",
             type: "appointment",
+            category_id: "",
+            service_name_id: "",
         },
     });
 
@@ -132,10 +158,12 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
     const watchDate = form.watch("date");
     const watchDuration = form.watch("duration") || 30;
     const watchStartTime = form.watch("start_time");
+    const watchCategoryId = form.watch("category_id");
+    const watchServiceNameId = form.watch("service_name_id");
     const currentHour   = watchStartTime?.split(":")[0] ?? "";
     const currentMinute = watchStartTime?.split(":")[1] ?? "";
 
-    // Buscar detalhes do profissional selecionado (service_ids + work_hours)
+    // Buscar detalhes do profissional selecionado (work_hours + work_days)
     const { data: selectedProfessional } = useQuery({
         queryKey: ["professional-detail", watchProfessionalId],
         queryFn: async () => {
@@ -151,12 +179,49 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
         enabled: !!watchProfessionalId,
     });
 
-    // Filtrar serviços pelo profissional selecionado
-    const filteredServices = useMemo(() => {
-        if (!services) return [];
-        if (!selectedProfessional?.service_ids?.length) return services;
-        return services.filter((s: any) => selectedProfessional.service_ids.includes(s.id));
-    }, [services, selectedProfessional]);
+    // ── Filtragem em cascata: Profissional → Categoria → Serviço → Aplicação ──
+
+    // Aplicações (services_client) disponíveis para o profissional selecionado
+    const professionalServices = useMemo(() => {
+        if (!serviceClients || !watchProfessionalId) return [];
+        return serviceClients.filter((sc: any) =>
+            sc.professionals?.includes(watchProfessionalId)
+        );
+    }, [serviceClients, watchProfessionalId]);
+
+    // Categorias com pelo menos 1 aplicação para o profissional
+    const availableCategories = useMemo(() => {
+        if (!categories) return [];
+        const catIds = new Set(professionalServices.map((sc: any) => sc.category_id));
+        return categories.filter((c: any) => catIds.has(c.id));
+    }, [categories, professionalServices]);
+
+    // Serviços (service_name) filtrados por categoria + profissional
+    const availableServiceNames = useMemo(() => {
+        if (!serviceNames || !watchCategoryId) return [];
+        const snIds = new Set(
+            professionalServices
+                .filter((sc: any) => sc.category_id === watchCategoryId)
+                .map((sc: any) => sc.service_name_id)
+        );
+        return serviceNames.filter((sn: any) => snIds.has(sn.id));
+    }, [serviceNames, professionalServices, watchCategoryId]);
+
+    // Aplicações filtradas por categoria + serviço + profissional
+    const availableApplications = useMemo(() => {
+        if (!watchCategoryId || !watchServiceNameId) return [];
+        return professionalServices.filter((sc: any) =>
+            sc.category_id === watchCategoryId &&
+            sc.service_name_id === watchServiceNameId
+        );
+    }, [professionalServices, watchCategoryId, watchServiceNameId]);
+
+    // Verificar se a categoria selecionada é "direct" (pular nível do serviço)
+    const selectedCategory = useMemo(() => {
+        return categories?.find((c: any) => c.id === watchCategoryId);
+    }, [categories, watchCategoryId]);
+
+    const isDirectCategory = selectedCategory?.category_type === "direct";
 
     // Fetch existing appointments for the selected professional and date
     // Inclui ausências clínica-wide do Google Calendar (professional_id IS NULL)
@@ -375,7 +440,9 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                     contact_name: appointmentToEdit.contacts?.push_name || "",
                     contact_phone: appointmentToEdit.contacts?.number || "",
                     professional_id: appointmentToEdit.professional_id,
-                    service_id: appointmentToEdit.service_id,
+                    category_id: appointmentToEdit.category_id || "",
+                    service_name_id: appointmentToEdit.service_name_id || "",
+                    service_id: appointmentToEdit.service_id || "",
                     date: format(new Date(appointmentToEdit.start_time), "yyyy-MM-dd"),
                     start_time: format(new Date(appointmentToEdit.start_time), "HH:mm"),
                     end_time: format(new Date(appointmentToEdit.end_time), "HH:mm"),
@@ -390,6 +457,8 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                     contact_name: defaultContactName || "",
                     contact_phone: defaultContactPhone || "",
                     professional_id: defaultProfessionalId || "",
+                    category_id: "",
+                    service_name_id: "",
                     service_id: defaultServiceId || "",
                     date: defaultDate ? format(defaultDate, "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd"),
                     start_time: defaultDate ? format(defaultDate, "HH:mm") : "09:00",
@@ -404,32 +473,28 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                 setActiveTab("appointment");
             }
         }
-    // NOTE: `activeTab` foi removido das dependências de propósito — antes
-    // causava form.reset() toda vez que o usuário trocava de aba, apagando
-    // o profissional selecionado. Trocar de aba agora apenas atualiza o
-    // campo `type` via onValueChange do Tabs (ver abaixo).
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, defaultDate, defaultProfessionalId, defaultServiceId, appointmentToEdit, form, defaultContactId, defaultContactName, defaultContactPhone]);
 
     // Quando o profissional muda, limpar serviço e duração (serviço pode ser inválido para o novo profissional)
     useEffect(() => {
         if (!open) return;
-        // Não limpar quando estamos apenas abrindo o modal para edição
         if (appointmentToEdit) return;
-        // Não limpar quando o serviço foi pré-definido via prop
         if (defaultServiceId) return;
+        form.setValue("category_id", "");
+        form.setValue("service_name_id", "");
         form.setValue("service_id", "");
         form.setValue("duration", 30);
         form.setValue("price", 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [watchProfessionalId]);
 
-    // Preencher duração/preço quando defaultServiceId e services estão disponíveis
+    // Preencher duração/preço quando defaultServiceId e serviceClients estão disponíveis
     useEffect(() => {
-        if (!open || !defaultServiceId || !services) return;
-        handleServiceChange(defaultServiceId);
+        if (!open || !defaultServiceId || !serviceClients) return;
+        handleApplicationChange(defaultServiceId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [services, defaultServiceId, open]);
+    }, [serviceClients, defaultServiceId, open]);
 
     const handleHourChange = (newHour: string) => {
         const firstMin = validSlots.find((s) => s.hour === parseInt(newHour));
@@ -475,15 +540,56 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [minutesForLockedHour, open]);
 
-    const handleServiceChange = (serviceId: string) => {
-        const service = services?.find((s: any) => s.id === serviceId) as any;
-        if (service) {
-            form.setValue("duration", service.duration_minutes ?? 30);
-            form.setValue("price", service.price ?? 0);
+    // ── Handlers de cascata ──
+
+    const handleCategoryChange = (categoryId: string) => {
+        form.setValue("category_id", categoryId);
+        form.setValue("service_name_id", "");
+        form.setValue("service_id", "");
+        form.setValue("duration", 30);
+        form.setValue("price", 0);
+
+        // Para categorias "direct", auto-selecionar o service_name (há apenas 1)
+        const cat = categories?.find((c: any) => c.id === categoryId);
+        if (cat?.category_type === "direct") {
+            const sn = serviceNames?.find((s: any) => s.category_id === categoryId);
+            if (sn) {
+                form.setValue("service_name_id", sn.id);
+            }
         }
     };
 
+    const handleServiceNameChange = (serviceNameId: string) => {
+        form.setValue("service_name_id", serviceNameId);
+        form.setValue("service_id", "");
+        form.setValue("duration", 30);
+        form.setValue("price", 0);
 
+        // Se houver apenas 1 aplicação, auto-selecionar
+        const apps = professionalServices.filter((sc: any) =>
+            sc.category_id === watchCategoryId &&
+            sc.service_name_id === serviceNameId
+        );
+        if (apps.length === 1) {
+            handleApplicationChange(apps[0].id);
+        }
+    };
+
+    const handleApplicationChange = (serviceClientId: string) => {
+        form.setValue("service_id", serviceClientId);
+        const sc = serviceClients?.find((s: any) => s.id === serviceClientId);
+        if (sc) {
+            form.setValue("duration", sc.duration_minutes ?? 30);
+            form.setValue("price", sc.price ?? 0);
+            // Garantir category_id e service_name_id se vieram de defaultServiceId
+            if (!form.getValues("category_id") && sc.category_id) {
+                form.setValue("category_id", sc.category_id);
+            }
+            if (!form.getValues("service_name_id") && sc.service_name_id) {
+                form.setValue("service_name_id", sc.service_name_id);
+            }
+        }
+    };
 
     const onSubmit = async (values: z.infer<typeof formSchema>) => {
         setIsLoading(true);
@@ -526,7 +632,9 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                 user_id: ownerId,
                 professional_id: values.professional_id,
                 contact_id: values.contact_id || null,
-                service_id: values.type === "appointment" ? values.service_id : null,
+                service_id: values.type === "appointment" ? (values.service_id || null) : null,
+                category_id: values.type === "appointment" ? (values.category_id || null) : null,
+                service_name_id: values.type === "appointment" ? (values.service_name_id || null) : null,
                 start_time: startDateTime.toISOString(),
                 end_time: endDateTime.toISOString(),
                 price: values.type === "appointment" ? values.price : 0,
@@ -689,21 +797,26 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                                         )}
                                     />
 
+                                    {/* ── Seleção em cascata: Categoria → Serviço → Aplicação ── */}
                                     <FormField
                                         control={form.control}
-                                        name="service_id"
+                                        name="category_id"
                                         render={({ field }) => (
                                             <FormItem>
-                                                <FormLabel>Serviço</FormLabel>
-                                                <Select onValueChange={(val) => { field.onChange(val); handleServiceChange(val); }} value={field.value} disabled={isPast || !!defaultServiceId}>
+                                                <FormLabel>Categoria</FormLabel>
+                                                <Select
+                                                    onValueChange={handleCategoryChange}
+                                                    value={field.value}
+                                                    disabled={isPast || !watchProfessionalId}
+                                                >
                                                     <FormControl>
                                                         <SelectTrigger>
-                                                            <SelectValue placeholder="Selecione" />
+                                                            <SelectValue placeholder={!watchProfessionalId ? "Selecione um profissional" : "Selecione a categoria"} />
                                                         </SelectTrigger>
                                                     </FormControl>
                                                     <SelectContent>
-                                                        {filteredServices.map((s: any) => (
-                                                            <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                                                        {availableCategories.map((c: any) => (
+                                                            <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                                                         ))}
                                                     </SelectContent>
                                                 </Select>
@@ -711,6 +824,66 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                                             </FormItem>
                                         )}
                                     />
+
+                                    {/* Serviço: oculto para categorias "direct" (auto-selecionado) */}
+                                    {watchCategoryId && !isDirectCategory && (
+                                        <FormField
+                                            control={form.control}
+                                            name="service_name_id"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Serviço</FormLabel>
+                                                    <Select
+                                                        onValueChange={handleServiceNameChange}
+                                                        value={field.value}
+                                                        disabled={isPast}
+                                                    >
+                                                        <FormControl>
+                                                            <SelectTrigger>
+                                                                <SelectValue placeholder="Selecione o serviço" />
+                                                            </SelectTrigger>
+                                                        </FormControl>
+                                                        <SelectContent>
+                                                            {availableServiceNames.map((sn: any) => (
+                                                                <SelectItem key={sn.id} value={sn.id}>{sn.name}</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    )}
+
+                                    {/* Aplicação */}
+                                    {watchServiceNameId && (
+                                        <FormField
+                                            control={form.control}
+                                            name="service_id"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Aplicação</FormLabel>
+                                                    <Select
+                                                        onValueChange={(val) => { field.onChange(val); handleApplicationChange(val); }}
+                                                        value={field.value}
+                                                        disabled={isPast}
+                                                    >
+                                                        <FormControl>
+                                                            <SelectTrigger>
+                                                                <SelectValue placeholder="Selecione a aplicação" />
+                                                            </SelectTrigger>
+                                                        </FormControl>
+                                                        <SelectContent>
+                                                            {availableApplications.map((app: any) => (
+                                                                <SelectItem key={app.id} value={app.id}>{app.name}</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    )}
                                 </>
                             )}
 

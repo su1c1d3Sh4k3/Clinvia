@@ -1,11 +1,10 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Plus, Filter, ChevronLeft, ChevronRight, Search, PanelLeftClose, PanelLeftOpen, Settings, FileText, RefreshCw } from "lucide-react";
 import { SchedulingCalendar } from "@/components/scheduling/SchedulingCalendar";
@@ -30,7 +29,8 @@ export default function Scheduling() {
     const queryClient = useQueryClient();
     const { data: ownerId } = useOwnerId();
     const [date, setDate] = useState<Date | undefined>(new Date());
-    const [selectedServices, setSelectedServices] = useState<string[]>([]);
+    const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
+    const [selectedServiceNameId, setSelectedServiceNameId] = useState<string>("");
     const [searchTerm, setSearchTerm] = useState("");
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [isProfessionalModalOpen, setIsProfessionalModalOpen] = useState(false);
@@ -114,12 +114,31 @@ export default function Scheduling() {
     const handleNextDay = () => date && setDate(addDays(date, 1));
     const handleToday = () => setDate(new Date());
 
-    const { data: services } = useQuery({
-        queryKey: ["services-list"],
+    // ── Novo sistema de serviços: categorias + service_name + services_client ──
+    const { data: categories } = useQuery({
+        queryKey: ["services-categories"],
         queryFn: async () => {
-            const { data, error } = await supabase.from("products_services").select("*").eq("type", "service");
+            const { data, error } = await supabase.from("services_category").select("*");
             if (error) throw error;
-            return data;
+            return data as any[];
+        },
+    });
+
+    const { data: serviceNamesAll } = useQuery({
+        queryKey: ["service-names-all"],
+        queryFn: async () => {
+            const { data, error } = await supabase.from("service_name").select("*");
+            if (error) throw error;
+            return data as any[];
+        },
+    });
+
+    const { data: serviceClients } = useQuery({
+        queryKey: ["services-client-active"],
+        queryFn: async () => {
+            const { data, error } = await supabase.from("services_client").select("*").eq("status", true);
+            if (error) throw error;
+            return data as any[];
         },
     });
 
@@ -145,8 +164,7 @@ export default function Scheduling() {
                 .from("appointments")
                 .select(`
                     *,
-                    contacts (push_name, number),
-                    products_services (name, color)
+                    contacts (push_name, number)
                 `)
                 .gte("start_time", start.toISOString())
                 .lte("start_time", end.toISOString());
@@ -227,11 +245,26 @@ export default function Scheduling() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [ownerId, activeGCalConnection]);
 
-    const filteredProfessionals = professionals?.filter(p => {
-        if (selectedServices.length === 0) return true;
-        // If professional has ANY of the selected services
-        return p.service_ids?.some((id: string) => selectedServices.includes(id));
-    }) || [];
+    // Filtro por categoria/serviço: encontra profissionais com aplicações vinculadas
+    const filteredProfessionals = useMemo(() => {
+        if (!professionals) return [];
+        if (!selectedCategoryId && !selectedServiceNameId) return professionals;
+
+        let filtered = serviceClients || [];
+        if (selectedCategoryId) {
+            filtered = filtered.filter((sc: any) => sc.category_id === selectedCategoryId);
+        }
+        if (selectedServiceNameId) {
+            filtered = filtered.filter((sc: any) => sc.service_name_id === selectedServiceNameId);
+        }
+
+        const profIds = new Set<string>();
+        filtered.forEach((sc: any) => {
+            sc.professionals?.forEach((pid: string) => profIds.add(pid));
+        });
+
+        return professionals.filter(p => profIds.has(p.id));
+    }, [professionals, serviceClients, selectedCategoryId, selectedServiceNameId]);
 
     const handleSlotClick = (professionalId: string, slotDate: Date) => {
         setSelectedSlot({ professionalId, date: slotDate });
@@ -249,13 +282,11 @@ export default function Scheduling() {
         setIsProfessionalModalOpen(true);
     };
 
-    const toggleServiceFilter = (serviceId: string) => {
-        setSelectedServices(prev =>
-            prev.includes(serviceId)
-                ? prev.filter(id => id !== serviceId)
-                : [...prev, serviceId]
-        );
-    };
+    // Service names filtrados pela categoria selecionada
+    const filteredServiceNames = useMemo(() => {
+        if (!serviceNamesAll || !selectedCategoryId) return [];
+        return serviceNamesAll.filter((sn: any) => sn.category_id === selectedCategoryId);
+    }, [serviceNamesAll, selectedCategoryId]);
 
     const handleStatusChange = async (appointmentId: string, newStatus: string, event?: any) => {
         if (newStatus === 'rescheduled' && event) {
@@ -293,16 +324,15 @@ export default function Scheduling() {
                 } else {
                     // Prepare appointment data for SaleModal
                     const appointmentDate = new Date(event.start_time).toISOString().split('T')[0];
-                    const serviceType = event.products_services?.type || 'service';
 
                     setCompletedAppointmentData({
                         contact_id: event.contact_id || undefined,
                         professional_id: event.professional_id || undefined,
                         service_id: event.service_id || undefined,
-                        service_type: serviceType as 'product' | 'service',
+                        service_type: 'service',
                         price: event.price,
                         sale_date: appointmentDate,
-                        notes: event.description || `Venda de agendamento - ${event.products_services?.name || 'Serviço'}`,
+                        notes: event.description || `Venda de agendamento - ${event.service_name || 'Serviço'}`,
                     });
                     setIsSaleModalOpen(true);
                 }
@@ -430,22 +460,43 @@ export default function Scheduling() {
                                     Filtrar por Serviço
                                 </CardTitle>
                             </CardHeader>
-                            <CardContent className="p-0">
-                                <div className="max-h-48 overflow-y-auto px-6 pb-4 pt-0 space-y-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-track]:bg-transparent">
-                                    {services?.map((service) => (
-                                        <div key={service.id} className="flex items-center space-x-2">
-                                            <Checkbox
-                                                id={`filter-${service.id}`}
-                                                checked={selectedServices.includes(service.id)}
-                                                onCheckedChange={() => toggleServiceFilter(service.id)}
-                                            />
-                                            <Label htmlFor={`filter-${service.id}`} className="text-sm font-normal cursor-pointer">
-                                                {service.name}
-                                            </Label>
-                                        </div>
-                                    ))}
-                                    {services?.length === 0 && <span className="text-muted-foreground text-xs">Nenhum serviço cadastrado</span>}
+                            <CardContent className="space-y-3 px-4 pb-4 pt-0">
+                                {/* Filtro por Categoria */}
+                                <div className="space-y-1">
+                                    <Label className="text-xs text-muted-foreground">Categoria</Label>
+                                    <select
+                                        className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                                        value={selectedCategoryId}
+                                        onChange={(e) => {
+                                            setSelectedCategoryId(e.target.value);
+                                            setSelectedServiceNameId("");
+                                        }}
+                                    >
+                                        <option value="">Todas</option>
+                                        {categories?.map((c: any) => (
+                                            <option key={c.id} value={c.id}>{c.name}</option>
+                                        ))}
+                                    </select>
                                 </div>
+
+                                {/* Filtro por Serviço (aparece quando categoria selecionada) */}
+                                {selectedCategoryId && filteredServiceNames.length > 0 && (
+                                    <div className="space-y-1">
+                                        <Label className="text-xs text-muted-foreground">Serviço</Label>
+                                        <select
+                                            className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                                            value={selectedServiceNameId}
+                                            onChange={(e) => setSelectedServiceNameId(e.target.value)}
+                                        >
+                                            <option value="">Todos</option>
+                                            {filteredServiceNames.map((sn: any) => (
+                                                <option key={sn.id} value={sn.id}>{sn.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
+
+                                {!categories?.length && <span className="text-muted-foreground text-xs">Nenhuma categoria cadastrada</span>}
                             </CardContent>
                         </Card>
 

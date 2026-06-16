@@ -44,7 +44,6 @@ function buildNotificationMessage(appointment: any, template: string): string {
     const contact = appointment?.contacts;
     const clientName = contact?.push_name || contact?.name || "Cliente";
     const serviceName =
-        appointment?.products_services?.name ||
         appointment?.service_name ||
         "procedimento";
     const professionalName =
