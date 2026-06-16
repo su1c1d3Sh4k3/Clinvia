@@ -307,7 +307,7 @@ export default function Scheduling() {
 
             // Fire-and-forget: sincronizar com Google Calendar
             if (ownerId) {
-                const syncAction = newStatus === "canceled" ? "delete_appointment" : "sync_appointment";
+                const syncAction = (newStatus === "canceled" || newStatus === "no-show") ? "delete_appointment" : "sync_appointment";
                 supabase.functions.invoke("google-calendar-sync", {
                     body: { action: syncAction, appointment_id: appointmentId, user_id: ownerId },
                 }).catch(() => {});

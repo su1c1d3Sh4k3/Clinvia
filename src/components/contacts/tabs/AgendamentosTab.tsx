@@ -35,12 +35,33 @@ export const AgendamentosTab = ({ contactId }: AgendamentosTabProps) => {
     );
   }
 
+  const getDisplayStatus = (apt: any): string => {
+    const s = apt.status || 'pending';
+    if (['pending', 'confirmed', 'rescheduled'].includes(s) && new Date(apt.end_time) < new Date()) {
+      return 'waiting';
+    }
+    return s;
+  };
+
+  const statusLabel = (s: string) => {
+    switch (s) {
+      case 'pending': return 'Pendente';
+      case 'confirmed': return 'Confirmado';
+      case 'rescheduled': return 'Reagendado';
+      case 'completed': return 'Concluído';
+      case 'canceled': return 'Cancelado';
+      case 'no-show': return 'Não compareceu';
+      case 'waiting': return 'Aguardando';
+      default: return s;
+    }
+  };
+
   const statusColor = (s: string) => {
-    if (!s) return "secondary";
-    const lower = s.toLowerCase();
-    if (lower.includes("confirm") || lower.includes("conclu")) return "default";
-    if (lower.includes("cancel")) return "destructive";
-    return "secondary";
+    if (s === 'no-show') return "destructive" as const;
+    if (s === 'waiting') return "secondary" as const;
+    if (s === 'confirmed' || s === 'completed') return "default" as const;
+    if (s === 'canceled') return "destructive" as const;
+    return "secondary" as const;
   };
 
   return (
@@ -68,9 +89,11 @@ export const AgendamentosTab = ({ contactId }: AgendamentosTabProps) => {
               <TableCell className="text-sm">{apt.professional?.name || "—"}</TableCell>
               <TableCell className="text-sm">{apt.service_name || "—"}</TableCell>
               <TableCell className="text-center">
-                <Badge variant={statusColor(apt.status)} className="text-[10px]">
-                  {apt.status || "Pendente"}
-                </Badge>
+                {(() => { const ds = getDisplayStatus(apt); return (
+                  <Badge variant={statusColor(ds)} className="text-[10px]">
+                    {statusLabel(ds)}
+                  </Badge>
+                ); })()}
               </TableCell>
             </TableRow>
           ))}

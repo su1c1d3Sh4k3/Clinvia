@@ -2,7 +2,7 @@ import { useMemo, useRef, useEffect, useState } from "react";
 import { format, addMinutes, startOfDay, differenceInMinutes, parseISO, isSameDay } from "date-fns";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
-import { ThumbsUp, Clock, X, Check, Pen, ChevronLeft, ChevronRight } from "lucide-react";
+import { ThumbsUp, Clock, X, Check, Pen, ChevronLeft, ChevronRight, UserX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface SchedulingCalendarProps {
@@ -102,10 +102,23 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                 return "bg-green-100 border-green-200 text-green-700 hover:bg-green-200";
             case 'canceled':
                 return "bg-red-100 border-red-200 text-red-700 hover:bg-red-200";
+            case 'no-show':
+                return "bg-orange-100 border-orange-200 text-orange-700 hover:bg-orange-200";
+            case 'waiting':
+                return "bg-gray-200 border-gray-300 text-gray-700 hover:bg-gray-300";
             case 'pending':
             default:
                 return "bg-blue-100 border-blue-200 text-blue-700 hover:bg-blue-200";
         }
+    };
+
+    // Deriva status visual: pending/confirmed/rescheduled com horário passado → 'waiting'
+    const getDisplayStatus = (apt: any): string => {
+        const status = apt.status || 'pending';
+        if (['pending', 'confirmed', 'rescheduled'].includes(status) && new Date(apt.end_time) < new Date()) {
+            return 'waiting';
+        }
+        return status;
     };
 
     return (
@@ -230,13 +243,14 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                     return apt.professional_id === professional.id;
                                 })
                                 .map((apt) => {
-                                    const isFinalStatus = apt.status === 'completed' || apt.status === 'canceled';
-                                    const isCanceled = apt.status === 'canceled';
+                                    const displayStatus = getDisplayStatus(apt);
+                                    const isFinalStatus = ['completed', 'canceled', 'no-show'].includes(displayStatus);
+                                    const isCollapsed = displayStatus === 'canceled' || displayStatus === 'no-show';
+                                    const isWaiting = displayStatus === 'waiting';
 
-                                    // Agendamentos cancelados: exibe apenas faixa fina (20px) no topo
-                                    // liberando o restante do slot para novos agendamentos
+                                    // Cancelados e no-show: faixa fina (20px) no topo
                                     const baseStyle = getEventStyle(apt);
-                                    const eventStyle = isCanceled
+                                    const eventStyle = isCollapsed
                                         ? { ...baseStyle, height: '20px', opacity: 0.55 }
                                         : baseStyle;
 
@@ -245,8 +259,8 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                             key={apt.id}
                                             className={cn(
                                                 "absolute left-1 right-1 rounded-md px-1.5 py-0.5 cursor-pointer border shadow-sm transition-all z-10 group/card",
-                                                apt.type === "absence" ? "bg-muted text-muted-foreground border-border" : getStatusColor(apt.status || 'pending'),
-                                                isCanceled && "border-dashed"
+                                                apt.type === "absence" ? "bg-muted text-muted-foreground border-border" : getStatusColor(displayStatus),
+                                                isCollapsed && "border-dashed"
                                             )}
                                             style={eventStyle}
                                             onClick={(e) => {
@@ -257,7 +271,46 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                             {/* Actions Overlay - Floating Above */}
                                             {apt.type !== "absence" && (
                                                 <div className="absolute -top-9 right-0 flex items-center gap-1 opacity-0 group-hover/card:opacity-100 transition-all duration-200 bg-background/95 backdrop-blur-sm border shadow-sm rounded-full p-1 z-50">
-                                                    {!isFinalStatus && canEditAppointment && (
+                                                    {/* Ações para status waiting: Concluir, Cancelar, No-show */}
+                                                    {isWaiting && canEditAppointment && (
+                                                        <>
+                                                            <div className="relative group/btn">
+                                                                <Button
+                                                                    variant="ghost" size="icon" className="h-6 w-6 rounded-full hover:bg-green-100 hover:text-green-600 transition-colors"
+                                                                    onClick={(e) => { e.stopPropagation(); onStatusChange(apt.id, 'completed', apt); }}
+                                                                >
+                                                                    <Check className="h-3.5 w-3.5" strokeWidth={2} />
+                                                                </Button>
+                                                                <span className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-black text-white text-[10px] rounded opacity-0 group-hover/btn:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                                                                    Concluir
+                                                                </span>
+                                                            </div>
+                                                            <div className="relative group/btn">
+                                                                <Button
+                                                                    variant="ghost" size="icon" className="h-6 w-6 rounded-full hover:bg-red-100 hover:text-red-600 transition-colors"
+                                                                    onClick={(e) => { e.stopPropagation(); onStatusChange(apt.id, 'canceled'); }}
+                                                                >
+                                                                    <X className="h-3.5 w-3.5" strokeWidth={2} />
+                                                                </Button>
+                                                                <span className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-black text-white text-[10px] rounded opacity-0 group-hover/btn:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                                                                    Cancelar
+                                                                </span>
+                                                            </div>
+                                                            <div className="relative group/btn">
+                                                                <Button
+                                                                    variant="ghost" size="icon" className="h-6 w-6 rounded-full hover:bg-orange-100 hover:text-orange-600 transition-colors"
+                                                                    onClick={(e) => { e.stopPropagation(); onStatusChange(apt.id, 'no-show'); }}
+                                                                >
+                                                                    <UserX className="h-3.5 w-3.5" strokeWidth={2} />
+                                                                </Button>
+                                                                <span className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-black text-white text-[10px] rounded opacity-0 group-hover/btn:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                                                                    Não compareceu
+                                                                </span>
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                    {/* Ações para status normal (não-waiting, não-final) */}
+                                                    {!isFinalStatus && !isWaiting && canEditAppointment && (
                                                         <>
                                                             <div className="relative group/btn">
                                                                 <Button
@@ -308,15 +361,17 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                                             </div>
                                                         </>
                                                     )}
-                                                    {apt.status === 'completed' && <div className="px-2 py-1 flex items-center gap-1 text-green-600 font-medium text-[10px]"><Check className="h-3 w-3" /> Concluído</div>}
-                                                    {apt.status === 'canceled' && <div className="px-2 py-1 flex items-center gap-1 text-red-600 font-medium text-[10px]"><X className="h-3 w-3" /> Cancelado</div>}
+                                                    {/* Labels para status terminais */}
+                                                    {displayStatus === 'completed' && <div className="px-2 py-1 flex items-center gap-1 text-green-600 font-medium text-[10px]"><Check className="h-3 w-3" /> Concluído</div>}
+                                                    {displayStatus === 'canceled' && <div className="px-2 py-1 flex items-center gap-1 text-red-600 font-medium text-[10px]"><X className="h-3 w-3" /> Cancelado</div>}
+                                                    {displayStatus === 'no-show' && <div className="px-2 py-1 flex items-center gap-1 text-orange-600 font-medium text-[10px]"><UserX className="h-3 w-3" /> Não compareceu</div>}
                                                 </div>
                                             )}
 
-                                            {isCanceled ? (
-                                                // Cancelado: só exibe faixa fina com nome + "Cancelado"
+                                            {isCollapsed ? (
+                                                // Cancelado/No-show: faixa fina com nome
                                                 <div className="flex items-center gap-1 truncate h-full" style={{ fontSize: '9px', lineHeight: 1 }}>
-                                                    <X className="h-2.5 w-2.5 shrink-0" />
+                                                    {displayStatus === 'no-show' ? <UserX className="h-2.5 w-2.5 shrink-0" /> : <X className="h-2.5 w-2.5 shrink-0" />}
                                                     <span className="font-semibold truncate">
                                                         {apt.contacts?.push_name || apt.contact_name || 'Cliente'}
                                                     </span>

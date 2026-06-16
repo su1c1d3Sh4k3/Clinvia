@@ -21,7 +21,7 @@ import { toZonedTime } from "date-fns-tz";
 import { ptBR } from "date-fns/locale";
 import {
     Pencil, Calendar, Clock, User, DollarSign, FileText, Briefcase, Bell,
-    CheckCircle2, CalendarClock, XCircle, Check,
+    CheckCircle2, CalendarClock, XCircle, Check, UserX,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
@@ -48,16 +48,19 @@ export function ViewAppointmentModal({ appointment, open, onOpenChange, onEdit, 
 
     if (!appointment) return null;
 
-    const status: string = appointment.status || "pending";
-    const isFinalized = status === "completed" || status === "canceled";
+    const rawStatus: string = appointment.status || "pending";
+    const isPastAppointment = new Date(appointment.end_time) < new Date();
+    // Derivar 'waiting': pending/confirmed/rescheduled com horário passado
+    const status: string = ['pending', 'confirmed', 'rescheduled'].includes(rawStatus) && isPastAppointment
+        ? 'waiting' : rawStatus;
+    const isFinalized = ['completed', 'canceled', 'no-show'].includes(status);
+    const isWaiting = status === 'waiting';
     const alreadyConfirmed = status === "confirmed";
 
     const runStatusChange = (newStatus: string) => {
         if (!onStatusChange) return;
         onStatusChange(appointment.id, newStatus, appointment);
-        // Close the view modal for terminal transitions; reschedule opens the
-        // edit modal which already handles its own lifecycle.
-        if (newStatus === "canceled" || newStatus === "completed" || newStatus === "rescheduled") {
+        if (["canceled", "completed", "rescheduled", "no-show"].includes(newStatus)) {
             onOpenChange(false);
         }
     };
@@ -66,7 +69,6 @@ export function ViewAppointmentModal({ appointment, open, onOpenChange, onEdit, 
         return toZonedTime(dateStr, TIMEZONE);
     };
 
-    const isPast = new Date(appointment.end_time) < new Date();
     const hasContact = !!appointment.contacts && !!appointment.contact_id;
     const isAppointment = appointment.type !== 'absence';
 
@@ -119,8 +121,15 @@ export function ViewAppointmentModal({ appointment, open, onOpenChange, onEdit, 
                                 Cancelado
                             </Badge>
                         )}
-                        {isPast && status !== 'completed' && status !== 'canceled' && (
-                            <Badge variant="secondary">Data passada</Badge>
+                        {status === 'no-show' && (
+                            <Badge variant="outline" className="border-orange-300 bg-orange-50 text-orange-700 dark:border-orange-700 dark:bg-orange-950/40 dark:text-orange-300">
+                                Não compareceu
+                            </Badge>
+                        )}
+                        {status === 'waiting' && (
+                            <Badge variant="outline" className="border-gray-400 bg-gray-100 text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                                Aguardando definição
+                            </Badge>
                         )}
                         {appointment.price > 0 && (
                             <Badge variant="outline" className="border-green-200 bg-green-50 text-green-700">
@@ -218,8 +227,40 @@ export function ViewAppointmentModal({ appointment, open, onOpenChange, onEdit, 
                         </div>
                     </div>
 
-                    {/* Action buttons — only for real appointments (not absences) that aren't finalized */}
-                    {isAppointment && onStatusChange && !isFinalized && canEdit && (
+                    {/* Action buttons — waiting: Concluir, Cancelar, No-show */}
+                    {isAppointment && onStatusChange && isWaiting && canEdit && (
+                        <div className="pt-2 border-t space-y-2">
+                            <div className="grid grid-cols-3 gap-2">
+                                <Button
+                                    className="w-full gap-2"
+                                    variant="outline"
+                                    onClick={() => runStatusChange("completed")}
+                                >
+                                    <Check className="h-4 w-4 text-green-600" />
+                                    Concluir
+                                </Button>
+                                <Button
+                                    className="w-full gap-2"
+                                    variant="outline"
+                                    onClick={() => setCancelConfirmOpen(true)}
+                                >
+                                    <XCircle className="h-4 w-4 text-red-600" />
+                                    Cancelar
+                                </Button>
+                                <Button
+                                    className="w-full gap-2"
+                                    variant="outline"
+                                    onClick={() => runStatusChange("no-show")}
+                                >
+                                    <UserX className="h-4 w-4 text-orange-600" />
+                                    No-show
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Action buttons — normal (not waiting, not finalized) */}
+                    {isAppointment && onStatusChange && !isFinalized && !isWaiting && canEdit && (
                         <div className="pt-2 border-t space-y-2">
                             <div className="grid grid-cols-2 gap-2">
                                 <Button
