@@ -4,7 +4,8 @@ import { CrmClient, CRM_STAGES, STAGE_COLORS, TERMINAL_STAGES, CrmStage } from "
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, GripVertical, MessageSquare } from "lucide-react";
+import { Loader2, GripVertical, MessageSquare, AlertTriangle } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { DealConversationModal } from "./DealConversationModal";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -37,6 +38,66 @@ export const NewKanbanBoard = ({ onCardClick }: NewKanbanBoardProps) => {
       return data as CrmClient[];
     },
   });
+
+  // Fetch services for all active deals (to show service names on cards)
+  const { data: allServices } = useQuery({
+    queryKey: ["crm-client-services-all"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("crm_client_services" as any)
+        .select("crm_client_id, service_client_id, service_name");
+      if (error) throw error;
+      return data as any[];
+    },
+  });
+
+  // Fetch service_name (level 2) for deduplication by service type
+  const { data: serviceClientsForNames } = useQuery({
+    queryKey: ["services-client-names-map"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("services_client" as any)
+        .select("id, service_name_id, service_name:service_name!inner(name)");
+      if (error) throw error;
+      return data as any[];
+    },
+  });
+
+  // Fetch contacts with waiting appointments
+  const { data: waitingContacts } = useQuery({
+    queryKey: ["waiting-appointment-contacts"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("appointments")
+        .select("contact_id")
+        .eq("status", "waiting")
+        .not("contact_id", "is", null);
+      if (error) throw error;
+      return new Set((data || []).map((a: any) => a.contact_id));
+    },
+    refetchInterval: 60000, // refresh every minute
+  });
+
+  // Build a map: crm_client_id → unique service names (level 2, deduplicated)
+  const cardServiceNames = (() => {
+    const map: Record<string, string[]> = {};
+    if (!allServices) return map;
+    const scMap: Record<string, string> = {};
+    if (serviceClientsForNames) {
+      for (const sc of serviceClientsForNames) {
+        scMap[sc.id] = (sc as any).service_name?.name || "";
+      }
+    }
+    for (const svc of allServices) {
+      if (!map[svc.crm_client_id]) map[svc.crm_client_id] = [];
+      // Use service_name (level 2) if available, fallback to service_name field
+      const displayName = (svc.service_client_id && scMap[svc.service_client_id]) || svc.service_name;
+      if (displayName && !map[svc.crm_client_id].includes(displayName)) {
+        map[svc.crm_client_id].push(displayName);
+      }
+    }
+    return map;
+  })();
 
   const moveStage = useMutation({
     mutationFn: async ({ id, stage }: { id: string; stage: CrmStage }) => {
@@ -140,6 +201,8 @@ export const NewKanbanBoard = ({ onCardClick }: NewKanbanBoardProps) => {
                 <div className="space-y-2">
                   {cards.map((client) => {
                     const borderColor = client.priority ? PRIORITY_BORDER[client.priority] : "transparent";
+                    const services = cardServiceNames[client.id] || [];
+                    const hasWaiting = waitingContacts?.has(client.contact_id);
                     return (
                       <div
                         key={client.id}
@@ -168,6 +231,19 @@ export const NewKanbanBoard = ({ onCardClick }: NewKanbanBoardProps) => {
                             <span className="text-xs font-medium truncate flex-1">
                               {client.contact?.push_name || "Sem nome"}
                             </span>
+                            {/* Alert icon for waiting appointments */}
+                            {hasWaiting && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p className="text-xs">Aguardando conclusão do agendamento</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
                             {/* Chat button */}
                             {client.contact_id && (
                               <div onClick={(e) => e.stopPropagation()} className="shrink-0">
@@ -183,6 +259,16 @@ export const NewKanbanBoard = ({ onCardClick }: NewKanbanBoardProps) => {
                               </div>
                             )}
                           </div>
+                          {/* Services in negotiation */}
+                          {services.length > 0 && (
+                            <div className="ml-5 mb-1 flex flex-wrap gap-1">
+                              {services.map((sn) => (
+                                <span key={sn} className="text-[9px] bg-muted px-1.5 py-0.5 rounded-sm text-muted-foreground truncate max-w-[120px]">
+                                  {sn}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                           <div className="flex items-center justify-between ml-5">
                             {client.value > 0 ? (
                               <span className="text-[11px] font-semibold text-primary">

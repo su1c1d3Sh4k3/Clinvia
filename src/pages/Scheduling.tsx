@@ -20,6 +20,7 @@ import { useToast } from "@/hooks/use-toast";
 import { generateDailyReport } from "@/utils/generateDailyReport";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useCrmAppointmentSync } from "@/hooks/useCrmAppointmentSync";
 
 export default function Scheduling() {
     const { toast } = useToast();
@@ -28,6 +29,7 @@ export default function Scheduling() {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const { data: ownerId } = useOwnerId();
+    const { onAppointmentCompleted, onAppointmentLost } = useCrmAppointmentSync();
     const [date, setDate] = useState<Date | undefined>(new Date());
     const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
     const [selectedServiceNameId, setSelectedServiceNameId] = useState<string>("");
@@ -313,28 +315,24 @@ export default function Scheduling() {
                 }).catch(() => {});
             }
 
-            // If status is completed, open SaleModal with pre-filled data
-            if (newStatus === 'completed' && event) {
-                // Skip if no price or type is not 'appointment'
-                if (!event.price || event.price <= 0 || event.type === 'absence') {
-                    toast({
-                        title: "Agendamento concluído",
-                        description: "Sem valor para registrar venda.",
-                    });
-                } else {
-                    // Prepare appointment data for SaleModal
-                    const appointmentDate = new Date(event.start_time).toISOString().split('T')[0];
+            // CRM automation based on status
+            if (event?.contact_id && ownerId) {
+                const crmParams = {
+                    contactId: event.contact_id,
+                    ownerId,
+                    serviceClientId: event.service_id || null,
+                    serviceName: event.service_name || "Serviço",
+                    servicePrice: event.price || 0,
+                    professionalId: event.professional_id || undefined,
+                };
 
-                    setCompletedAppointmentData({
-                        contact_id: event.contact_id || undefined,
-                        professional_id: event.professional_id || undefined,
-                        service_id: event.service_id || undefined,
-                        service_type: 'service',
-                        price: event.price,
-                        sale_date: appointmentDate,
-                        notes: event.description || `Venda de agendamento - ${event.service_name || 'Serviço'}`,
-                    });
-                    setIsSaleModalOpen(true);
+                if (newStatus === 'completed') {
+                    // Create sale (pending) + update CRM deal + handle Ganho/Recorrência
+                    onAppointmentCompleted(crmParams).catch(() => {});
+                } else if (newStatus === 'canceled') {
+                    onAppointmentLost({ ...crmParams, lossType: "canceled" }).catch(() => {});
+                } else if (newStatus === 'no-show') {
+                    onAppointmentLost({ ...crmParams, lossType: "no_show" }).catch(() => {});
                 }
             }
 

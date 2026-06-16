@@ -112,14 +112,8 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
         }
     };
 
-    // Deriva status visual: pending/confirmed/rescheduled com horário passado → 'waiting'
-    const getDisplayStatus = (apt: any): string => {
-        const status = apt.status || 'pending';
-        if (['pending', 'confirmed', 'rescheduled'].includes(status) && new Date(apt.end_time) < new Date()) {
-            return 'waiting';
-        }
-        return status;
-    };
+    // Status vem direto do banco (waiting é setado pelo cron pg_cron)
+    const getDisplayStatus = (apt: any): string => apt.status || 'pending';
 
     return (
         <div className="flex flex-col h-full border rounded-lg overflow-hidden bg-background">

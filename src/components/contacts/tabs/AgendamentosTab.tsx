@@ -35,13 +35,7 @@ export const AgendamentosTab = ({ contactId }: AgendamentosTabProps) => {
     );
   }
 
-  const getDisplayStatus = (apt: any): string => {
-    const s = apt.status || 'pending';
-    if (['pending', 'confirmed', 'rescheduled'].includes(s) && new Date(apt.end_time) < new Date()) {
-      return 'waiting';
-    }
-    return s;
-  };
+  const getDisplayStatus = (apt: any): string => apt.status || 'pending';
 
   const statusLabel = (s: string) => {
     switch (s) {

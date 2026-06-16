@@ -19,6 +19,7 @@ import { format, addMinutes, parseISO, set } from "date-fns";
 import { ContactPicker } from "@/components/ui/contact-picker";
 
 import { useOwnerId } from "@/hooks/useOwnerId";
+import { useCrmAppointmentSync } from "@/hooks/useCrmAppointmentSync";
 
 
 const formSchema = z.object({
@@ -42,11 +43,11 @@ const formSchema = z.object({
     end_time: z.string().optional(),
 }).superRefine((data, ctx) => {
     if (data.type === "appointment") {
-        if (!data.contact_name || data.contact_name.length < 1) {
+        if (!data.contact_id || data.contact_id.length < 1) {
             ctx.addIssue({
                 code: z.ZodIssueCode.custom,
-                message: "Nome é obrigatório",
-                path: ["contact_name"],
+                message: "Contato é obrigatório",
+                path: ["contact_id"],
             });
         }
         if (!data.duration || data.duration < 10) {
@@ -90,6 +91,7 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
     const [activeTab, setActiveTab] = useState<"appointment" | "absence">("appointment");
     const [isLoading, setIsLoading] = useState(false);
     const { data: ownerId } = useOwnerId();
+    const { onAppointmentCreated: syncCrmOnCreate } = useCrmAppointmentSync();
 
     const isPast = appointmentToEdit && new Date(appointmentToEdit.end_time) < new Date();
 
@@ -670,6 +672,20 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                     }).catch(() => {});
                 }
                 onAppointmentCreated?.();
+
+                // CRM sync: create/move card to "Agendado" + add service
+                if (values.type === "appointment" && values.contact_id) {
+                    const svc = serviceClients?.find((s: any) => s.id === values.service_id);
+                    syncCrmOnCreate({
+                        contactId: values.contact_id,
+                        ownerId,
+                        serviceClientId: values.service_id || null,
+                        serviceName: svc?.name || "",
+                        servicePrice: values.price || 0,
+                        serviceMinPrice: svc?.min_price || 0,
+                        professionalId: values.professional_id,
+                    }).catch(() => {}); // fire-and-forget
+                }
             }
 
             queryClient.invalidateQueries({ queryKey: ["appointments"] });

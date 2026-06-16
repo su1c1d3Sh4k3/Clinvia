@@ -48,11 +48,8 @@ export function ViewAppointmentModal({ appointment, open, onOpenChange, onEdit, 
 
     if (!appointment) return null;
 
-    const rawStatus: string = appointment.status || "pending";
-    const isPastAppointment = new Date(appointment.end_time) < new Date();
-    // Derivar 'waiting': pending/confirmed/rescheduled com horário passado
-    const status: string = ['pending', 'confirmed', 'rescheduled'].includes(rawStatus) && isPastAppointment
-        ? 'waiting' : rawStatus;
+    // Status vem direto do banco (waiting é setado pelo cron pg_cron)
+    const status: string = appointment.status || "pending";
     const isFinalized = ['completed', 'canceled', 'no-show'].includes(status);
     const isWaiting = status === 'waiting';
     const alreadyConfirmed = status === "confirmed";
