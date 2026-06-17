@@ -1475,6 +1475,117 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                 }
 
                 try {
+                    // ── Enrich bd_data with contact, CRM, services catalog, appointments, last summary ──
+                    let enrichedContact = null;
+                    let enrichedCrm = null;
+                    let enrichedServicesCatalog: any[] = [];
+                    let enrichedAppointments: any = {};
+                    let enrichedLastSummary = null;
+
+                    if (contactId) {
+                        // 1. Contact data
+                        const { data: cData } = await supabase
+                            .from('contacts')
+                            .select('id, push_name, number, phone, email, cpf, company, instagram, patient, is_lead, created_at')
+                            .eq('id', contactId)
+                            .single();
+                        enrichedContact = cData || null;
+
+                        // 2. Active CRM deal + services
+                        const { data: crmCard } = await supabase
+                            .from('crm_client')
+                            .select('stage, value, priority, is_active')
+                            .eq('contact_id', contactId)
+                            .eq('is_active', true)
+                            .maybeSingle();
+
+                        if (crmCard) {
+                            const { data: crmSvcs } = await supabase
+                                .from('crm_client_services')
+                                .select('service_name, quantity, unit_price')
+                                .eq('crm_client_id', (await supabase.from('crm_client').select('id').eq('contact_id', contactId).eq('is_active', true).single()).data?.id);
+                            enrichedCrm = { ...crmCard, services: crmSvcs || [] };
+                        }
+
+                        // 3. Appointments: last completed + next pending
+                        const { data: lastApt } = await supabase
+                            .from('appointments')
+                            .select('service_name, professional_name, start_time, end_time, status, price')
+                            .eq('contact_id', contactId)
+                            .eq('type', 'appointment')
+                            .in('status', ['completed'])
+                            .order('start_time', { ascending: false })
+                            .limit(1)
+                            .maybeSingle();
+
+                        const { data: nextApt } = await supabase
+                            .from('appointments')
+                            .select('service_name, professional_name, start_time, end_time, status, price')
+                            .eq('contact_id', contactId)
+                            .eq('type', 'appointment')
+                            .in('status', ['pending', 'confirmed', 'rescheduled'])
+                            .order('start_time', { ascending: true })
+                            .limit(1)
+                            .maybeSingle();
+
+                        enrichedAppointments = {
+                            last_completed: lastApt || null,
+                            next_pending: nextApt || null,
+                        };
+
+                        // 4. Last conversation summary
+                        const { data: lastConv } = await supabase
+                            .from('conversations')
+                            .select('summary, sentiment_score, updated_at')
+                            .eq('contact_id', contactId)
+                            .not('summary', 'is', null)
+                            .order('updated_at', { ascending: false })
+                            .limit(1)
+                            .maybeSingle();
+                        enrichedLastSummary = lastConv || null;
+                    }
+
+                    // 5. Services catalog (just names, grouped by category > service)
+                    const { data: catalogRaw } = await supabase
+                        .from('services_client')
+                        .select('name, price, duration_minutes, category_id, service_name_id')
+                        .eq('user_id', userId)
+                        .eq('status', true);
+
+                    if (catalogRaw && catalogRaw.length > 0) {
+                        const catIds = [...new Set(catalogRaw.map((s: any) => s.category_id))];
+                        const snIds = [...new Set(catalogRaw.map((s: any) => s.service_name_id))];
+
+                        const { data: cats } = await supabase.from('services_category').select('id, name').in('id', catIds);
+                        const { data: sns } = await supabase.from('service_name').select('id, name, category_id').in('id', snIds);
+
+                        const catMap = new Map((cats || []).map((c: any) => [c.id, c.name]));
+                        const snMap = new Map((sns || []).map((s: any) => [s.id, { name: s.name, category_id: s.category_id }]));
+
+                        // Group: category > service > applications
+                        const grouped: Record<string, Record<string, any[]>> = {};
+                        for (const sc of catalogRaw) {
+                            const catName = catMap.get(sc.category_id) || 'Outros';
+                            const snInfo = snMap.get(sc.service_name_id);
+                            const svcName = snInfo?.name || 'Serviço';
+                            if (!grouped[catName]) grouped[catName] = {};
+                            if (!grouped[catName][svcName]) grouped[catName][svcName] = [];
+                            grouped[catName][svcName].push({
+                                name: sc.name,
+                                price: sc.price,
+                                duration_minutes: sc.duration_minutes,
+                            });
+                        }
+
+                        enrichedServicesCatalog = Object.entries(grouped).map(([cat, svcs]) => ({
+                            category: cat,
+                            services: Object.entries(svcs).map(([svc, apps]) => ({
+                                name: svc,
+                                applications: apps,
+                            })),
+                        }));
+                    }
+
                     const forwardedPayload = {
                         ...payload,
                         bd_data: {
@@ -1483,7 +1594,12 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                             conversation_id: conversation?.id || null,
                             group_id: groupId || null,
                             instance_id: instance.id,
-                            ia_funnel_id: iaFunnelId
+                            ia_funnel_id: iaFunnelId,
+                            contact: enrichedContact,
+                            crm: enrichedCrm,
+                            services_catalog: enrichedServicesCatalog,
+                            appointments: enrichedAppointments,
+                            last_summary: enrichedLastSummary,
                         }
                     };
 
