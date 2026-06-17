@@ -867,6 +867,36 @@ serve(async (req) => {
                         ...(wasResolved && isNpsButtonResponse ? { status: 'resolved' } : {})
                     })
                     .eq('id', conversation.id);
+
+                // Ensure CRM card exists for contact (also for existing conversations)
+                if (contactId && !groupId && !fromMe) {
+                    try {
+                        const { data: existingCrm } = await supabase
+                            .from('crm_client')
+                            .select('id')
+                            .eq('contact_id', contactId)
+                            .eq('is_active', true)
+                            .maybeSingle();
+
+                        if (!existingCrm) {
+                            let crmStage = 'Em Atendimento Humano';
+                            if (conversation.queue_id) {
+                                const { data: qData } = await supabase
+                                    .from('queues').select('name').eq('id', conversation.queue_id).single();
+                                if (qData?.name === 'Atendimento IA') crmStage = 'Em Atendimento IA';
+                            }
+                            await supabase.from('crm_client').insert({
+                                user_id: userId,
+                                contact_id: contactId,
+                                stage: crmStage,
+                                is_active: true,
+                            });
+                            console.log('[webhook-handle-message] crm_client auto-created (existing conv):', crmStage);
+                        }
+                    } catch (crmErr) {
+                        console.warn('[webhook-handle-message] crm_client auto-creation skipped:', crmErr);
+                    }
+                }
             } else {
                 const { data: newConv, error: convError } = await supabase
                     .from('conversations')
@@ -1494,7 +1524,7 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                         // 2. Active CRM deal + services
                         const { data: crmCard } = await supabase
                             .from('crm_client')
-                            .select('stage, value, priority, is_active')
+                            .select('id, stage, value, priority, is_active')
                             .eq('contact_id', contactId)
                             .eq('is_active', true)
                             .maybeSingle();
@@ -1503,8 +1533,8 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                             const { data: crmSvcs } = await supabase
                                 .from('crm_client_services')
                                 .select('service_name, quantity, unit_price')
-                                .eq('crm_client_id', (await supabase.from('crm_client').select('id').eq('contact_id', contactId).eq('is_active', true).single()).data?.id);
-                            enrichedCrm = { ...crmCard, services: crmSvcs || [] };
+                                .eq('crm_client_id', crmCard.id);
+                            enrichedCrm = { stage: crmCard.stage, value: crmCard.value, priority: crmCard.priority, is_active: crmCard.is_active, services: crmSvcs || [] };
                         }
 
                         // 3. Appointments: last completed + next pending
@@ -1524,13 +1554,14 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                             .eq('contact_id', contactId)
                             .eq('type', 'appointment')
                             .in('status', ['pending', 'confirmed', 'rescheduled'])
+                            .gte('start_time', new Date().toISOString())
                             .order('start_time', { ascending: true })
                             .limit(1)
                             .maybeSingle();
 
                         enrichedAppointments = {
-                            last_completed: lastApt || null,
-                            next_pending: nextApt || null,
+                            last_completed: lastApt || 'Nenhum agendamento concluído',
+                            next_pending: nextApt || 'Nenhum agendamento pendente',
                         };
 
                         // 4. Last conversation summary
