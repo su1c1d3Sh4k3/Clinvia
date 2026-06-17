@@ -1545,45 +1545,17 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                         enrichedLastSummary = lastConv || null;
                     }
 
-                    // 5. Services catalog (just names, grouped by category > service)
+                    // 5. Services catalog — only unique service names (level 2)
                     const { data: catalogRaw } = await supabase
                         .from('services_client')
-                        .select('name, price, duration_minutes, category_id, service_name_id')
+                        .select('service_name_id')
                         .eq('user_id', userId)
                         .eq('status', true);
 
                     if (catalogRaw && catalogRaw.length > 0) {
-                        const catIds = [...new Set(catalogRaw.map((s: any) => s.category_id))];
                         const snIds = [...new Set(catalogRaw.map((s: any) => s.service_name_id))];
-
-                        const { data: cats } = await supabase.from('services_category').select('id, name').in('id', catIds);
-                        const { data: sns } = await supabase.from('service_name').select('id, name, category_id').in('id', snIds);
-
-                        const catMap = new Map((cats || []).map((c: any) => [c.id, c.name]));
-                        const snMap = new Map((sns || []).map((s: any) => [s.id, { name: s.name, category_id: s.category_id }]));
-
-                        // Group: category > service > applications
-                        const grouped: Record<string, Record<string, any[]>> = {};
-                        for (const sc of catalogRaw) {
-                            const catName = catMap.get(sc.category_id) || 'Outros';
-                            const snInfo = snMap.get(sc.service_name_id);
-                            const svcName = snInfo?.name || 'Serviço';
-                            if (!grouped[catName]) grouped[catName] = {};
-                            if (!grouped[catName][svcName]) grouped[catName][svcName] = [];
-                            grouped[catName][svcName].push({
-                                name: sc.name,
-                                price: sc.price,
-                                duration_minutes: sc.duration_minutes,
-                            });
-                        }
-
-                        enrichedServicesCatalog = Object.entries(grouped).map(([cat, svcs]) => ({
-                            category: cat,
-                            services: Object.entries(svcs).map(([svc, apps]) => ({
-                                name: svc,
-                                applications: apps,
-                            })),
-                        }));
+                        const { data: sns } = await supabase.from('service_name').select('name').in('id', snIds);
+                        enrichedServicesCatalog = (sns || []).map((s: any) => s.name);
                     }
 
                     const forwardedPayload = {
