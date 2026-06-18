@@ -23,7 +23,7 @@ serve(async (req) => {
         }
 
         const body = await req.json();
-        const { user_id, service_name } = body;
+        const { user_id, service_name, contact_id, phone_number } = body;
 
         if (!user_id) {
             return new Response(
@@ -36,6 +36,25 @@ serve(async (req) => {
             Deno.env.get("SUPABASE_URL") ?? "",
             Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
         );
+
+        // Helper: generate booking link for contact
+        const generateBookingLink = async () => {
+            if (!contact_id && !phone_number) return null;
+            let cid = contact_id;
+            let contactName = "";
+            if (!cid && phone_number) {
+                const cleaned = phone_number.replace(/\D/g, "");
+                const { data } = await supabase.from("contacts").select("id, push_name")
+                    .eq("user_id", user_id).ilike("number", `${cleaned}%`).limit(1).maybeSingle();
+                if (data) { cid = data.id; contactName = data.push_name || ""; }
+            } else if (cid) {
+                const { data } = await supabase.from("contacts").select("push_name").eq("id", cid).single();
+                contactName = data?.push_name || "";
+            }
+            if (!cid) return null;
+            const token = btoa(JSON.stringify({ user_id, contact_id: cid, contact_name: contactName }));
+            return `https://app.clinvia.com.br/agendar?d=${token}`;
+        };
 
         // If service_name provided: return applications for that service
         if (service_name) {
@@ -74,6 +93,8 @@ serve(async (req) => {
 
             if (appsError) throw appsError;
 
+            const bookingLink = await generateBookingLink();
+
             return new Response(
                 JSON.stringify({
                     service: sn.name,
@@ -86,6 +107,7 @@ serve(async (req) => {
                         duration_minutes: a.duration_minutes,
                         description: a.description,
                     })),
+                    ...(bookingLink ? { booking_link: bookingLink } : {}),
                 }),
                 { headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
@@ -123,6 +145,8 @@ serve(async (req) => {
 
         const catMap = new Map((cats || []).map((c: any) => [c.id, c.name]));
 
+        const bookingLink = await generateBookingLink();
+
         return new Response(
             JSON.stringify({
                 services: (sns || []).map((s: any) => ({
@@ -130,6 +154,7 @@ serve(async (req) => {
                     name: s.name,
                     category: catMap.get(s.category_id) || null,
                 })),
+                ...(bookingLink ? { booking_link: bookingLink } : {}),
             }),
             { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
