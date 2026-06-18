@@ -238,6 +238,78 @@ serve(async (req) => {
             );
         }
 
+        // ── ACTION: add_service ──
+        // Adds a service to the active deal by name
+        if (action === "add_service") {
+            const cid = await resolveContactId();
+
+            const { data: card } = await supabase
+                .from("crm_client")
+                .select("id, stage")
+                .eq("contact_id", cid)
+                .eq("is_active", true)
+                .maybeSingle();
+
+            if (!card) throw new Error("Nenhuma negociação ativa para este contato");
+            if (TERMINAL_STAGES.includes(card.stage)) throw new Error(`Negociação em "${card.stage}" — não pode ser editada`);
+
+            const serviceName = body.service_name || body.name;
+            if (!serviceName) throw new Error("Missing field: service_name");
+
+            // Find the service_client by name
+            const { data: sc } = await supabase
+                .from("services_client")
+                .select("id, name, price, min_price")
+                .eq("user_id", user_id)
+                .ilike("name", serviceName)
+                .eq("status", true)
+                .limit(1)
+                .maybeSingle();
+
+            if (!sc) throw new Error(`Serviço "${serviceName}" não encontrado`);
+
+            // Check if already in the deal
+            const { data: existing } = await supabase
+                .from("crm_client_services")
+                .select("id")
+                .eq("crm_client_id", card.id)
+                .eq("service_client_id", sc.id)
+                .maybeSingle();
+
+            if (existing) {
+                return new Response(
+                    JSON.stringify({ message: "Serviço já está na negociação", service: sc.name }),
+                    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+                );
+            }
+
+            const qty = body.quantity || 1;
+            const price = body.unit_price || sc.price || 0;
+
+            await supabase.from("crm_client_services").insert({
+                crm_client_id: card.id,
+                service_client_id: sc.id,
+                service_name: sc.name,
+                quantity: qty,
+                unit_price: price,
+                min_price: sc.min_price || 0,
+            });
+
+            // Recalculate deal value
+            const { data: allSvcs } = await supabase
+                .from("crm_client_services")
+                .select("unit_price, quantity")
+                .eq("crm_client_id", card.id);
+
+            const newTotal = (allSvcs || []).reduce((s: number, r: any) => s + r.unit_price * r.quantity, 0);
+            await supabase.from("crm_client").update({ value: newTotal, updated_at: new Date().toISOString() }).eq("id", card.id);
+
+            return new Response(
+                JSON.stringify({ success: true, service: sc.name, quantity: qty, unit_price: price, deal_value: newTotal }),
+                { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+        }
+
         // ── ACTION: list_stages ──
         // Returns all available stages
         if (action === "list_stages") {
