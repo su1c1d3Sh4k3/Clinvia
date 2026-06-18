@@ -53,7 +53,7 @@ serve(async (req) => {
             }
             if (!cid) return null;
             const token = btoa(JSON.stringify({ user_id, contact_id: cid, contact_name: contactName }));
-            return `https://app.clinvia.ai/agendar?d=${token}`;
+            return `https://app.clinbia.ai/agendar?d=${token}`;
         };
 
         // If service_name provided: return applications for that service
