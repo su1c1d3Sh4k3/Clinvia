@@ -183,6 +183,66 @@ serve(async (req) => {
 
             if (insertErr) throw insertErr;
 
+            // CRM sync: create/move card to Agendado + add service
+            try {
+                const terminals = ['Ganho', 'Perdido', 'Finalizado'];
+                const { data: activeCard } = await supabase.from("crm_client")
+                    .select("id, stage").eq("contact_id", contact_id).eq("is_active", true).maybeSingle();
+
+                if (activeCard) {
+                    if (terminals.includes(activeCard.stage)) {
+                        // Terminal → create new card
+                        const { data: newCard } = await supabase.from("crm_client").insert({
+                            user_id, contact_id, stage: "Agendado",
+                            stage_changed_at: new Date().toISOString(), value: 0,
+                            professional_id, priority: "medium", is_active: true,
+                        }).select().single();
+                        if (newCard) {
+                            await supabase.from("crm_client_services").insert({
+                                crm_client_id: newCard.id, service_client_id: service_id,
+                                service_name: svc.name, quantity: 1, unit_price: svc.price || 0, min_price: 0,
+                            });
+                            await supabase.from("crm_client").update({ value: svc.price || 0 }).eq("id", newCard.id);
+                        }
+                    } else {
+                        // Move to Agendado
+                        if (activeCard.stage !== "Agendado") {
+                            await supabase.from("crm_client").update({
+                                stage: "Agendado", stage_changed_at: new Date().toISOString(),
+                            }).eq("id", activeCard.id);
+                        }
+                        // Add service if not duplicate
+                        const { data: existingSvc } = await supabase.from("crm_client_services")
+                            .select("id").eq("crm_client_id", activeCard.id).eq("service_client_id", service_id).maybeSingle();
+                        if (!existingSvc) {
+                            await supabase.from("crm_client_services").insert({
+                                crm_client_id: activeCard.id, service_client_id: service_id,
+                                service_name: svc.name, quantity: 1, unit_price: svc.price || 0, min_price: 0,
+                            });
+                            const { data: allSvcs } = await supabase.from("crm_client_services")
+                                .select("unit_price, quantity").eq("crm_client_id", activeCard.id);
+                            const total = (allSvcs || []).reduce((s: number, r: any) => s + r.unit_price * r.quantity, 0);
+                            await supabase.from("crm_client").update({ value: total }).eq("id", activeCard.id);
+                        }
+                    }
+                } else {
+                    // No card → create
+                    const { data: newCard } = await supabase.from("crm_client").insert({
+                        user_id, contact_id, stage: "Agendado",
+                        stage_changed_at: new Date().toISOString(), value: svc.price || 0,
+                        professional_id, priority: "medium", is_active: true,
+                    }).select().single();
+                    if (newCard) {
+                        await supabase.from("crm_client_services").insert({
+                            crm_client_id: newCard.id, service_client_id: service_id,
+                            service_name: svc.name, quantity: 1, unit_price: svc.price || 0, min_price: 0,
+                        });
+                    }
+                }
+            } catch (crmErr) {
+                console.warn("[api-public-booking] CRM sync error:", crmErr);
+            }
+
             return new Response(JSON.stringify({ success: true, appointment_id: created.id }),
                 { status: 201, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
