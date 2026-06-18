@@ -247,6 +247,75 @@ serve(async (req) => {
                 { status: 201, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
+        // ── get_pending: pending/confirmed appointments for this contact ──
+        if (action === "get_pending") {
+            if (!contact_id) throw new Error("Missing contact_id");
+
+            const { data: apts } = await supabase.from("appointments")
+                .select("id, service_name, professional_name, start_time, end_time, status, price, service_id, professional_id")
+                .eq("contact_id", contact_id).eq("type", "appointment")
+                .in("status", ["pending", "confirmed", "rescheduled"])
+                .gte("start_time", new Date().toISOString())
+                .order("start_time", { ascending: true });
+
+            return new Response(JSON.stringify({ appointments: apts || [] }),
+                { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+
+        // ── cancel_booking ──
+        if (action === "cancel_booking") {
+            const { appointment_id } = { appointment_id: body.appointment_id };
+            if (!appointment_id) throw new Error("Missing appointment_id");
+
+            const { data: updated, error: upErr } = await supabase.from("appointments")
+                .update({ status: "canceled" }).eq("id", appointment_id).select().single();
+            if (upErr) throw upErr;
+
+            return new Response(JSON.stringify({ success: true, status: "canceled" }),
+                { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+
+        // ── reschedule_booking ──
+        if (action === "reschedule_booking") {
+            const { appointment_id } = { appointment_id: body.appointment_id };
+            if (!appointment_id || !date || !time) throw new Error("Missing appointment_id, date or time");
+
+            const { data: existing } = await supabase.from("appointments")
+                .select("start_time, end_time, professional_id").eq("id", appointment_id).single();
+            if (!existing) throw new Error("Agendamento não encontrado");
+
+            const durationMs = new Date(existing.end_time).getTime() - new Date(existing.start_time).getTime();
+            const startISO = `${date}T${time}:00-03:00`;
+            const startDate = new Date(startISO);
+            const endDate = new Date(startDate.getTime() + durationMs);
+
+            if (startDate < new Date()) {
+                return new Response(JSON.stringify({ error: "Não é possível reagendar para o passado" }),
+                    { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+            }
+
+            const { data: overlap } = await supabase.rpc("check_appointment_overlap", {
+                p_professional_id: existing.professional_id,
+                p_start_time: startDate.toISOString(),
+                p_end_time: endDate.toISOString(),
+                p_exclude_id: appointment_id,
+            });
+            if (overlap) {
+                return new Response(JSON.stringify({ error: "Novo horário indisponível" }),
+                    { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+            }
+
+            const { error: upErr } = await supabase.from("appointments").update({
+                start_time: startDate.toISOString(),
+                end_time: endDate.toISOString(),
+                status: "rescheduled",
+            }).eq("id", appointment_id);
+            if (upErr) throw upErr;
+
+            return new Response(JSON.stringify({ success: true, status: "rescheduled" }),
+                { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+
         throw new Error("Invalid action");
 
     } catch (error) {
