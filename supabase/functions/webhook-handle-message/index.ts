@@ -1576,17 +1576,48 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                         enrichedLastSummary = lastConv || null;
                     }
 
-                    // 5. Services catalog — only unique service names (level 2)
+                    // 5. Services catalog — service names + professionals
                     const { data: catalogRaw } = await supabase
                         .from('services_client')
-                        .select('service_name_id')
+                        .select('service_name_id, professionals')
                         .eq('user_id', userId)
                         .eq('status', true);
 
                     if (catalogRaw && catalogRaw.length > 0) {
+                        // Collect all professional IDs from all services
+                        const allProfIds = new Set<string>();
+                        for (const sc of catalogRaw) {
+                            for (const pid of (sc.professionals || [])) allProfIds.add(pid);
+                        }
+
+                        // Fetch professional names
+                        const profMap = new Map<string, string>();
+                        if (allProfIds.size > 0) {
+                            const { data: profs } = await supabase
+                                .from('professionals')
+                                .select('id, name')
+                                .in('id', [...allProfIds]);
+                            for (const p of profs || []) profMap.set(p.id, p.name);
+                        }
+
+                        // Group professionals by service_name_id
+                        const snProfMap = new Map<string, Set<string>>();
+                        for (const sc of catalogRaw) {
+                            if (!snProfMap.has(sc.service_name_id)) snProfMap.set(sc.service_name_id, new Set());
+                            for (const pid of (sc.professionals || [])) {
+                                const name = profMap.get(pid);
+                                if (name) snProfMap.get(sc.service_name_id)!.add(name);
+                            }
+                        }
+
                         const snIds = [...new Set(catalogRaw.map((s: any) => s.service_name_id))];
-                        const { data: sns } = await supabase.from('service_name').select('name').in('id', snIds);
-                        enrichedServicesCatalog = (sns || []).map((s: any) => s.name);
+                        const { data: sns } = await supabase.from('service_name').select('id, name').in('id', snIds);
+
+                        enrichedServicesCatalog = (sns || []).map((s: any) => {
+                            const profs = snProfMap.get(s.id);
+                            const profNames = profs && profs.size > 0 ? [...profs].join(', ') : null;
+                            return profNames ? `${s.name} (${profNames})` : s.name;
+                        });
                     }
 
                     const forwardedPayload = {
