@@ -1,11 +1,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
-import { addMinutes, subMinutes, parse, format, isBefore, isEqual, parseISO } from "https://esm.sh/date-fns@2.30.0";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-api-key",
 };
+
+function pad(n: number): string { return String(n).padStart(2, "0"); }
 
 serve(async (req) => {
     if (req.method === "OPTIONS") {
@@ -15,22 +16,17 @@ serve(async (req) => {
     try {
         const apiKey = req.headers.get("x-api-key");
         const envApiKey = Deno.env.get("SCHEDULING_API_KEY");
-
         if (!envApiKey || apiKey !== envApiKey) {
-            return new Response(
-                JSON.stringify({ error: "Unauthorized: Invalid or missing API Key" }),
-                { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
+            return new Response(JSON.stringify({ error: "Unauthorized" }),
+                { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
-        const reqJson = await req.json();
-        const { action, user_id, date, service_name, appointment_data, duration, contact_id, appointment_id, new_date, new_time } = reqJson;
+        const body = await req.json();
+        const { action, user_id } = body;
 
         if (!user_id) {
-            return new Response(
-                JSON.stringify({ error: "Missing required field: user_id" }),
-                { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
+            return new Response(JSON.stringify({ error: "Missing user_id" }),
+                { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
         const supabase = createClient(
@@ -38,373 +34,340 @@ serve(async (req) => {
             Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
         );
 
-        // Helper to calculate slots for a professional
-        const calculateSlots = async (professional, dateStr, serviceDuration = 60) => {
-            // 1. Get Global Settings
-            const { data: globalSettings } = await supabase
-                .from("scheduling_settings")
-                .select("*")
-                .eq("user_id", user_id)
-                .single();
-
-            let startHour = globalSettings?.start_hour ?? 8;
-            let endHour = globalSettings?.end_hour ?? 19;
-            let workDays = globalSettings?.work_days ?? [0, 1, 2, 3, 4, 5, 6];
-
-            // 2. Override with Professional Settings
-            if (professional.work_days && professional.work_days.length > 0) {
-                workDays = professional.work_days;
-            }
-            if (professional.work_hours) {
-                const startParts = professional.work_hours.start.split(':');
-                const endParts = professional.work_hours.end.split(':');
-                startHour = parseInt(startParts[0]);
-                endHour = parseInt(endParts[0]);
-            }
-
-            // 3. Check Day
-            const requestedDate = parse(dateStr, "yyyy-MM-dd", new Date());
-            const dayOfWeek = requestedDate.getDay();
-            if (!workDays.includes(dayOfWeek)) {
-                return [
-                    { time_available_true: [] },
-                    { time_available_false: [] } // Whole day unavailable
-                ];
-            }
-
-            // 4. Fetch Appointments
-            // Fetching broad range to ensure we catch everything
-            const { data: appointments } = await supabase
-                .from("appointments")
-                .select("start_time, end_time")
-                .eq("user_id", user_id)
-                .eq("professional_id", professional.id)
-                .gte("start_time", `${dateStr}T00:00:00`) // This is UTC comparison, effectively 21:00 prev day Brazil
-                .lte("start_time", `${dateStr}T23:59:59`); // This is UTC comparison
-
-            // 5. Generate Slots
-            const time_available_true = [];
-            const time_available_false = [];
-
-            let currentSlot = new Date(requestedDate);
-            currentSlot.setHours(startHour, 0, 0, 0);
-            const endTime = new Date(requestedDate);
-            endTime.setHours(endHour, 0, 0, 0);
-
-            while (isBefore(currentSlot, endTime) || isEqual(currentSlot, endTime)) {
-                const slotEnd = addMinutes(currentSlot, serviceDuration);
-
-                // Check if slot exceeds working hours
-                if (isBefore(slotEnd, endTime) || isEqual(slotEnd, endTime)) {
-                    const isBusy = appointments?.some((apt) => {
-                        // Manual Timezone Adjustment: Subtract 3 hours from DB time to get Brazil Time
-                        // DB (UTC) -> Brazil (Local for loop)
-                        const aptStartUTC = parseISO(apt.start_time);
-                        const aptEndUTC = parseISO(apt.end_time);
-
-                        const aptStart = subMinutes(aptStartUTC, 180); // -3 hours
-                        const aptEnd = subMinutes(aptEndUTC, 180);     // -3 hours
-
-                        // Overlap check
-                        return isBefore(currentSlot, aptEnd) && isBefore(aptStart, slotEnd);
-                    });
-
-                    const timeStr = format(currentSlot, "HH:mm");
-                    if (!isBusy) {
-                        time_available_true.push(timeStr);
-                    } else {
-                        time_available_false.push(timeStr);
-                    }
-                } else {
-                    // Slot exceeds end time, technically unavailable but usually just not listed.
-                    // User asked for unavailable slots, so we can list it or just ignore.
-                    // Usually "unavailable" implies "within work hours but taken".
-                    // Let's ignore slots outside work hours to keep list clean.
-                }
-                currentSlot = addMinutes(currentSlot, 30); // 30 min step
-            }
-
-            return [
-                { time_available_true },
-                { time_available_false }
-            ];
+        // Helper: resolve contact by phone
+        const resolveContact = async (contactId?: string, phoneNumber?: string) => {
+            if (contactId) return contactId;
+            if (!phoneNumber) throw new Error("Missing contact_id or phone_number");
+            const cleaned = phoneNumber.replace(/\D/g, "");
+            const { data } = await supabase.from("contacts").select("id")
+                .eq("user_id", user_id).ilike("number", `${cleaned}%`).limit(1).single();
+            if (!data) throw new Error(`Contato não encontrado: ${phoneNumber}`);
+            return data.id;
         };
 
+        // Helper: resolve service_client by application name
+        const resolveService = async (serviceName: string) => {
+            const { data } = await supabase.from("services_client")
+                .select("id, name, price, min_price, duration_minutes, category_id, service_name_id, professionals")
+                .eq("user_id", user_id).ilike("name", serviceName).eq("status", true)
+                .limit(1).maybeSingle();
+            if (!data) throw new Error(`Aplicação "${serviceName}" não encontrada`);
+            return data;
+        };
 
-        if (action === "check_availability") {
-            if (!date) throw new Error("Missing date");
-            // duration is already destructured from req.json()
-            const serviceDuration = duration || 60; // Default 60 min if not provided
+        // Helper: find a professional for the service
+        const resolveProfessional = async (sc: any, preferredName?: string) => {
+            const profIds: string[] = sc.professionals || [];
+            if (profIds.length === 0) throw new Error(`Nenhum profissional atrelado ao serviço "${sc.name}"`);
 
-            // Get all professionals
-            const { data: professionals } = await supabase
-                .from("professionals")
-                .select("*")
-                .eq("user_id", user_id);
-
-            const result = {};
-            for (const pro of professionals || []) {
-                const slots = await calculateSlots(pro, date, duration);
-                result[pro.name] = slots;
+            if (preferredName) {
+                const { data } = await supabase.from("professionals").select("id, name")
+                    .in("id", profIds).ilike("name", `%${preferredName}%`).limit(1).maybeSingle();
+                if (data) return data;
             }
-            return new Response(JSON.stringify(result), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        }
+            // Default: first professional
+            const { data } = await supabase.from("professionals").select("id, name")
+                .in("id", profIds).limit(1).single();
+            return data;
+        };
 
-        if (action === "check_availability_by_service") {
-            if (!date || !service_name) throw new Error("Missing date or service_name");
-
-            // Find service
-            const { data: services } = await supabase
-                .from("products_services")
-                .select("*")
-                .eq("user_id", user_id)
-                .ilike("name", `%${service_name}%`)
-                .limit(1);
-
-            if (!services || services.length === 0) return new Response(JSON.stringify({}), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-
-            const service = services[0];
-
-            // Find professionals
-            const { data: professionals } = await supabase
-                .from("professionals")
-                .select("*")
-                .eq("user_id", user_id)
-                .contains("service_ids", [service.id]);
-
-            const result = {};
-            for (const pro of professionals || []) {
-                const slots = await calculateSlots(pro, date, service.duration || 60);
-                result[pro.name] = slots;
-            }
-            return new Response(JSON.stringify(result), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        }
-
-        if (action === "create_appointment") {
-            if (!appointment_data) throw new Error("Missing appointment_data");
-
-            // appointment_data should have: professional_id, contact_id, service_id, date, start_time, duration, price
-            // We need to construct the payload
-            const { professional_id, contact_id, service_id, date, start_time, price, description } = appointment_data;
-            let { duration } = appointment_data;
-
-            // Resolve duration: se o payload mandou 0/undefined, tenta buscar do serviço.
-            // Motivo: a constraint valid_time_range (end_time > start_time) falha
-            // silenciosamente quando duration é 0 — a mensagem que volta ao
-            // cliente é críptica ("check constraint violated"), impossível
-            // debugar no N8N. Aqui devolvemos erro legível.
-            if (!duration || duration <= 0) {
-                if (service_id) {
-                    const { data: svc } = await supabase
-                        .from("products_services")
-                        .select("duration_minutes, name")
-                        .eq("id", service_id)
-                        .maybeSingle();
-                    if (svc?.duration_minutes && svc.duration_minutes > 0) {
-                        duration = svc.duration_minutes;
-                    } else {
-                        return new Response(
-                            JSON.stringify({
-                                error: `O serviço "${svc?.name ?? service_id}" está cadastrado com duração 0. Atualize a duração do serviço antes de criar o agendamento, ou informe 'duration' (em minutos) no payload.`
-                            }),
-                            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-                        );
-                    }
-                } else {
-                    return new Response(
-                        JSON.stringify({
-                            error: "Campo 'duration' é obrigatório (em minutos) quando o service_id não é informado ou não possui duração cadastrada."
-                        }),
-                        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-                    );
-                }
-            }
-
-            // Manual timezone adjustment for Brazil (UTC-3)
-            // Input: "2025-12-08 10:00" -> Parsed as 10:00 UTC
-            // Target: 13:00 UTC (which is 10:00 Brazil)
-            // Action: Add 3 hours (180 minutes)
-
-            const startDateTime = `${date}T${start_time}`;
-            const parsedDate = parseISO(startDateTime);
-            const startDate = addMinutes(parsedDate, 180); // Add 3 hours
-            const endDate = addMinutes(startDate, duration);
-
-            // Validate that appointment is not in the past
-            const now = new Date();
-            if (startDate < now) {
-                return new Response(
-                    JSON.stringify({ error: "A data informada é anterior a data atual, verifique se a data ou o ano estão corretos e tente novamente." }),
-                    { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-                );
-            }
-
-
-            const payload = {
-                user_id,
-                professional_id,
-                contact_id,
-                service_id,
-                start_time: startDate.toISOString(),
-                end_time: endDate.toISOString(),
-                price,
-                description,
-                type: 'appointment'
-            };
-
-            const { data, error } = await supabase
-                .from("appointments")
-                .insert(payload)
-                .select()
-                .single();
-
-            if (error) throw error;
-
-            // Create Notification
-            try {
-                // Fetch names for better notification
-                const { data: contact } = await supabase.from("contacts").select("push_name").eq("id", contact_id).single();
-                const { data: professional } = await supabase.from("professionals").select("name").eq("id", professional_id).single();
-
-                const contactName = contact?.push_name || "Cliente";
-                const professionalName = professional?.name || "Profissional";
-                const formattedDate = format(startDate, "dd/MM 'às' HH:mm");
-
-                await supabase.from("notifications").insert({
-                    type: 'appointment_created',
-                    title: 'Novo Agendamento',
-                    description: `Agendamento para ${contactName} com ${professionalName} em ${formattedDate}.`,
-                    metadata: { appointment_id: data.id, professional_id, contact_id },
-                    related_user_id: user_id,
-                    user_id: user_id  // SECURITY FIX: Tenant isolation
-                });
-            } catch (notifError) {
-                console.error("Error creating notification:", notifError);
-                // Don't fail the request if notification fails
-            }
-
-            // Sync com Google Calendar em background (fire-and-forget)
-            try {
-                const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-                const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-                const syncPromise = fetch(`${supabaseUrl}/functions/v1/google-calendar-sync`, {
-                    method: "POST",
-                    headers: { "Authorization": `Bearer ${serviceKey}`, "Content-Type": "application/json" },
-                    body: JSON.stringify({ action: "sync_appointment", appointment_id: data.id, user_id }),
-                });
-                // deno-lint-ignore no-explicit-any
-                (globalThis as any).EdgeRuntime?.waitUntil(syncPromise);
-            } catch (_syncErr) { /* silently ignore sync errors */ }
-
-            return new Response(JSON.stringify(data), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        }
-
+        // ══════════════════════════════════════════════
+        // ACTION: fetch_appointments
+        // ══════════════════════════════════════════════
         if (action === "fetch_appointments") {
-            if (!contact_id) throw new Error("Missing contact_id");
+            const contactId = await resolveContact(body.contact_id, body.phone_number);
 
-            const { data, error } = await supabase
-                .from("appointments")
-                .select(`
-                    *,
-                    professionals (name),
-                    products_services (name)
-                `)
-                .eq("user_id", user_id)
-                .eq("contact_id", contact_id)
+            const { data, error } = await supabase.from("appointments")
+                .select("id, service_name, professional_name, start_time, end_time, status, price, type, category_id, service_name_id, service_id")
+                .eq("user_id", user_id).eq("contact_id", contactId)
                 .order("start_time", { ascending: false });
 
             if (error) throw error;
 
-            return new Response(JSON.stringify(data), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+            return new Response(JSON.stringify({
+                contact_id: contactId,
+                appointments: (data || []).map((a: any) => ({
+                    id: a.id,
+                    service: a.service_name,
+                    professional: a.professional_name,
+                    date: a.start_time?.split("T")[0],
+                    start_time: a.start_time,
+                    end_time: a.end_time,
+                    status: a.status,
+                    price: a.price,
+                })),
+            }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
-        if (action === "reschedule_appointment") {
-            if (!appointment_id || !new_date || !new_time) throw new Error("Missing appointment_id, new_date, or new_time");
+        // ══════════════════════════════════════════════
+        // ACTION: create_appointment
+        // ══════════════════════════════════════════════
+        if (action === "create_appointment") {
+            const { service_name, date, time, professional_name, phone_number, contact_id, description } = body;
+            if (!service_name || !date || !time) throw new Error("Missing service_name, date or time");
 
-            // 1. Fetch existing appointment to get duration
-            const { data: existingApt, error: fetchError } = await supabase
-                .from("appointments")
-                .select("start_time, end_time")
-                .eq("id", appointment_id)
-                .single();
+            const cid = await resolveContact(contact_id, phone_number);
+            const sc = await resolveService(service_name);
+            const prof = await resolveProfessional(sc, professional_name);
+            const duration = sc.duration_minutes || 30;
 
-            if (fetchError || !existingApt) throw new Error("Appointment not found");
+            // Build datetime (input is local BRT → store as UTC+3)
+            const startISO = `${date}T${time}:00-03:00`;
+            const startDate = new Date(startISO);
+            const endDate = new Date(startDate.getTime() + duration * 60000);
 
-            const oldStart = parseISO(existingApt.start_time);
-            const oldEnd = parseISO(existingApt.end_time);
-            const durationInMinutes = (oldEnd.getTime() - oldStart.getTime()) / (1000 * 60);
+            // Validate not in the past
+            if (startDate < new Date()) {
+                return new Response(JSON.stringify({ error: "Não é possível agendar no passado" }),
+                    { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+            }
 
-            // 2. Calculate new times
-            // Manual timezone adjustment for Brazil (UTC-3)
-            const startDateTime = `${new_date}T${new_time}`;
-            const parsedDate = parseISO(startDateTime);
-            const startDate = addMinutes(parsedDate, 180); // Add 3 hours
-            const endDate = addMinutes(startDate, durationInMinutes);
+            // Check overlap
+            const { data: overlap } = await supabase.rpc("check_appointment_overlap", {
+                p_professional_id: prof.id,
+                p_start_time: startDate.toISOString(),
+                p_end_time: endDate.toISOString(),
+                p_exclude_id: null,
+            });
+            if (overlap) {
+                return new Response(JSON.stringify({ error: "Horário indisponível (conflito com outro agendamento)" }),
+                    { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+            }
 
-            // 3. Update
-            const { data, error } = await supabase
-                .from("appointments")
-                .update({
-                    start_time: startDate.toISOString(),
-                    end_time: endDate.toISOString(),
-                    status: 'rescheduled'
-                })
-                .eq("id", appointment_id)
-                .select()
-                .single();
+            const payload = {
+                user_id,
+                professional_id: prof.id,
+                contact_id: cid,
+                service_id: sc.id,
+                category_id: sc.category_id,
+                service_name_id: sc.service_name_id,
+                start_time: startDate.toISOString(),
+                end_time: endDate.toISOString(),
+                price: sc.price || 0,
+                description: description || null,
+                type: "appointment",
+            };
 
+            const { data: created, error } = await supabase.from("appointments").insert(payload).select().single();
             if (error) throw error;
 
-            // Sync reagendamento com Google Calendar em background
+            // Google Calendar sync (fire-and-forget)
             try {
                 const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
                 const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-                const syncPromise = fetch(`${supabaseUrl}/functions/v1/google-calendar-sync`, {
+                fetch(`${supabaseUrl}/functions/v1/google-calendar-sync`, {
+                    method: "POST",
+                    headers: { "Authorization": `Bearer ${serviceKey}`, "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "sync_appointment", appointment_id: created.id, user_id }),
+                }).catch(() => {});
+            } catch (_) {}
+
+            // CRM sync: move/create card to Agendado + add service
+            try {
+                const { data: activeCard } = await supabase.from("crm_client")
+                    .select("id, stage").eq("contact_id", cid).eq("is_active", true).maybeSingle();
+
+                if (activeCard) {
+                    const terminals = ['Ganho', 'Perdido', 'Finalizado'];
+                    if (terminals.includes(activeCard.stage)) {
+                        // Terminal → create new card
+                        const { data: newCard } = await supabase.from("crm_client").insert({
+                            user_id, contact_id: cid, stage: "Agendado",
+                            stage_changed_at: new Date().toISOString(), value: 0,
+                            professional_id: prof.id, priority: "medium", is_active: true,
+                        }).select().single();
+                        if (newCard) {
+                            await supabase.from("crm_client_services").insert({
+                                crm_client_id: newCard.id, service_client_id: sc.id,
+                                service_name: sc.name, quantity: 1, unit_price: sc.price || 0, min_price: sc.min_price || 0,
+                            });
+                            await supabase.from("crm_client").update({ value: sc.price || 0 }).eq("id", newCard.id);
+                        }
+                    } else {
+                        // Move to Agendado
+                        if (activeCard.stage !== "Agendado") {
+                            await supabase.from("crm_client").update({
+                                stage: "Agendado", stage_changed_at: new Date().toISOString(),
+                            }).eq("id", activeCard.id);
+                        }
+                        // Add service if not duplicate
+                        const { data: existingSvc } = await supabase.from("crm_client_services")
+                            .select("id").eq("crm_client_id", activeCard.id).eq("service_client_id", sc.id).maybeSingle();
+                        if (!existingSvc) {
+                            await supabase.from("crm_client_services").insert({
+                                crm_client_id: activeCard.id, service_client_id: sc.id,
+                                service_name: sc.name, quantity: 1, unit_price: sc.price || 0, min_price: sc.min_price || 0,
+                            });
+                            // Recalc value
+                            const { data: allSvcs } = await supabase.from("crm_client_services")
+                                .select("unit_price, quantity").eq("crm_client_id", activeCard.id);
+                            const total = (allSvcs || []).reduce((s: number, r: any) => s + r.unit_price * r.quantity, 0);
+                            await supabase.from("crm_client").update({ value: total }).eq("id", activeCard.id);
+                        }
+                    }
+                } else {
+                    // No card → create
+                    const { data: newCard } = await supabase.from("crm_client").insert({
+                        user_id, contact_id: cid, stage: "Agendado",
+                        stage_changed_at: new Date().toISOString(), value: sc.price || 0,
+                        professional_id: prof.id, priority: "medium", is_active: true,
+                    }).select().single();
+                    if (newCard) {
+                        await supabase.from("crm_client_services").insert({
+                            crm_client_id: newCard.id, service_client_id: sc.id,
+                            service_name: sc.name, quantity: 1, unit_price: sc.price || 0, min_price: sc.min_price || 0,
+                        });
+                    }
+                }
+            } catch (crmErr) {
+                console.warn("[api-scheduling] CRM sync error:", crmErr);
+            }
+
+            return new Response(JSON.stringify({
+                success: true,
+                appointment: {
+                    id: created.id,
+                    service: created.service_name,
+                    professional: prof.name,
+                    date,
+                    start_time: created.start_time,
+                    end_time: created.end_time,
+                    price: created.price,
+                    status: created.status,
+                },
+            }), { status: 201, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+
+        // ══════════════════════════════════════════════
+        // ACTION: reschedule_appointment
+        // ══════════════════════════════════════════════
+        if (action === "reschedule_appointment") {
+            const { appointment_id, new_date, new_time } = body;
+            if (!appointment_id || !new_date || !new_time) throw new Error("Missing appointment_id, new_date or new_time");
+
+            // Fetch existing to get duration
+            const { data: existing } = await supabase.from("appointments")
+                .select("start_time, end_time, professional_id")
+                .eq("id", appointment_id).single();
+            if (!existing) throw new Error("Agendamento não encontrado");
+
+            const durationMs = new Date(existing.end_time).getTime() - new Date(existing.start_time).getTime();
+            const durationMin = durationMs / 60000;
+
+            const startISO = `${new_date}T${new_time}:00-03:00`;
+            const startDate = new Date(startISO);
+            const endDate = new Date(startDate.getTime() + durationMin * 60000);
+
+            if (startDate < new Date()) {
+                return new Response(JSON.stringify({ error: "Não é possível reagendar para o passado" }),
+                    { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+            }
+
+            // Check overlap
+            const { data: overlap } = await supabase.rpc("check_appointment_overlap", {
+                p_professional_id: existing.professional_id,
+                p_start_time: startDate.toISOString(),
+                p_end_time: endDate.toISOString(),
+                p_exclude_id: appointment_id,
+            });
+            if (overlap) {
+                return new Response(JSON.stringify({ error: "Novo horário indisponível (conflito)" }),
+                    { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+            }
+
+            const { data: updated, error } = await supabase.from("appointments").update({
+                start_time: startDate.toISOString(),
+                end_time: endDate.toISOString(),
+                status: "rescheduled",
+            }).eq("id", appointment_id).select().single();
+            if (error) throw error;
+
+            // Google Calendar sync
+            try {
+                const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+                const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+                fetch(`${supabaseUrl}/functions/v1/google-calendar-sync`, {
                     method: "POST",
                     headers: { "Authorization": `Bearer ${serviceKey}`, "Content-Type": "application/json" },
                     body: JSON.stringify({ action: "sync_appointment", appointment_id, user_id }),
-                });
-                // deno-lint-ignore no-explicit-any
-                (globalThis as any).EdgeRuntime?.waitUntil(syncPromise);
-            } catch (_syncErr) { /* silently ignore sync errors */ }
+                }).catch(() => {});
+            } catch (_) {}
 
-            return new Response(JSON.stringify(data), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+            return new Response(JSON.stringify({
+                success: true,
+                appointment: {
+                    id: updated.id,
+                    service: updated.service_name,
+                    professional: updated.professional_name,
+                    date: new_date,
+                    start_time: updated.start_time,
+                    end_time: updated.end_time,
+                    status: updated.status,
+                },
+            }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
+        // ══════════════════════════════════════════════
+        // ACTION: cancel_appointment
+        // ══════════════════════════════════════════════
         if (action === "cancel_appointment") {
+            const { appointment_id } = body;
             if (!appointment_id) throw new Error("Missing appointment_id");
 
-            const { data, error } = await supabase
-                .from("appointments")
-                .update({ status: 'canceled' })
-                .eq("id", appointment_id)
-                .select()
-                .single();
-
+            const { data: updated, error } = await supabase.from("appointments")
+                .update({ status: "canceled" }).eq("id", appointment_id).select().single();
             if (error) throw error;
 
-            // Remover evento do Google Calendar em background
+            // Google Calendar: delete event
             try {
                 const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
                 const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-                const syncPromise = fetch(`${supabaseUrl}/functions/v1/google-calendar-sync`, {
+                fetch(`${supabaseUrl}/functions/v1/google-calendar-sync`, {
                     method: "POST",
                     headers: { "Authorization": `Bearer ${serviceKey}`, "Content-Type": "application/json" },
                     body: JSON.stringify({ action: "delete_appointment", appointment_id, user_id }),
-                });
-                // deno-lint-ignore no-explicit-any
-                (globalThis as any).EdgeRuntime?.waitUntil(syncPromise);
-            } catch (_syncErr) { /* silently ignore sync errors */ }
+                }).catch(() => {});
+            } catch (_) {}
 
-            return new Response(JSON.stringify(data), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+            // CRM: create Perdido card for the canceled service
+            if (updated.contact_id && updated.service_id) {
+                try {
+                    await supabase.from("crm_client").insert({
+                        user_id, contact_id: updated.contact_id, stage: "Perdido",
+                        stage_changed_at: new Date().toISOString(), value: updated.price || 0,
+                        loss_reason: "canceled", loss_reason_other: "Cliente cancelou o agendamento",
+                        is_active: false,
+                    });
+                    // Remove service from active deal
+                    const { data: activeCard } = await supabase.from("crm_client")
+                        .select("id").eq("contact_id", updated.contact_id).eq("is_active", true).maybeSingle();
+                    if (activeCard) {
+                        await supabase.from("crm_client_services").delete()
+                            .eq("crm_client_id", activeCard.id).eq("service_client_id", updated.service_id);
+                        const { data: remaining } = await supabase.from("crm_client_services")
+                            .select("unit_price, quantity").eq("crm_client_id", activeCard.id);
+                        if (remaining && remaining.length > 0) {
+                            const total = remaining.reduce((s: number, r: any) => s + r.unit_price * r.quantity, 0);
+                            await supabase.from("crm_client").update({ value: total }).eq("id", activeCard.id);
+                        } else {
+                            await supabase.from("crm_client").update({ is_active: false }).eq("id", activeCard.id);
+                        }
+                    }
+                } catch (crmErr) {
+                    console.warn("[api-scheduling] CRM cancel sync error:", crmErr);
+                }
+            }
+
+            return new Response(JSON.stringify({
+                success: true,
+                appointment: { id: updated.id, status: "canceled" },
+            }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
-        throw new Error("Invalid action");
+        throw new Error(`Invalid action: "${action}". Valid: fetch_appointments, create_appointment, reschedule_appointment, cancel_appointment`);
 
     } catch (error) {
-        return new Response(
-            JSON.stringify({ error: error.message }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return new Response(JSON.stringify({ error: error.message }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 });
