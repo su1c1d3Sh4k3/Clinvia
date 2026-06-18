@@ -22,7 +22,8 @@ serve(async (req) => {
             );
         }
 
-        const { user_id } = await req.json();
+        const body = await req.json();
+        const { user_id, service_name } = body;
 
         if (!user_id) {
             return new Response(
@@ -36,16 +37,100 @@ serve(async (req) => {
             Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
         );
 
-        const { data, error } = await supabase
-            .from("products_services")
-            .select("*")
-            .eq("user_id", user_id)
-            .eq("type", "service"); // Only services, not products
+        // If service_name provided: return applications for that service
+        if (service_name) {
+            // Find the service_name record (level 2) by name (case-insensitive)
+            const { data: sn, error: snError } = await supabase
+                .from("service_name")
+                .select("id, name, category_id")
+                .ilike("name", service_name)
+                .limit(1)
+                .maybeSingle();
 
-        if (error) throw error;
+            if (snError) throw snError;
+
+            if (!sn) {
+                return new Response(
+                    JSON.stringify({ error: `Serviço "${service_name}" não encontrado`, applications: [] }),
+                    { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+                );
+            }
+
+            // Get category name
+            const { data: cat } = await supabase
+                .from("services_category")
+                .select("name")
+                .eq("id", sn.category_id)
+                .single();
+
+            // Get all active applications for this service
+            const { data: apps, error: appsError } = await supabase
+                .from("services_client")
+                .select("id, name, price, min_price, duration_minutes, description")
+                .eq("user_id", user_id)
+                .eq("service_name_id", sn.id)
+                .eq("status", true)
+                .order("name");
+
+            if (appsError) throw appsError;
+
+            return new Response(
+                JSON.stringify({
+                    service: sn.name,
+                    category: cat?.name || null,
+                    applications: (apps || []).map((a: any) => ({
+                        id: a.id,
+                        name: a.name,
+                        price: a.price,
+                        min_price: a.min_price,
+                        duration_minutes: a.duration_minutes,
+                        description: a.description,
+                    })),
+                }),
+                { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+        }
+
+        // No service_name: return all services (level 2 names only)
+        const { data: allSc, error: scError } = await supabase
+            .from("services_client")
+            .select("service_name_id")
+            .eq("user_id", user_id)
+            .eq("status", true);
+
+        if (scError) throw scError;
+
+        const snIds = [...new Set((allSc || []).map((s: any) => s.service_name_id))];
+
+        if (snIds.length === 0) {
+            return new Response(
+                JSON.stringify({ services: [] }),
+                { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+        }
+
+        const { data: sns } = await supabase
+            .from("service_name")
+            .select("id, name, category_id")
+            .in("id", snIds)
+            .order("name");
+
+        const catIds = [...new Set((sns || []).map((s: any) => s.category_id))];
+        const { data: cats } = await supabase
+            .from("services_category")
+            .select("id, name")
+            .in("id", catIds);
+
+        const catMap = new Map((cats || []).map((c: any) => [c.id, c.name]));
 
         return new Response(
-            JSON.stringify(data),
+            JSON.stringify({
+                services: (sns || []).map((s: any) => ({
+                    id: s.id,
+                    name: s.name,
+                    category: catMap.get(s.category_id) || null,
+                })),
+            }),
             { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
 
