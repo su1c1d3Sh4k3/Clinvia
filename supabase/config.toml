@@ -46,6 +46,9 @@ verify_jwt = false
 [functions.api-services]
 verify_jwt = false
 
+[functions.api-availability]
+verify_jwt = false
+
 # Evolution/WhatsApp Functions
 
 
