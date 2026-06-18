@@ -1628,7 +1628,7 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                             contact_id: contactId,
                             contact_name: enrichedContact.push_name || "",
                         }));
-                        bookingLink = `https://app.clinvia.com.br/agendar?d=${token}`;
+                        bookingLink = `https://app.clinvia.ai/agendar?d=${token}`;
                     }
 
                     const forwardedPayload = {
