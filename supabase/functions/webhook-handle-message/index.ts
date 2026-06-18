@@ -1620,6 +1620,17 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                         });
                     }
 
+                    // Generate booking link for this contact
+                    let bookingLink: string | null = null;
+                    if (contactId && enrichedContact) {
+                        const token = btoa(JSON.stringify({
+                            user_id: userId,
+                            contact_id: contactId,
+                            contact_name: enrichedContact.push_name || "",
+                        }));
+                        bookingLink = `https://app.clinvia.com.br/agendar?d=${token}`;
+                    }
+
                     const forwardedPayload = {
                         ...payload,
                         bd_data: {
@@ -1634,6 +1645,7 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                             services_catalog: enrichedServicesCatalog,
                             appointments: enrichedAppointments,
                             last_summary: enrichedLastSummary,
+                            booking_link: bookingLink,
                         }
                     };
 
