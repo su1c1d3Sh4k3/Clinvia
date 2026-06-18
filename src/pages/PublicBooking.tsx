@@ -1,19 +1,26 @@
 import { useState, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Loader2, Calendar, Clock, Check, ChevronLeft, ChevronRight, User, ArrowLeft } from "lucide-react";
+import { Loader2, Clock, Check, ChevronLeft, ChevronRight, User, ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, addDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameMonth, isSameDay, isBefore } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
-interface BookingParams {
-  user_id: string;
-  contact_id: string;
-  contact_name: string;
+const API_BASE = "https://swfshqvvbohnahdyndch.supabase.co/functions/v1/api-public-booking";
+const ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN3ZnNocXZ2Ym9obmFoZHluZGNoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzMxNjI4NjgsImV4cCI6MjA0ODczODg2OH0.MbOhXXnaJFAcZKoSWRj3V9cDBdfBpqH4V0iyasUVef0";
+
+async function callApi(body: any) {
+  const res = await fetch(API_BASE, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${ANON_KEY}` },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Erro");
+  return data;
 }
 
+interface BookingParams { user_id: string; contact_id: string; contact_name: string; }
 type Step = "service" | "professional" | "datetime" | "confirm" | "done";
 
 export default function PublicBooking() {
@@ -21,14 +28,12 @@ export default function PublicBooking() {
   const [params, setParams] = useState<BookingParams | null>(null);
   const [error, setError] = useState("");
 
-  // Data
   const [categories, setCategories] = useState<any[]>([]);
   const [serviceNames, setServiceNames] = useState<any[]>([]);
   const [applications, setApplications] = useState<any[]>([]);
-  const [professionals, setProfessionals] = useState<any[]>([]);
-  const [slots, setSlots] = useState<any[]>([]);
+  const [allProfessionals, setAllProfessionals] = useState<any[]>([]);
+  const [slots, setSlots] = useState<string[]>([]);
 
-  // Selection
   const [step, setStep] = useState<Step>("service");
   const [selCatId, setSelCatId] = useState("");
   const [selSvcId, setSelSvcId] = useState("");
@@ -41,13 +46,12 @@ export default function PublicBooking() {
   const [loading, setLoading] = useState(true);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState<any>(null);
 
   const tomorrow = useMemo(() => {
     const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(0, 0, 0, 0); return d;
   }, []);
 
-  // Parse token from URL
+  // Parse token
   useEffect(() => {
     try {
       const d = searchParams.get("d");
@@ -58,98 +62,53 @@ export default function PublicBooking() {
     } catch { setError("Link expirado ou inválido"); setLoading(false); }
   }, [searchParams]);
 
-  // Fetch categories + services
+  // Fetch services + professionals
   useEffect(() => {
     if (!params) return;
     (async () => {
       setLoading(true);
-      const { data: sc } = await supabase.from("services_client" as any)
-        .select("id, name, price, duration_minutes, category_id, service_name_id, professionals")
-        .eq("user_id", params.user_id).eq("status", true);
-      const catIds = [...new Set((sc || []).map((s: any) => s.category_id))];
-      const snIds = [...new Set((sc || []).map((s: any) => s.service_name_id))];
-      const { data: cats } = await supabase.from("services_category" as any).select("id, name, category_type").in("id", catIds).order("name");
-      const { data: sns } = await supabase.from("service_name" as any).select("id, name, category_id").in("id", snIds).order("name");
-      setCategories(cats || []);
-      setServiceNames(sns || []);
-      setApplications(sc || []);
+      try {
+        const [svcData, profData] = await Promise.all([
+          callApi({ action: "get_services", user_id: params.user_id }),
+          callApi({ action: "get_prof_list", user_id: params.user_id }),
+        ]);
+        setCategories(svcData.categories || []);
+        setServiceNames(svcData.service_names || []);
+        setApplications(svcData.applications || []);
+        setAllProfessionals(profData.professionals || []);
+      } catch (err: any) { setError(err.message); }
       setLoading(false);
     })();
   }, [params]);
 
-  // Filter service names by selected category
   const filteredSns = useMemo(() => serviceNames.filter(s => s.category_id === selCatId), [serviceNames, selCatId]);
-
-  // Filter applications by selected service name
   const filteredApps = useMemo(() => applications.filter(a => a.service_name_id === selSvcId), [applications, selSvcId]);
+  const filteredProfs = useMemo(() => {
+    if (!selApp) return [];
+    return allProfessionals.filter(p => (selApp.professionals || []).includes(p.id));
+  }, [selApp, allProfessionals]);
 
-  // When app is selected, load professionals
-  useEffect(() => {
-    if (!selApp) { setProfessionals([]); return; }
-    const profIds: string[] = selApp.professionals || [];
-    if (profIds.length === 0) return;
-    (async () => {
-      const { data } = await supabase.from("professionals").select("id, name, photo_url, role").in("id", profIds);
-      setProfessionals(data || []);
-      // Auto-select if only 1 professional
-      if (data && data.length === 1) {
-        setSelProf(data[0]);
-        setStep("datetime");
-      }
-    })();
-  }, [selApp]);
-
-  // Fetch slots when date is selected
+  // Fetch slots
   useEffect(() => {
     if (!selDate || !selProf || !selApp || !params) return;
     (async () => {
       setLoadingSlots(true);
       setSelTime("");
-      const dateStr = format(selDate, "yyyy-MM-dd");
-      const duration = selApp.duration_minutes || 30;
-
-      // Fetch professional work hours
-      const { data: prof } = await supabase.from("professionals")
-        .select("work_hours, work_days").eq("id", selProf.id).single();
-
-      const wh = prof?.work_hours || {};
-      const workDays: number[] = prof?.work_days || [1, 2, 3, 4, 5];
-      if (!workDays.includes(selDate.getDay())) { setSlots([]); setLoadingSlots(false); return; }
-
-      const parseT = (t: any): number => {
-        if (!t) return 0;
-        if (typeof t === "string" && t.includes(":")) { const [h, m] = t.split(":").map(Number); return h * 60 + (m || 0); }
-        return parseFloat(t) * 60 || 0;
-      };
-
-      const whStart = parseT(wh.start) || 8 * 60;
-      const whEnd = parseT(wh.end) || 20 * 60;
-      const brkStart = wh.break_start ? parseT(wh.break_start) : null;
-      const brkEnd = wh.break_end ? parseT(wh.break_end) : null;
-
-      // Fetch existing appointments
-      const { data: apts } = await supabase.from("appointments")
-        .select("start_time, end_time").eq("professional_id", selProf.id).neq("status", "canceled")
-        .gte("start_time", `${dateStr}T00:00:00`).lte("start_time", `${dateStr}T23:59:59`);
-
-      const busy = (apts || []).map((a: any) => {
-        const s = new Date(a.start_time); const e = new Date(a.end_time);
-        return { start: s.getHours() * 60 + s.getMinutes(), end: e.getHours() * 60 + e.getMinutes() };
-      });
-
-      const available: string[] = [];
-      for (let m = whStart; m + duration <= whEnd; m += 10) {
-        if (brkStart !== null && brkEnd !== null && m < brkEnd && m + duration > brkStart) continue;
-        let conflict = false;
-        for (const b of busy) { if (m < b.end && m + duration > b.start) { conflict = true; break; } }
-        if (!conflict) available.push(`${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`);
-      }
-      setSlots(available);
+      try {
+        const data = await callApi({
+          action: "get_slots",
+          user_id: params.user_id,
+          professional_id: selProf.id,
+          service_id: selApp.id,
+          date: format(selDate, "yyyy-MM-dd"),
+        });
+        setSlots(data.slots || []);
+      } catch { setSlots([]); }
       setLoadingSlots(false);
     })();
   }, [selDate, selProf, selApp, params]);
 
-  // Calendar
+  // Calendar days
   const calDays = useMemo(() => {
     const start = startOfWeek(startOfMonth(calMonth), { weekStartsOn: 0 });
     const end = endOfWeek(endOfMonth(calMonth), { weekStartsOn: 0 });
@@ -159,36 +118,34 @@ export default function PublicBooking() {
     return days;
   }, [calMonth]);
 
+  const handleSelectApp = (app: any) => {
+    setSelApp(app);
+    const profs = allProfessionals.filter(p => (app.professionals || []).includes(p.id));
+    if (profs.length === 1) {
+      setSelProf(profs[0]);
+      setStep("datetime");
+    } else {
+      setStep("professional");
+    }
+  };
+
   const handleConfirm = async () => {
     if (!params || !selApp || !selProf || !selDate || !selTime) return;
     setSubmitting(true);
+    setError("");
     try {
-      const dateStr = format(selDate, "yyyy-MM-dd");
-      const startISO = `${dateStr}T${selTime}:00-03:00`;
-      const startDate = new Date(startISO);
-      const endDate = new Date(startDate.getTime() + (selApp.duration_minutes || 30) * 60000);
-
-      const { data, error } = await supabase.from("appointments").insert({
+      await callApi({
+        action: "create_booking",
         user_id: params.user_id,
-        professional_id: selProf.id,
         contact_id: params.contact_id,
         service_id: selApp.id,
-        category_id: selApp.category_id,
-        service_name_id: selApp.service_name_id,
-        start_time: startDate.toISOString(),
-        end_time: endDate.toISOString(),
-        price: selApp.price || 0,
-        type: "appointment",
-      }).select().single();
-
-      if (error) throw error;
-      setResult(data);
+        professional_id: selProf.id,
+        date: format(selDate, "yyyy-MM-dd"),
+        time: selTime,
+      });
       setStep("done");
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setSubmitting(false);
-    }
+    } catch (err: any) { setError(err.message); }
+    setSubmitting(false);
   };
 
   const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -205,7 +162,7 @@ export default function PublicBooking() {
           {params?.contact_name && <p className="text-sm text-muted-foreground">Olá, {params.contact_name}</p>}
         </div>
 
-        {/* Steps indicator */}
+        {/* Steps */}
         <div className="flex items-center justify-center gap-2">
           {(["service", "professional", "datetime", "confirm"] as Step[]).map((s, i) => (
             <div key={s} className="flex items-center gap-2">
@@ -223,8 +180,6 @@ export default function PublicBooking() {
         {step === "service" && (
           <div className="space-y-4">
             <h2 className="text-sm font-semibold text-muted-foreground">Escolha o serviço</h2>
-
-            {/* Category */}
             <div className="space-y-2">
               <label className="text-xs text-muted-foreground">Categoria</label>
               <div className="grid grid-cols-2 gap-2">
@@ -237,7 +192,6 @@ export default function PublicBooking() {
               </div>
             </div>
 
-            {/* Service name */}
             {selCatId && filteredSns.length > 0 && (
               <div className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-200">
                 <label className="text-xs text-muted-foreground">Serviço</label>
@@ -252,13 +206,12 @@ export default function PublicBooking() {
               </div>
             )}
 
-            {/* Application */}
             {selSvcId && filteredApps.length > 0 && (
               <div className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-200">
                 <label className="text-xs text-muted-foreground">Aplicação</label>
                 <div className="grid grid-cols-1 gap-2">
                   {filteredApps.map(a => (
-                    <button key={a.id} onClick={() => { setSelApp(a); setStep(a.professionals?.length === 1 ? "datetime" : "professional"); }}
+                    <button key={a.id} onClick={() => handleSelectApp(a)}
                       className={cn("p-3 rounded-lg border text-left transition-all",
                         selApp?.id === a.id ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
                       )}>
@@ -283,7 +236,7 @@ export default function PublicBooking() {
             </button>
             <h2 className="text-sm font-semibold text-muted-foreground">Escolha o profissional</h2>
             <div className="grid grid-cols-2 gap-3">
-              {professionals.map(p => (
+              {filteredProfs.map(p => (
                 <button key={p.id} onClick={() => { setSelProf(p); setStep("datetime"); }}
                   className={cn("flex flex-col items-center gap-2 p-4 rounded-lg border transition-all",
                     selProf?.id === p.id ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
@@ -302,12 +255,11 @@ export default function PublicBooking() {
         {/* ── Step 3: Date + Time ── */}
         {step === "datetime" && (
           <div className="space-y-4">
-            <button onClick={() => setStep(professionals.length > 1 ? "professional" : "service")} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+            <button onClick={() => setStep(filteredProfs.length > 1 ? "professional" : "service")} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
               <ArrowLeft className="w-4 h-4" /> Voltar
             </button>
             <h2 className="text-sm font-semibold text-muted-foreground">Escolha data e horário</h2>
 
-            {/* Calendar */}
             <div className="border rounded-lg p-3">
               <div className="flex items-center justify-between mb-3">
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCalMonth(d => { const n = new Date(d); n.setMonth(n.getMonth() - 1); return n; })}>
@@ -326,8 +278,7 @@ export default function PublicBooking() {
                   const isDisabled = isBefore(day, tomorrow) || !isSameMonth(day, calMonth);
                   const isSelected = selDate && isSameDay(day, selDate);
                   return (
-                    <button key={i} disabled={isDisabled}
-                      onClick={() => setSelDate(day)}
+                    <button key={i} disabled={isDisabled} onClick={() => setSelDate(day)}
                       className={cn("h-9 w-full rounded-md text-sm transition-all",
                         isDisabled && "text-muted-foreground/30 cursor-not-allowed",
                         !isDisabled && !isSelected && "hover:bg-accent",
@@ -338,7 +289,6 @@ export default function PublicBooking() {
               </div>
             </div>
 
-            {/* Time slots */}
             {selDate && (
               <div className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-200">
                 <div className="flex items-center gap-2">
@@ -371,36 +321,15 @@ export default function PublicBooking() {
               <ArrowLeft className="w-4 h-4" /> Voltar
             </button>
             <h2 className="text-sm font-semibold text-muted-foreground">Confirme seu agendamento</h2>
-
             <div className="border rounded-lg p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Serviço</span>
-                <span className="text-sm font-medium">{selApp.name}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Profissional</span>
-                <span className="text-sm font-medium">{selProf.name}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Data</span>
-                <span className="text-sm font-medium capitalize">{format(selDate, "EEEE, dd/MM", { locale: ptBR })}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Horário</span>
-                <span className="text-sm font-medium">{selTime}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Duração</span>
-                <span className="text-sm font-medium">{selApp.duration_minutes} min</span>
-              </div>
-              <div className="flex items-center justify-between pt-2 border-t">
-                <span className="text-sm font-semibold">Valor</span>
-                <span className="text-base font-bold text-primary">{fmt(selApp.price)}</span>
-              </div>
+              <div className="flex items-center justify-between"><span className="text-sm text-muted-foreground">Serviço</span><span className="text-sm font-medium">{selApp.name}</span></div>
+              <div className="flex items-center justify-between"><span className="text-sm text-muted-foreground">Profissional</span><span className="text-sm font-medium">{selProf.name}</span></div>
+              <div className="flex items-center justify-between"><span className="text-sm text-muted-foreground">Data</span><span className="text-sm font-medium capitalize">{format(selDate, "EEEE, dd/MM", { locale: ptBR })}</span></div>
+              <div className="flex items-center justify-between"><span className="text-sm text-muted-foreground">Horário</span><span className="text-sm font-medium">{selTime}</span></div>
+              <div className="flex items-center justify-between"><span className="text-sm text-muted-foreground">Duração</span><span className="text-sm font-medium">{selApp.duration_minutes} min</span></div>
+              <div className="flex items-center justify-between pt-2 border-t"><span className="text-sm font-semibold">Valor</span><span className="text-base font-bold text-primary">{fmt(selApp.price)}</span></div>
             </div>
-
             {error && <p className="text-sm text-destructive text-center">{error}</p>}
-
             <Button className="w-full h-12 text-base font-semibold" onClick={handleConfirm} disabled={submitting}>
               {submitting ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Check className="w-5 h-5 mr-2" />}
               Confirmar Agendamento
@@ -417,22 +346,10 @@ export default function PublicBooking() {
             <h2 className="text-xl font-bold">Agendamento Confirmado!</h2>
             <p className="text-sm text-muted-foreground">Seu atendimento foi agendado com sucesso.</p>
             <div className="border rounded-lg p-4 space-y-2 text-left">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Serviço</span>
-                <span className="font-medium">{selApp?.name}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Profissional</span>
-                <span className="font-medium">{selProf?.name}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Data</span>
-                <span className="font-medium">{selDate && format(selDate, "dd/MM/yyyy")}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Horário</span>
-                <span className="font-medium">{selTime}</span>
-              </div>
+              <div className="flex justify-between text-sm"><span className="text-muted-foreground">Serviço</span><span className="font-medium">{selApp?.name}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-muted-foreground">Profissional</span><span className="font-medium">{selProf?.name}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-muted-foreground">Data</span><span className="font-medium">{selDate && format(selDate, "dd/MM/yyyy")}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-muted-foreground">Horário</span><span className="font-medium">{selTime}</span></div>
             </div>
           </div>
         )}
