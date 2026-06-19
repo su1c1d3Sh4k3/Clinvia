@@ -252,6 +252,34 @@ serve(async (req) => {
                 .update({ status: "canceled" }).eq("id", appointment_id).select().single();
             if (upErr) throw upErr;
 
+            // CRM: create Perdido card + remove service from active card
+            if (updated.contact_id && updated.service_id) {
+                try {
+                    await supabase.from("crm_client").insert({
+                        user_id, contact_id: updated.contact_id, stage: "Perdido",
+                        stage_changed_at: new Date().toISOString(), value: updated.price || 0,
+                        loss_reason: "canceled", loss_reason_other: "Cliente cancelou o agendamento via link",
+                        is_active: false,
+                    });
+                    const { data: activeCard } = await supabase.from("crm_client")
+                        .select("id").eq("contact_id", updated.contact_id).eq("is_active", true).maybeSingle();
+                    if (activeCard) {
+                        await supabase.from("crm_client_services").delete()
+                            .eq("crm_client_id", activeCard.id).eq("service_client_id", updated.service_id);
+                        const { data: remaining } = await supabase.from("crm_client_services")
+                            .select("unit_price, quantity").eq("crm_client_id", activeCard.id);
+                        if (remaining && remaining.length > 0) {
+                            const total = remaining.reduce((s: number, r: any) => s + r.unit_price * r.quantity, 0);
+                            await supabase.from("crm_client").update({ value: total }).eq("id", activeCard.id);
+                        } else {
+                            await supabase.from("crm_client").update({ is_active: false }).eq("id", activeCard.id);
+                        }
+                    }
+                } catch (crmErr) {
+                    console.warn("[api-public-booking] CRM cancel sync error:", crmErr);
+                }
+            }
+
             return new Response(JSON.stringify({ success: true, status: "canceled" }),
                 { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
@@ -285,12 +313,27 @@ serve(async (req) => {
                     { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } });
             }
 
-            const { error: upErr } = await supabase.from("appointments").update({
+            const { data: rescheduled, error: upErr } = await supabase.from("appointments").update({
                 start_time: startDate.toISOString(),
                 end_time: endDate.toISOString(),
                 status: "rescheduled",
-            }).eq("id", appointment_id);
+            }).eq("id", appointment_id).select().single();
             if (upErr) throw upErr;
+
+            // CRM: move card to Agendado
+            if (rescheduled.contact_id) {
+                try {
+                    const { data: activeCard } = await supabase.from("crm_client")
+                        .select("id, stage").eq("contact_id", rescheduled.contact_id).eq("is_active", true).maybeSingle();
+                    if (activeCard && activeCard.stage !== "Agendado") {
+                        await supabase.from("crm_client").update({
+                            stage: "Agendado", stage_changed_at: new Date().toISOString(),
+                        }).eq("id", activeCard.id);
+                    }
+                } catch (crmErr) {
+                    console.warn("[api-public-booking] CRM reschedule sync error:", crmErr);
+                }
+            }
 
             return new Response(JSON.stringify({ success: true, status: "rescheduled" }),
                 { headers: { ...corsHeaders, "Content-Type": "application/json" } });

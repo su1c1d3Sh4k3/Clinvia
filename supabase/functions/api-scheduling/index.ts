@@ -293,6 +293,21 @@ serve(async (req) => {
                 }).catch(() => {});
             } catch (_) {}
 
+            // CRM: move card to Agendado
+            if (updated.contact_id) {
+                try {
+                    const { data: activeCard } = await supabase.from("crm_client")
+                        .select("id, stage").eq("contact_id", updated.contact_id).eq("is_active", true).maybeSingle();
+                    if (activeCard && activeCard.stage !== "Agendado") {
+                        await supabase.from("crm_client").update({
+                            stage: "Agendado", stage_changed_at: new Date().toISOString(),
+                        }).eq("id", activeCard.id);
+                    }
+                } catch (crmErr) {
+                    console.warn("[api-scheduling] CRM reschedule sync error:", crmErr);
+                }
+            }
+
             return new Response(JSON.stringify({
                 success: true,
                 appointment: {
