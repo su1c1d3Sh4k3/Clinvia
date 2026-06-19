@@ -314,7 +314,7 @@ export const NewKanbanBoard = ({ onCardClick }: NewKanbanBoardProps) => {
                     {cards.map((client) => {
                       const borderColor = client.priority ? PRIORITY_BORDER[client.priority] : "transparent";
                       const services = cardServiceNames[client.id] || [];
-                      const hasWaiting = waitingContacts?.has(client.contact_id);
+                      const hasWaiting = isTerminal && stage === "Ganho" && waitingContacts?.has(client.contact_id);
                       return (
                         <div
                           key={client.id}
@@ -329,8 +329,8 @@ export const NewKanbanBoard = ({ onCardClick }: NewKanbanBoardProps) => {
                           )}
                           style={{ borderLeftColor: borderColor }}
                         >
-                          <div className="p-2.5">
-                            <div className="flex items-center gap-2 mb-1.5">
+                          <div className="p-2.5 min-w-0">
+                            <div className="flex items-center gap-2 mb-1.5 min-w-0">
                               {!isTerminal && (
                                 <GripVertical className="w-3 h-3 text-muted-foreground shrink-0" />
                               )}
@@ -340,7 +340,7 @@ export const NewKanbanBoard = ({ onCardClick }: NewKanbanBoardProps) => {
                                   {(client.contact?.push_name || "?")[0]?.toUpperCase()}
                                 </AvatarFallback>
                               </Avatar>
-                              <span className="text-xs font-medium truncate flex-1">
+                              <span className="text-xs font-medium truncate flex-1 min-w-0">
                                 {client.contact?.push_name || "Sem nome"}
                               </span>
                               {/* Alert icon for waiting appointments */}
