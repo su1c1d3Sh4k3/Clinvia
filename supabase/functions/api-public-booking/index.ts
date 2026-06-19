@@ -14,7 +14,7 @@ serve(async (req) => {
     }
 
     try {
-        const { action, user_id, contact_id, service_id, professional_id, date, time } = await req.json();
+        const { action, user_id, contact_id, service_id, professional_id, date, time, appointment_id } = await req.json();
 
         if (!user_id) {
             return new Response(JSON.stringify({ error: "Missing user_id" }),
@@ -48,30 +48,8 @@ serve(async (req) => {
             }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
-        // ── get_professionals: by IDs ──
-        if (action === "get_professionals") {
-            const { professional_ids } = await req.json().catch(() => ({}));
-            const ids = professional_ids || [];
-            if (ids.length === 0) {
-                return new Response(JSON.stringify({ professionals: [] }),
-                    { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-            }
-            // We already have the body parsed, use the ids from the outer parse
-            return new Response(JSON.stringify({ professionals: [] }),
-                { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        }
-
-        // ── get_professionals_by_ids ──
-        if (action === "get_professionals_by_ids") {
-            const body2 = { action, user_id, contact_id, service_id, professional_id, date, time };
-            // professional_ids comes from body
-            return new Response(JSON.stringify({ error: "Use get_slots instead" }),
-                { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        }
-
-        // ── get_prof_list: fetch professionals by array of IDs ──
+        // ── get_prof_list: all professionals ──
         if (action === "get_prof_list") {
-            // Re-parse body to get professional_ids
             const { data: profs } = await supabase.from("professionals")
                 .select("id, name, photo_url, role");
             return new Response(JSON.stringify({ professionals: profs || [] }),
@@ -142,8 +120,10 @@ serve(async (req) => {
                     { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
             }
 
-            const { data: svc } = await supabase.from("services_client")
-                .select("name, price, duration_minutes, category_id, service_name_id").eq("id", service_id).single();
+            const [{ data: svc }, { data: prof }] = await Promise.all([
+                supabase.from("services_client").select("name, price, duration_minutes, category_id, service_name_id").eq("id", service_id).single(),
+                supabase.from("professionals").select("name").eq("id", professional_id).single(),
+            ]);
             if (!svc) throw new Error("Serviço não encontrado");
 
             const duration = svc.duration_minutes || 30;
@@ -175,6 +155,8 @@ serve(async (req) => {
                 service_id,
                 category_id: svc.category_id,
                 service_name_id: svc.service_name_id,
+                service_name: svc.name,
+                professional_name: prof?.name || "",
                 start_time: startDate.toISOString(),
                 end_time: endDate.toISOString(),
                 price: svc.price || 0,
@@ -264,7 +246,6 @@ serve(async (req) => {
 
         // ── cancel_booking ──
         if (action === "cancel_booking") {
-            const { appointment_id } = { appointment_id: body.appointment_id };
             if (!appointment_id) throw new Error("Missing appointment_id");
 
             const { data: updated, error: upErr } = await supabase.from("appointments")
@@ -277,7 +258,6 @@ serve(async (req) => {
 
         // ── reschedule_booking ──
         if (action === "reschedule_booking") {
-            const { appointment_id } = { appointment_id: body.appointment_id };
             if (!appointment_id || !date || !time) throw new Error("Missing appointment_id, date or time");
 
             const { data: existing } = await supabase.from("appointments")
