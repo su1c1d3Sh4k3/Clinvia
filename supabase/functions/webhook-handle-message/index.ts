@@ -868,6 +868,18 @@ serve(async (req) => {
                     })
                     .eq('id', conversation.id);
 
+                // Update contact last_message tracking for follow-up system
+                if (contactId && !isGroup) {
+                    await supabase
+                        .from('contacts')
+                        .update({
+                            last_message: fromMe ? 'enviada' : 'recebida',
+                            last_message_time: new Date().toISOString(),
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('id', contactId);
+                }
+
                 // Ensure CRM card exists for contact (also for existing conversations)
                 if (contactId && !groupId && !fromMe) {
                     try {
@@ -912,6 +924,18 @@ serve(async (req) => {
                     })
                     .select()
                     .single();
+
+                // Update contact last_message tracking for new conversations
+                if (newConv && contactId && !groupId) {
+                    await supabase
+                        .from('contacts')
+                        .update({
+                            last_message: fromMe ? 'enviada' : 'recebida',
+                            last_message_time: new Date().toISOString(),
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('id', contactId);
+                }
 
                 if (convError) {
                     console.error('[webhook-handle-message] Error creating conversation:', convError);
