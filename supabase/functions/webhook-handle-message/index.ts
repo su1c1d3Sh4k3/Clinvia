@@ -870,13 +870,18 @@ serve(async (req) => {
 
                 // Update contact last_message tracking for follow-up system
                 if (contactId && !isGroup) {
+                    const updateData: Record<string, any> = {
+                        last_message: fromMe ? 'enviada' : 'recebida',
+                        last_message_time: new Date().toISOString(),
+                        updated_at: new Date().toISOString()
+                    };
+                    // Reset follow_number to 0 when client sends a message (enviada -> recebida)
+                    if (!fromMe) {
+                        updateData.follow_number = 0;
+                    }
                     await supabase
                         .from('contacts')
-                        .update({
-                            last_message: fromMe ? 'enviada' : 'recebida',
-                            last_message_time: new Date().toISOString(),
-                            updated_at: new Date().toISOString()
-                        })
+                        .update(updateData)
                         .eq('id', contactId);
                 }
 
@@ -927,13 +932,17 @@ serve(async (req) => {
 
                 // Update contact last_message tracking for new conversations
                 if (newConv && contactId && !groupId) {
+                    const updateData: Record<string, any> = {
+                        last_message: fromMe ? 'enviada' : 'recebida',
+                        last_message_time: new Date().toISOString(),
+                        updated_at: new Date().toISOString()
+                    };
+                    if (!fromMe) {
+                        updateData.follow_number = 0;
+                    }
                     await supabase
                         .from('contacts')
-                        .update({
-                            last_message: fromMe ? 'enviada' : 'recebida',
-                            last_message_time: new Date().toISOString(),
-                            updated_at: new Date().toISOString()
-                        })
+                        .update(updateData)
                         .eq('id', contactId);
                 }
 

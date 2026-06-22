@@ -16,6 +16,7 @@ const corsHeaders = {
  * Body (JSON):
  *   - user_id (obrigatório): ID do usuário dono dos contatos
  *   - min (obrigatório): tempo mínimo em minutos desde a última mensagem
+ *   - follow_number (opcional): filtrar por número de follow-up (0, 1 ou 2)
  */
 serve(async (req) => {
     if (req.method === 'OPTIONS') {
@@ -26,6 +27,7 @@ serve(async (req) => {
         const body = await req.json();
         const userId = body.user_id;
         const minParam = body.min;
+        const followNumber = body.follow_number !== undefined ? Number(body.follow_number) : null;
 
         if (!userId) {
             return new Response(
@@ -49,10 +51,15 @@ serve(async (req) => {
         );
 
         // Busca contatos pendentes usando query com timezone de São Paulo no retorno
-        const { data, error } = await supabase.rpc('get_followup_pending_contacts', {
+        const rpcParams: Record<string, any> = {
             p_user_id: userId,
             p_minutes: minutes,
-        });
+        };
+        if (followNumber !== null) {
+            rpcParams.p_follow_number = followNumber;
+        }
+
+        const { data, error } = await supabase.rpc('get_followup_pending_contacts', rpcParams);
 
         if (error) {
             console.error('[api-followup-pending] RPC error:', error);
