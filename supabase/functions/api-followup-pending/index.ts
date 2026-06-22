@@ -13,7 +13,7 @@ const corsHeaders = {
  * Filtros: ia_on = true, last_message = 'enviada',
  * last_message_time mais antiga que X minutos.
  *
- * Query params:
+ * Body (JSON):
  *   - user_id (obrigatório): ID do usuário dono dos contatos
  *   - min (obrigatório): tempo mínimo em minutos desde a última mensagem
  */
@@ -23,9 +23,9 @@ serve(async (req) => {
     }
 
     try {
-        const url = new URL(req.url);
-        const userId = url.searchParams.get('user_id');
-        const minParam = url.searchParams.get('min');
+        const body = await req.json();
+        const userId = body.user_id;
+        const minParam = body.min;
 
         if (!userId) {
             return new Response(
