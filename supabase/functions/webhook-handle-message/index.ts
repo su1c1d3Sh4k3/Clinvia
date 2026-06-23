@@ -1398,6 +1398,46 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
             }
         }
 
+        // ─── Appointment Confirmation intercept — BLOCK N8N ONLY ───
+        // DB trigger trg_appointment_confirmation_on_inbound handles response.
+        const _da_fromMe = payload.message?.fromMe === true || payload.fromMe === true;
+        if (!isGroup && contactId && !_da_fromMe && eventType === 'messages') {
+            try {
+                const { data: activeAcSession } = await supabase
+                    .from('appointment_confirmation_sessions')
+                    .select('id, state, conversation_id')
+                    .eq('contact_id', contactId)
+                    .not('state', 'in', '(completed,transferred,failed)')
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+
+                if (activeAcSession) {
+                    console.log(
+                        `[webhook-handle-message] Active appointment confirmation session ${activeAcSession.id} ` +
+                        `(state=${activeAcSession.state}) — blocking N8N forward; DB trigger will drive the flow`
+                    );
+
+                    const _ac_currentConvId = conversation?.id || null;
+                    if (_ac_currentConvId && activeAcSession.conversation_id !== _ac_currentConvId) {
+                        await supabase
+                            .from('appointment_confirmation_sessions')
+                            .update({ conversation_id: _ac_currentConvId })
+                            .eq('id', activeAcSession.id);
+                    }
+
+                    flushBackgroundTasks();
+                    return new Response(
+                        JSON.stringify({ success: true, routed: 'appointment_confirmation', path: 'db_trigger' }),
+                        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+                    );
+                }
+            } catch (interceptErr) {
+                console.error('[webhook-handle-message] appointment confirmation intercept error:', interceptErr);
+            }
+        }
+        // ─── End Appointment Confirmation intercept ───
+
         // ─── Delivery Automation intercept — BLOCK N8N ONLY ───
         // The actual response processing is handled by the DB trigger
         // `trg_delivery_automation_on_inbound` on messages INSERT (see migration
@@ -1409,7 +1449,6 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
         // Here we only: (1) re-point the session's conversation_id to the
         // current conversation if it drifted, (2) short-circuit this handler
         // so N8N does NOT receive the forward.
-        const _da_fromMe = payload.message?.fromMe === true || payload.fromMe === true;
         if (!isGroup && contactId && !_da_fromMe && eventType === 'messages') {
             try {
                 const { data: activeAutomationSession } = await supabase

@@ -196,3 +196,10 @@ verify_jwt = false
 
 [functions.scheduler-notifications]
 verify_jwt = false
+
+# Appointment Confirmation
+[functions.appointment-confirmation-cron]
+verify_jwt = false
+
+[functions.appointment-confirmation-respond]
+verify_jwt = false
