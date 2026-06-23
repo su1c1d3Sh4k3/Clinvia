@@ -96,7 +96,8 @@ async function processConfirm24h(ctx: CronContext): Promise<{ sent: number; erro
     const from = new Date(now.getTime() + 23 * 3600_000);
     const to = new Date(now.getTime() + 25 * 3600_000);
 
-    const { data: appointments } = await supabase
+    // Find appointments in the 24h window (trigger)
+    const { data: windowAppointments } = await supabase
         .from("appointments")
         .select("id, contact_id, start_time, service_name, professional_name")
         .eq("user_id", userId)
@@ -105,26 +106,47 @@ async function processConfirm24h(ctx: CronContext): Promise<{ sent: number; erro
         .gte("start_time", from.toISOString())
         .lte("start_time", to.toISOString());
 
-    if (!appointments?.length) return { sent: 0, errors: 0 };
+    if (!windowAppointments?.length) return { sent: 0, errors: 0 };
 
-    const groups = groupByContactAndDay(appointments);
+    // Get unique contact+day pairs from window hits
+    const contactDays = new Map<string, { contactId: string; dateBR: string }>();
+    for (const apt of windowAppointments) {
+        if (!apt.contact_id) continue;
+        const dateBR = utcToBrasiliaParts(new Date(apt.start_time)).ymd;
+        const key = `${apt.contact_id}__${dateBR}`;
+        if (!contactDays.has(key)) contactDays.set(key, { contactId: apt.contact_id, dateBR });
+    }
+
     let sent = 0, errors = 0;
 
-    for (const group of groups.values()) {
+    for (const { contactId, dateBR } of contactDays.values()) {
         try {
-            const contactId = group[0].contact_id;
-            if (!contactId) continue;
-
             // Check if already sent
-            const appointmentDate = group[0]._dateBR;
             const { data: existing } = await supabase
                 .from("appointment_confirmation_sessions")
                 .select("id")
                 .eq("contact_id", contactId)
                 .eq("flow_type", "confirm_24h")
-                .eq("appointment_date", appointmentDate)
+                .eq("appointment_date", dateBR)
                 .maybeSingle();
             if (existing) continue;
+
+            // Fetch ALL appointments for this contact on this day (not just window)
+            const dayStart = `${dateBR}T00:00:00-03:00`;
+            const dayEnd = `${dateBR}T23:59:59-03:00`;
+            const { data: allDayAppointments } = await supabase
+                .from("appointments")
+                .select("id, contact_id, start_time, service_name, professional_name")
+                .eq("user_id", userId)
+                .eq("contact_id", contactId)
+                .eq("type", "appointment")
+                .in("status", ["pending", "confirmed", "rescheduled"])
+                .gte("start_time", dayStart)
+                .lte("start_time", dayEnd)
+                .order("start_time", { ascending: true });
+
+            const group = (allDayAppointments || []).map((a: any) => ({ ...a, _dateBR: dateBR }));
+            if (!group.length) continue;
 
             const { data: contact } = await supabase
                 .from("contacts")
@@ -175,7 +197,7 @@ async function processConfirm24h(ctx: CronContext): Promise<{ sent: number; erro
                 conversation_id: conversationId,
                 instance_id: ctx.instance.id,
                 appointment_ids: group.map((a: any) => a.id),
-                appointment_date: appointmentDate,
+                appointment_date: dateBR,
                 flow_type: "confirm_24h",
                 state: "awaiting_confirmation",
                 last_prompt_message_id: sendRes.messageId,
@@ -201,7 +223,7 @@ async function processReminder2h(ctx: CronContext): Promise<{ sent: number; erro
     const from = new Date(now.getTime() + 110 * 60_000); // 1h50m
     const to = new Date(now.getTime() + 130 * 60_000);   // 2h10m
 
-    const { data: appointments } = await supabase
+    const { data: windowAppointments } = await supabase
         .from("appointments")
         .select("id, contact_id, start_time, service_name, professional_name")
         .eq("user_id", userId)
@@ -210,25 +232,45 @@ async function processReminder2h(ctx: CronContext): Promise<{ sent: number; erro
         .gte("start_time", from.toISOString())
         .lte("start_time", to.toISOString());
 
-    if (!appointments?.length) return { sent: 0, errors: 0 };
+    if (!windowAppointments?.length) return { sent: 0, errors: 0 };
 
-    const groups = groupByContactAndDay(appointments);
+    const contactDays = new Map<string, { contactId: string; dateBR: string }>();
+    for (const apt of windowAppointments) {
+        if (!apt.contact_id) continue;
+        const dateBR = utcToBrasiliaParts(new Date(apt.start_time)).ymd;
+        const key = `${apt.contact_id}__${dateBR}`;
+        if (!contactDays.has(key)) contactDays.set(key, { contactId: apt.contact_id, dateBR });
+    }
+
     let sent = 0, errors = 0;
 
-    for (const group of groups.values()) {
+    for (const { contactId, dateBR } of contactDays.values()) {
         try {
-            const contactId = group[0].contact_id;
-            if (!contactId) continue;
-
-            const appointmentDate = group[0]._dateBR;
             const { data: existing } = await supabase
                 .from("appointment_confirmation_sessions")
                 .select("id")
                 .eq("contact_id", contactId)
                 .eq("flow_type", "reminder_2h")
-                .eq("appointment_date", appointmentDate)
+                .eq("appointment_date", dateBR)
                 .maybeSingle();
             if (existing) continue;
+
+            // Fetch ALL appointments for this contact on this day
+            const dayStart = `${dateBR}T00:00:00-03:00`;
+            const dayEnd = `${dateBR}T23:59:59-03:00`;
+            const { data: allDayAppointments } = await supabase
+                .from("appointments")
+                .select("id, contact_id, start_time, service_name, professional_name")
+                .eq("user_id", userId)
+                .eq("contact_id", contactId)
+                .eq("type", "appointment")
+                .in("status", ["pending", "confirmed", "rescheduled"])
+                .gte("start_time", dayStart)
+                .lte("start_time", dayEnd)
+                .order("start_time", { ascending: true });
+
+            const group = (allDayAppointments || []).map((a: any) => ({ ...a, _dateBR: dateBR }));
+            if (!group.length) continue;
 
             const { data: contact } = await supabase
                 .from("contacts")
@@ -258,7 +300,7 @@ async function processReminder2h(ctx: CronContext): Promise<{ sent: number; erro
                 conversation_id: conversationId,
                 instance_id: ctx.instance.id,
                 appointment_ids: group.map((a: any) => a.id),
-                appointment_date: appointmentDate,
+                appointment_date: dateBR,
                 flow_type: "reminder_2h",
                 state: "completed",
                 ended_at: new Date().toISOString(),
@@ -284,7 +326,7 @@ async function processFeedback24h(ctx: CronContext): Promise<{ sent: number; err
     const from = new Date(now.getTime() - 25 * 3600_000);
     const to = new Date(now.getTime() - 23 * 3600_000);
 
-    const { data: appointments } = await supabase
+    const { data: windowAppointments } = await supabase
         .from("appointments")
         .select("id, contact_id, start_time, end_time, status, service_name, professional_name")
         .eq("user_id", userId)
@@ -293,10 +335,10 @@ async function processFeedback24h(ctx: CronContext): Promise<{ sent: number; err
         .gte("end_time", from.toISOString())
         .lte("end_time", to.toISOString());
 
-    if (!appointments?.length) return { sent: 0, errors: 0 };
+    if (!windowAppointments?.length) return { sent: 0, errors: 0 };
 
-    // Update confirmed → completed (finalizado)
-    for (const apt of appointments) {
+    // Update confirmed → completed for ALL found
+    for (const apt of windowAppointments) {
         if (apt.status === "confirmed") {
             await supabase.from("appointments")
                 .update({ status: "completed" })
@@ -304,23 +346,52 @@ async function processFeedback24h(ctx: CronContext): Promise<{ sent: number; err
         }
     }
 
-    const groups = groupByContactAndDay(appointments);
+    const contactDays = new Map<string, { contactId: string; dateBR: string }>();
+    for (const apt of windowAppointments) {
+        if (!apt.contact_id) continue;
+        const dateBR = utcToBrasiliaParts(new Date(apt.start_time)).ymd;
+        const key = `${apt.contact_id}__${dateBR}`;
+        if (!contactDays.has(key)) contactDays.set(key, { contactId: apt.contact_id, dateBR });
+    }
+
     let sent = 0, errors = 0;
 
-    for (const group of groups.values()) {
+    for (const { contactId, dateBR } of contactDays.values()) {
         try {
-            const contactId = group[0].contact_id;
-            if (!contactId) continue;
-
-            const appointmentDate = group[0]._dateBR;
             const { data: existing } = await supabase
                 .from("appointment_confirmation_sessions")
                 .select("id")
                 .eq("contact_id", contactId)
                 .eq("flow_type", "feedback_24h")
-                .eq("appointment_date", appointmentDate)
+                .eq("appointment_date", dateBR)
                 .maybeSingle();
             if (existing) continue;
+
+            // Fetch ALL appointments for this contact on this day and mark completed
+            const dayStart = `${dateBR}T00:00:00-03:00`;
+            const dayEnd = `${dateBR}T23:59:59-03:00`;
+            const { data: allDayAppointments } = await supabase
+                .from("appointments")
+                .select("id, contact_id, start_time, end_time, status, service_name, professional_name")
+                .eq("user_id", userId)
+                .eq("contact_id", contactId)
+                .eq("type", "appointment")
+                .in("status", ["confirmed", "completed"])
+                .gte("start_time", dayStart)
+                .lte("start_time", dayEnd)
+                .order("start_time", { ascending: true });
+
+            const group = (allDayAppointments || []).map((a: any) => ({ ...a, _dateBR: dateBR }));
+            if (!group.length) continue;
+
+            // Also mark any remaining confirmed as completed
+            for (const apt of group) {
+                if (apt.status === "confirmed") {
+                    await supabase.from("appointments")
+                        .update({ status: "completed" })
+                        .eq("id", apt.id);
+                }
+            }
 
             const { data: contact } = await supabase
                 .from("contacts")
@@ -360,7 +431,7 @@ async function processFeedback24h(ctx: CronContext): Promise<{ sent: number; err
                 conversation_id: conversationId,
                 instance_id: ctx.instance.id,
                 appointment_ids: group.map((a: any) => a.id),
-                appointment_date: appointmentDate,
+                appointment_date: dateBR,
                 flow_type: "feedback_24h",
                 state: "awaiting_feedback_rating",
                 last_prompt_message_id: sendRes.messageId,
