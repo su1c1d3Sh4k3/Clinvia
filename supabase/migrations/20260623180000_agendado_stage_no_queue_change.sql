@@ -1,6 +1,6 @@
--- Fix: CRM stage "Agendado" should NOT move conversation queue to "Atendimento IA"
--- When appointment is confirmed and CRM moves to "Agendado", the queue must stay unchanged
--- (e.g. remain in "Pós-Venda" during the confirmation flow)
+-- Fix: Only 4 CRM stages should change conversation queue.
+-- All other stages (Agendado, Qualificado, Follow Up, Ganho, Perdido, etc.)
+-- must NEVER alter the current queue of the conversation.
 
 CREATE OR REPLACE FUNCTION sync_contact_ia_on_from_crm()
 RETURNS TRIGGER AS $$
@@ -9,6 +9,7 @@ DECLARE
   v_queue_name TEXT;
   v_queue_id UUID;
 BEGIN
+  -- Only these 4 stages change the conversation queue
   CASE NEW.stage
     WHEN 'Em Atendimento Humano' THEN
       v_ia_on := FALSE; v_queue_name := 'Atendimento Humano';
@@ -18,10 +19,13 @@ BEGIN
       v_ia_on := FALSE; v_queue_name := 'Financeiro';
     WHEN 'Pós-Venda' THEN
       v_ia_on := FALSE; v_queue_name := 'Pós-Venda';
-    WHEN 'Agendado' THEN
-      v_ia_on := FALSE; v_queue_name := NULL;
     ELSE
-      v_ia_on := TRUE; v_queue_name := 'Atendimento IA';
+      -- All other stages: update ia_on only, NEVER change queue
+      v_ia_on := CASE
+        WHEN NEW.stage IN ('Em Atendimento IA', 'Qualificado', 'Follow Up', 'Recorrencia', 'Sem Contato', 'Sem Interesse') THEN TRUE
+        ELSE FALSE
+      END;
+      v_queue_name := NULL;
   END CASE;
 
   IF OLD.stage IS DISTINCT FROM NEW.stage THEN
