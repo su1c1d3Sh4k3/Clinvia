@@ -157,19 +157,6 @@ async function processConfirm24h(ctx: CronContext): Promise<{ sent: number; erro
 
             const { conversationId } = await resolveConversation(supabase, userId, ctx.instance.id, contact);
 
-            // Move queue to Pós-Venda
-            const { data: pvQueue } = await supabase
-                .from("queues")
-                .select("id")
-                .eq("user_id", userId)
-                .eq("name", "Pós-Venda")
-                .maybeSingle();
-            if (pvQueue?.id) {
-                await supabase.from("conversations")
-                    .update({ queue_id: pvQueue.id, updated_at: new Date().toISOString() })
-                    .eq("id", conversationId);
-            }
-
             const firstName = (contact.push_name || "").split(" ")[0] || "cliente";
             const msgText = buildConfirmMessage(firstName, group, ctx.clinicName);
 
@@ -190,6 +177,31 @@ async function processConfirm24h(ctx: CronContext): Promise<{ sent: number; erro
                 trackSource: "appointment_confirmation",
                 trackId: `confirm_24h:${contactId}`,
             });
+
+            // Move CRM to Pós-Venda stage (trigger syncs queue automatically)
+            await supabase
+                .from("crm_client")
+                .update({
+                    stage: "Pós-Venda",
+                    stage_changed_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                })
+                .eq("contact_id", contactId)
+                .eq("user_id", userId)
+                .eq("is_active", true);
+
+            // Also explicitly move queue (in case no CRM card exists)
+            const { data: pvQueue } = await supabase
+                .from("queues")
+                .select("id")
+                .eq("user_id", userId)
+                .eq("name", "Pós-Venda")
+                .maybeSingle();
+            if (pvQueue?.id) {
+                await supabase.from("conversations")
+                    .update({ queue_id: pvQueue.id, updated_at: new Date().toISOString() })
+                    .eq("id", conversationId);
+            }
 
             await supabase.from("appointment_confirmation_sessions").insert({
                 user_id: userId,
