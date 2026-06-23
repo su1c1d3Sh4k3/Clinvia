@@ -23,7 +23,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Building2, Ban, Target, HelpCircle, Settings, Plus, Trash2, Loader2, Play, Heart, FlaskConical, X, Phone } from "lucide-react";
+import { Building2, HelpCircle, Settings, Plus, Trash2, Loader2, Play, FlaskConical, X, Phone } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { BiaWizard } from "@/components/ia-wizard/BiaWizard";
 import { BiaWizardTrigger } from "@/components/ia-wizard/BiaWizardTrigger";
@@ -428,10 +428,7 @@ export default function IAConfig() {
             const payload = {
                 ...data,
                 user_id: ownerId,
-                restrictions: formatRestrictions(),
-                qualify: formatProductItems(qualifyItems),
                 frequent_questions: formatProductItems(faqItems, companyFaq),
-                convenio: formatConvenioItems(),
             };
 
             const { data: result, error } = await supabase
@@ -797,26 +794,14 @@ export default function IAConfig() {
             </div>
 
             <Tabs defaultValue="company" className="w-full">
-                <TabsList className="grid w-full grid-cols-6 mb-4 md:mb-8 h-auto">
+                <TabsList className="grid w-full grid-cols-3 mb-4 md:mb-8 h-auto">
                     <TabsTrigger value="company" className="flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
                         <Building2 className="h-4 w-4" />
                         <span className="hidden sm:inline">Empresa</span>
                     </TabsTrigger>
-                    <TabsTrigger value="restrictions" className="flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
-                        <Ban className="h-4 w-4" />
-                        <span className="hidden sm:inline">Restrições</span>
-                    </TabsTrigger>
-                    <TabsTrigger value="qualify" className="flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
-                        <Target className="h-4 w-4" />
-                        <span className="hidden sm:inline">Qualificação</span>
-                    </TabsTrigger>
                     <TabsTrigger value="faq" className="flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
                         <HelpCircle className="h-4 w-4" />
                         <span className="hidden sm:inline">F.A.Q</span>
-                    </TabsTrigger>
-                    <TabsTrigger value="convenio" className="flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
-                        <Heart className="h-4 w-4" />
-                        <span className="hidden sm:inline">Convênio</span>
                     </TabsTrigger>
                     <TabsTrigger value="settings" className="flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
                         <Settings className="h-4 w-4" />
@@ -964,118 +949,6 @@ export default function IAConfig() {
                     </Card>
                 </TabsContent>
 
-                {/* Aba: Restrições */}
-                <TabsContent value="restrictions">
-                    <Card>
-                        <CardHeader className="p-4 md:p-6">
-                            <CardTitle className="text-base md:text-lg">Restrições</CardTitle>
-                            <CardDescription className="text-xs md:text-sm">
-                                O que a IA NÃO deve fazer.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="p-4 md:p-6 pt-0 md:pt-0 space-y-4">
-                            {restrictions.map((restriction) => (
-                                <div key={restriction.id} className="flex items-center gap-2">
-                                    <Input
-                                        value={restriction.text}
-                                        onChange={(e) => updateRestriction(restriction.id, e.target.value)}
-                                        placeholder="Não deve informar preços sem consultar a tabela..."
-                                    />
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => removeRestriction(restriction.id)}
-                                        className="text-destructive hover:text-destructive"
-                                    >
-                                        <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                </div>
-                            ))}
-
-                            <Button variant="outline" onClick={addRestriction} className="w-full">
-                                <Plus className="mr-2 h-4 w-4" />
-                                Adicionar Restrição
-                            </Button>
-
-                            <div className="flex justify-end pt-4">
-                                <Button onClick={handleSave} disabled={saveMutation.isPending}>
-                                    {saveMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                    Salvar
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-
-                {/* Aba: Qualificação */}
-                <TabsContent value="qualify">
-                    <Card>
-                        <CardHeader className="p-4 md:p-6">
-                            <CardTitle className="text-base md:text-lg">Qualificação</CardTitle>
-                            <CardDescription className="text-xs md:text-sm">
-                                Perguntas para classificar leads.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="p-4 md:p-6 pt-0 md:pt-0 space-y-4 md:space-y-6">
-                            {qualifyItems.map((item, index) => (
-                                <div key={index} className="relative border rounded-lg p-4 space-y-4">
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => removeQualifyItem(index)}
-                                        className="absolute top-2 right-2 text-destructive hover:text-destructive"
-                                    >
-                                        <Trash2 className="h-4 w-4" />
-                                    </Button>
-
-                                    <div className="space-y-2 pr-10">
-                                        <Label>Produto/Serviço</Label>
-                                        <Select
-                                            value={item.productId}
-                                            onValueChange={(value) => updateQualifyItem(index, "productId", value)}
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Selecione um produto ou serviço" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {productsServices?.map((ps) => (
-                                                    <SelectItem key={ps.id} value={ps.id}>
-                                                        {ps.name} ({ps.type === "product" ? "Produto" : "Serviço"})
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-
-                                    {(item.productId || item.productName) && (
-                                        <div className="space-y-2">
-                                            <Label>Fluxo de qualificação</Label>
-                                            <Textarea
-                                                value={item.text}
-                                                onChange={(e) => updateQualifyItem(index, "text", e.target.value)}
-                                                placeholder="Defina as perguntas e critérios de qualificação para este item..."
-                                                rows={4}
-                                            />
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
-
-                            <Button variant="outline" onClick={addQualifyItem} className="w-full">
-                                <Plus className="mr-2 h-4 w-4" />
-                                Adicionar outro fluxo
-                            </Button>
-
-                            <div className="flex justify-end pt-4">
-                                <Button onClick={handleSave} disabled={saveMutation.isPending}>
-                                    {saveMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                    Salvar
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-
                 {/* Aba: F.A.Q */}
                 <TabsContent value="faq">
                     <Card>
@@ -1152,90 +1025,6 @@ export default function IAConfig() {
                                 {faqItems.length === 0
                                     ? "Adicionar F.A.Q sobre um Produto/Serviço"
                                     : "Adicionar outro F.A.Q sobre um Produto/Serviço"}
-                            </Button>
-
-                            <div className="flex justify-end pt-4">
-                                <Button onClick={handleSave} disabled={saveMutation.isPending}>
-                                    {saveMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                    Salvar
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-
-                {/* Aba: Convênio */}
-                <TabsContent value="convenio">
-                    <Card>
-                        <CardHeader className="p-4 md:p-6">
-                            <CardTitle className="text-base md:text-lg">Convênios</CardTitle>
-                            <CardDescription className="text-xs md:text-sm">
-                                Cadastre os convênios aceitos e seus valores.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="p-4 md:p-6 pt-0 md:pt-0 space-y-4 md:space-y-6">
-                            {convenioItems.map((item, index) => (
-                                <div key={item.id} className="relative border rounded-lg p-4 space-y-4">
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => removeConvenioItem(index)}
-                                        className="absolute top-2 right-2 text-destructive hover:text-destructive"
-                                    >
-                                        <Trash2 className="h-4 w-4" />
-                                    </Button>
-
-                                    {/* Nome do Convênio */}
-                                    <div className="space-y-2 pr-10">
-                                        <Label>Nome do Convênio</Label>
-                                        <Input
-                                            value={item.nome}
-                                            onChange={(e) => updateConvenioItem(index, "nome", e.target.value)}
-                                            placeholder="Ex: Unimed, Bradesco Saúde..."
-                                        />
-                                    </div>
-
-                                    {/* Valores */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <Label>Valor da Primeira Consulta</Label>
-                                            <Input
-                                                value={item.valorPrimeira}
-                                                onChange={(e) => handleCurrencyChange(index, "valorPrimeira", e.target.value)}
-                                                placeholder="R$ 0,00"
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label>Valor das Demais Consultas</Label>
-                                            <Input
-                                                value={item.valorDemais}
-                                                onChange={(e) => handleCurrencyChange(index, "valorDemais", e.target.value)}
-                                                placeholder="R$ 0,00"
-                                            />
-                                        </div>
-                                    </div>
-
-                                    {/* Previsão de Vaga */}
-                                    <div className="space-y-2">
-                                        <Label>Previsão de Vaga (em dias)</Label>
-                                        <Input
-                                            type="number"
-                                            min={1}
-                                            max={365}
-                                            value={item.previsaoDias || ""}
-                                            onChange={(e) => updateConvenioItem(index, "previsaoDias", parseInt(e.target.value) || 0)}
-                                            placeholder="Ex: 15"
-                                            className="w-full md:w-32"
-                                        />
-                                    </div>
-                                </div>
-                            ))}
-
-                            <Button variant="outline" onClick={addConvenioItem} className="w-full">
-                                <Plus className="mr-2 h-4 w-4" />
-                                {convenioItems.length === 0
-                                    ? "Adicionar Convênio"
-                                    : "Adicionar outro Convênio"}
                             </Button>
 
                             <div className="flex justify-end pt-4">
@@ -1417,190 +1206,6 @@ export default function IAConfig() {
                                     )}
                                 </div>
                             )}
-
-                            {/* Delay de Resposta */}
-                            <div className="space-y-2 p-3 md:p-4 border rounded-lg">
-                                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-                                    <div className="space-y-0.5">
-                                        <h4 className="font-medium text-sm md:text-base">Delay (segundos)</h4>
-                                        <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">
-                                            Tempo antes de responder.
-                                        </p>
-                                    </div>
-                                    <Input
-                                        type="number"
-                                        min={15}
-                                        max={120}
-                                        value={config.delay}
-                                        onChange={(e) => setConfig({ ...config, delay: parseInt(e.target.value) || 15 })}
-                                        className="w-full md:w-32"
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Follow Up */}
-                            <div className="space-y-3 md:space-y-4 p-3 md:p-4 border rounded-lg">
-                                <div className="flex items-center justify-between gap-3">
-                                    <div className="space-y-0.5">
-                                        <h4 className="font-medium text-sm md:text-base">Follow Up</h4>
-                                        <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">
-                                            Retomar contato após tempo definido.
-                                        </p>
-                                    </div>
-                                    <Switch
-                                        checked={config.followup}
-                                        onCheckedChange={(checked) => setConfig({ ...config, followup: checked })}
-                                    />
-                                </div>
-
-                                {config.followup && (
-                                    <div className="space-y-4 pl-4 border-l-2 border-primary/30">
-                                        {/* Follow Up 1 */}
-                                        <div className="space-y-2">
-                                            <div className="flex items-center gap-4">
-                                                <Switch
-                                                    checked={config.fup1}
-                                                    onCheckedChange={(checked) => setConfig({ ...config, fup1: checked })}
-                                                />
-                                                <span className="font-medium">Follow Up 1</span>
-                                            </div>
-                                            {config.fup1 && (
-                                                <div className="space-y-2 pl-10">
-                                                    <div className="flex items-center gap-2">
-                                                        <Label>Minutos:</Label>
-                                                        <Input
-                                                            type="number"
-                                                            min={10}
-                                                            value={config.fup1_time}
-                                                            onChange={(e) => setConfig({ ...config, fup1_time: parseInt(e.target.value) || 60 })}
-                                                            className="w-24"
-                                                        />
-                                                    </div>
-                                                    <div className="space-y-1">
-                                                        <Label>Mensagem:</Label>
-                                                        <Textarea
-                                                            value={config.fup1_message}
-                                                            onChange={(e) => setConfig({ ...config, fup1_message: e.target.value })}
-                                                            placeholder="Olá! Vi que você não respondeu ainda, posso ajudar?"
-                                                            rows={2}
-                                                        />
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* Follow Up 2 */}
-                                        <div className="space-y-2">
-                                            <div className="flex items-center gap-4">
-                                                <Switch
-                                                    checked={config.fup2}
-                                                    onCheckedChange={(checked) => setConfig({ ...config, fup2: checked })}
-                                                />
-                                                <span className="font-medium">Follow Up 2</span>
-                                            </div>
-                                            {config.fup2 && (
-                                                <div className="space-y-2 pl-10">
-                                                    <div className="flex items-center gap-2">
-                                                        <Label>Minutos:</Label>
-                                                        <Input
-                                                            type="number"
-                                                            min={10}
-                                                            value={config.fup2_time}
-                                                            onChange={(e) => setConfig({ ...config, fup2_time: parseInt(e.target.value) || 120 })}
-                                                            className="w-24"
-                                                        />
-                                                    </div>
-                                                    <div className="space-y-1">
-                                                        <Label>Mensagem:</Label>
-                                                        <Textarea
-                                                            value={config.fup2_message}
-                                                            onChange={(e) => setConfig({ ...config, fup2_message: e.target.value })}
-                                                            placeholder="Oi! Ainda estou aqui caso precise de algo."
-                                                            rows={2}
-                                                        />
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* Follow Up 3 */}
-                                        <div className="space-y-2">
-                                            <div className="flex items-center gap-4">
-                                                <Switch
-                                                    checked={config.fup3}
-                                                    onCheckedChange={(checked) => setConfig({ ...config, fup3: checked })}
-                                                />
-                                                <span className="font-medium">Follow Up 3</span>
-                                            </div>
-                                            {config.fup3 && (
-                                                <div className="space-y-2 pl-10">
-                                                    <div className="flex items-center gap-2">
-                                                        <Label>Minutos:</Label>
-                                                        <Input
-                                                            type="number"
-                                                            min={10}
-                                                            value={config.fup3_time}
-                                                            onChange={(e) => setConfig({ ...config, fup3_time: parseInt(e.target.value) || 180 })}
-                                                            className="w-24"
-                                                        />
-                                                    </div>
-                                                    <div className="space-y-1">
-                                                        <Label>Mensagem:</Label>
-                                                        <Textarea
-                                                            value={config.fup3_message}
-                                                            onChange={(e) => setConfig({ ...config, fup3_message: e.target.value })}
-                                                            placeholder="Última tentativa! Qualquer dúvida é só chamar."
-                                                            rows={2}
-                                                        />
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* CRM Auto */}
-                            <div className="flex items-center justify-between p-3 md:p-4 border rounded-lg gap-3">
-                                <div className="space-y-0.5">
-                                    <h4 className="font-medium text-sm md:text-base">CRM Automático</h4>
-                                    <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">
-                                        Clientes cadastrados automaticamente.
-                                    </p>
-                                </div>
-                                <Switch
-                                    checked={config.crm_auto}
-                                    onCheckedChange={handleCrmAutoChange}
-                                />
-                            </div>
-
-                            {/* Agendamento */}
-                            <div className="flex items-center justify-between p-3 md:p-4 border rounded-lg gap-3">
-                                <div className="space-y-0.5">
-                                    <h4 className="font-medium text-sm md:text-base">Agendamento</h4>
-                                    <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">
-                                        IA prioriza agendar horários.
-                                    </p>
-                                </div>
-                                <Switch
-                                    checked={config.scheduling_on}
-                                    onCheckedChange={(checked) => setConfig({ ...config, scheduling_on: checked })}
-                                />
-                            </div>
-
-                            {/* Follow Up horário comercial */}
-                            <div className="flex items-center justify-between p-3 md:p-4 border rounded-lg gap-3">
-                                <div className="space-y-0.5">
-                                    <h4 className="font-medium text-sm md:text-base">Follow Up comercial</h4>
-                                    <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">
-                                        Só entre 7h e 18h.
-                                    </p>
-                                </div>
-                                <Switch
-                                    checked={config.followup_business_hours}
-                                    onCheckedChange={(checked) => setConfig({ ...config, followup_business_hours: checked })}
-                                />
-                            </div>
 
                             {/* Responder Áudios por IA */}
                             <div className="space-y-3 md:space-y-4 p-3 md:p-4 border rounded-lg">

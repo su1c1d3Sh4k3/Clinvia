@@ -14,11 +14,8 @@ import { STEP_ORDER, STEP_LABELS } from './bia-messages';
 
 import { StepEmpresaInfo } from './steps/StepEmpresaInfo';
 import { StepEmpresaSobre } from './steps/StepEmpresaSobre';
-import { StepRestricoes } from './steps/StepRestricoes';
-import { StepQualificacao } from './steps/StepQualificacao';
 import { StepFaqEmpresa } from './steps/StepFaqEmpresa';
 import { StepFaqProdutos } from './steps/StepFaqProdutos';
-import { StepConvenios } from './steps/StepConvenios';
 import { StepConfiguracoes } from './steps/StepConfiguracoes';
 import { StepResumo } from './steps/StepResumo';
 
@@ -33,10 +30,7 @@ interface ExistingConfig {
   description?: string;
   opening_hours?: string;
   payment?: string;
-  restrictions?: string;
-  qualify?: string;
   frequent_questions?: string;
-  convenio?: string;
   scheduling_on?: boolean;
 }
 
@@ -65,16 +59,10 @@ function renderStep(stepId: WizardStepId, props: StepRendererProps) {
       return <StepEmpresaInfo state={state} updateField={updateField} />;
     case 'empresa-sobre':
       return <StepEmpresaSobre state={state} updateField={updateField} />;
-    case 'restricoes':
-      return <StepRestricoes state={state} updateField={updateField} />;
-    case 'qualificacao':
-      return <StepQualificacao state={state} updateField={updateField} productsServices={productsServices} />;
     case 'faq-empresa':
       return <StepFaqEmpresa state={state} updateField={updateField} />;
     case 'faq-produtos':
       return <StepFaqProdutos state={state} updateField={updateField} productsServices={productsServices} />;
-    case 'convenios':
-      return <StepConvenios state={state} updateField={updateField} />;
     case 'configuracoes':
       return <StepConfiguracoes state={state} updateField={updateField} />;
     case 'resumo':

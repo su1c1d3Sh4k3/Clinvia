@@ -1,4 +1,4 @@
-import { Pencil, Loader2, CheckCircle2, Building2, Ban, Target, HelpCircle, Heart, Settings, Calendar } from 'lucide-react';
+import { Pencil, Loader2, CheckCircle2, Building2, HelpCircle, Settings, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WizardState, WizardStepId } from '../wizard-state';
 
@@ -59,11 +59,8 @@ function Row({ label, value }: { label: string; value: string }) {
 export function StepResumo({ state, onGoToStep, onSave, isSaving }: StepProps) {
   const hasEmpresa = state.name || state.agent_name;
   const hasSobre = state.description || state.opening_hours || state.payment;
-  const hasRestricoes = state.restrictions.filter(r => r.text).length > 0;
-  const hasQualify = state.qualifyItems.filter(q => q.productName && q.text).length > 0;
   const hasFaqEmpresa = !!state.companyFaq.trim();
   const hasFaqProdutos = state.faqItems.filter(f => f.productName && f.text).length > 0;
-  const hasConvenios = state.convenioItems.filter(c => c.nome).length > 0;
 
   return (
     <div className="space-y-3">
@@ -108,44 +105,6 @@ export function StepResumo({ state, onGoToStep, onSave, isSaving }: StepProps) {
         </div>
       </ResumoSection>
 
-      {/* Restrições */}
-      <ResumoSection
-        title="Restrições"
-        icon={<Ban className="w-4 h-4" />}
-        stepId="restricoes"
-        onEdit={onGoToStep}
-        isEmpty={!hasRestricoes}
-        emptyLabel="Nenhuma restrição cadastrada"
-      >
-        <ul className="space-y-1">
-          {state.restrictions.filter(r => r.text).map(r => (
-            <li key={r.id} className="flex items-start gap-2 text-xs text-white/80">
-              <span className="text-violet-400 mt-0.5">•</span>
-              {r.text}
-            </li>
-          ))}
-        </ul>
-      </ResumoSection>
-
-      {/* Qualificação */}
-      <ResumoSection
-        title="Qualificação"
-        icon={<Target className="w-4 h-4" />}
-        stepId="qualificacao"
-        onEdit={onGoToStep}
-        isEmpty={!hasQualify}
-        emptyLabel="Nenhum fluxo de qualificação cadastrado"
-      >
-        <div className="space-y-2">
-          {state.qualifyItems.filter(q => q.productName && q.text).map((q, i) => (
-            <div key={i} className="text-xs">
-              <span className="text-violet-300 font-medium">{q.productName}</span>
-              <p className="text-white/60 mt-0.5 line-clamp-2">{q.text}</p>
-            </div>
-          ))}
-        </div>
-      </ResumoSection>
-
       {/* FAQ Empresa */}
       <ResumoSection
         title="FAQ da Empresa"
@@ -172,27 +131,6 @@ export function StepResumo({ state, onGoToStep, onSave, isSaving }: StepProps) {
             <div key={i} className="text-xs">
               <span className="text-violet-300 font-medium">{f.productName}</span>
               <p className="text-white/60 mt-0.5 line-clamp-2">{f.text}</p>
-            </div>
-          ))}
-        </div>
-      </ResumoSection>
-
-      {/* Convênios */}
-      <ResumoSection
-        title="Convênios"
-        icon={<Heart className="w-4 h-4" />}
-        stepId="convenios"
-        onEdit={onGoToStep}
-        isEmpty={!hasConvenios}
-        emptyLabel="Nenhum convênio cadastrado"
-      >
-        <div className="space-y-2">
-          {state.convenioItems.filter(c => c.nome).map((c, i) => (
-            <div key={i} className="text-xs space-y-0.5">
-              <p className="font-medium text-violet-300">{c.nome}</p>
-              {c.valorPrimeira && <p className="text-white/60">1ª Consulta: {c.valorPrimeira}</p>}
-              {c.valorDemais && <p className="text-white/60">Demais: {c.valorDemais}</p>}
-              <p className="text-white/60">Previsão: {c.previsaoDias} dias</p>
             </div>
           ))}
         </div>
