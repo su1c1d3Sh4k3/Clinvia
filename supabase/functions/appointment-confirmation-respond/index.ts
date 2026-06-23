@@ -187,6 +187,9 @@ async function handleAwaitingConfirmation(
                 .eq("id", aptId);
         }
 
+        // Keep CRM at Pós-Venda (api-scheduling or frontend may reset to Agendado)
+        await forceQueuePosVenda(ctx);
+
         await send(ctx, `Perfeito ${firstName}, amanhã uma hora antes eu entro em contato para te lembrar do atendimento. Muito obrigado estamos te aguardando!`);
         await markSession(supabase, session.id, {
             state: "completed",
@@ -405,6 +408,9 @@ async function moveCrmToStage(ctx: SessionContext, stage: string, lossReason?: s
         .eq("contact_id", ctx.session.contact_id)
         .eq("user_id", ctx.session.user_id)
         .eq("is_active", true);
+
+    // Re-force queue to Pós-Venda after CRM change (trigger may reset it)
+    await forceQueuePosVenda(ctx);
 }
 
 async function moveCrmGanhoOrFinalizado(ctx: SessionContext) {
@@ -417,6 +423,13 @@ async function moveCrmGanhoOrFinalizado(ctx: SessionContext) {
         .maybeSingle();
 
     if (!crmCard) return;
+
+    // Resolve conversation BEFORE moving CRM to terminal stage
+    // (trigger only affects status IN pending/open, so resolved is safe)
+    await ctx.supabase
+        .from("conversations")
+        .update({ status: "resolved", updated_at: new Date().toISOString() })
+        .eq("id", ctx.session.conversation_id);
 
     const newStage = crmCard.stage === "Ganho" ? "Finalizado" : "Ganho";
     await ctx.supabase
@@ -444,6 +457,22 @@ async function moveConversationToQueue(ctx: SessionContext, queueName: string) {
                 queue_id: queue.id,
                 updated_at: new Date().toISOString(),
             })
+            .eq("id", ctx.session.conversation_id);
+    }
+}
+
+/** Force conversation queue to Pós-Venda — used after CRM changes that trigger sync */
+async function forceQueuePosVenda(ctx: SessionContext) {
+    const { data: pvQueue } = await ctx.supabase
+        .from("queues")
+        .select("id")
+        .eq("user_id", ctx.session.user_id)
+        .eq("name", "Pós-Venda")
+        .maybeSingle();
+    if (pvQueue?.id) {
+        await ctx.supabase
+            .from("conversations")
+            .update({ queue_id: pvQueue.id, updated_at: new Date().toISOString() })
             .eq("id", ctx.session.conversation_id);
     }
 }
