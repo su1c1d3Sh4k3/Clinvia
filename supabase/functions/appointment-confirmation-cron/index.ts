@@ -343,15 +343,15 @@ async function processFeedback24h(ctx: CronContext): Promise<{ sent: number; err
         .select("id, contact_id, start_time, end_time, status, service_name, professional_name")
         .eq("user_id", userId)
         .eq("type", "appointment")
-        .in("status", ["confirmed", "completed"])
+        .in("status", ["confirmed", "completed", "waiting"])
         .gte("end_time", from.toISOString())
         .lte("end_time", to.toISOString());
 
     if (!windowAppointments?.length) return { sent: 0, errors: 0 };
 
-    // Update confirmed → completed for ALL found
+    // Update confirmed/waiting → completed for ALL found
     for (const apt of windowAppointments) {
-        if (apt.status === "confirmed") {
+        if (apt.status === "confirmed" || apt.status === "waiting") {
             await supabase.from("appointments")
                 .update({ status: "completed" })
                 .eq("id", apt.id);
@@ -388,7 +388,7 @@ async function processFeedback24h(ctx: CronContext): Promise<{ sent: number; err
                 .eq("user_id", userId)
                 .eq("contact_id", contactId)
                 .eq("type", "appointment")
-                .in("status", ["confirmed", "completed"])
+                .in("status", ["confirmed", "completed", "waiting"])
                 .gte("start_time", dayStart)
                 .lte("start_time", dayEnd)
                 .order("start_time", { ascending: true });
@@ -396,9 +396,9 @@ async function processFeedback24h(ctx: CronContext): Promise<{ sent: number; err
             const group = (allDayAppointments || []).map((a: any) => ({ ...a, _dateBR: dateBR }));
             if (!group.length) continue;
 
-            // Also mark any remaining confirmed as completed
+            // Also mark any remaining confirmed/waiting as completed
             for (const apt of group) {
-                if (apt.status === "confirmed") {
+                if (apt.status === "confirmed" || apt.status === "waiting") {
                     await supabase.from("appointments")
                         .update({ status: "completed" })
                         .eq("id", apt.id);

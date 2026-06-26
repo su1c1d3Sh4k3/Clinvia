@@ -36,6 +36,7 @@ const CRM = React.lazy(() => import("./pages/CRM"));
 const Tasks = React.lazy(() => import("./pages/Tasks"));
 const ProductsServices = React.lazy(() => import("./pages/ProductsServices"));
 const Scheduling = React.lazy(() => import("./pages/Scheduling"));
+const Recurrence = React.lazy(() => import("./pages/Recurrence"));
 const IAConfig = React.lazy(() => import("./pages/IAConfig"));
 const Settings = React.lazy(() => import("./pages/Settings"));
 const Financial = React.lazy(() => import("./pages/Financial"));
@@ -168,6 +169,7 @@ const App = () => (
                   <Route path="/tasks" element={<Tasks />} />
                   <Route path="/products-services" element={<ProductsServices />} />
                   <Route path="/scheduling" element={<Scheduling />} />
+                  <Route path="/recurrence" element={<Recurrence />} />
                   <Route path="/ia-config" element={<IAConfig />} />
                   <Route path="/financial" element={<Financial />} />
                   <Route path="/sales" element={<Sales />} />
