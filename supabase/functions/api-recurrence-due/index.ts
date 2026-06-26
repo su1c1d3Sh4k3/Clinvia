@@ -66,18 +66,33 @@ serve(async (req) => {
 
         if (error) throw error;
 
-        // Enrich each entry with which approach is due today
-        const results = (data || []).map((entry: any) => {
-            const dueApproaches: string[] = [];
-            if (entry.approach_1_date === date) dueApproaches.push("approach_1");
-            if (entry.approach_2_date === date) dueApproaches.push("approach_2");
-            if (entry.approach_3_date === date) dueApproaches.push("approach_3");
+        // Build clean response: one entry per matching approach
+        const results: any[] = [];
+        for (const entry of data || []) {
+            const approaches = [
+                { field: "approach_1_date", date: entry.approach_1_date, status: entry.approach_1_status },
+                { field: "approach_2_date", date: entry.approach_2_date, status: entry.approach_2_status },
+                { field: "approach_3_date", date: entry.approach_3_date, status: entry.approach_3_status },
+            ];
 
-            return {
-                ...entry,
-                due_today: dueApproaches,
-            };
-        });
+            for (const match of approaches) {
+                if (match.date === date) {
+                    results.push({
+                        id: entry.id,
+                        contact_id: entry.contact_id,
+                        appointment_id: entry.appointment_id,
+                        service_client_id: entry.service_client_id,
+                        contact_name: entry.contact_name,
+                        service_name: entry.service_name,
+                        application_name: entry.application_name,
+                        procedure_date: entry.procedure_date,
+                        recurrence_date: entry.recurrence_date,
+                        approach: match.field,
+                        approach_status: match.status,
+                    });
+                }
+            }
+        }
 
         return json({ success: true, count: results.length, data: results });
     } catch (err: any) {
