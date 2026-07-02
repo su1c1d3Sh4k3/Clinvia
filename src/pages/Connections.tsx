@@ -46,35 +46,24 @@ const Connections = () => {
     // Meta Embedded Signup State
     const [isConnectingMeta, setIsConnectingMeta] = useState(false);
 
-    // WhatsApp Instances Query (UZAPI only)
-    const { data: instances, isLoading: loadingWhatsApp } = useQuery({
+    // All Instances Query — filter by provider in JS (provider column not in generated types)
+    const { data: allInstances, isLoading: loadingInstances } = useQuery({
         queryKey: ["instances"],
         queryFn: async () => {
             const { data, error } = await supabase
-                .from("instances" as any)
+                .from("instances")
                 .select("*")
-                .neq("provider", "meta")
                 .order("created_at", { ascending: false });
 
             if (error) throw error;
-            return data as any[];
+            return data;
         },
     });
 
-    // Meta Instances Query
-    const { data: metaInstances, isLoading: loadingMeta } = useQuery({
-        queryKey: ["meta-instances"],
-        queryFn: async () => {
-            const { data, error } = await supabase
-                .from("instances" as any)
-                .select("*")
-                .eq("provider", "meta")
-                .order("created_at", { ascending: false });
-
-            if (error) throw error;
-            return data as any[];
-        },
-    });
+    const instances = allInstances?.filter((i: any) => i.provider !== "meta") || [];
+    const metaInstances = allInstances?.filter((i: any) => i.provider === "meta") || [];
+    const loadingWhatsApp = loadingInstances;
+    const loadingMeta = loadingInstances;
 
     // Poll for connection status changes
     useEffect(() => {

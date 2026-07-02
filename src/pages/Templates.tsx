@@ -46,12 +46,12 @@ const Templates = () => {
         queryKey: ["meta-instances"],
         queryFn: async () => {
             const { data, error } = await supabase
-                .from("instances" as any)
+                .from("instances")
                 .select("*")
-                .eq("provider", "meta")
-                .eq("status", "connected");
+                .order("created_at", { ascending: false });
             if (error) throw error;
-            return data as any[];
+            // Filter in JS since 'provider' column isn't in generated types
+            return (data as any[]).filter((i: any) => i.provider === "meta" && i.status === "connected");
         },
     });
 
