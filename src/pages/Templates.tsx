@@ -192,19 +192,33 @@ const Templates = () => {
                 }];
             }
 
-            const { data, error } = await supabase.functions.invoke('meta-template-manage', {
-                body: {
-                    action: 'send',
-                    user_id: user.id,
-                    instance_id: activeInstance.id,
-                    to: number,
-                    template_name: selectedTemplate.name,
-                    template_language: selectedTemplate.language,
-                    template_components: templateComponents,
-                },
-            });
+            const payload = {
+                action: 'send',
+                user_id: user.id,
+                instance_id: activeInstance.id,
+                to: number,
+                template_name: selectedTemplate.name,
+                template_language: selectedTemplate.language,
+                template_components: templateComponents,
+            };
+            console.log('[Templates] Sending template:', JSON.stringify(payload));
 
-            if (error) throw error;
+            const response = await fetch(
+                `https://swfshqvvbohnahdyndch.supabase.co/functions/v1/meta-template-manage`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+                    },
+                    body: JSON.stringify(payload),
+                }
+            );
+
+            const data = await response.json();
+            console.log('[Templates] Response:', response.status, JSON.stringify(data));
+
+            if (!response.ok) throw new Error(data?.error || `HTTP ${response.status}`);
             if (!data?.success) throw new Error(data?.error || 'Falha ao enviar');
             return data;
         },
