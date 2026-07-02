@@ -37,16 +37,16 @@ serve(async (req) => {
         if (!user_id) throw new Error("Missing field: user_id");
         if (!instance_id) throw new Error("Missing field: instance_id");
 
-        // Get instance
+        // Get instance (service_role bypasses RLS, no need to filter by user_id)
         const { data: instance, error: instanceError } = await supabase
             .from("instances")
             .select("id, user_id, provider, meta_waba_id, meta_access_token, meta_phone_number_id")
             .eq("id", instance_id)
-            .eq("user_id", user_id)
             .eq("provider", "meta")
             .single();
 
         if (instanceError || !instance) {
+            console.error("[meta-template-manage] Instance lookup failed:", instanceError?.message, "instance_id:", instance_id);
             throw new Error("Meta instance not found");
         }
 
@@ -54,6 +54,9 @@ serve(async (req) => {
         if (!wabaId || !accessToken) {
             throw new Error("Meta credentials missing");
         }
+
+        // Use instance owner's user_id for DB operations
+        const ownerId = instance.user_id || user_id;
 
         // ── ACTION: list ──
         if (action === "list" || action === "sync") {
@@ -76,7 +79,7 @@ serve(async (req) => {
                     .from("message_templates")
                     .upsert(
                         {
-                            user_id,
+                            user_id: ownerId,
                             instance_id,
                             waba_id: wabaId,
                             name: tpl.name,
@@ -100,7 +103,6 @@ serve(async (req) => {
             const { data: localTemplates } = await supabase
                 .from("message_templates")
                 .select("*")
-                .eq("user_id", user_id)
                 .eq("instance_id", instance_id)
                 .order("created_at", { ascending: false });
 
@@ -158,7 +160,7 @@ serve(async (req) => {
             const { data: saved, error: saveError } = await supabase
                 .from("message_templates")
                 .insert({
-                    user_id,
+                    ownerId,
                     instance_id,
                     waba_id: wabaId,
                     name,
