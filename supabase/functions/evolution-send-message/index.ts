@@ -302,6 +302,27 @@ serve(async (req) => {
     }
 
     const instance = conversation.instance;
+
+    // ── Meta Cloud API routing ──
+    // If this instance uses Meta provider, redirect to meta-send-message
+    if (instance?.provider === 'meta') {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+      const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+      const metaResp = await fetch(`${supabaseUrl}/functions/v1/meta-send-message`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': req.headers.get('Authorization') || `Bearer ${serviceKey}`,
+        },
+        body: JSON.stringify({ ...reqData, conversationId }),
+      });
+      const metaBody = await metaResp.text();
+      return new Response(metaBody, {
+        status: metaResp.status,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     if (!instance || !instance.apikey) {
       throw new Error('Instance configuration missing');
     }

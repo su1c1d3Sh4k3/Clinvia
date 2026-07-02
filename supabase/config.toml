@@ -131,7 +131,18 @@ verify_jwt = false
 [functions.webhook-handle-status]
 verify_jwt = false
 
+# Meta WhatsApp Cloud API
+[functions.meta-webhook]
+verify_jwt = false
 
+[functions.meta-send-message]
+verify_jwt = false
+
+[functions.meta-embedded-signup]
+verify_jwt = false
+
+[functions.meta-template-manage]
+verify_jwt = false
 
 [functions.ia-workflow-webhook]
 verify_jwt = false
