@@ -274,27 +274,59 @@ const Connections = () => {
 
     // Load Facebook SDK
     useEffect(() => {
-        if (!META_APP_ID || document.getElementById('facebook-jssdk')) {
-            if ((window as any).FB) setMetaSdkLoaded(true);
+        if (!META_APP_ID) {
+            console.warn('[Meta SDK] META_APP_ID not configured');
             return;
         }
 
+        // If FB already loaded (e.g. from previous render)
+        if ((window as any).FB) {
+            console.log('[Meta SDK] FB already available');
+            setMetaSdkLoaded(true);
+            return;
+        }
+
+        // Set up callback before adding script
         (window as any).fbAsyncInit = function () {
+            console.log('[Meta SDK] fbAsyncInit called');
             (window as any).FB.init({
                 appId: META_APP_ID,
                 autoLogAppEvents: true,
                 xfbml: false,
                 version: 'v22.0',
             });
+            console.log('[Meta SDK] FB.init complete');
             setMetaSdkLoaded(true);
         };
+
+        // Remove old script if exists (stale from hot reload)
+        const existingScript = document.getElementById('facebook-jssdk');
+        if (existingScript) {
+            existingScript.remove();
+        }
 
         const script = document.createElement('script');
         script.id = 'facebook-jssdk';
         script.src = 'https://connect.facebook.net/en_US/sdk.js';
         script.async = true;
         script.defer = true;
+        script.crossOrigin = 'anonymous';
+        script.onerror = () => {
+            console.error('[Meta SDK] Failed to load Facebook SDK');
+            // Fallback: still allow button click, will open popup manually
+            setMetaSdkLoaded(true);
+        };
         document.body.appendChild(script);
+
+        // Safety timeout — if SDK doesn't load in 8s, enable button anyway
+        const timeout = setTimeout(() => {
+            if (!(window as any).FB) {
+                console.warn('[Meta SDK] Timeout — enabling fallback');
+                setMetaSdkLoaded(true);
+            }
+        }, 8000);
+
+        return () => clearTimeout(timeout);
     }, []);
 
     // Listen for Embedded Signup events
@@ -318,84 +350,84 @@ const Connections = () => {
     }, []);
 
     const handleMetaEmbeddedSignup = () => {
-        if (!metaSdkLoaded || !(window as any).FB) {
-            toast({
-                title: "SDK não carregado",
-                description: "Aguarde o carregamento do Facebook SDK e tente novamente.",
-                variant: "destructive",
-            });
-            return;
-        }
-
         if (!user?.id) {
             toast({ title: "Erro", description: "Você precisa estar logado.", variant: "destructive" });
             return;
         }
 
-        setIsConnectingMeta(true);
+        // If FB SDK loaded, use it
+        if ((window as any).FB) {
+            setIsConnectingMeta(true);
 
-        (window as any).FB.login(
-            async (response: any) => {
-                try {
-                    if (!response.authResponse) {
-                        toast({ title: "Cancelado", description: "A conexão com o WhatsApp foi cancelada.", variant: "destructive" });
-                        return;
+            (window as any).FB.login(
+                async (response: any) => {
+                    try {
+                        if (!response.authResponse) {
+                            toast({ title: "Cancelado", description: "A conexão com o WhatsApp foi cancelada.", variant: "destructive" });
+                            return;
+                        }
+
+                        const code = response.authResponse.code;
+                        if (!code) {
+                            toast({ title: "Erro", description: "Nenhum código de autorização retornado.", variant: "destructive" });
+                            return;
+                        }
+
+                        // Get data from Embedded Signup message event
+                        const signupData = (window as any).__meta_signup_data || {};
+                        const { phone_number_id, waba_id } = signupData;
+
+                        if (!phone_number_id || !waba_id) {
+                            toast({ title: "Erro", description: "Dados do Embedded Signup incompletos. Tente novamente.", variant: "destructive" });
+                            return;
+                        }
+
+                        toast({ title: "Conectando...", description: "Registrando seu WhatsApp na Cloud API..." });
+
+                        const { data, error } = await supabase.functions.invoke('meta-embedded-signup', {
+                            body: {
+                                code,
+                                waba_id,
+                                phone_number_id,
+                                user_id: user.id,
+                            },
+                        });
+
+                        if (error) throw error;
+                        if (!data?.success) throw new Error(data?.error || 'Falha no registro');
+
+                        toast({
+                            title: "WhatsApp Oficial conectado!",
+                            description: `Numero ${data.phone || ''} registrado com sucesso.`,
+                        });
+                        queryClient.invalidateQueries({ queryKey: ["meta-instances"] });
+                        (window as any).__meta_signup_data = null;
+                    } catch (err: any) {
+                        console.error('[Meta Embedded Signup] Error:', err);
+                        toast({ title: "Erro na conexão", description: err.message, variant: "destructive" });
+                    } finally {
+                        setIsConnectingMeta(false);
                     }
-
-                    const code = response.authResponse.code;
-                    if (!code) {
-                        toast({ title: "Erro", description: "Nenhum código de autorização retornado.", variant: "destructive" });
-                        return;
-                    }
-
-                    // Get data from Embedded Signup message event
-                    const signupData = (window as any).__meta_signup_data || {};
-                    const { phone_number_id, waba_id } = signupData;
-
-                    if (!phone_number_id || !waba_id) {
-                        toast({ title: "Erro", description: "Dados do Embedded Signup incompletos. Tente novamente.", variant: "destructive" });
-                        return;
-                    }
-
-                    toast({ title: "Conectando...", description: "Registrando seu WhatsApp na Cloud API..." });
-
-                    const { data, error } = await supabase.functions.invoke('meta-embedded-signup', {
-                        body: {
-                            code,
-                            waba_id,
-                            phone_number_id,
-                            user_id: user.id,
-                        },
-                    });
-
-                    if (error) throw error;
-                    if (!data?.success) throw new Error(data?.error || 'Falha no registro');
-
-                    toast({
-                        title: "WhatsApp Oficial conectado!",
-                        description: `Numero ${data.phone || ''} registrado com sucesso.`,
-                    });
-                    queryClient.invalidateQueries({ queryKey: ["meta-instances"] });
-                    (window as any).__meta_signup_data = null;
-                } catch (err: any) {
-                    console.error('[Meta Embedded Signup] Error:', err);
-                    toast({ title: "Erro na conexão", description: err.message, variant: "destructive" });
-                } finally {
-                    setIsConnectingMeta(false);
-                }
-            },
-            {
-                config_id: META_CONFIG_ID,
-                response_type: 'code',
-                override_default_response_type: true,
-                extras: {
-                    setup: {},
-                    featureType: 'whatsapp_business_app_onboarding',
-                    sessionInfoVersion: '3',
-                    version: 'v4',
                 },
-            }
-        );
+                {
+                    config_id: META_CONFIG_ID,
+                    response_type: 'code',
+                    override_default_response_type: true,
+                    extras: {
+                        setup: {},
+                        featureType: 'whatsapp_business_app_onboarding',
+                        sessionInfoVersion: '3',
+                        version: 'v4',
+                    },
+                }
+            );
+        } else {
+            // Fallback: open Meta Embedded Signup URL directly
+            console.warn('[Meta Embedded Signup] FB SDK not available, using direct URL fallback');
+            const redirectUri = `${window.location.origin}/connections`;
+            const signupUrl = `https://www.facebook.com/v22.0/dialog/oauth?client_id=${META_APP_ID}&config_id=${META_CONFIG_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&override_default_response_type=true&extras=${encodeURIComponent(JSON.stringify({ version: 'v4', sessionInfoVersion: '3', featureType: 'whatsapp_business_app_onboarding' }))}`;
+            window.open(signupUrl, '_blank', 'width=800,height=700');
+        }
     };
 
     const deleteMetaInstanceMutation = useMutation({
