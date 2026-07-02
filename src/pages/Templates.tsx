@@ -261,7 +261,7 @@ const Templates = () => {
     const getVariableCount = (tpl: any): number => {
         const bodyComponent = tpl.components?.find((c: any) => c.type === 'BODY');
         if (!bodyComponent?.text) return 0;
-        const matches = bodyComponent.text.match(/\{\{\d+\}\}/g);
+        const matches = bodyComponent.text.match(/\{\{\s*\d+\s*\}\}/g);
         return matches ? matches.length : 0;
     };
 
