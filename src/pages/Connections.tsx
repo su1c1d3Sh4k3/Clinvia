@@ -17,8 +17,8 @@ import { Badge } from "@/components/ui/badge";
 import { AlertCircle, CheckCircle2, Loader2, Plus, RefreshCw, Trash2, Shield, ExternalLink } from "lucide-react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 
-const META_APP_ID = import.meta.env.VITE_META_APP_ID || '';
-const META_CONFIG_ID = import.meta.env.VITE_META_CONFIG_ID || '';
+const META_APP_ID = import.meta.env.VITE_META_APP_ID || '1328505766119863';
+const META_CONFIG_ID = import.meta.env.VITE_META_CONFIG_ID || '1804825927169026';
 
 // Confirme se esse ID está correto. Às vezes o .env sobrescreve com um valor antigo de dev.
 const INSTAGRAM_APP_ID = import.meta.env.VITE_INSTAGRAM_APP_ID || '746674508461826';
