@@ -51,13 +51,13 @@ const Connections = () => {
         queryKey: ["instances"],
         queryFn: async () => {
             const { data, error } = await supabase
-                .from("instances")
+                .from("instances" as any)
                 .select("*")
                 .neq("provider", "meta")
                 .order("created_at", { ascending: false });
 
             if (error) throw error;
-            return data;
+            return data as any[];
         },
     });
 
@@ -66,13 +66,13 @@ const Connections = () => {
         queryKey: ["meta-instances"],
         queryFn: async () => {
             const { data, error } = await supabase
-                .from("instances")
+                .from("instances" as any)
                 .select("*")
                 .eq("provider", "meta")
                 .order("created_at", { ascending: false });
 
             if (error) throw error;
-            return data;
+            return data as any[];
         },
     });
 
@@ -323,7 +323,7 @@ const Connections = () => {
     const deleteMetaInstanceMutation = useMutation({
         mutationFn: async (id: string) => {
             const { error } = await supabase
-                .from("instances")
+                .from("instances" as any)
                 .delete()
                 .eq("id", id)
                 .eq("provider", "meta");

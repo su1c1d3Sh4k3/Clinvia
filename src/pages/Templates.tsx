@@ -46,12 +46,12 @@ const Templates = () => {
         queryKey: ["meta-instances"],
         queryFn: async () => {
             const { data, error } = await supabase
-                .from("instances")
+                .from("instances" as any)
                 .select("*")
                 .eq("provider", "meta")
                 .eq("status", "connected");
             if (error) throw error;
-            return data;
+            return data as any[];
         },
     });
 
