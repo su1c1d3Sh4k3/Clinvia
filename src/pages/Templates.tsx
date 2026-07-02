@@ -183,55 +183,29 @@ const Templates = () => {
             const number = sendTo.replace(/\D/g, "");
             if (!number) throw new Error("Numero invalido");
 
-            // Build template data
-            const templateData: any = {
-                name: selectedTemplate.name,
-                language: { code: selectedTemplate.language || "pt_BR" },
-            };
-
-            // Add body parameters if any
+            // Build template components (body parameters)
+            let templateComponents: any[] | undefined;
             if (sendParams.length > 0 && sendParams.some(p => p.trim())) {
-                templateData.components = [{
+                templateComponents = [{
                     type: "body",
                     parameters: sendParams.filter(p => p.trim()).map(p => ({ type: "text", text: p })),
                 }];
             }
 
-            // Find or create conversation for this number
-            const { data: contact } = await supabase
-                .from("contacts")
-                .select("id")
-                .eq("number", number)
-                .eq("instance_id", activeInstance.id)
-                .maybeSingle();
-
-            let conversationId: string | null = null;
-
-            if (contact) {
-                const { data: conv } = await supabase
-                    .from("conversations")
-                    .select("id")
-                    .eq("contact_id", contact.id)
-                    .eq("instance_id", activeInstance.id)
-                    .in("status", ["pending", "open"])
-                    .order("created_at", { ascending: false })
-                    .limit(1)
-                    .maybeSingle();
-                conversationId = conv?.id || null;
-            }
-
-            const { data, error } = await supabase.functions.invoke('meta-send-message', {
+            const { data, error } = await supabase.functions.invoke('meta-template-manage', {
                 body: {
-                    conversationId,
-                    contactId: contact?.id,
-                    body: selectedTemplate.name,
-                    messageType: "template",
-                    templateData,
+                    action: 'send',
+                    user_id: user.id,
+                    instance_id: activeInstance.id,
+                    to: number,
+                    template_name: selectedTemplate.name,
+                    template_language: selectedTemplate.language,
+                    template_components: templateComponents,
                 },
             });
 
             if (error) throw error;
-            if (!data?.success) throw new Error(data?.message || data?.error || 'Falha ao enviar');
+            if (!data?.success) throw new Error(data?.error || 'Falha ao enviar');
             return data;
         },
         onSuccess: () => {

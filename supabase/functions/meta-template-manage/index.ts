@@ -216,7 +216,70 @@ serve(async (req) => {
             );
         }
 
-        throw new Error(`Invalid action: "${action}". Valid: list, create, delete, sync`);
+        // ── ACTION: send ──
+        if (action === "send") {
+            const { to, template_name, template_language, template_components } = body;
+
+            if (!to) throw new Error("Missing field: to (phone number)");
+            if (!template_name) throw new Error("Missing field: template_name");
+
+            const phoneNumberId = instance.meta_phone_number_id;
+            const number = to.replace(/\D/g, "");
+
+            const templatePayload: any = {
+                messaging_product: "whatsapp",
+                recipient_type: "individual",
+                to: number,
+                type: "template",
+                template: {
+                    name: template_name,
+                    language: { code: template_language || "pt_BR" },
+                },
+            };
+
+            // Add components (body parameters, etc) if provided
+            if (template_components && template_components.length > 0) {
+                templatePayload.template.components = template_components;
+            }
+
+            console.log("[meta-template-manage] Sending template:", template_name, "to:", number);
+
+            const sendResp = await fetch(
+                `${GRAPH_API}/${phoneNumberId}/messages`,
+                {
+                    method: "POST",
+                    headers: {
+                        Authorization: `Bearer ${accessToken}`,
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(templatePayload),
+                }
+            );
+
+            const sendResult = await sendResp.json();
+
+            if (!sendResp.ok) {
+                const errorMsg =
+                    sendResult?.error?.error_user_msg ||
+                    sendResult?.error?.message ||
+                    "Failed to send template";
+                console.error("[meta-template-manage] Send failed:", JSON.stringify(sendResult));
+                throw new Error(errorMsg);
+            }
+
+            const messageId = sendResult.messages?.[0]?.id || null;
+            console.log("[meta-template-manage] Template sent, wamid:", messageId);
+
+            return new Response(
+                JSON.stringify({
+                    success: true,
+                    message_id: messageId,
+                }),
+                { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+        }
+
+        throw new Error(`Invalid action: "${action}". Valid: list, create, delete, sync, send`);
     } catch (error: any) {
         console.error("[meta-template-manage] Error:", error);
         return new Response(
