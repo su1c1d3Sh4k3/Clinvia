@@ -1,7 +1,7 @@
 import {
   Users, Settings, LayoutDashboard, MessageSquare, Briefcase,
   Smartphone, LogOut, BookUser, Calendar, Repeat,
-  Package, Bot, ChevronDown
+  Package, Bot, ChevronDown, FileText
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -41,6 +41,7 @@ const menuStructure: MenuItem[] = [
     children: [
       { icon: Bot, label: "IA", id: "ia-config", path: "/ia-config" },
       { icon: Smartphone, label: "Conexões", id: "whatsapp", path: "/whatsapp-connection" },
+      { icon: FileText, label: "Templates", id: "templates", path: "/templates" },
       { icon: Settings, label: "Sistema", id: "settings", path: "/settings" },
     ]
   },

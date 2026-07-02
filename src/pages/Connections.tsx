@@ -12,10 +12,13 @@ import { ConnectInstanceDialog } from "@/components/ConnectInstanceDialog";
 import { InstanceRow } from "@/components/InstanceRow";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
-import { FaWhatsapp, FaInstagram } from "react-icons/fa";
+import { FaWhatsapp, FaInstagram, FaFacebook } from "react-icons/fa";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, CheckCircle2, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, Loader2, Plus, RefreshCw, Trash2, Shield, ExternalLink } from "lucide-react";
 import { useSearchParams, useNavigate } from "react-router-dom";
+
+const META_APP_ID = import.meta.env.VITE_META_APP_ID || '';
+const META_CONFIG_ID = import.meta.env.VITE_META_CONFIG_ID || '';
 
 // Confirme se esse ID está correto. Às vezes o .env sobrescreve com um valor antigo de dev.
 const INSTAGRAM_APP_ID = import.meta.env.VITE_INSTAGRAM_APP_ID || '746674508461826';
@@ -40,13 +43,33 @@ const Connections = () => {
     // Instagram OAuth State
     const [isConnectingInstagram, setIsConnectingInstagram] = useState(false);
 
-    // WhatsApp Instances Query
+    // Meta Embedded Signup State
+    const [isConnectingMeta, setIsConnectingMeta] = useState(false);
+    const [metaSdkLoaded, setMetaSdkLoaded] = useState(false);
+
+    // WhatsApp Instances Query (UZAPI only)
     const { data: instances, isLoading: loadingWhatsApp } = useQuery({
         queryKey: ["instances"],
         queryFn: async () => {
             const { data, error } = await supabase
                 .from("instances")
                 .select("*")
+                .neq("provider", "meta")
+                .order("created_at", { ascending: false });
+
+            if (error) throw error;
+            return data;
+        },
+    });
+
+    // Meta Instances Query
+    const { data: metaInstances, isLoading: loadingMeta } = useQuery({
+        queryKey: ["meta-instances"],
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from("instances")
+                .select("*")
+                .eq("provider", "meta")
                 .order("created_at", { ascending: false });
 
             if (error) throw error;
@@ -246,6 +269,152 @@ const Connections = () => {
             navigate('/connections', { replace: true });
         }
     };
+
+    // ── Meta Embedded Signup ──
+
+    // Load Facebook SDK
+    useEffect(() => {
+        if (!META_APP_ID || document.getElementById('facebook-jssdk')) {
+            if ((window as any).FB) setMetaSdkLoaded(true);
+            return;
+        }
+
+        (window as any).fbAsyncInit = function () {
+            (window as any).FB.init({
+                appId: META_APP_ID,
+                autoLogAppEvents: true,
+                xfbml: false,
+                version: 'v22.0',
+            });
+            setMetaSdkLoaded(true);
+        };
+
+        const script = document.createElement('script');
+        script.id = 'facebook-jssdk';
+        script.src = 'https://connect.facebook.net/en_US/sdk.js';
+        script.async = true;
+        script.defer = true;
+        document.body.appendChild(script);
+    }, []);
+
+    // Listen for Embedded Signup events
+    useEffect(() => {
+        const handler = (event: MessageEvent) => {
+            if (event.origin !== "https://www.facebook.com" && event.origin !== "https://web.facebook.com") return;
+            try {
+                const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+                if (data.type === 'WA_EMBEDDED_SIGNUP') {
+                    const { phone_number_id, waba_id } = data.data || {};
+                    if (phone_number_id && waba_id) {
+                        console.log('[Meta Embedded Signup] Got phone_number_id:', phone_number_id, 'waba_id:', waba_id);
+                        // Store for use when FB.login callback fires
+                        (window as any).__meta_signup_data = { phone_number_id, waba_id };
+                    }
+                }
+            } catch {}
+        };
+        window.addEventListener('message', handler);
+        return () => window.removeEventListener('message', handler);
+    }, []);
+
+    const handleMetaEmbeddedSignup = () => {
+        if (!metaSdkLoaded || !(window as any).FB) {
+            toast({
+                title: "SDK não carregado",
+                description: "Aguarde o carregamento do Facebook SDK e tente novamente.",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        if (!user?.id) {
+            toast({ title: "Erro", description: "Você precisa estar logado.", variant: "destructive" });
+            return;
+        }
+
+        setIsConnectingMeta(true);
+
+        (window as any).FB.login(
+            async (response: any) => {
+                try {
+                    if (!response.authResponse) {
+                        toast({ title: "Cancelado", description: "A conexão com o WhatsApp foi cancelada.", variant: "destructive" });
+                        return;
+                    }
+
+                    const code = response.authResponse.code;
+                    if (!code) {
+                        toast({ title: "Erro", description: "Nenhum código de autorização retornado.", variant: "destructive" });
+                        return;
+                    }
+
+                    // Get data from Embedded Signup message event
+                    const signupData = (window as any).__meta_signup_data || {};
+                    const { phone_number_id, waba_id } = signupData;
+
+                    if (!phone_number_id || !waba_id) {
+                        toast({ title: "Erro", description: "Dados do Embedded Signup incompletos. Tente novamente.", variant: "destructive" });
+                        return;
+                    }
+
+                    toast({ title: "Conectando...", description: "Registrando seu WhatsApp na Cloud API..." });
+
+                    const { data, error } = await supabase.functions.invoke('meta-embedded-signup', {
+                        body: {
+                            code,
+                            waba_id,
+                            phone_number_id,
+                            user_id: user.id,
+                        },
+                    });
+
+                    if (error) throw error;
+                    if (!data?.success) throw new Error(data?.error || 'Falha no registro');
+
+                    toast({
+                        title: "WhatsApp Oficial conectado!",
+                        description: `Numero ${data.phone || ''} registrado com sucesso.`,
+                    });
+                    queryClient.invalidateQueries({ queryKey: ["meta-instances"] });
+                    (window as any).__meta_signup_data = null;
+                } catch (err: any) {
+                    console.error('[Meta Embedded Signup] Error:', err);
+                    toast({ title: "Erro na conexão", description: err.message, variant: "destructive" });
+                } finally {
+                    setIsConnectingMeta(false);
+                }
+            },
+            {
+                config_id: META_CONFIG_ID,
+                response_type: 'code',
+                override_default_response_type: true,
+                extras: {
+                    setup: {},
+                    featureType: 'whatsapp_business_app_onboarding',
+                    sessionInfoVersion: '3',
+                    version: 'v4',
+                },
+            }
+        );
+    };
+
+    const deleteMetaInstanceMutation = useMutation({
+        mutationFn: async (id: string) => {
+            const { error } = await supabase
+                .from("instances")
+                .delete()
+                .eq("id", id)
+                .eq("provider", "meta");
+            if (error) throw error;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["meta-instances"] });
+            toast({ title: "Instância Meta removida" });
+        },
+        onError: (error: any) => {
+            toast({ title: "Erro ao remover", description: error.message, variant: "destructive" });
+        },
+    });
 
     const handleConnectInstagram = () => {
         if (!user?.id) {
@@ -574,10 +743,16 @@ const Connections = () => {
                 </div>
 
                 <Tabs defaultValue="whatsapp" className="w-full">
-                    <TabsList className="grid w-full grid-cols-2">
+                    <TabsList className="grid w-full grid-cols-3">
                         <TabsTrigger value="whatsapp" className="flex items-center gap-2">
                             <FaWhatsapp className="h-4 w-4 text-green-500" />
-                            WhatsApp
+                            <span className="hidden sm:inline">WhatsApp</span>
+                            <span className="sm:hidden">WA</span>
+                        </TabsTrigger>
+                        <TabsTrigger value="meta" className="flex items-center gap-2">
+                            <Shield className="h-4 w-4 text-blue-500" />
+                            <span className="hidden sm:inline">WA Oficial</span>
+                            <span className="sm:hidden">Oficial</span>
                         </TabsTrigger>
                         <TabsTrigger value="instagram" className="flex items-center gap-2">
                             <FaInstagram className="h-4 w-4 text-pink-500" />
@@ -639,6 +814,140 @@ const Connections = () => {
                                 )}
                             </CardContent>
                         </Card>
+                    </TabsContent>
+
+                    {/* Meta WhatsApp Oficial Tab */}
+                    <TabsContent value="meta" className="space-y-4 mt-4">
+                        <Card>
+                            <CardHeader className="p-4 md:p-6">
+                                <CardTitle className="text-base md:text-lg flex items-center gap-2">
+                                    <Shield className="h-5 w-5 text-blue-500" />
+                                    WhatsApp Oficial (Cloud API)
+                                </CardTitle>
+                                <CardDescription className="text-xs md:text-sm">
+                                    Conexão oficial via Meta Cloud API - sem intermediários, com suporte a templates aprovados
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="p-4 md:p-6 pt-0 md:pt-0">
+                                {loadingMeta ? (
+                                    <p className="text-muted-foreground">Carregando...</p>
+                                ) : metaInstances && metaInstances.length > 0 ? (
+                                    <div className="space-y-4">
+                                        {metaInstances.map((instance: any) => (
+                                            <div
+                                                key={instance.id}
+                                                className="flex flex-col md:flex-row md:items-center md:justify-between p-3 md:p-4 border rounded-lg bg-card gap-3 md:gap-4"
+                                            >
+                                                <div className="flex items-center gap-4 min-w-0">
+                                                    <div className="p-2 bg-blue-500/10 rounded-full shrink-0">
+                                                        <FaWhatsapp className="h-5 w-5 text-green-500" />
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <h4 className="font-medium truncate">{instance.name || instance.user_name || 'WhatsApp Oficial'}</h4>
+                                                        <p className="text-xs text-muted-foreground truncate">
+                                                            WABA: {instance.meta_waba_id}
+                                                        </p>
+                                                        <p className="text-xs text-muted-foreground truncate">
+                                                            Phone ID: {instance.meta_phone_number_id}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-2 md:gap-3">
+                                                    <Badge
+                                                        className={`text-[10px] md:text-xs border ${
+                                                            instance.status === "connected"
+                                                                ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"
+                                                                : "bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/30"
+                                                        }`}
+                                                    >
+                                                        {instance.status === "connected" ? (
+                                                            <><CheckCircle2 className="w-3 h-3 mr-1" /> Conectado</>
+                                                        ) : (
+                                                            <><AlertCircle className="w-3 h-3 mr-1" /> Desconectado</>
+                                                        )}
+                                                    </Badge>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => navigate('/templates')}
+                                                        className="h-7 md:h-8 text-xs md:text-sm"
+                                                    >
+                                                        <ExternalLink className="w-3.5 h-3.5 mr-1" />
+                                                        Templates
+                                                    </Button>
+                                                    {canDelete('connections') && (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="destructive"
+                                                            onClick={() => deleteMetaInstanceMutation.mutate(instance.id)}
+                                                            disabled={deleteMetaInstanceMutation.isPending}
+                                                            className="h-7 md:h-8 w-7 md:w-8 p-0"
+                                                        >
+                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="text-center py-6">
+                                        <Shield className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                                        <p className="text-muted-foreground mb-2">
+                                            Nenhuma conexão oficial configurada.
+                                        </p>
+                                        <p className="text-xs text-muted-foreground">
+                                            Conecte seu WhatsApp Business via Meta Cloud API para usar templates aprovados.
+                                        </p>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+
+                        {canCreate('connections') && (
+                            <Card>
+                                <CardHeader className="p-4 md:p-6">
+                                    <CardTitle className="text-base md:text-lg">Conectar WhatsApp Oficial</CardTitle>
+                                    <CardDescription className="text-xs md:text-sm">
+                                        Use o Meta Embedded Signup para conectar sua conta Business
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent className="p-4 md:p-6 pt-0 md:pt-0">
+                                    <div className="space-y-4">
+                                        <div className="p-4 bg-muted/50 rounded-lg">
+                                            <h4 className="font-medium text-sm mb-2">Requisitos</h4>
+                                            <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
+                                                <li>Conta Meta Business (Facebook Business Manager)</li>
+                                                <li>Numero de telefone nao vinculado a outro WhatsApp Business</li>
+                                                <li>Acesso de administrador ao Meta Business Suite</li>
+                                            </ul>
+                                        </div>
+                                        <Button
+                                            onClick={handleMetaEmbeddedSignup}
+                                            disabled={isConnectingMeta || !metaSdkLoaded}
+                                            className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                                        >
+                                            {isConnectingMeta ? (
+                                                <>
+                                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                                    Conectando...
+                                                </>
+                                            ) : !metaSdkLoaded ? (
+                                                <>
+                                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                                    Carregando SDK...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <FaFacebook className="h-4 w-4 mr-2" />
+                                                    Conectar com Meta Business
+                                                </>
+                                            )}
+                                        </Button>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )}
                     </TabsContent>
 
                     {/* Instagram Tab */}

@@ -50,6 +50,7 @@ const DevManager = React.lazy(() => import("./pages/DevManager"));
 const Reports = React.lazy(() => import("./pages/Reports"));
 const AutoMessages = React.lazy(() => import("./pages/AutoMessages"));
 const BusinessReports = React.lazy(() => import("./pages/BusinessReports"));
+const Templates = React.lazy(() => import("./pages/Templates"));
 // BETA — Instagram via Facebook Login for Business (página standalone, sem menu)
 const WhatsAppConnectionTeste = React.lazy(() => import("./pages/WhatsAppConnectionTeste"));
 // Página pública de agendamento (sem login, acesso via link)
@@ -180,6 +181,7 @@ const App = () => (
                   <Route path="/reports" element={<Reports />} />
                   <Route path="/auto-messages" element={<AutoMessages />} />
                   <Route path="/business-reports" element={<BusinessReports />} />
+                  <Route path="/templates" element={<Templates />} />
                 </Route>
                 <Route path="*" element={<NotFound />} />
               </Routes>
