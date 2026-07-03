@@ -182,9 +182,10 @@ Deno.serve(async (req) => {
 
         let listQuery = supabase
             .from('instances')
-            .select('id, name, user_id, status, server_url, apikey, last_disconnect_notified_at, last_health_check, restriction_active, restriction_until')
+            .select('id, name, user_id, status, server_url, apikey, last_disconnect_notified_at, last_health_check, restriction_active, restriction_until, provider')
             .not('apikey', 'is', null)
-            .not('server_url', 'is', null);
+            .not('server_url', 'is', null)
+            .neq('provider', 'meta');
         if (ownerIdFilter) {
             listQuery = listQuery.eq('user_id', ownerIdFilter);
         }

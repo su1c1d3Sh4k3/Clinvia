@@ -139,9 +139,11 @@ export const InstanceRow = ({ instance, onConnect }: InstanceRowProps) => {
         }
     });
 
-    // Check connection on mount
+    // Check connection on mount (skip Meta instances — they don't use UZAPI)
     useEffect(() => {
-        checkConnectionMutation.mutate(instance.id);
+        if (instance.provider !== 'meta' && !(instance.instance_name || '').startsWith('meta-')) {
+            checkConnectionMutation.mutate(instance.id);
+        }
     }, []);
 
     return (
