@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,27 @@ import {
     Dialog, DialogContent, DialogDescription, DialogFooter,
     DialogHeader, DialogTitle, DialogTrigger
 } from "@/components/ui/dialog";
+
+const SUPABASE_URL = "https://swfshqvvbohnahdyndch.supabase.co";
+
+// Helper to call meta-template-manage edge function
+async function callTemplateApi(body: any): Promise<any> {
+    const session = (await supabase.auth.getSession()).data.session;
+    const resp = await fetch(`${SUPABASE_URL}/functions/v1/meta-template-manage`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token || ''}`,
+        },
+        body: JSON.stringify(body),
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.success) {
+        console.error('[Templates] API error:', resp.status, data);
+        throw new Error(data?.error || `HTTP ${resp.status}`);
+    }
+    return data;
+}
 
 const Templates = () => {
     const { user } = useAuth();
@@ -40,60 +61,65 @@ const Templates = () => {
     // Send state
     const [sendTo, setSendTo] = useState("");
     const [sendParams, setSendParams] = useState<string[]>([]);
+    const [selectedInstanceId, setSelectedInstanceId] = useState<string>("");
 
-    // Get all instances (same cache key as NavigationSidebar/Connections)
-    const { data: allInstances } = useQuery({
-        queryKey: ["instances"],
+    // Get Meta instances via direct SQL-like RPC to avoid cache conflicts
+    // Uses a SEPARATE query key so NavigationSidebar can't overwrite the data
+    const { data: metaInstances, isLoading: loadingInstances } = useQuery({
+        queryKey: ["templates-meta-instances"],
         queryFn: async () => {
+            // Fetch ALL instances, then filter in JS
             const { data, error } = await supabase
                 .from("instances")
                 .select("*")
                 .order("created_at", { ascending: false });
-            if (error) throw error;
-            return data;
+
+            if (error) {
+                console.error('[Templates] Failed to fetch instances:', error);
+                throw error;
+            }
+
+            console.log('[Templates] Raw instances:', data?.map((i: any) => ({
+                id: i.id,
+                name: i.instance_name,
+                provider: i.provider,
+                status: i.status,
+            })));
+
+            // Filter: meta provider OR instance_name starts with meta-
+            const meta = (data || []).filter((i: any) =>
+                (i.provider === "meta" || (i.instance_name || '').startsWith("meta-"))
+                && i.status === "connected"
+            );
+
+            console.log('[Templates] Meta instances found:', meta.length);
+            return meta as any[];
         },
+        staleTime: 30_000,
     });
-
-    const metaInstances = (allInstances as any[] | undefined)?.filter(
-        (i: any) => (i.provider === "meta" || (i.instance_name || '').startsWith("meta-")) && i.status === "connected"
-    ) || [];
-
-    const [selectedInstanceId, setSelectedInstanceId] = useState<string>("");
 
     // Auto-select first instance
     const activeInstance = selectedInstanceId
         ? metaInstances?.find((i: any) => i.id === selectedInstanceId)
         : metaInstances?.[0];
 
-    // Helper to call meta-template-manage
-    const callTemplateApi = async (body: any) => {
-        const session = (await supabase.auth.getSession()).data.session;
-        const resp = await fetch(
-            `https://swfshqvvbohnahdyndch.supabase.co/functions/v1/meta-template-manage`,
-            {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${session?.access_token || ''}`,
-                },
-                body: JSON.stringify(body),
-            }
-        );
-        const data = await resp.json();
-        if (!resp.ok || !data.success) throw new Error(data?.error || `HTTP ${resp.status}`);
-        return data;
-    };
+    // Log activeInstance for debugging
+    useEffect(() => {
+        console.log('[Templates] activeInstance:', activeInstance?.id, activeInstance?.instance_name);
+    }, [activeInstance?.id]);
 
     // Templates query
-    const { data: templates, isLoading: loadingTemplates, refetch: refetchTemplates } = useQuery({
+    const { data: templates, isLoading: loadingTemplates } = useQuery({
         queryKey: ["meta-templates", activeInstance?.id],
         queryFn: async () => {
             if (!activeInstance || !user?.id) return [];
+            console.log('[Templates] Fetching templates for instance:', activeInstance.id);
             const data = await callTemplateApi({
                 action: 'list',
                 user_id: user.id,
                 instance_id: activeInstance.id,
             });
+            console.log('[Templates] Templates loaded:', data.count);
             return data.templates || [];
         },
         enabled: !!activeInstance && !!user?.id,
@@ -118,22 +144,14 @@ const Templates = () => {
     const createMutation = useMutation({
         mutationFn: async () => {
             if (!activeInstance || !user?.id) throw new Error("Sem instancia ativa");
-
             const components: any[] = [];
-
             if (newHeaderText.trim()) {
                 components.push({ type: "HEADER", format: "TEXT", text: newHeaderText.trim() });
             }
-
-            components.push({
-                type: "BODY",
-                text: newBodyText.trim(),
-            });
-
+            components.push({ type: "BODY", text: newBodyText.trim() });
             if (newFooterText.trim()) {
                 components.push({ type: "FOOTER", text: newFooterText.trim() });
             }
-
             return await callTemplateApi({
                 action: 'create',
                 user_id: user.id,
@@ -148,7 +166,8 @@ const Templates = () => {
             queryClient.invalidateQueries({ queryKey: ["meta-templates"] });
             toast({ title: "Template criado!", description: "Aguardando aprovacao da Meta." });
             setCreateDialogOpen(false);
-            resetForm();
+            setNewName(""); setNewCategory("UTILITY"); setNewLanguage("pt_BR");
+            setNewBodyText(""); setNewHeaderText(""); setNewFooterText("");
         },
         onError: (err: any) => {
             toast({ title: "Erro ao criar template", description: err.message, variant: "destructive" });
@@ -179,11 +198,9 @@ const Templates = () => {
     const sendMutation = useMutation({
         mutationFn: async () => {
             if (!activeInstance || !user?.id || !selectedTemplate) throw new Error("Dados incompletos");
-
             const number = sendTo.replace(/\D/g, "");
             if (!number) throw new Error("Numero invalido");
 
-            // Build template components (body parameters)
             let templateComponents: any[] | undefined;
             if (sendParams.length > 0 && sendParams.some(p => p.trim())) {
                 templateComponents = [{
@@ -192,7 +209,7 @@ const Templates = () => {
                 }];
             }
 
-            const payload = {
+            return await callTemplateApi({
                 action: 'send',
                 user_id: user.id,
                 instance_id: activeInstance.id,
@@ -200,27 +217,7 @@ const Templates = () => {
                 template_name: selectedTemplate.name,
                 template_language: selectedTemplate.language,
                 template_components: templateComponents,
-            };
-            console.log('[Templates] Sending template:', JSON.stringify(payload));
-
-            const response = await fetch(
-                `https://swfshqvvbohnahdyndch.supabase.co/functions/v1/meta-template-manage`,
-                {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-                    },
-                    body: JSON.stringify(payload),
-                }
-            );
-
-            const data = await response.json();
-            console.log('[Templates] Response:', response.status, JSON.stringify(data));
-
-            if (!response.ok) throw new Error(data?.error || `HTTP ${response.status}`);
-            if (!data?.success) throw new Error(data?.error || 'Falha ao enviar');
-            return data;
+            });
         },
         onSuccess: () => {
             toast({ title: "Template enviado!" });
@@ -232,15 +229,6 @@ const Templates = () => {
             toast({ title: "Erro ao enviar", description: err.message, variant: "destructive" });
         },
     });
-
-    const resetForm = () => {
-        setNewName("");
-        setNewCategory("UTILITY");
-        setNewLanguage("pt_BR");
-        setNewBodyText("");
-        setNewHeaderText("");
-        setNewFooterText("");
-    };
 
     const getStatusBadge = (status: string) => {
         switch (status?.toUpperCase()) {
@@ -257,7 +245,6 @@ const Templates = () => {
         }
     };
 
-    // Extract variable count from template body (e.g. {{1}}, {{2}})
     const getVariableCount = (tpl: any): number => {
         const bodyComponent = tpl.components?.find((c: any) => c.type === 'BODY');
         if (!bodyComponent?.text) return 0;
@@ -271,6 +258,17 @@ const Templates = () => {
         setSendParams(new Array(varCount).fill(""));
         setSendDialogOpen(true);
     };
+
+    // Show loading while instances are being fetched
+    if (loadingInstances) {
+        return (
+            <div className="p-4 md:p-8">
+                <div className="max-w-4xl mx-auto flex items-center justify-center py-20">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+            </div>
+        );
+    }
 
     if (!metaInstances || metaInstances.length === 0) {
         return (
@@ -427,7 +425,6 @@ const Templates = () => {
                     </div>
                 </div>
 
-                {/* Templates List */}
                 <Card>
                     <CardHeader className="p-4 md:p-6">
                         <CardTitle className="text-base md:text-lg">
@@ -446,7 +443,6 @@ const Templates = () => {
                                     const headerComponent = tpl.components?.find((c: any) => c.type === 'HEADER');
                                     const footerComponent = tpl.components?.find((c: any) => c.type === 'FOOTER');
                                     const isExpanded = expandedTemplate === tpl.id;
-
                                     return (
                                         <div key={tpl.id} className="border rounded-lg">
                                             <div
@@ -469,28 +465,15 @@ const Templates = () => {
                                                 </div>
                                                 <div className="flex items-center gap-2 shrink-0">
                                                     {tpl.status?.toUpperCase() === 'APPROVED' && (
-                                                        <Button
-                                                            size="sm"
-                                                            variant="outline"
-                                                            className="h-7 text-xs"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                openSendDialog(tpl);
-                                                            }}
-                                                        >
+                                                        <Button size="sm" variant="outline" className="h-7 text-xs"
+                                                            onClick={(e) => { e.stopPropagation(); openSendDialog(tpl); }}>
                                                             <Send className="h-3 w-3 mr-1" /> Enviar
                                                         </Button>
                                                     )}
-                                                    <Button
-                                                        size="sm"
-                                                        variant="ghost"
+                                                    <Button size="sm" variant="ghost"
                                                         className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            deleteMutation.mutate(tpl.name);
-                                                        }}
-                                                        disabled={deleteMutation.isPending}
-                                                    >
+                                                        onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(tpl.name); }}
+                                                        disabled={deleteMutation.isPending}>
                                                         <Trash2 className="h-3.5 w-3.5" />
                                                     </Button>
                                                     {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -544,7 +527,6 @@ const Templates = () => {
                 </Card>
             </div>
 
-            {/* Send Template Dialog */}
             <Dialog open={sendDialogOpen} onOpenChange={setSendDialogOpen}>
                 <DialogContent>
                     <DialogHeader>
