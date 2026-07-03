@@ -153,11 +153,19 @@ const Templates = () => {
     const createMutation = useMutation({
         mutationFn: async () => {
             if (!activeInstance || !user?.id) throw new Error("Sem instancia ativa");
+            const bodyText = newBodyText.trim();
+            const vars = bodyText.match(/\{\{\s*\d+\s*\}\}/g);
+            if (vars && vars.length > 0) {
+                const textWithoutVars = bodyText.replace(/\{\{\s*\d+\s*\}\}/g, '').trim();
+                if (textWithoutVars.length < 20) {
+                    throw new Error("O corpo da mensagem precisa ter pelo menos 20 caracteres de texto alem das variaveis. A Meta exige texto suficiente ao redor das variaveis.");
+                }
+            }
             const components: any[] = [];
             if (newHeaderText.trim()) {
                 components.push({ type: "HEADER", format: "TEXT", text: newHeaderText.trim() });
             }
-            components.push({ type: "BODY", text: newBodyText.trim() });
+            components.push({ type: "BODY", text: bodyText });
             if (newFooterText.trim()) {
                 components.push({ type: "FOOTER", text: newFooterText.trim() });
             }
