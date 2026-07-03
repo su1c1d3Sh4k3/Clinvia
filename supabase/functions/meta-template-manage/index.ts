@@ -129,19 +129,31 @@ serve(async (req) => {
                 throw new Error("Template name must be lowercase alphanumeric with underscores only");
             }
 
+            // Auto-generate example values for variables in BODY components
+            const enrichedComponents = components.map((comp: any) => {
+                if (comp.type === "BODY" && comp.text) {
+                    const vars = comp.text.match(/\{\{\s*\d+\s*\}\}/g);
+                    if (vars && vars.length > 0) {
+                        const examples = vars.map((_: string, i: number) => `exemplo_${i + 1}`);
+                        return { ...comp, example: { body_text: [examples] } };
+                    }
+                }
+                return comp;
+            });
+
             const metaResp = await fetch(
                 `${GRAPH_API}/${wabaId}/message_templates`,
                 {
                     method: "POST",
                     headers: {
                         Authorization: `Bearer ${accessToken}`,
-                        "Content-Type": "application/json",
+                        "Content-Type": "application/json; charset=utf-8",
                     },
                     body: JSON.stringify({
                         name,
                         language: language || "pt_BR",
                         category: category.toUpperCase(),
-                        components,
+                        components: enrichedComponents,
                     }),
                 }
             );
