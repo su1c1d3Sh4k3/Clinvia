@@ -56,12 +56,14 @@ const Connections = () => {
                 .order("created_at", { ascending: false });
 
             if (error) throw error;
+            console.log('[Connections] All instances:', JSON.stringify(data?.map((i: any) => ({ id: i.id, name: i.instance_name || i.name, provider: i.provider, status: i.status }))));
             return data;
         },
     });
 
     const instances = allInstances?.filter((i: any) => i.provider !== "meta") || [];
     const metaInstances = allInstances?.filter((i: any) => i.provider === "meta") || [];
+    console.log('[Connections] UZAPI instances:', instances.length, 'Meta instances:', metaInstances.length);
     const loadingWhatsApp = loadingInstances;
     const loadingMeta = loadingInstances;
 
