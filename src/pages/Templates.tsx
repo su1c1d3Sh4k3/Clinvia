@@ -41,19 +41,22 @@ const Templates = () => {
     const [sendTo, setSendTo] = useState("");
     const [sendParams, setSendParams] = useState<string[]>([]);
 
-    // Get Meta instances
-    const { data: metaInstances } = useQuery({
-        queryKey: ["meta-instances"],
+    // Get all instances (same cache key as NavigationSidebar/Connections)
+    const { data: allInstances } = useQuery({
+        queryKey: ["instances"],
         queryFn: async () => {
             const { data, error } = await supabase
                 .from("instances")
                 .select("*")
                 .order("created_at", { ascending: false });
             if (error) throw error;
-            // Filter in JS since 'provider' column isn't in generated types
-            return (data as any[]).filter((i: any) => (i.provider === "meta" || (i.instance_name || '').startsWith("meta-")) && i.status === "connected");
+            return data;
         },
     });
+
+    const metaInstances = (allInstances as any[] | undefined)?.filter(
+        (i: any) => (i.provider === "meta" || (i.instance_name || '').startsWith("meta-")) && i.status === "connected"
+    ) || [];
 
     const [selectedInstanceId, setSelectedInstanceId] = useState<string>("");
 
@@ -62,22 +65,35 @@ const Templates = () => {
         ? metaInstances?.find((i: any) => i.id === selectedInstanceId)
         : metaInstances?.[0];
 
+    // Helper to call meta-template-manage
+    const callTemplateApi = async (body: any) => {
+        const session = (await supabase.auth.getSession()).data.session;
+        const resp = await fetch(
+            `https://swfshqvvbohnahdyndch.supabase.co/functions/v1/meta-template-manage`,
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session?.access_token || ''}`,
+                },
+                body: JSON.stringify(body),
+            }
+        );
+        const data = await resp.json();
+        if (!resp.ok || !data.success) throw new Error(data?.error || `HTTP ${resp.status}`);
+        return data;
+    };
+
     // Templates query
     const { data: templates, isLoading: loadingTemplates, refetch: refetchTemplates } = useQuery({
         queryKey: ["meta-templates", activeInstance?.id],
         queryFn: async () => {
             if (!activeInstance || !user?.id) return [];
-
-            const { data, error } = await supabase.functions.invoke('meta-template-manage', {
-                body: {
-                    action: 'list',
-                    user_id: user.id,
-                    instance_id: activeInstance.id,
-                },
+            const data = await callTemplateApi({
+                action: 'list',
+                user_id: user.id,
+                instance_id: activeInstance.id,
             });
-
-            if (error) throw error;
-            if (!data?.success) throw new Error(data?.error || 'Falha ao listar templates');
             return data.templates || [];
         },
         enabled: !!activeInstance && !!user?.id,
@@ -87,12 +103,7 @@ const Templates = () => {
     const syncMutation = useMutation({
         mutationFn: async () => {
             if (!activeInstance || !user?.id) throw new Error("Sem instancia ativa");
-            const { data, error } = await supabase.functions.invoke('meta-template-manage', {
-                body: { action: 'sync', user_id: user.id, instance_id: activeInstance.id },
-            });
-            if (error) throw error;
-            if (!data?.success) throw new Error(data?.error);
-            return data;
+            return await callTemplateApi({ action: 'sync', user_id: user.id, instance_id: activeInstance.id });
         },
         onSuccess: (data) => {
             queryClient.invalidateQueries({ queryKey: ["meta-templates"] });
@@ -123,21 +134,15 @@ const Templates = () => {
                 components.push({ type: "FOOTER", text: newFooterText.trim() });
             }
 
-            const { data, error } = await supabase.functions.invoke('meta-template-manage', {
-                body: {
-                    action: 'create',
-                    user_id: user.id,
-                    instance_id: activeInstance.id,
-                    name: newName.trim(),
-                    category: newCategory,
-                    language: newLanguage,
-                    components,
-                },
+            return await callTemplateApi({
+                action: 'create',
+                user_id: user.id,
+                instance_id: activeInstance.id,
+                name: newName.trim(),
+                category: newCategory,
+                language: newLanguage,
+                components,
             });
-
-            if (error) throw error;
-            if (!data?.success) throw new Error(data?.error);
-            return data;
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["meta-templates"] });
@@ -154,17 +159,12 @@ const Templates = () => {
     const deleteMutation = useMutation({
         mutationFn: async (templateName: string) => {
             if (!activeInstance || !user?.id) throw new Error("Sem instancia ativa");
-            const { data, error } = await supabase.functions.invoke('meta-template-manage', {
-                body: {
-                    action: 'delete',
-                    user_id: user.id,
-                    instance_id: activeInstance.id,
-                    name: templateName,
-                },
+            return await callTemplateApi({
+                action: 'delete',
+                user_id: user.id,
+                instance_id: activeInstance.id,
+                name: templateName,
             });
-            if (error) throw error;
-            if (!data?.success) throw new Error(data?.error);
-            return data;
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["meta-templates"] });
