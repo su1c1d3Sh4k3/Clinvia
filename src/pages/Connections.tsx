@@ -61,9 +61,8 @@ const Connections = () => {
         },
     });
 
-    const instances = allInstances?.filter((i: any) => i.provider !== "meta") || [];
-    const metaInstances = allInstances?.filter((i: any) => i.provider === "meta") || [];
-    console.log('[Connections] UZAPI instances:', instances.length, 'Meta instances:', metaInstances.length);
+    const instances = allInstances?.filter((i: any) => i.provider !== "meta" && !(i.instance_name || '').startsWith("meta-")) || [];
+    const metaInstances = allInstances?.filter((i: any) => i.provider === "meta" || (i.instance_name || '').startsWith("meta-")) || [];
     const loadingWhatsApp = loadingInstances;
     const loadingMeta = loadingInstances;
 

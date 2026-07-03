@@ -51,7 +51,7 @@ const Templates = () => {
                 .order("created_at", { ascending: false });
             if (error) throw error;
             // Filter in JS since 'provider' column isn't in generated types
-            return (data as any[]).filter((i: any) => i.provider === "meta" && i.status === "connected");
+            return (data as any[]).filter((i: any) => (i.provider === "meta" || (i.instance_name || '').startsWith("meta-")) && i.status === "connected");
         },
     });
 
