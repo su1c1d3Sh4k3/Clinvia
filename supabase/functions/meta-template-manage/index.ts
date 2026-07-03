@@ -172,7 +172,7 @@ serve(async (req) => {
             const { data: saved, error: saveError } = await supabase
                 .from("message_templates")
                 .insert({
-                    ownerId,
+                    user_id: ownerId,
                     instance_id,
                     waba_id: wabaId,
                     name,
