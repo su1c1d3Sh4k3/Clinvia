@@ -215,10 +215,10 @@ serve(async (req) => {
 
             if (!metaResp.ok) {
                 const err = await metaResp.text();
-                throw new Error(`Failed to delete template: ${err}`);
+                console.warn("[meta-template-manage] Meta delete failed (will clean local DB anyway):", err);
             }
 
-            // Remove from local DB
+            // Always remove from local DB (even if Meta says not found)
             await supabase
                 .from("message_templates")
                 .delete()
