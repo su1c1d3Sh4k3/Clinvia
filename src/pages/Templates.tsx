@@ -20,19 +20,28 @@ import {
 } from "@/components/ui/dialog";
 
 const SUPABASE_URL = "https://swfshqvvbohnahdyndch.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN3ZnNocXZ2Ym9obmFoZHluZGNoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1OTAyMzIsImV4cCI6MjA3OTE2NjIzMn0.rUja2PsYj9kWODdizhJNS6HjfA9Tg7DrJJylUH8RTnY";
 
 // Helper to call meta-template-manage edge function
 async function callTemplateApi(body: any): Promise<any> {
-    const session = (await supabase.auth.getSession()).data.session;
+    let token = SUPABASE_ANON_KEY;
+    try {
+        const session = (await supabase.auth.getSession()).data.session;
+        if (session?.access_token) token = session.access_token;
+    } catch {}
+
     const resp = await fetch(`${SUPABASE_URL}/functions/v1/meta-template-manage`, {
         method: 'POST',
         headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session?.access_token || ''}`,
+            'Content-Type': 'application/json; charset=utf-8',
+            'Authorization': `Bearer ${token}`,
+            'apikey': SUPABASE_ANON_KEY,
         },
         body: JSON.stringify(body),
     });
-    const data = await resp.json();
+    const text = await resp.text();
+    let data: any;
+    try { data = JSON.parse(text); } catch { throw new Error(`Invalid response: ${text.substring(0, 200)}`); }
     if (!resp.ok || !data.success) {
         console.error('[Templates] API error:', resp.status, data);
         throw new Error(data?.error || `HTTP ${resp.status}`);
