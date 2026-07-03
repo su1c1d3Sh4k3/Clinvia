@@ -139,7 +139,7 @@ export const NavigationSidebar = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("instances")
-        .select("id, name, status")
+        .select("*")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
