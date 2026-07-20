@@ -78,29 +78,32 @@ export default function Team() {
     // Professionals query
     const { data: professionals, isLoading: isProfessionalsLoading } = useProfessionals();
 
-    // Services query (for displaying service names)
-    const { data: services } = useQuery({
-        queryKey: ["services-for-professionals"],
+    // Services query (from services_client)
+    const { data: servicesClient } = useQuery({
+        queryKey: ["services-client-list", ownerId],
+        enabled: !!ownerId,
         queryFn: async () => {
             const { data, error } = await supabase
-                .from("products_services")
-                .select("id, name")
-                .eq("type", "service");
+                .from("services_client" as any)
+                .select("id, name, professionals")
+                .eq("user_id", ownerId!)
+                .eq("status", true)
+                .order("name");
             if (error) throw error;
-            return data || [];
+            return (data || []) as Array<{ id: string; name: string; professionals: string[] | null }>;
         },
     });
 
     // Day names helper
     const DAY_NAMES = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
-    // Helper to get service names from IDs
-    const getServiceNames = (serviceIds: string[] | null) => {
-        if (!serviceIds || serviceIds.length === 0 || !services) return "-";
-        return serviceIds
-            .map(id => services.find((s: any) => s.id === id)?.name)
-            .filter(Boolean)
-            .join(", ") || "-";
+    // Helper to get service names linked to a professional
+    const getServiceNames = (professionalId: string) => {
+        if (!servicesClient) return "-";
+        const linked = servicesClient
+            .filter(s => (s.professionals || []).includes(professionalId))
+            .map(s => s.name);
+        return linked.length > 0 ? linked.join(", ") : "-";
     };
 
     // Helper to get work days names
@@ -571,7 +574,7 @@ export default function Team() {
                                     </TableCell>
                                     <TableCell className="max-w-[150px] hidden md:table-cell py-2 md:py-4">
                                         <span className="text-xs text-muted-foreground truncate block">
-                                            {getServiceNames(professional.service_ids)}
+                                            {getServiceNames(professional.id)}
                                         </span>
                                     </TableCell>
                                     <TableCell className="hidden lg:table-cell py-2 md:py-4">

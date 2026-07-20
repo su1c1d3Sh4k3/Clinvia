@@ -85,14 +85,17 @@ export function ProfessionalModal({ open, onOpenChange, professionalToEdit }: Pr
     const [existingPhoto, setExistingPhoto] = useState<string | null>(null);
 
     const { data: services } = useQuery({
-        queryKey: ["services-list"],
+        queryKey: ["services-client-list", ownerId],
+        enabled: !!ownerId,
         queryFn: async () => {
             const { data, error } = await supabase
-                .from("products_services")
-                .select("id, name")
-                .eq("type", "service");
+                .from("services_client" as any)
+                .select("id, name, professionals")
+                .eq("user_id", ownerId!)
+                .eq("status", true)
+                .order("name");
             if (error) throw error;
-            return data;
+            return (data || []) as Array<{ id: string; name: string; professionals: string[] | null }>;
         },
     });
 
@@ -115,11 +118,15 @@ export function ProfessionalModal({ open, onOpenChange, professionalToEdit }: Pr
 
     useEffect(() => {
         if (professionalToEdit) {
+            // Derive service_ids from services_client.professionals array
+            const linkedServiceIds = (services || [])
+                .filter(s => (s.professionals || []).includes(professionalToEdit.id))
+                .map(s => s.id);
             form.reset({
                 name: professionalToEdit.name,
                 role: professionalToEdit.role || "",
                 commission: professionalToEdit.commission || 0,
-                service_ids: professionalToEdit.service_ids || [],
+                service_ids: linkedServiceIds,
                 work_days: professionalToEdit.work_days || [],
                 work_hours: professionalToEdit.work_hours || {
                     start: "09:00",
@@ -146,7 +153,7 @@ export function ProfessionalModal({ open, onOpenChange, professionalToEdit }: Pr
             setExistingPhoto(null);
             setPhotoFile(null);
         }
-    }, [professionalToEdit, open, form]);
+    }, [professionalToEdit, open, form, services]);
 
     const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files?.[0]) {
@@ -204,25 +211,25 @@ export function ProfessionalModal({ open, onOpenChange, professionalToEdit }: Pr
                 name: values.name,
                 role: values.role,
                 commission: values.commission,
-                service_ids: values.service_ids,
                 work_days: values.work_days,
                 work_hours: values.work_hours,
                 photo_url: photoUrl,
             };
 
+            let professionalId: string;
+
             if (professionalToEdit) {
-                const { data: updated, error } = await supabase
+                const { error } = await supabase
                     .from("professionals" as any)
                     .update(payload)
-                    .eq("id", professionalToEdit.id)
-                    .select()
-                    .single();
+                    .eq("id", professionalToEdit.id);
                 if (error) {
                     if (error.code === "PGRST116") {
                         throw new Error("Não foi possível atualizar o profissional. Verifique suas permissões.");
                     }
                     throw error;
                 }
+                professionalId = professionalToEdit.id;
                 toast({ title: "Profissional atualizado com sucesso!" });
             } else {
                 const { data: newProf, error } = await supabase
@@ -231,10 +238,10 @@ export function ProfessionalModal({ open, onOpenChange, professionalToEdit }: Pr
                     .select("id")
                     .single();
                 if (error) throw error;
+                professionalId = newProf.id;
                 toast({ title: "Profissional criado com sucesso!" });
 
-                // Fire-and-forget: criar sub-calendário Google para o novo profissional,
-                // caso a clínica já tenha uma conexão Google Calendar ativa.
+                // Fire-and-forget: criar sub-calendário Google para o novo profissional
                 if (newProf?.id) {
                     const { data: clinicConn } = await supabase
                         .from("professional_google_calendars")
@@ -256,7 +263,31 @@ export function ProfessionalModal({ open, onOpenChange, professionalToEdit }: Pr
                 }
             }
 
+            // Update services_client.professionals for each service
+            const selectedServiceIds = new Set(values.service_ids);
+            const updates = (services || []).map(svc => {
+                const currentPros = svc.professionals || [];
+                const hasPro = currentPros.includes(professionalId);
+                const shouldHave = selectedServiceIds.has(svc.id);
+
+                if (shouldHave && !hasPro) {
+                    return supabase
+                        .from("services_client" as any)
+                        .update({ professionals: [...currentPros, professionalId] })
+                        .eq("id", svc.id);
+                } else if (!shouldHave && hasPro) {
+                    return supabase
+                        .from("services_client" as any)
+                        .update({ professionals: currentPros.filter((p: string) => p !== professionalId) })
+                        .eq("id", svc.id);
+                }
+                return null;
+            }).filter(Boolean);
+
+            await Promise.all(updates);
+
             queryClient.invalidateQueries({ queryKey: ["professionals-list"] });
+            queryClient.invalidateQueries({ queryKey: ["services-client-list"] });
             onOpenChange(false);
         } catch (error: any) {
             toast({
