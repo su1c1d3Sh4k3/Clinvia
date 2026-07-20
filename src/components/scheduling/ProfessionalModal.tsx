@@ -256,7 +256,7 @@ export function ProfessionalModal({ open, onOpenChange, professionalToEdit }: Pr
                 }
             }
 
-            queryClient.invalidateQueries({ queryKey: ["professionals"] });
+            queryClient.invalidateQueries({ queryKey: ["professionals-list"] });
             onOpenChange(false);
         } catch (error: any) {
             toast({
