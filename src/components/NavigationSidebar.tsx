@@ -42,7 +42,7 @@ const menuStructure: MenuItem[] = [
       { icon: Bot, label: "IA", id: "ia-config", path: "/ia-config" },
       { icon: Smartphone, label: "Conexões", id: "whatsapp", path: "/whatsapp-connection" },
       { icon: FileText, label: "Templates", id: "templates", path: "/templates" },
-      { icon: Settings, label: "Sistema", id: "settings", path: "/settings" },
+      { icon: Settings, label: "Perfil", id: "settings", path: "/settings" },
     ]
   },
 ];
