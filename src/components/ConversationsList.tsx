@@ -360,10 +360,10 @@ export const ConversationsList = ({
             </Button>
           </div>
 
-          <div className="flex items-center flex-1 justify-evenly">
+          <div className="grid grid-cols-4 gap-1.5 flex-1">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="icon" className="h-7 w-7" title="Filtros Avançados">
+                <Button variant="outline" size="icon" className="h-7 w-full" title="Filtros Avançados">
                   <Filter className="h-3.5 w-3.5" />
                 </Button>
               </DropdownMenuTrigger>
@@ -427,12 +427,12 @@ export const ConversationsList = ({
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <TagAssignment contactId={selectedConversation?.contacts?.id} />
+            <TagAssignment contactId={selectedConversation?.contacts?.id} triggerClassName="h-7 w-full" iconClassName="h-3.5 w-3.5" />
 
             <Button
               variant="outline"
               size="icon"
-              className="h-7 w-7"
+              className="h-7 w-full"
               onClick={() => onOpenNewMessage?.()}
               title="Nova Mensagem"
             >
@@ -442,7 +442,7 @@ export const ConversationsList = ({
             <Button
               variant={isSearchOpen ? "secondary" : "outline"}
               size="icon"
-              className="h-7 w-7"
+              className="h-7 w-full"
               title="Buscar Mensagem"
               onClick={() => setIsSearchOpen(!isSearchOpen)}
             >
@@ -460,47 +460,41 @@ export const ConversationsList = ({
             setTab(v as any);
           }
         }} className="w-full">
-          <TabsList className="grid w-full grid-cols-4 h-auto">
-            <TabsTrigger value="open" className="flex items-center gap-1 py-1.5 h-auto relative data-[state=active]:text-primary">
-              <div className="relative">
-                <MessageSquare className="h-3.5 w-3.5" />
-                {((unreadCounts as any)[selectedChannelFilter]?.open || 0) > 0 && (
-                  <Badge className="absolute -top-1.5 -right-2.5 h-4 min-w-[1rem] px-0.5 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] border-[1.5px] border-background">
-                    {(unreadCounts as any)[selectedChannelFilter]?.open || 0}
-                  </Badge>
-                )}
-              </div>
+          <TabsList className={cn("grid w-full h-auto", selectedChannelFilter === "whatsapp" ? "grid-cols-4" : "grid-cols-3")}>
+            <TabsTrigger value="open" className="flex flex-col items-center gap-0.5 py-1.5 h-auto relative data-[state=active]:text-primary">
+              <MessageSquare className="h-4 w-4" />
               <span className="text-[10px] font-medium">Abertos</span>
+              {((unreadCounts as any)[selectedChannelFilter]?.open || 0) > 0 && (
+                <Badge className="absolute top-0.5 right-1 h-4 min-w-[1rem] px-0.5 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] border-[1.5px] border-background">
+                  {(unreadCounts as any)[selectedChannelFilter]?.open || 0}
+                </Badge>
+              )}
             </TabsTrigger>
 
-            <TabsTrigger value="pending" className="flex items-center gap-1 py-1.5 h-auto relative data-[state=active]:text-primary">
-              <div className="relative">
-                <Clock className="h-3.5 w-3.5" />
-                {((unreadCounts as any)[selectedChannelFilter]?.pending || 0) > 0 && (
-                  <Badge className="absolute -top-1.5 -right-2.5 h-4 min-w-[1rem] px-0.5 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] border-[1.5px] border-background">
-                    {(unreadCounts as any)[selectedChannelFilter]?.pending || 0}
-                  </Badge>
-                )}
-              </div>
+            <TabsTrigger value="pending" className="flex flex-col items-center gap-0.5 py-1.5 h-auto relative data-[state=active]:text-primary">
+              <Clock className="h-4 w-4" />
               <span className="text-[10px] font-medium">Pendentes</span>
+              {((unreadCounts as any)[selectedChannelFilter]?.pending || 0) > 0 && (
+                <Badge className="absolute top-0.5 right-1 h-4 min-w-[1rem] px-0.5 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] border-[1.5px] border-background">
+                  {(unreadCounts as any)[selectedChannelFilter]?.pending || 0}
+                </Badge>
+              )}
             </TabsTrigger>
 
-            <TabsTrigger value="resolved" className="flex items-center gap-1 py-1.5 h-auto data-[state=active]:text-primary">
-              <CheckCheck className="h-3.5 w-3.5" />
+            <TabsTrigger value="resolved" className="flex flex-col items-center gap-0.5 py-1.5 h-auto data-[state=active]:text-primary">
+              <CheckCheck className="h-4 w-4" />
               <span className="text-[10px] font-medium">Resolvidos</span>
             </TabsTrigger>
 
             {selectedChannelFilter === "whatsapp" && (
-              <TabsTrigger value="groups" className="flex items-center gap-1 py-1.5 h-auto relative data-[state=active]:text-primary">
-                <div className="relative">
-                  <MessageSquare className="h-3.5 w-3.5" />
-                  {((unreadCounts as any)[selectedChannelFilter]?.groups || 0) > 0 && (
-                    <Badge className="absolute -top-1.5 -right-2.5 h-4 min-w-[1rem] px-0.5 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] border-[1.5px] border-background">
-                      {(unreadCounts as any)[selectedChannelFilter]?.groups || 0}
-                    </Badge>
-                  )}
-                </div>
+              <TabsTrigger value="groups" className="flex flex-col items-center gap-0.5 py-1.5 h-auto relative data-[state=active]:text-primary">
+                <MessageSquare className="h-4 w-4" />
                 <span className="text-[10px] font-medium">Grupos</span>
+                {((unreadCounts as any)[selectedChannelFilter]?.groups || 0) > 0 && (
+                  <Badge className="absolute top-0.5 right-1 h-4 min-w-[1rem] px-0.5 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] border-[1.5px] border-background">
+                    {(unreadCounts as any)[selectedChannelFilter]?.groups || 0}
+                  </Badge>
+                )}
               </TabsTrigger>
             )}
           </TabsList>
