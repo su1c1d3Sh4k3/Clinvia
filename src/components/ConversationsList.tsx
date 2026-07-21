@@ -336,10 +336,10 @@ export const ConversationsList = ({
 
   return (
     <div className="w-full md:w-[360px] h-full border-r border-[#1E2229]/20 dark:border-border flex flex-col bg-white dark:bg-background overflow-hidden">
-      <div className="p-3 border-b border-[#1E2229]/20 dark:border-border space-y-2.5">
+      <div className="p-3 border-b border-[#1E2229]/20 dark:border-border space-y-2">
         {/* Top bar: Channel toggle + Action buttons */}
-        <div className="flex items-center gap-1">
-          <div className="flex items-center gap-0.5 bg-muted rounded-lg p-0.5">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-0.5 bg-muted rounded-lg p-0.5 flex-shrink-0">
             <Button
               variant={selectedChannelFilter === 'whatsapp' ? 'secondary' : 'ghost'}
               size="icon"
@@ -360,88 +360,84 @@ export const ConversationsList = ({
             </Button>
           </div>
 
-          <div className="flex items-center gap-1 ml-auto">
-            {selectedTypeFilter !== "groups" && (
-              <>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="icon" className="h-7 w-7" title="Filtros Avançados">
-                      <Filter className="h-3.5 w-3.5" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-56 p-2 space-y-2">
-                    <div className="space-y-1">
-                      <span className="text-xs font-medium text-muted-foreground ml-2">Filas</span>
-                      <select
-                        className="w-full text-sm border rounded p-1 bg-background"
-                        value={selectedQueueFilter || ""}
-                        onChange={(e) => setSelectedQueueFilter(e.target.value || null)}
-                      >
-                        <option value="">Todas as Filas</option>
-                        {queues?.map((q: any) => (
-                          <option key={q.id} value={q.id}>{q.name}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="space-y-1">
-                      <span className="text-xs font-medium text-muted-foreground ml-2">Tags</span>
-                      <select
-                        className="w-full text-sm border rounded p-1 bg-background"
-                        value={selectedTagFilter || ""}
-                        onChange={(e) => setSelectedTagFilter(e.target.value || null)}
-                      >
-                        <option value="">Todas as Tags</option>
-                        {tags?.map((t: any) => (
-                          <option key={t.id} value={t.id}>{t.name}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="space-y-1">
-                      <span className="text-xs font-medium text-muted-foreground ml-2">Instâncias</span>
-                      <select
-                        className="w-full text-sm border rounded p-1 bg-background"
-                        value={selectedInstanceFilter || ""}
-                        onChange={(e) => setSelectedInstanceFilter(e.target.value || null)}
-                      >
-                        <option value="">Todas as Instâncias</option>
-                        {instances?.map((i: any) => (
-                          <option key={i.id} value={i.id}>{i.name}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {(selectedQueueFilter || selectedTagFilter || selectedInstanceFilter) && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="w-full text-xs h-7"
-                        onClick={() => {
-                          setSelectedQueueFilter(null);
-                          setSelectedTagFilter(null);
-                          setSelectedInstanceFilter(null);
-                        }}
-                      >
-                        Limpar Filtros
-                      </Button>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-
-                <TagAssignment contactId={selectedConversation?.contacts?.id} />
-
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-7 w-7"
-                  onClick={() => onOpenNewMessage?.()}
-                  title="Nova Mensagem"
-                >
-                  <Send className="h-3.5 w-3.5" />
+          <div className="flex items-center flex-1 justify-evenly">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon" className="h-7 w-7" title="Filtros Avançados">
+                  <Filter className="h-3.5 w-3.5" />
                 </Button>
-              </>
-            )}
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56 p-2 space-y-2">
+                <div className="space-y-1">
+                  <span className="text-xs font-medium text-muted-foreground ml-2">Filas</span>
+                  <select
+                    className="w-full text-sm border rounded p-1 bg-background"
+                    value={selectedQueueFilter || ""}
+                    onChange={(e) => setSelectedQueueFilter(e.target.value || null)}
+                  >
+                    <option value="">Todas as Filas</option>
+                    {queues?.map((q: any) => (
+                      <option key={q.id} value={q.id}>{q.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <span className="text-xs font-medium text-muted-foreground ml-2">Tags</span>
+                  <select
+                    className="w-full text-sm border rounded p-1 bg-background"
+                    value={selectedTagFilter || ""}
+                    onChange={(e) => setSelectedTagFilter(e.target.value || null)}
+                  >
+                    <option value="">Todas as Tags</option>
+                    {tags?.map((t: any) => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <span className="text-xs font-medium text-muted-foreground ml-2">Instâncias</span>
+                  <select
+                    className="w-full text-sm border rounded p-1 bg-background"
+                    value={selectedInstanceFilter || ""}
+                    onChange={(e) => setSelectedInstanceFilter(e.target.value || null)}
+                  >
+                    <option value="">Todas as Instâncias</option>
+                    {instances?.map((i: any) => (
+                      <option key={i.id} value={i.id}>{i.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {(selectedQueueFilter || selectedTagFilter || selectedInstanceFilter) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full text-xs h-7"
+                    onClick={() => {
+                      setSelectedQueueFilter(null);
+                      setSelectedTagFilter(null);
+                      setSelectedInstanceFilter(null);
+                    }}
+                  >
+                    Limpar Filtros
+                  </Button>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <TagAssignment contactId={selectedConversation?.contacts?.id} />
+
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => onOpenNewMessage?.()}
+              title="Nova Mensagem"
+            >
+              <Send className="h-3.5 w-3.5" />
+            </Button>
 
             <Button
               variant={isSearchOpen ? "secondary" : "outline"}
@@ -452,82 +448,63 @@ export const ConversationsList = ({
             >
               <Search className="h-3.5 w-3.5" />
             </Button>
-
-            <Button
-              variant={unreadOnly ? "default" : "outline"}
-              size="icon"
-              className={cn("h-7 w-7", unreadOnly && "bg-primary text-primary-foreground")}
-              title="Não Lidas"
-              onClick={() => setUnreadOnly(!unreadOnly)}
-            >
-              <MailCheck className="h-3.5 w-3.5" />
-            </Button>
           </div>
         </div>
-        {/* Pessoas/Grupos tabs - only show for WhatsApp, Instagram doesn't have groups */}
-        {selectedChannelFilter === "whatsapp" && (
-          <Tabs defaultValue="people" className="w-full" onValueChange={(v) => {
-            // Reset status tab when switching between people/groups if needed, or keep it independent.
-            // For now, we will keep the status tab independent but visually separated.
-          }}>
-            <TabsList className="grid w-full grid-cols-2 mb-2">
-              <TabsTrigger value="people" onClick={() => setSelectedTypeFilter("people")} className="relative">
-                Pessoas
-                {((unreadCounts as any)[selectedChannelFilter]?.people || 0) > 0 && (
-                  <Badge className="ml-2 h-5 w-5 p-0 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px]">
-                    {(unreadCounts as any)[selectedChannelFilter]?.people || 0}
-                  </Badge>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="groups" onClick={() => setSelectedTypeFilter("groups")} className="relative">
-                Grupos
-                {((unreadCounts as any)[selectedChannelFilter]?.groups || 0) > 0 && (
-                  <Badge className="ml-2 h-5 w-5 p-0 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px]">
-                    {(unreadCounts as any)[selectedChannelFilter]?.groups || 0}
-                  </Badge>
-                )}
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-        )}
 
-        {/* Hide Status Tabs for Groups */}
-        {selectedTypeFilter !== "groups" && (
-          <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="w-full">
-            <TabsList className="grid w-full grid-cols-3 h-auto">
-              <TabsTrigger value="open" className="flex items-center gap-1.5 py-1.5 h-auto relative data-[state=active]:text-primary">
+        {/* Status Tabs: Abertos, Pendentes, Resolvidos, Grupos */}
+        <Tabs value={selectedTypeFilter === "groups" ? "groups" : tab} onValueChange={(v) => {
+          if (v === "groups") {
+            setSelectedTypeFilter("groups");
+          } else {
+            setSelectedTypeFilter("people");
+            setTab(v as any);
+          }
+        }} className="w-full">
+          <TabsList className="grid w-full grid-cols-4 h-auto">
+            <TabsTrigger value="open" className="flex items-center gap-1 py-1.5 h-auto relative data-[state=active]:text-primary">
+              <div className="relative">
+                <MessageSquare className="h-3.5 w-3.5" />
+                {((unreadCounts as any)[selectedChannelFilter]?.open || 0) > 0 && (
+                  <Badge className="absolute -top-1.5 -right-2.5 h-4 min-w-[1rem] px-0.5 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] border-[1.5px] border-background">
+                    {(unreadCounts as any)[selectedChannelFilter]?.open || 0}
+                  </Badge>
+                )}
+              </div>
+              <span className="text-[10px] font-medium">Abertos</span>
+            </TabsTrigger>
+
+            <TabsTrigger value="pending" className="flex items-center gap-1 py-1.5 h-auto relative data-[state=active]:text-primary">
+              <div className="relative">
+                <Clock className="h-3.5 w-3.5" />
+                {((unreadCounts as any)[selectedChannelFilter]?.pending || 0) > 0 && (
+                  <Badge className="absolute -top-1.5 -right-2.5 h-4 min-w-[1rem] px-0.5 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] border-[1.5px] border-background">
+                    {(unreadCounts as any)[selectedChannelFilter]?.pending || 0}
+                  </Badge>
+                )}
+              </div>
+              <span className="text-[10px] font-medium">Pendentes</span>
+            </TabsTrigger>
+
+            <TabsTrigger value="resolved" className="flex items-center gap-1 py-1.5 h-auto data-[state=active]:text-primary">
+              <CheckCheck className="h-3.5 w-3.5" />
+              <span className="text-[10px] font-medium">Resolvidos</span>
+            </TabsTrigger>
+
+            {selectedChannelFilter === "whatsapp" && (
+              <TabsTrigger value="groups" className="flex items-center gap-1 py-1.5 h-auto relative data-[state=active]:text-primary">
                 <div className="relative">
-                  <MessageSquare className="h-4 w-4" />
-                  {((unreadCounts as any)[selectedChannelFilter]?.open || 0) > 0 && (
+                  <MessageSquare className="h-3.5 w-3.5" />
+                  {((unreadCounts as any)[selectedChannelFilter]?.groups || 0) > 0 && (
                     <Badge className="absolute -top-1.5 -right-2.5 h-4 min-w-[1rem] px-0.5 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] border-[1.5px] border-background">
-                      {(unreadCounts as any)[selectedChannelFilter]?.open || 0}
+                      {(unreadCounts as any)[selectedChannelFilter]?.groups || 0}
                     </Badge>
                   )}
                 </div>
-                <span className="text-[11px] font-medium">Abertos</span>
+                <span className="text-[10px] font-medium">Grupos</span>
               </TabsTrigger>
-
-              <TabsTrigger value="pending" className="flex items-center gap-1.5 py-1.5 h-auto relative data-[state=active]:text-primary">
-                <div className="relative">
-                  <Clock className="h-4 w-4" />
-                  {((unreadCounts as any)[selectedChannelFilter]?.pending || 0) > 0 && (
-                    <Badge className="absolute -top-1.5 -right-2.5 h-4 min-w-[1rem] px-0.5 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] border-[1.5px] border-background">
-                      {(unreadCounts as any)[selectedChannelFilter]?.pending || 0}
-                    </Badge>
-                  )}
-                </div>
-                <span className="text-[11px] font-medium">Pendentes</span>
-              </TabsTrigger>
-
-              <TabsTrigger value="resolved" className="flex items-center gap-1.5 py-1.5 h-auto data-[state=active]:text-primary">
-                <div className="relative">
-                  <CheckCheck className="h-4 w-4" />
-                </div>
-                <span className="text-[11px] font-medium">Resolvidos</span>
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-        )}
+            )}
+          </TabsList>
+        </Tabs>
 
         {/* Message Search Bar */}
         {isSearchOpen && setSearchTerm && (
@@ -569,14 +546,29 @@ export const ConversationsList = ({
           </div>
         )}
 
-        <div className="relative">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-black dark:text-white" />
-          <Input
-            placeholder="Buscar contatos..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-8 border-secondary"
-          />
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-black dark:text-white" />
+            <Input
+              placeholder="Buscar contatos..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-8 border-secondary"
+            />
+          </div>
+          <button
+            onClick={() => setUnreadOnly(!unreadOnly)}
+            className={cn(
+              "flex flex-col items-center gap-0.5 px-2 py-1 rounded-md border transition-colors flex-shrink-0",
+              unreadOnly
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-background text-muted-foreground border-input hover:bg-muted"
+            )}
+            title="Filtrar não lidas"
+          >
+            <MailCheck className="h-4 w-4" />
+            <span className="text-[9px] font-medium leading-none">Não lidas</span>
+          </button>
         </div>
       </div>
 
@@ -746,13 +738,13 @@ export const ConversationsList = ({
                         {(conversation as any).assigned_agent_id && (() => {
                           const assignedAgent = staffMembers?.find(m => m.id === (conversation as any).assigned_agent_id);
                           return assignedAgent ? (
-                            <span className="truncate max-w-[90px]" title={assignedAgent.name}>
+                            <span className="truncate" title={assignedAgent.name}>
                               👤 {assignedAgent.name.split(' ')[0]}
                             </span>
                           ) : null;
                         })()}
                         {(conversation as any).assigned_agent_id && queueName && <span className="text-border/60 mx-0.5">·</span>}
-                        {queueName && <span className="truncate max-w-[70px]" title={queueName}>{queueName}</span>}
+                        {queueName && <span className="truncate" title={queueName}>{queueName}</span>}
                       </div>
                     </div>
 
