@@ -25,7 +25,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { NewMessageModal } from "@/components/NewMessageModal";
 import { TagAssignment } from "@/components/TagAssignment";
-import { ContactDetailsDialog } from "@/components/ContactDetailsDialog";
+import { ClientProfileModal } from "@/components/contacts/ClientProfileModal";
 import { ContactModal } from "@/components/ContactModal";
 import { useFollowUpNotifications } from "@/hooks/useFollowUp";
 
@@ -136,7 +136,6 @@ export const ConversationsList = ({
   const [isContactDetailsOpen, setIsContactDetailsOpen] = useState(false);
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [selectedContactForDetails, setSelectedContactForDetails] = useState<any>(null);
-  const [selectedConversationForDetails, setSelectedConversationForDetails] = useState<any>(null);
   const [editingContact, setEditingContact] = useState<any>(null);
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<"people" | "groups">("people");
   const [unreadOnly, setUnreadOnly] = useState(false);
@@ -761,7 +760,6 @@ export const ConversationsList = ({
                         onClick={(e) => {
                           e.stopPropagation();
                           setSelectedContactForDetails(contact);
-                          setSelectedConversationForDetails(conversation);
                           setIsContactDetailsOpen(true);
                         }}
                         title="Ver Detalhes"
@@ -794,15 +792,10 @@ export const ConversationsList = ({
 
 
 
-      <ContactDetailsDialog
+      <ClientProfileModal
         open={isContactDetailsOpen}
         onOpenChange={setIsContactDetailsOpen}
         contact={selectedContactForDetails}
-        conversation={selectedConversationForDetails}
-        onEdit={(contact) => {
-          setEditingContact(contact);
-          setIsContactModalOpen(true);
-        }}
       />
 
       <ContactModal
