@@ -197,7 +197,7 @@ async function processSignup(
                 meta_access_token: accessToken,
                 meta_waba_id: wabaId,
                 status: "connected",
-                phone: displayPhoneNumber,
+                client_number: displayPhoneNumber,
                 user_name: verifiedName,
                 updated_at: new Date().toISOString(),
             })
@@ -277,7 +277,7 @@ async function processSignup(
             meta_phone_number_id: phoneNumberId,
             meta_access_token: accessToken,
             status: "connected",
-            phone: displayPhoneNumber,
+            client_number: displayPhoneNumber,
             user_name: verifiedName,
             default_queue_id: defaultQueueId,
             webhook_url: webhookUrl,
