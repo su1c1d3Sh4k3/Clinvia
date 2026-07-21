@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
-import { Search, Filter, Plus, MessageSquare, Send, Tag as TagIcon, Eye, Check, CheckCheck, Clock, FileText, Mic, Image as ImageIcon, Video, StickyNote } from "lucide-react";
+import { Search, Filter, Plus, MessageSquare, Send, Tag as TagIcon, Eye, Check, CheckCheck, Clock, FileText, Mic, Image as ImageIcon, Video, StickyNote, MailCheck } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { FaWhatsapp, FaInstagram } from "react-icons/fa";
@@ -139,6 +139,7 @@ export const ConversationsList = ({
   const [selectedConversationForDetails, setSelectedConversationForDetails] = useState<any>(null);
   const [editingContact, setEditingContact] = useState<any>(null);
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<"people" | "groups">("people");
+  const [unreadOnly, setUnreadOnly] = useState(false);
 
   // Aba do Inbox (WhatsApp/Instagram) persistida em sessionStorage:
   // - F5 / refresh mantém a aba (sessionStorage sobrevive ao reload)
@@ -313,7 +314,10 @@ export const ConversationsList = ({
     // Filter by People vs Groups
     const matchesType = selectedTypeFilter === "groups" ? isGroup : !isGroup;
 
-    return matchesSearch && matchesQueue && matchesTag && matchesInstance && matchesType;
+    // Filter by unread only
+    const matchesUnread = unreadOnly ? (conv.unread_count || 0) > 0 : true;
+
+    return matchesSearch && matchesQueue && matchesTag && matchesInstance && matchesType && matchesUnread;
   });
 
   const selectedConversation = conversations.find(c => c.id === selectedId);
@@ -332,10 +336,10 @@ export const ConversationsList = ({
 
   return (
     <div className="w-full md:w-[360px] h-full border-r border-[#1E2229]/20 dark:border-border flex flex-col bg-white dark:bg-background overflow-hidden">
-      <div className="p-4 border-b border-[#1E2229]/20 dark:border-border space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Inbox</h2>
-          <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
+      <div className="p-3 border-b border-[#1E2229]/20 dark:border-border space-y-2.5">
+        {/* Top bar: Channel toggle + Action buttons */}
+        <div className="flex items-center gap-1">
+          <div className="flex items-center gap-0.5 bg-muted rounded-lg p-0.5">
             <Button
               variant={selectedChannelFilter === 'whatsapp' ? 'secondary' : 'ghost'}
               size="icon"
@@ -343,7 +347,7 @@ export const ConversationsList = ({
               onClick={() => setSelectedChannelFilter('whatsapp')}
               title="WhatsApp"
             >
-              <FaWhatsapp className={`h-4 w-4 ${selectedChannelFilter === 'whatsapp' ? 'text-green-500' : 'text-muted-foreground'}`} />
+              <FaWhatsapp className={`h-3.5 w-3.5 ${selectedChannelFilter === 'whatsapp' ? 'text-green-500' : 'text-muted-foreground'}`} />
             </Button>
             <Button
               variant={selectedChannelFilter === 'instagram' ? 'secondary' : 'ghost'}
@@ -352,104 +356,113 @@ export const ConversationsList = ({
               onClick={() => setSelectedChannelFilter('instagram')}
               title="Instagram"
             >
-              <FaInstagram className={`h-4 w-4 ${selectedChannelFilter === 'instagram' ? 'text-pink-500' : 'text-muted-foreground'}`} />
+              <FaInstagram className={`h-3.5 w-3.5 ${selectedChannelFilter === 'instagram' ? 'text-pink-500' : 'text-muted-foreground'}`} />
             </Button>
           </div>
-        </div>
 
-        {/* Action Buttons */}
-        <div className="flex gap-2">
-          {selectedTypeFilter !== "groups" && (
-            <>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="icon" className="flex-1" title="Filtros Avançados">
-                    <Filter className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-56 p-2 space-y-2">
-                  <div className="space-y-1">
-                    <span className="text-xs font-medium text-muted-foreground ml-2">Filas</span>
-                    <select
-                      className="w-full text-sm border rounded p-1 bg-background"
-                      value={selectedQueueFilter || ""}
-                      onChange={(e) => setSelectedQueueFilter(e.target.value || null)}
-                    >
-                      <option value="">Todas as Filas</option>
-                      {queues?.map((q: any) => (
-                        <option key={q.id} value={q.id}>{q.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <span className="text-xs font-medium text-muted-foreground ml-2">Tags</span>
-                    <select
-                      className="w-full text-sm border rounded p-1 bg-background"
-                      value={selectedTagFilter || ""}
-                      onChange={(e) => setSelectedTagFilter(e.target.value || null)}
-                    >
-                      <option value="">Todas as Tags</option>
-                      {tags?.map((t: any) => (
-                        <option key={t.id} value={t.id}>{t.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <span className="text-xs font-medium text-muted-foreground ml-2">Instâncias</span>
-                    <select
-                      className="w-full text-sm border rounded p-1 bg-background"
-                      value={selectedInstanceFilter || ""}
-                      onChange={(e) => setSelectedInstanceFilter(e.target.value || null)}
-                    >
-                      <option value="">Todas as Instâncias</option>
-                      {instances?.map((i: any) => (
-                        <option key={i.id} value={i.id}>{i.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {(selectedQueueFilter || selectedTagFilter || selectedInstanceFilter) && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="w-full text-xs h-7"
-                      onClick={() => {
-                        setSelectedQueueFilter(null);
-                        setSelectedTagFilter(null);
-                        setSelectedInstanceFilter(null);
-                      }}
-                    >
-                      Limpar Filtros
+          <div className="flex items-center gap-1 ml-auto">
+            {selectedTypeFilter !== "groups" && (
+              <>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="icon" className="h-7 w-7" title="Filtros Avançados">
+                      <Filter className="h-3.5 w-3.5" />
                     </Button>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-56 p-2 space-y-2">
+                    <div className="space-y-1">
+                      <span className="text-xs font-medium text-muted-foreground ml-2">Filas</span>
+                      <select
+                        className="w-full text-sm border rounded p-1 bg-background"
+                        value={selectedQueueFilter || ""}
+                        onChange={(e) => setSelectedQueueFilter(e.target.value || null)}
+                      >
+                        <option value="">Todas as Filas</option>
+                        {queues?.map((q: any) => (
+                          <option key={q.id} value={q.id}>{q.name}</option>
+                        ))}
+                      </select>
+                    </div>
 
-              <TagAssignment contactId={selectedConversation?.contacts?.id} />
+                    <div className="space-y-1">
+                      <span className="text-xs font-medium text-muted-foreground ml-2">Tags</span>
+                      <select
+                        className="w-full text-sm border rounded p-1 bg-background"
+                        value={selectedTagFilter || ""}
+                        onChange={(e) => setSelectedTagFilter(e.target.value || null)}
+                      >
+                        <option value="">Todas as Tags</option>
+                        {tags?.map((t: any) => (
+                          <option key={t.id} value={t.id}>{t.name}</option>
+                        ))}
+                      </select>
+                    </div>
 
-              <Button
-                variant="outline"
-                size="icon"
-                className="flex-1"
-                onClick={() => onOpenNewMessage?.()}
-                title="Nova Mensagem"
-              >
-                <Send className="h-4 w-4 text-black dark:text-white" />
-              </Button>
-            </>
-          )}
+                    <div className="space-y-1">
+                      <span className="text-xs font-medium text-muted-foreground ml-2">Instâncias</span>
+                      <select
+                        className="w-full text-sm border rounded p-1 bg-background"
+                        value={selectedInstanceFilter || ""}
+                        onChange={(e) => setSelectedInstanceFilter(e.target.value || null)}
+                      >
+                        <option value="">Todas as Instâncias</option>
+                        {instances?.map((i: any) => (
+                          <option key={i.id} value={i.id}>{i.name}</option>
+                        ))}
+                      </select>
+                    </div>
 
-          <Button
-            variant={isSearchOpen ? "secondary" : "outline"}
-            size="icon"
-            className="flex-1"
-            title="Buscar Mensagem"
-            onClick={() => setIsSearchOpen(!isSearchOpen)}
-          >
-            <Search className="h-4 w-4 text-black dark:text-white" />
-          </Button>
+                    {(selectedQueueFilter || selectedTagFilter || selectedInstanceFilter) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full text-xs h-7"
+                        onClick={() => {
+                          setSelectedQueueFilter(null);
+                          setSelectedTagFilter(null);
+                          setSelectedInstanceFilter(null);
+                        }}
+                      >
+                        Limpar Filtros
+                      </Button>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                <TagAssignment contactId={selectedConversation?.contacts?.id} />
+
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => onOpenNewMessage?.()}
+                  title="Nova Mensagem"
+                >
+                  <Send className="h-3.5 w-3.5" />
+                </Button>
+              </>
+            )}
+
+            <Button
+              variant={isSearchOpen ? "secondary" : "outline"}
+              size="icon"
+              className="h-7 w-7"
+              title="Buscar Mensagem"
+              onClick={() => setIsSearchOpen(!isSearchOpen)}
+            >
+              <Search className="h-3.5 w-3.5" />
+            </Button>
+
+            <Button
+              variant={unreadOnly ? "default" : "outline"}
+              size="icon"
+              className={cn("h-7 w-7", unreadOnly && "bg-primary text-primary-foreground")}
+              title="Não Lidas"
+              onClick={() => setUnreadOnly(!unreadOnly)}
+            >
+              <MailCheck className="h-3.5 w-3.5" />
+            </Button>
+          </div>
         </div>
         {/* Pessoas/Grupos tabs - only show for WhatsApp, Instagram doesn't have groups */}
         {selectedChannelFilter === "whatsapp" && (
@@ -482,65 +495,35 @@ export const ConversationsList = ({
         {selectedTypeFilter !== "groups" && (
           <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="w-full">
             <TabsList className="grid w-full grid-cols-3 h-auto">
-              <TabsTrigger value="open" className="flex flex-col items-center gap-1 py-2 h-auto relative data-[state=active]:text-primary">
+              <TabsTrigger value="open" className="flex items-center gap-1.5 py-1.5 h-auto relative data-[state=active]:text-primary">
                 <div className="relative">
-                  <MessageSquare className="h-5 w-5" />
+                  <MessageSquare className="h-4 w-4" />
                   {((unreadCounts as any)[selectedChannelFilter]?.open || 0) > 0 && (
-                    <Badge className="absolute -top-2 -right-3 h-5 min-w-[1.25rem] px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] border-2 border-background">
+                    <Badge className="absolute -top-1.5 -right-2.5 h-4 min-w-[1rem] px-0.5 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] border-[1.5px] border-background">
                       {(unreadCounts as any)[selectedChannelFilter]?.open || 0}
                     </Badge>
                   )}
                 </div>
-                <span className="text-xs font-medium">Abertos</span>
+                <span className="text-[11px] font-medium">Abertos</span>
               </TabsTrigger>
 
-              <TabsTrigger value="pending" className="flex flex-col items-center gap-1 py-2 h-auto relative data-[state=active]:text-primary">
+              <TabsTrigger value="pending" className="flex items-center gap-1.5 py-1.5 h-auto relative data-[state=active]:text-primary">
                 <div className="relative">
-                  <div className="relative">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="lucide lucide-clock"
-                    >
-                      <circle cx="12" cy="12" r="10" />
-                      <polyline points="12 6 12 12 16 14" />
-                    </svg>
-                  </div>
+                  <Clock className="h-4 w-4" />
                   {((unreadCounts as any)[selectedChannelFilter]?.pending || 0) > 0 && (
-                    <Badge className="absolute -top-2 -right-3 h-5 min-w-[1.25rem] px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] border-2 border-background">
+                    <Badge className="absolute -top-1.5 -right-2.5 h-4 min-w-[1rem] px-0.5 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] border-[1.5px] border-background">
                       {(unreadCounts as any)[selectedChannelFilter]?.pending || 0}
                     </Badge>
                   )}
                 </div>
-                <span className="text-xs font-medium">Pendentes</span>
+                <span className="text-[11px] font-medium">Pendentes</span>
               </TabsTrigger>
 
-              <TabsTrigger value="resolved" className="flex flex-col items-center gap-1 py-2 h-auto data-[state=active]:text-primary">
+              <TabsTrigger value="resolved" className="flex items-center gap-1.5 py-1.5 h-auto data-[state=active]:text-primary">
                 <div className="relative">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="lucide lucide-check-circle-2"
-                  >
-                    <circle cx="12" cy="12" r="10" />
-                    <path d="m9 12 2 2 4-4" />
-                  </svg>
+                  <CheckCheck className="h-4 w-4" />
                 </div>
-                <span className="text-xs font-medium">Resolvidos</span>
+                <span className="text-[11px] font-medium">Resolvidos</span>
               </TabsTrigger>
             </TabsList>
           </Tabs>
@@ -681,176 +664,139 @@ export const ConversationsList = ({
                     onSelectConversation(conversation.id);
                   }}
                   className={cn(
-                    "block w-full max-w-[340px] mx-auto overflow-hidden p-3 rounded-2xl border bg-white dark:bg-card text-left transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 group relative animate-stagger-in flex flex-col gap-1.5",
+                    "block w-full max-w-[340px] mx-auto overflow-hidden p-2.5 rounded-xl border bg-white dark:bg-card text-left transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 group relative animate-stagger-in",
                     selectedId === conversation.id
                       ? "conversation-card-selected border-primary/40 z-10"
                       : "border-[#1E2229]/20 dark:border-border/50 hover:border-primary/20"
                   )}
                   style={{ animationDelay: `${index * 45}ms` }}
                 >
-                  {/* Row 1: Avatar + Name + Notification/Time */}
-                  <div className="flex justify-between items-center w-full">
-                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                      <Avatar className={cn(
-                        "w-10 h-10 flex-shrink-0 border-2 shadow-sm transition-all duration-300",
-                        selectedId === conversation.id
-                          ? "border-primary shadow-[0_0_8px_2px_rgba(0,177,242,0.4)]"
-                          : "border-white"
-                      )}>
-                        <AvatarImage src={profilePic || undefined} />
-                        <AvatarFallback className="bg-secondary/10 text-secondary font-bold">
-                          {displayName[0]?.toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex flex-col min-w-0 flex-1 gap-0.5">
-                        <div className="flex items-center gap-1.5 ">
-                          <span className="font-semibold text-[15px] truncate text-foreground/90" title={displayName}>
-                            {displayName}
-                          </span>
-                          {/* Bolinha de Remetente da última mensagem
-                              - Vermelha (Instagram only): janela de 24h da Meta expirou
-                              - Verde: você enviou a última
-                              - Laranja: cliente enviou a última */}
-                          {lastMsg && !isSystem && (
-                            <span className={cn(
-                              "w-2 h-2 rounded-full flex-shrink-0 shadow-sm",
-                              isInstagramWindowExpired
-                                ? "bg-red-500"
-                                : isOutbound
-                                  ? "bg-green-500"
-                                  : "bg-orange-500"
-                            )} title={
-                              isInstagramWindowExpired
-                                ? "Mensagem fora do intervalo de 24h"
-                                : isOutbound
-                                  ? "Você enviou a última mensagem"
-                                  : "Cliente enviou a última mensagem"
-                            } />
-                          )}
-                        </div>
-                        {/* Row 2: Ticket ID + Tags */}
-                        <div className="flex items-center gap-2">
-                          <div className="text-[12px] text-primary/80 font-medium tracking-tight">
-                            #{(conversation as any).ticket_id || conversation.id.substring(0, 5)}
-                          </div>
-                          {contact?.contact_tags?.length > 0 && (
-                            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar mask-gradient-right max-w-[140px]">
-                              {contact.contact_tags.map((ct: any) => (
-                                ct.tags && (
-                                  <div key={ct.tags.id} title={ct.tags.name} className="flex-shrink-0">
-                                    <TagIcon
-                                      className="w-3.5 h-3.5"
-                                      style={{ color: ct.tags.color }}
-                                    />
-                                  </div>
-                                )
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
+                  {/* 3-column layout: Avatar | Content | Meta */}
+                  <div className="flex gap-2.5 w-full">
+                    {/* Left: Avatar */}
+                    <Avatar className={cn(
+                      "w-11 h-11 flex-shrink-0 border-2 shadow-sm transition-all duration-300 mt-0.5",
+                      selectedId === conversation.id
+                        ? "border-primary shadow-[0_0_8px_2px_rgba(0,177,242,0.4)]"
+                        : "border-white dark:border-border"
+                    )}>
+                      <AvatarImage src={profilePic || undefined} />
+                      <AvatarFallback className="bg-secondary/10 text-secondary font-bold text-sm">
+                        {displayName[0]?.toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
 
-                    {/* Time and Badges Panel */}
-                    <div className="flex flex-col items-end gap-1 flex-shrink-0 ml-2">
-                      {isMetaConv && lastInboundAt ? (
-                        <span className={`text-[11px] whitespace-nowrap font-semibold tabular-nums ${metaWindowColor}`}>
-                          {metaWindowMs === 0 ? "Encerrada" : metaWindowLabel}
+                    {/* Center: Name + Last Message + Agent */}
+                    <div className="flex flex-col min-w-0 flex-1 gap-0.5">
+                      {/* Name + tags */}
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-semibold text-sm truncate text-foreground/90" title={displayName}>
+                          {displayName}
                         </span>
-                      ) : (
-                        <span className="text-[11px] text-muted-foreground whitespace-nowrap capitalize font-medium">
-                          {timeDisplay}
-                        </span>
-                      )}
-                      <div className="flex flex-col items-end gap-1">
+                        {lastMsg && !isSystem && (
+                          <span className={cn(
+                            "w-1.5 h-1.5 rounded-full flex-shrink-0",
+                            isInstagramWindowExpired ? "bg-red-500"
+                              : isOutbound ? "bg-green-500" : "bg-orange-500"
+                          )} />
+                        )}
+                        {contact?.contact_tags?.length > 0 && (
+                          <div className="flex items-center gap-0.5 overflow-hidden max-w-[60px]">
+                            {contact.contact_tags.slice(0, 3).map((ct: any) => (
+                              ct.tags && (
+                                <TagIcon key={ct.tags.id} className="w-3 h-3 flex-shrink-0" style={{ color: ct.tags.color }} title={ct.tags.name} />
+                              )
+                            ))}
+                          </div>
+                        )}
                         {conversation.unread_count > 0 && (
-                          <Badge className="bg-primary text-primary-foreground h-[18px] px-1.5 min-w-[1.25rem] text-[11px] leading-none animate-in scale-in">
+                          <Badge className="bg-primary text-primary-foreground h-4 px-1 min-w-[1rem] text-[9px] leading-none ml-auto flex-shrink-0">
                             {conversation.unread_count}
                           </Badge>
                         )}
-                        {/* Follow Up badge */}
-                        {followUpNotifications?.has(conversation.id) && (
-                          <span className="flex items-center gap-0.5 bg-green-500 text-white text-[9px] px-1.5 py-0.5 rounded-full flex-shrink-0 shadow-sm">
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="animate-bell-swing" style={{ transformOrigin: "top center" }}>
-                              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-                              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-                            </svg>
+                      </div>
+
+                      {/* Last message preview */}
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        {isOutbound && lastMsg?.status && (
+                          <span className="flex-shrink-0">
+                            {lastMsg.status === 'read' || lastMsg.status === 'played' ? <CheckCheck className="w-3 h-3 text-blue-500" /> :
+                              lastMsg.status === 'delivered' ? <CheckCheck className="w-3 h-3 text-gray-400" /> :
+                                lastMsg.status === 'sent' ? <Check className="w-3 h-3 text-gray-400" /> :
+                                  <Clock className="w-2.5 h-2.5 text-gray-400" />}
                           </span>
                         )}
+                        <span className="truncate text-foreground/70">
+                          {isOutbound ? "Você: " : ""}
+                          {(() => {
+                            const t = lastMsg?.message_type;
+                            if (t === 'image') return <><ImageIcon className="w-3 h-3 mr-0.5 inline -mt-0.5 text-blue-500" />Imagem</>;
+                            if (t === 'video') return <><Video className="w-3 h-3 mr-0.5 inline -mt-0.5 text-purple-500" />Vídeo</>;
+                            if (t === 'audio' || t === 'ptt') return <><Mic className="w-3 h-3 mr-0.5 inline -mt-0.5 text-green-500" />Áudio</>;
+                            if (t === 'document') return <><FileText className="w-3 h-3 mr-0.5 inline -mt-0.5 text-orange-500" />Documento</>;
+                            if (t === 'sticker') return <><StickyNote className="w-3 h-3 mr-0.5 inline -mt-0.5 text-pink-500" />Figurinha</>;
+                            if (t === 'reaction') return `Reagiu com ${lastMsg.body}`;
+                            return lastMsg?.body || "Nenhuma mensagem";
+                          })()}
+                        </span>
+                      </div>
+
+                      {/* Agent */}
+                      <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                        {(conversation as any).assigned_agent_id && (() => {
+                          const assignedAgent = staffMembers?.find(m => m.id === (conversation as any).assigned_agent_id);
+                          return assignedAgent ? (
+                            <span className="truncate max-w-[90px]" title={assignedAgent.name}>
+                              👤 {assignedAgent.name.split(' ')[0]}
+                            </span>
+                          ) : null;
+                        })()}
+                        {(conversation as any).assigned_agent_id && queueName && <span className="text-border/60 mx-0.5">·</span>}
+                        {queueName && <span className="truncate max-w-[70px]" title={queueName}>{queueName}</span>}
                       </div>
                     </div>
-                  </div>
 
-                  {/* Row 3: Preview da Última Mensagem */}
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground w-full px-2 py-1.5 mt-0.5 dark:bg-muted/40 dark:rounded-md dark:border dark:border-border/30">
-                    {isOutbound && lastMsg?.status && (
-                      <span className="flex-shrink-0">
-                        {lastMsg.status === 'read' || lastMsg.status === 'played' ? <CheckCheck className="w-3.5 h-3.5 text-blue-500" /> :
-                          lastMsg.status === 'delivered' ? <CheckCheck className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" /> :
-                            lastMsg.status === 'sent' ? <Check className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" /> :
-                              <Clock className="w-3 h-3 text-gray-400" />}
-                      </span>
-                    )}
-                    <span className="truncate flex-1 font-medium text-foreground/80">
-                      {isOutbound ? "Você: " : ""}
-                      {(() => {
-                        const t = lastMsg?.message_type;
-                        if (t === 'image') return <><ImageIcon className="w-3.5 h-3.5 mr-1 inline -mt-0.5 text-blue-500" />Imagem</>;
-                        if (t === 'video') return <><Video className="w-3.5 h-3.5 mr-1 inline -mt-0.5 text-purple-500" />Vídeo</>;
-                        if (t === 'audio' || t === 'ptt') return <><Mic className="w-3.5 h-3.5 mr-1 inline -mt-0.5 text-green-500" />Áudio</>;
-                        if (t === 'document') return <><FileText className="w-3.5 h-3.5 mr-1 inline -mt-0.5 text-orange-500" />Documento</>;
-                        if (t === 'sticker') return <><StickyNote className="w-3.5 h-3.5 mr-1 inline -mt-0.5 text-pink-500" />Figurinha</>;
-                        if (t === 'reaction') return `Reagiu com ${lastMsg.body}`;
-                        return lastMsg?.body || "Nenhuma mensagem";
-                      })()}
-                    </span>
-                  </div>
-
-                  {/* Row 4: Usuario atribuido | Nome da fila ----- nome da instancia | View Icon */}
-                  <div className="flex items-center justify-between text-[11px] pt-1">
-                    <div className="flex items-center gap-1.5 min-w-0 text-muted-foreground font-medium px-2 py-0.5 dark:bg-muted/50 dark:rounded dark:border dark:border-border/40">
-                      {/* Assigned Agent */}
-                      {(conversation as any).assigned_agent_id && (() => {
-                        const assignedAgent = staffMembers?.find(m => m.id === (conversation as any).assigned_agent_id);
-                        return assignedAgent ? (
-                          <span className="text-foreground/80 truncate max-w-[80px]" title={assignedAgent.name}>
-                            👤 {assignedAgent.name.split(' ')[0]}
-                          </span>
-                        ) : null;
-                      })()}
-
-                      {(conversation as any).assigned_agent_id && queueName && <span className="text-border/80 text-[10px] mx-0.5">|</span>}
-
-                      {/* Queue */}
-                      {queueName && (
-                        <span className="truncate max-w-[80px]" title={queueName}>
-                          {queueName}
+                    {/* Right: Time + Eye + Instance */}
+                    <div className="flex flex-col items-end gap-1 flex-shrink-0 pt-0.5">
+                      {isMetaConv && lastInboundAt ? (
+                        <span className={`text-[10px] whitespace-nowrap font-semibold tabular-nums ${metaWindowColor}`}>
+                          {metaWindowMs === 0 ? "Encerrada" : metaWindowLabel}
                         </span>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-1.5 flex-shrink-0 ml-1.5">
-                      {/* Instance Name */}
-                      {instanceName && (
-                        <span className="text-secondary dark:text-primary font-semibold px-2 py-0.5 dark:bg-secondary/10 rounded max-w-[100px] truncate" title={instanceName}>
-                          {instanceName}
+                      ) : (
+                        <span className="text-[10px] text-muted-foreground whitespace-nowrap capitalize">
+                          {timeDisplay}
                         </span>
                       )}
 
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-6 w-6 rounded-full bg-secondary/5 text-secondary dark:bg-slate-800 dark:text-slate-400 hover:text-primary transition-all duration-300 hover:scale-110"
+                        className="h-5 w-5 rounded-full text-muted-foreground hover:text-primary transition-colors"
                         onClick={(e) => {
                           e.stopPropagation();
                           setSelectedContactForDetails(contact);
                           setSelectedConversationForDetails(conversation);
                           setIsContactDetailsOpen(true);
                         }}
-                        title="Ver Detalhes do Contato"
+                        title="Ver Detalhes"
                       >
-                        <Eye className="h-3.5 w-3.5" />
+                        <Eye className="h-3 w-3" />
                       </Button>
+
+                      {instanceName && (
+                        <span className="text-[9px] text-secondary dark:text-primary font-medium max-w-[70px] truncate" title={instanceName}>
+                          {instanceName}
+                        </span>
+                      )}
+
+                      {followUpNotifications?.has(conversation.id) && (
+                        <span className="flex items-center bg-green-500 text-white text-[8px] px-1 py-0.5 rounded-full">
+                          <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="animate-bell-swing" style={{ transformOrigin: "top center" }}>
+                            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                          </svg>
+                        </span>
+                      )}
                     </div>
                   </div>
                 </button>
