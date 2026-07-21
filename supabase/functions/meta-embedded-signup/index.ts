@@ -331,13 +331,26 @@ serve(async (req) => {
             );
         }
 
+        // Extract user_id from OAuth state parameter
+        let stateUserId: string | null = null;
+        const stateParam = url.searchParams.get("state");
+        if (stateParam) {
+            try {
+                const decoded = JSON.parse(atob(stateParam));
+                stateUserId = decoded.user_id || null;
+                console.log("[meta-embedded-signup] Got user_id from state:", stateUserId);
+            } catch {
+                console.warn("[meta-embedded-signup] Could not parse state parameter");
+            }
+        }
+
         try {
             const supabase = createClient(
                 Deno.env.get("SUPABASE_URL") ?? "",
                 Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
             );
 
-            const result = await processSignup(supabase, code, null, null, null);
+            const result = await processSignup(supabase, code, null, null, stateUserId);
 
             console.log("[meta-embedded-signup] GET flow completed:", result.instance_id);
 

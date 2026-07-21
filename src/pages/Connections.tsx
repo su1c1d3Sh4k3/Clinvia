@@ -273,7 +273,7 @@ const Connections = () => {
                 title: "WhatsApp Oficial conectado!",
                 description: `${name || 'Numero'} ${phone} registrado com sucesso.`,
             });
-            queryClient.invalidateQueries({ queryKey: ["meta-instances"] });
+            queryClient.invalidateQueries({ queryKey: ["instances"] });
         } else if (metaSignup === 'error') {
             const message = searchParams.get('message') || 'Erro desconhecido';
             toast({ title: "Erro na conexão Meta", description: message, variant: "destructive" });
@@ -292,7 +292,10 @@ const Connections = () => {
         // Open the Meta Embedded Signup onboarding page directly.
         // redirect_uri points to our edge function (meta-embedded-signup)
         // which handles the OAuth token exchange server-side.
+        // We pass the user_id via the OAuth state parameter so the edge function
+        // can assign the instance to the correct owner.
         const redirectUri = 'https://swfshqvvbohnahdyndch.supabase.co/functions/v1/meta-embedded-signup';
+        const statePayload = btoa(JSON.stringify({ user_id: user.id }));
         const extras = JSON.stringify({
             version: 'v4',
             sessionInfoVersion: '3',
@@ -304,6 +307,7 @@ const Connections = () => {
             `&redirect_uri=${encodeURIComponent(redirectUri)}` +
             `&response_type=code` +
             `&override_default_response_type=true` +
+            `&state=${encodeURIComponent(statePayload)}` +
             `&extras=${encodeURIComponent(extras)}`;
 
         window.open(signupUrl, '_blank', 'width=800,height=700');
@@ -320,7 +324,7 @@ const Connections = () => {
             if (error) throw error;
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["meta-instances"] });
+            queryClient.invalidateQueries({ queryKey: ["instances"] });
             toast({ title: "Instância Meta removida" });
         },
         onError: (error: any) => {
