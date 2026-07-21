@@ -68,7 +68,7 @@ async function processSignup(
     if (!wabaId || !phoneNumberId) {
         console.log("[meta-embedded-signup] Auto-discovering WABA and phone numbers...");
 
-        // Get shared WABAs for this business
+        // Get shared WABAs for this business via debug_token
         const debugResp = await fetch(
             `${GRAPH_API}/debug_token?input_token=${accessToken}`,
             { headers: { Authorization: `Bearer ${appId}|${appSecret}` } }
@@ -87,19 +87,12 @@ async function processSignup(
                 wabaId = wabaMgmt.target_ids[0];
                 console.log("[meta-embedded-signup] Discovered WABA ID:", wabaId);
             }
-
-            // Find whatsapp_business_messaging scope for phone number IDs
-            const wabaMsg = granularScopes.find(
-                (s: any) => s.scope === "whatsapp_business_messaging"
-            );
-            if (wabaMsg?.target_ids?.length > 0 && !phoneNumberId) {
-                phoneNumberId = wabaMsg.target_ids[0];
-                console.log("[meta-embedded-signup] Discovered Phone Number ID:", phoneNumberId);
-            }
         }
 
-        // Fallback: query WABA phone numbers directly
-        if (wabaId && !phoneNumberId) {
+        // ALWAYS resolve the real phone_number_id from the WABA phone_numbers endpoint.
+        // The debug_token granular scopes can return the WABA ID in both scopes,
+        // so we cannot trust whatsapp_business_messaging target_ids for phone number.
+        if (wabaId) {
             const phonesResp = await fetch(
                 `${GRAPH_API}/${wabaId}/phone_numbers?fields=id,display_phone_number,verified_name`,
                 { headers: { Authorization: `Bearer ${accessToken}` } }
@@ -108,7 +101,7 @@ async function processSignup(
                 const phonesData = await phonesResp.json();
                 if (phonesData.data?.length > 0) {
                     phoneNumberId = phonesData.data[0].id;
-                    console.log("[meta-embedded-signup] Got phone from WABA:", phoneNumberId);
+                    console.log("[meta-embedded-signup] Resolved phone_number_id from WABA:", phoneNumberId);
                 }
             }
         }
