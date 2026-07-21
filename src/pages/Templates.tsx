@@ -380,6 +380,9 @@ const Templates = () => {
                                                     <SelectItem value="AUTHENTICATION">Autenticacao</SelectItem>
                                                 </SelectContent>
                                             </Select>
+                                            <p className="text-[11px] text-muted-foreground">
+                                                A Meta pode reclassificar automaticamente se o conteudo nao corresponder a categoria escolhida.
+                                            </p>
                                         </div>
                                         <div className="space-y-2">
                                             <Label>Idioma</Label>
