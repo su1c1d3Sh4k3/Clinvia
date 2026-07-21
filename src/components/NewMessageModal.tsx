@@ -12,8 +12,32 @@ import { useOwnerId } from "@/hooks/useOwnerId";
 import { checkActiveConversation } from "@/hooks/useActiveConversation";
 import { ContactPicker } from "@/components/ui/contact-picker";
 import { formatPhoneNumber, unformatPhoneNumber } from "@/utils/formatters";
-import { User } from "lucide-react";
+import { User, Search, FileText, Loader2, Send, LayoutTemplate } from "lucide-react";
 import { CRM_STAGES, STAGE_QUEUE_MAP, TERMINAL_STAGES, CrmStage } from "@/types/crm-client";
+import { useAuth } from "@/hooks/useAuth";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+
+const SUPABASE_URL = "https://swfshqvvbohnahdyndch.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN3ZnNocXZ2Ym9obmFoZHluZGNoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1OTAyMzIsImV4cCI6MjA3OTE2NjIzMn0.rUja2PsYj9kWODdizhJNS6HjfA9Tg7DrJJylUH8RTnY";
+
+async function callTemplateApi(body: any): Promise<any> {
+    let token = SUPABASE_ANON_KEY;
+    try {
+        const session = (await supabase.auth.getSession()).data.session;
+        if (session?.access_token) token = session.access_token;
+    } catch {}
+    const resp = await fetch(`${SUPABASE_URL}/functions/v1/meta-template-manage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json; charset=utf-8", Authorization: `Bearer ${token}`, apikey: SUPABASE_ANON_KEY },
+        body: JSON.stringify(body),
+    });
+    const text = await resp.text();
+    let data: any;
+    try { data = JSON.parse(text); } catch { throw new Error(`Invalid response: ${text.substring(0, 200)}`); }
+    if (!resp.ok || !data.success) throw new Error(data?.error || `HTTP ${resp.status}`);
+    return data;
+}
 
 interface PrefilledContact {
     id: string;
@@ -37,8 +61,13 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
     const [selectedContact, setSelectedContact] = useState<string | null>(null);
     const [selectedCrmStage, setSelectedCrmStage] = useState("");
     const [selectedQueueId, setSelectedQueueId] = useState("");
+    // Meta template state
+    const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
+    const [sendParams, setSendParams] = useState<string[]>([]);
+    const [templateSearch, setTemplateSearch] = useState("");
     const { toast } = useToast();
     const { data: ownerId } = useOwnerId();
+    const { user } = useAuth();
 
     // Pre-populate from prefilledContact whenever modal opens or contact changes
     useEffect(() => {
@@ -47,13 +76,15 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
             const phone = prefilledContact.number?.split('@')[0] || prefilledContact.phone || "55";
             setNumber(phone);
         } else if (!open) {
-            // Reset state when modal closes
             setSelectedContact(null);
             setNumber("55");
             setMessage("");
             setSelectedInstance("");
             setSelectedCrmStage("");
             setSelectedQueueId("");
+            setSelectedTemplate(null);
+            setSendParams([]);
+            setTemplateSearch("");
         }
     }, [open, prefilledContact]);
 
@@ -92,13 +123,58 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
     const stageHasAutoQueue = selectedCrmStage && STAGE_QUEUE_MAP[selectedCrmStage as CrmStage];
     const needsManualQueue = selectedCrmStage && !stageHasAutoQueue && !TERMINAL_STAGES.includes(selectedCrmStage as CrmStage);
 
+    // Detect if selected instance is Meta
+    const selectedInstanceObj = instances?.find((i: any) => i.name === selectedInstance);
+    const isMetaSelected = (selectedInstanceObj as any)?.provider === "meta";
+
+    // Fetch templates for Meta instance
+    const { data: metaTemplates, isLoading: loadingTemplates } = useQuery({
+        queryKey: ["meta-templates-newmsg", selectedInstanceObj?.id],
+        queryFn: async () => {
+            if (!selectedInstanceObj?.id || !user?.id) return [];
+            const data = await callTemplateApi({ action: "list", user_id: user.id, instance_id: selectedInstanceObj.id });
+            return (data.templates || []).filter((t: any) => t.status?.toUpperCase() === "APPROVED");
+        },
+        enabled: open && isMetaSelected && !!selectedInstanceObj?.id && !!user?.id,
+    });
+
+    const filteredTemplates = (metaTemplates || []).filter((t: any) => {
+        if (!templateSearch.trim()) return true;
+        const q = templateSearch.toLowerCase();
+        return t.name?.toLowerCase().includes(q) || t.components?.find((c: any) => c.type === "BODY")?.text?.toLowerCase().includes(q);
+    });
+
+    const getBodyText = (tpl: any): string => tpl?.components?.find((c: any) => c.type === "BODY")?.text || "";
+    const getHeaderText = (tpl: any): string => tpl?.components?.find((c: any) => c.type === "HEADER")?.text || "";
+    const getFooterText = (tpl: any): string => tpl?.components?.find((c: any) => c.type === "FOOTER")?.text || "";
+    const getVariableCount = (tpl: any): number => {
+        const matches = getBodyText(tpl).match(/\{\{\s*\d+\s*\}\}/g);
+        return matches ? matches.length : 0;
+    };
+    const getPreviewText = (tpl: any): string => {
+        let text = getBodyText(tpl);
+        sendParams.forEach((val, i) => {
+            if (val.trim()) text = text.replace(new RegExp(`\\{\\{\\s*${i + 1}\\s*\\}\\}`, "g"), val);
+        });
+        return text;
+    };
+
+    const handleSelectTemplate = (tpl: any) => {
+        setSelectedTemplate(tpl);
+        setSendParams(new Array(getVariableCount(tpl)).fill(""));
+    };
+
     const handleSend = async () => {
-        if (!selectedInstance || !number || !message) {
-            toast({
-                title: "Campos obrigatórios",
-                description: "Preencha todos os campos para enviar.",
-                variant: "destructive",
-            });
+        if (!selectedInstance || !number) {
+            toast({ title: "Campos obrigatórios", description: "Selecione instância e número.", variant: "destructive" });
+            return;
+        }
+        if (isMetaSelected && !selectedTemplate) {
+            toast({ title: "Template obrigatório", description: "Selecione um template para enviar via API oficial.", variant: "destructive" });
+            return;
+        }
+        if (!isMetaSelected && !message) {
+            toast({ title: "Campos obrigatórios", description: "Digite uma mensagem.", variant: "destructive" });
             return;
         }
 
@@ -112,31 +188,43 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
         }
 
         try {
-            // 1. Send Message via UZAPI API
-            // UZAPI usa endpoint diferente do Evolution API
-            const response = await fetch(`https://clinvia.uazapi.com/send/text`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Accept": "application/json",
-                    "token": instance.apikey || "",
-                },
-                body: JSON.stringify({
-                    number: number,
-                    text: message,
-                }),
-            });
+            let apiData: any = {};
 
-            if (!response.ok) {
-                const errorData = await response.text();
-                // Check if it's a 400 error (likely invalid number)
-                if (response.status === 400) {
-                    throw new Error("Número inválido ou não registrado no WhatsApp.");
+            if (isMetaSelected) {
+                // Send via Meta template API
+                let templateComponents: any[] | undefined;
+                if (sendParams.length > 0 && sendParams.some(p => p.trim())) {
+                    templateComponents = [{ type: "body", parameters: sendParams.filter(p => p.trim()).map(p => ({ type: "text", text: p })) }];
                 }
-                throw new Error(`Falha ao enviar: ${errorData}`);
-            }
+                const result = await callTemplateApi({
+                    action: "send",
+                    user_id: user?.id,
+                    instance_id: instance.id,
+                    to: number.replace(/\D/g, ""),
+                    template_name: selectedTemplate.name,
+                    template_language: selectedTemplate.language,
+                    template_components: templateComponents,
+                });
+                apiData = { key: { id: result.message_id } };
+            } else {
+                // Send via UZAPI API
+                const response = await fetch(`https://clinvia.uazapi.com/send/text`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                        "token": instance.apikey || "",
+                    },
+                    body: JSON.stringify({ number, text: message }),
+                });
 
-            const apiData = await response.json();
+                if (!response.ok) {
+                    const errorData = await response.text();
+                    if (response.status === 400) throw new Error("Número inválido ou não registrado no WhatsApp.");
+                    throw new Error(`Falha ao enviar: ${errorData}`);
+                }
+                apiData = await response.json();
+            }
 
             // 2. Handle Database Updates
             const remoteJid = `${number}@s.whatsapp.net`;
@@ -270,11 +358,14 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
             }
 
             // 2.3 Insert Message
+            const msgBody = isMetaSelected
+                ? `[Template: ${selectedTemplate?.name}] ${getPreviewText(selectedTemplate)}`
+                : message;
             const { error: messageError } = await supabase
                 .from("messages")
                 .insert({
                     conversation_id: conversation.id,
-                    body: message,
+                    body: msgBody,
                     direction: "outbound",
                     message_type: "text",
                     evolution_id: apiData?.key?.id || null,
@@ -283,12 +374,15 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
 
             if (messageError) throw messageError;
 
-            toast({ title: "Mensagem enviada com sucesso!" });
+            toast({ title: isMetaSelected ? "Template enviado com sucesso!" : "Mensagem enviada com sucesso!" });
             onOpenChange(false);
             setSelectedInstance("");
             setSelectedContact(null);
             setNumber("55");
             setMessage("");
+            setSelectedTemplate(null);
+            setSendParams([]);
+            setTemplateSearch("");
         } catch (error: any) {
             console.error("Erro ao enviar mensagem:", error);
             toast({
@@ -368,15 +462,84 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
                         </p>
                     </div>
 
-                    <div className="space-y-2">
-                        <Label>Mensagem</Label>
-                        <Textarea
-                            value={message}
-                            onChange={(e) => setMessage(e.target.value)}
-                            placeholder="Digite sua mensagem..."
-                            rows={4}
-                        />
-                    </div>
+                    {isMetaSelected ? (
+                        <div className="space-y-2">
+                            <Label className="flex items-center gap-2">
+                                <LayoutTemplate className="w-4 h-4" />
+                                Template (obrigatório na API oficial)
+                            </Label>
+                            <div className="border rounded-lg overflow-hidden">
+                                {/* Search */}
+                                <div className="p-2 border-b">
+                                    <div className="relative">
+                                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                                        <Input
+                                            placeholder="Buscar template..."
+                                            value={templateSearch}
+                                            onChange={(e) => setTemplateSearch(e.target.value)}
+                                            className="pl-8 h-8 text-sm"
+                                        />
+                                    </div>
+                                </div>
+                                {/* Template List */}
+                                <ScrollArea className="max-h-[150px]">
+                                    {loadingTemplates ? (
+                                        <div className="flex items-center justify-center py-4">
+                                            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                                        </div>
+                                    ) : filteredTemplates.length === 0 ? (
+                                        <p className="text-xs text-muted-foreground text-center py-4">Nenhum template aprovado</p>
+                                    ) : (
+                                        filteredTemplates.map((tpl: any) => (
+                                            <button
+                                                key={tpl.id}
+                                                onClick={() => handleSelectTemplate(tpl)}
+                                                className={`w-full text-left p-2 border-b text-sm hover:bg-muted/50 transition-colors ${selectedTemplate?.id === tpl.id ? "bg-primary/5 border-l-2 border-l-primary" : ""}`}
+                                            >
+                                                <p className="font-medium text-xs truncate">{tpl.name}</p>
+                                                <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">{getBodyText(tpl)}</p>
+                                            </button>
+                                        ))
+                                    )}
+                                </ScrollArea>
+                                {/* Preview + Variables */}
+                                {selectedTemplate && (
+                                    <div className="border-t p-3 space-y-2 bg-muted/20">
+                                        <div className="bg-[#e7fed6] dark:bg-[#025c4c] rounded-lg p-2.5 text-sm max-w-[280px] shadow-sm">
+                                            {getHeaderText(selectedTemplate) && <p className="font-bold text-xs mb-1">{getHeaderText(selectedTemplate)}</p>}
+                                            <p className="text-xs whitespace-pre-wrap">{getPreviewText(selectedTemplate)}</p>
+                                            {getFooterText(selectedTemplate) && <p className="text-[10px] text-muted-foreground mt-1">{getFooterText(selectedTemplate)}</p>}
+                                        </div>
+                                        {getVariableCount(selectedTemplate) > 0 && (
+                                            <div className="space-y-1.5">
+                                                {sendParams.map((val, i) => (
+                                                    <div key={i} className="flex items-center gap-2">
+                                                        <Label className="text-[10px] text-muted-foreground w-10 shrink-0">{`{{${i + 1}}}`}</Label>
+                                                        <Input
+                                                            placeholder={`Valor para {{${i + 1}}}`}
+                                                            value={val}
+                                                            onChange={(e) => { const next = [...sendParams]; next[i] = e.target.value; setSendParams(next); }}
+                                                            className="h-7 text-xs"
+                                                        />
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="space-y-2">
+                            <Label>Mensagem</Label>
+                            <Textarea
+                                value={message}
+                                onChange={(e) => setMessage(e.target.value)}
+                                placeholder="Digite sua mensagem..."
+                                rows={4}
+                            />
+                        </div>
+                    )}
 
                     <div className="space-y-2">
                         <Label>Etapa do CRM</Label>
