@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Send, Sparkles, TrendingUp, ChevronUp, Zap, Settings, RefreshCw, DollarSign, Calendar, MessageSquare } from "lucide-react";
+import { Send, Sparkles, TrendingUp, ChevronUp, Zap, Settings, RefreshCw, DollarSign, Calendar, MessageSquare, FileText, Bot } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -197,8 +197,8 @@ export const AIIntelligenceSidebar = ({ conversationId }: AIIntelligenceSidebarP
     { id: "sale", icon: DollarSign, label: "Venda", hideGroup: true },
     { id: "schedule", icon: Calendar, label: "Agenda", hideGroup: true },
     { id: "satisfaction", icon: TrendingUp, label: "Satisfação", hideGroup: true },
-    { id: "summary", icon: Sparkles, label: "Resumo", hideGroup: false },
-    { id: "copilot", icon: Sparkles, label: "Copilot", hideGroup: false },
+    { id: "summary", icon: FileText, label: "Resumo", hideGroup: false },
+    { id: "copilot", icon: Bot, label: "Copilot", hideGroup: false },
   ];
 
   const visibleItems = menuItems.filter(item => !item.hideGroup || !isGroup);
@@ -453,7 +453,7 @@ export const AIIntelligenceSidebar = ({ conversationId }: AIIntelligenceSidebarP
                 <CardHeader className="pb-2 px-3 pt-3">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-xs flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5" /> Resumo
+                      <FileText className="w-3.5 h-3.5" /> Resumo
                     </CardTitle>
                     <CollapsibleTrigger asChild>
                       <Button variant="ghost" size="sm" className="w-7 h-7 p-0">
@@ -486,7 +486,7 @@ export const AIIntelligenceSidebar = ({ conversationId }: AIIntelligenceSidebarP
                 <CardHeader className="pb-2 px-3 pt-3">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-xs flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5" /> Copilot IA
+                      <Bot className="w-3.5 h-3.5" /> Copilot IA
                     </CardTitle>
                     <div className="flex items-center gap-0.5">
                       <Button variant="ghost" size="sm" className="w-7 h-7 p-0" onClick={(e) => { e.stopPropagation(); setIsSettingsOpen(true); }}>
