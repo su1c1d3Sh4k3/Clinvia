@@ -258,12 +258,6 @@ const Index = () => {
         </ErrorBoundary>
         <AIIntelligenceSidebar
           conversationId={selectedConversationId}
-          onFollowUpMessageClick={setFollowUpMessage}
-          onOpportunitySelect={(conversationId, message) => {
-            console.log("Opportunity selected - conversationId:", conversationId, "message:", message);
-            setSelectedConversationId(conversationId);
-            setFollowUpMessage(message);
-          }}
         />
       </div>
 
@@ -340,15 +334,6 @@ const Index = () => {
             <div className="p-0">
               <AIIntelligenceSidebar
                 conversationId={selectedConversationId}
-                onFollowUpMessageClick={(message) => {
-                  setFollowUpMessage(message);
-                  setIsActionsSheetOpen(false);
-                }}
-                onOpportunitySelect={(conversationId, message) => {
-                  setSelectedConversationId(conversationId);
-                  setFollowUpMessage(message);
-                  setIsActionsSheetOpen(false);
-                }}
               />
             </div>
           </SheetContent>
