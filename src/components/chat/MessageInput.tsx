@@ -2,7 +2,7 @@ import { useRef, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Send, Paperclip, Smile, Mic, Sparkles, X, StopCircle, Image as ImageIcon, Video, FileText, Zap, ClipboardList, CheckCircle, AtSign, UserCircle } from "lucide-react";
+import { Send, Paperclip, Smile, Mic, Sparkles, X, StopCircle, Image as ImageIcon, Video, FileText, Zap, ClipboardList, CheckCircle, AtSign, UserCircle, LayoutTemplate } from "lucide-react";
 import { cn } from "@/lib/utils";
 import EmojiPicker, { EmojiClickData } from "emoji-picker-react";
 import { QuickMessagesMenu } from "@/components/QuickMessagesMenu";
@@ -67,6 +67,10 @@ interface MessageInputProps {
     conversationId?: string;
     /** Whether the current chat is a group */
     isGroup?: boolean;
+    /** Handler to open the template picker modal */
+    onOpenTemplatePicker?: () => void;
+    /** Whether to show the template button (Meta instances only) */
+    showTemplateButton?: boolean;
 }
 
 /**
@@ -104,7 +108,9 @@ export const MessageInput = ({
     onSendSurvey,
     isSendingSurvey,
     conversationId,
-    isGroup = false
+    isGroup = false,
+    onOpenTemplatePicker,
+    showTemplateButton = false,
 }: MessageInputProps) => {
 
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -367,6 +373,18 @@ export const MessageInput = ({
                             </div>
                         </PopoverContent>
                     </Popover>
+
+                    {showTemplateButton && (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-10 w-10 rounded-full hover:bg-muted/50"
+                            onClick={() => onOpenTemplatePicker?.()}
+                            title="Enviar template"
+                        >
+                            <LayoutTemplate className="w-5 h-5 text-muted-foreground" />
+                        </Button>
+                    )}
 
                     <Popover open={isEmojiOpen} onOpenChange={setIsEmojiOpen}>
                         <PopoverTrigger asChild>

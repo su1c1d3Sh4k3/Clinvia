@@ -33,6 +33,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { QuickMessageConfirmationModal } from "@/components/QuickMessageConfirmationModal";
+import { TemplatePickerModal } from "@/components/chat/TemplatePickerModal";
+import { LayoutTemplate, Clock } from "lucide-react";
 
 // Performance: Limit messages rendered at once
 const MESSAGES_PER_PAGE = 50;
@@ -143,6 +145,9 @@ export const ChatArea = ({
 
   // Contact Picker
   const [isContactPickerOpen, setIsContactPickerOpen] = useState(false);
+
+  // Template Picker
+  const [isTemplatePickerOpen, setIsTemplatePickerOpen] = useState(false);
 
   // Core Hooks
   const { messages, isLoading } = useMessages(conversationId);
@@ -284,6 +289,47 @@ export const ChatArea = ({
     enabled: (conversation as any)?.channel === 'instagram',
   });
 
+
+  // ── Meta 24h Window Logic ──
+  const isMetaInstance = (instance as any)?.provider === "meta";
+  const contactNumber = (conversation as any)?.contacts?.number || "";
+
+  // Fetch last inbound message timestamp for 24h window calculation
+  const { data: lastInboundMsg } = useQuery({
+    queryKey: ["last-inbound", conversationId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("messages")
+        .select("created_at")
+        .eq("conversation_id", conversationId!)
+        .eq("direction", "inbound")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!conversationId && isMetaInstance,
+    refetchInterval: isMetaInstance ? 60_000 : false,
+  });
+
+  const [windowTimeLeft, setWindowTimeLeft] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!isMetaInstance || !lastInboundMsg?.created_at) {
+      setWindowTimeLeft(null);
+      return;
+    }
+    const calc = () => {
+      const lastInbound = new Date(lastInboundMsg.created_at).getTime();
+      const msLeft = lastInbound + 24 * 60 * 60 * 1000 - Date.now();
+      setWindowTimeLeft(Math.max(0, msLeft));
+    };
+    calc();
+    const interval = setInterval(calc, 60_000);
+    return () => clearInterval(interval);
+  }, [isMetaInstance, lastInboundMsg?.created_at]);
+
+  const isWindowClosed = isMetaInstance && (windowTimeLeft === 0 || windowTimeLeft === null && !!conversationId);
 
   const contact = conversation?.contacts;
   const group = conversation?.groups;
@@ -821,31 +867,56 @@ export const ChatArea = ({
         conversation={conversation}
       />
 
-      <MessageInput
-        message={message}
-        setMessage={setMessage}
-        handleSend={handleSend}
-        handleFileSelect={(e) => { if (e.target.files?.[0]) setSelectedFile(e.target.files[0]) }}
-        selectedFile={selectedFile}
-        handleRemoveFile={() => setSelectedFile(null)}
-        isRecording={isRecording}
-        handleStartRecording={handleStartRecording}
-        handleStopRecording={handleStopRecording}
-        recordingTime={recordingTime}
-        isUploading={isUploading}
-        handleAiAction={handleAiAction}
-        isMobile={isMobile}
-        replyingTo={replyingTo}
-        setReplyingTo={setReplyingTo}
-        handlePaste={handlePaste}
-        quickMessages={quickMessages}
-        onQuickMessageSelect={handleQuickMessageSelect}
-        onSendSurvey={() => setShowSurveyModal(true)}
-        isSendingSurvey={isSendingSurvey}
-        conversationId={conversationId}
-        isGroup={isGroup}
-        onSendContact={() => setIsContactPickerOpen(true)}
-      />
+      {isWindowClosed ? (
+        <div className="p-3 border-t bg-muted/30">
+          <div className="flex flex-col items-center gap-2 py-3 px-4 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
+            <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+              <Clock className="w-4 h-4" />
+              <span className="text-sm font-medium">Janela de 24h fechada</span>
+            </div>
+            <p className="text-xs text-amber-600 dark:text-amber-500 text-center">
+              Para retomar a conversa, envie um template aprovado.
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-2 mt-1 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-950/40"
+              onClick={() => setIsTemplatePickerOpen(true)}
+            >
+              <LayoutTemplate className="w-4 h-4" />
+              Selecionar template
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <MessageInput
+          message={message}
+          setMessage={setMessage}
+          handleSend={handleSend}
+          handleFileSelect={(e) => { if (e.target.files?.[0]) setSelectedFile(e.target.files[0]) }}
+          selectedFile={selectedFile}
+          handleRemoveFile={() => setSelectedFile(null)}
+          isRecording={isRecording}
+          handleStartRecording={handleStartRecording}
+          handleStopRecording={handleStopRecording}
+          recordingTime={recordingTime}
+          isUploading={isUploading}
+          handleAiAction={handleAiAction}
+          isMobile={isMobile}
+          replyingTo={replyingTo}
+          setReplyingTo={setReplyingTo}
+          handlePaste={handlePaste}
+          quickMessages={quickMessages}
+          onQuickMessageSelect={handleQuickMessageSelect}
+          onSendSurvey={() => setShowSurveyModal(true)}
+          isSendingSurvey={isSendingSurvey}
+          conversationId={conversationId}
+          isGroup={isGroup}
+          onSendContact={() => setIsContactPickerOpen(true)}
+          showTemplateButton={isMetaInstance}
+          onOpenTemplatePicker={() => setIsTemplatePickerOpen(true)}
+        />
+      )}
 
       {/* Modals */}
       <InstanceSelectorModal open={isInstanceModalOpen} onOpenChange={setIsInstanceModalOpen} onSelect={handleInstanceSelect} />
@@ -903,6 +974,15 @@ export const ChatArea = ({
         onOpenChange={setIsContactPickerOpen}
         onSelect={handleSendContact}
       />
+
+      {isMetaInstance && (
+        <TemplatePickerModal
+          open={isTemplatePickerOpen}
+          onOpenChange={setIsTemplatePickerOpen}
+          instanceId={(conversation as any)?.instance_id || ""}
+          contactNumber={contactNumber}
+        />
+      )}
 
     </div>
   );

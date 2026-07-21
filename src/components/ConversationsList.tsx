@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { Search, Filter, Plus, MessageSquare, Send, Tag as TagIcon, Eye, Check, CheckCheck, Clock, FileText, Mic, Image as ImageIcon, Video, StickyNote } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -216,7 +216,7 @@ export const ConversationsList = ({
     queryFn: async () => {
       const { data, error } = await supabase
         .from("instances")
-        .select("id, name")
+        .select("id, name, provider")
         .order("name");
       if (error) throw error;
       return data;
@@ -225,10 +225,57 @@ export const ConversationsList = ({
 
 
 
-  const unreadCounts = useUnreadCounts(user?.id);
+  // Meta instance IDs for 24h window tracking
+  const metaInstanceIds = useMemo(() => {
+    if (!instances) return new Set<string>();
+    return new Set(instances.filter((i: any) => i.provider === "meta").map((i: any) => i.id));
+  }, [instances]);
 
-  // DEBUG: Log unreadCounts to see if channel separation is working
-  console.log('[DEBUG] unreadCounts:', unreadCounts, 'selectedChannelFilter:', selectedChannelFilter);
+  // Fetch last inbound message timestamps for Meta conversations
+  const metaConvIds = useMemo(() => {
+    return conversations.filter(c => metaInstanceIds.has((c as any).instance_id)).map(c => c.id);
+  }, [conversations, metaInstanceIds]);
+
+  const { data: lastInboundMap } = useQuery({
+    queryKey: ["last-inbound-batch", metaConvIds.join(",")],
+    queryFn: async () => {
+      if (metaConvIds.length === 0) return {};
+      const { data } = await supabase.rpc("get_last_inbound_timestamps" as any, {
+        conv_ids: metaConvIds,
+      });
+      if (data) {
+        const map: Record<string, string> = {};
+        (data as any[]).forEach((r: any) => { map[r.conversation_id] = r.last_inbound_at; });
+        return map;
+      }
+      // Fallback: query each conversation individually
+      const map: Record<string, string> = {};
+      for (const cid of metaConvIds.slice(0, 50)) {
+        const { data: msg } = await supabase
+          .from("messages")
+          .select("created_at")
+          .eq("conversation_id", cid)
+          .eq("direction", "inbound")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (msg) map[cid] = msg.created_at;
+      }
+      return map;
+    },
+    enabled: metaConvIds.length > 0,
+    refetchInterval: 60_000,
+  });
+
+  // Timer tick to force re-render every minute for 24h countdown
+  const [, setTimerTick] = useState(0);
+  useEffect(() => {
+    if (metaConvIds.length === 0) return;
+    const interval = setInterval(() => setTimerTick(t => t + 1), 60_000);
+    return () => clearInterval(interval);
+  }, [metaConvIds.length]);
+
+  const unreadCounts = useUnreadCounts(user?.id);
 
   const filteredConversations = conversations.filter((conv) => {
     const contact = conv.contacts;
@@ -592,8 +639,32 @@ export const ConversationsList = ({
                 (conversation as any).channel === 'instagram' &&
                 (conversation as any).instagram_window_expired === true;
 
+              // 24h window timer for Meta instances
+              const isMetaConv = metaInstanceIds.has((conversation as any).instance_id);
+              const lastInboundAt = isMetaConv && lastInboundMap ? lastInboundMap[conversation.id] : null;
+              let metaWindowMs = -1;
+              let metaWindowColor = "";
+              let metaWindowLabel = "";
+
+              if (isMetaConv && lastInboundAt) {
+                const lastTs = new Date(lastInboundAt).getTime();
+                metaWindowMs = Math.max(0, lastTs + 24 * 60 * 60 * 1000 - Date.now());
+                const hoursLeft = metaWindowMs / (1000 * 60 * 60);
+                if (metaWindowMs === 0) {
+                  metaWindowLabel = "Encerrada";
+                  metaWindowColor = "text-muted-foreground";
+                } else {
+                  const h = Math.floor(hoursLeft);
+                  const m = Math.floor((metaWindowMs / (1000 * 60)) % 60);
+                  metaWindowLabel = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+                  if (hoursLeft > 12) metaWindowColor = "text-emerald-600 dark:text-emerald-400";
+                  else if (hoursLeft > 6) metaWindowColor = "text-amber-600 dark:text-amber-400";
+                  else metaWindowColor = "text-red-600 dark:text-red-400";
+                }
+              }
+
               let timeDisplay = "";
-              if (conversation.last_message_at) {
+              if (!isMetaConv && conversation.last_message_at) {
                 try {
                   timeDisplay = formatDistanceToNow(new Date(conversation.last_message_at), { addSuffix: true, locale: ptBR });
                   timeDisplay = timeDisplay.replace('aproximadamente ', '');
@@ -682,9 +753,15 @@ export const ConversationsList = ({
 
                     {/* Time and Badges Panel */}
                     <div className="flex flex-col items-end gap-1 flex-shrink-0 ml-2">
-                      <span className="text-[11px] text-muted-foreground whitespace-nowrap capitalize font-medium">
-                        {timeDisplay}
-                      </span>
+                      {isMetaConv && lastInboundAt ? (
+                        <span className={`text-[11px] whitespace-nowrap font-semibold tabular-nums ${metaWindowColor}`}>
+                          {metaWindowMs === 0 ? "Encerrada" : metaWindowLabel}
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-muted-foreground whitespace-nowrap capitalize font-medium">
+                          {timeDisplay}
+                        </span>
+                      )}
                       <div className="flex flex-col items-end gap-1">
                         {conversation.unread_count > 0 && (
                           <Badge className="bg-primary text-primary-foreground h-[18px] px-1.5 min-w-[1.25rem] text-[11px] leading-none animate-in scale-in">
