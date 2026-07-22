@@ -329,8 +329,12 @@ export const ChatArea = ({
     return () => clearInterval(interval);
   }, [isMetaInstance, lastInboundMsg?.created_at]);
 
-  // Window is closed ONLY when we have confirmed 0ms left (not when data is still loading)
-  const isWindowClosed = isMetaInstance && windowTimeLeft === 0;
+  // Window is closed when:
+  // - windowTimeLeft === 0 (24h expired)
+  // - windowTimeLeft === null AND lastInboundMsg query has loaded (no inbound = no window)
+  const lastInboundLoaded = !!(conversationId && isMetaInstance);
+  const hasNoInbound = lastInboundLoaded && lastInboundMsg === null;
+  const isWindowClosed = isMetaInstance && (windowTimeLeft === 0 || hasNoInbound);
 
   const contact = conversation?.contacts;
   const group = conversation?.groups;

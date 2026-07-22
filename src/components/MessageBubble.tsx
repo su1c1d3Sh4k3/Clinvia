@@ -79,13 +79,15 @@ export function MessageBubble({
     };
 
     const HighlightText = ({ text, highlight }: { text: string, highlight: string }) => {
-        const urlRegex = /(https?:\/\/[^\s]+)/gi;
-        const parts = text.split(urlRegex);
+        // Split by URLs, bold (*text*), and italic (_text_)
+        const tokenRegex = /(https?:\/\/[^\s]+|\*[^*\n]+\*|_[^_\n]+_)/gi;
+        const parts = text.split(tokenRegex);
 
         return (
             <span>
                 {parts.map((part, i) => {
-                    if (urlRegex.test(part)) {
+                    // URLs
+                    if (/^https?:\/\//i.test(part)) {
                         return (
                             <a
                                 key={i}
@@ -100,9 +102,21 @@ export function MessageBubble({
                         );
                     }
 
+                    // Bold *text*
+                    if (/^\*[^*]+\*$/.test(part)) {
+                        const inner = part.slice(1, -1);
+                        return <strong key={i}>{inner}</strong>;
+                    }
+
+                    // Italic _text_
+                    if (/^_[^_]+_$/.test(part)) {
+                        const inner = part.slice(1, -1);
+                        return <em key={i}>{inner}</em>;
+                    }
+
                     if (!highlight.trim()) return <span key={i}>{part}</span>;
 
-                    const highlightParts = part.split(new RegExp(`(${highlight})`, 'gi'));
+                    const highlightParts = part.split(new RegExp(`(${highlight.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
                     return (
                         <span key={i}>
                             {highlightParts.map((hPart, j) =>
@@ -123,7 +137,7 @@ export function MessageBubble({
 
     const cleanMessageBody = (body: string) => {
         if (!body) return "";
-        return body.replace(/^\*[^*]+:\*\n/, "");
+        return body;
     };
 
     return (
