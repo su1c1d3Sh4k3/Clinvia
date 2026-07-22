@@ -238,11 +238,24 @@ export function MessageBubble({
             })()}
 
             {/* TEXTO (Se não for apenas um container de arquivo) */}
-            {msg.body && msg.message_type !== 'document' && msg.message_type !== 'audio' && msg.body !== '[Áudio]' && (
-                <p className="text-sm break-words whitespace-pre-wrap">
-                    <HighlightText text={cleanMessageBody(msg.body)} highlight={searchTerm} />
-                </p>
-            )}
+            {msg.body && msg.message_type !== 'document' && msg.message_type !== 'audio' && msg.body !== '[Áudio]' && (() => {
+                const body = cleanMessageBody(msg.body);
+                // Template messages: "*Template enviado: name*\nbody"
+                const tplMatch = body.match(/^\*Template enviado: ([^*]+)\*\n([\s\S]*)$/);
+                if (tplMatch) {
+                    return (
+                        <div className="text-sm break-words">
+                            <p className="font-bold">Template enviado: {tplMatch[1]}</p>
+                            <p className="whitespace-pre-wrap"><HighlightText text={tplMatch[2]} highlight={searchTerm} /></p>
+                        </div>
+                    );
+                }
+                return (
+                    <p className="text-sm break-words whitespace-pre-wrap">
+                        <HighlightText text={body} highlight={searchTerm} />
+                    </p>
+                );
+            })()}
 
             {/* METADATA (Hora e Status) */}
             <div className={cn(
