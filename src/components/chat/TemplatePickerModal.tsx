@@ -121,22 +121,27 @@ export function TemplatePickerModal({ open, onOpenChange, instanceId, contactNum
     const handleSend = async () => {
         if (!selectedTemplate || !user?.id || !instanceId) return;
 
-        const number = contactNumber.replace(/\D/g, "");
+        const number = contactNumber.replace(/@.*$/, "").replace(/\D/g, "");
         if (!number) {
             toast.error("Numero do contato invalido");
+            return;
+        }
+
+        // Validate all variables are filled
+        const varCount = getVariableCount(selectedTemplate);
+        if (varCount > 0 && sendParams.some((p) => !p.trim())) {
+            toast.error(`Preencha todas as ${varCount} variáveis`);
             return;
         }
 
         setIsSending(true);
         try {
             let templateComponents: any[] | undefined;
-            if (sendParams.length > 0 && sendParams.some((p) => p.trim())) {
+            if (sendParams.length > 0) {
                 templateComponents = [
                     {
                         type: "body",
-                        parameters: sendParams
-                            .filter((p) => p.trim())
-                            .map((p) => ({ type: "text", text: p })),
+                        parameters: sendParams.map((p) => ({ type: "text", text: p })),
                     },
                 ];
             }
