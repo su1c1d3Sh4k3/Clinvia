@@ -1710,6 +1710,27 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                         bookingLink = `https://app.clinbia.ai/agendar?d=${token}`;
                     }
 
+                    // 6. Campaign prompt: campanha ativa mais recente enviada a este contato
+                    let campaignPrompt: string | null = null;
+                    if (contactId) {
+                        try {
+                            const { data: campSent } = await supabase
+                                .from('campaign_contacts')
+                                .select('sent_at, campaigns!inner(ai_prompt, ia_enabled, valid_until, status)')
+                                .eq('contact_id', contactId)
+                                .eq('status', 'sent')
+                                .eq('campaigns.ia_enabled', true)
+                                .gte('campaigns.valid_until', new Date().toISOString())
+                                .in('campaigns.status', ['dispatching', 'dispatched'])
+                                .order('sent_at', { ascending: false })
+                                .limit(1)
+                                .maybeSingle();
+                            campaignPrompt = (campSent as any)?.campaigns?.ai_prompt || null;
+                        } catch (campErr) {
+                            console.warn('[webhook-handle-message] campaign_prompt lookup failed:', campErr);
+                        }
+                    }
+
                     const forwardedPayload = {
                         ...payload,
                         bd_data: {
@@ -1725,6 +1746,7 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                             appointments: enrichedAppointments,
                             last_summary: enrichedLastSummary,
                             booking_link: bookingLink,
+                            campaign_prompt: campaignPrompt,
                         }
                     };
 

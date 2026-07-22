@@ -1,7 +1,7 @@
 import {
   Users, Settings, LayoutDashboard, MessageSquare, Briefcase,
   Smartphone, LogOut, BookUser, Calendar, Repeat,
-  Package, Bot, ChevronDown, FileText
+  Package, Bot, ChevronDown, FileText, Megaphone
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -36,6 +36,7 @@ const menuStructure: MenuItem[] = [
   { icon: BookUser, label: "Clientes", id: "contacts", path: "/contacts" },
   { icon: Calendar, label: "Agenda", id: "scheduling", path: "/scheduling" },
   { icon: Repeat, label: "Recorrência", id: "recurrence", path: "/recurrence" },
+  { icon: Megaphone, label: "Campanhas", id: "campaigns", path: "/campanhas" },
   {
     icon: Settings, label: "Configurações", id: "config",
     children: [
