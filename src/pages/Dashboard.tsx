@@ -2,8 +2,7 @@ import { useState, useEffect } from "react";
 import { AtendimentosTab } from "@/components/dashboard/AtendimentosTab";
 import { NotificationsBoard } from "@/components/dashboard/NotificationsBoard";
 import { SalesDashboard } from "@/components/dashboard/SalesDashboard";
-import { MacroFunnelsPanel } from "@/components/dashboard/MacroFunnelsPanel";
-import { OpportunitiesSection } from "@/components/OpportunitiesSection";
+import { CrmDashboard } from "@/components/dashboard/crm/CrmDashboard";
 import { AgendamentosDashboard } from "@/components/dashboard/agendamentos/AgendamentosDashboard";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Headphones, Users, ShoppingCart, CalendarDays } from "lucide-react";
@@ -11,19 +10,19 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useFinancialAccess } from "@/hooks/useFinancialAccess";
 import { cn } from "@/lib/utils";
 
-type DashboardTab = "atendimentos" | "leads" | "vendas" | "agendamentos";
+type DashboardTab = "atendimentos" | "crm" | "vendas" | "agendamentos";
 
 const Dashboard = () => {
     const { data: userRole } = useUserRole();
     const { data: financialAccess } = useFinancialAccess();
-    const [activeTab, setActiveTab] = useState<DashboardTab>("leads");
+    const [activeTab, setActiveTab] = useState<DashboardTab>("crm");
 
     const canViewSales = userRole === 'admin' || (userRole === 'supervisor' && financialAccess !== false);
 
-    // Forçar aba "leads" para agentes
+    // Forçar aba "crm" para agentes
     useEffect(() => {
         if (userRole === 'agent') {
-            setActiveTab("leads");
+            setActiveTab("crm");
         }
     }, [userRole]);
 
@@ -52,11 +51,11 @@ const Dashboard = () => {
                             </TabsTrigger>
                         )}
                         <TabsTrigger
-                            value="leads"
+                            value="crm"
                             className="flex items-center gap-2"
                         >
                             <Users className="h-4 w-4 transition-transform duration-300 data-[state=active]:scale-110" />
-                            <span className="hidden sm:inline">Negócios</span>
+                            <span className="hidden sm:inline">CRM</span>
                         </TabsTrigger>
                         {canViewSales && (
                             <TabsTrigger
@@ -84,12 +83,7 @@ const Dashboard = () => {
                     <AtendimentosTab />
                 )}
 
-                {activeTab === "leads" && (
-                    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                        <OpportunitiesSection compact={true} />
-                        <MacroFunnelsPanel />
-                    </div>
-                )}
+                {activeTab === "crm" && <CrmDashboard />}
 
                 {activeTab === "vendas" && canViewSales && (
                     <SalesDashboard />
