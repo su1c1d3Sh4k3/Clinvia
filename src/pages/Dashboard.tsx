@@ -4,13 +4,14 @@ import { NotificationsBoard } from "@/components/dashboard/NotificationsBoard";
 import { SalesDashboard } from "@/components/dashboard/SalesDashboard";
 import { MacroFunnelsPanel } from "@/components/dashboard/MacroFunnelsPanel";
 import { OpportunitiesSection } from "@/components/OpportunitiesSection";
+import { AgendamentosDashboard } from "@/components/dashboard/agendamentos/AgendamentosDashboard";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Headphones, Users, ShoppingCart } from "lucide-react";
+import { Headphones, Users, ShoppingCart, CalendarDays } from "lucide-react";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useFinancialAccess } from "@/hooks/useFinancialAccess";
 import { cn } from "@/lib/utils";
 
-type DashboardTab = "atendimentos" | "leads" | "vendas";
+type DashboardTab = "atendimentos" | "leads" | "vendas" | "agendamentos";
 
 const Dashboard = () => {
     const { data: userRole } = useUserRole();
@@ -39,7 +40,7 @@ const Dashboard = () => {
                 <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as DashboardTab)} className="w-full">
                     <TabsList className={cn(
                         "grid w-full max-w-2xl mx-auto",
-                        userRole === 'agent' ? "grid-cols-1" : canViewSales ? "grid-cols-3" : "grid-cols-2"
+                        userRole === 'agent' ? "grid-cols-1" : canViewSales ? "grid-cols-4" : "grid-cols-3"
                     )}>
                         {userRole !== 'agent' && (
                             <TabsTrigger
@@ -66,6 +67,15 @@ const Dashboard = () => {
                                 <span className="hidden sm:inline">Vendas</span>
                             </TabsTrigger>
                         )}
+                        {userRole !== 'agent' && (
+                            <TabsTrigger
+                                value="agendamentos"
+                                className="flex items-center gap-2"
+                            >
+                                <CalendarDays className="h-4 w-4 transition-transform duration-300 data-[state=active]:scale-110" />
+                                <span className="hidden sm:inline">Agendamentos</span>
+                            </TabsTrigger>
+                        )}
                     </TabsList>
                 </Tabs>
 
@@ -83,6 +93,10 @@ const Dashboard = () => {
 
                 {activeTab === "vendas" && canViewSales && (
                     <SalesDashboard />
+                )}
+
+                {activeTab === "agendamentos" && userRole !== 'agent' && (
+                    <AgendamentosDashboard />
                 )}
             </div>
         </div>
