@@ -249,7 +249,17 @@ serve(async (req) => {
                 .eq("id", conversation.contact_id)
                 .single();
             if (!contact?.number) throw new Error("Contact number not found");
-            recipientNumber = contact.number.replace(/\D/g, "");
+            recipientNumber = contact.number.replace(/\D/g, "").replace(/@.*$/, "");
+            // Normalize BR mobile numbers: Meta expects 55+2-digit DDD+8-digit number (12 digits)
+            // Brazilian mobiles with 9th digit have 13 digits (55+2+9digits) — remove the extra 9
+            if (recipientNumber.startsWith("55") && recipientNumber.length === 13) {
+                const ddd = recipientNumber.substring(2, 4);
+                const rest = recipientNumber.substring(4);
+                if (rest.startsWith("9") && rest.length === 9) {
+                    recipientNumber = `55${ddd}${rest.substring(1)}`;
+                    console.log("[meta-send-message] Normalized BR number:", recipientNumber);
+                }
+            }
         } else {
             throw new Error("Groups not supported on Meta Cloud API");
         }
