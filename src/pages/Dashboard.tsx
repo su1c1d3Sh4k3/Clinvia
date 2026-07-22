@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { AtendimentosTab } from "@/components/dashboard/AtendimentosTab";
+import { MonitoramentoTab } from "@/components/dashboard/monitoramento/MonitoramentoTab";
 import { NotificationsBoard } from "@/components/dashboard/NotificationsBoard";
 import { SalesDashboard } from "@/components/dashboard/SalesDashboard";
 import { CrmDashboard } from "@/components/dashboard/crm/CrmDashboard";
@@ -10,7 +10,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useFinancialAccess } from "@/hooks/useFinancialAccess";
 import { cn } from "@/lib/utils";
 
-type DashboardTab = "atendimentos" | "crm" | "vendas" | "agendamentos";
+type DashboardTab = "monitoramento" | "crm" | "vendas" | "agendamentos";
 
 const Dashboard = () => {
     const { data: userRole } = useUserRole();
@@ -43,11 +43,11 @@ const Dashboard = () => {
                     )}>
                         {userRole !== 'agent' && (
                             <TabsTrigger
-                                value="atendimentos"
+                                value="monitoramento"
                                 className="flex items-center gap-2"
                             >
                                 <Headphones className="h-4 w-4 transition-transform duration-300 data-[state=active]:scale-110" />
-                                <span className="hidden sm:inline">Atendimentos</span>
+                                <span className="hidden sm:inline">Monitoramento</span>
                             </TabsTrigger>
                         )}
                         <TabsTrigger
@@ -79,8 +79,8 @@ const Dashboard = () => {
                 </Tabs>
 
                 {/* Tab Content */}
-                {activeTab === "atendimentos" && userRole !== 'agent' && (
-                    <AtendimentosTab />
+                {activeTab === "monitoramento" && userRole !== 'agent' && (
+                    <MonitoramentoTab />
                 )}
 
                 {activeTab === "crm" && <CrmDashboard />}
