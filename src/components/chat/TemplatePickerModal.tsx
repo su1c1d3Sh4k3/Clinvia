@@ -119,9 +119,22 @@ export function TemplatePickerModal({ open, onOpenChange, instanceId, contactNum
     };
 
     const handleSend = async () => {
-        if (!selectedTemplate || !user?.id || !instanceId) return;
+        console.log("[TemplatePickerModal] handleSend called", {
+            selectedTemplate: selectedTemplate?.name,
+            userId: user?.id,
+            instanceId,
+            contactNumber,
+            sendParams,
+        });
+
+        if (!selectedTemplate || !user?.id || !instanceId) {
+            console.error("[TemplatePickerModal] Missing data:", { selectedTemplate: !!selectedTemplate, userId: !!user?.id, instanceId: !!instanceId });
+            toast.error("Dados incompletos para envio");
+            return;
+        }
 
         const number = contactNumber.replace(/@.*$/, "").replace(/\D/g, "");
+        console.log("[TemplatePickerModal] Parsed number:", number, "from:", contactNumber);
         if (!number) {
             toast.error("Numero do contato invalido");
             return;
@@ -146,7 +159,7 @@ export function TemplatePickerModal({ open, onOpenChange, instanceId, contactNum
                 ];
             }
 
-            const result = await callTemplateApi({
+            const payload = {
                 action: "send",
                 user_id: user.id,
                 instance_id: instanceId,
@@ -154,7 +167,10 @@ export function TemplatePickerModal({ open, onOpenChange, instanceId, contactNum
                 template_name: selectedTemplate.name,
                 template_language: selectedTemplate.language,
                 template_components: templateComponents,
-            });
+            };
+            console.log("[TemplatePickerModal] Calling API with:", JSON.stringify(payload));
+            const result = await callTemplateApi(payload);
+            console.log("[TemplatePickerModal] API result:", result);
 
             // Save template message to messages table so it appears in the chat
             if (conversationId) {
