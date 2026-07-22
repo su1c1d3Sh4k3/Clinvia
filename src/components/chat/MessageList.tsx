@@ -206,7 +206,7 @@ export const MessageList = ({
         // Matches:
         // 1. URLs (http/https)
         // 2. Mentions (@number)
-        const tokenRegex = /(https?:\/\/[^\s]+)|(@\d+)/gi;
+        const tokenRegex = /(https?:\/\/[^\s]+)|(@\d+)|(\*[^*\n]+\*)|(_[^_\n]+_)/gi;
 
         // Split and filter undefined captures (because of capture groups in split)
         const parts = text.split(tokenRegex).filter(part => part !== undefined && part !== "");
@@ -248,6 +248,16 @@ export const MessageList = ({
                                 </span>
                             );
                         }
+                    }
+
+                    // Bold *text*
+                    if (/^\*[^*\n]+\*$/.test(part)) {
+                        return <strong key={i}>{part.slice(1, -1)}</strong>;
+                    }
+
+                    // Italic _text_
+                    if (/^_[^_\n]+_$/.test(part)) {
+                        return <em key={i}>{part.slice(1, -1)}</em>;
                     }
 
                     // Search Highlight Handling
@@ -510,6 +520,17 @@ export const MessageList = ({
                                         <div className="flex items-center gap-2 py-1">
                                             <img src={cfg.iconUrl} alt={cfg.label} className="w-8 h-8 object-contain shrink-0" />
                                             <span className="text-sm font-medium truncate">{body}</span>
+                                        </div>
+                                    );
+                                }
+
+                                // Template messages: "*Template enviado: name*\nbody"
+                                const tplMatch = body.match(/^\*Template enviado: ([^*]+)\*\n([\s\S]*)$/);
+                                if (tplMatch) {
+                                    return (
+                                        <div className="text-sm break-words [overflow-wrap:anywhere]">
+                                            <p className="font-bold">Template enviado: {tplMatch[1]}</p>
+                                            <p className="whitespace-pre-wrap"><HighlightText text={tplMatch[2]} highlight={searchTerm} /></p>
                                         </div>
                                     );
                                 }
