@@ -609,11 +609,37 @@ serve(async (req) => {
             }
 
             // Buscar contato existente - FILTRAR POR USER_ID
+            // Try multiple number formats to match existing contacts:
+            // Meta sends "553799957542", UZAPI saves "5537999575427@s.whatsapp.net"
+            const rawDigits = waNumber.replace(/\D/g, '').replace(/@.*$/, '');
+            const numberVariants = [waNumber];
+            // Add @s.whatsapp.net variant
+            if (!waNumber.includes('@')) numberVariants.push(`${rawDigits}@s.whatsapp.net`);
+            // For BR numbers: add 13-digit variant with 9th digit
+            if (rawDigits.startsWith('55') && rawDigits.length === 12) {
+                const ddd = rawDigits.substring(2, 4);
+                const local = rawDigits.substring(4);
+                const with9 = `55${ddd}9${local}`;
+                numberVariants.push(with9);
+                numberVariants.push(`${with9}@s.whatsapp.net`);
+            }
+            // For BR numbers: add 12-digit variant without 9th digit
+            if (rawDigits.startsWith('55') && rawDigits.length === 13) {
+                const ddd = rawDigits.substring(2, 4);
+                const rest = rawDigits.substring(4);
+                if (rest.startsWith('9')) {
+                    const without9 = `55${ddd}${rest.substring(1)}`;
+                    numberVariants.push(without9);
+                    numberVariants.push(`${without9}@s.whatsapp.net`);
+                }
+            }
+
             let { data: contact } = await supabase
                 .from('contacts')
                 .select('*')
                 .eq('user_id', userId)
-                .eq('number', waNumber)
+                .in('number', numberVariants)
+                .limit(1)
                 .maybeSingle();
 
             if (contact) {

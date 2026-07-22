@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
@@ -49,9 +49,11 @@ interface TemplatePickerModalProps {
     onOpenChange: (open: boolean) => void;
     instanceId: string;
     contactNumber: string;
+    conversationId?: string;
 }
 
-export function TemplatePickerModal({ open, onOpenChange, instanceId, contactNumber }: TemplatePickerModalProps) {
+export function TemplatePickerModal({ open, onOpenChange, instanceId, contactNumber, conversationId }: TemplatePickerModalProps) {
+    const queryClient = useQueryClient();
     const { user } = useAuth();
     const [search, setSearch] = useState("");
     const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
@@ -139,7 +141,7 @@ export function TemplatePickerModal({ open, onOpenChange, instanceId, contactNum
                 ];
             }
 
-            await callTemplateApi({
+            const result = await callTemplateApi({
                 action: "send",
                 user_id: user.id,
                 instance_id: instanceId,
@@ -148,6 +150,27 @@ export function TemplatePickerModal({ open, onOpenChange, instanceId, contactNum
                 template_language: selectedTemplate.language,
                 template_components: templateComponents,
             });
+
+            // Save template message to messages table so it appears in the chat
+            if (conversationId) {
+                const bodyText = getPreviewText(selectedTemplate);
+                const headerText = getHeaderText(selectedTemplate);
+                const fullBody = headerText
+                    ? `*${headerText}*\n${bodyText}`
+                    : bodyText;
+
+                await supabase.from("messages").insert({
+                    conversation_id: conversationId,
+                    body: fullBody,
+                    direction: "outbound",
+                    message_type: "text",
+                    status: "sent",
+                    evolution_id: result.message_id || null,
+                    instance_id: instanceId,
+                });
+
+                queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
+            }
 
             toast.success("Template enviado com sucesso!");
             onOpenChange(false);

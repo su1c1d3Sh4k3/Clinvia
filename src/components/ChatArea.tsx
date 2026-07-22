@@ -981,6 +981,7 @@ export const ChatArea = ({
           onOpenChange={setIsTemplatePickerOpen}
           instanceId={(conversation as any)?.instance_id || ""}
           contactNumber={contactNumber}
+          conversationId={conversationId}
         />
       )}
 
