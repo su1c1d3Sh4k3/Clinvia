@@ -164,7 +164,7 @@ export function TemplatePickerModal({ open, onOpenChange, instanceId, contactNum
             // Save template message to messages table so it appears in the chat
             if (conversationId) {
                 const bodyText = getPreviewText(selectedTemplate);
-                const fullBody = `📋 *${selectedTemplate.name}*\n${bodyText}`;
+                const fullBody = `*Template enviado: ${selectedTemplate.name}*\n${bodyText}`;
 
                 const { error: msgError } = await supabase.from("messages").insert({
                     conversation_id: conversationId,

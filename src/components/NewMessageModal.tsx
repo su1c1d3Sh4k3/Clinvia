@@ -359,7 +359,7 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
 
             // 2.3 Insert Message
             const msgBody = isMetaSelected
-                ? `📋 *${selectedTemplate?.name}*\n${getPreviewText(selectedTemplate)}`
+                ? `*Template enviado: ${selectedTemplate?.name}*\n${getPreviewText(selectedTemplate)}`
                 : message;
             const { error: messageError } = await supabase
                 .from("messages")
