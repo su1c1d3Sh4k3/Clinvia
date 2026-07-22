@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useOwnerId } from "@/hooks/useOwnerId";
 import { toast } from "sonner";
 import { Search, Send, FileText, Loader2 } from "lucide-react";
 
@@ -55,6 +56,7 @@ interface TemplatePickerModalProps {
 export function TemplatePickerModal({ open, onOpenChange, instanceId, contactNumber, conversationId }: TemplatePickerModalProps) {
     const queryClient = useQueryClient();
     const { user } = useAuth();
+    const { data: ownerId } = useOwnerId();
     const [search, setSearch] = useState("");
     const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
     const [sendParams, setSendParams] = useState<string[]>([]);
@@ -119,22 +121,12 @@ export function TemplatePickerModal({ open, onOpenChange, instanceId, contactNum
     };
 
     const handleSend = async () => {
-        console.log("[TemplatePickerModal] handleSend called", {
-            selectedTemplate: selectedTemplate?.name,
-            userId: user?.id,
-            instanceId,
-            contactNumber,
-            sendParams,
-        });
-
         if (!selectedTemplate || !user?.id || !instanceId) {
-            console.error("[TemplatePickerModal] Missing data:", { selectedTemplate: !!selectedTemplate, userId: !!user?.id, instanceId: !!instanceId });
             toast.error("Dados incompletos para envio");
             return;
         }
 
         const number = contactNumber.replace(/@.*$/, "").replace(/\D/g, "");
-        console.log("[TemplatePickerModal] Parsed number:", number, "from:", contactNumber);
         if (!number) {
             toast.error("Numero do contato invalido");
             return;
@@ -159,7 +151,7 @@ export function TemplatePickerModal({ open, onOpenChange, instanceId, contactNum
                 ];
             }
 
-            const payload = {
+            const result = await callTemplateApi({
                 action: "send",
                 user_id: user.id,
                 instance_id: instanceId,
@@ -167,10 +159,7 @@ export function TemplatePickerModal({ open, onOpenChange, instanceId, contactNum
                 template_name: selectedTemplate.name,
                 template_language: selectedTemplate.language,
                 template_components: templateComponents,
-            };
-            console.log("[TemplatePickerModal] Calling API with:", JSON.stringify(payload));
-            const result = await callTemplateApi(payload);
-            console.log("[TemplatePickerModal] API result:", result);
+            });
 
             // Save template message to messages table so it appears in the chat
             if (conversationId) {
@@ -187,6 +176,7 @@ export function TemplatePickerModal({ open, onOpenChange, instanceId, contactNum
                     message_type: "text",
                     status: "sent",
                     evolution_id: result.message_id || null,
+                    user_id: ownerId,
                 });
                 if (msgError) console.error("[TemplatePickerModal] Error saving message:", msgError);
 
