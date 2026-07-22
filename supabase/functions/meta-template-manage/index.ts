@@ -239,17 +239,7 @@ serve(async (req) => {
             if (!template_name) throw new Error("Missing field: template_name");
 
             const phoneNumberId = instance.meta_phone_number_id;
-            let number = to.replace(/\D/g, "").replace(/@.*$/, "");
-            // Normalize BR mobile numbers: Meta expects 55+2-digit DDD+8-digit number (12 digits total)
-            // Brazilian mobiles with 9th digit have 13 digits (55+2+9digits) — remove the extra 9
-            if (number.startsWith("55") && number.length === 13) {
-                const ddd = number.substring(2, 4);
-                const rest = number.substring(4);
-                if (rest.startsWith("9") && rest.length === 9) {
-                    number = `55${ddd}${rest.substring(1)}`;
-                    console.log("[meta-template-manage] Normalized BR number:", number);
-                }
-            }
+            const number = to.replace(/@.*$/, "").replace(/\D/g, "");
 
             const templatePayload: any = {
                 messaging_product: "whatsapp",
