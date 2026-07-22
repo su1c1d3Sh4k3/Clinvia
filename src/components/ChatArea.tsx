@@ -980,15 +980,13 @@ export const ChatArea = ({
         onSelect={handleSendContact}
       />
 
-      {isMetaInstance && (
-        <TemplatePickerModal
-          open={isTemplatePickerOpen}
-          onOpenChange={setIsTemplatePickerOpen}
-          instanceId={(conversation as any)?.instance_id || ""}
-          contactNumber={contactNumber}
-          conversationId={conversationId}
-        />
-      )}
+      <TemplatePickerModal
+        open={isTemplatePickerOpen}
+        onOpenChange={setIsTemplatePickerOpen}
+        instanceId={(conversation as any)?.instance_id || ""}
+        contactNumber={contactNumber}
+        conversationId={conversationId}
+      />
 
     </div>
   );
