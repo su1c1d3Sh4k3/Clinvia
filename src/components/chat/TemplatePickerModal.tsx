@@ -159,15 +159,15 @@ export function TemplatePickerModal({ open, onOpenChange, instanceId, contactNum
                     ? `*${headerText}*\n${bodyText}`
                     : bodyText;
 
-                await supabase.from("messages").insert({
+                const { error: msgError } = await supabase.from("messages").insert({
                     conversation_id: conversationId,
                     body: fullBody,
                     direction: "outbound",
                     message_type: "text",
                     status: "sent",
                     evolution_id: result.message_id || null,
-                    instance_id: instanceId,
                 });
+                if (msgError) console.error("[TemplatePickerModal] Error saving message:", msgError);
 
                 queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
             }
