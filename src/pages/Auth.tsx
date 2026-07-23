@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Lock, Mail, User, Building, Phone, Instagram, MapPin, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
-import TurnstileWidget from "@/components/TurnstileWidget";
+import TurnstileWidget, { TurnstileWidgetHandle } from "@/components/TurnstileWidget";
 import { sendClientSignupWebhook } from "@/utils/sendWebhook";
 import { ForgotPasswordDialog } from "@/components/auth/ForgotPasswordDialog";
 
@@ -46,6 +46,8 @@ const Auth = () => {
   // Captcha states
   const [loginCaptchaToken, setLoginCaptchaToken] = useState<string | null>(null);
   const [signupCaptchaToken, setSignupCaptchaToken] = useState<string | null>(null);
+  const loginCaptchaRef = useRef<TurnstileWidgetHandle>(null);
+  const signupCaptchaRef = useRef<TurnstileWidgetHandle>(null);
 
   // Phone mask: +55 (XX) 9 XXXX-XXXX
   const formatPhone = (value: string) => {
@@ -109,7 +111,9 @@ const Auth = () => {
         if (verifyError || !verifyData?.success) {
           toast.error("Falha na verificação de segurança. Tente novamente.");
           setIsLoading(false);
+          // Token expirado/consumido — gera um novo desafio (tokens são de uso único)
           setLoginCaptchaToken(null);
+          loginCaptchaRef.current?.reset();
           return;
         }
       }
@@ -146,6 +150,9 @@ const Auth = () => {
         });
 
         if (verifyError || !verifyData?.success) {
+          // Token expirado/consumido — gera um novo desafio (tokens são de uso único)
+          setSignupCaptchaToken(null);
+          signupCaptchaRef.current?.reset();
           throw new Error("Falha na verificação de segurança. Tente novamente.");
         }
       }
@@ -169,6 +176,9 @@ const Auth = () => {
         } else {
           toast.error("Erro ao criar cadastro: " + error.message);
         }
+        // O token já foi consumido na verificação — gera um novo para o retry
+        setSignupCaptchaToken(null);
+        signupCaptchaRef.current?.reset();
         return;
       }
 
@@ -307,7 +317,7 @@ const Auth = () => {
                   <ForgotPasswordDialog />
                 </div>
                 <div className="flex justify-center">
-                  <TurnstileWidget onVerify={setLoginCaptchaToken} />
+                  <TurnstileWidget ref={loginCaptchaRef} onVerify={setLoginCaptchaToken} onExpire={() => setLoginCaptchaToken(null)} />
                 </div>
                 <Button
                   type="submit"
@@ -440,7 +450,7 @@ const Auth = () => {
                 </div>
 
                 <div className="flex justify-center">
-                  <TurnstileWidget onVerify={setSignupCaptchaToken} />
+                  <TurnstileWidget ref={signupCaptchaRef} onVerify={setSignupCaptchaToken} onExpire={() => setSignupCaptchaToken(null)} />
                 </div>
 
                 <Button
