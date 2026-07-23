@@ -4,13 +4,14 @@ import { NotificationsBoard } from "@/components/dashboard/NotificationsBoard";
 import { SalesDashboard } from "@/components/dashboard/SalesDashboard";
 import { CrmDashboard } from "@/components/dashboard/crm/CrmDashboard";
 import { AgendamentosDashboard } from "@/components/dashboard/agendamentos/AgendamentosDashboard";
+import { CampanhasDashboard } from "@/components/dashboard/campanhas/CampanhasDashboard";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Headphones, Users, ShoppingCart, CalendarDays } from "lucide-react";
+import { Headphones, Users, ShoppingCart, CalendarDays, Megaphone } from "lucide-react";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useFinancialAccess } from "@/hooks/useFinancialAccess";
 import { cn } from "@/lib/utils";
 
-type DashboardTab = "monitoramento" | "crm" | "vendas" | "agendamentos";
+type DashboardTab = "monitoramento" | "crm" | "vendas" | "agendamentos" | "campanhas";
 
 const Dashboard = () => {
     const { data: userRole } = useUserRole();
@@ -39,7 +40,7 @@ const Dashboard = () => {
                 <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as DashboardTab)} className="w-full">
                     <TabsList className={cn(
                         "grid w-full max-w-2xl mx-auto",
-                        userRole === 'agent' ? "grid-cols-1" : canViewSales ? "grid-cols-4" : "grid-cols-3"
+                        userRole === 'agent' ? "grid-cols-1" : canViewSales ? "grid-cols-5" : "grid-cols-4"
                     )}>
                         {userRole !== 'agent' && (
                             <TabsTrigger
@@ -75,6 +76,15 @@ const Dashboard = () => {
                                 <span className="hidden sm:inline">Agendamentos</span>
                             </TabsTrigger>
                         )}
+                        {userRole !== 'agent' && (
+                            <TabsTrigger
+                                value="campanhas"
+                                className="flex items-center gap-2"
+                            >
+                                <Megaphone className="h-4 w-4 transition-transform duration-300 data-[state=active]:scale-110" />
+                                <span className="hidden sm:inline">Campanhas</span>
+                            </TabsTrigger>
+                        )}
                     </TabsList>
                 </Tabs>
 
@@ -91,6 +101,10 @@ const Dashboard = () => {
 
                 {activeTab === "agendamentos" && userRole !== 'agent' && (
                     <AgendamentosDashboard />
+                )}
+
+                {activeTab === "campanhas" && userRole !== 'agent' && (
+                    <CampanhasDashboard />
                 )}
             </div>
         </div>
