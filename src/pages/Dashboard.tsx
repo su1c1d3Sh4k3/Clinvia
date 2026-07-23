@@ -39,7 +39,7 @@ const Dashboard = () => {
                 {/* Dashboard Tabs - Agentes só veem Painel de Negócios */}
                 <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as DashboardTab)} className="w-full">
                     <TabsList className={cn(
-                        "grid w-full max-w-2xl mx-auto",
+                        "grid w-full max-w-3xl mx-auto",
                         userRole === 'agent' ? "grid-cols-1" : canViewSales ? "grid-cols-5" : "grid-cols-4"
                     )}>
                         {userRole !== 'agent' && (
@@ -47,15 +47,15 @@ const Dashboard = () => {
                                 value="monitoramento"
                                 className="flex items-center gap-2"
                             >
-                                <Headphones className="h-4 w-4 transition-transform duration-300 data-[state=active]:scale-110" />
-                                <span className="hidden sm:inline">Monitoramento</span>
+                                <Headphones className="h-4 w-4 shrink-0 transition-transform duration-300 data-[state=active]:scale-110" />
+                                <span className="hidden sm:inline truncate">Monitoramento</span>
                             </TabsTrigger>
                         )}
                         <TabsTrigger
                             value="crm"
                             className="flex items-center gap-2"
                         >
-                            <Users className="h-4 w-4 transition-transform duration-300 data-[state=active]:scale-110" />
+                            <Users className="h-4 w-4 shrink-0 transition-transform duration-300 data-[state=active]:scale-110" />
                             <span className="hidden sm:inline">CRM</span>
                         </TabsTrigger>
                         {canViewSales && (
@@ -63,7 +63,7 @@ const Dashboard = () => {
                                 value="vendas"
                                 className="flex items-center gap-2"
                             >
-                                <ShoppingCart className="h-4 w-4 transition-transform duration-300 data-[state=active]:scale-110" />
+                                <ShoppingCart className="h-4 w-4 shrink-0 transition-transform duration-300 data-[state=active]:scale-110" />
                                 <span className="hidden sm:inline">Vendas</span>
                             </TabsTrigger>
                         )}
@@ -72,8 +72,8 @@ const Dashboard = () => {
                                 value="agendamentos"
                                 className="flex items-center gap-2"
                             >
-                                <CalendarDays className="h-4 w-4 transition-transform duration-300 data-[state=active]:scale-110" />
-                                <span className="hidden sm:inline">Agendamentos</span>
+                                <CalendarDays className="h-4 w-4 shrink-0 transition-transform duration-300 data-[state=active]:scale-110" />
+                                <span className="hidden sm:inline truncate">Agendamentos</span>
                             </TabsTrigger>
                         )}
                         {userRole !== 'agent' && (
@@ -81,7 +81,7 @@ const Dashboard = () => {
                                 value="campanhas"
                                 className="flex items-center gap-2"
                             >
-                                <Megaphone className="h-4 w-4 transition-transform duration-300 data-[state=active]:scale-110" />
+                                <Megaphone className="h-4 w-4 shrink-0 transition-transform duration-300 data-[state=active]:scale-110" />
                                 <span className="hidden sm:inline">Campanhas</span>
                             </TabsTrigger>
                         )}
