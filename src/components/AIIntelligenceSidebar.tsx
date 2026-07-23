@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Send, Sparkles, TrendingUp, ChevronUp, Zap, Settings, RefreshCw, DollarSign, Calendar, MessageSquare, FileText, Bot } from "lucide-react";
+import { Send, Sparkles, TrendingUp, ChevronUp, Zap, Settings, RefreshCw, DollarSign, Calendar, MessageSquare, FileText, Bot, Pencil, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -14,6 +14,7 @@ import { useAutoAnalysis } from "@/hooks/useAutoAnalysis";
 import { useGenerateSummary } from "@/hooks/useGenerateSummary";
 import { supabase } from "@/integrations/supabase/client";
 import { CopilotSettingsModal } from "./CopilotSettingsModal";
+import { NegotiationQuickModal } from "@/components/crm/NegotiationQuickModal";
 import { SaleModal } from "@/components/sales/SaleModal";
 import { AppointmentModal } from "@/components/scheduling/AppointmentModal";
 import { format } from "date-fns";
@@ -128,6 +129,7 @@ export const AIIntelligenceSidebar = ({ conversationId }: AIIntelligenceSidebarP
   const [isUpdatingSatisfaction, setIsUpdatingSatisfaction] = useState(false);
   const [showSaleModal, setShowSaleModal] = useState(false);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
+  const [showNegotiationModal, setShowNegotiationModal] = useState(false);
 
   // Collapsible states
   const [openSection, setOpenSection] = useState<string | null>(() => {
@@ -206,6 +208,14 @@ export const AIIntelligenceSidebar = ({ conversationId }: AIIntelligenceSidebarP
   return (
     <>
       <CopilotSettingsModal open={isSettingsOpen} onOpenChange={setIsSettingsOpen} />
+      {contactId && (
+        <NegotiationQuickModal
+          open={showNegotiationModal}
+          onOpenChange={setShowNegotiationModal}
+          contactId={contactId}
+          deal={crmClient}
+        />
+      )}
       <SaleModal open={showSaleModal} onOpenChange={setShowSaleModal} fixedContactId={!isGroup ? contactId : undefined} />
       <AppointmentModal
         open={showAppointmentModal}
@@ -299,11 +309,29 @@ export const AIIntelligenceSidebar = ({ conversationId }: AIIntelligenceSidebarP
                               ))}
                             </div>
                           )}
+                          <Button
+                            onClick={() => setShowNegotiationModal(true)}
+                            variant="outline"
+                            size="sm"
+                            className="w-full text-xs h-7"
+                          >
+                            <Pencil className="w-3 h-3 mr-1.5" /> Editar Negociação
+                          </Button>
                         </div>
                       ) : (
-                        <p className="text-xs text-muted-foreground text-center py-2">
-                          Nenhum ticket CRM ativo
-                        </p>
+                        <div className="space-y-2">
+                          <p className="text-xs text-muted-foreground text-center py-1">
+                            Nenhuma negociação ativa
+                          </p>
+                          <Button
+                            onClick={() => setShowNegotiationModal(true)}
+                            variant="default"
+                            size="sm"
+                            className="w-full text-xs h-7"
+                          >
+                            <Plus className="w-3 h-3 mr-1.5" /> Criar Negociação
+                          </Button>
+                        </div>
                       )}
                     </CardContent>
                   </CollapsibleContent>
