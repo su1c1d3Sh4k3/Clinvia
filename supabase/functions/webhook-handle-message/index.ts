@@ -1052,16 +1052,24 @@ serve(async (req) => {
 
                 // Download Media
                 if (['image', 'audio', 'video', 'document', 'sticker'].includes(messageType) && messageId) {
-                    mediaUrl = await downloadMediaFromUzapi(
-                        instance.apikey,
-                        messageId,
-                        messageType,
-                        supabase,
-                        conversation.id,
-                        mediaFilename || undefined
-                    );
-                    if (mediaUrl) {
-                        console.log('[webhook-handle-message] Media uploaded:', mediaUrl);
+                    // Meta Cloud API: meta-webhook já baixou via Graph API e injetou a
+                    // URL pública no payload — instâncias Meta não têm token UAZAPI
+                    const metaMediaUrl = payload.message?.content?._meta_media_url;
+                    if (metaMediaUrl) {
+                        mediaUrl = metaMediaUrl;
+                        console.log('[webhook-handle-message] Using Meta media URL:', mediaUrl);
+                    } else {
+                        mediaUrl = await downloadMediaFromUzapi(
+                            instance.apikey,
+                            messageId,
+                            messageType,
+                            supabase,
+                            conversation.id,
+                            mediaFilename || undefined
+                        );
+                        if (mediaUrl) {
+                            console.log('[webhook-handle-message] Media uploaded:', mediaUrl);
+                        }
                     }
                 }
 
