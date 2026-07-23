@@ -14,11 +14,14 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
  * Body:
  *   user_id         (obrigatório) — dono da conta (bd_data.user_id)
  *   number          (obrigatório*) — número do cliente (qualquer formato)
- *   text            (obrigatório) — texto da mensagem
+ *   text            (obrigatório**) — texto da mensagem
+ *   audio_base64    (obrigatório**) — áudio em base64 (aceita data URI); enviado como PTT/voz
+ *   mime_type       (opcional)   — mime do áudio (default audio/mpeg)
  *   instance_id     (obrigatório) — instância que recebeu a mensagem (bd_data.instance_id)
  *   conversation_id (opcional)   — se enviado, pula a resolução por número
  *   contact_id      (opcional)   — se enviado, pula a busca de contato por número
  *   (* dispensável quando conversation_id ou contact_id são enviados)
+ *   (** enviar text OU audio_base64)
  */
 
 const corsHeaders = {
@@ -49,15 +52,17 @@ serve(async (req) => {
         const userId: string | undefined = body.user_id;
         const number: string | undefined = body.number || body.phone_number;
         const text: string | undefined = body.text;
+        const audioBase64: string | undefined = body.audio_base64 || body.audio;
+        const mimeType: string = body.mime_type || "audio/mpeg";
         const instanceId: string | undefined = body.instance_id;
         let conversationId: string | undefined = body.conversation_id;
         let contactId: string | undefined = body.contact_id;
 
-        if (!userId || !text || !instanceId) {
+        if (!userId || !instanceId || (!text && !audioBase64)) {
             return json({
                 success: false,
                 error: "missing_params",
-                message: "Campos obrigatórios: user_id, text, instance_id (+ number, conversation_id ou contact_id)",
+                message: "Campos obrigatórios: user_id, instance_id e text ou audio_base64 (+ number, conversation_id ou contact_id)",
             }, 400);
         }
         if (!conversationId && !contactId && !number) {
@@ -135,6 +140,48 @@ serve(async (req) => {
             conversationId = match.id;
         }
 
+        // ── Áudio em base64: upload no bucket público 'media' → URL ──
+        // A URL funciona nos dois providers: UAZAPI recebe em `file` (tipo ptt)
+        // e a Meta Cloud API baixa via `audio.link`.
+        let mediaUrl: string | undefined;
+        if (audioBase64) {
+            const extByMime: Record<string, string> = {
+                "audio/mpeg": "mp3",
+                "audio/mp3": "mp3",
+                "audio/ogg": "ogg",
+                "audio/opus": "ogg",
+                "audio/mp4": "m4a",
+                "audio/aac": "aac",
+                "audio/amr": "amr",
+                "audio/wav": "wav",
+            };
+            // Aceita data URI ("data:audio/ogg;base64,...") ou base64 puro
+            const dataUriMatch = audioBase64.match(/^data:([^;]+);base64,(.*)$/s);
+            const effectiveMime = dataUriMatch?.[1] || mimeType;
+            const rawBase64 = (dataUriMatch?.[2] || audioBase64).replace(/\s/g, "");
+
+            let fileBytes: Uint8Array;
+            try {
+                fileBytes = Uint8Array.from(atob(rawBase64), (c) => c.charCodeAt(0));
+            } catch {
+                return json({ success: false, error: "invalid_base64", message: "audio_base64 não é um base64 válido" }, 400);
+            }
+
+            const ext = extByMime[effectiveMime.toLowerCase()] || "mp3";
+            const fileName = `media/${conversationId}/${Date.now()}_api_audio.${ext}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from("media")
+                .upload(fileName, fileBytes, { contentType: effectiveMime, cacheControl: "3600", upsert: true });
+
+            if (uploadError) {
+                console.error("[api-send-message] audio upload error:", uploadError);
+                return json({ success: false, error: "upload_failed", message: "Falha ao processar o áudio" }, 500);
+            }
+
+            mediaUrl = supabase.storage.from("media").getPublicUrl(fileName).data.publicUrl;
+        }
+
         // ── Delega para evolution-send-message ──
         // Ele decide o provider: instance.provider === 'meta' → meta-send-message
         // (Graph API); caso contrário → UAZAPI. Também salva a mensagem no banco.
@@ -150,7 +197,8 @@ serve(async (req) => {
             body: JSON.stringify({
                 conversationId,
                 body: text,
-                messageType: "text",
+                messageType: mediaUrl ? "audio" : "text",
+                mediaUrl,
                 message: { wasSentByApi: true },
             }),
         });
