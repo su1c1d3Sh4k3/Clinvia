@@ -27,8 +27,8 @@ export const ClientProfileModal = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl h-[90vh] p-0 gap-0 overflow-hidden">
-        <DialogTitle className="px-5 py-3 border-b bg-muted/30 text-base font-semibold truncate">
+      <DialogContent className="max-w-6xl h-[90vh] p-0 gap-0 overflow-hidden flex flex-col">
+        <DialogTitle className="px-5 py-3 border-b bg-muted/30 text-base font-semibold truncate shrink-0">
           {contact.push_name || "Cliente"}
         </DialogTitle>
 

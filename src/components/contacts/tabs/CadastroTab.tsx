@@ -13,6 +13,24 @@ interface CadastroTabProps {
   contact: any;
 }
 
+interface FieldProps {
+  label: string;
+  field: string;
+  type?: string;
+  span?: number;
+  form: Record<string, string>;
+  setField: (key: string, value: string) => void;
+}
+
+// Definido fora do CadastroTab: se declarado dentro, o componente é recriado a
+// cada render e o React remonta o Input, fazendo o campo perder o foco a cada tecla.
+const Field = ({ label, field, type = "text", span = 1, form, setField }: FieldProps) => (
+  <div className={span === 2 ? "col-span-2" : ""}>
+    <Label className="text-xs">{label}</Label>
+    <Input type={type} value={form[field] || ""} onChange={(e) => setField(field, e.target.value)} className="h-8 text-sm" />
+  </div>
+);
+
 export const CadastroTab = ({ contact }: CadastroTabProps) => {
   const { data: ownerId } = useOwnerId();
   const queryClient = useQueryClient();
@@ -98,12 +116,7 @@ export const CadastroTab = ({ contact }: CadastroTabProps) => {
 
   if (isLoading) return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin" /></div>;
 
-  const Field = ({ label, field, type = "text", span = 1 }: { label: string; field: string; type?: string; span?: number }) => (
-    <div className={span === 2 ? "col-span-2" : ""}>
-      <Label className="text-xs">{label}</Label>
-      <Input type={type} value={(form as any)[field] || ""} onChange={(e) => setField(field, e.target.value)} className="h-8 text-sm" />
-    </div>
-  );
+  const fieldProps = { form: form as Record<string, string>, setField };
 
   return (
     <div className="space-y-6">
@@ -111,13 +124,13 @@ export const CadastroTab = ({ contact }: CadastroTabProps) => {
       <div>
         <h4 className="text-sm font-medium mb-3">Dados Pessoais</h4>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Nome" field="nome" span={2} />
-          <Field label="Nome Civil" field="nome_civil" />
-          <Field label="Telefone" field="telefone" />
-          <Field label="Email" field="email" />
-          <Field label="CPF" field="cpf" />
-          <Field label="RG" field="rg" />
-          <Field label="Data de Nascimento" field="data_nascimento" type="date" />
+          <Field label="Nome" field="nome" span={2} {...fieldProps} />
+          <Field label="Nome Civil" field="nome_civil" {...fieldProps} />
+          <Field label="Telefone" field="telefone" {...fieldProps} />
+          <Field label="Email" field="email" {...fieldProps} />
+          <Field label="CPF" field="cpf" {...fieldProps} />
+          <Field label="RG" field="rg" {...fieldProps} />
+          <Field label="Data de Nascimento" field="data_nascimento" type="date" {...fieldProps} />
           <div>
             <Label className="text-xs">Sexo</Label>
             <Select value={form.sexo} onValueChange={(v) => setField("sexo", v)}>
@@ -136,12 +149,12 @@ export const CadastroTab = ({ contact }: CadastroTabProps) => {
       <div>
         <h4 className="text-sm font-medium mb-3">Endereço</h4>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="CEP" field="cep" />
-          <Field label="Endereço" field="endereco" />
-          <Field label="Complemento" field="complemento" />
-          <Field label="Bairro" field="bairro" />
-          <Field label="Cidade" field="cidade" />
-          <Field label="Estado" field="estado" />
+          <Field label="CEP" field="cep" {...fieldProps} />
+          <Field label="Endereço" field="endereco" {...fieldProps} />
+          <Field label="Complemento" field="complemento" {...fieldProps} />
+          <Field label="Bairro" field="bairro" {...fieldProps} />
+          <Field label="Cidade" field="cidade" {...fieldProps} />
+          <Field label="Estado" field="estado" {...fieldProps} />
         </div>
       </div>
 
@@ -149,9 +162,9 @@ export const CadastroTab = ({ contact }: CadastroTabProps) => {
       <div>
         <h4 className="text-sm font-medium mb-3">Dados Complementares</h4>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Estado Civil" field="estado_civil" />
-          <Field label="Escolaridade" field="escolaridade" />
-          <Field label="Profissão" field="profissao" />
+          <Field label="Estado Civil" field="estado_civil" {...fieldProps} />
+          <Field label="Escolaridade" field="escolaridade" {...fieldProps} />
+          <Field label="Profissão" field="profissao" {...fieldProps} />
         </div>
       </div>
 
