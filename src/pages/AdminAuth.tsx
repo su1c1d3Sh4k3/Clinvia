@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Lock, Mail, ShieldAlert, RefreshCw, Send, KeyRound } from "lucide-react";
 import { toast } from "sonner";
-import TurnstileWidget from "@/components/TurnstileWidget";
+import TurnstileWidget, { TurnstileWidgetHandle } from "@/components/TurnstileWidget";
 
 const AdminAuth = () => {
     const navigate = useNavigate();
@@ -15,6 +15,14 @@ const AdminAuth = () => {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+    const captchaRef = useRef<TurnstileWidgetHandle>(null);
+
+    // Tokens do Turnstile são de uso único — sempre que uma tentativa falha
+    // após a verificação, é preciso gerar um novo desafio
+    const resetCaptcha = () => {
+        setCaptchaToken(null);
+        captchaRef.current?.reset();
+    };
 
     // 2FA State
     const [accessCode, setAccessCode] = useState("");
@@ -144,6 +152,7 @@ const AdminAuth = () => {
                 if (verifyError || !verifyData?.success) {
                     toast.error("Falha na verificação de segurança");
                     setIsLoading(false);
+                    resetCaptcha();
                     return;
                 }
             }
@@ -157,6 +166,7 @@ const AdminAuth = () => {
             if (authError) {
                 toast.error("Credenciais inválidas");
                 setIsLoading(false);
+                resetCaptcha();
                 return;
             }
 
@@ -171,6 +181,7 @@ const AdminAuth = () => {
                 toast.error("Acesso negado. Apenas super-admin pode acessar.");
                 await supabase.auth.signOut();
                 setIsLoading(false);
+                resetCaptcha();
                 return;
             }
 
@@ -178,6 +189,7 @@ const AdminAuth = () => {
             navigate("/admin");
         } catch (error) {
             toast.error("Erro ao fazer login");
+            resetCaptcha();
         } finally {
             setIsLoading(false);
         }
@@ -283,7 +295,7 @@ const AdminAuth = () => {
                         </div>
 
                         <div className="flex justify-center">
-                            <TurnstileWidget onVerify={setCaptchaToken} />
+                            <TurnstileWidget ref={captchaRef} onVerify={setCaptchaToken} onExpire={() => setCaptchaToken(null)} />
                         </div>
                         <Button
                             type="submit"

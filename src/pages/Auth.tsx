@@ -122,6 +122,10 @@ const Auth = () => {
     } catch (error) {
       console.error("Login Error:", error);
       toast.error("Erro ao realizar login");
+      // O token do captcha já foi consumido pela verificação bem-sucedida —
+      // sem reset, a próxima tentativa falharia com "timeout-or-duplicate"
+      setLoginCaptchaToken(null);
+      loginCaptchaRef.current?.reset();
     } finally {
       setIsLoading(false);
     }
