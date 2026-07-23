@@ -65,6 +65,7 @@ interface IAConfigData {
     convenio: string;
     test_mode: boolean;
     test_numbers: string[];
+    workflow_id: string;
 }
 
 interface QualifyItem {
@@ -121,6 +122,7 @@ const defaultConfig: IAConfigData = {
     convenio: "",
     test_mode: false,
     test_numbers: [],
+    workflow_id: "",
 };
 
 export default function IAConfig() {
@@ -224,6 +226,7 @@ export default function IAConfig() {
                 ...existingConfig,
                 test_mode: existingConfig.test_mode ?? false,
                 test_numbers: existingConfig.test_numbers ?? [],
+                workflow_id: existingConfig.workflow_id ?? "",
             });
 
             // Parse restrictions
@@ -438,6 +441,16 @@ export default function IAConfig() {
                 .single();
 
             if (error) throw error;
+
+            // Propaga o Workflow ID para todas as instâncias do usuário —
+            // webhook-handle-message usa instances.workflow_id como destino n8n
+            const workflowId = (data.workflow_id || "").trim() || null;
+            const { error: instError } = await supabase
+                .from("instances")
+                .update({ workflow_id: workflowId } as any)
+                .eq("user_id", ownerId);
+            if (instError) throw instError;
+
             return result;
         },
         onSuccess: () => {
@@ -1068,7 +1081,26 @@ export default function IAConfig() {
                                 {/* Lista de instâncias quando IA está ligada */}
                                 {config.ia_on && (
                                     <div className="space-y-3 pt-3 border-t">
-                                        <p className="text-xs text-muted-foreground">
+                                        {/* Workflow ID (n8n) */}
+                                        <div className="space-y-1.5">
+                                            <Label htmlFor="workflow-id" className="text-sm font-medium">Workflow ID</Label>
+                                            <Input
+                                                id="workflow-id"
+                                                value={config.workflow_id || ""}
+                                                onChange={(e) => setConfig({ ...config, workflow_id: e.target.value.trim() })}
+                                                placeholder="Código do fluxo n8n"
+                                                className="max-w-md"
+                                            />
+                                            <p className="text-xs text-muted-foreground break-all">
+                                                As mensagens serão roteadas para{" "}
+                                                <span className="font-mono">
+                                                    https://webhooks.clinvia.com.br/webhook/{config.workflow_id || "<código>"}
+                                                </span>
+                                                . Clique em Salvar para aplicar.
+                                            </p>
+                                        </div>
+
+                                        <p className="text-xs text-muted-foreground pt-2 border-t">
                                             Ative a IA para cada instância desejada:
                                         </p>
 

@@ -1503,7 +1503,13 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
         // - conversation.status must be 'pending'
         // - contacts.ia_on must be TRUE
         // - ia_config.ia_on must be TRUE
-        if (instance.webhook_url && eventType === 'messages' && !isGroup) {
+        // workflow_id (n8n) tem prioridade sobre webhook_url legado por instância —
+        // permite trocar de instância/provider mantendo o mesmo fluxo n8n
+        const n8nForwardUrl = instance.workflow_id
+            ? `https://webhooks.clinvia.com.br/webhook/${instance.workflow_id}`
+            : instance.webhook_url;
+
+        if (n8nForwardUrl && eventType === 'messages' && !isGroup) {
             const conversationIsPending = conversation?.status === 'pending';
 
             let contactIaOn = true;
@@ -1750,7 +1756,7 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                         }
                     };
 
-                    const webhookResponse = await fetch(instance.webhook_url, {
+                    const webhookResponse = await fetch(n8nForwardUrl, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',

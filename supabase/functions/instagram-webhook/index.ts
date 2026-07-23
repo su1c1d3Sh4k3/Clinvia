@@ -614,14 +614,17 @@ serve(async (req) => {
                                     // IMPORTANT: If multiple instances match, take the first one
                                     const { data: whatsappInstances } = await supabase
                                         .from('instances')
-                                        .select('id, webhook_url, ia_on_wpp')
+                                        .select('id, webhook_url, workflow_id, ia_on_wpp')
                                         .eq('user_id', userId)
                                         .eq('ia_on_wpp', true)
                                         .limit(1);
 
                                     if (whatsappInstances && whatsappInstances.length > 0) {
                                         const whatsappInstance = whatsappInstances[0];
-                                        const webhookUrl = whatsappInstance.webhook_url;
+                                        // workflow_id (n8n) tem prioridade sobre webhook_url legado
+                                        const webhookUrl = whatsappInstance.workflow_id
+                                            ? `https://webhooks.clinvia.com.br/webhook/${whatsappInstance.workflow_id}`
+                                            : whatsappInstance.webhook_url;
 
                                         if (webhookUrl) {
                                             // Fetch the 'Atendimento IA' funnel ID unconditionally to include in the payload
