@@ -34,6 +34,9 @@ verify_jwt = false
 [functions.api-contacts]
 verify_jwt = false
 
+[functions.api-send-message]
+verify_jwt = false
+
 [functions.api-crm]
 verify_jwt = false
 
