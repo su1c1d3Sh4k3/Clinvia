@@ -12,6 +12,16 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { sendMenu, sendText, type MenuButton } from "../_shared/uazapi-menu.ts";
 import { utcToBrasiliaParts } from "../_shared/timezone.ts";
+import { isMetaInstance, pickAutomationInstance, type AutomationInstance } from "../_shared/automation-instance.ts";
+import {
+    ensureSystemTemplates,
+    getSystemTemplateStatuses,
+    sendMetaTemplate,
+    TPL_CONFIRM_MULTI,
+    TPL_CONFIRM_SINGLE,
+    TPL_FEEDBACK,
+    TPL_REMINDER,
+} from "../_shared/system-templates.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -46,18 +56,33 @@ serve(async (req) => {
 
         for (const config of activeConfigs) {
             try {
-                // Get connected instance for this user
-                const { data: instance } = await supabase
-                    .from("instances")
-                    .select("id, apikey, status")
-                    .eq("user_id", config.user_id)
-                    .eq("status", "connected")
-                    .limit(1)
-                    .maybeSingle();
+                // Pick automation instance (primária → Meta → qualquer conectada)
+                const instance = await pickAutomationInstance(supabase, config.user_id);
+                if (!instance) continue;
 
-                if (!instance?.apikey) continue;
+                const isMeta = isMetaInstance(instance);
+                if (!isMeta && !instance.apikey) continue;
 
-                const ctx = { supabase, userId: config.user_id, instance, clinicName: config.name || "a clínica", now };
+                // Meta: garante templates de sistema criados e carrega statuses
+                let templateStatuses = new Map<string, string>();
+                if (isMeta) {
+                    try {
+                        templateStatuses = await ensureSystemTemplates(supabase, config.user_id, instance.id);
+                    } catch (err) {
+                        console.error(`[ac-cron] ensureSystemTemplates failed for ${config.user_id}:`, err);
+                        templateStatuses = await getSystemTemplateStatuses(supabase, instance.id);
+                    }
+                }
+
+                const ctx: CronContext = {
+                    supabase,
+                    userId: config.user_id,
+                    instance,
+                    isMeta,
+                    templateStatuses,
+                    clinicName: config.name || "a clínica",
+                    now,
+                };
 
                 const r1 = await processConfirm24h(ctx);
                 const r2 = await processReminder2h(ctx);
@@ -86,7 +111,9 @@ serve(async (req) => {
 interface CronContext {
     supabase: any;
     userId: string;
-    instance: { id: string; apikey: string };
+    instance: AutomationInstance;
+    isMeta: boolean;
+    templateStatuses: Map<string, string>;
     clinicName: string;
     now: Date;
 }
@@ -160,23 +187,55 @@ async function processConfirm24h(ctx: CronContext): Promise<{ sent: number; erro
             const firstName = (contact.push_name || "").split(" ")[0] || "cliente";
             const msgText = buildConfirmMessage(firstName, group, ctx.clinicName);
 
-            const buttons: MenuButton[] = [
-                { id: "ac_confirm", text: "Sim, pode confirmar" },
-                { id: "ac_reschedule", text: "Vou precisar reagendar" },
-                { id: "ac_cancel", text: "Não vou poder ir" },
-            ];
+            let sendRes: { messageId: string | null };
+            if (ctx.isMeta) {
+                // Meta: template obrigatório — só envia se APPROVED (sem fallback)
+                const tplName = group.length === 1 ? TPL_CONFIRM_SINGLE : TPL_CONFIRM_MULTI;
+                if (ctx.templateStatuses.get(tplName) !== "APPROVED") {
+                    console.log(`[ac-cron] template ${tplName} not APPROVED — skipping confirm_24h for ${contactId}`);
+                    continue;
+                }
+                const a = group[0];
+                const parameters = group.length === 1
+                    ? [
+                        firstName,
+                        formatTimeBR(a.start_time),
+                        ctx.clinicName,
+                        a.service_name || "atendimento",
+                        a.professional_name || "nosso profissional",
+                    ]
+                    : [
+                        firstName,
+                        ctx.clinicName,
+                        group.map((g: any) =>
+                            `${formatTimeBR(g.start_time)} — ${g.service_name} com ${g.professional_name}`
+                        ).join("; "),
+                    ];
+                sendRes = await sendMetaTemplate({
+                    conversationId,
+                    templateName: tplName,
+                    parameters,
+                    bodyPreview: msgText,
+                });
+            } else {
+                const buttons: MenuButton[] = [
+                    { id: "ac_confirm", text: "Sim, pode confirmar" },
+                    { id: "ac_reschedule", text: "Vou precisar reagendar" },
+                    { id: "ac_cancel", text: "Não vou poder ir" },
+                ];
 
-            const sendRes = await sendMenu({
-                supabase,
-                userId,
-                conversationId,
-                instanceApikey: ctx.instance.apikey,
-                number: contact.number,
-                text: msgText,
-                buttons,
-                trackSource: "appointment_confirmation",
-                trackId: `confirm_24h:${contactId}`,
-            });
+                sendRes = await sendMenu({
+                    supabase,
+                    userId,
+                    conversationId,
+                    instanceApikey: ctx.instance.apikey!,
+                    number: contact.number,
+                    text: msgText,
+                    buttons,
+                    trackSource: "appointment_confirmation",
+                    trackId: `confirm_24h:${contactId}`,
+                });
+            }
 
             // Move CRM to Pós-Venda stage (trigger syncs queue automatically)
             await supabase
@@ -296,14 +355,28 @@ async function processReminder2h(ctx: CronContext): Promise<{ sent: number; erro
             const firstName = (contact.push_name || "").split(" ")[0] || "cliente";
             const msgText = buildReminderMessage(firstName, group);
 
-            await sendText({
-                supabase,
-                userId,
-                conversationId,
-                instanceApikey: ctx.instance.apikey,
-                number: contact.number,
-                text: msgText,
-            });
+            if (ctx.isMeta) {
+                if (ctx.templateStatuses.get(TPL_REMINDER) !== "APPROVED") {
+                    console.log(`[ac-cron] template ${TPL_REMINDER} not APPROVED — skipping reminder_2h for ${contactId}`);
+                    continue;
+                }
+                const times = group.map((g: any) => formatTimeBR(g.start_time)).join(" e ");
+                await sendMetaTemplate({
+                    conversationId,
+                    templateName: TPL_REMINDER,
+                    parameters: [firstName, times],
+                    bodyPreview: msgText,
+                });
+            } else {
+                await sendText({
+                    supabase,
+                    userId,
+                    conversationId,
+                    instanceApikey: ctx.instance.apikey!,
+                    number: contact.number,
+                    text: msgText,
+                });
+            }
 
             // Create session as completed (no response expected)
             await supabase.from("appointment_confirmation_sessions").insert({
@@ -417,25 +490,39 @@ async function processFeedback24h(ctx: CronContext): Promise<{ sent: number; err
             const firstName = (contact.push_name || "").split(" ")[0] || "cliente";
             const msgText = `Como vai ${firstName}, espero que esteja bem, estou passando para pedir seu feedback sobre seu atendimento aqui na clínica ontem, se puder por gentileza nos dar seu feedback:`;
 
-            const buttons: MenuButton[] = [
-                { id: "ac_fb_5", text: "Excelente" },
-                { id: "ac_fb_4", text: "Muito bom" },
-                { id: "ac_fb_3", text: "Regular" },
-                { id: "ac_fb_2", text: "Precisa melhorar" },
-                { id: "ac_fb_1", text: "Insatisfeito" },
-            ];
+            let sendRes: { messageId: string | null };
+            if (ctx.isMeta) {
+                if (ctx.templateStatuses.get(TPL_FEEDBACK) !== "APPROVED") {
+                    console.log(`[ac-cron] template ${TPL_FEEDBACK} not APPROVED — skipping feedback_24h for ${contactId}`);
+                    continue;
+                }
+                sendRes = await sendMetaTemplate({
+                    conversationId,
+                    templateName: TPL_FEEDBACK,
+                    parameters: [firstName],
+                    bodyPreview: msgText,
+                });
+            } else {
+                const buttons: MenuButton[] = [
+                    { id: "ac_fb_5", text: "Excelente" },
+                    { id: "ac_fb_4", text: "Muito bom" },
+                    { id: "ac_fb_3", text: "Regular" },
+                    { id: "ac_fb_2", text: "Precisa melhorar" },
+                    { id: "ac_fb_1", text: "Insatisfeito" },
+                ];
 
-            const sendRes = await sendMenu({
-                supabase,
-                userId,
-                conversationId,
-                instanceApikey: ctx.instance.apikey,
-                number: contact.number,
-                text: msgText,
-                buttons,
-                trackSource: "appointment_confirmation",
-                trackId: `feedback_24h:${contactId}`,
-            });
+                sendRes = await sendMenu({
+                    supabase,
+                    userId,
+                    conversationId,
+                    instanceApikey: ctx.instance.apikey!,
+                    number: contact.number,
+                    text: msgText,
+                    buttons,
+                    trackSource: "appointment_confirmation",
+                    trackId: `feedback_24h:${contactId}`,
+                });
+            }
 
             await supabase.from("appointment_confirmation_sessions").insert({
                 user_id: userId,

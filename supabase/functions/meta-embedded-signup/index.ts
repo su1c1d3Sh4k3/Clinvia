@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { ensureSystemTemplates } from "../_shared/system-templates.ts";
 
 /**
  * meta-embedded-signup
@@ -178,7 +179,7 @@ async function processSignup(
     // ── Step 6: Check for existing instance ──
     const { data: existing } = await supabase
         .from("instances")
-        .select("id")
+        .select("id, user_id")
         .eq("meta_phone_number_id", phoneNumberId)
         .eq("provider", "meta")
         .maybeSingle();
@@ -199,6 +200,13 @@ async function processSignup(
             .single();
 
         if (updateError) throw updateError;
+
+        // Garante templates de sistema (confirmação/lembrete/feedback) — não bloqueia
+        try {
+            await ensureSystemTemplates(supabase, existing.user_id, updated.id);
+        } catch (err) {
+            console.error("[meta-embedded-signup] ensureSystemTemplates failed:", err);
+        }
 
         return {
             success: true,
@@ -284,6 +292,13 @@ async function processSignup(
     }
 
     console.log("[meta-embedded-signup] Instance created:", newInstance.id);
+
+    // Cria e submete à aprovação os templates de sistema das automações — não bloqueia
+    try {
+        await ensureSystemTemplates(supabase, userId, newInstance.id);
+    } catch (err) {
+        console.error("[meta-embedded-signup] ensureSystemTemplates failed:", err);
+    }
 
     return {
         success: true,

@@ -13,7 +13,9 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
-import { sendMenu, sendText, type MenuButton } from "../_shared/uazapi-menu.ts";
+import { sendText } from "../_shared/uazapi-menu.ts";
+import { isMetaInstance } from "../_shared/automation-instance.ts";
+import { sendMetaText } from "../_shared/system-templates.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -93,10 +95,11 @@ serve(async (req) => {
         // Load instance
         const { data: instance } = await supabase
             .from("instances")
-            .select("id, apikey")
+            .select("id, apikey, provider, instance_name")
             .eq("id", session.instance_id)
             .maybeSingle();
-        if (!instance?.apikey) {
+        const instIsMeta = instance ? isMetaInstance(instance) : false;
+        if (!instance || (!instIsMeta && !instance.apikey)) {
             return json({ success: false, error: "instance not found or no apikey" }, 400);
         }
 
@@ -122,6 +125,7 @@ serve(async (req) => {
             supabase,
             session,
             instance,
+            isMeta: instIsMeta,
             contact,
             userId: session.user_id,
             conversationId: session.conversation_id,
@@ -161,7 +165,8 @@ serve(async (req) => {
 interface SessionContext {
     supabase: any;
     session: any;
-    instance: { id: string; apikey: string };
+    instance: { id: string; apikey: string | null; provider: string | null; instance_name: string | null };
+    isMeta: boolean;
     contact: { id: string; push_name: string | null; number: string };
     userId: string;
     conversationId: string;
@@ -482,11 +487,16 @@ async function forceQueuePosVenda(ctx: SessionContext) {
 // ---------------------------------------------------------------------------
 
 async function send(ctx: SessionContext, text: string) {
+    if (ctx.isMeta) {
+        // Cliente acabou de responder → janela de 24h aberta → texto livre permitido
+        await sendMetaText({ conversationId: ctx.conversationId, text });
+        return;
+    }
     await sendText({
         supabase: ctx.supabase,
         userId: ctx.userId,
         conversationId: ctx.conversationId,
-        instanceApikey: ctx.instance.apikey,
+        instanceApikey: ctx.instance.apikey!,
         number: ctx.contact.number,
         text,
     });
