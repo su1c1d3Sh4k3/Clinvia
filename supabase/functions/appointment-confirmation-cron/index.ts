@@ -70,7 +70,10 @@ serve(async (req) => {
                         templateStatuses = await ensureSystemTemplates(supabase, config.user_id, instance.id);
                     } catch (err) {
                         console.error(`[ac-cron] ensureSystemTemplates failed for ${config.user_id}:`, err);
-                        templateStatuses = await getSystemTemplateStatuses(supabase, instance.id);
+                        templateStatuses = await getSystemTemplateStatuses(supabase, {
+                            id: instance.id,
+                            meta_waba_id: instance.meta_waba_id,
+                        });
                     }
                 }
 

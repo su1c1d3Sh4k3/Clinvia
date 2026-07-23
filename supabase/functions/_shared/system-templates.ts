@@ -127,12 +127,24 @@ export async function callFunction(
  * 1. Sincroniza os templates da instância com a Graph API (atualiza status)
  * 2. Cria os que estiverem faltando (submetidos à aprovação da Meta)
  * Retorna Map name → status (PENDING/APPROVED/REJECTED/...).
+ *
+ * Anti-duplicata: templates Meta pertencem à WABA (não ao número). A checagem
+ * de existência é feita por waba_id — se duas instâncias compartilham a mesma
+ * WABA, o template criado por uma vale para a outra e não é recriado. Erro
+ * "already exists" da Meta é tratado como benigno (resolve via sync).
  */
 export async function ensureSystemTemplates(
     supabase: any,
     userId: string,
     instanceId: string,
 ): Promise<Map<string, string>> {
+    const { data: inst } = await supabase
+        .from("instances")
+        .select("id, meta_waba_id")
+        .eq("id", instanceId)
+        .maybeSingle();
+    const instanceRef = { id: instanceId, meta_waba_id: inst?.meta_waba_id ?? null };
+
     // Sync com a Graph API (não-fatal se falhar — usa estado local)
     try {
         await callFunction("meta-template-manage", {
@@ -144,7 +156,7 @@ export async function ensureSystemTemplates(
         console.warn("[system-templates] sync failed:", err);
     }
 
-    const statuses = await getSystemTemplateStatuses(supabase, instanceId);
+    const statuses = await getSystemTemplateStatuses(supabase, instanceRef);
 
     for (const def of SYSTEM_TEMPLATES) {
         if (statuses.has(def.name)) continue;
@@ -159,10 +171,14 @@ export async function ensureSystemTemplates(
                 components: def.components,
             });
             if (!ok || result?.success === false) {
-                console.error(
-                    `[system-templates] create ${def.name} failed:`,
-                    result?.error || "unknown",
-                );
+                const errMsg = String(result?.error || "unknown");
+                if (/already exists|já existe/i.test(errMsg)) {
+                    // Template já existe na WABA (ex.: criado por outra instância) —
+                    // não é erro; o sync seguinte traz o status real
+                    console.log(`[system-templates] ${def.name} already exists on WABA — skipping`);
+                } else {
+                    console.error(`[system-templates] create ${def.name} failed:`, errMsg);
+                }
             } else {
                 statuses.set(def.name, result?.template?.status || "PENDING");
                 console.log(`[system-templates] created ${def.name} (instance ${instanceId})`);
@@ -175,16 +191,23 @@ export async function ensureSystemTemplates(
     return statuses;
 }
 
-/** Status locais dos templates de sistema da instância (Map name → status). */
+/**
+ * Status locais dos templates de sistema (Map name → status).
+ * Busca por waba_id quando disponível (templates são por WABA na Meta);
+ * fallback por instance_id.
+ */
 export async function getSystemTemplateStatuses(
     supabase: any,
-    instanceId: string,
+    instanceRef: { id: string; meta_waba_id?: string | null },
 ): Promise<Map<string, string>> {
-    const { data } = await supabase
+    let query = supabase
         .from("message_templates")
         .select("name, status")
-        .eq("instance_id", instanceId)
         .in("name", SYSTEM_TEMPLATE_NAMES);
+    query = instanceRef.meta_waba_id
+        ? query.eq("waba_id", instanceRef.meta_waba_id)
+        : query.eq("instance_id", instanceRef.id);
+    const { data } = await query;
     const map = new Map<string, string>();
     for (const t of data || []) map.set(t.name, t.status);
     return map;
