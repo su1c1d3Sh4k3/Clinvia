@@ -94,12 +94,14 @@ export const CadastroTab = ({ contact }: CadastroTabProps) => {
     if (!ownerId) return;
     setSaving(true);
     try {
+      // Coluna date do Postgres não aceita string vazia — campo é opcional
+      const payload = { ...form, data_nascimento: form.data_nascimento || null };
       if (patient) {
-        const { error } = await supabase.from("patients" as any).update(form).eq("id", patient.id);
+        const { error } = await supabase.from("patients" as any).update(payload).eq("id", patient.id);
         if (error) throw error;
       } else {
         const { error } = await supabase.from("patients" as any).insert({
-          ...form, user_id: ownerId, contact_id: contact.id,
+          ...payload, user_id: ownerId, contact_id: contact.id,
         });
         if (error) throw error;
         // Mark contact as patient
