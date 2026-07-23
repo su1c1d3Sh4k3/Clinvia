@@ -42,6 +42,16 @@ serve(async (req) => {
 
         const outcome = await result.json()
 
+        if (!outcome.success) {
+            // error-codes comuns: timeout-or-duplicate (token reutilizado/expirado),
+            // invalid-input-response, invalid-input-secret (secret != sitekey)
+            console.warn('[verify-turnstile] verification failed:', JSON.stringify({
+                error_codes: outcome['error-codes'] ?? null,
+                hostname: outcome.hostname ?? null,
+                challenge_ts: outcome.challenge_ts ?? null,
+            }))
+        }
+
         return new Response(
             JSON.stringify(outcome),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
