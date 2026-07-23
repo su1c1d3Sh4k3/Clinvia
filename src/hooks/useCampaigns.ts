@@ -34,6 +34,26 @@ async function callCampaignApi(body: any): Promise<any> {
     return data;
 }
 
+/** Sincroniza os templates de uma instância com a Meta (Graph API → message_templates). */
+async function syncInstanceTemplates(ownerId: string, instanceId: string): Promise<void> {
+    let token = SUPABASE_ANON_KEY;
+    try {
+        const session = (await supabase.auth.getSession()).data.session;
+        if (session?.access_token) token = session.access_token;
+    } catch { /* usa anon */ }
+    const resp = await fetch(`${SUPABASE_URL}/functions/v1/meta-template-manage`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json; charset=utf-8",
+            Authorization: `Bearer ${token}`,
+            apikey: SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ action: "sync", user_id: ownerId, instance_id: instanceId }),
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.success) throw new Error(data?.error || `HTTP ${resp.status}`);
+}
+
 export interface CampaignService {
     id: string;
     name: string;
@@ -95,6 +115,26 @@ export function useCampaigns() {
             if (error) throw error;
             const list = (campaigns || []) as unknown as Campaign[];
             if (list.length === 0) return [];
+
+            // Sync com a Meta antes de ler status (mesmo padrão da página Templates,
+            // que consulta a Graph API a cada listagem) — só instâncias com campanha ativa
+            const activeInstanceIds = [
+                ...new Set(
+                    list
+                        .filter(
+                            (c) =>
+                                c.instance_id &&
+                                c.template_name &&
+                                ["scheduled", "awaiting_template", "dispatching"].includes(c.status)
+                        )
+                        .map((c) => c.instance_id as string)
+                ),
+            ];
+            if (activeInstanceIds.length > 0) {
+                await Promise.allSettled(
+                    activeInstanceIds.map((id) => syncInstanceTemplates(ownerId!, id))
+                );
+            }
 
             // Status dos templates (join manual: instance_id + name)
             const templateNames = list.map((c) => c.template_name).filter(Boolean) as string[];
@@ -234,23 +274,7 @@ export function useCampaignMutations() {
     const syncTemplates = useMutation({
         mutationFn: async (instanceId: string) => {
             if (!ownerId) throw new Error("Usuário não autenticado");
-            let token = SUPABASE_ANON_KEY;
-            try {
-                const session = (await supabase.auth.getSession()).data.session;
-                if (session?.access_token) token = session.access_token;
-            } catch { /* usa anon */ }
-            const resp = await fetch(`${SUPABASE_URL}/functions/v1/meta-template-manage`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json; charset=utf-8",
-                    Authorization: `Bearer ${token}`,
-                    apikey: SUPABASE_ANON_KEY,
-                },
-                body: JSON.stringify({ action: "sync", user_id: ownerId, instance_id: instanceId }),
-            });
-            const data = await resp.json();
-            if (!resp.ok || !data.success) throw new Error(data?.error || `HTTP ${resp.status}`);
-            return data;
+            await syncInstanceTemplates(ownerId, instanceId);
         },
         onSuccess: invalidate,
     });
