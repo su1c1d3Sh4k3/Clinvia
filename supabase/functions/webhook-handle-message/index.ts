@@ -922,6 +922,35 @@ serve(async (req) => {
                     }
                 }
             } else {
+                // Padrão: IA desligada → fila default (Atendimento Humano);
+                // IA ligada (ia_config.ia_on + ia_on_wpp) → conversa nova SEMPRE na fila "Atendimento IA"
+                let newConvQueueId = instance.default_queue_id;
+                let newConvQueueIsIa = false;
+                if (contactId && !groupId) {
+                    try {
+                        const { data: iaCfg } = await supabase
+                            .from('ia_config')
+                            .select('ia_on')
+                            .eq('user_id', userId)
+                            .maybeSingle();
+
+                        if (iaCfg?.ia_on === true && instance.ia_on_wpp !== false) {
+                            const { data: iaQueue } = await supabase
+                                .from('queues')
+                                .select('id')
+                                .eq('user_id', userId)
+                                .eq('name', 'Atendimento IA')
+                                .maybeSingle();
+                            if (iaQueue?.id) {
+                                newConvQueueId = iaQueue.id;
+                                newConvQueueIsIa = true;
+                            }
+                        }
+                    } catch (queueErr) {
+                        console.warn('[webhook-handle-message] IA queue lookup failed, using default queue:', queueErr);
+                    }
+                }
+
                 const { data: newConv, error: convError } = await supabase
                     .from('conversations')
                     .insert({
@@ -931,7 +960,7 @@ serve(async (req) => {
                         user_id: userId,
                         status: 'pending',
                         unread_count: 1,
-                        queue_id: instance.default_queue_id,
+                        queue_id: newConvQueueId,
                         last_message_at: new Date().toISOString()
                     })
                     .select()
@@ -990,9 +1019,9 @@ serve(async (req) => {
                                 .maybeSingle();
 
                             if (!existingDeal) {
-                                // Determine CRM stage based on queue
-                                let crmStage = 'Em Atendimento Humano';
-                                if (instance.default_queue_id) {
+                                // Determine CRM stage based on queue (fila efetiva da conversa)
+                                let crmStage = newConvQueueIsIa ? 'Em Atendimento IA' : 'Em Atendimento Humano';
+                                if (!newConvQueueIsIa && instance.default_queue_id) {
                                     const { data: qData } = await supabase
                                         .from('queues')
                                         .select('name')
