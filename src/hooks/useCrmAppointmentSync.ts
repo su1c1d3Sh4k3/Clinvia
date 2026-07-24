@@ -7,7 +7,7 @@ import { TERMINAL_STAGES } from "@/types/crm-client";
  *
  * Flows:
  *  - onAppointmentCreated: create/move CRM card to "Agendado" + add service
- *  - onAppointmentCompleted: create sale, remove service, handle Ganho + Recorrência
+ *  - onAppointmentCompleted: create sale, remove service, create Ganho card
  *  - onAppointmentCanceled: create "Perdido" card, remove service from active deal
  *  - onAppointmentNoShow: same as canceled with different loss_reason
  */
@@ -212,9 +212,11 @@ export function useCrmAppointmentSync() {
       // Still has pending services — recalculate and keep in Agendado
       await recalcValue(card.id);
     } else {
-      // No more services → MOVE the existing card to Recorrência
-      // (not create a new one — avoids duplicate cards)
-      await moveCardToRecurrence(card.id, contactId, ownerId, professionalId);
+      // No more services → deactivate (the Ganho card already represents the outcome)
+      await supabase
+        .from("crm_client" as any)
+        .update({ is_active: false, updated_at: new Date().toISOString() })
+        .eq("id", card.id);
     }
 
     invalidateCrm();
@@ -287,65 +289,6 @@ export function useCrmAppointmentSync() {
     }
 
     invalidateCrm();
-  }
-
-  // ─── Helper: Move existing card to Recorrência ─────────────────────────────
-
-  async function moveCardToRecurrence(cardId: string, contactId: string, _ownerId: string, _professionalId?: string | null) {
-    // Collect all services from the contact's Ganho cards (deduplicated)
-    const { data: ganhoCards } = await supabase
-      .from("crm_client" as any)
-      .select("id")
-      .eq("contact_id", contactId)
-      .eq("stage", "Ganho")
-      .order("stage_changed_at", { ascending: false });
-
-    const allServiceIds = new Set<string>();
-    const uniqueServices: any[] = [];
-
-    for (const gc of ganhoCards || []) {
-      const { data: svcs } = await supabase
-        .from("crm_client_services" as any)
-        .select("*")
-        .eq("crm_client_id", gc.id);
-
-      for (const s of svcs || []) {
-        const key = s.service_client_id || s.service_name;
-        if (!allServiceIds.has(key)) {
-          allServiceIds.add(key);
-          uniqueServices.push(s);
-        }
-      }
-    }
-
-    const totalValue = uniqueServices.reduce((sum: number, s: any) => sum + (s.unit_price * s.quantity), 0);
-
-    // Move the existing card (don't create a new one)
-    await supabase
-      .from("crm_client" as any)
-      .update({
-        stage: "Recorrencia",
-        stage_changed_at: new Date().toISOString(),
-        value: totalValue,
-        priority: "medium",
-        updated_at: new Date().toISOString(),
-        // stays is_active: true
-      })
-      .eq("id", cardId);
-
-    // Add the deduplicated Ganho services to this card
-    if (uniqueServices.length > 0) {
-      const serviceInserts = uniqueServices.map((s: any) => ({
-        crm_client_id: cardId,
-        service_client_id: s.service_client_id,
-        service_name: s.service_name,
-        quantity: s.quantity,
-        unit_price: s.unit_price,
-        min_price: s.min_price || 0,
-      }));
-
-      await supabase.from("crm_client_services" as any).insert(serviceInserts);
-    }
   }
 
   return {

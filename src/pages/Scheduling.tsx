@@ -6,12 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Plus, Filter, ChevronLeft, ChevronRight, Search, PanelLeftClose, PanelLeftOpen, Settings, FileText, RefreshCw } from "lucide-react";
+import { Plus, Filter, ChevronLeft, ChevronRight, Search, PanelLeftClose, PanelLeftOpen, Settings, FileText, RefreshCw, Upload } from "lucide-react";
 import { SchedulingCalendar } from "@/components/scheduling/SchedulingCalendar";
 import { ProfessionalModal } from "@/components/scheduling/ProfessionalModal";
 import { AppointmentModal } from "@/components/scheduling/AppointmentModal";
 import { ViewAppointmentModal } from "@/components/scheduling/ViewAppointmentModal";
 import { SchedulingSettingsModal } from "@/components/scheduling/SchedulingSettingsModal";
+import { AppointmentImportWizard } from "@/components/scheduling/AppointmentImportWizard";
 import { SaleModal, AppointmentSaleData } from "@/components/sales/SaleModal";
 import { format, addDays, subDays, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -40,6 +41,7 @@ export default function Scheduling() {
     const [isViewModalOpen, setIsViewModalOpen] = useState(false);
     const [appointmentToView, setAppointmentToView] = useState<any>(null);
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+    const [isImportWizardOpen, setIsImportWizardOpen] = useState(false);
     const [selectedSlot, setSelectedSlot] = useState<{ professionalId: string, date: Date } | undefined>(undefined);
     const [appointmentToEdit, setAppointmentToEdit] = useState<any>(null);
     const [professionalToEdit, setProfessionalToEdit] = useState<any>(null);
@@ -430,6 +432,17 @@ export default function Scheduling() {
                             </Button>
                         )}
 
+                        {canCreate('appointments') && (
+                            <Button
+                                onClick={() => setIsImportWizardOpen(true)}
+                                variant="outline"
+                                className="w-full justify-start bg-white dark:bg-transparent border border-[#D4D5D6] dark:border-border"
+                            >
+                                <Upload className="w-4 h-4 mr-2" />
+                                Importar Agendamentos
+                            </Button>
+                        )}
+
                         <Button
                             onClick={handleGenerateDailyReport}
                             variant="outline"
@@ -642,6 +655,11 @@ export default function Scheduling() {
                 open={isSettingsModalOpen}
                 onOpenChange={setIsSettingsModalOpen}
                 currentSettings={settings}
+            />
+
+            <AppointmentImportWizard
+                open={isImportWizardOpen}
+                onOpenChange={setIsImportWizardOpen}
             />
 
             <SaleModal
