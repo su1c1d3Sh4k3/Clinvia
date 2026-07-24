@@ -5,11 +5,13 @@ import { makeOpenAIRequest, trackTokenUsage } from "../_shared/token-tracker.ts"
 /**
  * campaign-manage
  *
- * CRUD de campanhas de disparo em massa (templates Meta MARKETING).
+ * CRUD de campanhas de disparo em massa.
+ *  - Instâncias Meta (API oficial): template Meta (criado ou existente aprovado)
+ *  - Instâncias UAZAPI (API não oficial): texto livre, sem template (template_mode = none)
  *
  * Actions:
- *   - create:            cria campanha + tag + campaign_contacts + template Meta + ai_prompt
- *   - update:            edita campanha (recria template se mensagem mudou; regenera prompt)
+ *   - create:            cria campanha + tag + campaign_contacts (com vars por entrada) + template + ai_prompt
+ *   - update:            edita campanha (recria template se necessário; regenera prompt)
  *   - delete:            remove campanha (bloqueado em dispatching/dispatched)
  *   - recreate_template: sugere reescrita da mensagem via IA (template REJECTED)
  *   - regenerate_prompt: regenera apenas o ai_prompt
@@ -21,7 +23,8 @@ const corsHeaders = {
     "Content-Type": "application/json; charset=utf-8",
 };
 
-const MIN_LEAD_MS = 48 * 60 * 60 * 1000; // 48h
+const META_MIN_LEAD_MS = 24 * 60 * 60 * 1000; // 24h (Meta — aprovação de template)
+const UAZAPI_MIN_LEAD_MS = 2 * 60 * 60 * 1000; // 2h (API não oficial)
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -36,14 +39,29 @@ function slugify(name: string): string {
     return slug || "campanha";
 }
 
+function slugVarKey(raw: string): string {
+    return raw
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "")
+        .slice(0, 40);
+}
+
+function isMetaInstance(inst: any): boolean {
+    return inst?.provider === "meta" || (inst?.instance_name || "").startsWith("meta-");
+}
+
 /**
- * Converte mensagem com <nome>/<serviço>/<data> em corpo de template Meta
- * com {{1}}..{{n}} pela ordem de primeira aparição.
+ * Converte mensagem com variáveis <chave> (qualquer chave da fonte de dados)
+ * em corpo de template Meta com {{1}}..{{n}} pela ordem de primeira aparição.
  */
 function buildTemplateBody(message: string): { body: string; variableMap: string[] } {
     const variableMap: string[] = [];
-    const body = message.replace(/<\s*(nome|servi[çc]o|data)\s*>/gi, (_m, raw: string) => {
-        const key = raw.toLowerCase().replace("ç", "c"); // nome | servico | data
+    const body = message.replace(/<\s*([^<>\n]{1,60}?)\s*>/g, (m, raw: string) => {
+        const key = slugVarKey(raw);
+        if (!key) return m;
         let idx = variableMap.indexOf(key);
         if (idx === -1) {
             variableMap.push(key);
@@ -98,7 +116,8 @@ async function createMetaTemplate(
     instanceId: string,
     campaignName: string,
     version: number,
-    initialMessage: string
+    initialMessage: string,
+    category: "MARKETING" | "UTILITY"
 ) {
     const { body, variableMap } = buildTemplateBody(initialMessage);
     const templateName = `camp_${slugify(campaignName)}_v${version}`;
@@ -107,7 +126,7 @@ async function createMetaTemplate(
         user_id: ownerId,
         instance_id: instanceId,
         name: templateName,
-        category: "MARKETING",
+        category,
         language: "pt_BR",
         components: [{ type: "BODY", text: body }],
     });
@@ -118,6 +137,30 @@ async function createMetaTemplate(
     };
 }
 
+/** Valida template existente aprovado e retorna seus dados. */
+async function resolveExistingTemplate(
+    supabase: any,
+    ownerId: string,
+    instanceId: string,
+    templateRef: { id?: string; name?: string }
+) {
+    if (!templateRef?.id && !templateRef?.name) {
+        throw new Error("Template existente não informado");
+    }
+    let query = supabase
+        .from("message_templates")
+        .select("id, name, status, language, instance_id")
+        .eq("user_id", ownerId)
+        .eq("instance_id", instanceId);
+    query = templateRef.id ? query.eq("id", templateRef.id) : query.eq("name", templateRef.name);
+    const { data: tpl } = await query.maybeSingle();
+    if (!tpl) throw new Error("Template selecionado não encontrado nesta instância");
+    if (tpl.status !== "APPROVED") {
+        throw new Error("O template selecionado não está aprovado pela Meta");
+    }
+    return tpl;
+}
+
 interface PromptContext {
     name: string;
     objective: string;
@@ -125,6 +168,7 @@ interface PromptContext {
     discount_pct: number | null;
     valid_until: string;
     initial_message: string;
+    campaign_type?: string;
 }
 
 async function generateAiPrompt(
@@ -133,22 +177,42 @@ async function generateAiPrompt(
     ctx: PromptContext
 ): Promise<string | null> {
     try {
-        const servicesText = (ctx.services || [])
-            .map((s) => {
-                const price = s.price != null && s.price !== "" ? Number(s.price) : null;
-                return `- ${s.name || "Serviço"}${price != null && !isNaN(price) ? `: R$ ${price.toFixed(2)}` : ""}`;
-            })
-            .join("\n") || "- (nenhum serviço específico)";
-
+        const isNotification = ctx.campaign_type === "notification";
         const validUntil = new Date(ctx.valid_until).toLocaleDateString("pt-BR", {
             timeZone: "America/Sao_Paulo",
         });
 
-        const discountText = ctx.discount_pct
-            ? `Há um desconto de ${ctx.discount_pct}% que DEVE ser aplicado sobre o preço dos serviços acima ao informar valores ao cliente. Sempre mencione o preço original e o preço com desconto.`
-            : "Não há desconto especial nesta campanha; use os preços de tabela.";
+        let userPrompt: string;
+        if (isNotification) {
+            userPrompt = `Gere o bloco de instruções de campanha para um agente de IA de atendimento via WhatsApp de uma clínica.
 
-        const userPrompt = `Gere o bloco de instruções de campanha para um agente de IA de atendimento via WhatsApp de uma clínica.
+DADOS DA CAMPANHA (NOTIFICAÇÃO / AVISO — não é uma promoção de vendas):
+- Nome da campanha: ${ctx.name}
+- Objetivo definido pelo gestor: ${ctx.objective}
+- Validade da campanha: até ${validUntil}
+- Mensagem de notificação enviada ao cliente: "${ctx.initial_message}"
+
+REQUISITOS DO BLOCO GERADO:
+1. Escrito em português (pt-BR), direto ao agente de IA (segunda pessoa: "você deve...").
+2. Começar com uma linha deixando claro que estas instruções são PRIORIDADE MÁXIMA sobre o restante do prompt enquanto a campanha estiver vigente.
+3. Explicar o contexto: o cliente recebeu a notificação acima e pode responder a ela com dúvidas.
+4. Orientar o agente a esclarecer dúvidas sobre o conteúdo da notificação e conduzir rumo ao objetivo definido pelo gestor.
+5. Instruir a nunca inventar informações, serviços ou preços que não estejam no restante do prompt.
+6. Mencionar que o contexto desta notificação vale somente até ${validUntil}.
+7. Máximo de 250 palavras. Responda APENAS com o texto do bloco, sem título, sem markdown de código.`;
+        } else {
+            const servicesText = (ctx.services || [])
+                .map((s) => {
+                    const price = s.price != null && s.price !== "" ? Number(s.price) : null;
+                    return `- ${s.name || "Serviço"}${price != null && !isNaN(price) ? `: R$ ${price.toFixed(2)}` : ""}`;
+                })
+                .join("\n") || "- (nenhum serviço específico)";
+
+            const discountText = ctx.discount_pct
+                ? `Há um desconto de ${ctx.discount_pct}% que DEVE ser aplicado sobre o preço dos serviços acima ao informar valores ao cliente. Sempre mencione o preço original e o preço com desconto.`
+                : "Não há desconto especial nesta campanha; use os preços de tabela.";
+
+            userPrompt = `Gere o bloco de instruções de campanha para um agente de IA de atendimento via WhatsApp de uma clínica.
 
 DADOS DA CAMPANHA:
 - Nome da campanha: ${ctx.name}
@@ -168,6 +232,7 @@ REQUISITOS DO BLOCO GERADO:
 6. Instruir a nunca inventar serviços ou preços fora da lista.
 7. Mencionar que a condição é válida somente até ${validUntil}.
 8. Máximo de 250 palavras. Responda APENAS com o texto do bloco, sem título, sem markdown de código.`;
+        }
 
         const { response } = await makeOpenAIRequest(supabase, ownerId, {
             endpoint: "https://api.openai.com/v1/chat/completions",
@@ -223,7 +288,7 @@ ${originalMessage}
 
 MOTIVO DA REJEIÇÃO INFORMADO PELA META: ${rejectionReason || "não informado"}
 
-Reescreva a mensagem para maximizar a chance de aprovação como template MARKETING, seguindo as diretrizes da Meta:
+Reescreva a mensagem para maximizar a chance de aprovação como template, seguindo as diretrizes da Meta:
 - Sem promessas enganosas, linguagem sensacionalista, EXCESSO DE MAIÚSCULAS ou pontuação repetida (!!!, ???).
 - Sem conteúdo proibido (empréstimos, apostas, saúde milagrosa, etc.).
 - Sem pedir dados sensíveis (documentos, senhas, cartão).
@@ -232,7 +297,7 @@ Reescreva a mensagem para maximizar a chance de aprovação como template MARKET
 - Manter o mesmo idioma (pt-BR) e a mesma intenção comercial da original.
 
 REGRAS OBRIGATÓRIAS:
-1. PRESERVE os placeholders exatamente como estão: <nome>, <serviço>, <data> (use apenas os que existem na original).
+1. PRESERVE os placeholders entre < > exatamente como estão na original (ex.: <nome>, <data_agendamento>) — use apenas os que existem na original.
 2. Responda APENAS com o texto reescrito da mensagem, sem aspas, sem explicações.`;
 
     const { response } = await makeOpenAIRequest(supabase, ownerId, {
@@ -294,16 +359,82 @@ async function syncContactTags(
     }
 }
 
-function validateDates(scheduledAt: string, validUntil: string) {
+function validateDates(scheduledAt: string, validUntil: string, isMeta: boolean) {
     const sched = new Date(scheduledAt).getTime();
     const valid = new Date(validUntil).getTime();
     if (isNaN(sched) || isNaN(valid)) throw new Error("Datas inválidas");
-    if (sched < Date.now() + MIN_LEAD_MS) {
-        throw new Error("O disparo deve ser agendado com no mínimo 48 horas de antecedência");
+    const minLead = isMeta ? META_MIN_LEAD_MS : UAZAPI_MIN_LEAD_MS;
+    if (sched < Date.now() + minLead) {
+        throw new Error(
+            isMeta
+                ? "O disparo via API oficial (Meta) deve ser agendado com no mínimo 24 horas de antecedência"
+                : "O disparo deve ser agendado com no mínimo 2 horas de antecedência"
+        );
     }
     if (valid <= sched) {
         throw new Error("A validade deve ser posterior à data do disparo");
     }
+}
+
+interface EntryPayload {
+    contact_id: string;
+    vars?: Record<string, string>;
+}
+
+/** Normaliza entries (novo formato) ou contact_ids (legado) em EntryPayload[]. */
+function normalizeEntries(body: any): EntryPayload[] | undefined {
+    if (body.entries !== undefined) {
+        return ((body.entries || []) as any[])
+            .filter((e) => e?.contact_id)
+            .map((e) => ({ contact_id: e.contact_id, vars: e.vars || {} }));
+    }
+    if (body.contact_ids !== undefined) {
+        return [...new Set((body.contact_ids || []) as string[])].map((cid) => ({
+            contact_id: cid,
+            vars: {},
+        }));
+    }
+    return undefined;
+}
+
+async function insertCampaignContacts(
+    supabase: any,
+    campaignId: string,
+    ownerId: string,
+    entries: EntryPayload[],
+    invalidRows: any[]
+) {
+    const rows: any[] = entries.map((e) => ({
+        campaign_id: campaignId,
+        user_id: ownerId,
+        contact_id: e.contact_id,
+        raw_data: e.vars || {},
+        status: "pending",
+    }));
+    for (const inv of invalidRows || []) {
+        rows.push({
+            campaign_id: campaignId,
+            user_id: ownerId,
+            contact_id: null,
+            raw_data: inv,
+            status: "invalid",
+            error: "Número de telefone inválido",
+        });
+    }
+    for (let i = 0; i < rows.length; i += 500) {
+        const { error } = await supabase.from("campaign_contacts").insert(rows.slice(i, i + 500));
+        if (error) console.warn("[campaign-manage] campaign_contacts insert error:", error.message);
+    }
+}
+
+async function fetchInstance(supabase: any, instanceId: string) {
+    const { data: instance, error } = await supabase
+        .from("instances")
+        .select("id, user_id, provider, instance_name")
+        .eq("id", instanceId)
+        .single();
+    if (error || !instance) throw new Error("Instância não encontrada");
+    return instance;
 }
 
 // ── Handler ──────────────────────────────────────────────────────────────────
@@ -338,8 +469,9 @@ serve(async (req) => {
                 initial_message,
                 objective,
                 ia_enabled,
-                contact_ids,
                 invalid_rows,
+                campaign_type,
+                existing_template,
             } = body;
 
             if (!name) throw new Error("Missing field: name");
@@ -349,26 +481,37 @@ serve(async (req) => {
             if (!valid_until) throw new Error("Missing field: valid_until");
             if (!initial_message) throw new Error("Missing field: initial_message");
             if (!objective) throw new Error("Missing field: objective");
-            validateDates(scheduled_at, valid_until);
 
-            const uniqueContactIds: string[] = [...new Set((contact_ids || []) as string[])];
-            if (uniqueContactIds.length === 0 && !(invalid_rows || []).length) {
+            const instance = await fetchInstance(supabase, instance_id);
+            const isMeta = isMetaInstance(instance);
+            validateDates(scheduled_at, valid_until, isMeta);
+
+            const campaignType = campaign_type === "notification" ? "notification" : "promotion";
+            const templateMode = !isMeta
+                ? "none"
+                : body.template_mode === "existing"
+                    ? "existing"
+                    : "create";
+
+            const entries = normalizeEntries(body) || [];
+            if (entries.length === 0 && !(invalid_rows || []).length) {
                 throw new Error("A campanha precisa de pelo menos um contato");
             }
+            const uniqueContactIds = [...new Set(entries.map((e) => e.contact_id))];
 
-            // Instância precisa ser Meta
-            const { data: instance, error: instErr } = await supabase
-                .from("instances")
-                .select("id, user_id, provider")
-                .eq("id", instance_id)
-                .eq("provider", "meta")
-                .single();
-            if (instErr || !instance) throw new Error("Instância Meta não encontrada");
+            // Template existente: valida ANTES de criar a campanha
+            let existingTpl: any = null;
+            if (templateMode === "existing") {
+                existingTpl = await resolveExistingTemplate(supabase, ownerId, instance_id, existing_template);
+            }
 
             // Tag automática com nome da campanha
             const tag = await createTag(supabase, ownerId, name);
 
-            const { body: _tplBody, variableMap } = buildTemplateBody(initial_message);
+            const variableMap =
+                templateMode === "existing"
+                    ? ((body.variable_map || []) as string[])
+                    : buildTemplateBody(initial_message).variableMap;
 
             const { data: campaign, error: campErr } = await supabase
                 .from("campaigns")
@@ -380,8 +523,8 @@ serve(async (req) => {
                     source_config: source_config || {},
                     scheduled_at,
                     valid_until,
-                    services: services || [],
-                    discount_pct: discount_pct ?? null,
+                    services: campaignType === "promotion" ? services || [] : [],
+                    discount_pct: campaignType === "promotion" ? discount_pct ?? null : null,
                     initial_message,
                     variable_map: variableMap,
                     objective,
@@ -389,64 +532,59 @@ serve(async (req) => {
                     tag_id: tag.id,
                     template_version: 1,
                     status: "scheduled",
+                    campaign_type: campaignType,
+                    template_mode: templateMode,
+                    template_id: existingTpl?.id ?? null,
+                    template_name: existingTpl?.name ?? null,
                 })
                 .select()
                 .single();
             if (campErr) throw new Error(`Falha ao criar campanha: ${campErr.message}`);
 
-            // campaign_contacts (válidos + inválidos)
-            const rows: any[] = uniqueContactIds.map((cid) => ({
-                campaign_id: campaign.id,
-                user_id: ownerId,
-                contact_id: cid,
-                status: "pending",
-            }));
-            for (const inv of invalid_rows || []) {
-                rows.push({
-                    campaign_id: campaign.id,
-                    user_id: ownerId,
-                    contact_id: null,
-                    raw_data: inv,
-                    status: "invalid",
-                    error: "Número de telefone inválido",
-                });
-            }
-            if (rows.length > 0) {
-                const { error: ccErr } = await supabase.from("campaign_contacts").insert(rows);
-                if (ccErr) console.warn("[campaign-manage] campaign_contacts insert error:", ccErr.message);
-            }
+            // campaign_contacts (válidos com vars + inválidos)
+            await insertCampaignContacts(supabase, campaign.id, ownerId, entries, invalid_rows || []);
 
             // Tag em todos os contatos válidos
             await syncContactTags(supabase, tag.id, uniqueContactIds, []);
 
-            // Template Meta (falha não destrói a campanha — marca erro)
+            // Template Meta novo (só template_mode = create; falha não destrói a campanha)
             let templateError: string | null = null;
-            try {
-                const tpl = await createMetaTemplate(ownerId, instance_id, name, 1, initial_message);
-                await supabase
-                    .from("campaigns")
-                    .update({ template_id: tpl.templateId, template_name: tpl.templateName })
-                    .eq("id", campaign.id);
-                campaign.template_id = tpl.templateId;
-                campaign.template_name = tpl.templateName;
-            } catch (err: any) {
-                templateError = err.message;
-                await supabase
-                    .from("campaigns")
-                    .update({ status: "error", error_message: `Falha ao criar template: ${err.message}` })
-                    .eq("id", campaign.id);
-                campaign.status = "error";
-                campaign.error_message = `Falha ao criar template: ${err.message}`;
+            if (templateMode === "create") {
+                try {
+                    const tpl = await createMetaTemplate(
+                        ownerId,
+                        instance_id,
+                        name,
+                        1,
+                        initial_message,
+                        campaignType === "notification" ? "UTILITY" : "MARKETING"
+                    );
+                    await supabase
+                        .from("campaigns")
+                        .update({ template_id: tpl.templateId, template_name: tpl.templateName })
+                        .eq("id", campaign.id);
+                    campaign.template_id = tpl.templateId;
+                    campaign.template_name = tpl.templateName;
+                } catch (err: any) {
+                    templateError = err.message;
+                    await supabase
+                        .from("campaigns")
+                        .update({ status: "error", error_message: `Falha ao criar template: ${err.message}` })
+                        .eq("id", campaign.id);
+                    campaign.status = "error";
+                    campaign.error_message = `Falha ao criar template: ${err.message}`;
+                }
             }
 
             // ai_prompt (não bloqueante)
             const aiPrompt = await generateAiPrompt(supabase, ownerId, {
                 name,
                 objective,
-                services: services || [],
-                discount_pct: discount_pct ?? null,
+                services: campaignType === "promotion" ? services || [] : [],
+                discount_pct: campaignType === "promotion" ? discount_pct ?? null : null,
                 valid_until,
                 initial_message,
+                campaign_type: campaignType,
             });
             if (aiPrompt) {
                 await supabase.from("campaigns").update({ ai_prompt: aiPrompt }).eq("id", campaign.id);
@@ -481,38 +619,56 @@ serve(async (req) => {
             const fields = [
                 "name", "instance_id", "source_type", "source_config", "scheduled_at",
                 "valid_until", "services", "discount_pct", "objective", "ia_enabled",
-                "initial_message",
+                "initial_message", "campaign_type",
             ];
             for (const f of fields) {
                 if (body[f] !== undefined) updates[f] = body[f];
             }
 
+            const newInstanceId = (updates.instance_id as string) || campaign.instance_id;
+            const instance = await fetchInstance(supabase, newInstanceId);
+            const isMeta = isMetaInstance(instance);
+
+            const oldMode: string = campaign.template_mode || "create";
+            const newMode = !isMeta
+                ? "none"
+                : body.template_mode === "existing"
+                    ? "existing"
+                    : body.template_mode === "create"
+                        ? "create"
+                        : oldMode === "none" ? "create" : oldMode;
+            if (newMode !== oldMode) updates.template_mode = newMode;
+
+            const newCampaignType =
+                (updates.campaign_type as string) || campaign.campaign_type || "promotion";
+            if (newCampaignType === "notification") {
+                updates.services = [];
+                updates.discount_pct = null;
+            }
+
             const newScheduledAt = (updates.scheduled_at as string) || campaign.scheduled_at;
             const newValidUntil = (updates.valid_until as string) || campaign.valid_until;
+            const newMessage = (updates.initial_message as string) || campaign.initial_message;
             const messageChanged =
                 updates.initial_message !== undefined &&
                 updates.initial_message !== campaign.initial_message;
-            const needsNewTemplate = messageChanged || campaign.status === "error" || !campaign.template_name;
 
-            if (updates.scheduled_at !== undefined || updates.valid_until !== undefined || needsNewTemplate) {
-                validateDates(newScheduledAt, newValidUntil);
+            const needsNewTemplate =
+                newMode === "create" &&
+                (messageChanged || campaign.status === "error" || !campaign.template_name || oldMode !== "create");
+
+            if (
+                updates.scheduled_at !== undefined ||
+                updates.valid_until !== undefined ||
+                needsNewTemplate ||
+                newMode !== oldMode
+            ) {
+                validateDates(newScheduledAt, newValidUntil, isMeta);
             }
 
-            const newInstanceId = (updates.instance_id as string) || campaign.instance_id;
-            if (updates.instance_id !== undefined) {
-                const { data: inst } = await supabase
-                    .from("instances")
-                    .select("id")
-                    .eq("id", newInstanceId)
-                    .eq("provider", "meta")
-                    .single();
-                if (!inst) throw new Error("Instância Meta não encontrada");
-            }
-
-            // Recriar template se a mensagem mudou (ou se nunca foi criado / estava em erro)
-            if (needsNewTemplate) {
-                const newMessage = (updates.initial_message as string) || campaign.initial_message;
-                if (campaign.template_name && campaign.instance_id) {
+            // Remove template criado anteriormente quando ele deixa de ser usado
+            const dropOldCreatedTemplate = async () => {
+                if (oldMode === "create" && campaign.template_name && campaign.instance_id) {
                     try {
                         await callTemplateManage({
                             action: "delete",
@@ -524,25 +680,54 @@ serve(async (req) => {
                         console.warn("[campaign-manage] old template delete failed:", err.message);
                     }
                 }
-                const newVersion = (campaign.template_version || 1) + (campaign.template_name ? 1 : 0);
+            };
+
+            if (newMode === "none") {
+                if (oldMode !== "none") {
+                    await dropOldCreatedTemplate();
+                    updates.template_id = null;
+                    updates.template_name = null;
+                }
+                if (campaign.status === "error" || campaign.status === "awaiting_template") {
+                    updates.status = "scheduled";
+                    updates.error_message = null;
+                }
+            } else if (newMode === "existing") {
+                if (body.existing_template !== undefined || oldMode !== "existing") {
+                    const tpl = await resolveExistingTemplate(
+                        supabase, ownerId, newInstanceId, body.existing_template || {}
+                    );
+                    if (oldMode === "create") await dropOldCreatedTemplate();
+                    updates.template_id = tpl.id;
+                    updates.template_name = tpl.name;
+                    updates.variable_map = (body.variable_map || []) as string[];
+                    updates.status = "scheduled";
+                    updates.error_message = null;
+                } else if (body.variable_map !== undefined) {
+                    updates.variable_map = body.variable_map;
+                }
+            } else if (needsNewTemplate) {
+                await dropOldCreatedTemplate();
+                const newVersion =
+                    (campaign.template_version || 1) + (oldMode === "create" && campaign.template_name ? 1 : 0);
                 const tpl = await createMetaTemplate(
                     ownerId,
                     newInstanceId,
                     (updates.name as string) || campaign.name,
                     newVersion,
-                    newMessage
+                    newMessage,
+                    newCampaignType === "notification" ? "UTILITY" : "MARKETING"
                 );
-                const { variableMap } = buildTemplateBody(newMessage);
                 updates.template_id = tpl.templateId;
                 updates.template_name = tpl.templateName;
                 updates.template_version = newVersion;
-                updates.variable_map = variableMap;
+                updates.variable_map = tpl.variableMap;
                 updates.status = "scheduled";
                 updates.error_message = null;
             }
 
             // Regenerar ai_prompt se contexto comercial mudou
-            const promptFieldsChanged = ["objective", "services", "discount_pct", "valid_until", "initial_message"]
+            const promptFieldsChanged = ["objective", "services", "discount_pct", "valid_until", "initial_message", "campaign_type"]
                 .some((f) => body[f] !== undefined);
             if (promptFieldsChanged) {
                 const aiPrompt = await generateAiPrompt(supabase, ownerId, {
@@ -551,65 +736,43 @@ serve(async (req) => {
                     services: (updates.services as any[]) ?? campaign.services ?? [],
                     discount_pct: (updates.discount_pct as number | null) ?? campaign.discount_pct,
                     valid_until: newValidUntil,
-                    initial_message: (updates.initial_message as string) || campaign.initial_message,
+                    initial_message: newMessage,
+                    campaign_type: newCampaignType,
                 });
                 if (aiPrompt) updates.ai_prompt = aiPrompt;
             }
 
-            // Diff de audiência
-            if (body.contact_ids !== undefined) {
-                const newIds: string[] = [...new Set(body.contact_ids as string[])];
+            // Audiência: substituição das linhas pendentes (entradas podem repetir contato)
+            const entries = normalizeEntries(body);
+            if (entries !== undefined) {
                 const { data: existing } = await supabase
                     .from("campaign_contacts")
-                    .select("id, contact_id, status")
+                    .select("contact_id, status")
                     .eq("campaign_id", campaign_id)
                     .not("contact_id", "is", null);
 
-                const existingIds = new Set((existing || []).map((r: any) => r.contact_id));
-                const toAdd = newIds.filter((id) => !existingIds.has(id));
+                const oldIds = [...new Set((existing || []).map((r: any) => r.contact_id))] as string[];
+                const keptIds = new Set(
+                    (existing || [])
+                        .filter((r: any) => r.status !== "pending")
+                        .map((r: any) => r.contact_id)
+                );
+                const newIds = [...new Set(entries.map((e) => e.contact_id))];
                 const newSet = new Set(newIds);
-                const toRemove = (existing || [])
-                    .filter((r: any) => !newSet.has(r.contact_id) && r.status === "pending")
-                    .map((r: any) => r.contact_id);
 
-                if (toRemove.length > 0) {
-                    await supabase
-                        .from("campaign_contacts")
-                        .delete()
-                        .eq("campaign_id", campaign_id)
-                        .in("contact_id", toRemove)
-                        .eq("status", "pending");
-                }
-                if (toAdd.length > 0) {
-                    await supabase.from("campaign_contacts").insert(
-                        toAdd.map((cid) => ({
-                            campaign_id,
-                            user_id: ownerId,
-                            contact_id: cid,
-                            status: "pending",
-                        }))
-                    );
-                }
+                await supabase
+                    .from("campaign_contacts")
+                    .delete()
+                    .eq("campaign_id", campaign_id)
+                    .in("status", ["pending", "invalid"]);
+
+                await insertCampaignContacts(
+                    supabase, campaign_id, ownerId, entries, (body.invalid_rows as any[]) || []
+                );
+
+                const toAdd = newIds.filter((id) => !oldIds.includes(id));
+                const toRemove = oldIds.filter((id) => !newSet.has(id) && !keptIds.has(id));
                 await syncContactTags(supabase, campaign.tag_id, toAdd, toRemove);
-
-                if (body.invalid_rows !== undefined) {
-                    await supabase
-                        .from("campaign_contacts")
-                        .delete()
-                        .eq("campaign_id", campaign_id)
-                        .eq("status", "invalid");
-                    const invRows = (body.invalid_rows as any[]).map((inv) => ({
-                        campaign_id,
-                        user_id: ownerId,
-                        contact_id: null,
-                        raw_data: inv,
-                        status: "invalid",
-                        error: "Número de telefone inválido",
-                    }));
-                    if (invRows.length > 0) {
-                        await supabase.from("campaign_contacts").insert(invRows);
-                    }
-                }
             }
 
             const { data: updated, error: updErr } = await supabase
@@ -631,7 +794,8 @@ serve(async (req) => {
                 throw new Error("Campanha em disparo ou já disparada não pode ser excluída");
             }
 
-            if (campaign.template_name && campaign.instance_id) {
+            // Só remove o template da Meta se ele foi criado por esta campanha
+            if (campaign.template_mode === "create" && campaign.template_name && campaign.instance_id) {
                 try {
                     await callTemplateManage({
                         action: "delete",
@@ -662,6 +826,9 @@ serve(async (req) => {
 
         // ══ RECREATE_TEMPLATE (sugestão IA para template rejeitado) ═════════
         if (action === "recreate_template") {
+            if (campaign.template_mode && campaign.template_mode !== "create") {
+                throw new Error("Reescrita por IA só se aplica a campanhas com template criado pela plataforma");
+            }
             let rejectionReason: string | null = null;
             if (campaign.template_id) {
                 const { data: tpl } = await supabase
@@ -693,6 +860,7 @@ serve(async (req) => {
                 discount_pct: campaign.discount_pct,
                 valid_until: campaign.valid_until,
                 initial_message: campaign.initial_message,
+                campaign_type: campaign.campaign_type || "promotion",
             });
             if (!aiPrompt) throw new Error("Falha ao gerar o prompt com a IA");
 

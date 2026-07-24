@@ -6,10 +6,13 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
  *
  * Invocado pelo pg_cron a cada minuto (invoke_campaign_dispatch, com guard).
  *
- * 1. Promoção: campanhas scheduled/awaiting_template com scheduled_at <= now()
- *    → sync do template Meta → APPROVED = dispatching; PENDING = awaiting_template
- *    (erro após 48h de atraso); REJECTED/DISABLED = error.
- * 2. Envio: pick_campaign_contacts(4) com 15s entre mensagens via meta-send-message.
+ * 1. Promoção: campanhas scheduled/awaiting_template com scheduled_at <= now().
+ *    - template_mode = none (UAZAPI): vai direto para dispatching (sem template).
+ *    - Meta (create/existing): sync do template → APPROVED = dispatching;
+ *      PENDING = awaiting_template (erro após 48h); REJECTED/DISABLED = error.
+ * 2. Envio: pick_campaign_contacts(4). Variáveis resolvidas do raw_data da entrada.
+ *    - Meta: template via meta-send-message, 15s entre mensagens.
+ *    - UAZAPI: texto livre via evolution-send-message, 30–45s aleatórios.
  * 3. CRM: move/cria card para 'Em Atendimento IA' ou 'Em Atendimento Humano'.
  * 4. Conclusão: dispatching sem pending/sending → dispatched.
  */
@@ -21,7 +24,8 @@ const corsHeaders = {
 };
 
 const BATCH_SIZE = 4;
-const SPACING_MS = 15_000;
+const META_SPACING_MS = 15_000;
+const uazapiSpacingMs = () => 30_000 + Math.floor(Math.random() * 15_000); // 30–45s
 const MAX_TEMPLATE_WAIT_MS = 48 * 60 * 60 * 1000; // 48h de atraso máximo
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -52,11 +56,28 @@ function formatDateBR(iso: string): string {
     return new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
 }
 
-/** Resolve o valor de uma variável do template para um contato. */
-function resolveVariable(key: string, campaign: any, contact: any): string {
+function slugVarKey(raw: string): string {
+    return raw
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "")
+        .slice(0, 40);
+}
+
+/**
+ * Resolve o valor de uma variável para uma entrada da campanha.
+ * Prioridade: raw_data (snapshot da fonte de dados) → contato → legado servico/data.
+ */
+function resolveVariable(key: string, campaign: any, contact: any, rawData: any): string {
+    const rd = rawData || {};
+    if (rd[key] != null && String(rd[key]).trim() !== "") return String(rd[key]).trim();
     switch (key) {
         case "nome":
             return contact?.push_name?.trim() || "Cliente";
+        case "telefone":
+            return String(contact?.number || "").replace(/@.*$/, "");
         case "servico": {
             const names = (campaign.services || [])
                 .map((s: any) => s?.name)
@@ -70,13 +91,14 @@ function resolveVariable(key: string, campaign: any, contact: any): string {
     }
 }
 
-/** Renderiza a mensagem inicial substituindo <nome>/<serviço>/<data>. */
-function renderMessage(campaign: any, contact: any): string {
+/** Renderiza a mensagem inicial substituindo qualquer variável <chave>. */
+function renderMessage(campaign: any, contact: any, rawData: any): string {
     return (campaign.initial_message || "").replace(
-        /<\s*(nome|servi[çc]o|data)\s*>/gi,
-        (_m: string, raw: string) => {
-            const key = raw.toLowerCase().replace("ç", "c");
-            return resolveVariable(key, campaign, contact);
+        /<\s*([^<>\n]{1,60}?)\s*>/g,
+        (m: string, raw: string) => {
+            const key = slugVarKey(raw);
+            if (!key) return m;
+            return resolveVariable(key, campaign, contact, rawData);
         }
     );
 }
@@ -94,10 +116,21 @@ async function promoteCampaigns(supabase: any) {
             if (!camp.instance_id) {
                 await supabase
                     .from("campaigns")
-                    .update({ status: "error", error_message: "Instância Meta removida" })
+                    .update({ status: "error", error_message: "Instância da campanha removida" })
                     .eq("id", camp.id);
                 continue;
             }
+
+            // API não oficial (UAZAPI): sem template — direto para dispatching
+            if (camp.template_mode === "none") {
+                await supabase
+                    .from("campaigns")
+                    .update({ status: "dispatching", error_message: null })
+                    .eq("id", camp.id);
+                console.log(`[campaign-dispatch] Campaign ${camp.id} (uazapi) → dispatching`);
+                continue;
+            }
+
             if (!camp.template_name) {
                 await supabase
                     .from("campaigns")
@@ -273,10 +306,11 @@ async function dispatchBatch(supabase: any) {
     console.log(`[campaign-dispatch] Picked ${picked.length} contacts`);
 
     const campaignCache = new Map<string, any>();
+    let nextSpacingMs = META_SPACING_MS;
 
     for (let i = 0; i < picked.length; i++) {
         const row = picked[i];
-        if (i > 0) await sleep(SPACING_MS);
+        if (i > 0) await sleep(nextSpacingMs);
 
         try {
             let campaign = campaignCache.get(row.campaign_id);
@@ -289,6 +323,9 @@ async function dispatchBatch(supabase: any) {
                 campaign = data;
                 campaignCache.set(row.campaign_id, campaign);
             }
+            const isUazapi = campaign?.template_mode === "none";
+            nextSpacingMs = isUazapi ? uazapiSpacingMs() : META_SPACING_MS;
+
             if (!campaign || campaign.status !== "dispatching") {
                 await supabase
                     .from("campaign_contacts")
@@ -319,31 +356,46 @@ async function dispatchBatch(supabase: any) {
             }
 
             const conversationId = await findOrCreateConversation(supabase, campaign, row.contact_id);
+            const rawData = row.raw_data || {};
 
-            // Parâmetros do template pela ordem do variable_map
-            const variableMap: string[] = campaign.variable_map || [];
-            const parameters = variableMap.map((key) => ({
-                type: "text",
-                text: resolveVariable(key, campaign, contact),
-            }));
+            let ok: boolean;
+            let result: any;
 
-            const templateData: any = {
-                name: campaign.template_name,
-                language: { code: "pt_BR" },
-            };
-            if (parameters.length > 0) {
-                templateData.components = [{ type: "body", parameters }];
+            if (isUazapi) {
+                // API não oficial: texto livre renderizado (sem template)
+                const renderedBody = renderMessage(campaign, contact, rawData);
+                ({ ok, result } = await callFunction("evolution-send-message", {
+                    conversationId,
+                    body: renderedBody,
+                    messageType: "text",
+                    message: { wasSentByApi: true },
+                }));
+            } else {
+                // Meta: template com parâmetros pela ordem do variable_map
+                const variableMap: string[] = campaign.variable_map || [];
+                const parameters = variableMap.map((key) => ({
+                    type: "text",
+                    text: resolveVariable(key, campaign, contact, rawData) || "-",
+                }));
+
+                const templateData: any = {
+                    name: campaign.template_name,
+                    language: { code: "pt_BR" },
+                };
+                if (parameters.length > 0) {
+                    templateData.components = [{ type: "body", parameters }];
+                }
+
+                const renderedBody = `*Template enviado: ${campaign.template_name}*\n${renderMessage(campaign, contact, rawData)}`;
+
+                ({ ok, result } = await callFunction("meta-send-message", {
+                    conversationId,
+                    body: renderedBody,
+                    messageType: "template",
+                    templateData,
+                    message: { wasSentByApi: true },
+                }));
             }
-
-            const renderedBody = `*Template enviado: ${campaign.template_name}*\n${renderMessage(campaign, contact)}`;
-
-            const { ok, result } = await callFunction("meta-send-message", {
-                conversationId,
-                body: renderedBody,
-                messageType: "template",
-                templateData,
-                message: { wasSentByApi: true },
-            });
 
             if (!ok || result?.success === false) {
                 const errMsg = result?.message || result?.error || "Falha no envio do template";

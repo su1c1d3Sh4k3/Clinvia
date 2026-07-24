@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { AudienceSelection } from "../audienceTypes";
+import { AudienceSelection, AudienceEntry } from "../audienceTypes";
 
 interface AudienceTagProps {
     value: AudienceSelection;
@@ -27,26 +27,28 @@ export function AudienceTag({ value, onChange }: AudienceTagProps) {
         },
     });
 
-    const { data: contactIds } = useQuery({
+    const { data: entries } = useQuery({
         queryKey: ["audience-tag-contacts", tagId],
-        queryFn: async (): Promise<string[]> => {
+        queryFn: async (): Promise<AudienceEntry[]> => {
             const { data, error } = await supabase
                 .from("contact_tags")
                 .select("contact_id")
                 .eq("tag_id", tagId);
             if (error) throw error;
-            return [...new Set((data || []).map((r) => r.contact_id).filter(Boolean))] as string[];
+            const ids = [...new Set((data || []).map((r) => r.contact_id).filter(Boolean))] as string[];
+            return ids.map((id) => ({ contactId: id, vars: {} }));
         },
         enabled: !!tagId,
     });
 
     useEffect(() => {
         if (!tagId) return;
-        const ids = contactIds || [];
-        if (ids.join(",") === value.contactIds.join(",") && value.config?.tag_id === tagId) return;
-        onChange({ contactIds: ids, invalidRows: [], config: { tag_id: tagId } });
+        const list = entries || [];
+        const sig = (e: AudienceEntry[]) => e.map((x) => x.contactId).join(",");
+        if (sig(list) === sig(value.entries) && value.config?.tag_id === tagId) return;
+        onChange({ entries: list, invalidRows: [], config: { tag_id: tagId } });
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [contactIds, tagId]);
+    }, [entries, tagId]);
 
     return (
         <div className="space-y-3">
@@ -70,7 +72,7 @@ export function AudienceTag({ value, onChange }: AudienceTagProps) {
             </div>
             {tagId && (
                 <p className="text-sm text-muted-foreground">
-                    <span className="font-semibold text-foreground">{contactIds?.length ?? "..."}</span> contatos encontrados
+                    <span className="font-semibold text-foreground">{entries?.length ?? "..."}</span> contatos encontrados
                 </p>
             )}
         </div>

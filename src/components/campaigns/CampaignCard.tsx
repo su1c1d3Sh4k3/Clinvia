@@ -54,14 +54,16 @@ export function CampaignCard({ campaign, onEdit }: CampaignCardProps) {
     const { data: rateData } = useUsdBrlRate();
 
     const statusMeta = CAMPAIGN_STATUS[campaign.status] || CAMPAIGN_STATUS.scheduled;
-    const tplMeta = campaign.template_status ? TEMPLATE_STATUS[campaign.template_status] : null;
+    const isUazapi = campaign.template_mode === "none";
+    const tplMeta = !isUazapi && campaign.template_status ? TEMPLATE_STATUS[campaign.template_status] : null;
+    const isNotification = campaign.campaign_type === "notification";
     const editable = EDITABLE_STATUSES.includes(campaign.status);
     const counts = campaign.contact_counts || {};
     const total = campaign.total_contacts || 0;
     const validCount = total - (counts.invalid || 0);
     const rate = rateData?.rate ?? 5.5;
-    const estimatedCost = validCount * COST_PER_MSG_USD * rate;
-    const estimatedSeconds = Math.max(0, (validCount - 1) * 15);
+    const estimatedCost = isUazapi ? 0 : validCount * COST_PER_MSG_USD * rate;
+    const estimatedSeconds = Math.max(0, (validCount - 1) * (isUazapi ? 38 : 15));
     const durationLabel = estimatedSeconds < 60
         ? `${estimatedSeconds}s`
         : estimatedSeconds < 3600
@@ -129,6 +131,12 @@ export function CampaignCard({ campaign, onEdit }: CampaignCardProps) {
                     <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold truncate">{campaign.name}</span>
                         <Badge variant="secondary" className={statusMeta.className}>{statusMeta.label}</Badge>
+                        <Badge variant="outline">{isNotification ? "Notificação" : "Promoção"}</Badge>
+                        {isUazapi && (
+                            <Badge variant="secondary" className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                                API não oficial
+                            </Badge>
+                        )}
                         {tplMeta && (
                             <Badge variant="secondary" className={tplMeta.className}>{tplMeta.label}</Badge>
                         )}
@@ -184,7 +192,7 @@ export function CampaignCard({ campaign, onEdit }: CampaignCardProps) {
                     )}
 
                     {/* Estimativas */}
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className={cn("grid gap-2", isUazapi ? "grid-cols-2" : "grid-cols-3")}>
                         <div className="border rounded-xl p-2.5 flex items-center gap-2">
                             <Users className="w-4 h-4 text-primary shrink-0" />
                             <div>
@@ -199,26 +207,30 @@ export function CampaignCard({ campaign, onEdit }: CampaignCardProps) {
                                 <p className="text-[10px] text-muted-foreground mt-0.5">tempo estimado</p>
                             </div>
                         </div>
-                        <div className="border rounded-xl p-2.5 flex items-center gap-2">
-                            <DollarSign className="w-4 h-4 text-primary shrink-0" />
-                            <div>
-                                <p className="text-sm font-semibold leading-none">{formatCurrency(estimatedCost)}</p>
-                                <p className="text-[10px] text-muted-foreground mt-0.5">custo estimado</p>
+                        {!isUazapi && (
+                            <div className="border rounded-xl p-2.5 flex items-center gap-2">
+                                <DollarSign className="w-4 h-4 text-primary shrink-0" />
+                                <div>
+                                    <p className="text-sm font-semibold leading-none">{formatCurrency(estimatedCost)}</p>
+                                    <p className="text-[10px] text-muted-foreground mt-0.5">custo estimado</p>
+                                </div>
                             </div>
-                        </div>
+                        )}
                     </div>
 
                     {/* Detalhes */}
                     <div className="text-sm space-y-1 border rounded-xl p-3">
-                        <p>
-                            <span className="text-muted-foreground">Serviços:</span>{" "}
-                            {(campaign.services || []).length > 0
-                                ? campaign.services.map((s) => s.name).join(", ")
-                                : "nenhum"}
-                            {campaign.discount_pct != null && (
-                                <Badge variant="secondary" className="ml-2">{campaign.discount_pct}% off</Badge>
-                            )}
-                        </p>
+                        {!isNotification && (
+                            <p>
+                                <span className="text-muted-foreground">Serviços:</span>{" "}
+                                {(campaign.services || []).length > 0
+                                    ? campaign.services.map((s) => s.name).join(", ")
+                                    : "nenhum"}
+                                {campaign.discount_pct != null && (
+                                    <Badge variant="secondary" className="ml-2">{campaign.discount_pct}% off</Badge>
+                                )}
+                            </p>
+                        )}
                         <p className="whitespace-pre-wrap">
                             <span className="text-muted-foreground">Mensagem:</span> {campaign.initial_message}
                         </p>
@@ -299,7 +311,9 @@ export function CampaignCard({ campaign, onEdit }: CampaignCardProps) {
                     <AlertDialogHeader>
                         <AlertDialogTitle>Excluir campanha "{campaign.name}"?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            O template Meta e a etiqueta da campanha também serão removidos. Esta ação não pode ser desfeita.
+                            {campaign.template_mode === "create"
+                                ? "O template Meta e a etiqueta da campanha também serão removidos. Esta ação não pode ser desfeita."
+                                : "A etiqueta da campanha também será removida. Esta ação não pode ser desfeita."}
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

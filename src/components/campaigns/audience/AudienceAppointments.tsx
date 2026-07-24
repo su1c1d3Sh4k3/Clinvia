@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { AudienceSelection } from "../audienceTypes";
+import { AudienceSelection, AudienceEntry } from "../audienceTypes";
 
 const STATUS_OPTIONS = [
     { value: "all", label: "Todos os status" },
@@ -16,6 +16,10 @@ const STATUS_OPTIONS = [
     { value: "rescheduled", label: "Reagendado" },
     { value: "no_show", label: "Não compareceu" },
 ];
+
+const STATUS_LABELS: Record<string, string> = Object.fromEntries(
+    STATUS_OPTIONS.filter((s) => s.value !== "all").map((s) => [s.value, s.label])
+);
 
 interface AudienceAppointmentsProps {
     value: AudienceSelection;
@@ -40,14 +44,16 @@ export function AudienceAppointments({ value, onChange }: AudienceAppointmentsPr
         },
     });
 
-    const { data: contactIds } = useQuery({
+    // 1 entrada POR AGENDAMENTO — o mesmo contato pode receber várias mensagens
+    const { data: entries } = useQuery({
         queryKey: ["audience-appointments", professionalId, status, from, to],
-        queryFn: async (): Promise<string[]> => {
+        queryFn: async (): Promise<AudienceEntry[]> => {
             let query = supabase
                 .from("appointments" as any)
-                .select("contact_id")
+                .select("contact_id, start_time, status, professionals(name), products_services(name)")
                 .eq("type", "appointment")
                 .not("contact_id", "is", null)
+                .order("start_time", { ascending: true })
                 .limit(10000);
             if (professionalId !== "all") query = query.eq("professional_id", professionalId);
             if (status !== "all") query = query.eq("status", status);
@@ -55,20 +61,37 @@ export function AudienceAppointments({ value, onChange }: AudienceAppointmentsPr
             if (to) query = query.lte("start_time", new Date(to + "T23:59:59").toISOString());
             const { data, error } = await query;
             if (error) throw error;
-            return [...new Set(((data || []) as any[]).map((r) => r.contact_id))] as string[];
+            return ((data || []) as any[]).map((r) => {
+                const start = r.start_time ? new Date(r.start_time) : null;
+                return {
+                    contactId: r.contact_id,
+                    vars: {
+                        data_agendamento: start ? start.toLocaleDateString("pt-BR") : "",
+                        hora_agendamento: start
+                            ? start.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+                            : "",
+                        profissional: r.professionals?.name || "",
+                        servico_agendado: r.products_services?.name || "",
+                        status_agendamento: STATUS_LABELS[r.status] || r.status || "",
+                    },
+                };
+            });
         },
     });
 
     useEffect(() => {
-        const ids = contactIds || [];
-        if (ids.join(",") === value.contactIds.join(",")) return;
+        const list = entries || [];
+        const sig = (e: AudienceEntry[]) => e.map((x) => x.contactId + x.vars.data_agendamento + x.vars.hora_agendamento).join(",");
+        if (sig(list) === sig(value.entries)) return;
         onChange({
-            contactIds: ids,
+            entries: list,
             invalidRows: [],
             config: { professional_id: professionalId, status, from, to },
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [contactIds]);
+    }, [entries]);
+
+    const uniqueContacts = new Set((entries || []).map((e) => e.contactId)).size;
 
     return (
         <div className="space-y-3">
@@ -112,7 +135,11 @@ export function AudienceAppointments({ value, onChange }: AudienceAppointmentsPr
                 </div>
             </div>
             <p className="text-sm text-muted-foreground">
-                <span className="font-semibold text-foreground">{contactIds?.length ?? "..."}</span> contatos encontrados
+                <span className="font-semibold text-foreground">{entries?.length ?? "..."}</span> agendamentos
+                {entries != null && uniqueContacts !== entries.length && (
+                    <> de <span className="font-semibold text-foreground">{uniqueContacts}</span> contatos</>
+                )}{" "}
+                — cada agendamento gera uma mensagem
             </p>
         </div>
     );

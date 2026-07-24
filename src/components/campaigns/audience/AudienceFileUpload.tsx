@@ -12,7 +12,7 @@ import { useOwnerId } from "@/hooks/useOwnerId";
 import { parseFile, ParsedSheet } from "@/lib/importParser";
 import { autoMapColumns, FieldDef } from "@/lib/importMapper";
 import { normalizePhone, normalizeName } from "@/lib/importTransformers";
-import { AudienceSelection } from "../audienceTypes";
+import { AudienceSelection, AudienceEntry, slugVarKey } from "../audienceTypes";
 
 const AUDIENCE_FIELDS: FieldDef[] = [
     { key: "push_name", label: "Nome", required: true, synonyms: ["nome", "name", "paciente", "cliente", "push_name", "nome_completo", "full_name"] },
@@ -83,7 +83,7 @@ export function AudienceFileUpload({ fileType, value, onChange }: AudienceFileUp
             setFileName(file.name);
             setMapping(autoMapColumns(sheet.headers, AUDIENCE_FIELDS));
             setSummary(null);
-            onChange({ contactIds: [], invalidRows: [], config: {} });
+            onChange({ entries: [], invalidRows: [], config: {} });
         } catch (err: any) {
             toast.error("Erro ao ler arquivo: " + err.message);
         }
@@ -108,40 +108,75 @@ export function AudienceFileUpload({ fileType, value, onChange }: AudienceFileUp
         if (!parsed || !ownerId || !numberHeader) return;
         setProcessing(true);
         try {
-            // Normaliza + dedupe por telefone
-            const validByNumber = new Map<string, { push_name: string; number: string }>();
+            const suffix8 = (n: string) => n.replace(/\D/g, "").slice(-8);
+
+            // Normaliza + dedupe por telefone; guarda TODAS as colunas como variáveis
+            const validByNumber = new Map<string, { push_name: string; number: string; vars: Record<string, string> }>();
             const invalidRows: Record<string, string>[] = [];
             for (const row of parsed.rows) {
                 const number = normalizePhone(row[numberHeader] || "");
                 const name = normalizeName(nameHeader ? row[nameHeader] || "" : "");
-                if (!number) {
+                if (!number || suffix8(number).length < 8) {
                     invalidRows.push(row);
                     continue;
                 }
                 if (!validByNumber.has(number)) {
-                    validByNumber.set(number, { push_name: name || "Cliente", number });
+                    const vars: Record<string, string> = { nome: name || "Cliente", telefone: number };
+                    for (const h of parsed.headers) {
+                        const key = slugVarKey(h);
+                        if (key) vars[key] = String(row[h] ?? "").trim();
+                    }
+                    validByNumber.set(number, { push_name: name || "Cliente", number, vars });
                 }
             }
 
             const numbers = [...validByNumber.keys()];
-            const contactIds: string[] = [];
+            const entries: AudienceEntry[] = [];
 
             if (numbers.length > 0) {
-                // Busca existentes
-                const existingMap = new Map<string, string>();
-                for (let i = 0; i < numbers.length; i += 200) {
-                    const chunk = numbers.slice(i, i + 200);
-                    const { data: existing } = await supabase
+                // Match pelos ÚLTIMOS 8 DÍGITOS: carrega os contatos do dono
+                // (mais recentes primeiro — em colisão de sufixo, vale o mais recente)
+                const bySuffix = new Map<string, { id: string; push_name: string | null }>();
+                const PAGE = 1000;
+                for (let page = 0; ; page++) {
+                    const { data: batch, error } = await supabase
                         .from("contacts")
-                        .select("id, number")
+                        .select("id, number, push_name")
                         .eq("user_id", ownerId)
-                        .in("number", chunk);
-                    for (const c of existing || []) existingMap.set(c.number, c.id);
+                        .order("created_at", { ascending: false })
+                        .range(page * PAGE, page * PAGE + PAGE - 1);
+                    if (error) throw error;
+                    for (const c of batch || []) {
+                        const key = suffix8(c.number || "");
+                        if (key.length === 8 && !bySuffix.has(key)) {
+                            bySuffix.set(key, { id: c.id, push_name: c.push_name });
+                        }
+                    }
+                    if (!batch || batch.length < PAGE) break;
+                }
+
+                // Existentes: atualiza o nome com o do arquivo (demais campos preservados)
+                const matchedByNumber = new Map<string, string>();
+                const nameUpdates: { id: string; push_name: string }[] = [];
+                for (const n of numbers) {
+                    const match = bySuffix.get(suffix8(n));
+                    if (!match) continue;
+                    matchedByNumber.set(n, match.id);
+                    const fileName2 = validByNumber.get(n)!.push_name;
+                    if (fileName2 && fileName2 !== "Cliente" && fileName2 !== match.push_name) {
+                        nameUpdates.push({ id: match.id, push_name: fileName2 });
+                    }
+                }
+                for (const upd of nameUpdates) {
+                    await supabase
+                        .from("contacts")
+                        .update({ push_name: upd.push_name, updated_at: new Date().toISOString() })
+                        .eq("id", upd.id);
                 }
 
                 // Cria os que faltam
                 const toInsert = numbers
-                    .filter((n) => !existingMap.has(n))
+                    .filter((n) => !matchedByNumber.has(n))
                     .map((n) => ({
                         user_id: ownerId,
                         number: n,
@@ -157,22 +192,23 @@ export function AudienceFileUpload({ fileType, value, onChange }: AudienceFileUp
                         .insert(chunk as any)
                         .select("id, number");
                     if (error) throw error;
-                    for (const c of inserted || []) existingMap.set(c.number, c.id);
+                    for (const c of inserted || []) matchedByNumber.set(c.number, c.id);
                 }
 
                 for (const n of numbers) {
-                    const id = existingMap.get(n);
-                    if (id) contactIds.push(id);
+                    const id = matchedByNumber.get(n);
+                    if (id) entries.push({ contactId: id, vars: validByNumber.get(n)!.vars });
                 }
             }
 
-            setSummary({ valid: contactIds.length, invalid: invalidRows.length });
+            const varKeys = [...new Set(parsed.headers.map(slugVarKey).filter(Boolean))];
+            setSummary({ valid: entries.length, invalid: invalidRows.length });
             onChange({
-                contactIds,
+                entries,
                 invalidRows,
-                config: { file_name: fileName, total_rows: parsed.rows.length },
+                config: { file_name: fileName, total_rows: parsed.rows.length, var_keys: varKeys },
             });
-            toast.success(`${contactIds.length} contatos prontos (${invalidRows.length} inválidos)`);
+            toast.success(`${entries.length} contatos prontos (${invalidRows.length} inválidos)`);
         } catch (err: any) {
             toast.error("Erro ao processar contatos: " + err.message);
         } finally {
@@ -273,9 +309,9 @@ export function AudienceFileUpload({ fileType, value, onChange }: AudienceFileUp
                     )}
                 </div>
             )}
-            {value.contactIds.length > 0 && !summary && (
+            {value.entries.length > 0 && !summary && (
                 <p className="text-xs text-muted-foreground">
-                    {value.contactIds.length} contatos já selecionados
+                    {value.entries.length} contatos já selecionados
                 </p>
             )}
         </div>

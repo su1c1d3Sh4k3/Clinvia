@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
     ChevronLeft, ChevronRight, Loader2, Megaphone, Clock, DollarSign, Users,
     FileSpreadsheet, FileCode2, Kanban, Tag as TagIcon, CalendarDays, ShoppingCart,
+    AlertTriangle, BadgePercent, Bell,
 } from "lucide-react";
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -19,9 +20,11 @@ import {
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { cn, formatCurrency } from "@/lib/utils";
-import { useMetaInstances, useCampaignMutations, Campaign, CampaignService } from "@/hooks/useCampaigns";
+import { useCampaignInstances, isMetaInstance, useCampaignMutations, Campaign, CampaignService } from "@/hooks/useCampaigns";
 import { useUsdBrlRate } from "@/hooks/useUsdBrlRate";
-import { AudienceSelection, EMPTY_AUDIENCE } from "./audienceTypes";
+import {
+    AudienceSelection, EMPTY_AUDIENCE, SOURCE_VAR_KEYS, BASE_VAR_KEYS, slugVarKey,
+} from "./audienceTypes";
 import { AudienceFileUpload } from "./audience/AudienceFileUpload";
 import { AudienceCrm } from "./audience/AudienceCrm";
 import { AudienceTag } from "./audience/AudienceTag";
@@ -29,7 +32,10 @@ import { AudienceAppointments } from "./audience/AudienceAppointments";
 import { AudienceSales } from "./audience/AudienceSales";
 
 const COST_PER_MSG_USD = 0.0625;
-const SPACING_SECONDS = 15;
+const META_SPACING_SECONDS = 15;
+const UAZAPI_SPACING_SECONDS = 38; // média do intervalo aleatório 30-45s
+const META_MIN_LEAD_H = 24;
+const UAZAPI_MIN_LEAD_H = 2;
 
 const SOURCE_OPTIONS = [
     { value: "csv", label: "Arquivo CSV/Excel", icon: FileSpreadsheet },
@@ -42,7 +48,7 @@ const SOURCE_OPTIONS = [
 
 type SourceType = (typeof SOURCE_OPTIONS)[number]["value"];
 
-const STEPS = ["Dados", "Audiência", "Serviços", "Mensagem", "Objetivo", "Revisão"];
+const STEPS = ["Dados", "Audiência", "Tipo", "Mensagem", "Objetivo", "Revisão"];
 
 interface CampaignWizardProps {
     open: boolean;
@@ -67,7 +73,7 @@ function formatDuration(totalSeconds: number): string {
 
 export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardProps) {
     const isEdit = !!campaign;
-    const { data: instances } = useMetaInstances();
+    const { data: instances } = useCampaignInstances();
     const { createCampaign, updateCampaign } = useCampaignMutations();
     const { data: rateData } = useUsdBrlRate();
 
@@ -78,12 +84,20 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
     const [validUntil, setValidUntil] = useState("");
     const [sourceType, setSourceType] = useState<SourceType | "">("");
     const [audience, setAudience] = useState<AudienceSelection>(EMPTY_AUDIENCE);
+    const [campaignType, setCampaignType] = useState<"promotion" | "notification">("promotion");
     const [selectedServices, setSelectedServices] = useState<CampaignService[]>([]);
     const [discountPct, setDiscountPct] = useState<string>("");
+    const [templateChoice, setTemplateChoice] = useState<"create" | "existing">("create");
+    const [existingTemplateId, setExistingTemplateId] = useState("");
+    const [varMapping, setVarMapping] = useState<Record<number, string>>({});
     const [message, setMessage] = useState("");
     const [objective, setObjective] = useState("");
     const [iaEnabled, setIaEnabled] = useState(true);
     const messageRef = useRef<HTMLTextAreaElement>(null);
+
+    const selectedInstance = (instances || []).find((i: any) => i.id === instanceId);
+    const isMeta = selectedInstance ? isMetaInstance(selectedInstance) : true;
+    const minLeadHours = isMeta ? META_MIN_LEAD_H : UAZAPI_MIN_LEAD_H;
 
     // Pré-preenche em edição / reseta em criação
     useEffect(() => {
@@ -94,10 +108,14 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
             setScheduledAt(toLocalInputValue(campaign.scheduled_at));
             setValidUntil(toLocalInputValue(campaign.valid_until));
             setSourceType(campaign.source_type);
-            setAudience({ contactIds: [], invalidRows: [], config: campaign.source_config || {} });
+            setAudience({ entries: [], invalidRows: [], config: campaign.source_config || {} });
+            setCampaignType(campaign.campaign_type || "promotion");
             setSelectedServices(campaign.services || []);
             setDiscountPct(campaign.discount_pct != null ? String(campaign.discount_pct) : "");
-            setMessage(campaign.initial_message);
+            setTemplateChoice(campaign.template_mode === "existing" ? "existing" : "create");
+            setExistingTemplateId(campaign.template_mode === "existing" ? campaign.template_id || "" : "");
+            setVarMapping({});
+            setMessage(campaign.template_mode === "existing" ? "" : campaign.initial_message);
             setObjective(campaign.objective);
             setIaEnabled(campaign.ia_enabled);
         } else {
@@ -107,8 +125,12 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
             setValidUntil("");
             setSourceType("");
             setAudience(EMPTY_AUDIENCE);
+            setCampaignType("promotion");
             setSelectedServices([]);
             setDiscountPct("");
+            setTemplateChoice("create");
+            setExistingTemplateId("");
+            setVarMapping({});
             setMessage("");
             setObjective("");
             setIaEnabled(true);
@@ -145,16 +167,88 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
         enabled: open,
     });
 
-    const effectiveContactIds = audience.contactIds.length > 0
-        ? audience.contactIds
-        : (isEdit ? existingContactIds || [] : []);
-    const contactCount = effectiveContactIds.length;
+    // Templates Meta aprovados (somente BODY/FOOTER) para "usar template existente"
+    const { data: approvedTemplates } = useQuery({
+        queryKey: ["campaign-approved-templates", instanceId],
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from("message_templates" as any)
+                .select("id, name, language, status, components")
+                .eq("instance_id", instanceId)
+                .eq("status", "APPROVED")
+                .order("name");
+            if (error) throw error;
+            return ((data || []) as any[])
+                .filter((t) => {
+                    const comps = Array.isArray(t.components) ? t.components : [];
+                    return comps.every((c: any) =>
+                        ["BODY", "FOOTER"].includes(String(c?.type || "").toUpperCase())
+                    );
+                })
+                .map((t) => ({
+                    ...t,
+                    body: (Array.isArray(t.components) ? t.components : []).find(
+                        (c: any) => String(c?.type || "").toUpperCase() === "BODY"
+                    )?.text || "",
+                }));
+        },
+        enabled: open && !!instanceId && isMeta,
+    });
+
+    const selectedTemplate = (approvedTemplates || []).find((t: any) => t.id === existingTemplateId);
+
+    const templateVarNums = useMemo(() => {
+        const nums = new Set<number>();
+        const re = /\{\{(\d+)\}\}/g;
+        let m: RegExpExecArray | null;
+        while ((m = re.exec(selectedTemplate?.body || ""))) nums.add(Number(m[1]));
+        return [...nums].sort((a, b) => a - b);
+    }, [selectedTemplate?.body]);
+
+    // Em edição de campanha com template existente, pré-preenche o mapeamento salvo
+    useEffect(() => {
+        if (!isEdit || campaign?.template_mode !== "existing" || !selectedTemplate) return;
+        if (Object.keys(varMapping).length > 0) return;
+        const saved: string[] = campaign?.variable_map || [];
+        if (saved.length === 0) return;
+        const next: Record<number, string> = {};
+        templateVarNums.forEach((n, idx) => {
+            if (saved[idx]) next[n] = saved[idx];
+        });
+        setVarMapping(next);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedTemplate?.id, templateVarNums.join(",")]);
+
+    const effectiveEntries = audience.entries.length > 0
+        ? audience.entries
+        : (isEdit ? (existingContactIds || []).map((id) => ({ contactId: id, vars: {} })) : []);
+    const contactCount = effectiveEntries.length;
 
     const rate = rateData?.rate ?? 5.5;
-    const estimatedCostBrl = contactCount * COST_PER_MSG_USD * rate;
-    const estimatedSeconds = Math.max(0, (contactCount - 1) * SPACING_SECONDS);
+    const estimatedCostBrl = isMeta ? contactCount * COST_PER_MSG_USD * rate : 0;
+    const spacingSeconds = isMeta ? META_SPACING_SECONDS : UAZAPI_SPACING_SECONDS;
+    const estimatedSeconds = Math.max(0, (contactCount - 1) * spacingSeconds);
 
-    const minScheduled = useMemo(() => toLocalInputValue(new Date(Date.now() + 48 * 3600_000).toISOString()), [open]);
+    const minScheduled = useMemo(
+        () => toLocalInputValue(new Date(Date.now() + minLeadHours * 3600_000).toISOString()),
+        [open, minLeadHours]
+    );
+
+    // Variáveis disponíveis (exibição) — base + tipo + fonte de dados
+    const availableVars = useMemo(() => {
+        const keys: string[] = [...BASE_VAR_KEYS];
+        if (campaignType === "promotion") keys.push("serviço", "data");
+        if (sourceType && SOURCE_VAR_KEYS[sourceType]) {
+            for (const k of SOURCE_VAR_KEYS[sourceType]) if (!keys.includes(k)) keys.push(k);
+        }
+        if (sourceType === "csv" || sourceType === "xml") {
+            const fileKeys: string[] = audience.config?.var_keys || campaign?.source_config?.var_keys || [];
+            for (const k of fileKeys) {
+                if (k && !keys.includes(k) && !keys.map(slugVarKey).includes(k)) keys.push(k);
+            }
+        }
+        return keys;
+    }, [campaignType, sourceType, audience.config, campaign?.source_config]);
 
     const insertVariable = (variable: string) => {
         const el = messageRef.current;
@@ -181,24 +275,45 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
         });
     };
 
+    const useExistingTemplate = isMeta && templateChoice === "existing";
+
+    // Mensagem derivada do template existente ({{n}} → <variável mapeada>)
+    const existingInitialMessage = useMemo(() => {
+        if (!useExistingTemplate || !selectedTemplate) return "";
+        return String(selectedTemplate.body).replace(/\{\{(\d+)\}\}/g, (_m, n) => {
+            const key = varMapping[Number(n)];
+            return key ? `<${key}>` : `{{${n}}}`;
+        });
+    }, [useExistingTemplate, selectedTemplate, varMapping]);
+
+    const effectiveMessage = useExistingTemplate ? existingInitialMessage : message;
+
     const preview = useMemo(() => {
         const svcNames = selectedServices.map((s) => s.name).join(", ") || "nossos serviços";
         const dateStr = scheduledAt
             ? new Date(scheduledAt).toLocaleDateString("pt-BR")
             : new Date().toLocaleDateString("pt-BR");
-        return message
-            .replace(/<\s*nome\s*>/gi, "Maria")
-            .replace(/<\s*servi[çc]o\s*>/gi, svcNames)
-            .replace(/<\s*data\s*>/gi, dateStr);
-    }, [message, selectedServices, scheduledAt]);
+        const sample = audience.entries[0]?.vars || {};
+        return effectiveMessage.replace(/<\s*([^<>]+?)\s*>/g, (m, raw: string) => {
+            const key = slugVarKey(raw);
+            if (sample[key]) return sample[key];
+            if (key === "nome") return "Maria";
+            if (key === "telefone") return "(11) 91234-5678";
+            if (key === "servico") return svcNames;
+            if (key === "data") return dateStr;
+            return m;
+        });
+    }, [effectiveMessage, selectedServices, scheduledAt, audience.entries]);
 
     const stepValid = (): string | null => {
         if (step === 0) {
             if (!name.trim()) return "Informe o nome da campanha";
-            if (!instanceId) return "Selecione a instância Meta";
+            if (!instanceId) return "Selecione a instância de disparo";
             if (!scheduledAt) return "Informe a data do disparo";
-            if (new Date(scheduledAt).getTime() < Date.now() + 48 * 3600_000 - 60_000) {
-                return "O disparo precisa ser agendado com pelo menos 48h de antecedência (tempo de aprovação do template pela Meta)";
+            if (new Date(scheduledAt).getTime() < Date.now() + minLeadHours * 3600_000 - 60_000) {
+                return isMeta
+                    ? "Instância Meta: o disparo precisa ser agendado com pelo menos 24h de antecedência (tempo de aprovação do template)"
+                    : "O disparo precisa ser agendado com pelo menos 2h de antecedência";
             }
             if (!validUntil) return "Informe a validade da campanha";
             if (new Date(validUntil) <= new Date(scheduledAt)) return "A validade precisa ser depois do disparo";
@@ -208,7 +323,15 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
             if (contactCount === 0 && audience.invalidRows.length === 0) return "A audiência precisa de pelo menos um contato";
         }
         if (step === 3) {
-            if (!message.trim()) return "Escreva a mensagem inicial";
+            if (useExistingTemplate) {
+                if (!selectedTemplate) return "Selecione o template aprovado";
+                const missing = templateVarNums.filter((n) => !varMapping[n]);
+                if (missing.length > 0) {
+                    return `Mapeie a variável {{${missing[0]}}} do template`;
+                }
+            } else if (!message.trim()) {
+                return "Escreva a mensagem inicial";
+            }
         }
         if (step === 4) {
             if (!objective.trim()) return "Descreva o objetivo da campanha";
@@ -233,29 +356,41 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
             source_config: audience.config,
             scheduled_at: new Date(scheduledAt).toISOString(),
             valid_until: new Date(validUntil).toISOString(),
-            services: selectedServices,
-            discount_pct: discountPct ? parseFloat(discountPct) : null,
-            initial_message: message.trim(),
+            campaign_type: campaignType,
+            services: campaignType === "promotion" ? selectedServices : [],
+            discount_pct: campaignType === "promotion" && discountPct ? parseFloat(discountPct) : null,
+            initial_message: effectiveMessage.trim(),
             objective: objective.trim(),
             ia_enabled: iaEnabled,
+            template_mode: !isMeta ? "none" : templateChoice,
         };
+        if (useExistingTemplate && selectedTemplate) {
+            payload.existing_template = {
+                id: selectedTemplate.id,
+                name: selectedTemplate.name,
+                language: selectedTemplate.language || "pt_BR",
+            };
+            payload.variable_map = templateVarNums.map((n) => varMapping[n]);
+        }
         try {
             if (isEdit) {
                 // Só envia audiência se o usuário mexeu nela
-                if (audience.contactIds.length > 0) {
-                    payload.contact_ids = audience.contactIds;
+                if (audience.entries.length > 0) {
+                    payload.entries = audience.entries.map((e) => ({ contact_id: e.contactId, vars: e.vars }));
                     payload.invalid_rows = audience.invalidRows;
                 }
                 await updateCampaign.mutateAsync({ campaignId: campaign!.id, ...payload });
                 toast.success("Campanha atualizada!");
             } else {
-                payload.contact_ids = audience.contactIds;
+                payload.entries = audience.entries.map((e) => ({ contact_id: e.contactId, vars: e.vars }));
                 payload.invalid_rows = audience.invalidRows;
                 const res = await createCampaign.mutateAsync(payload);
                 if (res.template_error) {
                     toast.warning(`Campanha criada, mas o template falhou: ${res.template_error}. Edite a campanha para tentar novamente.`);
-                } else {
+                } else if (isMeta && templateChoice === "create") {
                     toast.success("Campanha criada! O template foi enviado para aprovação da Meta.");
+                } else {
+                    toast.success("Campanha criada!");
                 }
             }
             onOpenChange(false);
@@ -301,7 +436,7 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
                             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: Promoção Botox Julho" />
                         </div>
                         <div>
-                            <p className="text-xs text-muted-foreground mb-1">Instância Meta (WhatsApp API) *</p>
+                            <p className="text-xs text-muted-foreground mb-1">Instância de disparo *</p>
                             <Select value={instanceId} onValueChange={setInstanceId}>
                                 <SelectTrigger>
                                     <SelectValue placeholder="Selecione a instância" />
@@ -309,15 +444,29 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
                                 <SelectContent>
                                     {(instances || []).map((i: any) => (
                                         <SelectItem key={i.id} value={i.id}>
-                                            {i.name || i.instance_name}
+                                            <span className="flex items-center gap-2">
+                                                {i.name || i.instance_name}
+                                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                                                    {isMetaInstance(i) ? "API oficial (Meta)" : "API não oficial"}
+                                                </Badge>
+                                            </span>
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
                             {(instances || []).length === 0 && (
                                 <p className="text-xs text-amber-600 mt-1">
-                                    Nenhuma instância Meta conectada. Campanhas exigem WhatsApp API oficial (Meta).
+                                    Nenhuma instância de WhatsApp conectada.
                                 </p>
+                            )}
+                            {selectedInstance && !isMeta && (
+                                <div className="mt-2 flex items-start gap-2 border border-amber-500/40 bg-amber-500/10 rounded-lg p-2.5">
+                                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                                    <p className="text-xs text-amber-700 dark:text-amber-400">
+                                        Instância de API não oficial: não nos responsabilizamos por bloqueios e
+                                        banimentos de disparos realizados pela API não oficial.
+                                    </p>
+                                </div>
                             )}
                         </div>
                         <div className="grid grid-cols-2 gap-2">
@@ -329,7 +478,9 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
                                     min={minScheduled}
                                     onChange={(e) => setScheduledAt(e.target.value)}
                                 />
-                                <p className="text-[10px] text-muted-foreground mt-1">Mínimo 48h (aprovação do template)</p>
+                                <p className="text-[10px] text-muted-foreground mt-1">
+                                    {isMeta ? "Mínimo 24h (aprovação do template Meta)" : "Mínimo 2h (API não oficial, sem template)"}
+                                </p>
                             </div>
                             <div>
                                 <p className="text-xs text-muted-foreground mb-1">Válida até *</p>
@@ -379,7 +530,7 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
                         {sourceType === "appointments" && <AudienceAppointments value={audience} onChange={setAudience} />}
                         {sourceType === "sales" && <AudienceSales value={audience} onChange={setAudience} />}
 
-                        {isEdit && audience.contactIds.length === 0 && (existingContactIds?.length || 0) > 0 && (
+                        {isEdit && audience.entries.length === 0 && (existingContactIds?.length || 0) > 0 && (
                             <p className="text-xs text-muted-foreground">
                                 Mantendo a audiência atual ({existingContactIds!.length} contatos). Refaça a seleção acima para substituir.
                             </p>
@@ -387,84 +538,199 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
                     </div>
                 )}
 
-                {/* Step 2 — Serviços + desconto */}
+                {/* Step 2 — Tipo de campanha */}
                 {step === 2 && (
                     <div className="space-y-3">
-                        <div>
-                            <p className="text-xs text-muted-foreground mb-2">Serviços atrelados à campanha</p>
-                            <div className="max-h-56 overflow-y-auto border rounded-xl divide-y">
-                                {(services || []).length === 0 && (
-                                    <p className="text-sm text-muted-foreground p-3">Nenhum serviço ativo cadastrado.</p>
-                                )}
-                                {(services || []).map((svc: any) => {
-                                    const checked = selectedServices.some((s) => s.id === svc.id);
-                                    return (
-                                        <label
-                                            key={svc.id}
-                                            className="flex items-center gap-3 p-2.5 cursor-pointer hover:bg-muted/40"
-                                        >
-                                            <Checkbox checked={checked} onCheckedChange={() => toggleService(svc)} />
-                                            <span className="text-sm flex-1">{svc.name}</span>
-                                            {svc.price != null && (
-                                                <span className="text-xs text-muted-foreground">{formatCurrency(Number(svc.price))}</span>
-                                            )}
-                                        </label>
-                                    );
-                                })}
-                            </div>
+                        <div className="grid grid-cols-2 gap-2">
+                            {([
+                                { value: "promotion", label: "Promoção", desc: "Divulga serviços com condição especial", icon: BadgePercent },
+                                { value: "notification", label: "Notificação", desc: "Aviso/lembrete sem oferta comercial", icon: Bell },
+                            ] as const).map((opt) => (
+                                <button
+                                    key={opt.value}
+                                    type="button"
+                                    onClick={() => setCampaignType(opt.value)}
+                                    className={cn(
+                                        "border rounded-xl p-3 flex flex-col items-center gap-1.5 text-xs transition-colors",
+                                        campaignType === opt.value
+                                            ? "border-primary bg-primary/5 text-foreground font-medium"
+                                            : "border-border text-muted-foreground hover:bg-muted/40"
+                                    )}
+                                >
+                                    <opt.icon className="w-4 h-4" />
+                                    <span className="text-sm">{opt.label}</span>
+                                    <span className="text-[10px] text-muted-foreground text-center">{opt.desc}</span>
+                                </button>
+                            ))}
                         </div>
-                        <div>
-                            <p className="text-xs text-muted-foreground mb-1">Desconto da campanha (%) — opcional</p>
-                            <Input
-                                type="number"
-                                min={0}
-                                max={100}
-                                step={1}
-                                value={discountPct}
-                                onChange={(e) => setDiscountPct(e.target.value)}
-                                placeholder="Ex.: 20"
-                                className="w-32"
-                            />
-                            <p className="text-[10px] text-muted-foreground mt-1">
-                                A IA aplicará o desconto sobre o preço dos serviços selecionados.
+
+                        {campaignType === "promotion" && (
+                            <>
+                                <div>
+                                    <p className="text-xs text-muted-foreground mb-2">Serviços atrelados à campanha</p>
+                                    <div className="max-h-56 overflow-y-auto border rounded-xl divide-y">
+                                        {(services || []).length === 0 && (
+                                            <p className="text-sm text-muted-foreground p-3">Nenhum serviço ativo cadastrado.</p>
+                                        )}
+                                        {(services || []).map((svc: any) => {
+                                            const checked = selectedServices.some((s) => s.id === svc.id);
+                                            return (
+                                                <label
+                                                    key={svc.id}
+                                                    className="flex items-center gap-3 p-2.5 cursor-pointer hover:bg-muted/40"
+                                                >
+                                                    <Checkbox checked={checked} onCheckedChange={() => toggleService(svc)} />
+                                                    <span className="text-sm flex-1">{svc.name}</span>
+                                                    {svc.price != null && (
+                                                        <span className="text-xs text-muted-foreground">{formatCurrency(Number(svc.price))}</span>
+                                                    )}
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-muted-foreground mb-1">Desconto da campanha (%) — opcional</p>
+                                    <Input
+                                        type="number"
+                                        min={0}
+                                        max={100}
+                                        step={1}
+                                        value={discountPct}
+                                        onChange={(e) => setDiscountPct(e.target.value)}
+                                        placeholder="Ex.: 20"
+                                        className="w-32"
+                                    />
+                                    <p className="text-[10px] text-muted-foreground mt-1">
+                                        A IA aplicará o desconto sobre o preço dos serviços selecionados.
+                                    </p>
+                                </div>
+                            </>
+                        )}
+                        {campaignType === "notification" && (
+                            <p className="text-xs text-muted-foreground border rounded-xl p-3">
+                                Campanha de notificação: sem serviços nem desconto.
+                                {isMeta && " O template Meta será criado na categoria UTILITY (aprovação mais rápida e custo menor)."}
                             </p>
-                        </div>
+                        )}
                     </div>
                 )}
 
                 {/* Step 3 — Mensagem */}
                 {step === 3 && (
                     <div className="space-y-3">
-                        <div>
-                            <div className="flex items-center justify-between mb-1">
-                                <p className="text-xs text-muted-foreground">Mensagem inicial (vira template Meta) *</p>
-                                <div className="flex gap-1">
-                                    {["nome", "serviço", "data"].map((v) => (
-                                        <Button
-                                            key={v}
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            className="h-6 px-2 text-[10px]"
-                                            onClick={() => insertVariable(v)}
-                                        >
-                                            {`<${v}>`}
-                                        </Button>
-                                    ))}
-                                </div>
+                        {isMeta && (
+                            <div className="grid grid-cols-2 gap-2">
+                                {([
+                                    { value: "create", label: "Criar novo template" },
+                                    { value: "existing", label: "Usar template existente" },
+                                ] as const).map((opt) => (
+                                    <button
+                                        key={opt.value}
+                                        type="button"
+                                        onClick={() => setTemplateChoice(opt.value)}
+                                        className={cn(
+                                            "border rounded-xl p-2.5 text-xs transition-colors",
+                                            templateChoice === opt.value
+                                                ? "border-primary bg-primary/5 text-foreground font-medium"
+                                                : "border-border text-muted-foreground hover:bg-muted/40"
+                                        )}
+                                    >
+                                        {opt.label}
+                                    </button>
+                                ))}
                             </div>
-                            <Textarea
-                                ref={messageRef}
-                                value={message}
-                                onChange={(e) => setMessage(e.target.value)}
-                                rows={6}
-                                placeholder={"Olá <nome>! Temos uma condição especial em <serviço> válida a partir de <data>..."}
-                            />
-                            <p className="text-[10px] text-muted-foreground mt-1">
-                                Mensagem alterada após a criação exige novo template (nova aprovação da Meta).
-                            </p>
-                        </div>
-                        {message.trim() && (
+                        )}
+
+                        {useExistingTemplate ? (
+                            <div className="space-y-3">
+                                <div>
+                                    <p className="text-xs text-muted-foreground mb-1">Template aprovado *</p>
+                                    <Select value={existingTemplateId} onValueChange={(v) => { setExistingTemplateId(v); setVarMapping({}); }}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Selecione o template" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {(approvedTemplates || []).map((t: any) => (
+                                                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    {(approvedTemplates || []).length === 0 && (
+                                        <p className="text-xs text-amber-600 mt-1">
+                                            Nenhum template aprovado (somente texto) nesta instância.
+                                        </p>
+                                    )}
+                                </div>
+                                {selectedTemplate && (
+                                    <>
+                                        <div className="border rounded-xl p-3 bg-muted/30">
+                                            <p className="text-[10px] text-muted-foreground mb-1">Corpo do template</p>
+                                            <p className="text-sm whitespace-pre-wrap">{selectedTemplate.body}</p>
+                                        </div>
+                                        {templateVarNums.length > 0 && (
+                                            <div className="space-y-2">
+                                                <p className="text-xs text-muted-foreground">Mapeie cada variável do template:</p>
+                                                {templateVarNums.map((n) => (
+                                                    <div key={n} className="flex items-center gap-2">
+                                                        <Badge variant="outline" className="shrink-0 font-mono">{`{{${n}}}`}</Badge>
+                                                        <Select
+                                                            value={varMapping[n] || ""}
+                                                            onValueChange={(v) => setVarMapping((prev) => ({ ...prev, [n]: v }))}
+                                                        >
+                                                            <SelectTrigger className="h-8">
+                                                                <SelectValue placeholder="Escolha o dado" />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {availableVars.map((k) => (
+                                                                    <SelectItem key={k} value={slugVarKey(k)}>{k}</SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                        ) : (
+                            <div>
+                                <div className="flex items-center justify-between mb-1 gap-2">
+                                    <p className="text-xs text-muted-foreground shrink-0">
+                                        {isMeta ? "Mensagem inicial (vira template Meta) *" : "Mensagem inicial *"}
+                                    </p>
+                                    <div className="flex gap-1 flex-wrap justify-end">
+                                        {availableVars.map((v) => (
+                                            <Button
+                                                key={v}
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-6 px-2 text-[10px]"
+                                                onClick={() => insertVariable(v)}
+                                            >
+                                                {`<${v}>`}
+                                            </Button>
+                                        ))}
+                                    </div>
+                                </div>
+                                <Textarea
+                                    ref={messageRef}
+                                    value={message}
+                                    onChange={(e) => setMessage(e.target.value)}
+                                    rows={6}
+                                    placeholder={"Olá <nome>! Temos uma condição especial válida até..."}
+                                />
+                                {isMeta && (
+                                    <p className="text-[10px] text-muted-foreground mt-1">
+                                        Mensagem alterada após a criação exige novo template (nova aprovação da Meta).
+                                    </p>
+                                )}
+                            </div>
+                        )}
+
+                        {effectiveMessage.trim() && (
                             <div className="border rounded-xl p-3 bg-muted/30">
                                 <p className="text-[10px] text-muted-foreground mb-1">Pré-visualização</p>
                                 <p className="text-sm whitespace-pre-wrap">{preview}</p>
@@ -509,28 +775,43 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
                             <div className="border rounded-xl p-3 flex flex-col items-center gap-1">
                                 <Users className="w-4 h-4 text-primary" />
                                 <span className="text-lg font-semibold">{contactCount}</span>
-                                <span className="text-[10px] text-muted-foreground text-center">contatos</span>
+                                <span className="text-[10px] text-muted-foreground text-center">mensagens</span>
                             </div>
                             <div className="border rounded-xl p-3 flex flex-col items-center gap-1">
                                 <Clock className="w-4 h-4 text-primary" />
                                 <span className="text-lg font-semibold">{formatDuration(estimatedSeconds)}</span>
-                                <span className="text-[10px] text-muted-foreground text-center">tempo de disparo (15s/msg)</span>
+                                <span className="text-[10px] text-muted-foreground text-center">
+                                    tempo de disparo ({isMeta ? "15s/msg" : "30-45s/msg"})
+                                </span>
                             </div>
                             <div className="border rounded-xl p-3 flex flex-col items-center gap-1">
                                 <DollarSign className="w-4 h-4 text-primary" />
                                 <span className="text-lg font-semibold">{formatCurrency(estimatedCostBrl)}</span>
-                                <span className="text-[10px] text-muted-foreground text-center">custo estimado*</span>
+                                <span className="text-[10px] text-muted-foreground text-center">
+                                    {isMeta ? "custo estimado*" : "sem custo por mensagem"}
+                                </span>
                             </div>
                         </div>
                         <div className="text-sm space-y-1.5 border rounded-xl p-3">
                             <p><span className="text-muted-foreground">Campanha:</span> <span className="font-medium">{name}</span></p>
+                            <p>
+                                <span className="text-muted-foreground">Tipo:</span>{" "}
+                                {campaignType === "promotion" ? "Promoção" : "Notificação"}
+                                <span className="text-muted-foreground ml-3">Instância:</span>{" "}
+                                {selectedInstance ? (isMeta ? "API oficial (Meta)" : "API não oficial") : "—"}
+                            </p>
                             <p><span className="text-muted-foreground">Disparo:</span> {scheduledAt ? new Date(scheduledAt).toLocaleString("pt-BR") : "—"}</p>
                             <p><span className="text-muted-foreground">Válida até:</span> {validUntil ? new Date(validUntil).toLocaleString("pt-BR") : "—"}</p>
-                            <p>
-                                <span className="text-muted-foreground">Serviços:</span>{" "}
-                                {selectedServices.length > 0 ? selectedServices.map((s) => s.name).join(", ") : "nenhum"}
-                                {discountPct && <Badge variant="secondary" className="ml-2">{discountPct}% off</Badge>}
-                            </p>
+                            {campaignType === "promotion" && (
+                                <p>
+                                    <span className="text-muted-foreground">Serviços:</span>{" "}
+                                    {selectedServices.length > 0 ? selectedServices.map((s) => s.name).join(", ") : "nenhum"}
+                                    {discountPct && <Badge variant="secondary" className="ml-2">{discountPct}% off</Badge>}
+                                </p>
+                            )}
+                            {useExistingTemplate && selectedTemplate && (
+                                <p><span className="text-muted-foreground">Template:</span> {selectedTemplate.name} (já aprovado)</p>
+                            )}
                             <p><span className="text-muted-foreground">IA atende:</span> {iaEnabled ? "Sim" : "Não"}</p>
                             {audience.invalidRows.length > 0 && (
                                 <p className="text-amber-600 text-xs">
@@ -538,13 +819,26 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
                                 </p>
                             )}
                         </div>
-                        <p className="text-[10px] text-muted-foreground">
-                            * Estimativa: US$ {COST_PER_MSG_USD.toFixed(4)}/mensagem (marketing Meta BR) × cotação{" "}
-                            {rate.toFixed(2)}{rateData?.isFallback ? " (cotação padrão — API indisponível)" : ""}. Valor final pode variar.
-                        </p>
+                        {!isMeta && (
+                            <p className="text-[10px] text-amber-600">
+                                API não oficial: não nos responsabilizamos por bloqueios e banimentos de disparos
+                                realizados pela API não oficial.
+                            </p>
+                        )}
+                        {isMeta && (
+                            <p className="text-[10px] text-muted-foreground">
+                                * Estimativa: US$ {COST_PER_MSG_USD.toFixed(4)}/mensagem (marketing Meta BR) × cotação{" "}
+                                {rate.toFixed(2)}{rateData?.isFallback ? " (cotação padrão — API indisponível)" : ""}. Valor final pode variar.
+                            </p>
+                        )}
                         <p className="text-xs text-muted-foreground">
-                            Ao {isEdit ? "salvar" : "criar"}: template Meta enviado para aprovação, etiqueta "{name}" aplicada aos contatos
-                            e prompt de vendas gerado pela IA.
+                            Ao {isEdit ? "salvar" : "criar"}:{" "}
+                            {isMeta
+                                ? templateChoice === "existing"
+                                    ? "template aprovado reutilizado, "
+                                    : "template Meta enviado para aprovação, "
+                                : ""}
+                            etiqueta "{name}" aplicada aos contatos e prompt de vendas gerado pela IA.
                         </p>
                     </div>
                 )}

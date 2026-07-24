@@ -6,7 +6,7 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { CRM_STAGES } from "@/types/crm-client";
-import { AudienceSelection } from "../audienceTypes";
+import { AudienceSelection, AudienceEntry } from "../audienceTypes";
 
 interface AudienceCrmProps {
     value: AudienceSelection;
@@ -18,30 +18,38 @@ export function AudienceCrm({ value, onChange }: AudienceCrmProps) {
     const [from, setFrom] = useState<string>(value.config?.from || "");
     const [to, setTo] = useState<string>(value.config?.to || "");
 
-    const { data: contactIds } = useQuery({
+    const { data: entries } = useQuery({
         queryKey: ["audience-crm", stage, from, to],
-        queryFn: async (): Promise<string[]> => {
+        queryFn: async (): Promise<AudienceEntry[]> => {
             let query = supabase
                 .from("crm_client" as any)
-                .select("contact_id")
+                .select("contact_id, stage")
                 .eq("is_active", true)
                 .eq("stage", stage);
             if (from) query = query.gte("stage_changed_at", new Date(from).toISOString());
             if (to) query = query.lte("stage_changed_at", new Date(to + "T23:59:59").toISOString());
             const { data, error } = await query;
             if (error) throw error;
-            return [...new Set(((data || []) as any[]).map((r) => r.contact_id).filter(Boolean))] as string[];
+            const seen = new Set<string>();
+            const list: AudienceEntry[] = [];
+            for (const r of (data || []) as any[]) {
+                if (!r.contact_id || seen.has(r.contact_id)) continue;
+                seen.add(r.contact_id);
+                list.push({ contactId: r.contact_id, vars: { etapa: r.stage || "" } });
+            }
+            return list;
         },
         enabled: !!stage,
     });
 
     useEffect(() => {
         if (!stage) return;
-        const ids = contactIds || [];
-        if (ids.join(",") === value.contactIds.join(",") && value.config?.stage === stage) return;
-        onChange({ contactIds: ids, invalidRows: [], config: { stage, from, to } });
+        const list = entries || [];
+        const sig = (e: AudienceEntry[]) => e.map((x) => x.contactId).join(",");
+        if (sig(list) === sig(value.entries) && value.config?.stage === stage) return;
+        onChange({ entries: list, invalidRows: [], config: { stage, from, to } });
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [contactIds, stage, from, to]);
+    }, [entries, stage, from, to]);
 
     return (
         <div className="space-y-3">
@@ -70,7 +78,7 @@ export function AudienceCrm({ value, onChange }: AudienceCrmProps) {
             </div>
             {stage && (
                 <p className="text-sm text-muted-foreground">
-                    <span className="font-semibold text-foreground">{contactIds?.length ?? "..."}</span> contatos encontrados
+                    <span className="font-semibold text-foreground">{entries?.length ?? "..."}</span> contatos encontrados
                 </p>
             )}
         </div>

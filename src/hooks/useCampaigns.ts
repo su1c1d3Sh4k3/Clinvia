@@ -70,6 +70,8 @@ export interface Campaign {
     scheduled_at: string;
     valid_until: string;
     services: CampaignService[];
+    campaign_type: "promotion" | "notification";
+    template_mode: "create" | "existing" | "none";
     discount_pct: number | null;
     initial_message: string;
     variable_map: string[];
@@ -197,21 +199,23 @@ export function useCampaignContacts(campaignId: string | null) {
     });
 }
 
-/** Instâncias Meta conectadas (únicas permitidas para campanhas). */
-export function useMetaInstances() {
+export function isMetaInstance(i: any): boolean {
+    return i?.provider === "meta" || (i?.instance_name || "").startsWith("meta-");
+}
+
+/** Todas as instâncias conectadas (Meta primeiro), para seleção em campanhas. */
+export function useCampaignInstances() {
     return useQuery({
-        queryKey: ["campaigns-meta-instances"],
+        queryKey: ["campaigns-instances"],
         queryFn: async () => {
             const { data, error } = await supabase
                 .from("instances")
                 .select("*")
                 .order("created_at", { ascending: false });
             if (error) throw error;
-            return ((data || []) as any[]).filter(
-                (i) =>
-                    (i.provider === "meta" || (i.instance_name || "").startsWith("meta-")) &&
-                    i.status === "connected"
-            );
+            return ((data || []) as any[])
+                .filter((i) => i.status === "connected")
+                .sort((a, b) => Number(isMetaInstance(b)) - Number(isMetaInstance(a)));
         },
         staleTime: 30_000,
     });
