@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { ImportWizard } from "@/components/import/ImportWizard";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -115,10 +115,8 @@ const Contacts = () => {
     // Pagination state
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(20);
-    const [isImporting, setIsImporting] = useState(false);
     const [isWppImportOpen, setIsWppImportOpen] = useState(false);
     const [importWizardOpen, setImportWizardOpen] = useState(false);
-    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const { toast } = useToast();
     const queryClient = useQueryClient();
@@ -370,79 +368,6 @@ const Contacts = () => {
         XLSX.writeFile(wb, "modelo_contatos.xlsx");
     };
 
-    const handleImportContacts = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file || !ownerId) return;
-        // Limpa o input para permitir reimportar o mesmo arquivo
-        e.target.value = "";
-
-        setIsImporting(true);
-        try {
-            const data = await file.arrayBuffer();
-            const wb = XLSX.read(data);
-            const ws = wb.Sheets[wb.SheetNames[0]];
-            const rows = XLSX.utils.sheet_to_json<Record<string, any>>(ws);
-
-            if (rows.length === 0) {
-                toast({ title: "Planilha vazia", description: "Nenhum contato encontrado na planilha.", variant: "destructive" });
-                return;
-            }
-
-            // Mapeia colunas flexíveis (aceita variações de nome)
-            const mapField = (row: Record<string, any>, keys: string[]) => {
-                for (const k of keys) {
-                    const found = Object.keys(row).find(rk => rk.toLowerCase().trim() === k.toLowerCase());
-                    if (found && row[found] != null && String(row[found]).trim()) return String(row[found]).trim();
-                }
-                return null;
-            };
-
-            const contactsToImport = rows.map(row => {
-                const name = mapField(row, ["nome", "name", "push_name"]);
-                const phone = mapField(row, ["telefone", "phone", "celular", "whatsapp", "número", "numero"]);
-                if (!name || !phone) return null;
-
-                const cleanPhone = phone.replace(/\D/g, "");
-                return {
-                    push_name: name,
-                    phone: cleanPhone,
-                    number: `${cleanPhone}@s.whatsapp.net`,
-                    company: mapField(row, ["empresa", "company"]) || null,
-                    cpf: mapField(row, ["cpf", "documento"]) || null,
-                    email: mapField(row, ["email", "e-mail"]) || null,
-                    instagram: mapField(row, ["instagram", "insta"]) || null,
-                    user_id: ownerId,
-                    is_group: false,
-                    edited: true,
-                };
-            }).filter(Boolean);
-
-            if (contactsToImport.length === 0) {
-                toast({ title: "Nenhum contato válido", description: "Verifique se a planilha tem as colunas Nome e Telefone preenchidas.", variant: "destructive" });
-                return;
-            }
-
-            // Upsert em lotes de 100
-            const BATCH = 100;
-            let imported = 0;
-            for (let i = 0; i < contactsToImport.length; i += BATCH) {
-                const batch = contactsToImport.slice(i, i + BATCH);
-                const { error } = await supabase
-                    .from("contacts")
-                    .upsert(batch as any[], { onConflict: "user_id,number", ignoreDuplicates: false });
-                if (error) throw error;
-                imported += batch.length;
-            }
-
-            queryClient.invalidateQueries({ queryKey: ["contacts"] });
-            toast({ title: `${imported} contatos importados com sucesso!` });
-        } catch (error: any) {
-            toast({ title: "Erro ao importar", description: error.message, variant: "destructive" });
-        } finally {
-            setIsImporting(false);
-        }
-    };
-
     const handleExportContacts = () => {
         if (!filteredContacts || filteredContacts.length === 0) {
             toast({ title: "Nenhum contato para exportar", variant: "destructive" });
@@ -486,11 +411,6 @@ const Contacts = () => {
                                         <FileSpreadsheet className="w-4 h-4" />
                                         <span className="hidden lg:inline">Modelo</span>
                                     </Button>
-                                    <Button onClick={() => fileInputRef.current?.click()} variant="outline" size="sm" className="h-8 md:h-9 text-xs md:text-sm gap-1" disabled={isImporting} title="Importar contatos de planilha">
-                                        <Upload className="w-4 h-4" />
-                                        <span className="hidden lg:inline">{isImporting ? "Importando..." : "Importar"}</span>
-                                    </Button>
-                                    <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleImportContacts} />
                                     <Button onClick={() => setIsWppImportOpen(true)} variant="outline" size="sm" className="h-8 md:h-9 text-xs md:text-sm gap-1 border-green-500/30 text-green-600 hover:bg-green-500/10 hover:text-green-600" title="Importar contatos do WhatsApp">
                                         <FaWhatsapp className="w-4 h-4" />
                                         <span className="hidden lg:inline">Importar do Wpp</span>
