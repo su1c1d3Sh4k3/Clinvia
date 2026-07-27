@@ -132,6 +132,7 @@ serve(async (req) => {
             const { data, error } = await supabase.from("appointments")
                 .select("id, service_name, professional_name, start_time, end_time, status, price, type, category_id, service_name_id, service_id")
                 .eq("user_id", user_id).eq("contact_id", contactId)
+                .not("status", "in", "(completed,canceled,no_show)")
                 .order("start_time", { ascending: false });
 
             if (error) throw error;
