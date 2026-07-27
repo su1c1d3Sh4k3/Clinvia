@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -258,6 +258,41 @@ const Connections = () => {
             navigate('/connections', { replace: true });
         }
     };
+
+    // ── Verificação real da conexão Meta ao entrar na página ──
+    // O status "connected" no banco pode ser falso positivo (ex: número não
+    // registrado no Cloud API). Confere no Graph API e tenta auto-reparo.
+    const metaVerifiedRef = useRef(false);
+    useEffect(() => {
+        if (metaVerifiedRef.current) return;
+        if (!metaInstances || metaInstances.length === 0) return;
+        metaVerifiedRef.current = true;
+
+        (async () => {
+            let changed = false;
+            for (const inst of metaInstances) {
+                try {
+                    const { data, error } = await supabase.functions.invoke('meta-verify-connection', {
+                        body: { instance_id: inst.id },
+                    });
+                    if (error || !data) continue;
+                    if (data.connected === false) {
+                        changed = true;
+                        toast({
+                            title: "WhatsApp Oficial desconectado",
+                            description: data.reason || "A conexão não está funcional. Reconecte pelo botão de signup.",
+                            variant: "destructive",
+                        });
+                    } else if (data.repaired || inst.status !== 'connected') {
+                        changed = true;
+                    }
+                } catch {
+                    // silencioso: verificação não deve quebrar a página
+                }
+            }
+            if (changed) queryClient.invalidateQueries({ queryKey: ["instances"] });
+        })();
+    }, [metaInstances]);
 
     // ── Meta Embedded Signup ──
 

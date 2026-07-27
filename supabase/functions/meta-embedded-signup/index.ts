@@ -143,10 +143,28 @@ async function processSignup(
         }
     );
 
-    if (!registerResp.ok) {
-        const regErr = await registerResp.text();
-        if (registerResp.status !== 412) {
-            console.warn("[meta-embedded-signup] Registration response:", registerResp.status, regErr);
+    if (!registerResp.ok && registerResp.status !== 412) {
+        // 412 = já registrado. Qualquer outro erro é fatal: sem registro no Cloud API
+        // o número não envia nem recebe mensagens (falso positivo de "connected").
+        const regErrBody = await registerResp.json().catch(() => ({} as any));
+        const regMsg = regErrBody?.error?.error_user_msg || regErrBody?.error?.message || `HTTP ${registerResp.status}`;
+        console.error("[meta-embedded-signup] Registration FAILED:", registerResp.status, JSON.stringify(regErrBody));
+        throw new Error(`Falha ao registrar o número no Cloud API: ${regMsg}`);
+    }
+
+    // Confirma que o registro realmente efetivou (platform_type deve ser CLOUD_API)
+    const verifyResp = await fetch(
+        `${GRAPH_API}/${phoneNumberId}?fields=platform_type,status`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    if (verifyResp.ok) {
+        const verifyData = await verifyResp.json();
+        console.log("[meta-embedded-signup] Post-register check:", JSON.stringify(verifyData));
+        if (verifyData.platform_type !== "CLOUD_API") {
+            throw new Error(
+                `Número não foi registrado no Cloud API (platform_type: ${verifyData.platform_type}). ` +
+                `Verifique se o número não está ativo no app WhatsApp Business e tente reconectar.`
+            );
         }
     }
     console.log("[meta-embedded-signup] Phone registered (or already registered)");
@@ -170,11 +188,13 @@ async function processSignup(
     );
 
     if (!subResp.ok) {
-        const subErr = await subResp.text();
-        console.warn("[meta-embedded-signup] Webhook subscription warning:", subErr);
-    } else {
-        console.log("[meta-embedded-signup] Webhook subscribed");
+        // Sem inscrição no webhook as mensagens nunca chegam — erro fatal
+        const subErrBody = await subResp.json().catch(() => ({} as any));
+        const subMsg = subErrBody?.error?.error_user_msg || subErrBody?.error?.message || `HTTP ${subResp.status}`;
+        console.error("[meta-embedded-signup] Webhook subscription FAILED:", JSON.stringify(subErrBody));
+        throw new Error(`Falha ao inscrever o webhook de mensagens: ${subMsg}`);
     }
+    console.log("[meta-embedded-signup] Webhook subscribed");
 
     // ── Step 6: Check for existing instance ──
     const { data: existing } = await supabase
