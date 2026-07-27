@@ -329,7 +329,7 @@ async function handleAwaitingFeedbackRating(
     if (!rating.needsDetail) {
         // Excelente or Muito bom — done
         await send(ctx, "Muito obrigado, sua opinião é muito importante para que nós possamos melhorar a cada dia, esperamos ver você novamente até breve");
-        await moveCrmGanhoOrFinalizado(ctx);
+        await finalizeCrmCard(ctx);
         await markSession(supabase, session.id, {
             state: "completed",
             selected_rating: buttonId,
@@ -385,7 +385,7 @@ async function handleAwaitingFeedbackDetail(
         .eq("id", session.conversation_id);
 
     // CRM actions
-    await moveCrmGanhoOrFinalizado(ctx);
+    await finalizeCrmCard(ctx);
 
     await markSession(supabase, session.id, {
         state: "completed",
@@ -418,7 +418,8 @@ async function moveCrmToStage(ctx: SessionContext, stage: string, lossReason?: s
     await forceQueuePosVenda(ctx);
 }
 
-async function moveCrmGanhoOrFinalizado(ctx: SessionContext) {
+/** Pesquisa respondida → finaliza o card ativo na etapa Finalizado (vira histórico). */
+async function finalizeCrmCard(ctx: SessionContext) {
     const { data: crmCard } = await ctx.supabase
         .from("crm_client")
         .select("id, stage")
@@ -436,11 +437,11 @@ async function moveCrmGanhoOrFinalizado(ctx: SessionContext) {
         .update({ status: "resolved", updated_at: new Date().toISOString() })
         .eq("id", ctx.session.conversation_id);
 
-    const newStage = crmCard.stage === "Ganho" ? "Finalizado" : "Ganho";
     await ctx.supabase
         .from("crm_client")
         .update({
-            stage: newStage,
+            stage: "Finalizado",
+            is_active: false,
             stage_changed_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
         })

@@ -112,7 +112,7 @@ export const ClientSidebar = ({ contact }: ClientSidebarProps) => {
       ? (npsArray.reduce((acc: number, n: any) => acc + (n.nota || 0), 0) / npsArray.length).toFixed(1)
       : null;
 
-  const hasOpenTicket = lastConversation?.status === "open";
+  const hasOpenTicket = ["open", "pending"].includes(lastConversation?.status ?? "");
 
   const InfoRow = ({ icon: Icon, label, value, className }: { icon: any; label: string; value: string; className?: string }) => (
     <div className="flex items-start gap-2 py-1.5">

@@ -373,7 +373,8 @@ serve(async (req) => {
                 conversation_id: conversationId,
                 body: insertBody,
                 direction: "outbound",
-                message_type: messageType === "contact" ? "contact" : messageType,
+                // enum message_type não possui 'template' — templates são salvos como 'text'
+                message_type: messageType === "template" ? "text" : messageType,
                 media_url: mediaUrl,
                 evolution_id: metaMessageId,
                 user_id: instance.user_id,
@@ -387,8 +388,13 @@ serve(async (req) => {
             .single();
 
         if (messageError) {
-            console.error("[meta-send-message] Message insert error:", messageError);
-            throw new Error(`Failed to save message: ${messageError.message}`);
+            // A mensagem JÁ FOI enviada via Graph API — falha ao salvar não pode
+            // virar erro do request, senão automações (cron/campanhas) reenviam em loop.
+            console.error("[meta-send-message] Message insert error (message WAS sent, wamid:", metaMessageId, "):", messageError);
+            return new Response(
+                JSON.stringify({ success: true, messageId: null, providerId: metaMessageId, saveError: messageError.message }),
+                { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
         }
 
         console.log("[meta-send-message] Message saved:", message.id);

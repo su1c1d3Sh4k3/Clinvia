@@ -211,6 +211,13 @@ serve(async (req) => {
 
                 appointmentsCompleted++;
 
+                // Conclude CRM card server-side (mirrors useCrmAppointmentSync.onAppointmentCompleted)
+                try {
+                    await concludeCrmOnCompletion(supabase, apt);
+                } catch (crmErr) {
+                    console.error(`Error syncing CRM for appointment ${apt.id}:`, crmErr);
+                }
+
                 // Skip sale creation if no price or no service
                 if (!apt.price || apt.price <= 0 || !apt.service_id) continue;
 
@@ -266,3 +273,78 @@ serve(async (req) => {
         );
     }
 });
+
+// ── CRM sync on auto-complete ────────────────────────────────────────
+        // Cria card Ganho (histórico) para o agendamento concluído, remove o
+        // serviço do card ativo e desativa o card ativo quando não restam serviços.
+        async function concludeCrmOnCompletion(supabase: any, apt: any) {
+            if (!apt.contact_id) return;
+
+            // 1. Ganho card (inactive = histórico), como no fluxo manual do frontend
+            const { data: ganhoCard } = await supabase
+                .from("crm_client")
+                .insert({
+                    user_id: apt.user_id,
+                    contact_id: apt.contact_id,
+                    stage: "Ganho",
+                    stage_changed_at: new Date().toISOString(),
+                    value: apt.price || 0,
+                    professional_id: apt.professional_id || null,
+                    is_active: false,
+                })
+                .select("id")
+                .single();
+
+            if (ganhoCard && apt.service_name) {
+                await supabase.from("crm_client_services").insert({
+                    crm_client_id: ganhoCard.id,
+                    service_client_id: null,
+                    service_name: apt.service_name,
+                    quantity: 1,
+                    unit_price: apt.price || 0,
+                    min_price: 0,
+                });
+            }
+
+            // 2. Remove o serviço concluído do card ativo
+            const { data: activeCard } = await supabase
+                .from("crm_client")
+                .select("id")
+                .eq("contact_id", apt.contact_id)
+                .eq("user_id", apt.user_id)
+                .eq("is_active", true)
+                .maybeSingle();
+            if (!activeCard) return;
+
+            if (apt.service_name) {
+                const { data: match } = await supabase
+                    .from("crm_client_services")
+                    .select("id")
+                    .eq("crm_client_id", activeCard.id)
+                    .eq("service_name", apt.service_name)
+                    .limit(1)
+                    .maybeSingle();
+                if (match) {
+                    await supabase.from("crm_client_services").delete().eq("id", match.id);
+                }
+            }
+
+            // 3. Sem serviços restantes → desativa; senão recalcula o valor
+            const { data: remaining } = await supabase
+                .from("crm_client_services")
+                .select("unit_price, quantity")
+                .eq("crm_client_id", activeCard.id);
+
+            if (!remaining || remaining.length === 0) {
+                await supabase
+                    .from("crm_client")
+                    .update({ is_active: false, updated_at: new Date().toISOString() })
+                    .eq("id", activeCard.id);
+            } else {
+                const total = remaining.reduce((s: number, r: any) => s + r.unit_price * r.quantity, 0);
+                await supabase
+                    .from("crm_client")
+                    .update({ value: total, updated_at: new Date().toISOString() })
+                    .eq("id", activeCard.id);
+            }
+        }

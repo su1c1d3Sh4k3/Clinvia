@@ -90,6 +90,7 @@ serve(async (req) => {
                 const r1 = await processConfirm24h(ctx);
                 const r2 = await processReminder2h(ctx);
                 const r3 = await processFeedback24h(ctx);
+                await processFeedbackTimeout(ctx);
 
                 totalSent += r1.sent + r2.sent + r3.sent;
                 totalErrors += r1.errors + r2.errors + r3.errors;
@@ -539,6 +540,43 @@ async function processFeedback24h(ctx: CronContext): Promise<{ sent: number; err
                 last_prompt_message_id: sendRes.messageId,
             });
 
+            // Card CRM em "Pesquisa de Satisfação" enquanto aguarda a resposta.
+            // Se ainda houver card ativo (ex.: sem auto_complete), move-o; senão cria.
+            try {
+                const { data: activeCard } = await supabase
+                    .from("crm_client")
+                    .select("id, stage")
+                    .eq("contact_id", contactId)
+                    .eq("user_id", userId)
+                    .eq("is_active", true)
+                    .maybeSingle();
+
+                if (activeCard) {
+                    if (activeCard.stage !== "Pesquisa de Satisfação") {
+                        await supabase
+                            .from("crm_client")
+                            .update({
+                                stage: "Pesquisa de Satisfação",
+                                stage_changed_at: new Date().toISOString(),
+                                updated_at: new Date().toISOString(),
+                            })
+                            .eq("id", activeCard.id);
+                    }
+                } else {
+                    await supabase.from("crm_client").insert({
+                        user_id: userId,
+                        contact_id: contactId,
+                        stage: "Pesquisa de Satisfação",
+                        stage_changed_at: new Date().toISOString(),
+                        value: 0,
+                        priority: "medium",
+                        is_active: true,
+                    });
+                }
+            } catch (crmErr) {
+                console.error("[ac-cron] feedback_24h CRM card error:", crmErr);
+            }
+
             sent++;
             if (STAGGER_MS > 0) await sleep(STAGGER_MS);
         } catch (err) {
@@ -548,6 +586,64 @@ async function processFeedback24h(ctx: CronContext): Promise<{ sent: number; err
     }
 
     return { sent, errors };
+}
+
+// ---------------------------------------------------------------------------
+// Flow 4: feedback timeout — 24h sem resposta → card vai para Finalizado
+// ---------------------------------------------------------------------------
+
+async function processFeedbackTimeout(ctx: CronContext): Promise<void> {
+    const { supabase, userId, now } = ctx;
+    const cutoff = new Date(now.getTime() - 24 * 3600_000).toISOString();
+
+    const { data: staleSessions } = await supabase
+        .from("appointment_confirmation_sessions")
+        .select("id, contact_id, conversation_id")
+        .eq("user_id", userId)
+        .eq("flow_type", "feedback_24h")
+        .in("state", ["awaiting_feedback_rating", "awaiting_feedback_detail"])
+        .lt("created_at", cutoff);
+
+    for (const session of staleSessions || []) {
+        try {
+            await supabase
+                .from("appointment_confirmation_sessions")
+                .update({ state: "completed", ended_at: new Date().toISOString() })
+                .eq("id", session.id);
+
+            // Finaliza o card de Pesquisa de Satisfação sem resposta
+            const { data: card } = await supabase
+                .from("crm_client")
+                .select("id, stage")
+                .eq("contact_id", session.contact_id)
+                .eq("user_id", userId)
+                .eq("is_active", true)
+                .eq("stage", "Pesquisa de Satisfação")
+                .maybeSingle();
+
+            if (card) {
+                // Resolve a conversa antes (trigger de fila só afeta pending/open)
+                await supabase
+                    .from("conversations")
+                    .update({ status: "resolved", updated_at: new Date().toISOString() })
+                    .eq("id", session.conversation_id)
+                    .in("status", ["pending", "open"]);
+
+                await supabase
+                    .from("crm_client")
+                    .update({
+                        stage: "Finalizado",
+                        is_active: false,
+                        stage_changed_at: new Date().toISOString(),
+                        updated_at: new Date().toISOString(),
+                    })
+                    .eq("id", card.id);
+            }
+            console.log(`[ac-cron] feedback timeout: session ${session.id} finalized`);
+        } catch (err) {
+            console.error("[ac-cron] feedback timeout error:", err);
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
