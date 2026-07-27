@@ -1,17 +1,17 @@
-/** Normalize phone to WhatsApp format: 5511999999999@s.whatsapp.net */
+/** Normalize phone to digits-only with country code: 5511999999999 */
 export function normalizePhone(raw: string): string {
   if (!raw) return "";
-  // Strip everything except digits and +
-  let digits = raw.replace(/[^\d+]/g, "");
-  // Remove leading +
-  digits = digits.replace(/^\+/, "");
-  // If starts with 0, assume local BR number — prepend 55
-  if (digits.startsWith("0")) digits = "55" + digits.slice(1);
+  // Strip any WhatsApp suffix (@s.whatsapp.net etc.) before cleaning
+  const base = raw.split("@")[0];
+  // Strip everything except digits
+  let digits = base.replace(/\D/g, "");
+  // If starts with 0, assume local BR number — drop trunk zero
+  if (digits.startsWith("0")) digits = digits.slice(1);
   // If 10-11 digits (no country code), prepend 55
-  if (digits.length <= 11) digits = "55" + digits;
+  if (digits.length >= 10 && digits.length <= 11) digits = "55" + digits;
   // Must be 12-13 digits for BR
   if (digits.length < 12 || digits.length > 13) return "";
-  return digits + "@s.whatsapp.net";
+  return digits;
 }
 
 /** Extract just digits from phone (for display/phone field) */

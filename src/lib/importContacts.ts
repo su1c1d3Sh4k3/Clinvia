@@ -16,14 +16,32 @@ export async function importContacts(
   const result: ImportResult = { imported: 0, updated: 0, skipped: 0, errors: [] };
   const total = validRows.length;
 
-  // Fetch existing contacts by number for deduplication
-  const numbers = validRows.map((r) => r.data.number).filter(Boolean);
-  const { data: existing } = await supabase
-    .from("contacts")
-    .select("id, number")
-    .in("number", numbers);
+  // Match by last 8 digits (system-wide pattern): existing contacts may be stored
+  // as "5511999999999", "5511999999999@s.whatsapp.net" or without the 9th digit.
+  const last8 = (n: string) => n.split("@")[0].replace(/\D/g, "").slice(-8);
 
-  const existingMap = new Map((existing || []).map((c) => [c.number, c.id]));
+  // Fetch all owner's contacts once for deduplication
+  const existingMap = new Map<string, string>();
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data: page, error } = await supabase
+      .from("contacts")
+      .select("id, number")
+      .eq("user_id", ownerId)
+      .range(from, from + PAGE - 1);
+    if (error) {
+      result.errors.push(`Erro ao buscar contatos existentes: ${error.message}`);
+      return result;
+    }
+    for (const c of page || []) {
+      const key = last8(c.number || "");
+      if (key && !existingMap.has(key)) existingMap.set(key, c.id);
+    }
+    if (!page || page.length < PAGE) break;
+  }
+
+  // Track numbers inserted in this import to avoid duplicates within the sheet
+  const seenInSheet = new Set<string>();
 
   // Process in batches of 50
   const BATCH = 50;
@@ -38,7 +56,16 @@ export async function importContacts(
         continue;
       }
 
-      const existingId = existingMap.get(row.data.number);
+      const key = last8(row.data.number || "");
+
+      // Duplicate within the sheet → skip (first occurrence wins)
+      if (seenInSheet.has(key)) {
+        result.skipped++;
+        continue;
+      }
+      seenInSheet.add(key);
+
+      const existingId = existingMap.get(key);
       if (existingId) {
         // Update only empty fields
         const updates: any = {};
@@ -67,12 +94,19 @@ export async function importContacts(
       }
     }
 
-    // Batch insert
+    // Batch insert; on failure retry row-by-row so one bad row doesn't skip the batch
     if (toInsert.length > 0) {
       const { error } = await supabase.from("contacts").insert(toInsert);
       if (error) {
-        result.errors.push(`Erro no lote ${i / BATCH + 1}: ${error.message}`);
-        result.skipped += toInsert.length;
+        for (const contact of toInsert) {
+          const { error: rowError } = await supabase.from("contacts").insert(contact);
+          if (rowError) {
+            result.skipped++;
+            result.errors.push(`${contact.push_name || contact.number}: ${rowError.message}`);
+          } else {
+            result.imported++;
+          }
+        }
       } else {
         result.imported += toInsert.length;
       }
