@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-api-key",
 };
 
 /**
@@ -22,6 +22,13 @@ serve(async (req) => {
     }
 
     try {
+        const apiKey = req.headers.get("x-api-key");
+        const envApiKey = Deno.env.get("SCHEDULING_API_KEY");
+
+        if (!envApiKey || apiKey !== envApiKey) {
+            return json({ success: false, error: "Unauthorized: Invalid or missing API Key" }, 401);
+        }
+
         const body = await req.json();
         const userId = body.user_id;
         const date = body.date;
