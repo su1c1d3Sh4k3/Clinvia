@@ -8,6 +8,52 @@ const corsHeaders = {
 
 function pad(n: number): string { return String(n).padStart(2, "0"); }
 
+// Same semantics as api-availability
+function parseWorkTime(t: any): number | null {
+    if (t == null) return null;
+    if (typeof t === "string" && t.includes(":")) {
+        const [h, m] = t.split(":").map(Number);
+        return h * 60 + (m || 0);
+    }
+    const num = parseFloat(t);
+    return isNaN(num) ? null : num * 60;
+}
+
+const DAY_NAMES = ["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"];
+
+/**
+ * Validates the professional's work schedule (work_days, work_hours, break) for a
+ * local date/time. Returns an error message or null if valid.
+ * check_appointment_overlap only catches conflicts with other appointments — without
+ * this, bookings could silently land outside the professional's schedule.
+ */
+function validateWorkSchedule(prof: any, dateStr: string, timeStr: string, duration: number): string | null {
+    const dow = new Date(dateStr + "T12:00:00").getDay();
+    const workDays: number[] = prof.work_days || [0, 1, 2, 3, 4, 5, 6];
+    if (!workDays.includes(dow)) {
+        return `${prof.name} não atende na ${DAY_NAMES[dow]} (${dateStr})`;
+    }
+
+    const [h, m] = timeStr.split(":").map(Number);
+    const start = h * 60 + (m || 0);
+    const end = start + duration;
+
+    const wh = prof.work_hours || {};
+    const whStart = parseWorkTime(wh.start) ?? 8 * 60;
+    const whEnd = parseWorkTime(wh.end) ?? 20 * 60;
+    if (start < whStart || end > whEnd) {
+        return `${timeStr} está fora do expediente de ${prof.name} nesse dia`;
+    }
+
+    const breakStart = parseWorkTime(wh.break_start);
+    const breakEnd = parseWorkTime(wh.break_end);
+    if (breakStart !== null && breakEnd !== null && start < breakEnd && end > breakStart) {
+        return `${timeStr} cai no intervalo/pausa de ${prof.name}`;
+    }
+
+    return null;
+}
+
 serve(async (req) => {
     if (req.method === "OPTIONS") {
         return new Response("ok", { headers: corsHeaders });
@@ -60,15 +106,21 @@ serve(async (req) => {
             const profIds: string[] = sc.professionals || [];
             if (profIds.length === 0) throw new Error(`Nenhum profissional atrelado ao serviço "${sc.name}"`);
 
+            const { data: profs } = await supabase.from("professionals")
+                .select("id, name, work_hours, work_days")
+                .in("id", profIds);
+            if (!profs || profs.length === 0) throw new Error(`Nenhum profissional encontrado para o serviço "${sc.name}"`);
+
+            const names = profs.map((p: any) => p.name).join(", ");
+
             if (preferredName) {
-                const { data } = await supabase.from("professionals").select("id, name")
-                    .in("id", profIds).ilike("name", `%${preferredName}%`).limit(1).maybeSingle();
-                if (data) return data;
+                const match = profs.find((p: any) => p.name.toLowerCase().includes(preferredName.toLowerCase()));
+                if (match) return match;
+                throw new Error(`Profissional "${preferredName}" não atende o serviço "${sc.name}". Disponíveis: ${names}`);
             }
-            // Default: first professional
-            const { data } = await supabase.from("professionals").select("id, name")
-                .in("id", profIds).limit(1).single();
-            return data;
+
+            if (profs.length === 1) return profs[0];
+            throw new Error(`Serviço "${sc.name}" tem mais de um profissional — informe professional_name. Disponíveis: ${names}`);
         };
 
         // ══════════════════════════════════════════════
@@ -119,6 +171,13 @@ serve(async (req) => {
             // Validate not in the past
             if (startDate < new Date()) {
                 return new Response(JSON.stringify({ error: "Não é possível agendar no passado" }),
+                    { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+            }
+
+            // Validate professional work schedule (work_days/work_hours/break)
+            const scheduleError = validateWorkSchedule(prof, date, time, duration);
+            if (scheduleError) {
+                return new Response(JSON.stringify({ error: `${scheduleError}. Consulte a disponibilidade (api-availability) para horários válidos.` }),
                     { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
             }
 
@@ -261,6 +320,20 @@ serve(async (req) => {
             if (startDate < new Date()) {
                 return new Response(JSON.stringify({ error: "Não é possível reagendar para o passado" }),
                     { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+            }
+
+            // Validate professional work schedule at the new date/time
+            if (existing.professional_id) {
+                const { data: profRec } = await supabase.from("professionals")
+                    .select("id, name, work_hours, work_days")
+                    .eq("id", existing.professional_id).maybeSingle();
+                if (profRec) {
+                    const scheduleError = validateWorkSchedule(profRec, new_date, new_time, durationMin);
+                    if (scheduleError) {
+                        return new Response(JSON.stringify({ error: `${scheduleError}. Consulte a disponibilidade (api-availability) para horários válidos.` }),
+                            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+                    }
+                }
             }
 
             // Check overlap
