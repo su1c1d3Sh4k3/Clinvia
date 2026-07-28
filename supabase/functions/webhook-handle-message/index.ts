@@ -22,6 +22,19 @@ declare const EdgeRuntime: {
 };
 
 /**
+ * Converte timestamp UTC (ISO) para o fuso de São Paulo (-03:00),
+ * usado no payload enviado ao n8n (datas legíveis pela IA).
+ * Ex.: "2026-07-28T18:00:00+00:00" → "2026-07-28T15:00:00-03:00"
+ */
+function toSaoPaulo(iso: string | null | undefined): string | null {
+    if (!iso) return null;
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    // 'sv-SE' produz "YYYY-MM-DD HH:mm:ss"
+    return d.toLocaleString('sv-SE', { timeZone: 'America/Sao_Paulo' }).replace(' ', 'T') + '-03:00';
+}
+
+/**
  * webhook-handle-message
  *
  * Processa mensagens inbound (recebidas) e outbound (enviadas):
@@ -1641,7 +1654,7 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                             .select('id, push_name, number, phone, email, cpf, company, instagram, patient, is_lead, created_at')
                             .eq('id', contactId)
                             .single();
-                        enrichedContact = cData || null;
+                        enrichedContact = cData ? { ...cData, created_at: toSaoPaulo(cData.created_at) } : null;
 
                         // 2. Active CRM deal + services
                         const { data: crmCard } = await supabase
@@ -1681,9 +1694,10 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                             .limit(1)
                             .maybeSingle();
 
+                        const aptToSP = (a: any) => ({ ...a, start_time: toSaoPaulo(a.start_time), end_time: toSaoPaulo(a.end_time) });
                         enrichedAppointments = {
-                            last_completed: lastApt || 'Nenhum agendamento concluído',
-                            next_pending: nextApt || 'Nenhum agendamento pendente',
+                            last_completed: lastApt ? aptToSP(lastApt) : 'Nenhum agendamento concluído',
+                            next_pending: nextApt ? aptToSP(nextApt) : 'Nenhum agendamento pendente',
                         };
 
                         // 4. Last conversation summary
@@ -1695,7 +1709,7 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                             .order('updated_at', { ascending: false })
                             .limit(1)
                             .maybeSingle();
-                        enrichedLastSummary = lastConv || null;
+                        enrichedLastSummary = lastConv ? { ...lastConv, updated_at: toSaoPaulo(lastConv.updated_at) } : null;
                     }
 
                     // 5. Services catalog — service names + professionals
