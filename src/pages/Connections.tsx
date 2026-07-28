@@ -14,8 +14,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { FaWhatsapp, FaInstagram, FaFacebook } from "react-icons/fa";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, CheckCircle2, Loader2, Plus, RefreshCw, Trash2, Shield, ExternalLink } from "lucide-react";
+import { AlertCircle, CheckCircle2, Loader2, Plus, RefreshCw, Trash2, Shield, ExternalLink, Smartphone, FileText } from "lucide-react";
 import { useSearchParams, useNavigate } from "react-router-dom";
+import Templates from "./Templates";
 
 const META_APP_ID = import.meta.env.VITE_META_APP_ID || '1328505766119863';
 const META_CONFIG_ID = import.meta.env.VITE_META_CONFIG_ID || '1804825927169026';
@@ -45,6 +46,9 @@ const Connections = () => {
 
     // Meta Embedded Signup State
     const [isConnectingMeta, setIsConnectingMeta] = useState(false);
+
+    // Outer tab: Conexões | Templates (deep-link via ?tab=templates)
+    const [outerTab, setOuterTab] = useState(searchParams.get("tab") === "templates" ? "templates" : "connections");
 
     // All Instances Query — filter by provider in JS (provider column not in generated types)
     const { data: allInstances, isLoading: loadingInstances } = useQuery({
@@ -689,10 +693,23 @@ const Connections = () => {
                 <div>
                     <h1 className="text-2xl md:text-3xl font-bold">Conexões</h1>
                     <p className="text-muted-foreground text-sm md:text-base">
-                        Gerencie suas conexões do WhatsApp e Instagram
+                        Gerencie suas conexões e templates de mensagem
                     </p>
                 </div>
 
+                <Tabs value={outerTab} onValueChange={setOuterTab} className="w-full">
+                    <TabsList className="flex w-full justify-between mb-2 h-auto">
+                        <TabsTrigger value="connections" className="flex-1 flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
+                            <Smartphone className="h-4 w-4" />
+                            Conexões
+                        </TabsTrigger>
+                        <TabsTrigger value="templates" className="flex-1 flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
+                            <FileText className="h-4 w-4" />
+                            Templates
+                        </TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="connections">
                 <Tabs defaultValue="whatsapp" className="w-full">
                     <TabsList className="grid w-full grid-cols-3">
                         <TabsTrigger value="whatsapp" className="flex items-center gap-2">
@@ -820,7 +837,7 @@ const Connections = () => {
                                                     <Button
                                                         size="sm"
                                                         variant="outline"
-                                                        onClick={() => navigate('/templates')}
+                                                        onClick={() => setOuterTab('templates')}
                                                         className="h-7 md:h-8 text-xs md:text-sm"
                                                     >
                                                         <ExternalLink className="w-3.5 h-3.5 mr-1" />
@@ -1040,6 +1057,12 @@ const Connections = () => {
                                 </CardContent>
                             </Card>
                         )}
+                    </TabsContent>
+                </Tabs>
+                    </TabsContent>
+
+                    <TabsContent value="templates">
+                        <Templates embedded />
                     </TabsContent>
                 </Tabs>
             </div>

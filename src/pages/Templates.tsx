@@ -49,7 +49,7 @@ async function callTemplateApi(body: any): Promise<any> {
     return data;
 }
 
-const Templates = () => {
+const Templates = ({ embedded = false }: { embedded?: boolean }) => {
     const { user } = useAuth();
     const { toast } = useToast();
     const queryClient = useQueryClient();
@@ -279,7 +279,7 @@ const Templates = () => {
     // Show loading while instances are being fetched
     if (loadingInstances) {
         return (
-            <div className="p-4 md:p-8">
+            <div className={embedded ? "" : "p-4 md:p-8"}>
                 <div className="max-w-4xl mx-auto flex items-center justify-center py-20">
                     <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 </div>
@@ -289,7 +289,7 @@ const Templates = () => {
 
     if (!metaInstances || metaInstances.length === 0) {
         return (
-            <div className="p-4 md:p-8">
+            <div className={embedded ? "" : "p-4 md:p-8"}>
                 <div className="max-w-4xl mx-auto">
                     <Card>
                         <CardContent className="p-8 text-center">
@@ -309,15 +309,17 @@ const Templates = () => {
     }
 
     return (
-        <div className="p-4 md:p-8">
+        <div className={embedded ? "" : "p-4 md:p-8"}>
             <div className="max-w-4xl mx-auto space-y-4 md:space-y-6">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                    <div>
-                        <h1 className="text-2xl md:text-3xl font-bold">Templates</h1>
-                        <p className="text-muted-foreground text-sm md:text-base">
-                            Gerencie templates de mensagem do WhatsApp Business
-                        </p>
-                    </div>
+                <div className={`flex flex-col sm:flex-row sm:items-center gap-4 ${embedded ? "sm:justify-end" : "sm:justify-between"}`}>
+                    {!embedded && (
+                        <div>
+                            <h1 className="text-2xl md:text-3xl font-bold">Templates</h1>
+                            <p className="text-muted-foreground text-sm md:text-base">
+                                Gerencie templates de mensagem do WhatsApp Business
+                            </p>
+                        </div>
+                    )}
                     <div className="flex items-center gap-2">
                         {metaInstances.length > 1 && (
                             <Select

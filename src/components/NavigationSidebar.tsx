@@ -1,7 +1,7 @@
 import {
   Users, Settings, LayoutDashboard, MessageSquare, Briefcase,
   Smartphone, LogOut, BookUser, Calendar, Repeat,
-  Package, Bot, ChevronDown, FileText, Megaphone
+  Package, Bot, Megaphone
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -19,13 +19,12 @@ import { useMobileMenu } from "@/contexts/MobileMenuContext";
 import { AnimatedNavIcon } from "@/components/AnimatedNavIcon";
 import { FaWhatsapp, FaInstagram } from "react-icons/fa";
 
-// Menu structure with submenus
+// Flat menu structure (no submenus)
 interface MenuItem {
   icon: any;
   label: string;
   id: string;
-  path?: string;
-  children?: MenuItem[];
+  path: string;
 }
 
 const menuStructure: MenuItem[] = [
@@ -34,18 +33,13 @@ const menuStructure: MenuItem[] = [
   { icon: Briefcase, label: "CRM", id: "crm", path: "/crm" },
   { icon: Package, label: "Serviços", id: "products-services", path: "/products-services" },
   { icon: BookUser, label: "Clientes", id: "contacts", path: "/contacts" },
+  { icon: Users, label: "Equipe", id: "team", path: "/equipe" },
   { icon: Calendar, label: "Agenda", id: "scheduling", path: "/scheduling" },
   { icon: Repeat, label: "Recorrência", id: "recurrence", path: "/recurrence" },
   { icon: Megaphone, label: "Campanhas", id: "campaigns", path: "/campanhas" },
-  {
-    icon: Settings, label: "Configurações", id: "config",
-    children: [
-      { icon: Bot, label: "IA", id: "ia-config", path: "/ia-config" },
-      { icon: Smartphone, label: "Conexões", id: "whatsapp", path: "/whatsapp-connection" },
-      { icon: FileText, label: "Templates", id: "templates", path: "/templates" },
-      { icon: Settings, label: "Perfil", id: "settings", path: "/settings" },
-    ]
-  },
+  { icon: Bot, label: "IA", id: "ia-config", path: "/ia-config" },
+  { icon: Smartphone, label: "Conexões", id: "whatsapp", path: "/whatsapp-connection" },
+  { icon: Settings, label: "Configurações", id: "settings", path: "/settings" },
 ];
 
 export const NavigationSidebar = () => {
@@ -53,8 +47,6 @@ export const NavigationSidebar = () => {
   const { signOut, user } = useAuth();
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
-  const [openSubmenus, setOpenSubmenus] = useState<Set<string>>(new Set());
-  const [isHovered, setIsHovered] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const { hideFloatingButton } = useMobileMenu();
@@ -167,43 +159,8 @@ export const NavigationSidebar = () => {
     return location.pathname === path;
   };
 
-  const hasActiveChild = (item: MenuItem): boolean => {
-    if (item.children) {
-      return item.children.some(child => isPathActive(child.path));
-    }
-    return false;
-  };
-
-  useEffect(() => {
-    if (!isHovered) {
-      const newOpen = new Set<string>();
-      menuStructure.forEach(item => {
-        if (item.children && hasActiveChild(item)) {
-          newOpen.add(item.id);
-        }
-      });
-      setOpenSubmenus(newOpen);
-    }
-  }, [isHovered, location.pathname]);
-
-  const toggleSubmenu = (id: string) => {
-    setOpenSubmenus(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(id)) {
-        newSet.delete(id);
-      } else {
-        newSet.add(id);
-      }
-      return newSet;
-    });
-  };
-
   const handleNavClick = (item: MenuItem) => {
-    if (item.path) {
-      navigate(item.path);
-    } else if (item.children) {
-      toggleSubmenu(item.id);
-    }
+    navigate(item.path);
   };
 
   const handleLogout = async () => {
@@ -220,73 +177,17 @@ export const NavigationSidebar = () => {
     );
   };
 
-  const renderSubmenuItem = (child: MenuItem) => {
-    const ChildIcon = child.icon;
-    const isActive = isPathActive(child.path);
-
-    if (userRole !== "admin") {
-      if (child.id === "ia-config" && !hasAnyAccess('ia_config')) return null;
-    }
-
-    const crmBadgeCount = child.id === "crm" ? (stagnatedCount || 0) : 0;
-
-    return (
-      <button
-        key={child.id}
-        onClick={() => navigate(child.path!)}
-        className={cn(
-          "w-full flex items-center gap-2.5 py-2.5 transition-all duration-200 relative group/item",
-          "text-sidebar-foreground/70 dark:text-white/70 hover:text-sidebar-foreground dark:hover:text-white hover:bg-sidebar-accent dark:hover:bg-[#1E2229]",
-          "pl-6 pr-4"
-        )}
-      >
-        <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-sidebar-border dark:bg-[#272C35]">
-          {isActive && (
-            <div
-              className="absolute inset-0 w-0.5 bg-primary"
-              style={{ boxShadow: '0 0 6px 1px hsl(var(--primary) / 0.5)' }}
-            />
-          )}
-          <div
-            className="absolute inset-0 w-0.5 bg-primary opacity-0 group-hover/item:opacity-100 transition-opacity"
-            style={{ boxShadow: '0 0 6px 1px hsl(var(--primary) / 0.5)' }}
-          />
-        </div>
-
-        <div className="relative shrink-0">
-          <ChildIcon className={cn(
-            "w-[14px] h-[14px] transition-colors",
-            isActive && "text-primary"
-          )} />
-          <NotificationBadge count={crmBadgeCount} />
-        </div>
-
-        <span className={cn(
-          "whitespace-nowrap text-[12px] font-medium flex-1 text-left transition-opacity duration-300",
-          isMobile ? "opacity-100" : "opacity-0 group-hover/sidebar:opacity-100"
-        )}>
-          {child.label}
-        </span>
-      </button>
-    );
-  };
-
   const ANIMATED_IDS = new Set(["dashboard", "inbox", "crm"]);
 
   const renderMenuItem = (item: MenuItem) => {
     const Icon = item.icon;
     const isActive = isPathActive(item.path);
-    const hasChildren = item.children && item.children.length > 0;
-    const isOpen = openSubmenus.has(item.id);
-    const hasActiveInChildren = hasActiveChild(item);
     const useAnimated = ANIMATED_IDS.has(item.id);
 
     const dashboardBadge = item.id === "dashboard" ? (dashboardNotificationsCount || 0) : 0;
     const crmBadge = item.id === "crm" ? (stagnatedCount || 0) : 0;
     const badgeCount = dashboardBadge || crmBadge;
-    const isItemActive = isActive || hasActiveInChildren;
-
-    const showCollapsedSubmenu = hasChildren && hasActiveInChildren;
+    const isItemActive = isActive;
 
     return (
       <div key={item.id} className="relative">
@@ -298,7 +199,6 @@ export const NavigationSidebar = () => {
             isItemActive
               ? "bg-sidebar-accent dark:bg-[#22262E] hover:bg-sidebar-accent dark:hover:bg-[#22262E]"
               : "hover:bg-sidebar-accent dark:hover:bg-[#1E2229]",
-            hasChildren && (isOpen || hasActiveInChildren) && "bg-sidebar-accent dark:bg-[#22262E]",
             "px-4"
           )}
         >
@@ -334,56 +234,7 @@ export const NavigationSidebar = () => {
           )}>
             {item.label}
           </span>
-
-          {hasChildren && (
-            <ChevronDown className={cn(
-              "w-3 h-3 transition-transform",
-              isMobile ? "opacity-100" : "opacity-0 group-hover/sidebar:opacity-100",
-              isOpen && "rotate-180"
-            )} />
-          )}
         </button>
-
-        {hasChildren && isOpen && (
-          <div className={cn(
-            "relative",
-            isMobile ? "block" : "hidden group-hover/sidebar:block"
-          )}>
-            <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-sidebar-border dark:bg-[#272C35]" />
-            {item.children!.map(child => renderSubmenuItem(child))}
-          </div>
-        )}
-
-        {showCollapsedSubmenu && !isMobile && (
-          <div className="group-hover/sidebar:hidden flex flex-col">
-            {item.children!.map(child => {
-              const ChildIcon = child.icon;
-              const childIsActive = isPathActive(child.path);
-
-              if (userRole !== "admin") {
-                if (child.id === "ia-config" && !hasAnyAccess('ia_config')) return null;
-              }
-
-              const crmCollapsedBadge = child.id === "crm" ? (stagnatedCount || 0) : 0;
-
-              return (
-                <button
-                  key={child.id}
-                  onClick={() => navigate(child.path!)}
-                  className="w-full flex items-center justify-center py-2.5 transition-all duration-200 hover:bg-sidebar-accent dark:hover:bg-[#1E2229]"
-                >
-                  <div className="relative">
-                    <ChildIcon className={cn(
-                      "w-[14px] h-[14px] transition-colors text-sidebar-foreground/50 dark:text-white/50",
-                      childIsActive && "text-primary"
-                    )} />
-                    <NotificationBadge count={crmCollapsedBadge} />
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        )}
       </div>
     );
   };
@@ -427,8 +278,6 @@ export const NavigationSidebar = () => {
           isMobile && "fixed top-0 left-0 h-screen w-[260px] z-[60]",
           isMobile && (isMobileMenuOpen ? "translate-x-0" : "-translate-x-full")
         )}
-        onMouseEnter={() => !isMobile && setIsHovered(true)}
-        onMouseLeave={() => !isMobile && setIsHovered(false)}
       >
         {/* Logo Header */}
         <div className="flex items-center justify-center gap-2 px-3 py-2 border-b border-sidebar-border dark:border-white/10 overflow-hidden">
@@ -449,7 +298,13 @@ export const NavigationSidebar = () => {
 
         {/* Scrollable Menu Items */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col py-3 scrollbar-none">
-          {menuStructure.map(item => renderMenuItem(item))}
+          {menuStructure
+            .filter(item => {
+              if (item.id === "team") return userRole === "admin";
+              if (item.id === "ia-config") return userRole === "admin" || hasAnyAccess("ia_config");
+              return true;
+            })
+            .map(item => renderMenuItem(item))}
         </div>
 
         {/* Fixed Bottom Section */}

@@ -9,9 +9,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
-import { User, Building2, Lock, Camera, Loader2, Bell, BellRing, Users, Volume2, DollarSign, Settings as SettingsIcon, Pen, Download, Smartphone, Monitor, CheckCircle2, Calendar, ListTodo, TrendingUp, Lightbulb, ChevronDown, ChevronUp, AlertCircle, ShieldCheck, Zap } from "lucide-react";
-import { PermissionsSettings } from "@/components/settings/PermissionsSettings";
-import { TeamSettings } from "@/components/settings/TeamSettings";
+import { User, Building2, Lock, Camera, Loader2, Bell, BellRing, Users, Volume2, DollarSign, Settings as SettingsIcon, Pen, Download, Smartphone, Monitor, CheckCircle2, Calendar, ListTodo, TrendingUp, Lightbulb, ChevronDown, ChevronUp, AlertCircle, Zap } from "lucide-react";
 import { AutomationSettings } from "@/components/settings/AutomationSettings";
 import { FaInstagram } from "react-icons/fa";
 import { Switch } from "@/components/ui/switch";
@@ -513,18 +511,6 @@ export default function Settings() {
                         <SettingsIcon className="h-4 w-4" />
                         <span className="hidden md:inline">Sistema</span>
                     </TabsTrigger>
-                    {userRole === 'admin' && (
-                        <TabsTrigger value="team" className="flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
-                            <Users className="h-4 w-4" />
-                            <span className="hidden md:inline">Equipe</span>
-                        </TabsTrigger>
-                    )}
-                    {userRole === 'admin' && (
-                        <TabsTrigger value="permissions" className="flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
-                            <ShieldCheck className="h-4 w-4" />
-                            <span className="hidden md:inline">Permissões</span>
-                        </TabsTrigger>
-                    )}
                     {userRole === 'admin' && (
                         <TabsTrigger value="automations" className="flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
                             <Zap className="h-4 w-4" />
@@ -1096,34 +1082,6 @@ export default function Settings() {
                         </CardFooter>
                     </Card>
                 </TabsContent>
-
-                {/* Team Tab — admin only */}
-                {userRole === 'admin' && (
-                    <TabsContent value="team">
-                        <TeamSettings />
-                    </TabsContent>
-                )}
-
-                {/* Permissions Tab — admin only */}
-                {userRole === 'admin' && (
-                    <TabsContent value="permissions">
-                        <Card>
-                            <CardHeader className="p-4 md:p-6">
-                                <CardTitle className="text-base md:text-lg flex items-center gap-2">
-                                    <ShieldCheck className="h-5 w-5 text-primary" />
-                                    Permissões por Nível de Privilégio do Usuário
-                                </CardTitle>
-                                <CardDescription className="text-xs md:text-sm">
-                                    Defina o que Supervisores e Agentes podem criar, editar ou deletar em cada módulo.
-                                    As conversas e regras de visibilidade de dados sempre seguem as regras padrão do sistema.
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent className="p-4 md:p-6 pt-0">
-                                <PermissionsSettings />
-                            </CardContent>
-                        </Card>
-                    </TabsContent>
-                )}
 
                 {/* Automations Tab — admin only */}
                 {userRole === 'admin' && (
