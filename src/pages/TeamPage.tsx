@@ -7,9 +7,11 @@ import { TeamSettings } from "@/components/settings/TeamSettings";
 import { PermissionsSettings } from "@/components/settings/PermissionsSettings";
 
 export default function TeamPage() {
-    const { data: userRole, isLoading } = useUserRole();
+    // isPending (not isLoading): while `user` hydrates the query is disabled and
+    // isLoading stays false — redirecting then would bounce admins to "/".
+    const { data: userRole, isPending } = useUserRole();
 
-    if (isLoading) {
+    if (isPending) {
         return (
             <div className="flex items-center justify-center py-20">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
