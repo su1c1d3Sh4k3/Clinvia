@@ -8,6 +8,14 @@ const corsHeaders = {
 
 function pad(n: number): string { return String(n).padStart(2, "0"); }
 
+/** UTC → São Paulo (-03:00): "2026-07-28T18:00:00+00:00" → "2026-07-28T15:00:00-03:00" */
+function toSaoPaulo(iso: string | null | undefined): string | null {
+    if (!iso) return null;
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso as string;
+    return d.toLocaleString("sv-SE", { timeZone: "America/Sao_Paulo" }).replace(" ", "T") + "-03:00";
+}
+
 // Same semantics as api-availability
 function parseWorkTime(t: any): number | null {
     if (t == null) return null;
@@ -143,9 +151,9 @@ serve(async (req) => {
                     id: a.id,
                     service: a.service_name,
                     professional: a.professional_name,
-                    date: a.start_time?.split("T")[0],
-                    start_time: a.start_time,
-                    end_time: a.end_time,
+                    date: toSaoPaulo(a.start_time)?.split("T")[0],
+                    start_time: toSaoPaulo(a.start_time),
+                    end_time: toSaoPaulo(a.end_time),
                     status: a.status,
                     price: a.price,
                 })),
@@ -290,8 +298,8 @@ serve(async (req) => {
                     service: created.service_name,
                     professional: prof.name,
                     date,
-                    start_time: created.start_time,
-                    end_time: created.end_time,
+                    start_time: toSaoPaulo(created.start_time),
+                    end_time: toSaoPaulo(created.end_time),
                     price: created.price,
                     status: created.status,
                 },
@@ -389,8 +397,8 @@ serve(async (req) => {
                     service: updated.service_name,
                     professional: updated.professional_name,
                     date: new_date,
-                    start_time: updated.start_time,
-                    end_time: updated.end_time,
+                    start_time: toSaoPaulo(updated.start_time),
+                    end_time: toSaoPaulo(updated.end_time),
                     status: updated.status,
                 },
             }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });

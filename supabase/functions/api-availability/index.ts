@@ -28,6 +28,19 @@ function formatDate(d: Date): string {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+/** Minute of day of a UTC timestamp in the São Paulo timezone */
+function spMinuteOfDay(iso: string): number {
+    const t = new Date(iso).toLocaleTimeString("en-GB", { timeZone: "America/Sao_Paulo", hour12: false });
+    const [h, m] = t.split(":").map(Number);
+    return h * 60 + (m || 0);
+}
+
+/** Current date/time in São Paulo as a naive Date (safe for date arithmetic/getDay) */
+function spNow(): Date {
+    const s = new Date().toLocaleString("sv-SE", { timeZone: "America/Sao_Paulo" });
+    return new Date(s.replace(" ", "T"));
+}
+
 const DAY_NAMES = ["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"];
 
 interface Slot { time: string; professional: string; minuteOfDay: number; }
@@ -53,14 +66,13 @@ async function getSlotsForDate(
             .select("start_time, end_time")
             .eq("professional_id", prof.id)
             .neq("status", "canceled")
-            .gte("start_time", `${dateStr}T00:00:00`)
-            .lte("start_time", `${dateStr}T23:59:59`);
+            .gte("start_time", `${dateStr}T00:00:00-03:00`)
+            .lte("start_time", `${dateStr}T23:59:59-03:00`);
 
-        const busy = (appointments || []).map((a: any) => {
-            const s = new Date(a.start_time);
-            const e = new Date(a.end_time);
-            return { start: s.getHours() * 60 + s.getMinutes(), end: e.getHours() * 60 + e.getMinutes() };
-        });
+        const busy = (appointments || []).map((a: any) => ({
+            start: spMinuteOfDay(a.start_time),
+            end: spMinuteOfDay(a.end_time),
+        }));
 
         for (let m = whStart; m + duration <= whEnd; m += 10) {
             if (breakStart !== null && breakEnd !== null && m < breakEnd && m + duration > breakStart) continue;
@@ -194,7 +206,7 @@ serve(async (req) => {
         // ════════════════════════════════════════════
         // MODE 1: no date/period → 3 next days summary
         // ════════════════════════════════════════════
-        const today = new Date();
+        const today = spNow();
         const availability: any[] = [];
         let searchDate = new Date(today);
         searchDate.setDate(searchDate.getDate() + 1);

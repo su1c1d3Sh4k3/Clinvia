@@ -14,6 +14,14 @@ const CRM_STAGES = [
 
 const TERMINAL_STAGES = ['Ganho', 'Perdido', 'Finalizado'];
 
+/** UTC → São Paulo (-03:00) */
+function toSaoPaulo(iso: string | null | undefined): string | null {
+    if (!iso) return null;
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso as string;
+    return d.toLocaleString("sv-SE", { timeZone: "America/Sao_Paulo" }).replace(" ", "T") + "-03:00";
+}
+
 serve(async (req) => {
     if (req.method === "OPTIONS") {
         return new Response("ok", { headers: corsHeaders });
@@ -86,7 +94,7 @@ serve(async (req) => {
                 .eq("crm_client_id", card.id);
 
             return new Response(
-                JSON.stringify({ deal: { ...card, services: svcs || [] } }),
+                JSON.stringify({ deal: { ...card, created_at: toSaoPaulo(card.created_at), services: svcs || [] } }),
                 { headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
         }
