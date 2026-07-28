@@ -259,8 +259,14 @@ export const NewKanbanBoard = ({ onCardClick }: NewKanbanBoardProps) => {
     );
   }
 
+  // Non-terminal columns show only active cards; terminal columns (Ganho/Perdido/
+  // Finalizado) show closed cards (is_active=false). Cards deactivated in place
+  // (e.g. appointment completion deactivates the Agendado card without changing
+  // stage) must NOT reappear in their old column.
   const grouped = CRM_STAGES.reduce<Record<string, CrmClient[]>>((acc, stage) => {
-    acc[stage] = (clients || []).filter((c) => c.stage === stage);
+    acc[stage] = (clients || []).filter(
+      (c) => c.stage === stage && (TERMINAL_STAGES.includes(stage) || c.is_active)
+    );
     return acc;
   }, {} as Record<string, CrmClient[]>);
 
