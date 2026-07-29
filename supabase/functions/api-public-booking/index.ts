@@ -29,7 +29,7 @@ serve(async (req) => {
         // ── get_services: categories + service_names + applications ──
         if (action === "get_services") {
             const { data: sc } = await supabase.from("services_client")
-                .select("id, name, price, duration_minutes, category_id, service_name_id, professionals")
+                .select("id, name, description, price, duration_minutes, category_id, service_name_id, professionals")
                 .eq("user_id", user_id).eq("status", true);
 
             const catIds = [...new Set((sc || []).map((s: any) => s.category_id))];
@@ -42,7 +42,7 @@ serve(async (req) => {
                 categories: cats || [],
                 service_names: sns || [],
                 applications: (sc || []).map((s: any) => ({
-                    id: s.id, name: s.name, price: s.price, duration_minutes: s.duration_minutes,
+                    id: s.id, name: s.name, description: s.description, price: s.price, duration_minutes: s.duration_minutes,
                     category_id: s.category_id, service_name_id: s.service_name_id, professionals: s.professionals || [],
                 })),
             }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });

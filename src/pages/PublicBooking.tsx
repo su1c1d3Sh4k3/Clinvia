@@ -204,7 +204,6 @@ export default function PublicBooking() {
                     </div>
                     <div className="flex items-center gap-4 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> {fmtDate(apt.start_time)}</span>
-                      {apt.price > 0 && <span className="font-semibold text-primary">{fmt(apt.price)}</span>}
                     </div>
                     <div className="flex gap-2">
                       <Button variant="outline" size="sm" className="flex-1 gap-1.5 text-xs" onClick={() => startReschedule(apt)}>
@@ -275,10 +274,12 @@ export default function PublicBooking() {
                     <button key={a.id} onClick={() => handleSelectApp(a)}
                       className={cn("p-3 rounded-lg border text-left transition-all", selApp?.id === a.id ? "border-primary bg-primary/5" : "border-border hover:border-primary/50")}>
                       <span className="text-sm font-medium">{a.name}</span>
-                      <div className="flex items-center gap-3 mt-1">
-                        <span className="text-xs text-primary font-semibold">{fmt(a.price)}</span>
-                        {a.duration_minutes && <span className="text-xs text-muted-foreground">{a.duration_minutes} min</span>}
-                      </div>
+                      {a.description && <p className="text-xs text-muted-foreground mt-1">{a.description}</p>}
+                      {a.duration_minutes && (
+                        <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
+                          <Clock className="w-3 h-3" /> {a.duration_minutes} min
+                        </div>
+                      )}
                     </button>
                   ))}
                 </div>
