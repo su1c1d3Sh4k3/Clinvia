@@ -44,11 +44,10 @@ serve(async (req) => {
     let totalErrors = 0;
 
     try {
-        // Get all users with ia_on = true
+        // Confirmações funcionam independente da IA estar ligada (decisão do usuário)
         const { data: activeConfigs } = await supabase
             .from("ia_config")
-            .select("user_id, name")
-            .eq("ia_on", true);
+            .select("user_id, name");
 
         if (!activeConfigs?.length) {
             return json({ success: true, sent: 0, message: "no active configs" });
