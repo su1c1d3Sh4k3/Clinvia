@@ -744,7 +744,7 @@ async function resolveConversation(
             contact_id: contact.id,
             user_id: userId,
             instance_id: instanceId,
-            status: "open",
+            status: "pending",
             unread_count: 0,
             last_message_at: new Date().toISOString(),
         })
