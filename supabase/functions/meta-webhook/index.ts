@@ -306,7 +306,13 @@ serve(async (req) => {
                     continue;
                 }
 
-                if (change.field !== "messages") continue;
+                // smb_message_echoes = mensagens enviadas pelo app do WhatsApp Business
+                // (modo coexistência) — precisam ser salvas como outbound
+                const isEcho = change.field === "smb_message_echoes";
+                if (change.field !== "messages" && !isEcho) {
+                    console.log("[meta-webhook] Skipping unhandled field:", change.field);
+                    continue;
+                }
 
                 const value = change.value;
                 const phoneNumberId = value.metadata?.phone_number_id;
@@ -330,11 +336,18 @@ serve(async (req) => {
 
                 const accessToken = instance.meta_access_token;
 
-                // ── MESSAGES ──
-                if (value.messages && value.messages.length > 0) {
-                    for (const msg of value.messages) {
+                // ── MESSAGES (inbound) / MESSAGE ECHOES (outbound via app) ──
+                const incomingMsgs = isEcho
+                    ? (value.message_echoes || [])
+                    : (value.messages || []);
+                if (incomingMsgs.length > 0) {
+                    for (const msg of incomingMsgs) {
                         const contact = value.contacts?.[0];
                         const content = extractContentFromMeta(msg);
+                        // Nos echoes, "from" é o número da clínica e "to" é o cliente —
+                        // o chat/contato deve sempre apontar para o cliente
+                        const peer = isEcho ? (msg.to || msg.recipient_id || "") : msg.from;
+                        if (!peer) continue;
 
                         // Build normalized UZAPI-format payload
                         const normalizedPayload = {
@@ -342,24 +355,24 @@ serve(async (req) => {
                             EventType: "messages",
                             message: {
                                 messageid: msg.id,
-                                sender: msg.from,
-                                sender_pn: msg.from,
-                                pushName: contact?.profile?.name || "",
+                                sender: peer,
+                                sender_pn: peer,
+                                pushName: isEcho ? "" : (contact?.profile?.name || ""),
                                 messageType: mapMetaTypeToUzapi(msg.type),
                                 text: extractTextFromMeta(msg),
-                                fromMe: false,
+                                fromMe: isEcho,
                                 timestamp: parseInt(msg.timestamp) || Math.floor(Date.now() / 1000),
                                 isGroup: false,
-                                chatid: msg.from,
+                                chatid: peer,
                                 content: content,
                                 vote: content.selectedDisplayText || "",
                                 selectedDisplayText: content.selectedDisplayText || "",
                                 reaction: msg.type === "reaction" ? msg.reaction?.message_id : undefined,
                             },
                             chat: {
-                                wa_chatid: msg.from,
-                                wa_name: contact?.profile?.name || "",
-                                name: contact?.profile?.name || "",
+                                wa_chatid: peer,
+                                wa_name: isEcho ? "" : (contact?.profile?.name || ""),
+                                name: isEcho ? "" : (contact?.profile?.name || ""),
                             },
                             // Flag for meta-specific processing
                             _meta: {
@@ -379,7 +392,7 @@ serve(async (req) => {
                                 content._meta_media_id,
                                 accessToken,
                                 supabase,
-                                `meta-pending-${msg.from}`,
+                                `meta-pending-${peer}`,
                                 content.mimetype
                             );
                             if (mediaUrl) {
