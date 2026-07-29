@@ -4,14 +4,14 @@ import { CrmClient, CRM_STAGES, STAGE_COLORS, TERMINAL_STAGES, CrmStage } from "
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, GripVertical, MessageSquare, AlertTriangle } from "lucide-react";
+import { Loader2, GripVertical, MessageSquare, AlertTriangle, CalendarClock } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { DealConversationModal } from "./DealConversationModal";
 import { LossReasonModal } from "./LossReasonModal";
 import { PaymentTypeModal } from "./PaymentTypeModal";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { formatDistanceToNow } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useState } from "react";
 import { useOwnerId } from "@/hooks/useOwnerId";
@@ -20,6 +20,20 @@ const PRIORITY_BORDER: Record<string, string> = {
   low: "#22c55e",
   medium: "#eab308",
   high: "#ef4444",
+};
+
+const APT_STATUS_LABELS: Record<string, string> = {
+  pending: "Pendente",
+  confirmed: "Confirmado",
+  waiting: "Aguardando",
+  in_progress: "Em andamento",
+};
+
+const APT_STATUS_COLORS: Record<string, string> = {
+  pending: "text-amber-600 dark:text-amber-400",
+  confirmed: "text-emerald-600 dark:text-emerald-400",
+  waiting: "text-blue-600 dark:text-blue-400",
+  in_progress: "text-blue-600 dark:text-blue-400",
 };
 
 interface NewKanbanBoardProps {
@@ -84,6 +98,28 @@ export const NewKanbanBoard = ({ onCardClick }: NewKanbanBoardProps) => {
         .not("contact_id", "is", null);
       if (error) throw error;
       return new Set((data || []).map((a: any) => a.contact_id));
+    },
+    refetchInterval: 60000,
+  });
+
+  // Upcoming appointments (future) per contact — shown on the card
+  const { data: upcomingByContact } = useQuery({
+    queryKey: ["crm-upcoming-appointments"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("appointments")
+        .select("contact_id, start_time, status")
+        .not("contact_id", "is", null)
+        .gte("start_time", new Date().toISOString())
+        .not("status", "in", "(completed,canceled,no_show)")
+        .order("start_time", { ascending: true });
+      if (error) throw error;
+      const map: Record<string, { start_time: string; status: string }[]> = {};
+      for (const a of (data || []) as any[]) {
+        if (!map[a.contact_id]) map[a.contact_id] = [];
+        map[a.contact_id].push({ start_time: a.start_time, status: a.status });
+      }
+      return map;
     },
     refetchInterval: 60000,
   });
@@ -321,6 +357,7 @@ export const NewKanbanBoard = ({ onCardClick }: NewKanbanBoardProps) => {
                       const borderColor = client.priority ? PRIORITY_BORDER[client.priority] : "transparent";
                       const services = cardServiceNames[client.id] || [];
                       const hasWaiting = isTerminal && stage === "Ganho" && waitingContacts?.has(client.contact_id);
+                      const upcoming = (client.contact_id && upcomingByContact?.[client.contact_id]) || [];
                       return (
                         <div
                           key={client.id}
@@ -377,6 +414,22 @@ export const NewKanbanBoard = ({ onCardClick }: NewKanbanBoardProps) => {
                                 </div>
                               )}
                             </div>
+                            {/* Upcoming appointments */}
+                            {upcoming.length > 0 && (
+                              <div className="ml-5 mb-1 space-y-0.5">
+                                {upcoming.map((apt) => (
+                                  <div key={apt.start_time} className="flex items-center gap-1 text-[10px]">
+                                    <CalendarClock className="w-3 h-3 shrink-0 text-muted-foreground" />
+                                    <span className="text-muted-foreground">
+                                      {format(new Date(apt.start_time), "dd/MM HH:mm")}
+                                    </span>
+                                    <span className={cn("font-medium", APT_STATUS_COLORS[apt.status] || "text-muted-foreground")}>
+                                      {APT_STATUS_LABELS[apt.status] || apt.status}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                             {/* Services in negotiation */}
                             {services.length > 0 && (
                               <div className="ml-5 mb-1 flex flex-wrap gap-1">

@@ -241,30 +241,8 @@ async function processConfirm24h(ctx: CronContext): Promise<{ sent: number; erro
                 });
             }
 
-            // Move CRM to Pós-Venda stage (trigger syncs queue automatically)
-            await supabase
-                .from("crm_client")
-                .update({
-                    stage: "Pós-Venda",
-                    stage_changed_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString(),
-                })
-                .eq("contact_id", contactId)
-                .eq("user_id", userId)
-                .eq("is_active", true);
-
-            // Also explicitly move queue (in case no CRM card exists)
-            const { data: pvQueue } = await supabase
-                .from("queues")
-                .select("id")
-                .eq("user_id", userId)
-                .eq("name", "Pós-Venda")
-                .maybeSingle();
-            if (pvQueue?.id) {
-                await supabase.from("conversations")
-                    .update({ queue_id: pvQueue.id, updated_at: new Date().toISOString() })
-                    .eq("id", conversationId);
-            }
+            // Cliente permanece na etapa/fila atual (ex.: Agendado); o intercept
+            // por sessão ativa já bloqueia a IA durante o fluxo de confirmação.
 
             await supabase.from("appointment_confirmation_sessions").insert({
                 user_id: userId,
