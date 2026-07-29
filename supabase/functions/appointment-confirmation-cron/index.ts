@@ -14,9 +14,12 @@ import { sendMenu, sendText, type MenuButton } from "../_shared/uazapi-menu.ts";
 import { utcToBrasiliaParts } from "../_shared/timezone.ts";
 import { isMetaInstance, pickAutomationInstance, type AutomationInstance } from "../_shared/automation-instance.ts";
 import {
+    buildTemplateParameters,
     ensureSystemTemplates,
     getSystemTemplateStatuses,
+    getSystemTemplateVariableMaps,
     sendMetaTemplate,
+    SYSTEM_TEMPLATE_NAMES,
     TPL_CONFIRM_MULTI,
     TPL_CONFIRM_SINGLE,
     TPL_FEEDBACK,
@@ -94,6 +97,7 @@ serve(async (req) => {
 
                 // Meta: garante templates de sistema criados e carrega statuses
                 let templateStatuses = new Map<string, string>();
+                let variableMaps = new Map<string, string[]>();
                 if (isMeta) {
                     try {
                         templateStatuses = await ensureSystemTemplates(supabase, cronUserId, instance.id);
@@ -104,6 +108,21 @@ serve(async (req) => {
                             meta_waba_id: instance.meta_waba_id,
                         });
                     }
+                    variableMaps = await getSystemTemplateVariableMaps(supabase, {
+                        id: instance.id,
+                        meta_waba_id: instance.meta_waba_id,
+                    });
+                }
+
+                // Switches liga/desliga por template (ausência de linha = ligado)
+                const templateEnabled = new Map<string, boolean>();
+                const { data: settingRows } = await supabase
+                    .from("automation_template_settings")
+                    .select("template_name, enabled")
+                    .eq("user_id", cronUserId)
+                    .in("template_name", SYSTEM_TEMPLATE_NAMES);
+                for (const s of settingRows || []) {
+                    templateEnabled.set(s.template_name, s.enabled !== false);
                 }
 
                 const ctx: CronContext = {
@@ -112,6 +131,8 @@ serve(async (req) => {
                     instance,
                     isMeta,
                     templateStatuses,
+                    variableMaps,
+                    templateEnabled,
                     clinicName: nameByUser.get(cronUserId) || "a clínica",
                     now,
                 };
@@ -147,8 +168,15 @@ interface CronContext {
     instance: AutomationInstance;
     isMeta: boolean;
     templateStatuses: Map<string, string>;
+    variableMaps: Map<string, string[]>;
+    templateEnabled: Map<string, boolean>;
     clinicName: string;
     now: Date;
+}
+
+/** Switch liga/desliga do template automático (default: ligado). */
+function isTemplateEnabled(ctx: CronContext, tplName: string): boolean {
+    return ctx.templateEnabled.get(tplName) !== false;
 }
 
 async function processConfirm24h(ctx: CronContext): Promise<{ sent: number; errors: number }> {
@@ -220,30 +248,37 @@ async function processConfirm24h(ctx: CronContext): Promise<{ sent: number; erro
             const firstName = (contact.push_name || "").split(" ")[0] || "cliente";
             const msgText = buildConfirmMessage(firstName, group, ctx.clinicName);
 
+            // Switch liga/desliga (vale para Meta e UAZAPI)
+            const tplName = group.length === 1 ? TPL_CONFIRM_SINGLE : TPL_CONFIRM_MULTI;
+            if (!isTemplateEnabled(ctx, tplName)) {
+                console.log(`[ac-cron] ${tplName} disabled by user — skipping confirm_24h for ${contactId}`);
+                continue;
+            }
+
             let sendRes: { messageId: string | null };
             if (ctx.isMeta) {
                 // Meta: template obrigatório — só envia se APPROVED (sem fallback)
-                const tplName = group.length === 1 ? TPL_CONFIRM_SINGLE : TPL_CONFIRM_MULTI;
                 if (ctx.templateStatuses.get(tplName) !== "APPROVED") {
                     console.log(`[ac-cron] template ${tplName} not APPROVED — skipping confirm_24h for ${contactId}`);
                     continue;
                 }
                 const a = group[0];
-                const parameters = group.length === 1
-                    ? [
-                        firstName,
-                        formatTimeBR(a.start_time),
-                        ctx.clinicName,
-                        a.service_name || "atendimento",
-                        a.professional_name || "nosso profissional",
-                    ]
-                    : [
-                        firstName,
-                        ctx.clinicName,
-                        group.map((g: any) =>
+                const values: Record<string, string> = group.length === 1
+                    ? {
+                        nome_cliente: firstName,
+                        horario: formatTimeBR(a.start_time),
+                        clinica: ctx.clinicName,
+                        servico: a.service_name || "atendimento",
+                        profissional: a.professional_name || "nosso profissional",
+                    }
+                    : {
+                        nome_cliente: firstName,
+                        clinica: ctx.clinicName,
+                        agendamentos: group.map((g: any) =>
                             `${formatTimeBR(g.start_time)} — ${g.service_name} com ${g.professional_name}`
                         ).join("; "),
-                    ];
+                    };
+                const parameters = buildTemplateParameters(tplName, ctx.variableMaps, values);
                 sendRes = await sendMetaTemplate({
                     conversationId,
                     templateName: tplName,
@@ -366,6 +401,11 @@ async function processReminder2h(ctx: CronContext): Promise<{ sent: number; erro
             const firstName = (contact.push_name || "").split(" ")[0] || "cliente";
             const msgText = buildReminderMessage(firstName, group);
 
+            if (!isTemplateEnabled(ctx, TPL_REMINDER)) {
+                console.log(`[ac-cron] ${TPL_REMINDER} disabled by user — skipping reminder_2h for ${contactId}`);
+                continue;
+            }
+
             if (ctx.isMeta) {
                 if (ctx.templateStatuses.get(TPL_REMINDER) !== "APPROVED") {
                     console.log(`[ac-cron] template ${TPL_REMINDER} not APPROVED — skipping reminder_2h for ${contactId}`);
@@ -375,7 +415,11 @@ async function processReminder2h(ctx: CronContext): Promise<{ sent: number; erro
                 await sendMetaTemplate({
                     conversationId,
                     templateName: TPL_REMINDER,
-                    parameters: [firstName, times],
+                    parameters: buildTemplateParameters(TPL_REMINDER, ctx.variableMaps, {
+                        nome_cliente: firstName,
+                        horarios: times,
+                        clinica: ctx.clinicName,
+                    }),
                     bodyPreview: msgText,
                 });
             } else {
@@ -463,6 +507,11 @@ async function processFeedback24h(ctx: CronContext): Promise<{ sent: number; err
                 .maybeSingle();
             if (existing) continue;
 
+            if (!isTemplateEnabled(ctx, TPL_FEEDBACK)) {
+                console.log(`[ac-cron] ${TPL_FEEDBACK} disabled by user — skipping feedback_24h for ${contactId}`);
+                continue;
+            }
+
             // Fetch ALL appointments for this contact on this day and mark completed
             const dayStart = `${dateBR}T00:00:00-03:00`;
             const dayEnd = `${dateBR}T23:59:59-03:00`;
@@ -510,7 +559,10 @@ async function processFeedback24h(ctx: CronContext): Promise<{ sent: number; err
                 sendRes = await sendMetaTemplate({
                     conversationId,
                     templateName: TPL_FEEDBACK,
-                    parameters: [firstName],
+                    parameters: buildTemplateParameters(TPL_FEEDBACK, ctx.variableMaps, {
+                        nome_cliente: firstName,
+                        clinica: ctx.clinicName,
+                    }),
                     bodyPreview: msgText,
                 });
             } else {

@@ -9,6 +9,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
  * Actions:
  *   - list:   List templates from Meta + sync to DB
  *   - create: Create a new template on Meta
+ *   - edit:   Edit an existing template on Meta (name/language immutable;
+ *             approved templates go back to PENDING review)
  *   - delete: Delete a template on Meta
  *   - sync:   Force sync templates from Meta to DB
  */
@@ -199,6 +201,88 @@ serve(async (req) => {
             );
         }
 
+        // ── ACTION: edit ──
+        if (action === "edit") {
+            const { name, components, variable_map } = body;
+
+            if (!name) throw new Error("Missing field: name");
+            if (!components) throw new Error("Missing field: components");
+
+            // Localiza o template local para obter o meta_template_id
+            const { data: localTpl } = await supabase
+                .from("message_templates")
+                .select("id, meta_template_id, status")
+                .eq("waba_id", wabaId)
+                .eq("name", name)
+                .maybeSingle();
+
+            if (!localTpl?.meta_template_id) {
+                throw new Error("Template não encontrado — sincronize os templates primeiro");
+            }
+
+            // Meta só permite editar templates APPROVED, REJECTED ou PAUSED
+            const st = (localTpl.status || "").toUpperCase();
+            if (!["APPROVED", "REJECTED", "PAUSED"].includes(st)) {
+                throw new Error(`Template com status ${st} não pode ser editado (aguarde a revisão da Meta)`);
+            }
+
+            // Exemplos para variáveis do BODY (exigido pela Meta)
+            const enrichedComponents = components.map((comp: any) => {
+                if (comp.type === "BODY" && comp.text) {
+                    const vars = comp.text.match(/\{\{\s*\d+\s*\}\}/g);
+                    if (vars && vars.length > 0) {
+                        const examples = vars.map((_: string, i: number) => `exemplo_${i + 1}`);
+                        return { ...comp, example: { body_text: [examples] } };
+                    }
+                }
+                return comp;
+            });
+
+            const metaResp = await fetch(
+                `${GRAPH_API}/${localTpl.meta_template_id}`,
+                {
+                    method: "POST",
+                    headers: {
+                        Authorization: `Bearer ${accessToken}`,
+                        "Content-Type": "application/json; charset=utf-8",
+                    },
+                    body: JSON.stringify({ components: enrichedComponents }),
+                }
+            );
+
+            const metaResult = await metaResp.json();
+
+            if (!metaResp.ok || metaResult?.success === false) {
+                const errorMsg =
+                    metaResult?.error?.error_user_msg ||
+                    metaResult?.error?.message ||
+                    "Failed to edit template";
+                throw new Error(errorMsg);
+            }
+
+            // Atualiza local: volta para PENDING (Meta revisa de novo)
+            const updates: Record<string, unknown> = {
+                components,
+                status: "PENDING",
+                rejection_reason: null,
+                updated_at: new Date().toISOString(),
+            };
+            if (variable_map !== undefined) updates.variable_map = variable_map;
+
+            const { error: updError } = await supabase
+                .from("message_templates")
+                .update(updates)
+                .eq("id", localTpl.id);
+            if (updError) {
+                console.warn("[meta-template-manage] DB update error:", updError);
+            }
+
+            return new Response(
+                JSON.stringify({ success: true, template: { name, status: "PENDING" } }),
+                { headers: corsHeaders }
+            );
+        }
+
         // ── ACTION: delete ──
         if (action === "delete") {
             const { name: templateName, template_id } = body;
@@ -294,7 +378,7 @@ serve(async (req) => {
             );
         }
 
-        throw new Error(`Invalid action: "${action}". Valid: list, create, delete, sync, send`);
+        throw new Error(`Invalid action: "${action}". Valid: list, create, edit, delete, sync, send`);
     } catch (error: any) {
         console.error("[meta-template-manage] Error:", error);
         return new Response(

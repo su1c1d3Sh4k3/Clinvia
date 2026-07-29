@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -8,11 +8,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { useOwnerId } from "@/hooks/useOwnerId";
 import {
     Loader2, Plus, Trash2, RefreshCw, FileText, CheckCircle2,
-    XCircle, Clock, AlertTriangle, Send, ChevronDown, ChevronUp
+    XCircle, Clock, AlertTriangle, Send, ChevronDown, ChevronUp, Pencil, Bot
 } from "lucide-react";
 import {
     Dialog, DialogContent, DialogDescription, DialogFooter,
@@ -21,6 +23,73 @@ import {
 
 const SUPABASE_URL = "https://swfshqvvbohnahdyndch.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN3ZnNocXZ2Ym9obmFoZHluZGNoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1OTAyMzIsImV4cCI6MjA3OTE2NjIzMn0.rUja2PsYj9kWODdizhJNS6HjfA9Tg7DrJJylUH8RTnY";
+
+// ── Templates automáticos de sistema (agendamento) ──────────────────────────
+// Metadados para o editor: intervalo de envio + variáveis disponíveis por template.
+const SYS_TEMPLATE_META: Record<string, { interval: string; vars: { key: string; label: string }[] }> = {
+    sys_confirm_24h_v1: {
+        interval: "Este template é enviado automaticamente ~24 horas antes do agendamento (no dia anterior), quando o cliente tem 1 agendamento no dia.",
+        vars: [
+            { key: "nome_cliente", label: "Nome do cliente" },
+            { key: "horario", label: "Horário" },
+            { key: "clinica", label: "Nome da clínica" },
+            { key: "servico", label: "Serviço" },
+            { key: "profissional", label: "Profissional" },
+        ],
+    },
+    sys_confirm_multi_v1: {
+        interval: "Este template é enviado automaticamente ~24 horas antes, quando o cliente tem 2 ou mais agendamentos no mesmo dia.",
+        vars: [
+            { key: "nome_cliente", label: "Nome do cliente" },
+            { key: "clinica", label: "Nome da clínica" },
+            { key: "agendamentos", label: "Lista de agendamentos" },
+        ],
+    },
+    sys_reminder_2h_v1: {
+        interval: "Este template é enviado automaticamente 2 horas antes do agendamento.",
+        vars: [
+            { key: "nome_cliente", label: "Nome do cliente" },
+            { key: "horarios", label: "Horário(s)" },
+            { key: "clinica", label: "Nome da clínica" },
+        ],
+    },
+    sys_feedback_24h_v1: {
+        interval: "Este template é enviado automaticamente ~24 horas após o atendimento (pesquisa de satisfação).",
+        vars: [
+            { key: "nome_cliente", label: "Nome do cliente" },
+            { key: "clinica", label: "Nome da clínica" },
+        ],
+    },
+};
+
+// Ordem default das variáveis dos bodies originais ({{1}}..{{n}})
+const DEFAULT_SYS_VARIABLE_MAP: Record<string, string[]> = {
+    sys_confirm_24h_v1: ["nome_cliente", "horario", "clinica", "servico", "profissional"],
+    sys_confirm_multi_v1: ["nome_cliente", "clinica", "agendamentos"],
+    sys_reminder_2h_v1: ["nome_cliente", "horarios"],
+    sys_feedback_24h_v1: ["nome_cliente"],
+};
+
+// {{1}} → {{nome_cliente}} (para exibir no editor)
+function numberedToNamed(body: string, map: string[]): string {
+    return body.replace(/\{\{\s*(\d+)\s*\}\}/g, (m, n) => {
+        const key = map[parseInt(n, 10) - 1];
+        return key ? `{{${key}}}` : m;
+    });
+}
+
+// {{nome_cliente}} → {{1}} + variable_map na ordem de aparição
+function namedToNumbered(body: string, validKeys: string[]): { text: string; map: string[] } {
+    const map: string[] = [];
+    const text = body.replace(/\{\{\s*([a-z_]+)\s*\}\}/g, (m, key) => {
+        if (!validKeys.includes(key)) {
+            throw new Error(`Variável desconhecida: {{${key}}}. Use os botões de variáveis.`);
+        }
+        map.push(key);
+        return `{{${map.length}}}`;
+    });
+    return { text, map };
+}
 
 // Helper to call meta-template-manage edge function
 async function callTemplateApi(body: any): Promise<any> {
@@ -54,10 +123,20 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
     const { toast } = useToast();
     const queryClient = useQueryClient();
 
+    const { data: ownerId } = useOwnerId();
+
     const [createDialogOpen, setCreateDialogOpen] = useState(false);
     const [sendDialogOpen, setSendDialogOpen] = useState(false);
     const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
     const [expandedTemplate, setExpandedTemplate] = useState<string | null>(null);
+
+    // Edit state
+    const [editDialogOpen, setEditDialogOpen] = useState(false);
+    const [editTemplate, setEditTemplate] = useState<any>(null);
+    const [editBodyText, setEditBodyText] = useState("");
+    const [editHeaderText, setEditHeaderText] = useState("");
+    const [editFooterText, setEditFooterText] = useState("");
+    const editBodyRef = useRef<HTMLTextAreaElement>(null);
 
     // Form state
     const [newName, setNewName] = useState("");
@@ -134,6 +213,46 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
         enabled: !!activeInstance && !!user?.id,
     });
 
+    // Switches liga/desliga dos templates automáticos (ausência de linha = ligado)
+    const { data: automationSettings } = useQuery({
+        queryKey: ["automation-template-settings", ownerId],
+        queryFn: async () => {
+            const { data, error } = await (supabase as any)
+                .from("automation_template_settings")
+                .select("template_name, enabled")
+                .eq("user_id", ownerId);
+            if (error) throw error;
+            return (data || []) as { template_name: string; enabled: boolean }[];
+        },
+        enabled: !!ownerId,
+    });
+
+    const isAutomationEnabled = (name: string) =>
+        automationSettings?.find((s) => s.template_name === name)?.enabled !== false;
+
+    const toggleAutomationMutation = useMutation({
+        mutationFn: async ({ name, enabled }: { name: string; enabled: boolean }) => {
+            if (!ownerId) throw new Error("Sem usuario");
+            const { error } = await (supabase as any)
+                .from("automation_template_settings")
+                .upsert(
+                    { user_id: ownerId, template_name: name, enabled, updated_at: new Date().toISOString() },
+                    { onConflict: "user_id,template_name" }
+                );
+            if (error) throw error;
+            return enabled;
+        },
+        onSuccess: (enabled) => {
+            queryClient.invalidateQueries({ queryKey: ["automation-template-settings"] });
+            toast({
+                title: enabled ? "Envio automático ativado" : "Envio automático desativado",
+            });
+        },
+        onError: (err: any) => {
+            toast({ title: "Erro ao salvar", description: err.message, variant: "destructive" });
+        },
+    });
+
     // Sync mutation
     const syncMutation = useMutation({
         mutationFn: async () => {
@@ -190,6 +309,95 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
             toast({ title: "Erro ao criar template", description: err.message, variant: "destructive" });
         },
     });
+
+    // Edit mutation
+    const editMutation = useMutation({
+        mutationFn: async () => {
+            if (!activeInstance || !user?.id || !editTemplate) throw new Error("Dados incompletos");
+            const sysMeta = SYS_TEMPLATE_META[editTemplate.name];
+
+            let bodyText = editBodyText.trim();
+            let variableMap: string[] | undefined;
+            if (sysMeta) {
+                const converted = namedToNumbered(bodyText, sysMeta.vars.map((v) => v.key));
+                bodyText = converted.text;
+                variableMap = converted.map;
+            }
+
+            // Regras da Meta
+            if (/^\{\{\s*\d+\s*\}\}/.test(bodyText) || /\{\{\s*\d+\s*\}\}$/.test(bodyText)) {
+                throw new Error("O corpo não pode começar nem terminar com uma variável (regra da Meta).");
+            }
+            const textWithoutVars = bodyText.replace(/\{\{\s*\d+\s*\}\}/g, "").trim();
+            if (textWithoutVars.length < 20) {
+                throw new Error("O corpo da mensagem precisa ter pelo menos 20 caracteres de texto alem das variaveis.");
+            }
+
+            // Preserva componentes não editáveis (ex.: BUTTONS dos templates de sistema)
+            const otherComponents = (editTemplate.components || []).filter(
+                (c: any) => !["BODY", "HEADER", "FOOTER"].includes(c.type)
+            );
+            const components: any[] = [];
+            if (!sysMeta && editHeaderText.trim()) {
+                components.push({ type: "HEADER", format: "TEXT", text: editHeaderText.trim() });
+            }
+            components.push({ type: "BODY", text: bodyText });
+            if (!sysMeta && editFooterText.trim()) {
+                components.push({ type: "FOOTER", text: editFooterText.trim() });
+            }
+            components.push(...otherComponents);
+
+            return await callTemplateApi({
+                action: 'edit',
+                user_id: user.id,
+                instance_id: activeInstance.id,
+                name: editTemplate.name,
+                components,
+                variable_map: variableMap,
+            });
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["meta-templates"] });
+            toast({ title: "Template atualizado!", description: "Aguardando nova aprovacao da Meta." });
+            setEditDialogOpen(false);
+        },
+        onError: (err: any) => {
+            toast({ title: "Erro ao editar template", description: err.message, variant: "destructive" });
+        },
+    });
+
+    const openEditDialog = (tpl: any) => {
+        const sysMeta = SYS_TEMPLATE_META[tpl.name];
+        const bodyComponent = tpl.components?.find((c: any) => c.type === 'BODY');
+        let body = bodyComponent?.text || "";
+        if (sysMeta) {
+            const map = Array.isArray(tpl.variable_map) && tpl.variable_map.length > 0
+                ? tpl.variable_map
+                : DEFAULT_SYS_VARIABLE_MAP[tpl.name] || [];
+            body = numberedToNamed(body, map);
+        }
+        setEditTemplate(tpl);
+        setEditBodyText(body);
+        setEditHeaderText(tpl.components?.find((c: any) => c.type === 'HEADER')?.text || "");
+        setEditFooterText(tpl.components?.find((c: any) => c.type === 'FOOTER')?.text || "");
+        setEditDialogOpen(true);
+    };
+
+    const insertEditVariable = (key: string) => {
+        const token = `{{${key}}}`;
+        const el = editBodyRef.current;
+        if (!el) {
+            setEditBodyText((t) => t + token);
+            return;
+        }
+        const start = el.selectionStart ?? editBodyText.length;
+        const end = el.selectionEnd ?? start;
+        setEditBodyText(editBodyText.slice(0, start) + token + editBodyText.slice(end));
+        requestAnimationFrame(() => {
+            el.focus();
+            el.selectionStart = el.selectionEnd = start + token.length;
+        });
+    };
 
     // Delete mutation
     const deleteMutation = useMutation({
@@ -476,6 +684,11 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
                                                     <div className="min-w-0">
                                                         <div className="flex items-center gap-2 flex-wrap">
                                                             <span className="font-medium text-sm truncate">{tpl.name}</span>
+                                                            {SYS_TEMPLATE_META[tpl.name] && (
+                                                                <Badge className="bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30 border">
+                                                                    <Bot className="h-3 w-3 mr-1" /> Template Automatizado
+                                                                </Badge>
+                                                            )}
                                                             {getStatusBadge(tpl.status)}
                                                             <Badge variant="outline" className="text-[10px]">{tpl.category}</Badge>
                                                         </div>
@@ -486,10 +699,29 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center gap-2 shrink-0">
+                                                    {SYS_TEMPLATE_META[tpl.name] && (
+                                                        <div
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            title={isAutomationEnabled(tpl.name) ? "Envio automático ativado" : "Envio automático desativado"}
+                                                        >
+                                                            <Switch
+                                                                checked={isAutomationEnabled(tpl.name)}
+                                                                onCheckedChange={(v) => toggleAutomationMutation.mutate({ name: tpl.name, enabled: v })}
+                                                                disabled={toggleAutomationMutation.isPending}
+                                                                className="scale-90"
+                                                            />
+                                                        </div>
+                                                    )}
                                                     {tpl.status?.toUpperCase() === 'APPROVED' && (
                                                         <Button size="sm" variant="outline" className="h-7 text-xs"
                                                             onClick={(e) => { e.stopPropagation(); openSendDialog(tpl); }}>
                                                             <Send className="h-3 w-3 mr-1" /> Enviar
+                                                        </Button>
+                                                    )}
+                                                    {['APPROVED', 'REJECTED', 'PAUSED'].includes(tpl.status?.toUpperCase()) && (
+                                                        <Button size="sm" variant="outline" className="h-7 text-xs"
+                                                            onClick={(e) => { e.stopPropagation(); openEditDialog(tpl); }}>
+                                                            <Pencil className="h-3 w-3 mr-1" /> Editar
                                                         </Button>
                                                     )}
                                                     <Button size="sm" variant="ghost"
@@ -598,6 +830,96 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
                                 <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Enviando...</>
                             ) : (
                                 <><Send className="h-4 w-4 mr-2" /> Enviar</>
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+                <DialogContent className="max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle>Editar Template</DialogTitle>
+                        <DialogDescription>
+                            "{editTemplate?.name}" — nome e idioma nao podem ser alterados. Apos salvar, o template volta para revisao da Meta e so sera enviado quando aprovado novamente.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        {editTemplate && SYS_TEMPLATE_META[editTemplate.name] && (
+                            <div className="rounded-md bg-blue-500/10 border border-blue-500/30 p-3 text-xs text-blue-700 dark:text-blue-400 flex gap-2">
+                                <Clock className="h-4 w-4 shrink-0 mt-0.5" />
+                                <span>{SYS_TEMPLATE_META[editTemplate.name].interval}</span>
+                            </div>
+                        )}
+                        {editTemplate && !SYS_TEMPLATE_META[editTemplate.name] && (
+                            <div className="space-y-2">
+                                <Label>Cabecalho (opcional)</Label>
+                                <Input
+                                    placeholder="Titulo do template"
+                                    value={editHeaderText}
+                                    onChange={(e) => setEditHeaderText(e.target.value)}
+                                />
+                            </div>
+                        )}
+                        <div className="space-y-2">
+                            <Label>Corpo da mensagem</Label>
+                            <Textarea
+                                ref={editBodyRef}
+                                value={editBodyText}
+                                onChange={(e) => setEditBodyText(e.target.value)}
+                                rows={6}
+                            />
+                            {editTemplate && !SYS_TEMPLATE_META[editTemplate.name] && (
+                                <p className="text-xs text-muted-foreground">
+                                    Use {"{{1}}"}, {"{{2}}"}, etc. para variaveis dinamicas.
+                                </p>
+                            )}
+                        </div>
+                        {editTemplate && SYS_TEMPLATE_META[editTemplate.name] && (
+                            <div className="space-y-2">
+                                <Label>Variaveis (clique para inserir no texto)</Label>
+                                <div className="flex flex-wrap gap-2">
+                                    {SYS_TEMPLATE_META[editTemplate.name].vars.map((v) => (
+                                        <Button
+                                            key={v.key}
+                                            type="button"
+                                            size="sm"
+                                            variant="secondary"
+                                            className="h-7 text-xs"
+                                            onClick={() => insertEditVariable(v.key)}
+                                        >
+                                            <Plus className="h-3 w-3 mr-1" /> {v.label}
+                                        </Button>
+                                    ))}
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                    Os botoes de resposta rapida deste template sao fixos e serao mantidos automaticamente.
+                                </p>
+                            </div>
+                        )}
+                        {editTemplate && !SYS_TEMPLATE_META[editTemplate.name] && (
+                            <div className="space-y-2">
+                                <Label>Rodape (opcional)</Label>
+                                <Input
+                                    placeholder="Rodape do template"
+                                    value={editFooterText}
+                                    onChange={(e) => setEditFooterText(e.target.value)}
+                                />
+                            </div>
+                        )}
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+                            Cancelar
+                        </Button>
+                        <Button
+                            onClick={() => editMutation.mutate()}
+                            disabled={editMutation.isPending || !editBodyText.trim()}
+                        >
+                            {editMutation.isPending ? (
+                                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Salvando...</>
+                            ) : (
+                                <><Pencil className="h-4 w-4 mr-2" /> Salvar alteracoes</>
                             )}
                         </Button>
                     </DialogFooter>

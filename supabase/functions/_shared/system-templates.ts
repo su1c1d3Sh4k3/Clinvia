@@ -93,6 +93,51 @@ export const SYSTEM_TEMPLATES: SystemTemplateDef[] = [
 
 export const SYSTEM_TEMPLATE_NAMES = SYSTEM_TEMPLATES.map((t) => t.name);
 
+// Ordem padrão das variáveis (chaves nomeadas) de cada template de sistema —
+// corresponde aos {{n}} dos bodies default acima. Quando o cliente edita o
+// template, message_templates.variable_map sobrescreve essa ordem.
+export const DEFAULT_VARIABLE_MAP: Record<string, string[]> = {
+    [TPL_CONFIRM_SINGLE]: ["nome_cliente", "horario", "clinica", "servico", "profissional"],
+    [TPL_CONFIRM_MULTI]: ["nome_cliente", "clinica", "agendamentos"],
+    [TPL_REMINDER]: ["nome_cliente", "horarios"],
+    [TPL_FEEDBACK]: ["nome_cliente"],
+};
+
+/**
+ * Carrega variable_map dos templates de sistema (Map name → string[]).
+ * Só retorna entradas com variable_map salvo (template editado pelo cliente).
+ */
+export async function getSystemTemplateVariableMaps(
+    supabase: any,
+    instanceRef: { id: string; meta_waba_id?: string | null },
+): Promise<Map<string, string[]>> {
+    let query = supabase
+        .from("message_templates")
+        .select("name, variable_map")
+        .in("name", SYSTEM_TEMPLATE_NAMES);
+    query = instanceRef.meta_waba_id
+        ? query.eq("waba_id", instanceRef.meta_waba_id)
+        : query.eq("instance_id", instanceRef.id);
+    const { data } = await query;
+    const map = new Map<string, string[]>();
+    for (const t of data || []) {
+        if (Array.isArray(t.variable_map) && t.variable_map.length > 0) {
+            map.set(t.name, t.variable_map);
+        }
+    }
+    return map;
+}
+
+/** Monta os parâmetros posicionais a partir do map de valores nomeados. */
+export function buildTemplateParameters(
+    templateName: string,
+    variableMaps: Map<string, string[]>,
+    values: Record<string, string>,
+): string[] {
+    const order = variableMaps.get(templateName) || DEFAULT_VARIABLE_MAP[templateName] || [];
+    return order.map((key) => values[key] ?? "");
+}
+
 // ---------------------------------------------------------------------------
 // Chamada interna a outra edge function (service role)
 // ---------------------------------------------------------------------------
