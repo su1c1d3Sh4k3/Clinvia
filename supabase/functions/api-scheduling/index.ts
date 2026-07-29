@@ -137,11 +137,18 @@ serve(async (req) => {
         if (action === "fetch_appointments") {
             const contactId = await resolveContact(body.contact_id, body.phone_number);
 
-            const { data, error } = await supabase.from("appointments")
+            let query = supabase.from("appointments")
                 .select("id, service_name, professional_name, start_time, end_time, status, price, type, category_id, service_name_id, service_id")
-                .eq("user_id", user_id).eq("contact_id", contactId)
-                .not("status", "in", "(completed,canceled,no_show)")
-                .order("start_time", { ascending: false });
+                .eq("user_id", user_id).eq("contact_id", contactId);
+
+            // Optional status filter (e.g. "pending"); default keeps excluding closed ones
+            if (body.status) {
+                query = query.eq("status", body.status);
+            } else {
+                query = query.not("status", "in", "(completed,canceled,no_show)");
+            }
+
+            const { data, error } = await query.order("start_time", { ascending: false });
 
             if (error) throw error;
 
