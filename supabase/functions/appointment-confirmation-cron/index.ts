@@ -44,19 +44,49 @@ serve(async (req) => {
     let totalErrors = 0;
 
     try {
-        // Confirmações funcionam independente da IA estar ligada (decisão do usuário)
-        const { data: activeConfigs } = await supabase
-            .from("ia_config")
-            .select("user_id, name");
+        // Confirmações funcionam independente da IA (decisão do usuário) e não
+        // dependem de ia_config existir: iteramos os users com agendamentos nas
+        // janelas relevantes (24h antes, 2h antes, ~24h depois) + sessões abertas.
+        const windowFrom = new Date(now.getTime() - 30 * 3600_000);
+        const windowTo = new Date(now.getTime() + 26 * 3600_000);
+        const { data: aptUsers } = await supabase
+            .from("appointments")
+            .select("user_id")
+            .eq("type", "appointment")
+            .gte("start_time", windowFrom.toISOString())
+            .lte("start_time", windowTo.toISOString());
 
-        if (!activeConfigs?.length) {
-            return json({ success: true, sent: 0, message: "no active configs" });
+        const userIds = new Set<string>((aptUsers || []).map((a: any) => a.user_id));
+
+        // Users com sessões não-terminais (sweep de timeout de feedback)
+        const { data: sessUsers } = await supabase
+            .from("appointment_confirmation_sessions")
+            .select("user_id")
+            .not("state", "in", "(completed,transferred,failed)");
+        for (const s of sessUsers || []) userIds.add(s.user_id);
+
+        if (!userIds.size) {
+            return json({ success: true, sent: 0, message: "no users with appointments in window" });
         }
 
-        for (const config of activeConfigs) {
+        // Nome da clínica: ia_config.name → fallback profiles.company_name
+        const idList = [...userIds];
+        const nameByUser = new Map<string, string>();
+        const { data: profRows } = await supabase
+            .from("profiles").select("id, company_name").in("id", idList);
+        for (const p of profRows || []) {
+            if (p.company_name) nameByUser.set(p.id, p.company_name);
+        }
+        const { data: cfgRows } = await supabase
+            .from("ia_config").select("user_id, name").in("user_id", idList);
+        for (const c of cfgRows || []) {
+            if (c.name) nameByUser.set(c.user_id, c.name);
+        }
+
+        for (const cronUserId of idList) {
             try {
                 // Pick automation instance (primária → Meta → qualquer conectada)
-                const instance = await pickAutomationInstance(supabase, config.user_id);
+                const instance = await pickAutomationInstance(supabase, cronUserId);
                 if (!instance) continue;
 
                 const isMeta = isMetaInstance(instance);
@@ -66,9 +96,9 @@ serve(async (req) => {
                 let templateStatuses = new Map<string, string>();
                 if (isMeta) {
                     try {
-                        templateStatuses = await ensureSystemTemplates(supabase, config.user_id, instance.id);
+                        templateStatuses = await ensureSystemTemplates(supabase, cronUserId, instance.id);
                     } catch (err) {
-                        console.error(`[ac-cron] ensureSystemTemplates failed for ${config.user_id}:`, err);
+                        console.error(`[ac-cron] ensureSystemTemplates failed for ${cronUserId}:`, err);
                         templateStatuses = await getSystemTemplateStatuses(supabase, {
                             id: instance.id,
                             meta_waba_id: instance.meta_waba_id,
@@ -78,11 +108,11 @@ serve(async (req) => {
 
                 const ctx: CronContext = {
                     supabase,
-                    userId: config.user_id,
+                    userId: cronUserId,
                     instance,
                     isMeta,
                     templateStatuses,
-                    clinicName: config.name || "a clínica",
+                    clinicName: nameByUser.get(cronUserId) || "a clínica",
                     now,
                 };
 
@@ -94,7 +124,7 @@ serve(async (req) => {
                 totalSent += r1.sent + r2.sent + r3.sent;
                 totalErrors += r1.errors + r2.errors + r3.errors;
             } catch (err) {
-                console.error(`[ac-cron] error for user ${config.user_id}:`, err);
+                console.error(`[ac-cron] error for user ${cronUserId}:`, err);
                 totalErrors++;
             }
         }

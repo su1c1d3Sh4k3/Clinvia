@@ -202,15 +202,14 @@ export async function importAppointments(opts: {
     rows: ValidatedRow[];
     professionalLinks: EntityLink[];
     serviceLinks: EntityLink[];
-    autoCrm: boolean;
     onProgress?: (current: number, total: number) => void;
 }): Promise<AppointmentImportResult> {
-    const { ownerId, rows, professionalLinks, serviceLinks, autoCrm, onProgress } = opts;
+    const { ownerId, rows, professionalLinks, serviceLinks, onProgress } = opts;
     const result: AppointmentImportResult = {
         imported: 0, failed: 0, contactsCreated: 0, professionalsCreated: 0,
         salesCreated: 0, cardsCreated: 0, errors: [],
     };
-    const totalSteps = rows.length * (autoCrm ? 2 : 1);
+    const totalSteps = rows.length * 2;
     let step = 0;
     const tick = () => onProgress?.(++step, totalSteps);
 
@@ -352,7 +351,7 @@ export async function importAppointments(opts: {
         if (!contactId || !professionalId || !svc || !row.data.start) {
             result.failed++;
             result.errors.push(`Linha ignorada (${row.data.name || "sem nome"}): vínculo incompleto`);
-            if (!autoCrm) tick(); else { tick(); tick(); }
+            tick(); tick();
             continue;
         }
         const start = new Date(row.data.start);
@@ -394,17 +393,15 @@ export async function importAppointments(opts: {
         chunk.forEach(() => tick());
     }
 
-    // 6. Negociações + vendas automáticas (opcional)
-    if (autoCrm) {
-        const cardCache = new Map<string, { id: string; svcIds: Set<string>; total: number } | null>();
-        for (const p of prepared) {
-            try {
-                await syncCrmForImported(ownerId, p, cardCache, result);
-            } catch (err: any) {
-                result.errors.push(`CRM (${p.svc.name}): ${err.message}`);
-            }
-            tick();
+    // 6. Negociações + vendas automáticas (sempre ativas)
+    const cardCache = new Map<string, { id: string; svcIds: Set<string>; total: number } | null>();
+    for (const p of prepared) {
+        try {
+            await syncCrmForImported(ownerId, p, cardCache, result);
+        } catch (err: any) {
+            result.errors.push(`CRM (${p.svc.name}): ${err.message}`);
         }
+        tick();
     }
 
     return result;
@@ -510,16 +507,18 @@ async function syncCrmForImported(
     }
 
     if (!cached.svcIds.has(p.svc.id)) {
+        // Regra: negociação sempre usa o preço cadastrado do serviço
+        const dealPrice = p.svc.price ?? p.price ?? 0;
         await supabase.from("crm_client_services" as any).insert({
             crm_client_id: cached.id,
             service_client_id: p.svc.id,
             service_name: p.svc.name || "Serviço",
             quantity: 1,
-            unit_price: p.price,
+            unit_price: dealPrice,
             min_price: p.svc.min_price || 0,
         });
         cached.svcIds.add(p.svc.id);
-        cached.total += p.price;
+        cached.total += dealPrice;
         await supabase
             .from("crm_client" as any)
             .update({ value: cached.total, updated_at: nowIso })

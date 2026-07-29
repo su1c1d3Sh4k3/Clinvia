@@ -4,7 +4,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Upload, ArrowRight, ArrowLeft, Check, AlertTriangle, XCircle, Download, Loader2, CalendarPlus, UserPlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -47,7 +46,6 @@ export function AppointmentImportWizard({ open, onOpenChange }: AppointmentImpor
     const [validated, setValidated] = useState<ValidatedRow[]>([]);
     const [profLinks, setProfLinks] = useState<EntityLink[]>([]);
     const [svcLinks, setSvcLinks] = useState<EntityLink[]>([]);
-    const [autoCrm, setAutoCrm] = useState(false);
     const [importing, setImporting] = useState(false);
     const [progress, setProgress] = useState(0);
     const [result, setResult] = useState<AppointmentImportResult | null>(null);
@@ -225,7 +223,6 @@ export function AppointmentImportWizard({ open, onOpenChange }: AppointmentImpor
                 rows: importableRows,
                 professionalLinks: profLinks,
                 serviceLinks: svcLinks,
-                autoCrm,
                 onProgress: (cur, total) => setProgress(Math.round((cur / total) * 100)),
             });
             queryClient.invalidateQueries({ queryKey: ["appointments"] });
@@ -544,19 +541,14 @@ export function AppointmentImportWizard({ open, onOpenChange }: AppointmentImpor
                                 )}
                             </div>
 
-                            <label className="flex items-start gap-2.5 p-3 border rounded-lg cursor-pointer hover:bg-accent/30 transition-colors">
-                                <Checkbox
-                                    checked={autoCrm}
-                                    onCheckedChange={(v) => setAutoCrm(!!v)}
-                                    className="mt-0.5"
-                                />
+                            <div className="p-3 border rounded-lg bg-accent/20">
                                 <span className="text-xs">
-                                    <span className="font-medium block">Lançar vendas e criar negociações automaticamente</span>
+                                    <span className="font-medium block">Vendas e negociações são criadas automaticamente</span>
                                     <span className="text-muted-foreground">
                                         Finalizados → venda + card Ganho · Pendentes/Confirmados → card em Agendado · Cancelados/Faltas → card Perdido
                                     </span>
                                 </span>
-                            </label>
+                            </div>
 
                             {importing && (
                                 <div className="space-y-2">

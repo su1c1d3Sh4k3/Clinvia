@@ -681,7 +681,8 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                         ownerId,
                         serviceClientId: values.service_id || null,
                         serviceName: svc?.name || "",
-                        servicePrice: values.price || 0,
+                        // Regra: negociação sempre usa o preço cadastrado do serviço
+                        servicePrice: svc?.price ?? values.price ?? 0,
                         serviceMinPrice: svc?.min_price || 0,
                         professionalId: values.professional_id,
                     }).catch(() => {}); // fire-and-forget
