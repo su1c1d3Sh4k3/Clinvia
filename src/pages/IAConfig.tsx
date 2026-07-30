@@ -25,8 +25,6 @@ import {
 import { toast } from "sonner";
 import { Building2, HelpCircle, Settings, Plus, Trash2, Loader2, Play, FlaskConical, X, Phone } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { BiaWizard } from "@/components/ia-wizard/BiaWizard";
-import { BiaWizardTrigger } from "@/components/ia-wizard/BiaWizardTrigger";
 
 interface IAConfigData {
     id?: string;
@@ -152,8 +150,6 @@ export default function IAConfig() {
     const [creatingFunnel, setCreatingFunnel] = useState(false); // Loading da criação do funil
     const [playingVoice, setPlayingVoice] = useState(false); // Loading do preview de voz
     const [togglingIA, setTogglingIA] = useState(false); // Loading do toggle de IA
-    const [showWizard, setShowWizard] = useState(false); // Wizard Bia
-    const [wizardAutoOpened, setWizardAutoOpened] = useState(false); // Controla auto-abertura do wizard
     const [testNumberInput, setTestNumberInput] = useState(""); // Input para número de teste
 
     // Buscar configuração existente
@@ -267,19 +263,6 @@ export default function IAConfig() {
             }
         }
     }, [existingConfig, productsServices]);
-
-    // Auto-abrir wizard para usuários de primeira vez
-    useEffect(() => {
-        if (!isLoadingConfig && !wizardAutoOpened && ownerId) {
-            setWizardAutoOpened(true);
-            const isFirstTime =
-                existingConfig === null ||
-                (!existingConfig?.name?.trim() && !existingConfig?.agent_name?.trim());
-            if (isFirstTime) {
-                setShowWizard(true);
-            }
-        }
-    }, [isLoadingConfig, existingConfig, wizardAutoOpened, ownerId]);
 
     // Parser simples para campos de produto/texto
     // Formato esperado: "1. - NomeProduto:\nconteúdo\n\n2. - OutroProduto:\nconteúdo"
@@ -800,10 +783,6 @@ export default function IAConfig() {
         <div className="container mx-auto py-4 md:py-10 px-3 md:px-6 max-w-4xl animate-in fade-in duration-500">
             <div className="flex items-center justify-between mb-4 md:mb-8">
                 <h1 className="text-2xl md:text-3xl font-bold text-foreground">Definições de IA</h1>
-                <BiaWizardTrigger
-                    existingConfig={existingConfig ?? null}
-                    onOpenWizard={() => setShowWizard(true)}
-                />
             </div>
 
             <Tabs defaultValue="company" className="w-full">
@@ -1288,22 +1267,6 @@ export default function IAConfig() {
                     </Card>
                 </TabsContent>
             </Tabs>
-
-            {/* Wizard Bia - Assistente de Configuração de IA */}
-            {showWizard && (
-                <BiaWizard
-                    open={showWizard}
-                    onClose={() => setShowWizard(false)}
-                    existingConfig={existingConfig ?? null}
-                    ownerId={ownerId ?? ""}
-                    productsServices={productsServices ?? []}
-                    onSaveSuccess={() => {
-                        queryClient.invalidateQueries({ queryKey: ["ia-config"] });
-                        setShowWizard(false);
-                        toast.success("Configurações salvas pelo assistente Bia! 🎉");
-                    }}
-                />
-            )}
 
             {/* Modal de confirmação para criar funil IA */}
             <Dialog open={showCreateFunnelModal} onOpenChange={setShowCreateFunnelModal}>
