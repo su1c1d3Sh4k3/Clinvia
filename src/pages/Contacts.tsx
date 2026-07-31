@@ -162,6 +162,23 @@ const Contacts = () => {
         enabled: !!ownerId,
     });
 
+    // Importar do Wpp só existe na API não oficial (UAZAPI) — exige instância conectada
+    const { data: hasUazapiConnection } = useQuery({
+        queryKey: ["contacts-has-uazapi-connection"],
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from("instances")
+                .select("id, provider, instance_name, status");
+            if (error) throw error;
+            return (data || []).some((i: any) =>
+                i.status === "connected"
+                && i.provider !== "meta"
+                && !(i.instance_name || "").startsWith("meta-")
+            );
+        },
+        staleTime: 30_000,
+    });
+
     // Fetch Tags for Filter
     const { data: tags } = useQuery({
         queryKey: ["tags-filter"],
@@ -411,10 +428,12 @@ const Contacts = () => {
                                         <FileSpreadsheet className="w-4 h-4" />
                                         <span className="hidden lg:inline">Modelo</span>
                                     </Button>
-                                    <Button onClick={() => setIsWppImportOpen(true)} variant="outline" size="sm" className="h-8 md:h-9 text-xs md:text-sm gap-1 border-green-500/30 text-green-600 hover:bg-green-500/10 hover:text-green-600" title="Importar contatos do WhatsApp">
-                                        <FaWhatsapp className="w-4 h-4" />
-                                        <span className="hidden lg:inline">Importar do Wpp</span>
-                                    </Button>
+                                    {hasUazapiConnection && (
+                                        <Button onClick={() => setIsWppImportOpen(true)} variant="outline" size="sm" className="h-8 md:h-9 text-xs md:text-sm gap-1 border-green-500/30 text-green-600 hover:bg-green-500/10 hover:text-green-600" title="Importar contatos do WhatsApp">
+                                            <FaWhatsapp className="w-4 h-4" />
+                                            <span className="hidden lg:inline">Importar do Wpp</span>
+                                        </Button>
+                                    )}
                                 </>
                             )}
                             <Button onClick={handleExportContacts} variant="outline" size="sm" className="h-8 md:h-9 text-xs md:text-sm gap-1" title="Exportar contatos para planilha">
