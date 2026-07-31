@@ -260,7 +260,7 @@ const Auth = () => {
           <div className="mx-auto mb-2">
             <img
               src="/clinvia-logo-full.png"
-              alt="Clinvia"
+              alt="Clinbia"
               className="h-10 w-auto object-contain"
             />
           </div>

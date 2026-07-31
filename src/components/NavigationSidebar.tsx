@@ -283,12 +283,12 @@ export const NavigationSidebar = () => {
         <div className="flex items-center justify-center gap-2 px-3 py-2 border-b border-sidebar-border dark:border-white/10 overflow-hidden">
           <img
             src="/logo-icon.png"
-            alt="Clinvia"
+            alt="Clinbia"
             className="h-8 w-8 object-contain shrink-0"
           />
           <img
             src="/clinvia-text-dark.png"
-            alt="Clinvia"
+            alt="Clinbia"
             className={cn(
               "h-6 w-auto object-contain",
               isMobile ? "block" : "hidden group-hover/sidebar:block"

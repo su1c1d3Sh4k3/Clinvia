@@ -173,7 +173,7 @@ const AdminAuth = () => {
             </Card>
 
             <div className="absolute bottom-4 text-gray-600 text-xs">
-                © 2024 Clinvia Admin Panel
+                © 2024 Clinbia Admin Panel
             </div>
         </div>
     );

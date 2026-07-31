@@ -629,7 +629,7 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
                                     <div className="space-y-2">
                                         <Label>Rodape (opcional)</Label>
                                         <Input
-                                            placeholder="Clinvia - Gestao Inteligente"
+                                            placeholder="Clinbia - Gestao Inteligente"
                                             value={newFooterText}
                                             onChange={(e) => setNewFooterText(e.target.value)}
                                         />

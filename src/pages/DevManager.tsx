@@ -948,7 +948,7 @@ export default function DevManager() {
         {/* Footer */}
         <div className="text-center py-4">
           <p className="text-xs font-mono" style={{ color: "#333" }}>
-            Dev Manager · Clinvia · Última atualização: {data ? formatTime(data.refreshed_at) : "—"}
+            Dev Manager · Clinbia · Última atualização: {data ? formatTime(data.refreshed_at) : "—"}
           </p>
         </div>
       </div>

@@ -24,8 +24,8 @@ export default defineConfig(({ mode }) => ({
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024
       },
       manifest: {
-        name: "Clinvia",
-        short_name: "Clinvia",
+        name: "Clinbia",
+        short_name: "Clinbia",
         description: "Plataforma completa de gestão e atendimento para clínicas",
         start_url: "/",
         display: "standalone",
