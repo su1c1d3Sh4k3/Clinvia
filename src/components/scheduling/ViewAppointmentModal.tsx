@@ -20,12 +20,11 @@ import { format } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 import { ptBR } from "date-fns/locale";
 import {
-    Pencil, Calendar, Clock, User, DollarSign, FileText, Briefcase, Bell,
+    Pencil, Calendar, Clock, User, DollarSign, FileText, Briefcase,
     CheckCircle2, CalendarClock, XCircle, Check, UserX,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
-import { NotifyAppointmentModal } from "./NotifyAppointmentModal";
 
 const TIMEZONE = "America/Sao_Paulo";
 
@@ -43,7 +42,6 @@ interface ViewAppointmentModalProps {
 }
 
 export function ViewAppointmentModal({ appointment, open, onOpenChange, onEdit, onStatusChange, canEdit = true }: ViewAppointmentModalProps) {
-    const [notifyOpen, setNotifyOpen] = useState(false);
     const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
 
     if (!appointment) return null;
@@ -297,29 +295,9 @@ export function ViewAppointmentModal({ appointment, open, onOpenChange, onEdit, 
                         </div>
                     )}
 
-                    {/* Botão Notificar Cliente */}
-                    {isAppointment && hasContact && (
-                        <div className="pt-2 border-t">
-                            <Button
-                                className="w-full gap-2"
-                                variant="outline"
-                                onClick={() => setNotifyOpen(true)}
-                            >
-                                <Bell className="h-4 w-4" />
-                                Notificar Cliente
-                            </Button>
-                        </div>
-                    )}
                 </div>
             </DialogContent>
         </Dialog>
-
-        {/* Modal de notificação */}
-        <NotifyAppointmentModal
-            appointment={appointment}
-            open={notifyOpen}
-            onOpenChange={setNotifyOpen}
-        />
 
         {/* Confirmação de cancelamento */}
         <AlertDialog open={cancelConfirmOpen} onOpenChange={setCancelConfirmOpen}>

@@ -57,13 +57,6 @@ export interface AppointmentMetrics {
     byDayOfWeek: { dow: number; count: number }[];
     byHourHeatmap: { dow: number; hour: number; count: number }[];
     dailyProgress: { date: string; cumulative: number }[];
-    goal: {
-        target: number;
-        month: number;
-        year: number;
-        achieved: number;
-        progressPct: number;
-    } | null;
 }
 
 export interface SalesMetrics {
@@ -317,8 +310,6 @@ async function fetchAppointmentMetrics(start: string, end: string): Promise<Appo
         };
     });
 
-    const advGoal = adv.goal;
-
     return {
         total: items.length,
         confirmed: items.filter(a => a.status === "confirmed").length,
@@ -339,13 +330,6 @@ async function fetchAppointmentMetrics(start: string, end: string): Promise<Appo
         byDayOfWeek: Array.isArray(adv.by_day_of_week) ? adv.by_day_of_week : [],
         byHourHeatmap: Array.isArray(adv.by_hour_heatmap) ? adv.by_hour_heatmap : [],
         dailyProgress: Array.isArray(adv.daily_progress) ? adv.daily_progress : [],
-        goal: advGoal ? {
-            target: Number(advGoal.target) || 0,
-            month: Number(advGoal.month) || 0,
-            year: Number(advGoal.year) || 0,
-            achieved: Number(advGoal.achieved) || 0,
-            progressPct: Number(advGoal.progress_pct) || 0,
-        } : null,
     };
 }
 

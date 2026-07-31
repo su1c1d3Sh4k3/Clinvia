@@ -3,11 +3,11 @@ import { AppointmentHeatmap } from "./AppointmentHeatmap";
 import { AppointmentMetrics, calcEvolution } from "@/hooks/useReportData";
 import {
     Calendar, CheckCircle, Clock, RefreshCw, XCircle, Users,
-    Target, TrendingUp, AlertTriangle, UserX, Activity,
+    TrendingUp, AlertTriangle, UserX, Activity,
 } from "lucide-react";
 import {
     BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid,
-    Tooltip, Legend, ResponsiveContainer, LineChart, Line, ReferenceLine,
+    Tooltip, Legend, ResponsiveContainer, LineChart, Line,
 } from "recharts";
 
 interface AppointmentsReportProps {
@@ -24,10 +24,6 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const DOW_LABELS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-const MONTH_NAMES = [
-    "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
-];
 
 const CARD = "relative group rounded-2xl bg-white dark:bg-card/50 backdrop-blur-sm border border-border/50 p-6 hover:shadow-md hover:border-border/80 transition-all duration-300";
 
@@ -48,29 +44,6 @@ const ChartTooltip = ({ active, payload, label }: any) => {
         </div>
     );
 };
-
-// Calcula dias restantes no mês e ritmo necessário
-function getMonthPacing(achieved: number, target: number): { daysLeft: number; neededPerDay: number } {
-    const now = new Date();
-    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-    const daysLeft = Math.max(0, lastDay - now.getDate());
-    const remaining = Math.max(0, target - achieved);
-    const neededPerDay = daysLeft > 0 ? Math.ceil(remaining / daysLeft) : 0;
-    return { daysLeft, neededPerDay };
-}
-
-// Cor do progresso por % (verde ≥80, amarelo ≥50, vermelho <50)
-function progressColor(pct: number): string {
-    if (pct >= 80) return "text-emerald-600 dark:text-emerald-400";
-    if (pct >= 50) return "text-amber-600 dark:text-amber-400";
-    return "text-red-600 dark:text-red-400";
-}
-
-function progressBarColor(pct: number): string {
-    if (pct >= 80) return "bg-emerald-500";
-    if (pct >= 50) return "bg-amber-500";
-    return "bg-red-500";
-}
 
 export function AppointmentsReport({ data, comparison }: AppointmentsReportProps) {
     const statusData = [
@@ -110,12 +83,8 @@ export function AppointmentsReport({ data, comparison }: AppointmentsReportProps
         return { day: label, count: match?.count || 0 };
     });
 
-    // Comparativo Meta × Realidade
-    const goal = data.goal;
-    const pacing = goal ? getMonthPacing(goal.achieved, goal.target) : null;
-
+    // Visão consolidada do período
     const comparativoMeta = [
-        { label: "Meta", value: goal?.target || 0, color: "#6366f1" },
         { label: "Realizados", value: data.total, color: "#3b82f6" },
         { label: "Concluídos", value: data.completed, color: "#10b981" },
         { label: "No-show", value: data.pureNoShowCount, color: "#f59e0b" },
@@ -130,63 +99,6 @@ export function AppointmentsReport({ data, comparison }: AppointmentsReportProps
 
     return (
         <div className="space-y-8">
-            {/* ══════════ SEÇÃO 1: Meta Mensal (destaque) ══════════ */}
-            <section className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="flex items-center gap-2 mb-4">
-                    <div className="p-1.5 rounded-lg bg-indigo-500/10"><Target className="w-4 h-4 text-indigo-500" /></div>
-                    <h3 className="text-sm font-semibold tracking-tight">Meta Mensal</h3>
-                </div>
-                {goal ? (
-                    <div className={CARD}>
-                        <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 via-transparent to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-                        <div className="relative z-10 grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
-                            <div>
-                                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">{MONTH_NAMES[goal.month - 1]} / {goal.year}</p>
-                                <div className="flex items-baseline gap-2">
-                                    <span className={`text-4xl font-black ${progressColor(goal.progressPct)}`}>
-                                        {goal.progressPct.toFixed(0)}%
-                                    </span>
-                                </div>
-                                <p className="text-sm text-muted-foreground mt-1">
-                                    <span className="font-semibold">{goal.achieved}</span> de {goal.target} concluídos
-                                </p>
-                            </div>
-                            <div className="md:col-span-2">
-                                <div className="w-full h-4 rounded-full bg-muted/40 overflow-hidden">
-                                    <div
-                                        className={`h-full rounded-full transition-all duration-1000 ease-out ${progressBarColor(goal.progressPct)}`}
-                                        style={{ width: `${Math.min(100, goal.progressPct)}%` }}
-                                    />
-                                </div>
-                                {pacing && pacing.daysLeft > 0 && (
-                                    <p className="text-xs text-muted-foreground mt-3">
-                                        Faltam <span className="font-semibold">{pacing.daysLeft} dias</span>.
-                                        {" "}Ritmo necessário: <span className="font-semibold">{pacing.neededPerDay}/dia</span>
-                                    </p>
-                                )}
-                                {pacing && pacing.daysLeft === 0 && (
-                                    <p className="text-xs text-muted-foreground mt-3">
-                                        Último dia do mês — acompanhe o fechamento.
-                                    </p>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                ) : (
-                    <div className={CARD}>
-                        <div className="relative z-10 flex items-center gap-3">
-                            <Target className="w-8 h-8 text-muted-foreground/40" />
-                            <div>
-                                <p className="text-sm font-semibold">Meta não configurada</p>
-                                <p className="text-xs text-muted-foreground">
-                                    Defina em Agenda → Configurações → Meta Mensal de Agendamentos
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </section>
-
             {/* ══════════ SEÇÃO 2: KPIs de Conclusão ══════════ */}
             <section className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: '80ms', animationFillMode: 'backwards' }}>
                 <div className="flex items-center gap-2 mb-4">
@@ -236,29 +148,21 @@ export function AppointmentsReport({ data, comparison }: AppointmentsReportProps
                 </div>
             </section>
 
-            {/* ══════════ SEÇÃO 3: Comparativo Meta × Realidade ══════════ */}
+            {/* ══════════ SEÇÃO 3: Visão Consolidada ══════════ */}
             <section className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: '160ms', animationFillMode: 'backwards' }}>
                 <div className="flex items-center gap-2 mb-4">
                     <div className="p-1.5 rounded-lg bg-indigo-500/10"><TrendingUp className="w-4 h-4 text-indigo-500" /></div>
-                    <h3 className="text-sm font-semibold tracking-tight">Meta × Realidade</h3>
+                    <h3 className="text-sm font-semibold tracking-tight">Visão Consolidada</h3>
                 </div>
                 <div className={CARD}>
                     <div className="relative z-10">
-                        <p className="text-xs text-muted-foreground mb-4">Comparativo consolidado do período com linha de referência da meta</p>
+                        <p className="text-xs text-muted-foreground mb-4">Comparativo consolidado do período</p>
                         <ResponsiveContainer width="100%" height={280}>
                             <BarChart data={comparativoMeta}>
                                 <CartesianGrid strokeDasharray="4 4" strokeOpacity={0.08} vertical={false} />
                                 <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                                 <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} allowDecimals={false} axisLine={false} tickLine={false} />
                                 <Tooltip content={<ChartTooltip />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.08 }} />
-                                {goal && (
-                                    <ReferenceLine
-                                        y={goal.target}
-                                        stroke="#6366f1"
-                                        strokeDasharray="4 4"
-                                        label={{ value: `Meta: ${goal.target}`, position: "insideTopRight", fill: "#6366f1", fontSize: 11 }}
-                                    />
-                                )}
                                 <Bar dataKey="value" name="Quantidade" radius={[6, 6, 0, 0]}>
                                     {comparativoMeta.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                                 </Bar>
@@ -290,14 +194,6 @@ export function AppointmentsReport({ data, comparison }: AppointmentsReportProps
                                     <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                                     <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} allowDecimals={false} axisLine={false} tickLine={false} />
                                     <Tooltip content={<ChartTooltip />} />
-                                    {goal && (
-                                        <ReferenceLine
-                                            y={goal.target}
-                                            stroke="#6366f1"
-                                            strokeDasharray="4 4"
-                                            label={{ value: `Meta: ${goal.target}`, position: "insideTopRight", fill: "#6366f1", fontSize: 11 }}
-                                        />
-                                    )}
                                     <Line
                                         type="monotone"
                                         dataKey="Acumulado"
