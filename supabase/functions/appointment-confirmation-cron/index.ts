@@ -25,6 +25,12 @@ import {
     TPL_FEEDBACK,
     TPL_REMINDER,
 } from "../_shared/system-templates.ts";
+import {
+    isUazapiMessageEnabled,
+    loadUazapiAutomationMessages,
+    renderUazapiMessage,
+    type UazapiAutomationMessage,
+} from "../_shared/uazapi-automation-messages.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -114,16 +120,23 @@ serve(async (req) => {
                     });
                 }
 
-                // Switches liga/desliga por template (ausência de linha = ligado)
+                // Switches liga/desliga por template — Meta only (ausência de linha = ligado)
                 const templateEnabled = new Map<string, boolean>();
-                const { data: settingRows } = await supabase
-                    .from("automation_template_settings")
-                    .select("template_name, enabled")
-                    .eq("user_id", cronUserId)
-                    .in("template_name", SYSTEM_TEMPLATE_NAMES);
-                for (const s of settingRows || []) {
-                    templateEnabled.set(s.template_name, s.enabled !== false);
+                if (isMeta) {
+                    const { data: settingRows } = await supabase
+                        .from("automation_template_settings")
+                        .select("template_name, enabled")
+                        .eq("user_id", cronUserId)
+                        .in("template_name", SYSTEM_TEMPLATE_NAMES);
+                    for (const s of settingRows || []) {
+                        templateEnabled.set(s.template_name, s.enabled !== false);
+                    }
                 }
+
+                // UAZAPI: mensagens editadas + switches independentes
+                const uazapiMessages = isMeta
+                    ? new Map<string, UazapiAutomationMessage>()
+                    : await loadUazapiAutomationMessages(supabase, cronUserId);
 
                 const ctx: CronContext = {
                     supabase,
@@ -133,6 +146,7 @@ serve(async (req) => {
                     templateStatuses,
                     variableMaps,
                     templateEnabled,
+                    uazapiMessages,
                     clinicName: nameByUser.get(cronUserId) || "a clínica",
                     now,
                 };
@@ -170,13 +184,16 @@ interface CronContext {
     templateStatuses: Map<string, string>;
     variableMaps: Map<string, string[]>;
     templateEnabled: Map<string, boolean>;
+    uazapiMessages: Map<string, UazapiAutomationMessage>;
     clinicName: string;
     now: Date;
 }
 
-/** Switch liga/desliga do template automático (default: ligado). */
+/** Switch liga/desliga por provedor (default: ligado). Meta e UAZAPI são independentes. */
 function isTemplateEnabled(ctx: CronContext, tplName: string): boolean {
-    return ctx.templateEnabled.get(tplName) !== false;
+    return ctx.isMeta
+        ? ctx.templateEnabled.get(tplName) !== false
+        : isUazapiMessageEnabled(ctx.uazapiMessages, tplName);
 }
 
 async function processConfirm24h(ctx: CronContext): Promise<{ sent: number; errors: number }> {
@@ -246,9 +263,8 @@ async function processConfirm24h(ctx: CronContext): Promise<{ sent: number; erro
             const { conversationId } = await resolveConversation(supabase, userId, ctx.instance.id, contact);
 
             const firstName = (contact.push_name || "").split(" ")[0] || "cliente";
-            const msgText = buildConfirmMessage(firstName, group, ctx.clinicName);
 
-            // Switch liga/desliga (vale para Meta e UAZAPI)
+            // Switch liga/desliga (independente por provedor)
             const tplName = group.length === 1 ? TPL_CONFIRM_SINGLE : TPL_CONFIRM_MULTI;
             if (!isTemplateEnabled(ctx, tplName)) {
                 console.log(`[ac-cron] ${tplName} disabled by user — skipping confirm_24h for ${contactId}`);
@@ -283,9 +299,26 @@ async function processConfirm24h(ctx: CronContext): Promise<{ sent: number; erro
                     conversationId,
                     templateName: tplName,
                     parameters,
-                    bodyPreview: msgText,
+                    bodyPreview: buildConfirmMessage(firstName, group, ctx.clinicName),
                 });
             } else {
+                const a = group[0];
+                const msgText = renderUazapiMessage(ctx.uazapiMessages, tplName, group.length === 1
+                    ? {
+                        nome_cliente: firstName,
+                        horario: formatTimeBR(a.start_time),
+                        clinica: ctx.clinicName,
+                        servico: a.service_name || "atendimento",
+                        profissional: a.professional_name || "nosso profissional",
+                    }
+                    : {
+                        nome_cliente: firstName,
+                        clinica: ctx.clinicName,
+                        agendamentos: group.map((g: any) =>
+                            `• ${formatTimeBR(g.start_time)} — ${g.service_name} com ${g.professional_name}`
+                        ).join("\n"),
+                    });
+
                 const buttons: MenuButton[] = [
                     { id: "ac_confirm", text: "Sim, pode confirmar" },
                     { id: "ac_reschedule", text: "Vou precisar reagendar" },
@@ -399,7 +432,6 @@ async function processReminder2h(ctx: CronContext): Promise<{ sent: number; erro
             const { conversationId } = await resolveConversation(supabase, userId, ctx.instance.id, contact);
 
             const firstName = (contact.push_name || "").split(" ")[0] || "cliente";
-            const msgText = buildReminderMessage(firstName, group);
 
             if (!isTemplateEnabled(ctx, TPL_REMINDER)) {
                 console.log(`[ac-cron] ${TPL_REMINDER} disabled by user — skipping reminder_2h for ${contactId}`);
@@ -420,9 +452,14 @@ async function processReminder2h(ctx: CronContext): Promise<{ sent: number; erro
                         horarios: times,
                         clinica: ctx.clinicName,
                     }),
-                    bodyPreview: msgText,
+                    bodyPreview: buildReminderMessage(firstName, group),
                 });
             } else {
+                const msgText = renderUazapiMessage(ctx.uazapiMessages, TPL_REMINDER, {
+                    nome_cliente: firstName,
+                    horarios: group.map((g: any) => formatTimeBR(g.start_time)).join(" e "),
+                    clinica: ctx.clinicName,
+                });
                 await sendText({
                     supabase,
                     userId,
@@ -548,7 +585,6 @@ async function processFeedback24h(ctx: CronContext): Promise<{ sent: number; err
             const { conversationId } = await resolveConversation(supabase, userId, ctx.instance.id, contact);
 
             const firstName = (contact.push_name || "").split(" ")[0] || "cliente";
-            const msgText = `Como vai ${firstName}, espero que esteja bem, estou passando para pedir seu feedback sobre seu atendimento aqui na clínica ontem, se puder por gentileza nos dar seu feedback:`;
 
             let sendRes: { messageId: string | null };
             if (ctx.isMeta) {
@@ -563,9 +599,13 @@ async function processFeedback24h(ctx: CronContext): Promise<{ sent: number; err
                         nome_cliente: firstName,
                         clinica: ctx.clinicName,
                     }),
-                    bodyPreview: msgText,
+                    bodyPreview: `Como vai ${firstName}, espero que esteja bem, estou passando para pedir seu feedback sobre seu atendimento aqui na clínica ontem, se puder por gentileza nos dar seu feedback:`,
                 });
             } else {
+                const msgText = renderUazapiMessage(ctx.uazapiMessages, TPL_FEEDBACK, {
+                    nome_cliente: firstName,
+                    clinica: ctx.clinicName,
+                });
                 const buttons: MenuButton[] = [
                     { id: "ac_fb_5", text: "Excelente" },
                     { id: "ac_fb_4", text: "Muito bom" },

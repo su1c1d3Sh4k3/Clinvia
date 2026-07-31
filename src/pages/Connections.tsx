@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { AlertCircle, CheckCircle2, Loader2, Plus, RefreshCw, Trash2, Shield, ExternalLink, Smartphone, FileText } from "lucide-react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import Templates from "./Templates";
+import AutomaticMessages from "@/components/connections/AutomaticMessages";
 
 const META_APP_ID = import.meta.env.VITE_META_APP_ID || '1328505766119863';
 const META_CONFIG_ID = import.meta.env.VITE_META_CONFIG_ID || '1804825927169026';
@@ -47,8 +48,12 @@ const Connections = () => {
     // Meta Embedded Signup State
     const [isConnectingMeta, setIsConnectingMeta] = useState(false);
 
-    // Outer tab: Conexões | Templates (deep-link via ?tab=templates)
-    const [outerTab, setOuterTab] = useState(searchParams.get("tab") === "templates" ? "templates" : "connections");
+    // Outer tab: Conexões | Templates (Meta) | Mensagens API não oficial (UAZAPI)
+    // Deep-links: ?tab=templates | ?tab=automessages
+    const initialTab = searchParams.get("tab");
+    const [outerTab, setOuterTab] = useState(
+        initialTab === "templates" ? "templates" : initialTab === "automessages" ? "automessages" : "connections"
+    );
 
     // All Instances Query — filter by provider in JS (provider column not in generated types)
     const { data: allInstances, isLoading: loadingInstances } = useQuery({
@@ -67,6 +72,18 @@ const Connections = () => {
 
     const instances = allInstances?.filter((i: any) => i.provider !== "meta" && !(i.instance_name || '').startsWith("meta-")) || [];
     const metaInstances = allInstances?.filter((i: any) => i.provider === "meta" || (i.instance_name || '').startsWith("meta-")) || [];
+
+    // Abas condicionais por provedor: Templates (Meta) | Mensagens API não oficial (UAZAPI)
+    const hasMetaInstance = metaInstances.length > 0;
+    const hasUazapiInstance = instances.length > 0;
+
+    // Se a aba ativa não existe para os provedores do usuário, volta para Conexões
+    useEffect(() => {
+        if (loadingInstances) return;
+        if ((outerTab === "templates" && !hasMetaInstance) || (outerTab === "automessages" && !hasUazapiInstance)) {
+            setOuterTab("connections");
+        }
+    }, [loadingInstances, outerTab, hasMetaInstance, hasUazapiInstance]);
     const loadingWhatsApp = loadingInstances;
     const loadingMeta = loadingInstances;
 
@@ -703,10 +720,18 @@ const Connections = () => {
                             <Smartphone className="h-4 w-4" />
                             Conexões
                         </TabsTrigger>
-                        <TabsTrigger value="templates" className="flex-1 flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
-                            <FileText className="h-4 w-4" />
-                            Templates
-                        </TabsTrigger>
+                        {hasMetaInstance && (
+                            <TabsTrigger value="templates" className="flex-1 flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
+                                <FileText className="h-4 w-4" />
+                                Templates
+                            </TabsTrigger>
+                        )}
+                        {hasUazapiInstance && (
+                            <TabsTrigger value="automessages" className="flex-1 flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
+                                <FileText className="h-4 w-4" />
+                                Mensagens API não oficial
+                            </TabsTrigger>
+                        )}
                     </TabsList>
 
                     <TabsContent value="connections">
@@ -1061,9 +1086,17 @@ const Connections = () => {
                 </Tabs>
                     </TabsContent>
 
-                    <TabsContent value="templates">
-                        <Templates embedded />
-                    </TabsContent>
+                    {hasMetaInstance && (
+                        <TabsContent value="templates">
+                            <Templates embedded />
+                        </TabsContent>
+                    )}
+
+                    {hasUazapiInstance && (
+                        <TabsContent value="automessages">
+                            <AutomaticMessages />
+                        </TabsContent>
+                    )}
                 </Tabs>
             </div>
 
