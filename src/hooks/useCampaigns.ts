@@ -254,18 +254,6 @@ export function useCampaignMutations() {
         onSuccess: invalidate,
     });
 
-    const recreateTemplate = useMutation({
-        mutationFn: async (campaignId: string): Promise<string> => {
-            if (!ownerId) throw new Error("Usuário não autenticado");
-            const data = await callCampaignApi({
-                action: "recreate_template",
-                user_id: ownerId,
-                campaign_id: campaignId,
-            });
-            return data.suggestion as string;
-        },
-    });
-
     const regeneratePrompt = useMutation({
         mutationFn: async (campaignId: string) => {
             if (!ownerId) throw new Error("Usuário não autenticado");
@@ -283,5 +271,5 @@ export function useCampaignMutations() {
         onSuccess: invalidate,
     });
 
-    return { createCampaign, updateCampaign, deleteCampaign, recreateTemplate, regeneratePrompt, syncTemplates };
+    return { createCampaign, updateCampaign, deleteCampaign, regeneratePrompt, syncTemplates };
 }

@@ -6,14 +6,16 @@ import { makeOpenAIRequest, trackTokenUsage } from "../_shared/token-tracker.ts"
  * campaign-manage
  *
  * CRUD de campanhas de disparo em massa.
- *  - Instâncias Meta (API oficial): template Meta (criado ou existente aprovado)
+ *  - Instâncias Meta (API oficial): SOMENTE template existente já APROVADO (template_mode = existing)
  *  - Instâncias UAZAPI (API não oficial): texto livre, sem template (template_mode = none)
  *
+ * O modo "create" (criar template junto com a campanha) foi descontinuado — campanhas
+ * legadas com template_mode = create seguem o fluxo atual no campaign-dispatch até o disparo.
+ *
  * Actions:
- *   - create:            cria campanha + tag + campaign_contacts (com vars por entrada) + template + ai_prompt
- *   - update:            edita campanha (recria template se necessário; regenera prompt)
+ *   - create:            cria campanha + tag + campaign_contacts (com vars por entrada) + ai_prompt
+ *   - update:            edita campanha (revalida template existente; regenera prompt)
  *   - delete:            remove campanha (bloqueado em dispatching/dispatched)
- *   - recreate_template: sugere reescrita da mensagem via IA (template REJECTED)
  *   - regenerate_prompt: regenera apenas o ai_prompt
  */
 
@@ -23,21 +25,9 @@ const corsHeaders = {
     "Content-Type": "application/json; charset=utf-8",
 };
 
-const META_MIN_LEAD_MS = 24 * 60 * 60 * 1000; // 24h (Meta — aprovação de template)
-const UAZAPI_MIN_LEAD_MS = 2 * 60 * 60 * 1000; // 2h (API não oficial)
+const MIN_LEAD_MS = 60 * 60 * 1000; // 1h (template já aprovado — sem espera de aprovação)
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-function slugify(name: string): string {
-    const slug = name
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/[^a-z0-9]+/g, "_")
-        .replace(/^_+|_+$/g, "")
-        .slice(0, 40);
-    return slug || "campanha";
-}
 
 function slugVarKey(raw: string): string {
     return raw
@@ -109,32 +99,6 @@ async function callTemplateManage(payload: Record<string, unknown>) {
         throw new Error(result?.error || "Falha na chamada ao meta-template-manage");
     }
     return result;
-}
-
-async function createMetaTemplate(
-    ownerId: string,
-    instanceId: string,
-    campaignName: string,
-    version: number,
-    initialMessage: string,
-    category: "MARKETING" | "UTILITY"
-) {
-    const { body, variableMap } = buildTemplateBody(initialMessage);
-    const templateName = `camp_${slugify(campaignName)}_v${version}`;
-    const result = await callTemplateManage({
-        action: "create",
-        user_id: ownerId,
-        instance_id: instanceId,
-        name: templateName,
-        category,
-        language: "pt_BR",
-        components: [{ type: "BODY", text: body }],
-    });
-    return {
-        templateId: result.template?.id || null,
-        templateName,
-        variableMap,
-    };
 }
 
 /** Valida template existente aprovado e retorna seus dados. */
@@ -273,69 +237,6 @@ REQUISITOS DO BLOCO GERADO:
     }
 }
 
-async function rewriteTemplateMessage(
-    supabase: any,
-    ownerId: string,
-    originalMessage: string,
-    rejectionReason: string | null
-): Promise<string> {
-    const userPrompt = `A mensagem de template abaixo foi REJEITADA pela Meta (WhatsApp Cloud API).
-
-MENSAGEM ORIGINAL:
-"""
-${originalMessage}
-"""
-
-MOTIVO DA REJEIÇÃO INFORMADO PELA META: ${rejectionReason || "não informado"}
-
-Reescreva a mensagem para maximizar a chance de aprovação como template, seguindo as diretrizes da Meta:
-- Sem promessas enganosas, linguagem sensacionalista, EXCESSO DE MAIÚSCULAS ou pontuação repetida (!!!, ???).
-- Sem conteúdo proibido (empréstimos, apostas, saúde milagrosa, etc.).
-- Sem pedir dados sensíveis (documentos, senhas, cartão).
-- Tom claro, profissional e com valor para o destinatário; deixar claro quem envia.
-- Variáveis não podem ficar coladas umas nas outras nem abrir/encerrar a mensagem sem texto ao redor suficiente.
-- Manter o mesmo idioma (pt-BR) e a mesma intenção comercial da original.
-
-REGRAS OBRIGATÓRIAS:
-1. PRESERVE os placeholders entre < > exatamente como estão na original (ex.: <nome>, <data_agendamento>) — use apenas os que existem na original.
-2. Responda APENAS com o texto reescrito da mensagem, sem aspas, sem explicações.`;
-
-    const { response } = await makeOpenAIRequest(supabase, ownerId, {
-        endpoint: "https://api.openai.com/v1/chat/completions",
-        body: {
-            model: "gpt-4o-mini",
-            messages: [
-                {
-                    role: "system",
-                    content:
-                        "Você é um especialista em políticas de templates do WhatsApp Business (Meta). Reescreve mensagens para aprovação, preservando placeholders.",
-                },
-                { role: "user", content: userPrompt },
-            ],
-            temperature: 0.5,
-            max_tokens: 500,
-        },
-    });
-
-    if (!response.ok) {
-        const err = await response.json().catch(() => null);
-        throw new Error(err?.error?.message || "Falha ao gerar sugestão com a IA");
-    }
-
-    const data = await response.json();
-    if (data.usage) {
-        await trackTokenUsage(supabase, {
-            ownerId,
-            functionName: "campaign-manage",
-            model: "gpt-4o-mini",
-            usage: data.usage,
-        });
-    }
-    const suggestion = data.choices?.[0]?.message?.content?.trim();
-    if (!suggestion) throw new Error("IA não retornou sugestão");
-    return suggestion;
-}
-
 async function syncContactTags(
     supabase: any,
     tagId: string | null,
@@ -359,17 +260,12 @@ async function syncContactTags(
     }
 }
 
-function validateDates(scheduledAt: string, validUntil: string, isMeta: boolean) {
+function validateDates(scheduledAt: string, validUntil: string) {
     const sched = new Date(scheduledAt).getTime();
     const valid = new Date(validUntil).getTime();
     if (isNaN(sched) || isNaN(valid)) throw new Error("Datas inválidas");
-    const minLead = isMeta ? META_MIN_LEAD_MS : UAZAPI_MIN_LEAD_MS;
-    if (sched < Date.now() + minLead) {
-        throw new Error(
-            isMeta
-                ? "O disparo via API oficial (Meta) deve ser agendado com no mínimo 24 horas de antecedência"
-                : "O disparo deve ser agendado com no mínimo 2 horas de antecedência"
-        );
+    if (sched < Date.now() + MIN_LEAD_MS) {
+        throw new Error("O disparo deve ser agendado com no mínimo 1 hora de antecedência");
     }
     if (valid <= sched) {
         throw new Error("A validade deve ser posterior à data do disparo");
@@ -484,14 +380,15 @@ serve(async (req) => {
 
             const instance = await fetchInstance(supabase, instance_id);
             const isMeta = isMetaInstance(instance);
-            validateDates(scheduled_at, valid_until, isMeta);
+            validateDates(scheduled_at, valid_until);
 
             const campaignType = campaign_type === "notification" ? "notification" : "promotion";
-            const templateMode = !isMeta
-                ? "none"
-                : body.template_mode === "existing"
-                    ? "existing"
-                    : "create";
+            if (isMeta && body.template_mode === "create") {
+                throw new Error(
+                    "A criação de template junto com a campanha foi descontinuada — selecione um template já aprovado pela Meta"
+                );
+            }
+            const templateMode = !isMeta ? "none" : "existing";
 
             const entries = normalizeEntries(body) || [];
             if (entries.length === 0 && !(invalid_rows || []).length) {
@@ -547,35 +444,6 @@ serve(async (req) => {
             // Tag em todos os contatos válidos
             await syncContactTags(supabase, tag.id, uniqueContactIds, []);
 
-            // Template Meta novo (só template_mode = create; falha não destrói a campanha)
-            let templateError: string | null = null;
-            if (templateMode === "create") {
-                try {
-                    const tpl = await createMetaTemplate(
-                        ownerId,
-                        instance_id,
-                        name,
-                        1,
-                        initial_message,
-                        campaignType === "notification" ? "UTILITY" : "MARKETING"
-                    );
-                    await supabase
-                        .from("campaigns")
-                        .update({ template_id: tpl.templateId, template_name: tpl.templateName })
-                        .eq("id", campaign.id);
-                    campaign.template_id = tpl.templateId;
-                    campaign.template_name = tpl.templateName;
-                } catch (err: any) {
-                    templateError = err.message;
-                    await supabase
-                        .from("campaigns")
-                        .update({ status: "error", error_message: `Falha ao criar template: ${err.message}` })
-                        .eq("id", campaign.id);
-                    campaign.status = "error";
-                    campaign.error_message = `Falha ao criar template: ${err.message}`;
-                }
-            }
-
             // ai_prompt (não bloqueante)
             const aiPrompt = await generateAiPrompt(supabase, ownerId, {
                 name,
@@ -592,7 +460,7 @@ serve(async (req) => {
             }
 
             return new Response(
-                JSON.stringify({ success: true, campaign, template_error: templateError }),
+                JSON.stringify({ success: true, campaign }),
                 { status: 201, headers: corsHeaders }
             );
         }
@@ -629,14 +497,18 @@ serve(async (req) => {
             const instance = await fetchInstance(supabase, newInstanceId);
             const isMeta = isMetaInstance(instance);
 
+            if (isMeta && body.template_mode === "create") {
+                throw new Error(
+                    "A criação de template junto com a campanha foi descontinuada — selecione um template já aprovado pela Meta"
+                );
+            }
             const oldMode: string = campaign.template_mode || "create";
+            // Legado "create" só permanece se a edição não mexer no modo (chamadas fora do wizard)
             const newMode = !isMeta
                 ? "none"
-                : body.template_mode === "existing"
+                : body.template_mode !== undefined || oldMode === "none"
                     ? "existing"
-                    : body.template_mode === "create"
-                        ? "create"
-                        : oldMode === "none" ? "create" : oldMode;
+                    : oldMode;
             if (newMode !== oldMode) updates.template_mode = newMode;
 
             const newCampaignType =
@@ -653,17 +525,18 @@ serve(async (req) => {
                 updates.initial_message !== undefined &&
                 updates.initial_message !== campaign.initial_message;
 
-            const needsNewTemplate =
-                newMode === "create" &&
-                (messageChanged || campaign.status === "error" || !campaign.template_name || oldMode !== "create");
+            if (newMode === "create" && messageChanged) {
+                throw new Error(
+                    "Esta campanha usa um template criado pela plataforma (modo descontinuado) — para alterar a mensagem, selecione um template já aprovado pela Meta"
+                );
+            }
 
             if (
                 updates.scheduled_at !== undefined ||
                 updates.valid_until !== undefined ||
-                needsNewTemplate ||
                 newMode !== oldMode
             ) {
-                validateDates(newScheduledAt, newValidUntil, isMeta);
+                validateDates(newScheduledAt, newValidUntil);
             }
 
             // Remove template criado anteriormente quando ele deixa de ser usado
@@ -706,24 +579,6 @@ serve(async (req) => {
                 } else if (body.variable_map !== undefined) {
                     updates.variable_map = body.variable_map;
                 }
-            } else if (needsNewTemplate) {
-                await dropOldCreatedTemplate();
-                const newVersion =
-                    (campaign.template_version || 1) + (oldMode === "create" && campaign.template_name ? 1 : 0);
-                const tpl = await createMetaTemplate(
-                    ownerId,
-                    newInstanceId,
-                    (updates.name as string) || campaign.name,
-                    newVersion,
-                    newMessage,
-                    newCampaignType === "notification" ? "UTILITY" : "MARKETING"
-                );
-                updates.template_id = tpl.templateId;
-                updates.template_name = tpl.templateName;
-                updates.template_version = newVersion;
-                updates.variable_map = tpl.variableMap;
-                updates.status = "scheduled";
-                updates.error_message = null;
             }
 
             // Regenerar ai_prompt se contexto comercial mudou
@@ -824,33 +679,6 @@ serve(async (req) => {
             });
         }
 
-        // ══ RECREATE_TEMPLATE (sugestão IA para template rejeitado) ═════════
-        if (action === "recreate_template") {
-            if (campaign.template_mode && campaign.template_mode !== "create") {
-                throw new Error("Reescrita por IA só se aplica a campanhas com template criado pela plataforma");
-            }
-            let rejectionReason: string | null = null;
-            if (campaign.template_id) {
-                const { data: tpl } = await supabase
-                    .from("message_templates")
-                    .select("rejection_reason, status")
-                    .eq("id", campaign.template_id)
-                    .maybeSingle();
-                rejectionReason = tpl?.rejection_reason || null;
-            }
-
-            const suggestion = await rewriteTemplateMessage(
-                supabase,
-                ownerId,
-                campaign.initial_message,
-                rejectionReason
-            );
-
-            return new Response(JSON.stringify({ success: true, suggestion }), {
-                headers: corsHeaders,
-            });
-        }
-
         // ══ REGENERATE_PROMPT ═══════════════════════════════════════════════
         if (action === "regenerate_prompt") {
             const aiPrompt = await generateAiPrompt(supabase, ownerId, {
@@ -872,7 +700,7 @@ serve(async (req) => {
         }
 
         throw new Error(
-            `Invalid action: "${action}". Valid: create, update, delete, recreate_template, regenerate_prompt`
+            `Invalid action: "${action}". Valid: create, update, delete, regenerate_prompt`
         );
     } catch (error: any) {
         console.error("[campaign-manage] Error:", error);

@@ -34,8 +34,7 @@ import { AudienceSales } from "./audience/AudienceSales";
 const COST_PER_MSG_USD = 0.0625;
 const META_SPACING_SECONDS = 15;
 const UAZAPI_SPACING_SECONDS = 38; // média do intervalo aleatório 30-45s
-const META_MIN_LEAD_H = 24;
-const UAZAPI_MIN_LEAD_H = 2;
+const MIN_LEAD_H = 1;
 
 const SOURCE_OPTIONS = [
     { value: "csv", label: "Arquivo CSV/Excel", icon: FileSpreadsheet },
@@ -87,7 +86,6 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
     const [campaignType, setCampaignType] = useState<"promotion" | "notification">("promotion");
     const [selectedServices, setSelectedServices] = useState<CampaignService[]>([]);
     const [discountPct, setDiscountPct] = useState<string>("");
-    const [templateChoice, setTemplateChoice] = useState<"create" | "existing">("create");
     const [existingTemplateId, setExistingTemplateId] = useState("");
     const [varMapping, setVarMapping] = useState<Record<number, string>>({});
     const [message, setMessage] = useState("");
@@ -97,7 +95,7 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
 
     const selectedInstance = (instances || []).find((i: any) => i.id === instanceId);
     const isMeta = selectedInstance ? isMetaInstance(selectedInstance) : true;
-    const minLeadHours = isMeta ? META_MIN_LEAD_H : UAZAPI_MIN_LEAD_H;
+    const minLeadHours = MIN_LEAD_H;
 
     // Pré-preenche em edição / reseta em criação
     useEffect(() => {
@@ -112,10 +110,9 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
             setCampaignType(campaign.campaign_type || "promotion");
             setSelectedServices(campaign.services || []);
             setDiscountPct(campaign.discount_pct != null ? String(campaign.discount_pct) : "");
-            setTemplateChoice(campaign.template_mode === "existing" ? "existing" : "create");
             setExistingTemplateId(campaign.template_mode === "existing" ? campaign.template_id || "" : "");
             setVarMapping({});
-            setMessage(campaign.template_mode === "existing" ? "" : campaign.initial_message);
+            setMessage(campaign.template_mode === "none" ? campaign.initial_message : "");
             setObjective(campaign.objective);
             setIaEnabled(campaign.ia_enabled);
         } else {
@@ -128,7 +125,6 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
             setCampaignType("promotion");
             setSelectedServices([]);
             setDiscountPct("");
-            setTemplateChoice("create");
             setExistingTemplateId("");
             setVarMapping({});
             setMessage("");
@@ -275,7 +271,8 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
         });
     };
 
-    const useExistingTemplate = isMeta && templateChoice === "existing";
+    // Meta: sempre template existente já aprovado (modo "create" descontinuado)
+    const useExistingTemplate = isMeta;
 
     // Mensagem derivada do template existente ({{n}} → <variável mapeada>)
     const existingInitialMessage = useMemo(() => {
@@ -311,9 +308,7 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
             if (!instanceId) return "Selecione a instância de disparo";
             if (!scheduledAt) return "Informe a data do disparo";
             if (new Date(scheduledAt).getTime() < Date.now() + minLeadHours * 3600_000 - 60_000) {
-                return isMeta
-                    ? "Instância Meta: o disparo precisa ser agendado com pelo menos 24h de antecedência (tempo de aprovação do template)"
-                    : "O disparo precisa ser agendado com pelo menos 2h de antecedência";
+                return "O disparo precisa ser agendado com pelo menos 1h de antecedência";
             }
             if (!validUntil) return "Informe a validade da campanha";
             if (new Date(validUntil) <= new Date(scheduledAt)) return "A validade precisa ser depois do disparo";
@@ -362,7 +357,7 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
             initial_message: effectiveMessage.trim(),
             objective: objective.trim(),
             ia_enabled: iaEnabled,
-            template_mode: !isMeta ? "none" : templateChoice,
+            template_mode: !isMeta ? "none" : "existing",
         };
         if (useExistingTemplate && selectedTemplate) {
             payload.existing_template = {
@@ -384,14 +379,8 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
             } else {
                 payload.entries = audience.entries.map((e) => ({ contact_id: e.contactId, vars: e.vars }));
                 payload.invalid_rows = audience.invalidRows;
-                const res = await createCampaign.mutateAsync(payload);
-                if (res.template_error) {
-                    toast.warning(`Campanha criada, mas o template falhou: ${res.template_error}. Edite a campanha para tentar novamente.`);
-                } else if (isMeta && templateChoice === "create") {
-                    toast.success("Campanha criada! O template foi enviado para aprovação da Meta.");
-                } else {
-                    toast.success("Campanha criada!");
-                }
+                await createCampaign.mutateAsync(payload);
+                toast.success("Campanha criada!");
             }
             onOpenChange(false);
         } catch (err: any) {
@@ -479,7 +468,7 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
                                     onChange={(e) => setScheduledAt(e.target.value)}
                                 />
                                 <p className="text-[10px] text-muted-foreground mt-1">
-                                    {isMeta ? "Mínimo 24h (aprovação do template Meta)" : "Mínimo 2h (API não oficial, sem template)"}
+                                    Mínimo 1h de antecedência
                                 </p>
                             </div>
                             <div>
@@ -610,7 +599,6 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
                         {campaignType === "notification" && (
                             <p className="text-xs text-muted-foreground border rounded-xl p-3">
                                 Campanha de notificação: sem serviços nem desconto.
-                                {isMeta && " O template Meta será criado na categoria UTILITY (aprovação mais rápida e custo menor)."}
                             </p>
                         )}
                     </div>
@@ -619,29 +607,6 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
                 {/* Step 3 — Mensagem */}
                 {step === 3 && (
                     <div className="space-y-3">
-                        {isMeta && (
-                            <div className="grid grid-cols-2 gap-2">
-                                {([
-                                    { value: "create", label: "Criar novo template" },
-                                    { value: "existing", label: "Usar template existente" },
-                                ] as const).map((opt) => (
-                                    <button
-                                        key={opt.value}
-                                        type="button"
-                                        onClick={() => setTemplateChoice(opt.value)}
-                                        className={cn(
-                                            "border rounded-xl p-2.5 text-xs transition-colors",
-                                            templateChoice === opt.value
-                                                ? "border-primary bg-primary/5 text-foreground font-medium"
-                                                : "border-border text-muted-foreground hover:bg-muted/40"
-                                        )}
-                                    >
-                                        {opt.label}
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-
                         {useExistingTemplate ? (
                             <div className="space-y-3">
                                 <div>
@@ -658,7 +623,12 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
                                     </Select>
                                     {(approvedTemplates || []).length === 0 && (
                                         <p className="text-xs text-amber-600 mt-1">
-                                            Nenhum template aprovado (somente texto) nesta instância.
+                                            Nenhum template aprovado (somente texto) nesta instância. Crie e aguarde a
+                                            aprovação em{" "}
+                                            <a href="/whatsapp-connection?tab=templates" className="underline font-medium">
+                                                Conexões &gt; Templates
+                                            </a>{" "}
+                                            antes de criar a campanha.
                                         </p>
                                     )}
                                 </div>
@@ -698,7 +668,7 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
                             <div>
                                 <div className="flex items-center justify-between mb-1 gap-2">
                                     <p className="text-xs text-muted-foreground shrink-0">
-                                        {isMeta ? "Mensagem inicial (vira template Meta) *" : "Mensagem inicial *"}
+                                        Mensagem inicial *
                                     </p>
                                     <div className="flex gap-1 flex-wrap justify-end">
                                         {availableVars.map((v) => (
@@ -722,11 +692,6 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
                                     rows={6}
                                     placeholder={"Olá <nome>! Temos uma condição especial válida até..."}
                                 />
-                                {isMeta && (
-                                    <p className="text-[10px] text-muted-foreground mt-1">
-                                        Mensagem alterada após a criação exige novo template (nova aprovação da Meta).
-                                    </p>
-                                )}
                             </div>
                         )}
 
@@ -833,11 +798,7 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
                         )}
                         <p className="text-xs text-muted-foreground">
                             Ao {isEdit ? "salvar" : "criar"}:{" "}
-                            {isMeta
-                                ? templateChoice === "existing"
-                                    ? "template aprovado reutilizado, "
-                                    : "template Meta enviado para aprovação, "
-                                : ""}
+                            {isMeta ? "template aprovado reutilizado, " : ""}
                             etiqueta "{name}" aplicada aos contatos e prompt de vendas gerado pela IA.
                         </p>
                     </div>

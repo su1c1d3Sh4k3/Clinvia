@@ -5,10 +5,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
-import {
-    Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
 import {
     AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
     AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -48,9 +44,7 @@ interface CampaignCardProps {
 export function CampaignCard({ campaign, onEdit }: CampaignCardProps) {
     const [expanded, setExpanded] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
-    const [rewriteOpen, setRewriteOpen] = useState(false);
-    const [suggestion, setSuggestion] = useState("");
-    const { deleteCampaign, recreateTemplate, regeneratePrompt, syncTemplates, updateCampaign } = useCampaignMutations();
+    const { deleteCampaign, regeneratePrompt, syncTemplates } = useCampaignMutations();
     const { data: rateData } = useUsdBrlRate();
 
     const statusMeta = CAMPAIGN_STATUS[campaign.status] || CAMPAIGN_STATUS.scheduled;
@@ -69,26 +63,6 @@ export function CampaignCard({ campaign, onEdit }: CampaignCardProps) {
         : estimatedSeconds < 3600
             ? `${Math.ceil(estimatedSeconds / 60)} min`
             : `${Math.floor(estimatedSeconds / 3600)}h ${Math.ceil((estimatedSeconds % 3600) / 60)}min`;
-
-    const handleRewrite = async () => {
-        try {
-            const s = await recreateTemplate.mutateAsync(campaign.id);
-            setSuggestion(s);
-            setRewriteOpen(true);
-        } catch (err: any) {
-            toast.error(err.message);
-        }
-    };
-
-    const approveRewrite = async () => {
-        try {
-            await updateCampaign.mutateAsync({ campaignId: campaign.id, initial_message: suggestion });
-            setRewriteOpen(false);
-            toast.success("Novo template criado e enviado para aprovação da Meta.");
-        } catch (err: any) {
-            toast.error(err.message);
-        }
-    };
 
     const handleDelete = async () => {
         try {
@@ -177,17 +151,10 @@ export function CampaignCard({ campaign, onEdit }: CampaignCardProps) {
                                         </p>
                                     )}
                                     <p className="text-xs text-muted-foreground mt-0.5">
-                                        Edite a mensagem ou deixe a IA reescrever seguindo as diretrizes da Meta.
+                                        Edite a campanha e selecione outro template já aprovado pela Meta.
                                     </p>
                                 </div>
                             </div>
-                            <Button size="sm" variant="outline" onClick={handleRewrite} disabled={recreateTemplate.isPending}>
-                                {recreateTemplate.isPending ? (
-                                    <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Gerando...</>
-                                ) : (
-                                    <><Sparkles className="w-3.5 h-3.5 mr-1.5" /> Recriar com IA</>
-                                )}
-                            </Button>
                         </div>
                     )}
 
@@ -279,31 +246,6 @@ export function CampaignCard({ campaign, onEdit }: CampaignCardProps) {
                     </div>
                 </div>
             )}
-
-            {/* Dialog reescrita IA */}
-            <Dialog open={rewriteOpen} onOpenChange={setRewriteOpen}>
-                <DialogContent className="sm:max-w-lg">
-                    <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                            <Sparkles className="w-4 h-4 text-primary" /> Mensagem reescrita pela IA
-                        </DialogTitle>
-                    </DialogHeader>
-                    <p className="text-xs text-muted-foreground">
-                        Reescrita seguindo as diretrizes de templates da Meta. Ajuste se quiser e aprove para criar o novo template.
-                    </p>
-                    <Textarea value={suggestion} onChange={(e) => setSuggestion(e.target.value)} rows={6} />
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setRewriteOpen(false)}>Cancelar</Button>
-                        <Button onClick={approveRewrite} disabled={updateCampaign.isPending || !suggestion.trim()}>
-                            {updateCampaign.isPending ? (
-                                <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> Criando template...</>
-                            ) : (
-                                "Aprovar e criar template"
-                            )}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
 
             {/* Confirmação de exclusão */}
             <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
