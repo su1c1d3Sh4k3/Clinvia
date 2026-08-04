@@ -163,7 +163,9 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
         enabled: open,
     });
 
-    // Templates Meta aprovados (somente BODY/FOOTER) para "usar template existente"
+    // Templates Meta aprovados para "usar template existente".
+    // Aceita qualquer componente que não exija parâmetro dinâmico no envio:
+    // BODY/FOOTER sempre; HEADER de texto fixo (sem {{n}}); botões QUICK_REPLY.
     const { data: approvedTemplates } = useQuery({
         queryKey: ["campaign-approved-templates", instanceId],
         queryFn: async () => {
@@ -177,9 +179,20 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
             return ((data || []) as any[])
                 .filter((t) => {
                     const comps = Array.isArray(t.components) ? t.components : [];
-                    return comps.every((c: any) =>
-                        ["BODY", "FOOTER"].includes(String(c?.type || "").toUpperCase())
-                    );
+                    return comps.every((c: any) => {
+                        const type = String(c?.type || "").toUpperCase();
+                        if (["BODY", "FOOTER"].includes(type)) return true;
+                        if (type === "HEADER") {
+                            return String(c?.format || "TEXT").toUpperCase() === "TEXT"
+                                && !/\{\{\s*\d+\s*\}\}/.test(String(c?.text || ""));
+                        }
+                        if (type === "BUTTONS") {
+                            return (c?.buttons || []).every(
+                                (b: any) => String(b?.type || "").toUpperCase() === "QUICK_REPLY"
+                            );
+                        }
+                        return false;
+                    });
                 })
                 .map((t) => ({
                     ...t,
