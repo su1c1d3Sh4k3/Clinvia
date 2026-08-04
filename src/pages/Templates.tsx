@@ -597,7 +597,7 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
                                     Novo Template
                                 </Button>
                             </DialogTrigger>
-                            <DialogContent className="max-w-lg">
+                            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                                 <DialogHeader>
                                     <DialogTitle>Criar Template</DialogTitle>
                                     <DialogDescription>
@@ -865,7 +865,7 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
             </div>
 
             <Dialog open={sendDialogOpen} onOpenChange={setSendDialogOpen}>
-                <DialogContent>
+                <DialogContent className="max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Enviar Template</DialogTitle>
                         <DialogDescription>
@@ -920,7 +920,7 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
             </Dialog>
 
             <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-                <DialogContent className="max-w-lg">
+                <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Editar Template</DialogTitle>
                         <DialogDescription>
