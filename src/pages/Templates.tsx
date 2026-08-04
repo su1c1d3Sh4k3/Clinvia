@@ -91,6 +91,23 @@ function namedToNumbered(body: string, validKeys: string[]): { text: string; map
     return { text, map };
 }
 
+// Botões de resposta rápida → componente BUTTONS da Meta (ou null se vazio)
+function buildButtonsComponent(buttons: string[]): any | null {
+    const texts = buttons.map((b) => b.trim()).filter(Boolean);
+    if (texts.length === 0) return null;
+    if (texts.some((t) => t.length > 25)) {
+        throw new Error("Cada botão pode ter no máximo 25 caracteres.");
+    }
+    const unique = new Set(texts.map((t) => t.toLowerCase()));
+    if (unique.size !== texts.length) {
+        throw new Error("Os textos dos botões devem ser diferentes entre si.");
+    }
+    return {
+        type: "BUTTONS",
+        buttons: texts.map((text) => ({ type: "QUICK_REPLY", text })),
+    };
+}
+
 // Helper to call meta-template-manage edge function
 async function callTemplateApi(body: any): Promise<any> {
     let token = SUPABASE_ANON_KEY;
@@ -136,6 +153,7 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
     const [editBodyText, setEditBodyText] = useState("");
     const [editHeaderText, setEditHeaderText] = useState("");
     const [editFooterText, setEditFooterText] = useState("");
+    const [editButtons, setEditButtons] = useState<string[]>([]);
     const editBodyRef = useRef<HTMLTextAreaElement>(null);
 
     // Form state
@@ -145,6 +163,7 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
     const [newBodyText, setNewBodyText] = useState("");
     const [newHeaderText, setNewHeaderText] = useState("");
     const [newFooterText, setNewFooterText] = useState("");
+    const [newButtons, setNewButtons] = useState<string[]>([]);
 
     // Send state
     const [sendTo, setSendTo] = useState("");
@@ -288,6 +307,8 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
             if (newFooterText.trim()) {
                 components.push({ type: "FOOTER", text: newFooterText.trim() });
             }
+            const buttonsComponent = buildButtonsComponent(newButtons);
+            if (buttonsComponent) components.push(buttonsComponent);
             return await callTemplateApi({
                 action: 'create',
                 user_id: user.id,
@@ -304,6 +325,7 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
             setCreateDialogOpen(false);
             setNewName(""); setNewCategory("UTILITY"); setNewLanguage("pt_BR");
             setNewBodyText(""); setNewHeaderText(""); setNewFooterText("");
+            setNewButtons([]);
         },
         onError: (err: any) => {
             toast({ title: "Erro ao criar template", description: err.message, variant: "destructive" });
@@ -333,9 +355,12 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
                 throw new Error("O corpo da mensagem precisa ter pelo menos 20 caracteres de texto alem das variaveis.");
             }
 
-            // Preserva componentes não editáveis (ex.: BUTTONS dos templates de sistema)
+            // Preserva componentes não editáveis (ex.: BUTTONS dos templates de sistema).
+            // Em templates comuns, BUTTONS é editável pela UI e sai deste filtro.
             const otherComponents = (editTemplate.components || []).filter(
-                (c: any) => !["BODY", "HEADER", "FOOTER"].includes(c.type)
+                (c: any) =>
+                    !["BODY", "HEADER", "FOOTER"].includes(c.type) &&
+                    (sysMeta || c.type !== "BUTTONS")
             );
             const components: any[] = [];
             if (!sysMeta && editHeaderText.trim()) {
@@ -344,6 +369,10 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
             components.push({ type: "BODY", text: bodyText });
             if (!sysMeta && editFooterText.trim()) {
                 components.push({ type: "FOOTER", text: editFooterText.trim() });
+            }
+            if (!sysMeta) {
+                const buttonsComponent = buildButtonsComponent(editButtons);
+                if (buttonsComponent) components.push(buttonsComponent);
             }
             components.push(...otherComponents);
 
@@ -380,6 +409,12 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
         setEditBodyText(body);
         setEditHeaderText(tpl.components?.find((c: any) => c.type === 'HEADER')?.text || "");
         setEditFooterText(tpl.components?.find((c: any) => c.type === 'FOOTER')?.text || "");
+        const buttonsComponent = tpl.components?.find((c: any) => c.type === 'BUTTONS');
+        setEditButtons(
+            (buttonsComponent?.buttons || [])
+                .filter((b: any) => b.type === 'QUICK_REPLY')
+                .map((b: any) => b.text || "")
+        );
         setEditDialogOpen(true);
     };
 
@@ -634,6 +669,41 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
                                             onChange={(e) => setNewFooterText(e.target.value)}
                                         />
                                     </div>
+                                    <div className="space-y-2">
+                                        <Label>Botoes de resposta rapida (opcional)</Label>
+                                        {newButtons.map((btn, idx) => (
+                                            <div key={idx} className="flex items-center gap-2">
+                                                <Input
+                                                    placeholder={`Botao ${idx + 1} (ex: Confirmar)`}
+                                                    value={btn}
+                                                    maxLength={25}
+                                                    onChange={(e) => {
+                                                        const arr = [...newButtons];
+                                                        arr[idx] = e.target.value;
+                                                        setNewButtons(arr);
+                                                    }}
+                                                />
+                                                <Button
+                                                    type="button" size="sm" variant="ghost"
+                                                    className="h-8 w-8 p-0 shrink-0 text-destructive hover:text-destructive"
+                                                    onClick={() => setNewButtons(newButtons.filter((_, i) => i !== idx))}
+                                                >
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                </Button>
+                                            </div>
+                                        ))}
+                                        {newButtons.length < 10 && (
+                                            <Button
+                                                type="button" size="sm" variant="outline" className="h-7 text-xs"
+                                                onClick={() => setNewButtons([...newButtons, ""])}
+                                            >
+                                                <Plus className="h-3 w-3 mr-1" /> Adicionar botao
+                                            </Button>
+                                        )}
+                                        <p className="text-xs text-muted-foreground">
+                                            O cliente responde tocando no botao. Max. 25 caracteres por botao; com mais de 3, o WhatsApp exibe "Ver todas as opcoes".
+                                        </p>
+                                    </div>
                                 </div>
                                 <DialogFooter>
                                     <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
@@ -672,6 +742,7 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
                                     const bodyComponent = tpl.components?.find((c: any) => c.type === 'BODY');
                                     const headerComponent = tpl.components?.find((c: any) => c.type === 'HEADER');
                                     const footerComponent = tpl.components?.find((c: any) => c.type === 'FOOTER');
+                                    const buttonsComponent = tpl.components?.find((c: any) => c.type === 'BUTTONS');
                                     const isExpanded = expandedTemplate === tpl.id;
                                     return (
                                         <div key={tpl.id} className="border rounded-lg">
@@ -751,6 +822,18 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
                                                         <div>
                                                             <span className="font-medium text-xs text-muted-foreground">RODAPE:</span>
                                                             <p className="text-muted-foreground">{footerComponent.text}</p>
+                                                        </div>
+                                                    )}
+                                                    {buttonsComponent?.buttons?.length > 0 && (
+                                                        <div>
+                                                            <span className="font-medium text-xs text-muted-foreground">BOTOES:</span>
+                                                            <div className="flex flex-wrap gap-1.5 mt-1">
+                                                                {buttonsComponent.buttons.map((b: any, i: number) => (
+                                                                    <Badge key={i} variant="outline" className="text-xs font-normal">
+                                                                        {b.text}
+                                                                    </Badge>
+                                                                ))}
+                                                            </div>
                                                         </div>
                                                     )}
                                                     {tpl.rejection_reason && (
@@ -905,6 +988,43 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
                                     value={editFooterText}
                                     onChange={(e) => setEditFooterText(e.target.value)}
                                 />
+                            </div>
+                        )}
+                        {editTemplate && !SYS_TEMPLATE_META[editTemplate.name] && (
+                            <div className="space-y-2">
+                                <Label>Botoes de resposta rapida (opcional)</Label>
+                                {editButtons.map((btn, idx) => (
+                                    <div key={idx} className="flex items-center gap-2">
+                                        <Input
+                                            placeholder={`Botao ${idx + 1} (ex: Confirmar)`}
+                                            value={btn}
+                                            maxLength={25}
+                                            onChange={(e) => {
+                                                const arr = [...editButtons];
+                                                arr[idx] = e.target.value;
+                                                setEditButtons(arr);
+                                            }}
+                                        />
+                                        <Button
+                                            type="button" size="sm" variant="ghost"
+                                            className="h-8 w-8 p-0 shrink-0 text-destructive hover:text-destructive"
+                                            onClick={() => setEditButtons(editButtons.filter((_, i) => i !== idx))}
+                                        >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                        </Button>
+                                    </div>
+                                ))}
+                                {editButtons.length < 10 && (
+                                    <Button
+                                        type="button" size="sm" variant="outline" className="h-7 text-xs"
+                                        onClick={() => setEditButtons([...editButtons, ""])}
+                                    >
+                                        <Plus className="h-3 w-3 mr-1" /> Adicionar botao
+                                    </Button>
+                                )}
+                                <p className="text-xs text-muted-foreground">
+                                    Max. 25 caracteres por botao; com mais de 3, o WhatsApp exibe "Ver todas as opcoes".
+                                </p>
                             </div>
                         )}
                     </div>
