@@ -386,6 +386,12 @@ export function useCreateSale() {
                 professional_id: data.professional_id || null,
                 notes: data.notes || null,
                 contact_id: data.contact_id || null,
+                service_client_id: data.service_client_id || null,
+                appointment_id: data.appointment_id || null,
+                scheduled: data.scheduled ?? false,
+                ia_scheduling: data.ia_scheduling ?? false,
+                ia_contact_days: data.ia_contact_days ?? null,
+                ia_scheduling_status: data.ia_scheduling_status ?? null,
             };
 
             const { data: result, error } = await supabase
@@ -437,6 +443,12 @@ export function useUpdateSale() {
                     professional_id: data.professional_id || null,
                     notes: data.notes || null,
                     contact_id: data.contact_id || null,
+                    service_client_id: data.service_client_id || null,
+                    appointment_id: data.appointment_id || null,
+                    scheduled: data.scheduled ?? false,
+                    ia_scheduling: data.ia_scheduling ?? false,
+                    ia_contact_days: data.ia_contact_days ?? null,
+                    ia_scheduling_status: data.ia_scheduling_status ?? null,
                 })
                 .eq('id', id)
                 .select()

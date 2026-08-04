@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -90,6 +91,12 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
     const queryClient = useQueryClient();
     const [activeTab, setActiveTab] = useState<"appointment" | "absence">("appointment");
     const [isLoading, setIsLoading] = useState(false);
+
+    // ── Pagamento da venda gerada automaticamente (apenas na criação) ──
+    const [paymentType, setPaymentType] = useState<"cash" | "installment" | "pending" | "mixed">("pending");
+    const [installments, setInstallments] = useState(2);
+    const [interestRate, setInterestRate] = useState(0);
+    const [cashAmount, setCashAmount] = useState(0);
     const { data: ownerId } = useOwnerId();
     const { onAppointmentCreated: syncCrmOnCreate } = useCrmAppointmentSync();
 
@@ -164,6 +171,17 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
     const watchServiceNameId = form.watch("service_name_id");
     const currentHour   = watchStartTime?.split(":")[0] ?? "";
     const currentMinute = watchStartTime?.split(":")[1] ?? "";
+    const watchPrice = form.watch("price") || 0;
+
+    // ── Preview do parcelamento (mesma regra do módulo de vendas: juros simples, 1ª parcela sem juros) ──
+    const formatCurrency = (v: number) =>
+        v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    const financedBase = paymentType === "mixed" ? Math.max(watchPrice - cashAmount, 0) : watchPrice;
+    const avgTime = (installments - 1) / 2;
+    const totalWithInterest = installments > 1
+        ? financedBase * (1 + (interestRate / 100) * avgTime)
+        : financedBase;
+    const installmentValue = installments > 0 ? totalWithInterest / installments : 0;
 
     // Buscar detalhes do profissional selecionado (work_hours + work_days)
     const { data: selectedProfessional } = useQuery({
@@ -474,6 +492,11 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                 // não quando o usuário alterna manualmente entre abas.
                 setActiveTab("appointment");
             }
+            // Reset pagamento
+            setPaymentType("pending");
+            setInstallments(2);
+            setInterestRate(0);
+            setCashAmount(0);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, defaultDate, defaultProfessionalId, defaultServiceId, appointmentToEdit, form, defaultContactId, defaultContactName, defaultContactPhone]);
@@ -617,6 +640,14 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                 endDateTime = addMinutes(startDateTime, values.duration || 30);
             }
 
+            // Validação do pagamento misto (venda gerada automaticamente)
+            if (!appointmentToEdit && values.type === "appointment" && paymentType === "mixed") {
+                const total = values.price || 0;
+                if (cashAmount <= 0 || cashAmount >= total) {
+                    throw new Error("No pagamento misto, o valor à vista deve ser maior que zero e menor que o total.");
+                }
+            }
+
             // Check overlap
             const { data: isOverlap, error: overlapError } = await supabase.rpc("check_appointment_overlap", {
                 p_professional_id: values.professional_id,
@@ -672,6 +703,23 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                     }).catch(() => {});
                 }
                 onAppointmentCreated?.();
+
+                // Atualizar pagamento da venda criada automaticamente pelo trigger
+                // (parcelas são regeneradas automaticamente pelo trigger de installments)
+                if (values.type === "appointment" && values.contact_id && values.service_id && created?.id && paymentType !== "pending") {
+                    const isFinanced = paymentType === "installment" || paymentType === "mixed";
+                    const { error: saleErr } = await supabase
+                        .from("sales")
+                        .update({
+                            payment_type: paymentType,
+                            installments: isFinanced ? installments : 1,
+                            interest_rate: isFinanced ? interestRate : 0,
+                            cash_amount: paymentType === "mixed" ? cashAmount : paymentType === "cash" ? (values.price || 0) : 0,
+                        })
+                        .eq("appointment_id", created.id);
+                    if (saleErr) console.error("Erro ao atualizar pagamento da venda:", saleErr);
+                    queryClient.invalidateQueries({ queryKey: ["sales"] });
+                }
 
                 // CRM sync: create/move card to "Agendado" + add service
                 if (values.type === "appointment" && values.contact_id) {
@@ -1030,6 +1078,94 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                                         </FormItem>
                                     )}
                                 />
+                            )}
+
+                            {/* ── Pagamento da venda gerada automaticamente ── */}
+                            {activeTab === "appointment" && !appointmentToEdit && (
+                                <div className="space-y-3 rounded-md border p-3">
+                                    <div className="space-y-2">
+                                        <Label>Forma de Pagamento</Label>
+                                        <Select
+                                            value={paymentType}
+                                            onValueChange={(value: "cash" | "installment" | "pending" | "mixed") => {
+                                                setPaymentType(value);
+                                                if (value === "cash" || value === "pending") {
+                                                    setInstallments(2);
+                                                    setInterestRate(0);
+                                                }
+                                                if (value !== "mixed") setCashAmount(0);
+                                            }}
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="pending">Pendente</SelectItem>
+                                                <SelectItem value="cash">À Vista</SelectItem>
+                                                <SelectItem value="installment">Parcelado</SelectItem>
+                                                <SelectItem value="mixed">Misto (Vista + Parcelado)</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    {paymentType === "mixed" && (
+                                        <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                                            <Label>Valor à Vista</Label>
+                                            <CurrencyInput
+                                                value={cashAmount}
+                                                onChange={(val) => {
+                                                    const maxCash = watchPrice > 0 ? watchPrice - 0.01 : 0;
+                                                    setCashAmount(Math.min(Math.max(val, 0), maxCash));
+                                                }}
+                                            />
+                                            <p className="text-xs text-muted-foreground">
+                                                Restante a parcelar: <span className="font-medium text-foreground">{formatCurrency(Math.max(watchPrice - cashAmount, 0))}</span>
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {(paymentType === "installment" || paymentType === "mixed") && (
+                                        <>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div className="space-y-2">
+                                                    <Label>Parcelas</Label>
+                                                    <Select
+                                                        value={String(installments)}
+                                                        onValueChange={(val) => setInstallments(parseInt(val))}
+                                                    >
+                                                        <SelectTrigger>
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 18, 24].map((n) => (
+                                                                <SelectItem key={n} value={String(n)}>{n}x</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label>Juros % (a.m.)</Label>
+                                                    <Input
+                                                        type="number"
+                                                        min={0}
+                                                        max={10}
+                                                        step={0.1}
+                                                        value={interestRate}
+                                                        onChange={(e) => setInterestRate(parseFloat(e.target.value) || 0)}
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-md text-sm">
+                                                <p className="font-medium">{installments}x de {formatCurrency(installmentValue)}</p>
+                                                {interestRate > 0 && (
+                                                    <p className="text-xs text-muted-foreground">
+                                                        Total com juros: {formatCurrency(totalWithInterest)}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
                             )}
 
                             <FormField

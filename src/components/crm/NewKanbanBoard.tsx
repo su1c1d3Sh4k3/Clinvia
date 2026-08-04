@@ -8,7 +8,6 @@ import { Loader2, GripVertical, MessageSquare, AlertTriangle, CalendarClock } fr
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { DealConversationModal } from "./DealConversationModal";
 import { LossReasonModal } from "./LossReasonModal";
-import { PaymentTypeModal } from "./PaymentTypeModal";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { format, formatDistanceToNow } from "date-fns";
@@ -47,9 +46,7 @@ export const NewKanbanBoard = ({ onCardClick }: NewKanbanBoardProps) => {
 
   // Modal states
   const [lossModalOpen, setLossModalOpen] = useState(false);
-  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [pendingDrop, setPendingDrop] = useState<{ client: CrmClient; targetStage: CrmStage } | null>(null);
-  const [isProcessingSale, setIsProcessingSale] = useState(false);
 
   const { data: clients, isLoading } = useQuery({
     queryKey: ["crm-clients"],
@@ -192,81 +189,13 @@ export const NewKanbanBoard = ({ onCardClick }: NewKanbanBoardProps) => {
       return;
     }
 
-    // Intercept Ganho → open PaymentTypeModal
-    if (targetStage === "Ganho") {
-      setPendingDrop({ client, targetStage });
-      setPaymentModalOpen(true);
-      return;
-    }
-
+    // Ganho: apenas move — vendas são criadas na criação do agendamento (trigger no banco)
     moveStage.mutate({ id: clientId, stage: targetStage });
   };
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
-  };
-
-  // ── Ganho: create sales from deal services ──
-  const createSalesForDeal = async (client: CrmClient, paymentType: 'cash' | 'installment' | 'mixed' | 'pending', installments?: number, interestRate?: number, cashAmount?: number) => {
-    if (!ownerId) return;
-    const services = (allServices || []).filter((s: any) => s.crm_client_id === client.id);
-    if (services.length === 0) return;
-
-    for (const svc of services) {
-      const totalAmount = (svc.unit_price || 0) * (svc.quantity || 1);
-      await supabase.from("sales").insert({
-        user_id: ownerId,
-        category: "service",
-        product_service_id: null,
-        product_name: svc.service_name || "Serviço",
-        quantity: svc.quantity || 1,
-        unit_price: svc.unit_price || 0,
-        total_amount: totalAmount,
-        payment_type: paymentType,
-        installments: paymentType === 'cash' || paymentType === 'pending' ? 1 : (installments || 1),
-        interest_rate: paymentType === 'cash' || paymentType === 'pending' ? 0 : (interestRate || 0),
-        cash_amount: paymentType === 'mixed' ? (cashAmount || 0) : 0,
-        sale_date: new Date().toISOString().split("T")[0],
-        contact_id: client.contact_id,
-        professional_id: client.professional_id,
-        notes: `Venda do CRM - ${svc.service_name}`,
-      });
-    }
-    queryClient.invalidateQueries({ queryKey: ["sales"] });
-  };
-
-  const handlePaymentConfirm = async (paymentType: 'cash' | 'installment' | 'mixed', installments?: number, interestRate?: number, cashAmount?: number) => {
-    if (!pendingDrop) return;
-    setIsProcessingSale(true);
-    try {
-      await createSalesForDeal(pendingDrop.client, paymentType, installments, interestRate, cashAmount);
-      moveStage.mutate({ id: pendingDrop.client.id, stage: "Ganho" });
-      toast.success("Vendas criadas e negociação concluída!");
-    } catch {
-      toast.error("Erro ao criar vendas");
-    } finally {
-      setIsProcessingSale(false);
-      setPaymentModalOpen(false);
-      setPendingDrop(null);
-    }
-  };
-
-  const handlePaymentCancel = async () => {
-    // "Decidir Depois" → cria como pending e move para Ganho
-    if (!pendingDrop) return;
-    setIsProcessingSale(true);
-    try {
-      await createSalesForDeal(pendingDrop.client, 'pending');
-      moveStage.mutate({ id: pendingDrop.client.id, stage: "Ganho" });
-      toast.success("Negociação concluída! Pagamento pendente.");
-    } catch {
-      toast.error("Erro ao processar");
-    } finally {
-      setIsProcessingSale(false);
-      setPaymentModalOpen(false);
-      setPendingDrop(null);
-    }
   };
 
   const handleLossConfirm = (reason: string, otherDescription?: string) => {
@@ -308,10 +237,6 @@ export const NewKanbanBoard = ({ onCardClick }: NewKanbanBoardProps) => {
 
   const fmt = (v: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
-
-  // Compute values for PaymentTypeModal
-  const pendingServices = pendingDrop ? (allServices || []).filter((s: any) => s.crm_client_id === pendingDrop.client.id) : [];
-  const pendingTotal = pendingServices.reduce((sum: number, s: any) => sum + ((s.unit_price || 0) * (s.quantity || 1)), 0);
 
   return (
     <>
@@ -481,17 +406,6 @@ export const NewKanbanBoard = ({ onCardClick }: NewKanbanBoardProps) => {
         onCancel={handleLossCancel}
       />
 
-      {/* Modal: Forma de Pagamento (Ganho) */}
-      <PaymentTypeModal
-        open={paymentModalOpen}
-        onOpenChange={setPaymentModalOpen}
-        dealTitle={pendingDrop?.client.contact?.push_name || "Negociação"}
-        totalValue={pendingTotal}
-        productsCount={pendingServices.length}
-        onConfirm={handlePaymentConfirm}
-        onCancel={handlePaymentCancel}
-        isLoading={isProcessingSale}
-      />
     </>
   );
 };

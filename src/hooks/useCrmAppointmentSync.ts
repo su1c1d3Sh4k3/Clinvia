@@ -7,7 +7,7 @@ import { TERMINAL_STAGES } from "@/types/crm-client";
  *
  * Flows:
  *  - onAppointmentCreated: create/move CRM card to "Agendado" + add service
- *  - onAppointmentCompleted: create sale, remove service, create Ganho card
+ *  - onAppointmentCompleted: remove service, create Ganho card (sale is created by DB trigger on appointment creation)
  *  - onAppointmentCanceled: create "Perdido" card, remove service from active deal
  *  - onAppointmentNoShow: same as canceled with different loss_reason
  */
@@ -138,29 +138,10 @@ export function useCrmAppointmentSync() {
   }) {
     const { contactId, ownerId, serviceClientId, serviceName, servicePrice = 0, professionalId } = params;
 
-    // 1. Create sale with payment_type='pending'
-    if (serviceClientId && servicePrice > 0) {
-      await supabase.from("sales").insert({
-        user_id: ownerId,
-        category: "service",
-        product_service_id: null,
-        product_name: serviceName || "Serviço",
-        quantity: 1,
-        unit_price: servicePrice,
-        total_amount: servicePrice,
-        payment_type: "pending",
-        installments: 1,
-        interest_rate: 0,
-        cash_amount: 0,
-        sale_date: new Date().toISOString().split("T")[0],
-        professional_id: professionalId || null,
-        contact_id: contactId,
-        notes: `Venda automática - agendamento concluído: ${serviceName}`,
-      });
-      queryClient.invalidateQueries({ queryKey: ["sales"] });
-    }
+    // NOTA: a venda NÃO é mais criada aqui — ela é criada automaticamente
+    // pelo trigger do banco quando o agendamento é criado (link_or_create_sale_on_appointment).
 
-    // 2. Create a Ganho card (is_active=false) for the completed service
+    // 1. Create a Ganho card (is_active=false) for the completed service
     if (serviceClientId) {
       const { data: ganhoCard } = await supabase
         .from("crm_client" as any)
@@ -190,7 +171,7 @@ export function useCrmAppointmentSync() {
       }
     }
 
-    // 3. Remove the completed service from the active deal
+    // 2. Remove the completed service from the active deal
     const card = await findActiveCard(contactId);
     if (!card) {
       invalidateCrm();
@@ -205,7 +186,7 @@ export function useCrmAppointmentSync() {
         .eq("service_client_id", serviceClientId);
     }
 
-    // 4. Check remaining services in active deal
+    // 3. Check remaining services in active deal
     const remaining = await findCardServices(card.id);
 
     if (remaining.length > 0) {

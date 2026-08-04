@@ -7,14 +7,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Plus, Trash2 } from "lucide-react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Switch } from "@/components/ui/switch";
+import { Loader2, Trash2 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { useStaff, useCurrentTeamMember } from "@/hooks/useStaff";
 import { toast } from "sonner";
 import { CRM_STAGES, TERMINAL_STAGES } from "@/types/crm-client";
-import { ServiceCategory, ServiceName } from "@/types/services";
+import { ServiceCascadePicker, CascadeApplication } from "@/components/services/ServiceCascadePicker";
 
 interface ServiceLine {
   id?: string; // crm_client_services.id (linhas já salvas, no modo edição)
@@ -23,6 +24,9 @@ interface ServiceLine {
   quantity: number;
   unitPrice: number;
   minPrice: number;
+  scheduled: boolean;
+  iaScheduling: boolean;
+  iaContactDays: number;
 }
 
 interface NegotiationQuickModalProps {
@@ -49,13 +53,8 @@ export const NegotiationQuickModal = ({ open, onOpenChange, contactId, deal }: N
   const [services, setServices] = useState<ServiceLine[]>([]);
   const [removedServiceIds, setRemovedServiceIds] = useState<string[]>([]);
 
-  const [selCategoryId, setSelCategoryId] = useState("");
-  const [selServiceNameId, setSelServiceNameId] = useState("");
-  const [selApplicationId, setSelApplicationId] = useState("");
-
   useEffect(() => {
     if (!open) return;
-    setSelCategoryId(""); setSelServiceNameId(""); setSelApplicationId("");
     setRemovedServiceIds([]);
     if (deal) {
       setStage(deal.stage || "Qualificado");
@@ -69,6 +68,9 @@ export const NegotiationQuickModal = ({ open, onOpenChange, contactId, deal }: N
         quantity: s.quantity,
         unitPrice: Number(s.unit_price),
         minPrice: Number(s.min_price ?? 0),
+        scheduled: !!s.scheduled,
+        iaScheduling: !!s.ia_scheduling,
+        iaContactDays: s.ia_contact_days ?? 30,
       })));
     } else {
       setStage("Qualificado");
@@ -79,47 +81,7 @@ export const NegotiationQuickModal = ({ open, onOpenChange, contactId, deal }: N
     }
   }, [open, deal, currentTeamMember]);
 
-  const { data: categories } = useQuery({
-    queryKey: ["services-categories"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("services_category" as any).select("*").order("name");
-      if (error) throw error;
-      return data as ServiceCategory[];
-    },
-  });
-
-  const { data: serviceNames } = useQuery({
-    queryKey: ["service-names", selCategoryId],
-    enabled: !!selCategoryId,
-    queryFn: async () => {
-      const { data, error } = await supabase.from("service_name" as any).select("*").eq("category_id", selCategoryId).order("name");
-      if (error) throw error;
-      return data as ServiceName[];
-    },
-  });
-
-  const { data: applications } = useQuery({
-    queryKey: ["deal-applications", selServiceNameId],
-    enabled: !!selServiceNameId,
-    queryFn: async () => {
-      const { data: clientApps } = await supabase
-        .from("services_client" as any).select("*")
-        .eq("service_name_id", selServiceNameId).eq("status", true).order("name");
-      if (clientApps && clientApps.length > 0) {
-        return clientApps.map((a: any) => ({ id: a.id, name: a.name, price: a.price, min_price: a.min_price }));
-      }
-      const { data: tpl, error } = await supabase
-        .from("service_applications" as any).select("*")
-        .eq("service_name_id", selServiceNameId).order("name");
-      if (error) throw error;
-      return (tpl || []).map((a: any) => ({ id: a.id, name: a.name, price: a.default_price, min_price: a.default_min_price }));
-    },
-  });
-
-  const handleAddService = () => {
-    if (!selApplicationId || !applications) return;
-    const app = applications.find((a: any) => a.id === selApplicationId);
-    if (!app) return;
+  const handleAddService = (app: CascadeApplication) => {
     if (services.some((s) => s.serviceClientId === app.id)) {
       toast.error("Serviço já adicionado");
       return;
@@ -127,15 +89,17 @@ export const NegotiationQuickModal = ({ open, onOpenChange, contactId, deal }: N
     setServices((prev) => [...prev, {
       serviceClientId: app.id, name: app.name,
       quantity: 1, unitPrice: app.price, minPrice: app.min_price ?? 0,
+      scheduled: false, iaScheduling: false, iaContactDays: 30,
     }]);
-    setSelApplicationId("");
   };
 
-  const updateLine = (idx: number, field: "quantity" | "unitPrice", value: number) => {
+  const updateLine = (idx: number, patch: Partial<ServiceLine>) => {
     setServices((prev) => prev.map((s, i) => {
       if (i !== idx) return s;
-      if (field === "unitPrice") return { ...s, unitPrice: Math.max(s.minPrice, value) };
-      return { ...s, quantity: Math.max(1, value) };
+      const next = { ...s, ...patch };
+      next.unitPrice = Math.max(s.minPrice, next.unitPrice);
+      next.quantity = Math.max(1, next.quantity);
+      return next;
     }));
   };
 
@@ -178,12 +142,18 @@ export const NegotiationQuickModal = ({ open, onOpenChange, contactId, deal }: N
         for (const s of services) {
           if (s.id) {
             await supabase.from("crm_client_services" as any)
-              .update({ quantity: s.quantity, unit_price: s.unitPrice })
+              .update({
+                quantity: s.quantity, unit_price: s.unitPrice,
+                scheduled: s.scheduled, ia_scheduling: !s.scheduled && s.iaScheduling,
+                ia_contact_days: !s.scheduled && s.iaScheduling ? s.iaContactDays : null,
+              })
               .eq("id", s.id);
           } else {
             await supabase.from("crm_client_services" as any).insert({
               crm_client_id: deal.id, service_client_id: s.serviceClientId,
               service_name: s.name, quantity: s.quantity, unit_price: s.unitPrice, min_price: s.minPrice,
+              scheduled: s.scheduled, ia_scheduling: !s.scheduled && s.iaScheduling,
+              ia_contact_days: !s.scheduled && s.iaScheduling ? s.iaContactDays : null,
             });
           }
         }
@@ -211,6 +181,8 @@ export const NegotiationQuickModal = ({ open, onOpenChange, contactId, deal }: N
             services.map((s) => ({
               crm_client_id: (created as any).id, service_client_id: s.serviceClientId,
               service_name: s.name, quantity: s.quantity, unit_price: s.unitPrice, min_price: s.minPrice,
+              scheduled: s.scheduled, ia_scheduling: !s.scheduled && s.iaScheduling,
+              ia_contact_days: !s.scheduled && s.iaScheduling ? s.iaContactDays : null,
             }))
           );
         }
@@ -223,7 +195,6 @@ export const NegotiationQuickModal = ({ open, onOpenChange, contactId, deal }: N
     } finally { setSaving(false); }
   };
 
-  const nativeSelectClass = "h-8 text-xs w-full rounded-md border border-input bg-background px-2 py-1 focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50";
   const stageOptions = isEdit ? CRM_STAGES : CRM_STAGES.filter((s) => !TERMINAL_STAGES.includes(s));
 
   return (
@@ -237,52 +208,7 @@ export const NegotiationQuickModal = ({ open, onOpenChange, contactId, deal }: N
           {/* Serviços */}
           <div className="border rounded-lg p-3 space-y-3 bg-muted/10 dark:bg-white/5">
             <Label className="text-sm font-medium">Adicionar Serviço</Label>
-            <div className="grid grid-cols-3 gap-2">
-              <div>
-                <Label className="text-[11px]">Categoria</Label>
-                <select
-                  className={nativeSelectClass}
-                  value={selCategoryId}
-                  onChange={(e) => { setSelCategoryId(e.target.value); setSelServiceNameId(""); setSelApplicationId(""); }}
-                >
-                  <option value="">Selecione...</option>
-                  {(categories || []).map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <Label className="text-[11px]">Procedimento</Label>
-                <select
-                  className={nativeSelectClass}
-                  value={selServiceNameId}
-                  onChange={(e) => { setSelServiceNameId(e.target.value); setSelApplicationId(""); }}
-                  disabled={!selCategoryId}
-                >
-                  <option value="">Selecione...</option>
-                  {(serviceNames || []).map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <Label className="text-[11px]">Aplicação</Label>
-                <select
-                  className={nativeSelectClass}
-                  value={selApplicationId}
-                  onChange={(e) => setSelApplicationId(e.target.value)}
-                  disabled={!selServiceNameId}
-                >
-                  <option value="">Selecione...</option>
-                  {(applications || []).map((a: any) => (
-                    <option key={a.id} value={a.id}>{a.name} — {fmt(a.price)}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={handleAddService} disabled={!selApplicationId}>
-              <Plus className="w-3 h-3" /> Adicionar
-            </Button>
+            <ServiceCascadePicker onAdd={(app) => handleAddService(app)} />
 
             {services.length > 0 && (
               <div className="space-y-2 border-t pt-3">
@@ -298,14 +224,14 @@ export const NegotiationQuickModal = ({ open, onOpenChange, contactId, deal }: N
                       <div>
                         <Label className="text-[10px] text-muted-foreground">Quantidade</Label>
                         <Input type="number" min={1} value={svc.quantity}
-                          onChange={(e) => updateLine(idx, "quantity", parseInt(e.target.value) || 1)}
+                          onChange={(e) => updateLine(idx, { quantity: parseInt(e.target.value) || 1 })}
                           className="h-8 text-sm" />
                       </div>
                       <div>
                         <Label className="text-[10px] text-muted-foreground">Valor Unit. (R$)</Label>
                         <Input type="number" step="0.01" min={svc.minPrice}
                           value={svc.unitPrice}
-                          onChange={(e) => updateLine(idx, "unitPrice", parseFloat(e.target.value) || 0)}
+                          onChange={(e) => updateLine(idx, { unitPrice: parseFloat(e.target.value) || 0 })}
                           className="h-8 text-sm" />
                         <span className="text-[9px] text-muted-foreground">Mín: {fmt(svc.minPrice)}</span>
                       </div>
@@ -313,6 +239,34 @@ export const NegotiationQuickModal = ({ open, onOpenChange, contactId, deal }: N
                         <Label className="text-[10px] text-muted-foreground">Subtotal</Label>
                         <Input value={fmt(svc.unitPrice * svc.quantity)} disabled className="h-8 text-sm bg-muted" />
                       </div>
+                    </div>
+                    <div className="flex items-center gap-4 border-t pt-2">
+                      <div className="flex items-center gap-1.5">
+                        <Switch
+                          checked={svc.scheduled}
+                          onCheckedChange={(checked) => updateLine(idx, { scheduled: checked, iaScheduling: false })}
+                          className="scale-75"
+                        />
+                        <Label className="text-[11px]">Serviço Agendado</Label>
+                      </div>
+                      {!svc.scheduled && (
+                        <div className="flex items-center gap-1.5">
+                          <Switch
+                            checked={svc.iaScheduling}
+                            onCheckedChange={(checked) => updateLine(idx, { iaScheduling: checked })}
+                            className="scale-75"
+                          />
+                          <Label className="text-[11px]">Agendamento IA</Label>
+                        </div>
+                      )}
+                      {!svc.scheduled && svc.iaScheduling && (
+                        <div className="flex items-center gap-1.5">
+                          <Label className="text-[11px] text-muted-foreground">Dias p/ contato</Label>
+                          <Input type="number" min={1} value={svc.iaContactDays}
+                            onChange={(e) => updateLine(idx, { iaContactDays: Math.max(1, parseInt(e.target.value) || 1) })}
+                            className="h-7 w-16 text-xs" />
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}

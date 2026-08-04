@@ -6,7 +6,10 @@ import {
     TrendingUp,
     Package,
     Calendar,
+    CalendarCheck,
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { useSalesSummary, useAnnualRevenue, useTopProductService, useSalesProjection } from "@/hooks/useSales";
 import { SaleCategoryLabels } from "@/types/sales";
 
@@ -28,7 +31,26 @@ export function SalesCards({ month, year }: SalesCardsProps) {
     const { data: topProduct, isLoading: loadingTop } = useTopProductService(month, year);
     const { data: projection, isLoading: loadingProjection } = useSalesProjection(year);
 
-    const isLoading = loadingSummary || loadingAnnual || loadingTop || loadingProjection;
+    // % de vendas do período com agendamento concluído
+    const { data: schedStats, isLoading: loadingSched } = useQuery({
+        queryKey: ["sales-scheduling-pct", month, year],
+        queryFn: async () => {
+            const mm = String(month).padStart(2, "0");
+            const lastDay = new Date(year, month, 0).getDate();
+            const { data, error } = await supabase
+                .from("sales" as any)
+                .select("id, appointment:appointments!sales_appointment_id_fkey(status)")
+                .gte("sale_date", `${year}-${mm}-01`)
+                .lte("sale_date", `${year}-${mm}-${String(lastDay).padStart(2, "0")}`);
+            if (error) throw error;
+            const rows = (data || []) as any[];
+            const total = rows.length;
+            const completed = rows.filter((s) => s.appointment?.status === "completed").length;
+            return { total, completed, pct: total > 0 ? (completed / total) * 100 : 0 };
+        },
+    });
+
+    const isLoading = loadingSummary || loadingAnnual || loadingTop || loadingProjection || loadingSched;
 
     const monthlyRevenue = (summary?.monthly_revenue || 0) + (summary?.monthly_pending || 0);
 
@@ -71,12 +93,33 @@ export function SalesCards({ month, year }: SalesCardsProps) {
             glowColor: "from-orange-500/10",
             description: `${projection?.pending_installments || 0} parcelas pendentes`,
         },
-    ];
+        {
+            title: "% Agendamentos",
+            value: 0,
+            displayValue: `${(schedStats?.pct || 0).toFixed(0)}%`,
+            icon: CalendarCheck,
+            color: "text-purple-500",
+            bgColor: "bg-purple-500/10",
+            glowColor: "from-purple-500/10",
+            description: `${schedStats?.completed || 0} de ${schedStats?.total || 0} vendas com agendamento concluído`,
+        },
+    ] as Array<{
+        title: string;
+        value: number;
+        displayValue?: string;
+        icon: any;
+        color: string;
+        bgColor: string;
+        glowColor: string;
+        description: string;
+        highlighted?: boolean;
+        badge?: string;
+    }>;
 
     if (isLoading) {
         return (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {[1, 2, 3, 4].map((i) => (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+                {[1, 2, 3, 4, 5].map((i) => (
                     <Card key={i}>
                         <CardContent className="p-6">
                             <Skeleton className="h-20 w-full" />
@@ -88,7 +131,7 @@ export function SalesCards({ month, year }: SalesCardsProps) {
     }
 
     return (
-        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 md:gap-6">
+        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-6">
             {cards.map((card, index) => (
                 <Card
                     key={index}
@@ -113,7 +156,7 @@ export function SalesCards({ month, year }: SalesCardsProps) {
                                         {card.title}
                                     </p>
                                     <p className={`text-lg sm:text-xl md:text-2xl font-bold mt-1 ${card.color} tracking-tight`}>
-                                        {formatCurrency(card.value)}
+                                        {card.displayValue ?? formatCurrency(card.value)}
                                     </p>
                                     <p className="text-[10px] md:text-xs text-muted-foreground mt-1.5 hidden sm:block truncate opacity-80">
                                         {card.description}

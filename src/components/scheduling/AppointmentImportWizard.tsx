@@ -77,7 +77,6 @@ export function AppointmentImportWizard({ open, onOpenChange }: AppointmentImpor
         setValidated([]);
         setProfLinks([]);
         setSvcLinks([]);
-        setAutoCrm(false);
         setResult(null);
         setProgress(0);
     };

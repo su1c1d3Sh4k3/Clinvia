@@ -13,7 +13,6 @@ import { AppointmentModal } from "@/components/scheduling/AppointmentModal";
 import { ViewAppointmentModal } from "@/components/scheduling/ViewAppointmentModal";
 import { SchedulingSettingsModal } from "@/components/scheduling/SchedulingSettingsModal";
 import { AppointmentImportWizard } from "@/components/scheduling/AppointmentImportWizard";
-import { SaleModal, AppointmentSaleData } from "@/components/sales/SaleModal";
 import { format, addDays, subDays, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Input } from "@/components/ui/input";
@@ -45,10 +44,6 @@ export default function Scheduling() {
     const [selectedSlot, setSelectedSlot] = useState<{ professionalId: string, date: Date } | undefined>(undefined);
     const [appointmentToEdit, setAppointmentToEdit] = useState<any>(null);
     const [professionalToEdit, setProfessionalToEdit] = useState<any>(null);
-
-    // SaleModal state for appointment completion
-    const [isSaleModalOpen, setIsSaleModalOpen] = useState(false);
-    const [completedAppointmentData, setCompletedAppointmentData] = useState<AppointmentSaleData | undefined>(undefined);
 
     // Google Calendar sync state
     const [isSyncing, setIsSyncing] = useState(false);
@@ -660,12 +655,6 @@ export default function Scheduling() {
             <AppointmentImportWizard
                 open={isImportWizardOpen}
                 onOpenChange={setIsImportWizardOpen}
-            />
-
-            <SaleModal
-                open={isSaleModalOpen}
-                onOpenChange={setIsSaleModalOpen}
-                appointmentData={completedAppointmentData}
             />
         </div>
     );

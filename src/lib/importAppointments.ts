@@ -390,6 +390,9 @@ export async function importAppointments(opts: {
             continue;
         }
         result.imported += chunk.length;
+        // Vendas são criadas/vinculadas automaticamente pelo trigger do banco
+        // (link_or_create_sale_on_appointment) — 1 por agendamento com contato+serviço
+        result.salesCreated += chunk.length;
         chunk.forEach(() => tick());
     }
 
@@ -417,31 +420,8 @@ async function syncCrmForImported(
 ) {
     const nowIso = new Date().toISOString();
 
-    // Finalizado → venda (data do agendamento) + card Ganho
+    // Finalizado → card Ganho (a venda já foi criada pelo trigger do banco)
     if (p.status === "completed") {
-        if (p.price > 0) {
-            const y = p.start.getFullYear();
-            const m = String(p.start.getMonth() + 1).padStart(2, "0");
-            const d = String(p.start.getDate()).padStart(2, "0");
-            const { error } = await supabase.from("sales").insert({
-                user_id: ownerId,
-                category: "service",
-                product_service_id: null,
-                product_name: p.svc.name || "Serviço",
-                quantity: 1,
-                unit_price: p.price,
-                total_amount: p.price,
-                payment_type: "pending",
-                installments: 1,
-                interest_rate: 0,
-                cash_amount: 0,
-                sale_date: `${y}-${m}-${d}`,
-                professional_id: p.professionalId,
-                contact_id: p.contactId,
-                notes: `Venda automática - importação de agendamentos: ${p.svc.name}`,
-            });
-            if (!error) result.salesCreated++;
-        }
         await createInactiveCard(ownerId, p, "Ganho", null, result);
         return;
     }

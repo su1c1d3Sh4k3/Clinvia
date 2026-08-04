@@ -6,6 +6,13 @@
 export type SaleCategory = 'product' | 'service';
 export type PaymentType = 'cash' | 'installment' | 'pending' | 'mixed';
 export type InstallmentStatus = 'pending' | 'paid' | 'overdue';
+export type IaSchedulingStatus = 'pendente' | 'vencido' | 'contato_realizado' | 'agendado';
+export type AppointmentAlert = 'canceled' | 'no_show';
+
+export const AppointmentAlertLabels: Record<AppointmentAlert, string> = {
+    canceled: 'Agendamento Cancelado',
+    no_show: 'Cliente não compareceu',
+};
 
 // Labels para display
 export const SaleCategoryLabels: Record<SaleCategory, string> = {
@@ -45,6 +52,13 @@ export interface Sale {
     professional_id?: string;
     notes?: string;
     contact_id?: string;
+    service_client_id?: string | null;
+    appointment_id?: string | null;
+    scheduled?: boolean;
+    ia_scheduling?: boolean;
+    ia_contact_days?: number | null;
+    ia_scheduling_status?: IaSchedulingStatus | null;
+    appointment_alert?: AppointmentAlert | null;
     created_at: string;
     updated_at: string;
     // Joined fields
@@ -103,6 +117,12 @@ export interface SaleFormData {
     professional_id?: string;
     notes?: string;
     contact_id?: string;
+    service_client_id?: string;
+    appointment_id?: string | null;
+    scheduled?: boolean;
+    ia_scheduling?: boolean;
+    ia_contact_days?: number | null;
+    ia_scheduling_status?: IaSchedulingStatus | null;
 }
 
 // Interfaces para métricas

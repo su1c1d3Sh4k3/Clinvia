@@ -184,12 +184,11 @@ serve(async (req) => {
 
             const userIds = usersWithAutoComplete.map(u => u.user_id);
             let appointmentsCompleted = 0;
-            let salesCreated = 0;
 
             // Find confirmed appointments with end_time <= now for these users
             const { data: appointmentsToComplete, error: aptError } = await supabase
                 .from("appointments")
-                .select("*, products_services(id, name, type, price)")
+                .select("*")
                 .in("user_id", userIds)
                 .eq("status", "confirmed")
                 .eq("type", "appointment")
@@ -218,47 +217,14 @@ serve(async (req) => {
                     console.error(`Error syncing CRM for appointment ${apt.id}:`, crmErr);
                 }
 
-                // Skip sale creation if no price or no service
-                if (!apt.price || apt.price <= 0 || !apt.service_id) continue;
-
-                const service = apt.products_services;
-                const appointmentDate = apt.start_time.split("T")[0];
-
-                // Create sale entry (always as 'pending' payment type)
-                const salePayload = {
-                    user_id: apt.user_id,
-                    category: service?.type || 'service',
-                    product_service_id: apt.service_id,
-                    quantity: 1,
-                    unit_price: apt.price,
-                    total_amount: apt.price,
-                    payment_type: 'pending',
-                    installments: 1,
-                    interest_rate: 0,
-                    sale_date: appointmentDate,
-                    professional_id: apt.professional_id || null,
-                    contact_id: apt.contact_id || null,
-                    team_member_id: null,
-                    notes: apt.description || `Venda de agendamento - ${service?.name || 'Serviço'}`,
-                };
-
-                const { error: saleError } = await supabase
-                    .from("sales")
-                    .insert(salePayload);
-
-                if (saleError) {
-                    console.error(`Error creating sale for appointment ${apt.id}:`, saleError);
-                    continue;
-                }
-
-                salesCreated++;
+                // NOTA: venda NÃO é criada aqui — o trigger do banco
+                // (link_or_create_sale_on_appointment) já cria a venda na criação do agendamento.
             }
 
             return new Response(
                 JSON.stringify({
                     success: true,
-                    appointments_completed: appointmentsCompleted,
-                    sales_created: salesCreated
+                    appointments_completed: appointmentsCompleted
                 }),
                 { headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
