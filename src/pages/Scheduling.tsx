@@ -422,7 +422,7 @@ export default function Scheduling() {
                         <Settings className="h-4 w-4" />
                     </Button>
 
-                    <div className="hidden md:block w-80 self-stretch">
+                    <div className="hidden md:block w-[40rem] self-stretch">
                         <div className="relative w-full h-full">
                             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             <Input
