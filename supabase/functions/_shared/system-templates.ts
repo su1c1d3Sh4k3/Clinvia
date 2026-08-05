@@ -302,6 +302,27 @@ export async function sendMetaTemplate(params: {
     return { messageId: result?.messageId || null };
 }
 
+/** Registra envio de template no log template_sends (dashboard Satisfação). */
+export async function logTemplateSend(supabase: any, params: {
+    userId: string;
+    templateName: string;
+    conversationId?: string | null;
+    contactId?: string | null;
+    sentVia: "automation" | "campaign";
+}): Promise<void> {
+    try {
+        await supabase.from("template_sends").insert({
+            user_id: params.userId,
+            template_name: params.templateName,
+            conversation_id: params.conversationId || null,
+            contact_id: params.contactId || null,
+            sent_via: params.sentVia,
+        });
+    } catch (e) {
+        console.error("[template-sends] log failed:", e);
+    }
+}
+
 export async function sendMetaText(params: {
     conversationId: string;
     text: string;

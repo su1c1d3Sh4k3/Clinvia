@@ -19,6 +19,7 @@ import {
     getSystemTemplateStatuses,
     getSystemTemplateVariableMaps,
     sendMetaTemplate,
+    logTemplateSend,
     SYSTEM_TEMPLATE_NAMES,
     TPL_CONFIRM_MULTI,
     TPL_CONFIRM_SINGLE,
@@ -301,6 +302,10 @@ async function processConfirm24h(ctx: CronContext): Promise<{ sent: number; erro
                     parameters,
                     bodyPreview: buildConfirmMessage(firstName, group, ctx.clinicName),
                 });
+                await logTemplateSend(supabase, {
+                    userId, templateName: tplName, conversationId,
+                    contactId, sentVia: "automation",
+                });
             } else {
                 const a = group[0];
                 const msgText = renderUazapiMessage(ctx.uazapiMessages, tplName, group.length === 1
@@ -454,6 +459,10 @@ async function processReminder2h(ctx: CronContext): Promise<{ sent: number; erro
                     }),
                     bodyPreview: buildReminderMessage(firstName, group),
                 });
+                await logTemplateSend(supabase, {
+                    userId, templateName: TPL_REMINDER, conversationId,
+                    contactId, sentVia: "automation",
+                });
             } else {
                 const msgText = renderUazapiMessage(ctx.uazapiMessages, TPL_REMINDER, {
                     nome_cliente: firstName,
@@ -600,6 +609,10 @@ async function processFeedback24h(ctx: CronContext): Promise<{ sent: number; err
                         clinica: ctx.clinicName,
                     }),
                     bodyPreview: `Como vai ${firstName}, espero que esteja bem, estou passando para pedir seu feedback sobre seu atendimento aqui na clínica ontem, se puder por gentileza nos dar seu feedback:`,
+                });
+                await logTemplateSend(supabase, {
+                    userId, templateName: TPL_FEEDBACK, conversationId,
+                    contactId, sentVia: "automation",
                 });
             } else {
                 const msgText = renderUazapiMessage(ctx.uazapiMessages, TPL_FEEDBACK, {

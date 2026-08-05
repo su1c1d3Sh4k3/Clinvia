@@ -1218,7 +1218,24 @@ serve(async (req) => {
                         (voteText && (voteText.includes('Excelente') || voteText.includes('Muito Bom') ||
                             voteText.includes('Bom') || voteText.includes('Regular') || voteText.includes('Ruim')));
 
+                    // Sessão ativa de confirmação/feedback: appointment-confirmation-respond
+                    // já grava o NPS — pular o fluxo legado evita entrada duplicada
+                    let npsHandledBySession = false;
                     if (isNpsResponse && contactId && !fromMe) {
+                        const { data: acFeedbackSession } = await supabase
+                            .from('appointment_confirmation_sessions')
+                            .select('id')
+                            .eq('contact_id', contactId)
+                            .not('state', 'in', '(completed,transferred,failed)')
+                            .limit(1)
+                            .maybeSingle();
+                        npsHandledBySession = !!acFeedbackSession;
+                        if (npsHandledBySession) {
+                            console.log('[webhook-handle-message] NPS vote handled by appointment confirmation session — skipping legacy save');
+                        }
+                    }
+
+                    if (isNpsResponse && contactId && !fromMe && !npsHandledBySession) {
                         let notaText = '';
                         if (voteText) {
                             if (voteText.includes('Excelente')) notaText = 'Excelente';
@@ -1301,7 +1318,8 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                         const { error: npsError } = await supabase.rpc('add_nps_entry', {
                             p_contact_id: contactId,
                             p_nota: notaText,
-                            p_feedback: feedback
+                            p_feedback: feedback,
+                            p_conversation_id: conversation?.id || null
                         });
 
                         if (npsError) {

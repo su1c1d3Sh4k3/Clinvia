@@ -374,6 +374,18 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
 
             if (messageError) throw messageError;
 
+            // Log de envio de template para o dashboard Satisfação
+            if (isMetaSelected && selectedTemplate?.name && ownerId) {
+                await supabase.from("template_sends" as any).insert({
+                    user_id: ownerId,
+                    template_name: selectedTemplate.name,
+                    conversation_id: conversation.id,
+                    contact_id: contact.id,
+                    sent_by: user?.id || null,
+                    sent_via: "manual",
+                });
+            }
+
             toast({ title: isMetaSelected ? "Template enviado com sucesso!" : "Mensagem enviada com sucesso!" });
             onOpenChange(false);
             setSelectedInstance("");

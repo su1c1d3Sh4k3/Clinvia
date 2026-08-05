@@ -417,6 +417,16 @@ async function dispatchBatch(supabase: any) {
                 })
                 .eq("id", row.id);
 
+            if (!isUazapi && campaign.template_name) {
+                await supabase.from("template_sends").insert({
+                    user_id: campaign.user_id,
+                    template_name: campaign.template_name,
+                    conversation_id: conversationId,
+                    contact_id: row.contact_id,
+                    sent_via: "campaign",
+                });
+            }
+
             await moveCrm(supabase, campaign, row.contact_id, conversationId);
 
             console.log(`[campaign-dispatch] Sent to contact ${row.contact_id} (campaign ${campaign.id})`);

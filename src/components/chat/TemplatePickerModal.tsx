@@ -180,6 +180,17 @@ export function TemplatePickerModal({ open, onOpenChange, instanceId, contactNum
                 queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
             }
 
+            // Log de envio para o dashboard Satisfação
+            if (ownerId) {
+                await supabase.from("template_sends" as any).insert({
+                    user_id: ownerId,
+                    template_name: selectedTemplate.name,
+                    conversation_id: conversationId || null,
+                    sent_by: user?.id || null,
+                    sent_via: "manual",
+                });
+            }
+
             toast.success("Template enviado com sucesso!");
             onOpenChange(false);
             setSelectedTemplate(null);

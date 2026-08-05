@@ -5,13 +5,14 @@ import { SalesDashboard } from "@/components/dashboard/SalesDashboard";
 import { CrmDashboard } from "@/components/dashboard/crm/CrmDashboard";
 import { AgendamentosDashboard } from "@/components/dashboard/agendamentos/AgendamentosDashboard";
 import { CampanhasDashboard } from "@/components/dashboard/campanhas/CampanhasDashboard";
+import { SatisfacaoDashboard } from "@/components/dashboard/satisfacao/SatisfacaoDashboard";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Headphones, Users, ShoppingCart, CalendarDays, Megaphone } from "lucide-react";
+import { Headphones, Users, ShoppingCart, CalendarDays, Megaphone, Smile } from "lucide-react";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useFinancialAccess } from "@/hooks/useFinancialAccess";
 import { cn } from "@/lib/utils";
 
-type DashboardTab = "monitoramento" | "crm" | "vendas" | "agendamentos" | "campanhas";
+type DashboardTab = "monitoramento" | "crm" | "vendas" | "agendamentos" | "campanhas" | "satisfacao";
 
 const Dashboard = () => {
     const { data: userRole } = useUserRole();
@@ -40,7 +41,7 @@ const Dashboard = () => {
                 <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as DashboardTab)} className="w-full">
                     <TabsList className={cn(
                         "grid w-full max-w-3xl mx-auto",
-                        userRole === 'agent' ? "grid-cols-1" : canViewSales ? "grid-cols-5" : "grid-cols-4"
+                        userRole === 'agent' ? "grid-cols-1" : canViewSales ? "grid-cols-6" : "grid-cols-5"
                     )}>
                         {userRole !== 'agent' && (
                             <TabsTrigger
@@ -85,6 +86,15 @@ const Dashboard = () => {
                                 <span className="hidden sm:inline">Campanhas</span>
                             </TabsTrigger>
                         )}
+                        {userRole !== 'agent' && (
+                            <TabsTrigger
+                                value="satisfacao"
+                                className="flex items-center gap-2"
+                            >
+                                <Smile className="h-4 w-4 shrink-0 transition-transform duration-300 data-[state=active]:scale-110" />
+                                <span className="hidden sm:inline">Satisfação</span>
+                            </TabsTrigger>
+                        )}
                     </TabsList>
                 </Tabs>
 
@@ -105,6 +115,10 @@ const Dashboard = () => {
 
                 {activeTab === "campanhas" && userRole !== 'agent' && (
                     <CampanhasDashboard />
+                )}
+
+                {activeTab === "satisfacao" && userRole !== 'agent' && (
+                    <SatisfacaoDashboard />
                 )}
             </div>
         </div>

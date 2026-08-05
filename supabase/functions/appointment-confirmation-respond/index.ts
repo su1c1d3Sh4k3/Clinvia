@@ -324,6 +324,7 @@ async function handleAwaitingFeedbackRating(
         p_contact_id: session.contact_id,
         p_nota: rating.nota,
         p_feedback: "",
+        p_conversation_id: session.conversation_id || null,
     });
 
     if (!rating.needsDetail) {

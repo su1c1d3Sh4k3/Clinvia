@@ -469,7 +469,7 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
                 }];
             }
 
-            return await callTemplateApi({
+            const result = await callTemplateApi({
                 action: 'send',
                 user_id: user.id,
                 instance_id: activeInstance.id,
@@ -478,6 +478,18 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
                 template_language: selectedTemplate.language,
                 template_components: templateComponents,
             });
+
+            // Log de envio para o dashboard Satisfação
+            if (ownerId) {
+                await supabase.from("template_sends" as any).insert({
+                    user_id: ownerId,
+                    template_name: selectedTemplate.name,
+                    sent_by: user.id,
+                    sent_via: "manual",
+                });
+            }
+
+            return result;
         },
         onSuccess: () => {
             toast({ title: "Template enviado!" });
