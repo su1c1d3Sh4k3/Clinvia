@@ -3,7 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useClientDeals, useClientAppointment, useClientTask } from '@/hooks/useQueueConversations';
-import { Briefcase, Calendar, CheckSquare, Star, User, ListOrdered } from 'lucide-react';
+import { Briefcase, Calendar, CheckSquare, Star, User, ListOrdered, Brain } from 'lucide-react';
+import { npsAverage } from '@/lib/nps';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useState } from 'react';
@@ -139,8 +140,12 @@ export const ContactDetailsDialog = ({ open, onOpenChange, contact, conversation
 
     if (!contact) return null;
 
-    // NPS
-    const npsScore = conversation?.sentiment_score;
+    // Satisfação (NPS) — média das avaliações do contato (pesquisa de satisfação)
+    const npsAvg = Array.isArray(contact.nps) && contact.nps.length > 0
+        ? npsAverage(contact.nps)
+        : null;
+    // Análise de sentimento (IA) — score da conversa atual
+    const sentimentScore = conversation?.sentiment_score;
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -160,13 +165,33 @@ export const ContactDetailsDialog = ({ open, onOpenChange, contact, conversation
                                 {contact.push_name?.[0]?.toUpperCase() || "?"}
                             </AvatarFallback>
                         </Avatar>
-                        {npsScore && (
-                            <div className="absolute -bottom-2 -right-2 bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400 font-bold px-2 py-0.5 rounded-full text-xs flex items-center shadow-sm border border-yellow-200 dark:border-yellow-700/50" title="NPS / Satisfação">
-                                <Star className="w-3 h-3 mr-1 fill-current" />
-                                {npsScore}
-                            </div>
-                        )}
                     </div>
+
+                    {/* Indicadores: Satisfação (NPS) x Análise de Sentimento (IA) */}
+                    {(npsAvg != null || sentimentScore) && (
+                        <div className="flex flex-wrap justify-center items-center gap-2 w-full">
+                            {npsAvg != null && (
+                                <Badge
+                                    variant="secondary"
+                                    title="Média das avaliações da pesquisa de satisfação (NPS)"
+                                    className="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 hover:bg-yellow-500/20 border border-yellow-500/30 flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold"
+                                >
+                                    <Star className="w-3.5 h-3.5 fill-current" />
+                                    NPS {npsAvg.toFixed(1)}/5
+                                </Badge>
+                            )}
+                            {sentimentScore && (
+                                <Badge
+                                    variant="secondary"
+                                    title="Análise de sentimento da conversa feita pela IA"
+                                    className="bg-violet-500/10 text-violet-700 dark:text-violet-400 hover:bg-violet-500/20 border border-violet-500/30 flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold"
+                                >
+                                    <Brain className="w-3.5 h-3.5" />
+                                    Sentimento {sentimentScore}
+                                </Badge>
+                            )}
+                        </div>
+                    )}
 
                     {/* Fila & Atendente (Se houver contexto de conversa) */}
                     {(queueName || agentName) && (

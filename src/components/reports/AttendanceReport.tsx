@@ -197,7 +197,7 @@ export function AttendanceReport({ data, queues, comparison }: AttendanceReportP
                         <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 via-transparent to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                         <div className="relative z-10 flex items-center justify-between">
                             <div>
-                                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Nota IA (Sentiment)</span>
+                                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Análise de Sentimento (IA)</span>
                                 <div className="flex items-baseline gap-1.5 mt-2">
                                     <span className={`text-2xl md:text-3xl font-black tracking-tight ${sentimentColor(data.avgSentimentScore)}`}>
                                         {data.avgSentimentScore.toFixed(1)}
@@ -216,7 +216,7 @@ export function AttendanceReport({ data, queues, comparison }: AttendanceReportP
                         <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 via-transparent to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                         <div className="relative z-10 flex items-center justify-between">
                             <div>
-                                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">NPS (Cliente)</span>
+                                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Satisfação NPS (Cliente)</span>
                                 <div className="flex items-baseline gap-1.5 mt-2">
                                     <span className={`text-2xl md:text-3xl font-black tracking-tight ${npsColor(data.avgNps)}`}>
                                         {data.avgNps.toFixed(2)}

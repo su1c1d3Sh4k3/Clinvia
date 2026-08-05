@@ -202,7 +202,7 @@ export const ClientSidebar = ({ contact }: ClientSidebarProps) => {
 
         <InfoRow
           icon={Star}
-          label="Satisfação"
+          label="Satisfação (NPS)"
           value={satisfactionIndex ? `${satisfactionIndex} / 5` : "Sem avaliações"}
           className={satisfactionIndex ? "font-medium" : "text-muted-foreground italic"}
         />
