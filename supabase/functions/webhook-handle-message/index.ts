@@ -1767,14 +1767,17 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                             for (const pid of (sc.professionals || [])) allProfIds.add(pid);
                         }
 
-                        // Fetch professional names
+                        // Fetch professional names + roles
                         const profMap = new Map<string, string>();
                         if (allProfIds.size > 0) {
                             const { data: profs } = await supabase
                                 .from('professionals')
-                                .select('id, name')
+                                .select('id, name, role')
                                 .in('id', [...allProfIds]);
-                            for (const p of profs || []) profMap.set(p.id, p.name);
+                            for (const p of profs || []) {
+                                const label = p.role ? `${p.name} - ${p.role}` : p.name;
+                                profMap.set(p.id, label);
+                            }
                         }
 
                         // Group professionals by service_name_id
