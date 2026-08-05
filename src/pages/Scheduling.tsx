@@ -388,7 +388,7 @@ export default function Scheduling() {
         <div className="w-full pt-4 md:pt-6 px-3 md:px-6 h-[calc(100vh-4rem)] flex flex-col gap-3 md:gap-4 animate-fade-in">
             {/* Header (largura total, elementos centralizados) */}
             <div className="flex flex-col gap-3 md:gap-4">
-                <div className="flex flex-wrap justify-center items-center gap-2">
+                <div className="flex flex-wrap justify-center items-center gap-2 md:gap-6">
                     {/* Mobile: Toggle sidebar */}
                     <Button
                         variant="outline"
@@ -415,14 +415,15 @@ export default function Scheduling() {
                             <ChevronRight className="h-4 w-4" />
                         </Button>
                     </div>
-                    <Button variant="outline" onClick={handleToday} className="h-9 text-xs md:text-sm px-2 md:px-3 bg-white dark:bg-transparent border border-[#D4D5D6] dark:border-border">
+                    <Button variant="outline" onClick={handleToday} className="h-9 text-xs md:text-sm px-2 md:px-3 md:w-[214px] bg-white dark:bg-transparent border border-[#D4D5D6] dark:border-border">
                         Hoje
                     </Button>
-                    <Button variant="outline" size="icon" onClick={() => setIsSettingsModalOpen(true)} className="h-9 w-9">
-                        <Settings className="h-4 w-4" />
+                    <Button variant="outline" onClick={() => setIsSettingsModalOpen(true)} className="h-9 w-9 p-0 md:w-[214px] md:p-2">
+                        <Settings className="h-4 w-4 md:mr-2" />
+                        <span className="hidden md:inline text-sm">Configurações</span>
                     </Button>
 
-                    <div className="hidden md:block w-80">
+                    <div className="hidden md:block md:w-[214px]">
                         <div className="relative w-full">
                             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                             <Input
@@ -439,7 +440,7 @@ export default function Scheduling() {
                             setSelectedSlot(undefined);
                             setAppointmentToEdit(null);
                             setIsAppointmentModalOpen(true);
-                        }} className="h-9 text-xs md:text-sm">
+                        }} className="h-9 text-xs md:text-sm md:w-[214px]">
                             <Plus className="w-4 h-4 md:mr-2" />
                             <span className="hidden md:inline">Criar Agendamento</span>
                         </Button>
