@@ -27,22 +27,47 @@ serve(async (req) => {
         );
 
         // ── get_services: categories + service_names + applications ──
+        // Exibe APENAS a categoria Avaliação + serviços comprados e ainda não agendados (sem preços)
         if (action === "get_services") {
             const { data: sc } = await supabase.from("services_client")
-                .select("id, name, description, price, duration_minutes, category_id, service_name_id, professionals")
+                .select("id, name, description, duration_minutes, category_id, service_name_id, professionals")
                 .eq("user_id", user_id).eq("status", true);
 
-            const catIds = [...new Set((sc || []).map((s: any) => s.category_id))];
-            const snIds = [...new Set((sc || []).map((s: any) => s.service_name_id))];
+            const allCatIds = [...new Set((sc || []).map((s: any) => s.category_id))];
+            const { data: allCats } = await supabase.from("services_category")
+                .select("id, name, category_type").in("id", allCatIds).order("name");
 
-            const { data: cats } = await supabase.from("services_category").select("id, name, category_type").in("id", catIds).order("name");
+            // Categoria(s) "Avaliação" — sempre visível(is)
+            const normalize = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+            const avaliacaoCatIds = new Set((allCats || [])
+                .filter((c: any) => normalize(c.name) === "avaliacao")
+                .map((c: any) => c.id));
+
+            // Compras pendentes do contato (venda sem agendamento vinculado)
+            const purchasedServiceIds = new Set<string>();
+            if (contact_id) {
+                const { data: pendingSales } = await supabase.from("sales")
+                    .select("service_client_id")
+                    .eq("contact_id", contact_id)
+                    .is("appointment_id", null)
+                    .not("service_client_id", "is", null);
+                for (const s of pendingSales || []) purchasedServiceIds.add(s.service_client_id);
+            }
+
+            const visibleApps = (sc || []).filter((s: any) =>
+                avaliacaoCatIds.has(s.category_id) || purchasedServiceIds.has(s.id));
+
+            const catIds = [...new Set(visibleApps.map((s: any) => s.category_id))];
+            const snIds = [...new Set(visibleApps.map((s: any) => s.service_name_id))];
+
+            const cats = (allCats || []).filter((c: any) => catIds.includes(c.id));
             const { data: sns } = await supabase.from("service_name").select("id, name, category_id").in("id", snIds).order("name");
 
             return new Response(JSON.stringify({
-                categories: cats || [],
+                categories: cats,
                 service_names: sns || [],
-                applications: (sc || []).map((s: any) => ({
-                    id: s.id, name: s.name, description: s.description, price: s.price, duration_minutes: s.duration_minutes,
+                applications: visibleApps.map((s: any) => ({
+                    id: s.id, name: s.name, description: s.description, duration_minutes: s.duration_minutes,
                     category_id: s.category_id, service_name_id: s.service_name_id, professionals: s.professionals || [],
                 })),
             }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -234,7 +259,7 @@ serve(async (req) => {
             if (!contact_id) throw new Error("Missing contact_id");
 
             const { data: apts } = await supabase.from("appointments")
-                .select("id, service_name, professional_name, start_time, end_time, status, price, service_id, professional_id")
+                .select("id, service_name, professional_name, start_time, end_time, status, service_id, professional_id")
                 .eq("contact_id", contact_id).eq("type", "appointment")
                 .in("status", ["pending", "confirmed", "rescheduled"])
                 .gte("start_time", new Date().toISOString())

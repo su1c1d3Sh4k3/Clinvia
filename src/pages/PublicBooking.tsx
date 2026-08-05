@@ -69,7 +69,7 @@ export default function PublicBooking() {
     setLoading(true);
     try {
       const [svcData, profData, aptData] = await Promise.all([
-        callApi({ action: "get_services", user_id: params.user_id }),
+        callApi({ action: "get_services", user_id: params.user_id, contact_id: params.contact_id }),
         callApi({ action: "get_prof_list", user_id: params.user_id }),
         callApi({ action: "get_pending", user_id: params.user_id, contact_id: params.contact_id }),
       ]);
@@ -165,7 +165,6 @@ export default function PublicBooking() {
     setStep("home"); setManagingApt(null); setSelCatId(""); setSelSvcId(""); setSelApp(null); setSelProf(null); setSelDate(null); setSelTime(""); setConfirmCancel(false); setError("");
   };
 
-  const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
   const fmtDate = (iso: string) => { try { return format(new Date(iso), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }); } catch { return iso; } };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-background"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
@@ -392,7 +391,6 @@ export default function PublicBooking() {
               <div className="flex items-center justify-between"><span className="text-sm text-muted-foreground">Data</span><span className="text-sm font-medium capitalize">{format(selDate, "EEEE, dd/MM", { locale: ptBR })}</span></div>
               <div className="flex items-center justify-between"><span className="text-sm text-muted-foreground">Horário</span><span className="text-sm font-medium">{selTime}</span></div>
               <div className="flex items-center justify-between"><span className="text-sm text-muted-foreground">Duração</span><span className="text-sm font-medium">{selApp.duration_minutes} min</span></div>
-              <div className="flex items-center justify-between pt-2 border-t"><span className="text-sm font-semibold">Valor</span><span className="text-base font-bold text-primary">{fmt(selApp.price)}</span></div>
             </div>
             {error && <p className="text-sm text-destructive text-center">{error}</p>}
             <Button className="w-full h-12 text-base font-semibold" onClick={handleConfirm} disabled={submitting}>
