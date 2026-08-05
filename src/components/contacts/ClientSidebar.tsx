@@ -9,6 +9,7 @@ import {
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { STAGE_COLORS, CrmStage } from "@/types/crm-client";
+import { npsAverage } from "@/lib/nps";
 
 interface ClientSidebarProps {
   contact: any;
@@ -107,10 +108,8 @@ export const ClientSidebar = ({ contact }: ClientSidebarProps) => {
 
   // Satisfaction index (average NPS)
   const npsArray = contact.nps as any[] | null;
-  const satisfactionIndex =
-    npsArray && npsArray.length > 0
-      ? (npsArray.reduce((acc: number, n: any) => acc + (n.nota || 0), 0) / npsArray.length).toFixed(1)
-      : null;
+  const npsAvg = npsArray && npsArray.length > 0 ? npsAverage(npsArray) : null;
+  const satisfactionIndex = npsAvg != null ? npsAvg.toFixed(1) : null;
 
   const hasOpenTicket = ["open", "pending"].includes(lastConversation?.status ?? "");
 

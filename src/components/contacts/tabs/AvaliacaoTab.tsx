@@ -2,6 +2,7 @@ import { Star } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { npsNotaToNumber, npsAverage } from "@/lib/nps";
 
 interface AvaliacaoTabProps {
   contact: any;
@@ -19,7 +20,7 @@ export const AvaliacaoTab = ({ contact }: AvaliacaoTabProps) => {
     );
   }
 
-  const avg = (npsArray.reduce((a, n) => a + (n.nota || 0), 0) / npsArray.length).toFixed(1);
+  const avg = (npsAverage(npsArray) ?? 0).toFixed(1);
 
   const noteColor = (n: number) => {
     if (n >= 4) return "text-green-600";
@@ -45,8 +46,8 @@ export const AvaliacaoTab = ({ contact }: AvaliacaoTabProps) => {
           .sort((a, b) => new Date(b.dataPesquisa).getTime() - new Date(a.dataPesquisa).getTime())
           .map((entry: any, i: number) => (
             <div key={i} className="flex items-start gap-3 p-3 border rounded-md">
-              <div className={`text-lg font-bold ${noteColor(entry.nota)}`}>
-                {entry.nota}
+              <div className={`text-lg font-bold ${noteColor(npsNotaToNumber(entry.nota))}`}>
+                {npsNotaToNumber(entry.nota) || "—"}
               </div>
               <div className="flex-1 min-w-0">
                 {entry.feedback && (

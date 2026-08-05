@@ -7,11 +7,12 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Star, Calendar, MessageSquare } from "lucide-react";
+import { npsNotaToNumber, npsNotaLabel, npsAverage } from "@/lib/nps";
 
 interface NpsEntry {
     id?: string;
     dataPesquisa: string;
-    nota: number;
+    nota: number | string;
     feedback: string;
 }
 
@@ -28,29 +29,7 @@ const getNotaColor = (nota: number): string => {
     return "bg-red-500/10 text-red-500 border-red-500/20";
 };
 
-const getNotaLabel = (nota: number): string => {
-    const labels: Record<number, string> = {
-        5: "Excelente",
-        4: "Muito Bom",
-        3: "Bom",
-        2: "Regular",
-        1: "Ruim"
-    };
-    return labels[nota] || "";
-};
-
-// Converte nota texto ("Excelente") para número, ou retorna o número direto
-const notaToNumber = (nota: any): number => {
-    if (typeof nota === 'number') return nota;
-    const reverseMap: Record<string, number> = {
-        "Excelente": 5,
-        "Muito Bom": 4,
-        "Bom": 3,
-        "Regular": 2,
-        "Ruim": 1
-    };
-    return reverseMap[String(nota)] || 0;
-};
+const notaToNumber = npsNotaToNumber;
 
 const renderStars = (nota: number) => {
     return (
@@ -94,10 +73,8 @@ export function NpsFeedbackModal({
         return new Date(b.dataPesquisa).getTime() - new Date(a.dataPesquisa).getTime();
     });
 
-    // Calculate average (nota pode ser texto "Excelente" ou número 5)
-    const average = npsEntries.length > 0
-        ? (npsEntries.reduce((sum, e) => sum + notaToNumber(e.nota), 0) / npsEntries.length).toFixed(1)
-        : "0";
+    // Média (nota pode ser texto "Excelente", string "5" ou número 5)
+    const average = (npsAverage(npsEntries) ?? 0).toFixed(1);
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
@@ -139,7 +116,7 @@ export function NpsFeedbackModal({
                                         {formatDate(entry.dataPesquisa)}
                                     </div>
                                     <Badge className={getNotaColor(notaToNumber(entry.nota))}>
-                                        {typeof entry.nota === 'string' ? entry.nota : getNotaLabel(entry.nota)}
+                                        {npsNotaLabel(entry.nota)}
                                     </Badge>
                                 </div>
 
@@ -147,7 +124,7 @@ export function NpsFeedbackModal({
                                 <div className="flex items-center gap-2">
                                     {renderStars(notaToNumber(entry.nota))}
                                     <span className="text-sm font-medium">
-                                        {typeof entry.nota === 'number' ? `${entry.nota}/5` : `${entry.nota}/5`}
+                                        {notaToNumber(entry.nota)}/5
                                     </span>
                                 </div>
 

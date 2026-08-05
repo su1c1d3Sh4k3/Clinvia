@@ -47,6 +47,7 @@ import {
 import { AnalysisHistoryModal } from "@/components/AnalysisHistoryModal";
 import { ClientReportModal } from "@/components/ClientReportModal";
 import { NpsFeedbackModal } from "@/components/NpsFeedbackModal";
+import { npsNotaToNumber, npsNotaLabel } from "@/lib/nps";
 import { TagAssignment } from "@/components/TagAssignment";
 import { WhatsAppImportModal } from "@/components/WhatsAppImportModal";
 import { ClientProfileModal } from "@/components/contacts/ClientProfileModal";
@@ -78,7 +79,7 @@ interface Contact {
     report?: string;
     ia_on?: boolean;
     is_lead?: boolean;
-    nps?: { id?: string; dataPesquisa: string; nota: number; feedback: string }[];
+    nps?: { id?: string; dataPesquisa: string; nota: number | string; feedback: string }[];
 }
 
 
@@ -776,14 +777,13 @@ const Contacts = () => {
                                                 <TableCell className="text-center hidden lg:table-cell py-2 md:py-4">
                                                     {contact.nps && contact.nps.length > 0 ? (() => {
                                                         const lastNota = contact.nps[contact.nps.length - 1].nota;
-                                                        const isGreen = lastNota === 'Excelente' || lastNota === 'Muito Bom';
-                                                        const isYellow = lastNota === 'Bom' || lastNota === 'Regular';
-                                                        const colorClass = isGreen ? "bg-green-500/10 text-green-500 border-green-500/20" :
-                                                            isYellow ? "bg-yellow-500/10 text-yellow-500 border-yellow-500/20" :
+                                                        const notaNum = npsNotaToNumber(lastNota);
+                                                        const colorClass = notaNum >= 4 ? "bg-green-500/10 text-green-500 border-green-500/20" :
+                                                            notaNum === 3 ? "bg-yellow-500/10 text-yellow-500 border-yellow-500/20" :
                                                                 "bg-red-500/10 text-red-500 border-red-500/20";
                                                         return (
                                                             <Badge variant="outline" className={`text-[10px] ${colorClass}`}>
-                                                                {lastNota} <Star className="w-2.5 h-2.5 ml-0.5 inline fill-current" />
+                                                                {npsNotaLabel(lastNota)} <Star className="w-2.5 h-2.5 ml-0.5 inline fill-current" />
                                                             </Badge>
                                                         );
                                                     })() : (
