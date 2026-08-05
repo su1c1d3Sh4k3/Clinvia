@@ -1664,6 +1664,7 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                     let enrichedServicesCatalog: any[] = [];
                     let enrichedAppointments: any = {};
                     let enrichedLastSummary = null;
+                    let enrichedUnscheduledPurchases: any = 'Nenhuma compra realizada no momento';
 
                     if (contactId) {
                         // 1. Contact data
@@ -1717,6 +1718,28 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                             last_completed: lastApt ? aptToSP(lastApt) : 'Nenhum agendamento concluído',
                             next_pending: nextApt ? aptToSP(nextApt) : 'Nenhum agendamento pendente',
                         };
+
+                        // 3b. Compras (vendas) ainda sem agendamento vinculado
+                        const { data: unscheduledSales } = await supabase
+                            .from('sales')
+                            .select('product_name, quantity, unit_price, total_amount, sale_date, ia_scheduling, ia_contact_days, ia_scheduling_status')
+                            .eq('contact_id', contactId)
+                            .is('appointment_id', null)
+                            .order('sale_date', { ascending: false })
+                            .limit(20);
+
+                        if (unscheduledSales && unscheduledSales.length > 0) {
+                            enrichedUnscheduledPurchases = unscheduledSales.map((s: any) => ({
+                                service: s.product_name,
+                                quantity: s.quantity,
+                                unit_price: s.unit_price,
+                                total_amount: s.total_amount,
+                                sale_date: s.sale_date,
+                                ia_scheduling: s.ia_scheduling,
+                                ia_contact_days: s.ia_contact_days,
+                                ia_scheduling_status: s.ia_scheduling_status,
+                            }));
+                        }
 
                         // 4. Last conversation summary
                         const { data: lastConv } = await supabase
@@ -1819,6 +1842,7 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                             crm: enrichedCrm,
                             services_catalog: enrichedServicesCatalog,
                             appointments: enrichedAppointments,
+                            unscheduled_purchases: enrichedUnscheduledPurchases,
                             last_summary: enrichedLastSummary,
                             booking_link: bookingLink,
                             campaign_prompt: campaignPrompt,
