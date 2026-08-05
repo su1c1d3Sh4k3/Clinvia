@@ -483,10 +483,29 @@ serve(async (req) => {
                                     .single();
 
                                 if (contactError) {
-                                    console.error('[INSTAGRAM WEBHOOK] Error creating contact:', contactError);
-                                    continue;
+                                    // 23505 = corrida com outro webhook que criou o contato primeiro
+                                    // (índice único uq_contacts_user_instagram_id) — reusar o existente
+                                    if (contactError.code === '23505') {
+                                        const { data: racedContact } = await supabase
+                                            .from('contacts')
+                                            .select('*')
+                                            .eq('instagram_id', senderId)
+                                            .eq('user_id', userId)
+                                            .single();
+                                        if (racedContact) {
+                                            contact = racedContact;
+                                            console.log('[INSTAGRAM WEBHOOK] Contact created concurrently, reusing:', contact.id);
+                                        } else {
+                                            console.error('[INSTAGRAM WEBHOOK] Duplicate contact error but re-select failed');
+                                            continue;
+                                        }
+                                    } else {
+                                        console.error('[INSTAGRAM WEBHOOK] Error creating contact:', contactError);
+                                        continue;
+                                    }
+                                } else {
+                                    contact = newContact;
                                 }
-                                contact = newContact;
                                 console.log('[INSTAGRAM WEBHOOK] Created new contact:', contact.id);
                             }
 
