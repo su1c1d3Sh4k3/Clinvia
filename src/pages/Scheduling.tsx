@@ -415,21 +415,21 @@ export default function Scheduling() {
                             <ChevronRight className="h-4 w-4" />
                         </Button>
                     </div>
-                    <Button variant="outline" onClick={handleToday} className="h-9 text-xs md:text-sm px-2 md:px-3 bg-white dark:bg-transparent border border-[#D4D5D6] dark:border-border">
+                    <Button variant="outline" onClick={handleToday} className="h-9 md:h-auto md:self-stretch text-xs md:text-sm px-2 md:px-4 bg-white dark:bg-transparent border border-[#D4D5D6] dark:border-border">
                         Hoje
                     </Button>
-                    <Button variant="outline" size="icon" onClick={() => setIsSettingsModalOpen(true)} className="h-9 w-9">
+                    <Button variant="outline" size="icon" onClick={() => setIsSettingsModalOpen(true)} className="h-9 w-9 md:h-auto md:w-12 md:self-stretch">
                         <Settings className="h-4 w-4" />
                     </Button>
 
-                    <div className="hidden md:block w-80">
-                        <div className="relative w-full">
-                            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <div className="hidden md:block w-80 self-stretch">
+                        <div className="relative w-full h-full">
+                            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             <Input
                                 placeholder="Buscar clientes agendados hoje"
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="pl-8 bg-white dark:bg-background border border-[#D4D5D6] dark:border-border"
+                                className="pl-8 h-full bg-white dark:bg-background border border-[#D4D5D6] dark:border-border"
                             />
                         </div>
                     </div>
@@ -439,7 +439,7 @@ export default function Scheduling() {
                             setSelectedSlot(undefined);
                             setAppointmentToEdit(null);
                             setIsAppointmentModalOpen(true);
-                        }} className="h-9 text-xs md:text-sm">
+                        }} className="h-9 md:h-auto md:self-stretch text-xs md:text-sm md:px-4">
                             <Plus className="w-4 h-4 md:mr-2" />
                             <span className="hidden md:inline">Criar Agendamento</span>
                         </Button>
