@@ -246,6 +246,26 @@ serve(async (req) => {
             );
         }
 
+        // =============================================
+        // Step 5: Subscribe account to app webhooks
+        // Without this the account NEVER receives message webhooks
+        // (pelemaceio case: connected but subscribed_apps was empty)
+        // =============================================
+        let webhookSubscribed = false;
+        try {
+            const subUrl = `https://graph.instagram.com/v23.0/me/subscribed_apps?subscribed_fields=messages,messaging_postbacks,messaging_seen,message_reactions&access_token=${accessToken}`;
+            const subResponse = await fetch(subUrl, { method: 'POST' });
+            const subData = await subResponse.json();
+            webhookSubscribed = subResponse.ok && subData.success === true;
+            if (webhookSubscribed) {
+                console.log('[INSTAGRAM OAUTH] ✅ Webhook subscription successful');
+            } else {
+                console.error('[INSTAGRAM OAUTH] ⚠️ Webhook subscription failed:', JSON.stringify(subData));
+            }
+        } catch (subError: any) {
+            console.error('[INSTAGRAM OAUTH] ⚠️ Webhook subscription error:', subError.message);
+        }
+
         console.log('[INSTAGRAM OAUTH] ✅ Successfully connected Instagram account:', accountName);
 
         return new Response(
@@ -253,7 +273,8 @@ serve(async (req) => {
                 success: true,
                 account_name: accountName,
                 instagram_account_id: igBusinessAccountId,
-                instance_id: result.data.id
+                instance_id: result.data.id,
+                webhook_subscribed: webhookSubscribed
             }),
             { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
