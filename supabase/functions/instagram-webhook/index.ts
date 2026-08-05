@@ -81,11 +81,21 @@ serve(async (req) => {
         try {
             const rawBody = await req.text();
 
-            // 🔐 META SIGNATURE VALIDATION (X-Hub-Signature)
+            // 🔐 SIGNATURE VALIDATION (X-Hub-Signature)
+            // Instagram webhooks are signed with the Instagram app secret (INSTAGRAM_APP_SECRET),
+            // NOT the WhatsApp Cloud app secret (META_APP_SECRET). Try both for safety.
+            const igAppSecret = Deno.env.get('INSTAGRAM_APP_SECRET');
             const metaAppSecret = Deno.env.get('META_APP_SECRET');
-            if (metaAppSecret) {
+            const secretsToTry = [igAppSecret, metaAppSecret].filter((s): s is string => !!s);
+            if (secretsToTry.length > 0) {
                 const xHubSignature = req.headers.get('x-hub-signature');
-                const isValid = await validateMetaWebhookSignature(rawBody, xHubSignature, metaAppSecret);
+                let isValid = false;
+                for (const secret of secretsToTry) {
+                    if (await validateMetaWebhookSignature(rawBody, xHubSignature, secret)) {
+                        isValid = true;
+                        break;
+                    }
+                }
                 if (!isValid) {
                     console.warn(`[INSTAGRAM WEBHOOK] Invalid Meta signature from IP: ${clientIP}`);
                     return new Response(
