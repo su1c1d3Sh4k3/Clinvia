@@ -385,7 +385,83 @@ export default function Scheduling() {
     };
 
     return (
-        <div className="w-full py-4 md:py-6 px-3 md:px-6 h-[calc(100vh-4rem)] flex flex-col md:flex-row gap-4 md:gap-6 animate-fade-in">
+        <div className="w-full pt-4 md:pt-6 px-3 md:px-6 h-[calc(100vh-4rem)] flex flex-col gap-3 md:gap-4 animate-fade-in">
+            {/* Header (largura total, elementos centralizados) */}
+            <div className="flex flex-col gap-3 md:gap-4">
+                <div className="flex flex-wrap justify-center items-center gap-2">
+                    {/* Mobile: Toggle sidebar */}
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-9 w-9 md:hidden"
+                        onClick={() => setIsSidebarOpen(true)}
+                    >
+                        <Filter className="h-4 w-4" />
+                    </Button>
+
+                    <div className="flex items-center border rounded-md bg-white dark:bg-background border-[#D4D5D6] dark:border-border">
+                        <Button variant="ghost" size="icon" onClick={handlePreviousDay} className="h-9 w-9 rounded-none rounded-l-md border-r">
+                            <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <div className="px-2 md:px-4 py-2 text-xs md:text-sm font-medium min-w-[100px] md:min-w-[140px] text-center">
+                            {date ? (
+                                <div className="flex flex-col leading-none">
+                                    <span className="font-bold">{format(date, "d MMM", { locale: ptBR })}</span>
+                                    <span className="text-[10px] md:text-xs text-muted-foreground capitalize hidden sm:block">{format(date, "EEEE", { locale: ptBR })}</span>
+                                </div>
+                            ) : "Selecione"}
+                        </div>
+                        <Button variant="ghost" size="icon" onClick={handleNextDay} className="h-9 w-9 rounded-none rounded-r-md border-l">
+                            <ChevronRight className="h-4 w-4" />
+                        </Button>
+                    </div>
+                    <Button variant="outline" onClick={handleToday} className="h-9 text-xs md:text-sm px-2 md:px-3 bg-white dark:bg-transparent border border-[#D4D5D6] dark:border-border">
+                        Hoje
+                    </Button>
+                    <Button variant="outline" size="icon" onClick={() => setIsSettingsModalOpen(true)} className="h-9 w-9">
+                        <Settings className="h-4 w-4" />
+                    </Button>
+
+                    <div className="hidden md:block w-80">
+                        <div className="relative w-full">
+                            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                            <Input
+                                placeholder="Buscar clientes agendados hoje"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="pl-8 bg-white dark:bg-background border border-[#D4D5D6] dark:border-border"
+                            />
+                        </div>
+                    </div>
+
+                    {canCreate('appointments') && (
+                        <Button onClick={() => {
+                            setSelectedSlot(undefined);
+                            setAppointmentToEdit(null);
+                            setIsAppointmentModalOpen(true);
+                        }} className="h-9 text-xs md:text-sm">
+                            <Plus className="w-4 h-4 md:mr-2" />
+                            <span className="hidden md:inline">Criar Agendamento</span>
+                        </Button>
+                    )}
+                </div>
+
+                {/* Mobile search bar */}
+                <div className="md:hidden">
+                    <div className="relative w-full">
+                        <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            placeholder="Buscar clientes..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="pl-8 h-9 text-sm bg-white dark:bg-background border border-[#D4D5D6] dark:border-border"
+                        />
+                    </div>
+                </div>
+            </div>
+
+            {/* Corpo: sidebar + agenda alinhados pelo topo */}
+            <div className="flex-1 flex flex-col md:flex-row gap-4 md:gap-6 overflow-hidden">
             {/* Sidebar: rail de ícones no desktop (expande no hover, empurrando a agenda); painel completo no mobile */}
             <div
                 className={`shrink-0 flex-col transition-all duration-300 ${isSidebarOpen ? "flex w-full" : "hidden"} md:flex ${isSidebarExpanded ? "md:w-80" : "md:w-14"}`}
@@ -542,82 +618,7 @@ export default function Scheduling() {
             </div>
 
             {/* Main Calendar */}
-            <div className={`flex-1 flex flex-col gap-3 md:gap-4 overflow-hidden ${isSidebarOpen ? "hidden md:flex" : "flex"}`}>
-                <div className="flex flex-col gap-3 md:gap-4">
-                    <div className="flex flex-wrap justify-between items-center gap-2">
-                        <div className="flex items-center gap-1 md:gap-2">
-                            {/* Mobile: Toggle sidebar */}
-                            <Button
-                                variant="outline"
-                                size="icon"
-                                className="h-9 w-9 md:hidden"
-                                onClick={() => setIsSidebarOpen(true)}
-                            >
-                                <Filter className="h-4 w-4" />
-                            </Button>
-
-                            <div className="flex items-center border rounded-md bg-white dark:bg-background border-[#D4D5D6] dark:border-border">
-                                <Button variant="ghost" size="icon" onClick={handlePreviousDay} className="h-9 w-9 rounded-none rounded-l-md border-r">
-                                    <ChevronLeft className="h-4 w-4" />
-                                </Button>
-                                <div className="px-2 md:px-4 py-2 text-xs md:text-sm font-medium min-w-[100px] md:min-w-[140px] text-center">
-                                    {date ? (
-                                        <div className="flex flex-col leading-none">
-                                            <span className="font-bold">{format(date, "d MMM", { locale: ptBR })}</span>
-                                            <span className="text-[10px] md:text-xs text-muted-foreground capitalize hidden sm:block">{format(date, "EEEE", { locale: ptBR })}</span>
-                                        </div>
-                                    ) : "Selecione"}
-                                </div>
-                                <Button variant="ghost" size="icon" onClick={handleNextDay} className="h-9 w-9 rounded-none rounded-r-md border-l">
-                                    <ChevronRight className="h-4 w-4" />
-                                </Button>
-                            </div>
-                            <Button variant="outline" onClick={handleToday} className="h-9 text-xs md:text-sm px-2 md:px-3 bg-white dark:bg-transparent border border-[#D4D5D6] dark:border-border">
-                                Hoje
-                            </Button>
-                            <Button variant="outline" size="icon" onClick={() => setIsSettingsModalOpen(true)} className="h-9 w-9">
-                                <Settings className="h-4 w-4" />
-                            </Button>
-                        </div>
-
-                        <div className="hidden md:flex items-center gap-2 flex-1 max-w-md mx-4">
-                            <div className="relative w-full">
-                                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                                <Input
-                                    placeholder="Buscar clientes agendados hoje"
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="pl-8 bg-white dark:bg-background border border-[#D4D5D6] dark:border-border"
-                                />
-                            </div>
-                        </div>
-
-                        {canCreate('appointments') && (
-                            <Button onClick={() => {
-                                setSelectedSlot(undefined);
-                                setAppointmentToEdit(null);
-                                setIsAppointmentModalOpen(true);
-                            }} className="h-9 text-xs md:text-sm">
-                                <Plus className="w-4 h-4 md:mr-2" />
-                                <span className="hidden md:inline">Criar Agendamento</span>
-                            </Button>
-                        )}
-                    </div>
-
-                    {/* Mobile search bar */}
-                    <div className="md:hidden">
-                        <div className="relative w-full">
-                            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                placeholder="Buscar clientes..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="pl-8 h-9 text-sm bg-white dark:bg-background border border-[#D4D5D6] dark:border-border"
-                            />
-                        </div>
-                    </div>
-                </div>
-
+            <div className={`flex-1 flex flex-col overflow-hidden ${isSidebarOpen ? "hidden md:flex" : "flex"}`}>
                 {date && (
                     <SchedulingCalendar
                         date={date}
@@ -639,6 +640,7 @@ export default function Scheduling() {
                         canEditProfessional={canEdit('professionals')}
                     />
                 )}
+            </div>
             </div>
 
             <ProfessionalModal
