@@ -7,20 +7,23 @@ import { ptBR } from "date-fns/locale";
 
 interface ResumosTabProps {
   contact: any;
+  /** Ids adicionais (contatos Instagram vinculados) para visão unificada */
+  contactIds?: string[];
 }
 
-export const ResumosTab = ({ contact }: ResumosTabProps) => {
+export const ResumosTab = ({ contact, contactIds }: ResumosTabProps) => {
   // AI analysis from contact
   const analysisArray = (contact.analysis || []) as any[];
+  const ids = contactIds && contactIds.length > 0 ? contactIds : [contact.id];
 
   // Conversation summaries with sentiment scores
   const { data: convSummaries, isLoading } = useQuery({
-    queryKey: ["client-conv-summaries", contact.id],
+    queryKey: ["client-conv-summaries", ids],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("conversations")
         .select("id, summary, sentiment_score, created_at, updated_at")
-        .eq("contact_id", contact.id)
+        .in("contact_id", ids)
         .not("summary", "is", null)
         .order("updated_at", { ascending: false });
       if (error) throw error;

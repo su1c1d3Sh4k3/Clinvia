@@ -12,18 +12,21 @@ import { ptBR } from "date-fns/locale";
 
 interface AtendimentosTabProps {
   contactId: string;
+  /** Ids adicionais (contatos Instagram vinculados) para visão unificada */
+  contactIds?: string[];
 }
 
-export const AtendimentosTab = ({ contactId }: AtendimentosTabProps) => {
+export const AtendimentosTab = ({ contactId, contactIds }: AtendimentosTabProps) => {
   const [viewConvId, setViewConvId] = useState<string | null>(null);
+  const ids = contactIds && contactIds.length > 0 ? contactIds : [contactId];
 
   const { data: conversations, isLoading } = useQuery({
-    queryKey: ["client-conversations", contactId],
+    queryKey: ["client-conversations", ids],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("conversations")
         .select("id, status, summary, created_at, updated_at, queue_id")
-        .eq("contact_id", contactId)
+        .in("contact_id", ids)
         .order("updated_at", { ascending: false });
       if (error) throw error;
       return data as any[];

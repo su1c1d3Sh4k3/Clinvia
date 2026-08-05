@@ -1,3 +1,5 @@
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -23,13 +25,52 @@ export const ClientProfileModal = ({
   onOpenChange,
   contact,
 }: ClientProfileModalProps) => {
+  // Resolve vínculo Instagram ↔ WhatsApp: se o contato (IG) tem linked_contact_id,
+  // o contato WhatsApp "mestre" fornece os dados do perfil; conversas dos contatos
+  // IG vinculados entram junto (contactIds).
+  const { data: linkData } = useQuery({
+    queryKey: ["client-link", contact?.id],
+    enabled: !!contact?.id,
+    queryFn: async () => {
+      const { data: fresh } = await supabase
+        .from("contacts")
+        .select("*")
+        .eq("id", contact.id)
+        .single();
+      if (!fresh) return null;
+      let master: any = fresh;
+      if ((fresh as any).linked_contact_id) {
+        const { data: m } = await supabase
+          .from("contacts")
+          .select("*")
+          .eq("id", (fresh as any).linked_contact_id)
+          .single();
+        if (m) master = m;
+      }
+      const { data: satellites } = await (supabase.from("contacts") as any)
+        .select("id")
+        .eq("linked_contact_id", master.id);
+      return {
+        source: fresh as any,
+        master,
+        satelliteIds: ((satellites || []) as any[]).map((s) => s.id),
+      };
+    },
+  });
+
   if (!contact) return null;
+
+  const effectiveContact = linkData?.master ?? contact;
+  const contactIds = linkData
+    ? Array.from(new Set([linkData.master.id, ...linkData.satelliteIds]))
+    : [contact.id];
+  const sourceContact = linkData?.source ?? contact;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-6xl h-[90vh] p-0 gap-0 overflow-hidden flex flex-col">
         <DialogTitle className="px-5 py-3 border-b bg-muted/30 text-base font-semibold truncate shrink-0">
-          {contact.push_name || "Cliente"}
+          {effectiveContact.push_name || "Cliente"}
         </DialogTitle>
 
         {/* Body: 2 columns */}
@@ -52,15 +93,15 @@ export const ClientProfileModal = ({
               </div>
 
               <ScrollArea className="flex-1 px-5 py-4">
-                <TabsContent value="cadastro" className="mt-0"><CadastroTab contact={contact} /></TabsContent>
-                <TabsContent value="vendas" className="mt-0"><VendasTab contactId={contact.id} /></TabsContent>
-                <TabsContent value="procedimentos" className="mt-0"><ProcedimentosTab contactId={contact.id} /></TabsContent>
-                <TabsContent value="agendamentos" className="mt-0"><AgendamentosTab contactId={contact.id} /></TabsContent>
-                <TabsContent value="atendimentos" className="mt-0"><AtendimentosTab contactId={contact.id} /></TabsContent>
-                <TabsContent value="historico" className="mt-0"><HistoricoTab contactId={contact.id} /></TabsContent>
-                <TabsContent value="avaliacao" className="mt-0"><AvaliacaoTab contact={contact} /></TabsContent>
-                <TabsContent value="resumos" className="mt-0"><ResumosTab contact={contact} /></TabsContent>
-                <TabsContent value="negociacoes" className="mt-0"><NegociacoesTab contactId={contact.id} /></TabsContent>
+                <TabsContent value="cadastro" className="mt-0"><CadastroTab contact={effectiveContact} /></TabsContent>
+                <TabsContent value="vendas" className="mt-0"><VendasTab contactId={effectiveContact.id} /></TabsContent>
+                <TabsContent value="procedimentos" className="mt-0"><ProcedimentosTab contactId={effectiveContact.id} /></TabsContent>
+                <TabsContent value="agendamentos" className="mt-0"><AgendamentosTab contactId={effectiveContact.id} /></TabsContent>
+                <TabsContent value="atendimentos" className="mt-0"><AtendimentosTab contactId={effectiveContact.id} contactIds={contactIds} /></TabsContent>
+                <TabsContent value="historico" className="mt-0"><HistoricoTab contactId={effectiveContact.id} /></TabsContent>
+                <TabsContent value="avaliacao" className="mt-0"><AvaliacaoTab contact={effectiveContact} /></TabsContent>
+                <TabsContent value="resumos" className="mt-0"><ResumosTab contact={effectiveContact} contactIds={contactIds} /></TabsContent>
+                <TabsContent value="negociacoes" className="mt-0"><NegociacoesTab contactId={effectiveContact.id} /></TabsContent>
               </ScrollArea>
             </Tabs>
           </div>
@@ -69,7 +110,7 @@ export const ClientProfileModal = ({
           <div className="hidden md:block border-l">
             <ScrollArea className="h-full">
               <div className="p-4">
-                <ClientSidebar contact={contact} />
+                <ClientSidebar contact={effectiveContact} sourceContact={sourceContact} contactIds={contactIds} />
               </div>
             </ScrollArea>
           </div>

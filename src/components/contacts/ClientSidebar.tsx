@@ -1,21 +1,54 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Phone, Mail, CreditCard, User, Calendar, MessageSquare,
-  Star, Ticket, ListFilter,
+  Star, Ticket, ListFilter, Link2, Unlink, Instagram,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { STAGE_COLORS, CrmStage } from "@/types/crm-client";
 import { npsAverage } from "@/lib/nps";
+import { toast } from "sonner";
+import { LinkInstagramContactDialog } from "./LinkInstagramContactDialog";
 
 interface ClientSidebarProps {
   contact: any;
+  /** Contato pelo qual o modal foi aberto (pode ser o IG antes da resolução do vínculo) */
+  sourceContact?: any;
+  /** Todos os ids de contato do cliente (mestre + IGs vinculados) */
+  contactIds?: string[];
 }
 
-export const ClientSidebar = ({ contact }: ClientSidebarProps) => {
+export const ClientSidebar = ({ contact, sourceContact, contactIds }: ClientSidebarProps) => {
+  const queryClient = useQueryClient();
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const [unlinking, setUnlinking] = useState(false);
+
+  const source = sourceContact ?? contact;
+  const ids = contactIds && contactIds.length > 0 ? contactIds : [contact.id];
+  const isInstagramSource =
+    source?.channel === "instagram" || source?.number?.startsWith("instagram:");
+  const isLinked = !!source?.linked_contact_id;
+
+  const handleUnlink = async () => {
+    setUnlinking(true);
+    try {
+      const { error } = await (supabase.from("contacts") as any)
+        .update({ linked_contact_id: null })
+        .eq("id", source.id);
+      if (error) throw error;
+      toast.success("Vínculo removido");
+      queryClient.invalidateQueries({ queryKey: ["client-link"] });
+    } catch (err: any) {
+      toast.error("Erro ao desvincular: " + err.message);
+    } finally {
+      setUnlinking(false);
+    }
+  };
   // Active CRM deal
   const { data: crmClient } = useQuery({
     queryKey: ["crm-client-active", contact.id],
@@ -33,12 +66,12 @@ export const ClientSidebar = ({ contact }: ClientSidebarProps) => {
 
   // Last open conversation (ticket info + queue + responsible)
   const { data: lastConversation } = useQuery({
-    queryKey: ["client-last-conversation", contact.id],
+    queryKey: ["client-last-conversation", ids],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("conversations")
         .select("id, status, queue_id, assigned_agent_id, updated_at")
-        .eq("contact_id", contact.id)
+        .in("contact_id", ids)
         .order("updated_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -49,12 +82,12 @@ export const ClientSidebar = ({ contact }: ClientSidebarProps) => {
 
   // Ticket count
   const { data: ticketCount } = useQuery({
-    queryKey: ["client-ticket-count", contact.id],
+    queryKey: ["client-ticket-count", ids],
     queryFn: async () => {
       const { count, error } = await supabase
         .from("conversations")
         .select("id", { count: "exact", head: true })
-        .eq("contact_id", contact.id);
+        .in("contact_id", ids);
       if (error) throw error;
       return count || 0;
     },
@@ -137,7 +170,44 @@ export const ClientSidebar = ({ contact }: ClientSidebarProps) => {
           <p className="font-semibold text-sm">{contact.push_name || "Sem nome"}</p>
           <p className="text-xs text-muted-foreground">{contact.phone || contact.number || "—"}</p>
         </div>
+
+        {isInstagramSource && !isLinked && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-full gap-1.5 text-xs h-7"
+            onClick={() => setLinkDialogOpen(true)}
+          >
+            <Link2 className="w-3.5 h-3.5" />
+            Atribuir Instagram a Cliente
+          </Button>
+        )}
+
+        {isInstagramSource && isLinked && (
+          <div className="w-full space-y-1">
+            <Badge variant="secondary" className="w-full justify-center gap-1 text-[10px] font-normal">
+              <Instagram className="w-3 h-3" />
+              Instagram vinculado a {contact.push_name || "cliente"}
+            </Badge>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={unlinking}
+              className="w-full gap-1.5 text-xs h-6 text-muted-foreground"
+              onClick={handleUnlink}
+            >
+              <Unlink className="w-3 h-3" />
+              Desvincular
+            </Button>
+          </div>
+        )}
       </div>
+
+      <LinkInstagramContactDialog
+        open={linkDialogOpen}
+        onOpenChange={setLinkDialogOpen}
+        igContact={source}
+      />
 
       {/* Info rows */}
       <div className="space-y-0.5">
