@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Plus, Filter, ChevronLeft, ChevronRight, Search, PanelLeftClose, PanelLeftOpen, Settings, FileText, RefreshCw, Upload } from "lucide-react";
+import { Plus, Filter, ChevronLeft, ChevronRight, Search, Settings, FileText, RefreshCw, Upload, CalendarDays, UserPlus } from "lucide-react";
 import { SchedulingCalendar } from "@/components/scheduling/SchedulingCalendar";
 import { ProfessionalModal } from "@/components/scheduling/ProfessionalModal";
 import { AppointmentModal } from "@/components/scheduling/AppointmentModal";
@@ -34,7 +34,8 @@ export default function Scheduling() {
     const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
     const [selectedServiceNameId, setSelectedServiceNameId] = useState<string>("");
     const [searchTerm, setSearchTerm] = useState("");
-    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(true); // mobile
+    const [isSidebarExpanded, setIsSidebarExpanded] = useState(false); // desktop (hover no rail)
     const [isProfessionalModalOpen, setIsProfessionalModalOpen] = useState(false);
     const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false);
     const [isViewModalOpen, setIsViewModalOpen] = useState(false);
@@ -384,27 +385,49 @@ export default function Scheduling() {
     };
 
     return (
-        <div className="container mx-auto py-4 md:py-6 px-3 md:px-6 h-[calc(100vh-4rem)] flex flex-col md:flex-row gap-4 md:gap-6 animate-fade-in">
-            {/* Sidebar - Hidden on mobile by default, toggleable */}
+        <div className="w-full py-4 md:py-6 px-3 md:px-6 h-[calc(100vh-4rem)] flex flex-col md:flex-row gap-4 md:gap-6 animate-fade-in">
+            {/* Sidebar: rail de ícones no desktop (expande no hover, empurrando a agenda); painel completo no mobile */}
             <div
-                className={`shrink-0 flex flex-col gap-4 md:gap-6 transition-all duration-300 relative ${isSidebarOpen ? "w-full md:w-80" : "hidden md:block md:w-12"}`}
+                className={`shrink-0 flex-col transition-all duration-300 ${isSidebarOpen ? "flex w-full" : "hidden"} md:flex ${isSidebarExpanded ? "md:w-80" : "md:w-14"}`}
+                onMouseEnter={() => setIsSidebarExpanded(true)}
+                onMouseLeave={() => setIsSidebarExpanded(false)}
             >
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className="absolute -right-3 top-0 z-10 h-6 w-6 rounded-full border bg-background shadow-sm hidden md:flex"
-                    onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                >
-                    {isSidebarOpen ? <ChevronLeft className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                </Button>
+                {/* Rail de ícones (desktop recolhido) */}
+                {!isSidebarExpanded && (
+                    <div className="hidden md:flex flex-col items-center gap-1 py-2 border rounded-lg bg-background animate-in fade-in duration-200">
+                        <Button variant="ghost" size="icon" title="Calendário" onClick={() => setIsSidebarExpanded(true)}>
+                            <CalendarDays className="h-5 w-5" />
+                        </Button>
+                        {canCreate('professionals') && (
+                            <Button variant="ghost" size="icon" title="Adicionar Profissional" onClick={() => {
+                                setProfessionalToEdit(null);
+                                setIsProfessionalModalOpen(true);
+                            }}>
+                                <UserPlus className="h-5 w-5" />
+                            </Button>
+                        )}
+                        {canCreate('appointments') && (
+                            <Button variant="ghost" size="icon" title="Importar Agendamentos" onClick={() => setIsImportWizardOpen(true)}>
+                                <Upload className="h-5 w-5" />
+                            </Button>
+                        )}
+                        <Button variant="ghost" size="icon" title="Relatório Diário" onClick={handleGenerateDailyReport}>
+                            <FileText className="h-5 w-5" />
+                        </Button>
+                        {activeGCalConnection && (
+                            <Button variant="ghost" size="icon" title="Sincronizar Google" disabled={isSyncing} onClick={() => handleSyncGCal(false)}>
+                                <RefreshCw className={`h-5 w-5 ${isSyncing ? "animate-spin" : ""}`} />
+                            </Button>
+                        )}
+                        <Button variant="ghost" size="icon" title="Filtrar por Serviço" onClick={() => setIsSidebarExpanded(true)}>
+                            <Filter className="h-5 w-5" />
+                        </Button>
+                    </div>
+                )}
 
-                <div className={`flex flex-col gap-4 md:gap-6 overflow-y-auto pb-4 md:pb-6 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none'] transition-opacity duration-300 ${isSidebarOpen ? "opacity-100" : "opacity-0 invisible"}`}>
+                {/* Painel completo (desktop expandido no hover / mobile aberto) */}
+                <div className={`flex-col gap-4 md:gap-6 overflow-y-auto pb-4 md:pb-6 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none'] ${isSidebarOpen ? "flex" : "hidden"} ${isSidebarExpanded ? "md:flex animate-in fade-in slide-in-from-left-4 duration-200" : "md:hidden"}`}>
                     <div className="flex flex-col items-center gap-4 md:gap-6 origin-top md:scale-[0.8]">
-                        <div className="space-y-2 text-center w-full">
-                            <h1 className="text-xl md:text-2xl font-bold">Agendamento</h1>
-                            <p className="text-muted-foreground text-xs md:text-sm">Gerencie sua agenda</p>
-                        </div>
-
                         <Card className="w-full">
                             <CardContent className="p-0">
                                 <Calendar
