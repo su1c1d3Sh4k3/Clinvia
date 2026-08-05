@@ -28,16 +28,12 @@ export default function PublicBooking() {
   const [params, setParams] = useState<BookingParams | null>(null);
   const [error, setError] = useState("");
 
-  const [categories, setCategories] = useState<any[]>([]);
-  const [serviceNames, setServiceNames] = useState<any[]>([]);
   const [applications, setApplications] = useState<any[]>([]);
   const [allProfessionals, setAllProfessionals] = useState<any[]>([]);
   const [pendingApts, setPendingApts] = useState<any[]>([]);
   const [slots, setSlots] = useState<string[]>([]);
 
   const [step, setStep] = useState<Step>("home");
-  const [selCatId, setSelCatId] = useState("");
-  const [selSvcId, setSelSvcId] = useState("");
   const [selApp, setSelApp] = useState<any>(null);
   const [selProf, setSelProf] = useState<any>(null);
   const [selDate, setSelDate] = useState<Date | null>(null);
@@ -73,8 +69,6 @@ export default function PublicBooking() {
         callApi({ action: "get_prof_list", user_id: params.user_id }),
         callApi({ action: "get_pending", user_id: params.user_id, contact_id: params.contact_id }),
       ]);
-      setCategories(svcData.categories || []);
-      setServiceNames(svcData.service_names || []);
       setApplications(svcData.applications || []);
       setAllProfessionals(profData.professionals || []);
       setPendingApts(aptData.appointments || []);
@@ -84,8 +78,6 @@ export default function PublicBooking() {
 
   useEffect(() => { loadData(); }, [params]);
 
-  const filteredSns = useMemo(() => serviceNames.filter(s => s.category_id === selCatId), [serviceNames, selCatId]);
-  const filteredApps = useMemo(() => applications.filter(a => a.service_name_id === selSvcId), [applications, selSvcId]);
   const filteredProfs = useMemo(() => {
     if (!selApp) return [];
     return allProfessionals.filter(p => (selApp.professionals || []).includes(p.id));
@@ -162,7 +154,7 @@ export default function PublicBooking() {
   };
 
   const goHome = () => {
-    setStep("home"); setManagingApt(null); setSelCatId(""); setSelSvcId(""); setSelApp(null); setSelProf(null); setSelDate(null); setSelTime(""); setConfirmCancel(false); setError("");
+    setStep("home"); setManagingApt(null); setSelApp(null); setSelProf(null); setSelDate(null); setSelTime(""); setConfirmCancel(false); setError("");
   };
 
   const fmtDate = (iso: string) => { try { return format(new Date(iso), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }); } catch { return iso; } };
@@ -245,31 +237,12 @@ export default function PublicBooking() {
           <div className="space-y-4">
             <button onClick={goHome} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="w-4 h-4" /> Voltar</button>
             <h2 className="text-sm font-semibold text-muted-foreground">Escolha o serviço</h2>
-            <div className="space-y-2">
-              <label className="text-xs text-muted-foreground">Categoria</label>
-              <div className="grid grid-cols-2 gap-2">
-                {categories.map(c => (
-                  <button key={c.id} onClick={() => { setSelCatId(c.id); setSelSvcId(""); setSelApp(null); }}
-                    className={cn("p-3 rounded-lg border text-sm font-medium text-left transition-all", selCatId === c.id ? "border-primary bg-primary/5 text-primary" : "border-border hover:border-primary/50")}>{c.name}</button>
-                ))}
-              </div>
-            </div>
-            {selCatId && filteredSns.length > 0 && (
+            {applications.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">Nenhum serviço disponível para agendamento.</p>
+            ) : (
               <div className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-200">
-                <label className="text-xs text-muted-foreground">Serviço</label>
                 <div className="grid grid-cols-1 gap-2">
-                  {filteredSns.map(s => (
-                    <button key={s.id} onClick={() => { setSelSvcId(s.id); setSelApp(null); }}
-                      className={cn("p-3 rounded-lg border text-sm font-medium text-left transition-all", selSvcId === s.id ? "border-primary bg-primary/5 text-primary" : "border-border hover:border-primary/50")}>{s.name}</button>
-                  ))}
-                </div>
-              </div>
-            )}
-            {selSvcId && filteredApps.length > 0 && (
-              <div className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-200">
-                <label className="text-xs text-muted-foreground">Aplicação</label>
-                <div className="grid grid-cols-1 gap-2">
-                  {filteredApps.map(a => (
+                  {applications.map(a => (
                     <button key={a.id} onClick={() => handleSelectApp(a)}
                       className={cn("p-3 rounded-lg border text-left transition-all", selApp?.id === a.id ? "border-primary bg-primary/5" : "border-border hover:border-primary/50")}>
                       <span className="text-sm font-medium">{a.name}</span>
