@@ -133,6 +133,28 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
     // Status vem direto do banco (waiting é setado pelo cron pg_cron)
     const getDisplayStatus = (apt: any): string => apt.status || 'pending';
 
+    // Taxa de ocupação do dia por profissional (minutos agendados / minutos de expediente)
+    const getOccupancy = (professional: any): number => {
+        const profWorkDays = professional.work_days || settings?.work_days || [0, 1, 2, 3, 4, 5, 6];
+        if (!profWorkDays.includes(date.getDay())) return 0;
+        const wh = professional.work_hours || { start: "08:00", end: "22:00", break_start: null, break_end: null };
+        const toMin = (s: string) => {
+            const [h, m] = (s || "").split(":").map(Number);
+            return (h || 0) * 60 + (m || 0);
+        };
+        let total = toMin(wh.end || "22:00") - toMin(wh.start || "08:00");
+        if (wh.break_start && wh.break_end) total -= toMin(wh.break_end) - toMin(wh.break_start);
+        if (total <= 0) return 0;
+        const booked = appointments
+            .filter((a) =>
+                a.professional_id === professional.id &&
+                isSameDay(new Date(a.start_time), date) &&
+                a.type !== "absence" &&
+                !["canceled", "no-show"].includes(a.status))
+            .reduce((sum, a) => sum + differenceInMinutes(new Date(a.end_time), new Date(a.start_time)), 0);
+        return Math.min(100, Math.round((booked / total) * 100));
+    };
+
     return (
         <div className="flex flex-col h-full border rounded-lg overflow-hidden bg-background">
             {/* Header - Synced horizontal scroll on mobile */}
@@ -162,6 +184,26 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                 </span>
                             )}
                         </div>
+                        {(() => {
+                            const occupancy = getOccupancy(professional);
+                            return (
+                                <div className="relative w-8 h-8 md:w-12 md:h-12 shrink-0" title={`Ocupação da agenda: ${occupancy}%`}>
+                                    <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
+                                        <circle cx="18" cy="18" r="15" fill="none" strokeWidth="5" className="stroke-muted" />
+                                        <circle
+                                            cx="18" cy="18" r="15" fill="none" strokeWidth="5"
+                                            pathLength={100}
+                                            strokeDasharray={`${occupancy} ${100 - occupancy}`}
+                                            strokeLinecap="round"
+                                            className="stroke-primary transition-all duration-500"
+                                        />
+                                    </svg>
+                                    <span className="absolute inset-0 flex items-center justify-center text-[8px] md:text-[10px] font-semibold">
+                                        {occupancy}%
+                                    </span>
+                                </div>
+                            );
+                        })()}
                         {soloId === professional.id && (
                             <Button
                                 variant="outline"
