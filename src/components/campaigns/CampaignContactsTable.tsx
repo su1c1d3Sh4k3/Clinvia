@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Loader2 } from "lucide-react";
-import { useCampaignContacts } from "@/hooks/useCampaigns";
+import { useCampaignContacts, useCampaignContactResponses } from "@/hooks/useCampaigns";
 import { ConversationChatModal } from "@/components/queues/ConversationChatModal";
 
 const STATUS_META: Record<string, { label: string; className: string }> = {
@@ -19,6 +19,7 @@ interface CampaignContactsTableProps {
 
 export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps) {
     const { data: rows, isLoading } = useCampaignContacts(campaignId);
+    const { data: responses } = useCampaignContactResponses(campaignId);
     const [chatContact, setChatContact] = useState<{ id: string; name: string } | null>(null);
 
     if (isLoading) {
@@ -41,6 +42,7 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
                             <th className="px-3 py-2 font-medium">Contato</th>
                             <th className="px-3 py-2 font-medium">Telefone</th>
                             <th className="px-3 py-2 font-medium">Status</th>
+                            <th className="px-3 py-2 font-medium">Respondida</th>
                             <th className="px-3 py-2 font-medium">Enviado em</th>
                         </tr>
                     </thead>
@@ -78,6 +80,21 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
                                         <Badge variant="secondary" className={meta.className} title={r.error || undefined}>
                                             {meta.label}
                                         </Badge>
+                                    </td>
+                                    <td className="px-3 py-1.5">
+                                        {r.status === "sent" ? (
+                                            responses?.get(r.id) ? (
+                                                <Badge variant="secondary" className="bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
+                                                    Respondida
+                                                </Badge>
+                                            ) : (
+                                                <Badge variant="secondary" className="bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                                                    Pendente
+                                                </Badge>
+                                            )
+                                        ) : (
+                                            <span className="text-xs text-muted-foreground">—</span>
+                                        )}
                                     </td>
                                     <td className="px-3 py-1.5 text-xs text-muted-foreground">
                                         {r.sent_at ? new Date(r.sent_at).toLocaleString("pt-BR") : "—"}

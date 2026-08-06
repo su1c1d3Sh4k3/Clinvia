@@ -199,6 +199,26 @@ export function useCampaignContacts(campaignId: string | null) {
     });
 }
 
+/** Map campaign_contact_id -> respondeu (msg inbound após o envio; mesmo critério do responded_count) */
+export function useCampaignContactResponses(campaignId: string | null) {
+    return useQuery({
+        queryKey: ["campaign-contact-responses", campaignId],
+        queryFn: async (): Promise<Map<string, boolean>> => {
+            const { data, error } = await (supabase.rpc as any)("get_campaign_contact_responses", {
+                p_campaign_id: campaignId,
+            });
+            if (error) throw error;
+            const map = new Map<string, boolean>();
+            for (const r of (data || []) as { campaign_contact_id: string; responded: boolean }[]) {
+                map.set(r.campaign_contact_id, r.responded);
+            }
+            return map;
+        },
+        enabled: !!campaignId,
+        refetchInterval: 60_000,
+    });
+}
+
 export function isMetaInstance(i: any): boolean {
     return i?.provider === "meta" || (i?.instance_name || "").startsWith("meta-");
 }
