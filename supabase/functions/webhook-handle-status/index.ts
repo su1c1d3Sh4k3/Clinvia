@@ -80,6 +80,8 @@ serve(async (req) => {
                 status = 'read';
             } else if (state === 'Delivered') {
                 status = 'delivered';
+            } else if (state === 'Failed') {
+                status = 'failed';
             } else {
                 console.log('[webhook-handle-status] Unknown state:', state);
                 status = 'sent';

@@ -145,7 +145,7 @@ export function CampaignExpandableCard({ campaign, stats }: CampaignExpandableCa
                             </div>
                             <div className="border rounded-xl p-2.5">
                                 <p className="font-semibold text-red-600">{stats.failed_count}</p>
-                                <p className="text-[10px] text-muted-foreground">com erro</p>
+                                <p className="text-[10px] text-muted-foreground">rejeitadas</p>
                             </div>
                             <div className="border rounded-xl p-2.5">
                                 <p className="font-semibold text-violet-600">{stats.responded_count}</p>

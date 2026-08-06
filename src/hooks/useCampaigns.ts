@@ -102,6 +102,7 @@ export interface CampaignContactRow {
     error: string | null;
     sent_at: string | null;
     contact?: { push_name: string | null; number: string | null; phone: string | null } | null;
+    message?: { status: string | null } | null;
 }
 
 export function useCampaigns() {
@@ -189,7 +190,7 @@ export function useCampaignContacts(campaignId: string | null) {
         queryFn: async (): Promise<CampaignContactRow[]> => {
             const { data, error } = await supabase
                 .from("campaign_contacts" as any)
-                .select("id, campaign_id, contact_id, raw_data, status, error, sent_at, contact:contacts(push_name, number, phone)")
+                .select("id, campaign_id, contact_id, raw_data, status, error, sent_at, contact:contacts(push_name, number, phone), message:messages(status)")
                 .eq("campaign_id", campaignId)
                 .order("created_at", { ascending: true });
             if (error) throw error;

@@ -7,11 +7,22 @@ import { ConversationChatModal } from "@/components/queues/ConversationChatModal
 const STATUS_META: Record<string, { label: string; className: string }> = {
     pending: { label: "Pendente", className: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300" },
     sending: { label: "Enviando", className: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" },
-    sent: { label: "Enviado", className: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" },
-    failed: { label: "Falhou", className: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" },
+    sent: { label: "Enviada", className: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" },
+    delivered: { label: "Entregue", className: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" },
+    failed: { label: "Rejeitada", className: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" },
     invalid: { label: "Número inválido", className: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" },
     skipped: { label: "Ignorado", className: "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400" },
 };
+
+/** Status efetivo: refina 'sent' com o status real da mensagem (Meta reporta async) */
+function effectiveStatus(r: { status: string; message?: { status: string | null } | null }): string {
+    if (r.status === "sent") {
+        const ms = r.message?.status;
+        if (ms === "failed") return "failed";
+        if (ms === "delivered" || ms === "read") return "delivered";
+    }
+    return r.status;
+}
 
 interface CampaignContactsTableProps {
     campaignId: string;
@@ -48,7 +59,7 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
                     </thead>
                     <tbody className="divide-y">
                         {rows.map((r) => {
-                            const meta = STATUS_META[r.status] || STATUS_META.pending;
+                            const meta = STATUS_META[effectiveStatus(r)] || STATUS_META.pending;
                             const name = r.contact?.push_name
                                 || r.raw_data?.push_name || r.raw_data?.nome || r.raw_data?.name
                                 || "—";
