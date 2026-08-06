@@ -259,6 +259,53 @@ async function moveCrm(supabase: any, campaign: any, contactId: string, conversa
     }
 }
 
+// ── Tag da campanha: cria/reusa tag com o nome da campanha e atribui ao contato ──
+const tagCache = new Map<string, string | null>(); // campaignId -> tagId
+
+async function ensureCampaignTag(supabase: any, campaign: any): Promise<string | null> {
+    if (tagCache.has(campaign.id)) return tagCache.get(campaign.id) ?? null;
+    let tagId: string | null = null;
+    try {
+        const { data: existing } = await supabase
+            .from("tags")
+            .select("id")
+            .eq("user_id", campaign.user_id)
+            .eq("name", campaign.name)
+            .limit(1)
+            .maybeSingle();
+        if (existing) {
+            tagId = existing.id;
+        } else {
+            const { data: created, error } = await supabase
+                .from("tags")
+                .insert({ user_id: campaign.user_id, name: campaign.name, color: "#8B5CF6", is_active: true })
+                .select("id")
+                .single();
+            if (error) throw error;
+            tagId = created?.id ?? null;
+        }
+    } catch (err) {
+        console.warn(`[campaign-dispatch] ensureCampaignTag failed for ${campaign.id}:`, err);
+    }
+    tagCache.set(campaign.id, tagId);
+    return tagId;
+}
+
+async function tagContact(supabase: any, campaign: any, contactId: string) {
+    try {
+        const tagId = await ensureCampaignTag(supabase, campaign);
+        if (!tagId) return;
+        await supabase
+            .from("contact_tags")
+            .upsert(
+                { contact_id: contactId, tag_id: tagId, user_id: campaign.user_id },
+                { onConflict: "contact_id,tag_id", ignoreDuplicates: true }
+            );
+    } catch (err) {
+        console.warn(`[campaign-dispatch] tagContact failed for ${contactId}:`, err);
+    }
+}
+
 // ── Conversa: find-or-create ─────────────────────────────────────────────────
 async function findOrCreateConversation(supabase: any, campaign: any, contactId: string): Promise<string> {
     const { data: existing } = await supabase
@@ -427,6 +474,7 @@ async function dispatchBatch(supabase: any) {
                 });
             }
 
+            await tagContact(supabase, campaign, row.contact_id);
             await moveCrm(supabase, campaign, row.contact_id, conversationId);
 
             console.log(`[campaign-dispatch] Sent to contact ${row.contact_id} (campaign ${campaign.id})`);

@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Loader2 } from "lucide-react";
 import { useCampaignContacts } from "@/hooks/useCampaigns";
+import { ConversationChatModal } from "@/components/queues/ConversationChatModal";
 
 const STATUS_META: Record<string, { label: string; className: string }> = {
     pending: { label: "Pendente", className: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300" },
@@ -17,6 +19,7 @@ interface CampaignContactsTableProps {
 
 export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps) {
     const { data: rows, isLoading } = useCampaignContacts(campaignId);
+    const [chatContact, setChatContact] = useState<{ id: string; name: string } | null>(null);
 
     if (isLoading) {
         return (
@@ -53,7 +56,23 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
                                 || "—";
                             return (
                                 <tr key={r.id}>
-                                    <td className="px-3 py-1.5 truncate max-w-[160px]">{String(name)}</td>
+                                    <td className="px-3 py-1.5 truncate max-w-[160px]">
+                                        {r.contact_id ? (
+                                            <button
+                                                type="button"
+                                                className="text-primary hover:underline font-medium truncate max-w-full text-left"
+                                                title="Abrir chat com este cliente"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setChatContact({ id: r.contact_id!, name: String(name) });
+                                                }}
+                                            >
+                                                {String(name)}
+                                            </button>
+                                        ) : (
+                                            String(name)
+                                        )}
+                                    </td>
                                     <td className="px-3 py-1.5 text-muted-foreground">{String(phone)}</td>
                                     <td className="px-3 py-1.5">
                                         <Badge variant="secondary" className={meta.className} title={r.error || undefined}>
@@ -69,6 +88,15 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
                     </tbody>
                 </table>
             </div>
+
+            {chatContact && (
+                <ConversationChatModal
+                    open={!!chatContact}
+                    onOpenChange={(open) => { if (!open) setChatContact(null); }}
+                    contactId={chatContact.id}
+                    contactName={chatContact.name}
+                />
+            )}
         </div>
     );
 }
