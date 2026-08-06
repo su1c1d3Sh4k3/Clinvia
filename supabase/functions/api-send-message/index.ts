@@ -167,6 +167,16 @@ serve(async (req) => {
                 return json({ success: false, error: "invalid_base64", message: "audio_base64 não é um base64 válido" }, 400);
             }
 
+            // Rejeita payloads truncados/inválidos (ex.: expressão n8n não resolvida).
+            // A Meta aceita o envio e falha async (131053) — melhor falhar aqui, síncrono.
+            if (fileBytes.length < 1024) {
+                return json({
+                    success: false,
+                    error: "invalid_audio",
+                    message: `audio_base64 decodificado tem apenas ${fileBytes.length} bytes — payload truncado ou inválido. Envie o base64 completo do arquivo de áudio.`,
+                }, 400);
+            }
+
             const ext = extByMime[effectiveMime.toLowerCase()] || "mp3";
             const fileName = `media/${conversationId}/${Date.now()}_api_audio.${ext}`;
 
