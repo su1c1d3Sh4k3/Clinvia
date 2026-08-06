@@ -217,12 +217,17 @@ serve(async (req) => {
             const daySlots = await getSlotsForDate(supabase, professionals, dateStr, searchDate.getDay(), duration);
 
             if (daySlots.length > 0) {
+                // 3 horários POR PROFISSIONAL (um por faixa manhã/meio-dia/tarde)
                 const pickedSlots: { time: string; professional: string }[] = [];
-                for (const band of BANDS_3) {
-                    const inBand = daySlots.filter(s => s.minuteOfDay >= band.start && s.minuteOfDay < band.end);
-                    if (inBand.length > 0) {
-                        const mid = Math.floor(inBand.length / 2);
-                        pickedSlots.push({ time: inBand[mid].time, professional: inBand[mid].professional });
+                const profNames = [...new Set(daySlots.map(s => s.professional))];
+                for (const profName of profNames) {
+                    const profSlots = daySlots.filter(s => s.professional === profName);
+                    for (const band of BANDS_3) {
+                        const inBand = profSlots.filter(s => s.minuteOfDay >= band.start && s.minuteOfDay < band.end);
+                        if (inBand.length > 0) {
+                            const mid = Math.floor(inBand.length / 2);
+                            pickedSlots.push({ time: inBand[mid].time, professional: profName });
+                        }
                     }
                 }
                 if (pickedSlots.length > 0) {
