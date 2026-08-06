@@ -148,10 +148,12 @@ function QualityCard({ inst }: { inst: MetaQualityInstance }) {
                         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                             <Timer className="w-3.5 h-3.5" /> Janela renova em
                         </div>
-                        <p className="text-lg font-bold leading-none tabular-nums">
-                            {countdown ?? "—"}
+                        <p className={cn("font-bold leading-none tabular-nums", countdown ? "text-lg" : "text-sm text-emerald-600 dark:text-emerald-400")}>
+                            {countdown ?? "Dentro do limite"}
                         </p>
-                        <p className="text-[10px] text-muted-foreground">24h após o último envio</p>
+                        <p className="text-[10px] text-muted-foreground">
+                            inicia ao exceder o limite; reinicia a cada +50% excedido
+                        </p>
                     </div>
                     {/* Selo de qualidade em destaque */}
                     <div className={cn("flex items-center gap-3 border rounded-xl p-3 col-span-2 md:col-span-1", meta.hero)}>

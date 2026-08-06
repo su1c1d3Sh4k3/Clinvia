@@ -109,8 +109,8 @@ serve(async (req) => {
                 const convIds = (convs || []).map((c) => c.id);
                 const contactByConv = new Map((convs || []).map((c) => [c.id, c.contact_id]));
 
-                const uniqueContacts = new Set<string>();
-                let newest: string | null = null;
+                // Primeiro outbound de cada contato dentro da janela (ordem de "consumo" do limite)
+                const firstOutboundByContact = new Map<string, string>();
 
                 // Pagina em blocos de conversation_ids para não estourar a URL
                 for (let i = 0; i < convIds.length; i += 200) {
@@ -123,17 +123,28 @@ serve(async (req) => {
                         .gte("created_at", since);
                     for (const m of msgs || []) {
                         const contactId = contactByConv.get(m.conversation_id);
-                        if (contactId) uniqueContacts.add(contactId);
-                        if (!newest || m.created_at > newest) newest = m.created_at;
+                        if (!contactId) continue;
+                        const prev = firstOutboundByContact.get(contactId);
+                        if (!prev || m.created_at < prev) firstOutboundByContact.set(contactId, m.created_at);
                     }
                 }
 
-                item.used_24h = uniqueContacts.size;
-                // Conservador: janela só "renova" 24h após o ÚLTIMO envio — evita que o
-                // cliente empilhe novos disparos enquanto ainda há envios dentro da janela.
-                item.window_resets_at = newest
-                    ? new Date(new Date(newest).getTime() + 24 * 60 * 60 * 1000).toISOString()
-                    : null;
+                const used = firstOutboundByContact.size;
+                item.used_24h = used;
+
+                // Timer só roda após EXCEDER o limite do tier; reinicia a cada +50% do
+                // limite excedido (1,5x, 2x, 2,5x...). Âncora = envio que cruzou o
+                // último threshold; janela renova 24h depois dele.
+                const limitVal = typeof item.tier_limit === "number" ? item.tier_limit : null;
+                let resetsAt: string | null = null;
+                if (limitVal != null && limitVal > 0 && used >= limitVal) {
+                    const steps = Math.floor((used / limitVal - 1) / 0.5); // quantos +50% já cruzou
+                    const thresholdCount = Math.min(used, Math.ceil(limitVal * (1 + 0.5 * steps)));
+                    const times = [...firstOutboundByContact.values()].sort();
+                    const crossTs = times[thresholdCount - 1];
+                    resetsAt = new Date(new Date(crossTs).getTime() + 24 * 60 * 60 * 1000).toISOString();
+                }
+                item.window_resets_at = resetsAt;
             } catch (e) {
                 console.warn("[meta-quality-status] usage calc failed:", (e as Error).message);
                 item.used_24h = null;
