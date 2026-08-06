@@ -36,6 +36,8 @@ Python integration tests live in `tests/` (test_*.py) — run manually with pyth
 - `src/lib/utils.ts` — `cn()` helper
 - `supabase/functions/` — ~100 Deno edge functions; shared code in `supabase/functions/_shared/`
 - `supabase/migrations/` — SQL migrations
+- `docs/diagnostics/` and `docs/reports/` — incident post-mortems and client reports (write new diagnostics here)
+- `feegow/` — PRD for planned Feegow Clinic API integration (IA scheduling), not yet implemented
 
 ## Conventions
 
