@@ -110,7 +110,7 @@ serve(async (req) => {
                 const contactByConv = new Map((convs || []).map((c) => [c.id, c.contact_id]));
 
                 const uniqueContacts = new Set<string>();
-                let oldest: string | null = null;
+                let newest: string | null = null;
 
                 // Pagina em blocos de conversation_ids para não estourar a URL
                 for (let i = 0; i < convIds.length; i += 200) {
@@ -124,13 +124,15 @@ serve(async (req) => {
                     for (const m of msgs || []) {
                         const contactId = contactByConv.get(m.conversation_id);
                         if (contactId) uniqueContacts.add(contactId);
-                        if (!oldest || m.created_at < oldest) oldest = m.created_at;
+                        if (!newest || m.created_at > newest) newest = m.created_at;
                     }
                 }
 
                 item.used_24h = uniqueContacts.size;
-                item.window_resets_at = oldest
-                    ? new Date(new Date(oldest).getTime() + 24 * 60 * 60 * 1000).toISOString()
+                // Conservador: janela só "renova" 24h após o ÚLTIMO envio — evita que o
+                // cliente empilhe novos disparos enquanto ainda há envios dentro da janela.
+                item.window_resets_at = newest
+                    ? new Date(new Date(newest).getTime() + 24 * 60 * 60 * 1000).toISOString()
                     : null;
             } catch (e) {
                 console.warn("[meta-quality-status] usage calc failed:", (e as Error).message);

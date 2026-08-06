@@ -138,7 +138,7 @@ function QualityCard({ inst }: { inst: MetaQualityInstance }) {
                         <p className="text-lg font-bold leading-none tabular-nums">
                             {countdown ?? "—"}
                         </p>
-                        <p className="text-[10px] text-muted-foreground">janela móvel de 24h</p>
+                        <p className="text-[10px] text-muted-foreground">24h após o último envio</p>
                     </div>
                     <div className="border rounded-xl p-3 space-y-1.5">
                         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
