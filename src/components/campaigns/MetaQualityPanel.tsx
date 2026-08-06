@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import {
     ShieldCheck, ShieldAlert, ShieldX, ShieldQuestion, Gauge, Timer,
-    Zap, ChevronDown, Lightbulb, Smartphone, TrendingUp,
+    ChevronDown, Lightbulb, Smartphone, TrendingUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -62,12 +62,6 @@ const RATING_META: Record<string, {
     },
 };
 
-const THROUGHPUT_LABEL: Record<string, string> = {
-    STANDARD: "Padrão (~80 msg/s)",
-    HIGH: "Alta (~1.000 msg/s)",
-    NOT_APPLICABLE: "Não aplicável",
-};
-
 const TIPS = [
     { icon: ShieldCheck, text: "Verifique sua empresa na Meta (Business Verification) — sobe o limite inicial de 250 para 2.000 contatos/dia." },
     { icon: TrendingUp, text: "Aumente o volume gradualmente: a Meta reavalia o número a cada 6 horas e sobe o limite automaticamente quando a qualidade se mantém alta." },
@@ -125,24 +119,6 @@ function QualityCard({ inst }: { inst: MetaQualityInstance }) {
                     )}
                 </div>
 
-                {/* Selo de qualidade em destaque */}
-                <div className={cn("flex items-center gap-3.5 border rounded-xl p-3.5 md:p-4", meta.hero)}>
-                    <div className={cn("w-12 h-12 md:w-14 md:h-14 rounded-full flex items-center justify-center shadow-lg shrink-0", meta.heroIcon)}>
-                        <RatingIcon className="w-6 h-6 md:w-7 md:h-7" />
-                    </div>
-                    <div className="min-w-0">
-                        <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                            Qualidade do número
-                        </p>
-                        <p className={cn("text-lg md:text-xl font-bold leading-tight", meta.heroTitle)}>
-                            {meta.label}
-                        </p>
-                        <p className={cn("text-xs md:text-sm leading-snug", meta.heroText)}>
-                            {meta.description}
-                        </p>
-                    </div>
-                </div>
-
                 {/* Métricas */}
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                     <div className="border rounded-xl p-3 space-y-1.5 col-span-2 md:col-span-1">
@@ -177,13 +153,22 @@ function QualityCard({ inst }: { inst: MetaQualityInstance }) {
                         </p>
                         <p className="text-[10px] text-muted-foreground">24h após o último envio</p>
                     </div>
-                    <div className="border rounded-xl p-3 space-y-1.5">
-                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <Zap className="w-3.5 h-3.5" /> Velocidade de envio
+                    {/* Selo de qualidade em destaque */}
+                    <div className={cn("flex items-center gap-3 border rounded-xl p-3 col-span-2 md:col-span-1", meta.hero)}>
+                        <div className={cn("w-11 h-11 rounded-full flex items-center justify-center shadow-lg shrink-0", meta.heroIcon)}>
+                            <RatingIcon className="w-6 h-6" />
                         </div>
-                        <p className="text-lg font-bold leading-none">
-                            {inst.throughput_level ? (THROUGHPUT_LABEL[inst.throughput_level] || inst.throughput_level) : "—"}
-                        </p>
+                        <div className="min-w-0">
+                            <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                                Qualidade do número
+                            </p>
+                            <p className={cn("text-base font-bold leading-tight", meta.heroTitle)}>
+                                {meta.label}
+                            </p>
+                            <p className={cn("text-[11px] leading-snug", meta.heroText)}>
+                                {meta.description}
+                            </p>
+                        </div>
                     </div>
                 </div>
 
