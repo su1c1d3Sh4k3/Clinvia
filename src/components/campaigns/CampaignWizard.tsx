@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { cn, formatCurrency } from "@/lib/utils";
 import { useCampaignInstances, isMetaInstance, useCampaignMutations, Campaign, CampaignService } from "@/hooks/useCampaigns";
+import { useMetaQuality } from "@/hooks/useMetaQuality";
 import { useUsdBrlRate } from "@/hooks/useUsdBrlRate";
 import {
     AudienceSelection, EMPTY_AUDIENCE, SOURCE_VAR_KEYS, BASE_VAR_KEYS, slugVarKey,
@@ -96,6 +97,12 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
     const selectedInstance = (instances || []).find((i: any) => i.id === instanceId);
     const isMeta = selectedInstance ? isMetaInstance(selectedInstance) : true;
     const minLeadHours = MIN_LEAD_H;
+
+    // Limite diário da Meta (messaging_limit_tier) da instância selecionada
+    const { data: metaQuality } = useMetaQuality();
+    const tierLimit = isMeta
+        ? (metaQuality || []).find((q) => q.instance_id === instanceId)?.tier_limit ?? null
+        : null;
 
     // Pré-preenche em edição / reseta em criação
     useEffect(() => {
@@ -232,6 +239,25 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
         ? audience.entries
         : (isEdit ? (existingContactIds || []).map((id) => ({ contactId: id, vars: {} })) : []);
     const contactCount = effectiveEntries.length;
+
+    // Aviso: audiência maior que o limite diário do número na Meta
+    const overTierLimit = tierLimit != null && contactCount > tierLimit;
+    const overTierWarning = overTierLimit ? (
+        <div className="flex items-start gap-2.5 border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/40 rounded-xl p-3 animate-in fade-in duration-200">
+            <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+            <div className="text-xs space-y-1">
+                <p className="font-semibold text-red-700 dark:text-red-300">
+                    Audiência acima do limite diário do seu número ({contactCount.toLocaleString("pt-BR")} contatos
+                    para um limite de {tierLimit!.toLocaleString("pt-BR")}/24h)
+                </p>
+                <p className="text-red-700/90 dark:text-red-300/90">
+                    O risco de mensagens não entregues é <strong>extremamente alto</strong> e o número pode ser
+                    penalizado ou banido pela Meta. Recomendamos dividir a audiência em disparos diários dentro do
+                    limite. <strong>Não nos responsabilizamos por bloqueios e banimentos de números.</strong>
+                </p>
+            </div>
+        </div>
+    ) : null;
 
     const rate = rateData?.rate ?? 5.5;
     const estimatedCostBrl = isMeta ? contactCount * COST_PER_MSG_USD * rate : 0;
@@ -537,6 +563,8 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
                                 Mantendo a audiência atual ({existingContactIds!.length} contatos). Refaça a seleção acima para substituir.
                             </p>
                         )}
+
+                        {overTierWarning}
                     </div>
                 )}
 
@@ -797,6 +825,7 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
                                 </p>
                             )}
                         </div>
+                        {overTierWarning}
                         {!isMeta && (
                             <p className="text-[10px] text-amber-600">
                                 API não oficial: não nos responsabilizamos por bloqueios e banimentos de disparos

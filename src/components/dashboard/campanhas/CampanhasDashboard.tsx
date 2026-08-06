@@ -5,6 +5,7 @@ import { CampanhasPeriodFilter } from "./CampanhasPeriodFilter";
 import { CampanhasKpiCards } from "./CampanhasKpiCards";
 import { CampaignExpandableCard } from "./CampaignExpandableCard";
 import { RecurrenceMonthCard } from "./RecurrenceMonthCard";
+import { MetaQualityPanel } from "@/components/campaigns/MetaQualityPanel";
 
 export function CampanhasDashboard() {
     const [period, setPeriod] = useState<CampanhasPeriod>({ mode: "all" });
@@ -12,6 +13,8 @@ export function CampanhasDashboard() {
 
     return (
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+            <MetaQualityPanel />
+
             <CampanhasPeriodFilter period={period} onChange={setPeriod} />
 
             <CampanhasKpiCards kpis={kpis} isLoading={isLoading} />

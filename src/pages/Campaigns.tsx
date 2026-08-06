@@ -6,6 +6,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useCampaigns, Campaign } from "@/hooks/useCampaigns";
 import { CampaignWizard } from "@/components/campaigns/CampaignWizard";
 import { CampaignCard } from "@/components/campaigns/CampaignCard";
+import { MetaQualityPanel } from "@/components/campaigns/MetaQualityPanel";
 
 export default function Campaigns() {
     const navigate = useNavigate();
@@ -46,6 +47,8 @@ export default function Campaigns() {
                     <Plus className="w-4 h-4 mr-1.5" /> Nova campanha
                 </Button>
             </div>
+
+            <MetaQualityPanel />
 
             {isLoading ? (
                 <div className="flex items-center justify-center py-16 text-muted-foreground gap-2">

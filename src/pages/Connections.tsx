@@ -18,6 +18,8 @@ import { AlertCircle, CheckCircle2, Loader2, Plus, RefreshCw, Trash2, Shield, Ex
 import { useSearchParams, useNavigate } from "react-router-dom";
 import Templates from "./Templates";
 import AutomaticMessages from "@/components/connections/AutomaticMessages";
+import { MetaQualityBadge } from "@/components/campaigns/MetaQualityPanel";
+import { useMetaQuality } from "@/hooks/useMetaQuality";
 
 const META_APP_ID = import.meta.env.VITE_META_APP_ID || '1328505766119863';
 const META_CONFIG_ID = import.meta.env.VITE_META_CONFIG_ID || '1804825927169026';
@@ -72,6 +74,10 @@ const Connections = () => {
 
     const instances = allInstances?.filter((i: any) => i.provider !== "meta" && !(i.instance_name || '').startsWith("meta-")) || [];
     const metaInstances = allInstances?.filter((i: any) => i.provider === "meta" || (i.instance_name || '').startsWith("meta-")) || [];
+
+    // Quality rating das instâncias Meta (Graph API, atualizado a cada carregamento)
+    const { data: metaQuality } = useMetaQuality();
+    const qualityByInstance = new Map((metaQuality || []).map((q) => [q.instance_id, q]));
 
     // Abas condicionais por provedor: Templates (Meta) | Mensagens API não oficial (UAZAPI)
     const hasMetaInstance = metaInstances.length > 0;
@@ -836,7 +842,10 @@ const Connections = () => {
                                                         <FaWhatsapp className="h-5 w-5 text-green-500" />
                                                     </div>
                                                     <div className="min-w-0">
-                                                        <h4 className="font-medium truncate">{instance.name || instance.user_name || 'WhatsApp Oficial'}</h4>
+                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                            <h4 className="font-medium truncate">{instance.name || instance.user_name || 'WhatsApp Oficial'}</h4>
+                                                            <MetaQualityBadge rating={qualityByInstance.get(instance.id)?.quality_rating} />
+                                                        </div>
                                                         <p className="text-xs text-muted-foreground truncate">
                                                             WABA: {instance.meta_waba_id}
                                                         </p>
