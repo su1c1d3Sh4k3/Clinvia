@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Loader2 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCampaignContacts, useCampaignContactResponses } from "@/hooks/useCampaigns";
 import { ConversationChatModal } from "@/components/queues/ConversationChatModal";
 
@@ -32,6 +33,41 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
     const { data: rows, isLoading } = useCampaignContacts(campaignId);
     const { data: responses } = useCampaignContactResponses(campaignId);
     const [chatContact, setChatContact] = useState<{ id: string; name: string } | null>(null);
+    const [statusFilter, setStatusFilter] = useState<string>("all");
+    const [respondedFilter, setRespondedFilter] = useState<string>("all");
+
+    // Contagens por status efetivo e por respondida (sobre todos os rows)
+    const statusCounts = useMemo(() => {
+        const counts: Record<string, number> = {};
+        for (const r of rows || []) {
+            const st = effectiveStatus(r);
+            counts[st] = (counts[st] || 0) + 1;
+        }
+        return counts;
+    }, [rows]);
+
+    const respondedCounts = useMemo(() => {
+        let responded = 0, pending = 0;
+        for (const r of rows || []) {
+            if (r.status !== "sent") continue;
+            if (responses?.get(r.id)) responded++;
+            else pending++;
+        }
+        return { responded, pending };
+    }, [rows, responses]);
+
+    const filteredRows = useMemo(() => {
+        return (rows || []).filter((r) => {
+            if (statusFilter !== "all" && effectiveStatus(r) !== statusFilter) return false;
+            if (respondedFilter !== "all") {
+                if (r.status !== "sent") return false;
+                const isResponded = !!responses?.get(r.id);
+                if (respondedFilter === "responded" && !isResponded) return false;
+                if (respondedFilter === "pending" && isResponded) return false;
+            }
+            return true;
+        });
+    }, [rows, statusFilter, respondedFilter, responses]);
 
     if (isLoading) {
         return (
@@ -46,6 +82,42 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
 
     return (
         <div className="border rounded-xl overflow-hidden">
+            {/* Barra de filtros */}
+            <div className="flex flex-wrap items-center gap-2 px-3 py-2 bg-muted/30 border-b">
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="h-8 w-[180px] text-xs bg-background">
+                        <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">Todos os status ({rows.length})</SelectItem>
+                        {Object.entries(STATUS_META)
+                            .filter(([key]) => statusCounts[key])
+                            .map(([key, meta]) => (
+                                <SelectItem key={key} value={key}>
+                                    {meta.label} ({statusCounts[key]})
+                                </SelectItem>
+                            ))}
+                    </SelectContent>
+                </Select>
+
+                <Select value={respondedFilter} onValueChange={setRespondedFilter}>
+                    <SelectTrigger className="h-8 w-[180px] text-xs bg-background">
+                        <SelectValue placeholder="Respondida" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">Respondida: todas</SelectItem>
+                        <SelectItem value="responded">Respondida ({respondedCounts.responded})</SelectItem>
+                        <SelectItem value="pending">Pendente ({respondedCounts.pending})</SelectItem>
+                    </SelectContent>
+                </Select>
+
+                {(statusFilter !== "all" || respondedFilter !== "all") && (
+                    <Badge variant="secondary" className="ml-auto text-xs">
+                        {filteredRows.length} de {rows.length} contatos
+                    </Badge>
+                )}
+            </div>
+
             <div className="max-h-64 overflow-y-auto">
                 <table className="w-full text-sm">
                     <thead className="bg-muted/50 sticky top-0">
@@ -58,7 +130,14 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
                         </tr>
                     </thead>
                     <tbody className="divide-y">
-                        {rows.map((r) => {
+                        {filteredRows.length === 0 && (
+                            <tr>
+                                <td colSpan={5} className="px-3 py-4 text-center text-xs text-muted-foreground">
+                                    Nenhum contato com os filtros selecionados.
+                                </td>
+                            </tr>
+                        )}
+                        {filteredRows.map((r) => {
                             const meta = STATUS_META[effectiveStatus(r)] || STATUS_META.pending;
                             const name = r.contact?.push_name
                                 || r.raw_data?.push_name || r.raw_data?.nome || r.raw_data?.name
