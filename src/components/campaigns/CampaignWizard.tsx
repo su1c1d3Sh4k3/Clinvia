@@ -382,7 +382,106 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
         setStep((s) => Math.min(s + 1, STEPS.length - 1));
     };
 
+    // ── Aviso: contatos que já participaram de outra campanha nos últimos 7 dias ──
+    // Mapeado pela etiqueta da campanha (tags.name = nome da campanha, contact_tags
+    // criado no envio pelo campaign-dispatch).
+    interface RecentCampaignWarning {
+        contactIds: string[];
+        campaigns: { name: string; count: number; daysAgo: number }[];
+    }
+    const [recentWarning, setRecentWarning] = useState<RecentCampaignWarning | null>(null);
+    const [checkingRecent, setCheckingRecent] = useState(false);
+
+    const checkRecentParticipation = async (
+        entries: AudienceSelection["entries"]
+    ): Promise<RecentCampaignWarning | null> => {
+        const contactIds = [...new Set(entries.map((e) => e.contactId).filter(Boolean))] as string[];
+        if (contactIds.length === 0) return null;
+
+        // Nomes de campanhas existentes (exclui a própria em edição) = etiquetas de campanha
+        const { data: pastCampaigns } = await supabase
+            .from("campaigns" as any)
+            .select("name");
+        const campaignNames = [...new Set(
+            ((pastCampaigns || []) as any[])
+                .map((c) => c.name)
+                .filter((n) => n && n !== campaign?.name && n !== name.trim())
+        )];
+        if (campaignNames.length === 0) return null;
+
+        const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        const rows: { contact_id: string; created_at: string; tags: { name: string } }[] = [];
+        for (let i = 0; i < contactIds.length; i += 200) {
+            const chunk = contactIds.slice(i, i + 200);
+            const { data } = await supabase
+                .from("contact_tags" as any)
+                .select("contact_id, created_at, tags!inner(name)")
+                .in("contact_id", chunk)
+                .gte("created_at", since)
+                .in("tags.name", campaignNames);
+            rows.push(...((data || []) as any[]));
+        }
+        if (rows.length === 0) return null;
+
+        const flagged = new Set<string>();
+        const byCampaign = new Map<string, { contacts: Set<string>; newest: number }>();
+        for (const r of rows) {
+            flagged.add(r.contact_id);
+            const key = r.tags.name;
+            const cur = byCampaign.get(key) || { contacts: new Set<string>(), newest: 0 };
+            cur.contacts.add(r.contact_id);
+            cur.newest = Math.max(cur.newest, new Date(r.created_at).getTime());
+            byCampaign.set(key, cur);
+        }
+        return {
+            contactIds: [...flagged],
+            campaigns: [...byCampaign.entries()]
+                .map(([n, v]) => ({
+                    name: n,
+                    count: v.contacts.size,
+                    daysAgo: Math.floor((Date.now() - v.newest) / 86_400_000),
+                }))
+                .sort((a, b) => b.count - a.count),
+        };
+    };
+
     const submit = async () => {
+        const entriesToSend = audience.entries;
+        if (!isEdit || entriesToSend.length > 0) {
+            setCheckingRecent(true);
+            try {
+                const warning = await checkRecentParticipation(entriesToSend);
+                if (warning) {
+                    setRecentWarning(warning);
+                    return;
+                }
+            } catch (e) {
+                console.warn("Falha ao checar campanhas recentes:", e);
+            } finally {
+                setCheckingRecent(false);
+            }
+        }
+        await doSubmit(entriesToSend);
+    };
+
+    const continueAnyway = async () => {
+        setRecentWarning(null);
+        await doSubmit(audience.entries);
+    };
+
+    const removeFlaggedAndContinue = async () => {
+        const flagged = new Set(recentWarning?.contactIds || []);
+        setRecentWarning(null);
+        const remaining = audience.entries.filter((e) => !e.contactId || !flagged.has(e.contactId));
+        if (remaining.length === 0) {
+            toast.error("Todos os contatos da audiência participaram de campanhas nos últimos 7 dias.");
+            return;
+        }
+        setAudience((a) => ({ ...a, entries: remaining }));
+        await doSubmit(remaining);
+    };
+
+    const doSubmit = async (entriesToSend: AudienceSelection["entries"]) => {
         const payload: any = {
             name: name.trim(),
             instance_id: instanceId,
@@ -409,14 +508,14 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
         try {
             if (isEdit) {
                 // Só envia audiência se o usuário mexeu nela
-                if (audience.entries.length > 0) {
-                    payload.entries = audience.entries.map((e) => ({ contact_id: e.contactId, vars: e.vars }));
+                if (entriesToSend.length > 0) {
+                    payload.entries = entriesToSend.map((e) => ({ contact_id: e.contactId, vars: e.vars }));
                     payload.invalid_rows = audience.invalidRows;
                 }
                 await updateCampaign.mutateAsync({ campaignId: campaign!.id, ...payload });
                 toast.success("Campanha atualizada!");
             } else {
-                payload.entries = audience.entries.map((e) => ({ contact_id: e.contactId, vars: e.vars }));
+                payload.entries = entriesToSend.map((e) => ({ contact_id: e.contactId, vars: e.vars }));
                 payload.invalid_rows = audience.invalidRows;
                 await createCampaign.mutateAsync(payload);
                 toast.success("Campanha criada!");
@@ -860,13 +959,50 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
                             Avançar <ChevronRight className="w-4 h-4 ml-1" />
                         </Button>
                     ) : (
-                        <Button onClick={submit} disabled={saving}>
-                            {saving ? (
+                        <Button onClick={submit} disabled={saving || checkingRecent}>
+                            {checkingRecent ? (
+                                <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> Verificando...</>
+                            ) : saving ? (
                                 <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> Salvando...</>
                             ) : isEdit ? "Salvar alterações" : "Criar campanha"}
                         </Button>
                     )}
                 </div>
+
+                {/* Aviso: contatos em campanhas dos últimos 7 dias */}
+                <Dialog open={!!recentWarning} onOpenChange={(o) => !o && setRecentWarning(null)}>
+                    <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                            <DialogTitle className="flex items-center gap-2">
+                                <AlertTriangle className="w-5 h-5 text-amber-500" />
+                                Contatos em campanhas recentes
+                            </DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-2 text-sm">
+                            {(recentWarning?.campaigns || []).map((c) => (
+                                <p key={c.name}>
+                                    Foi identificado que <strong>{c.count}</strong>{" "}
+                                    {c.count === 1 ? "cliente participou" : "clientes participaram"} da campanha{" "}
+                                    <strong>{c.name}</strong>{" "}
+                                    {c.daysAgo === 0 ? "hoje" : `há ${c.daysAgo} dia${c.daysAgo > 1 ? "s" : ""}`}.
+                                </p>
+                            ))}
+                            <p>
+                                Enviar uma nova campanha a eles pode acarretar problemas para seu score com a
+                                Meta. Deseja continuar?
+                            </p>
+                        </div>
+                        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-1">
+                            <Button variant="ghost" onClick={() => setRecentWarning(null)}>
+                                Cancelar
+                            </Button>
+                            <Button variant="outline" onClick={removeFlaggedAndContinue}>
+                                Excluir clientes ({recentWarning?.contactIds.length ?? 0})
+                            </Button>
+                            <Button onClick={continueAnyway}>Continuar</Button>
+                        </div>
+                    </DialogContent>
+                </Dialog>
             </DialogContent>
         </Dialog>
     );
