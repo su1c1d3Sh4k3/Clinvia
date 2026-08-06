@@ -11,7 +11,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
  *    - Meta (create/existing): sync do template → APPROVED = dispatching;
  *      PENDING = awaiting_template (erro após 48h); REJECTED/DISABLED = error.
  * 2. Envio: pick_campaign_contacts(4). Variáveis resolvidas do raw_data da entrada.
- *    - Meta: template via meta-send-message, 15s entre mensagens.
+ *    - Meta: template via meta-send-message, 30s entre mensagens.
  *    - UAZAPI: texto livre via evolution-send-message, 30–45s aleatórios.
  * 3. CRM: move/cria card para 'Em Atendimento IA' ou 'Em Atendimento Humano'.
  * 4. Conclusão: dispatching sem pending/sending → dispatched.
@@ -24,7 +24,7 @@ const corsHeaders = {
 };
 
 const BATCH_SIZE = 4;
-const META_SPACING_MS = 15_000;
+const META_SPACING_MS = 30_000;
 const uazapiSpacingMs = () => 30_000 + Math.floor(Math.random() * 15_000); // 30–45s
 const MAX_TEMPLATE_WAIT_MS = 48 * 60 * 60 * 1000; // 48h de atraso máximo
 

@@ -33,7 +33,7 @@ import { AudienceAppointments } from "./audience/AudienceAppointments";
 import { AudienceSales } from "./audience/AudienceSales";
 
 const COST_PER_MSG_USD = 0.0625;
-const META_SPACING_SECONDS = 15;
+const META_SPACING_SECONDS = 30;
 const UAZAPI_SPACING_SECONDS = 38; // média do intervalo aleatório 30-45s
 const MIN_LEAD_H = 1;
 
@@ -787,7 +787,7 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
                                 <Clock className="w-4 h-4 text-primary" />
                                 <span className="text-lg font-semibold">{formatDuration(estimatedSeconds)}</span>
                                 <span className="text-[10px] text-muted-foreground text-center">
-                                    tempo de disparo ({isMeta ? "15s/msg" : "30-45s/msg"})
+                                    tempo de disparo ({isMeta ? "30s/msg" : "30-45s/msg"})
                                 </span>
                             </div>
                             <div className="border rounded-xl p-3 flex flex-col items-center gap-1">
