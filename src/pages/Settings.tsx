@@ -9,8 +9,9 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
-import { User, Building2, Lock, Camera, Loader2, Bell, BellRing, Users, Volume2, DollarSign, Settings as SettingsIcon, Pen, Download, Smartphone, Monitor, CheckCircle2, Calendar, ListTodo, TrendingUp, Lightbulb, ChevronDown, ChevronUp, AlertCircle, Zap } from "lucide-react";
+import { User, Building2, Lock, Camera, Loader2, Bell, BellRing, Users, Volume2, DollarSign, Settings as SettingsIcon, Pen, Download, Smartphone, Monitor, CheckCircle2, Calendar, ListTodo, TrendingUp, Lightbulb, ChevronDown, ChevronUp, AlertCircle, Zap, Tag as TagIcon } from "lucide-react";
 import { AutomationSettings } from "@/components/settings/AutomationSettings";
+import { TagsSettings } from "@/components/settings/TagsSettings";
 import { FaInstagram } from "react-icons/fa";
 import { Switch } from "@/components/ui/switch";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -510,6 +511,10 @@ export default function Settings() {
                     <TabsTrigger value="notifications" className="flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
                         <SettingsIcon className="h-4 w-4" />
                         <span className="hidden md:inline">Sistema</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="tags" className="flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
+                        <TagIcon className="h-4 w-4" />
+                        <span className="hidden md:inline">Tags</span>
                     </TabsTrigger>
                     {userRole === 'admin' && (
                         <TabsTrigger value="automations" className="flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
@@ -1081,6 +1086,11 @@ export default function Settings() {
                             </Button>
                         </CardFooter>
                     </Card>
+                </TabsContent>
+
+                {/* Tags Tab */}
+                <TabsContent value="tags">
+                    <TagsSettings />
                 </TabsContent>
 
                 {/* Automations Tab — admin only */}
