@@ -7,34 +7,58 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { useMetaQuality, MetaQualityInstance } from "@/hooks/useMetaQuality";
 
-const RATING_META: Record<string, { label: string; icon: any; badge: string; bar: string; ring: string }> = {
+const RATING_META: Record<string, {
+    label: string; description: string; icon: any;
+    badge: string; bar: string; ring: string;
+    hero: string; heroIcon: string; heroTitle: string; heroText: string;
+}> = {
     GREEN: {
         label: "Qualidade Alta",
+        description: "Seu número está saudável. A Meta pode aumentar seu limite de envios automaticamente.",
         icon: ShieldCheck,
         badge: "bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-700",
         bar: "bg-emerald-500",
         ring: "border-l-emerald-500",
+        hero: "bg-gradient-to-r from-emerald-50 to-emerald-100/60 border-emerald-200 dark:from-emerald-950/60 dark:to-emerald-900/30 dark:border-emerald-800",
+        heroIcon: "bg-emerald-500 text-white shadow-emerald-500/40",
+        heroTitle: "text-emerald-700 dark:text-emerald-300",
+        heroText: "text-emerald-700/80 dark:text-emerald-300/70",
     },
     YELLOW: {
         label: "Qualidade Média",
+        description: "Atenção: clientes estão reportando suas mensagens. Reduza o ritmo de disparos para não cair para Baixa.",
         icon: ShieldAlert,
         badge: "bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-700",
         bar: "bg-amber-500",
         ring: "border-l-amber-500",
+        hero: "bg-gradient-to-r from-amber-50 to-amber-100/60 border-amber-200 dark:from-amber-950/60 dark:to-amber-900/30 dark:border-amber-800",
+        heroIcon: "bg-amber-500 text-white shadow-amber-500/40",
+        heroTitle: "text-amber-700 dark:text-amber-300",
+        heroText: "text-amber-700/80 dark:text-amber-300/70",
     },
     RED: {
         label: "Qualidade Baixa",
+        description: "Número penalizado pela Meta: envios podem ser rejeitados. Pause campanhas por alguns dias até voltar ao verde.",
         icon: ShieldX,
         badge: "bg-red-100 text-red-700 border-red-300 dark:bg-red-900/40 dark:text-red-300 dark:border-red-700",
         bar: "bg-red-500",
         ring: "border-l-red-500",
+        hero: "bg-gradient-to-r from-red-50 to-red-100/60 border-red-200 dark:from-red-950/60 dark:to-red-900/30 dark:border-red-800",
+        heroIcon: "bg-red-500 text-white shadow-red-500/40",
+        heroTitle: "text-red-700 dark:text-red-300",
+        heroText: "text-red-700/80 dark:text-red-300/70",
     },
     NA: {
         label: "Sem avaliação",
+        description: "A Meta ainda não avaliou este número — o índice aparece após um volume mínimo de envios.",
         icon: ShieldQuestion,
         badge: "bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-600",
         bar: "bg-slate-400",
         ring: "border-l-slate-400",
+        hero: "bg-gradient-to-r from-slate-50 to-slate-100/60 border-slate-200 dark:from-slate-900/60 dark:to-slate-800/30 dark:border-slate-700",
+        heroIcon: "bg-slate-500 text-white shadow-slate-500/40",
+        heroTitle: "text-slate-700 dark:text-slate-300",
+        heroText: "text-slate-600/90 dark:text-slate-400",
     },
 };
 
@@ -90,20 +114,33 @@ function QualityCard({ inst }: { inst: MetaQualityInstance }) {
     return (
         <div className={cn("border border-l-4 rounded-xl bg-card overflow-hidden", meta.ring)}>
             <div className="p-4 space-y-3">
-                {/* Cabeçalho: instância + rating */}
-                <div className="flex flex-wrap items-center gap-2">
-                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <Smartphone className="w-4 h-4 text-primary shrink-0" />
-                        <span className="font-semibold truncate">
-                            {inst.verified_name || inst.instance_name || "WhatsApp Oficial"}
-                        </span>
-                        {inst.display_phone_number && (
-                            <span className="text-xs text-muted-foreground shrink-0">{inst.display_phone_number}</span>
-                        )}
+                {/* Cabeçalho: instância */}
+                <div className="flex items-center gap-2 min-w-0">
+                    <Smartphone className="w-4 h-4 text-primary shrink-0" />
+                    <span className="font-semibold truncate">
+                        {inst.verified_name || inst.instance_name || "WhatsApp Oficial"}
+                    </span>
+                    {inst.display_phone_number && (
+                        <span className="text-xs text-muted-foreground shrink-0">{inst.display_phone_number}</span>
+                    )}
+                </div>
+
+                {/* Selo de qualidade em destaque */}
+                <div className={cn("flex items-center gap-3.5 border rounded-xl p-3.5 md:p-4", meta.hero)}>
+                    <div className={cn("w-12 h-12 md:w-14 md:h-14 rounded-full flex items-center justify-center shadow-lg shrink-0", meta.heroIcon)}>
+                        <RatingIcon className="w-6 h-6 md:w-7 md:h-7" />
                     </div>
-                    <Badge variant="outline" className={cn("gap-1", meta.badge)}>
-                        <RatingIcon className="w-3.5 h-3.5" /> {meta.label}
-                    </Badge>
+                    <div className="min-w-0">
+                        <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                            Qualidade do número
+                        </p>
+                        <p className={cn("text-lg md:text-xl font-bold leading-tight", meta.heroTitle)}>
+                            {meta.label}
+                        </p>
+                        <p className={cn("text-xs md:text-sm leading-snug", meta.heroText)}>
+                            {meta.description}
+                        </p>
+                    </div>
                 </div>
 
                 {/* Métricas */}
