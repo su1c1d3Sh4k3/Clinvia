@@ -1662,6 +1662,7 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                     let enrichedContact = null;
                     let enrichedCrm = null;
                     let enrichedServicesCatalog: any[] = [];
+                    let enrichedAvaliacoes: any[] = [];
                     let enrichedAppointments: any = {};
                     let enrichedLastSummary = null;
                     let enrichedUnscheduledPurchases: any = 'Nenhuma compra realizada no momento';
@@ -1754,13 +1755,26 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                     }
 
                     // 5. Services catalog — service names + professionals
+                    // Categoria "Avaliação" sai do catálogo e vai num objeto separado
                     const { data: catalogRaw } = await supabase
                         .from('services_client')
-                        .select('service_name_id, professionals')
+                        .select('service_name_id, professionals, category_id, name, description, price')
                         .eq('user_id', userId)
                         .eq('status', true);
 
                     if (catalogRaw && catalogRaw.length > 0) {
+                        // Identifica categoria(s) "Avaliação" (accent-insensitive)
+                        const normalize = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+                        const catIds = [...new Set(catalogRaw.map((s: any) => s.category_id).filter(Boolean))];
+                        const avaliacaoCatIds = new Set<string>();
+                        if (catIds.length > 0) {
+                            const { data: cats } = await supabase.from('services_category')
+                                .select('id, name').in('id', catIds);
+                            for (const c of cats || []) {
+                                if (normalize(c.name) === 'avaliacao') avaliacaoCatIds.add(c.id);
+                            }
+                        }
+
                         // Collect all professional IDs from all services
                         const allProfIds = new Set<string>();
                         for (const sc of catalogRaw) {
@@ -1780,9 +1794,26 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                             }
                         }
 
-                        // Group professionals by service_name_id
+                        const avaliacaoRows = catalogRaw.filter((s: any) => avaliacaoCatIds.has(s.category_id));
+                        const regularRows = catalogRaw.filter((s: any) => !avaliacaoCatIds.has(s.category_id));
+
+                        // Objeto separado de avaliações: nome, profissionais, descrição, valor
+                        enrichedAvaliacoes = avaliacaoRows.map((s: any) => {
+                            const profNames = (s.professionals || [])
+                                .map((pid: string) => profMap.get(pid))
+                                .filter(Boolean);
+                            const price = Number(s.price) || 0;
+                            return {
+                                nome: s.name,
+                                profissionais: profNames.length > 0 ? profNames.join(', ') : null,
+                                descricao: s.description || null,
+                                valor: price === 0 ? 'gratuito' : price,
+                            };
+                        });
+
+                        // Group professionals by service_name_id (só serviços fora de Avaliação)
                         const snProfMap = new Map<string, Set<string>>();
-                        for (const sc of catalogRaw) {
+                        for (const sc of regularRows) {
                             if (!snProfMap.has(sc.service_name_id)) snProfMap.set(sc.service_name_id, new Set());
                             for (const pid of (sc.professionals || [])) {
                                 const name = profMap.get(pid);
@@ -1790,14 +1821,16 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                             }
                         }
 
-                        const snIds = [...new Set(catalogRaw.map((s: any) => s.service_name_id))];
-                        const { data: sns } = await supabase.from('service_name').select('id, name').in('id', snIds);
+                        const snIds = [...new Set(regularRows.map((s: any) => s.service_name_id))];
+                        if (snIds.length > 0) {
+                            const { data: sns } = await supabase.from('service_name').select('id, name').in('id', snIds);
 
-                        enrichedServicesCatalog = (sns || []).map((s: any) => {
-                            const profs = snProfMap.get(s.id);
-                            const profNames = profs && profs.size > 0 ? [...profs].join(', ') : null;
-                            return profNames ? `${s.name} (${profNames})` : s.name;
-                        });
+                            enrichedServicesCatalog = (sns || []).map((s: any) => {
+                                const profs = snProfMap.get(s.id);
+                                const profNames = profs && profs.size > 0 ? [...profs].join(', ') : null;
+                                return profNames ? `${s.name} (${profNames})` : s.name;
+                            });
+                        }
                     }
 
                     // Generate booking link for this contact
@@ -1844,6 +1877,7 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                             contact: enrichedContact,
                             crm: enrichedCrm,
                             services_catalog: enrichedServicesCatalog,
+                            avaliacoes: enrichedAvaliacoes,
                             appointments: enrichedAppointments,
                             unscheduled_purchases: enrichedUnscheduledPurchases,
                             last_summary: enrichedLastSummary,
