@@ -2,8 +2,10 @@ import { useMemo, useRef, useEffect, useState } from "react";
 import { format, addMinutes, startOfDay, differenceInMinutes, parseISO, isSameDay } from "date-fns";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
-import { ThumbsUp, Clock, X, Check, Pen, ChevronLeft, ChevronRight, UserX, ArrowRight } from "lucide-react";
+import { ThumbsUp, Clock, X, Check, Pen, ChevronLeft, ChevronRight, UserX, ArrowRight, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useOwnerId } from "@/hooks/useOwnerId";
+import { useProfessionalNps } from "@/hooks/useAppointmentsDashboard";
 
 interface SchedulingCalendarProps {
     date: Date;
@@ -29,6 +31,11 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
     const endHour = settings?.end_hour ?? 22;
     const workDays = settings?.work_days ?? [0, 1, 2, 3, 4, 5, 6];
     const isDayBlocked = !workDays.includes(date.getDay());
+
+    // Média NPS por profissional (todo o histórico)
+    const { data: ownerId } = useOwnerId();
+    const { data: profNps } = useProfessionalNps(ownerId);
+    const npsOf = (professionalId: string) => (profNps || []).find((n) => n.professional_id === professionalId);
 
     // Solo view: clique no nome do profissional exibe apenas a agenda dele
     const [soloId, setSoloId] = useState<string | null>(null);
@@ -200,6 +207,36 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                     </svg>
                                     <span className="absolute inset-0 flex items-center justify-center text-[8px] md:text-[10px] font-semibold">
                                         {occupancy}%
+                                    </span>
+                                </div>
+                            );
+                        })()}
+                        {(() => {
+                            const nps = npsOf(professional.id);
+                            const value = nps?.avg_nps != null ? Number(nps.avg_nps) : null;
+                            const pct = value != null ? Math.min(100, Math.round((value / 5) * 100)) : 0;
+                            return (
+                                <div
+                                    className="relative w-8 h-8 md:w-12 md:h-12 shrink-0"
+                                    title={value != null
+                                        ? `Média NPS: ${value} / 5 (${nps!.nps_count} avaliações)`
+                                        : "Sem avaliações NPS"}
+                                >
+                                    <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
+                                        <circle cx="18" cy="18" r="15" fill="none" strokeWidth="5" className="stroke-muted" />
+                                        <circle
+                                            cx="18" cy="18" r="15" fill="none" strokeWidth="5"
+                                            pathLength={100}
+                                            strokeDasharray={`${pct} ${100 - pct}`}
+                                            strokeLinecap="round"
+                                            className="stroke-amber-500 transition-all duration-500"
+                                        />
+                                    </svg>
+                                    <span className="absolute inset-0 flex flex-col items-center justify-center leading-none">
+                                        <Star className="w-2 h-2 md:w-2.5 md:h-2.5 text-amber-500 fill-amber-500" />
+                                        <span className="text-[8px] md:text-[10px] font-semibold">
+                                            {value != null ? value : "—"}
+                                        </span>
                                     </span>
                                 </div>
                             );
