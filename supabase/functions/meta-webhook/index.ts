@@ -76,11 +76,37 @@ function mapMetaTypeToUzapi(metaType: string): string {
 function extractTextFromMeta(msg: any): string {
     if (msg.type === "text") return msg.text?.body || "";
     if (msg.type === "interactive") {
-        return (
-            msg.interactive?.button_reply?.title ||
-            msg.interactive?.list_reply?.title ||
-            ""
-        );
+        const it = msg.interactive || {};
+        // Resposta de botão/lista enviada pelo cliente
+        const replyTitle = it.button_reply?.title || it.list_reply?.title;
+        if (replyTitle) return replyTitle;
+        // Menu interativo RECEBIDO (list/button/cta de outro bot/empresa):
+        // renderiza como texto com as opções para aparecer no inbox
+        const parts: string[] = [];
+        if (it.header?.text) parts.push(`*${it.header.text}*`);
+        if (it.body?.text) parts.push(it.body.text);
+        const opts: string[] = [];
+        for (const b of it.action?.buttons || []) {
+            const t = b.reply?.title || b.title || b.text;
+            if (t) opts.push(`▪ ${t}`);
+        }
+        for (const s of it.action?.sections || []) {
+            if (s.title) opts.push(`*${s.title}*`);
+            for (const r of s.rows || []) {
+                if (r.title) opts.push(`▪ ${r.title}${r.description ? ` — ${r.description}` : ""}`);
+            }
+        }
+        if (it.action?.name === "cta_url" && it.action?.parameters?.display_text) {
+            opts.push(`🔗 ${it.action.parameters.display_text}: ${it.action.parameters.url || ""}`);
+        }
+        if (opts.length > 0) parts.push(opts.join("\n"));
+        if (it.footer?.text) parts.push(`_${it.footer.text}_`);
+        return parts.join("\n\n") || "📋 Mensagem interativa (menu de opções)";
+    }
+    // Tipo não suportado pela Cloud API (ex.: menu interativo de outro bot) —
+    // Meta não entrega o conteúdo, só o aviso. Mostra placeholder no inbox.
+    if (msg.type === "unsupported") {
+        return "⚠️ Mensagem interativa não suportada pela API do WhatsApp — o conteúdo (menu de opções) só é visível no aplicativo do celular.";
     }
     if (msg.type === "button") return msg.button?.text || "";
     if (msg.type === "reaction") return msg.reaction?.emoji || "";
@@ -349,6 +375,13 @@ serve(async (req) => {
                         const peer = isEcho ? (msg.to || msg.recipient_id || "") : msg.from;
                         if (!peer) continue;
 
+                        const msgText = extractTextFromMeta(msg);
+                        const mediaMsgTypes = ["image", "audio", "video", "document", "sticker"];
+                        if (!msgText && !mediaMsgTypes.includes(msg.type)) {
+                            // Diagnóstico: tipo de mensagem que resultou em texto vazio (bolha invisível no inbox)
+                            console.log("[meta-webhook] Empty text for msg type:", msg.type, JSON.stringify(msg).substring(0, 800));
+                        }
+
                         // Build normalized UZAPI-format payload
                         const normalizedPayload = {
                             instanceName: instance.instance_name,
@@ -359,7 +392,7 @@ serve(async (req) => {
                                 sender_pn: peer,
                                 pushName: isEcho ? "" : (contact?.profile?.name || ""),
                                 messageType: mapMetaTypeToUzapi(msg.type),
-                                text: extractTextFromMeta(msg),
+                                text: msgText,
                                 fromMe: isEcho,
                                 timestamp: parseInt(msg.timestamp) || Math.floor(Date.now() / 1000),
                                 isGroup: false,
