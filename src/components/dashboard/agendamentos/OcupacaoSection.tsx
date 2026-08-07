@@ -25,9 +25,11 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { MonthYearSelect, TodayToggle } from "./PeriodControls";
+import { useOwnerId } from "@/hooks/useOwnerId";
 import {
     useAppointmentsRange,
     useProfessionalsDashboard,
+    useProfessionalNps,
     dailyWorkMinutes,
 } from "@/hooks/useAppointmentsDashboard";
 
@@ -40,6 +42,8 @@ export function OcupacaoSection() {
 
     const weekEnd = useMemo(() => endOfWeek(weekStart, { weekStartsOn: 0 }), [weekStart]);
 
+    const { data: ownerId } = useOwnerId();
+    const { data: profNps } = useProfessionalNps(ownerId); // todo o histórico
     const { data: professionals } = useProfessionalsDashboard();
     const { data: appointments, isLoading } = useAppointmentsRange(
         startOfDay(weekStart).toISOString(),
@@ -83,6 +87,20 @@ export function OcupacaoSection() {
 
         return todayOn ? data.filter((d) => isSameDay(d.date, today)) : data;
     }, [appointments, professionals, selectedProf, weekStart, weekEnd, todayOn]);
+
+    const npsChartData = useMemo(() => {
+        const entries = (profNps || []).filter(
+            (n) => selectedProf === "all" || n.professional_id === selectedProf
+        );
+        return entries
+            .map((n) => ({
+                name: n.professional_name,
+                shortName: n.professional_name.split(" ")[0],
+                nps: n.avg_nps ?? 0,
+                count: n.nps_count,
+            }))
+            .sort((a, b) => b.nps - a.nps);
+    }, [profNps, selectedProf]);
 
     const weekLabel = `${format(weekStart, "dd MMM", { locale: ptBR })} – ${format(weekEnd, "dd MMM yyyy", { locale: ptBR })}`;
 
@@ -139,33 +157,79 @@ export function OcupacaoSection() {
                     </TabsList>
                 </Tabs>
 
-                {isLoading ? (
-                    <div className="h-[300px] flex items-center justify-center text-sm text-muted-foreground">
-                        Carregando...
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="lg:col-span-2">
+                        {isLoading ? (
+                            <div className="h-[300px] flex items-center justify-center text-sm text-muted-foreground">
+                                Carregando...
+                            </div>
+                        ) : (
+                            <ResponsiveContainer width="100%" height={300}>
+                                <BarChart data={chartData}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted))" opacity={0.2} />
+                                    <XAxis dataKey="day" stroke="hsl(var(--muted-foreground))" fontSize={11} />
+                                    <YAxis
+                                        stroke="hsl(var(--muted-foreground))"
+                                        fontSize={11}
+                                        domain={[0, 100]}
+                                        tickFormatter={(v) => `${v}%`}
+                                    />
+                                    <Tooltip
+                                        contentStyle={{
+                                            backgroundColor: "hsl(var(--card))",
+                                            border: "1px solid hsl(var(--border))",
+                                            borderRadius: "8px",
+                                        }}
+                                        formatter={(value: number) => [`${value}%`, "Ocupação"]}
+                                    />
+                                    <Bar dataKey="ocupacao" fill="#3b82f6" radius={[8, 8, 0, 0]} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        )}
                     </div>
-                ) : (
-                    <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={chartData}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted))" opacity={0.2} />
-                            <XAxis dataKey="day" stroke="hsl(var(--muted-foreground))" fontSize={11} />
-                            <YAxis
-                                stroke="hsl(var(--muted-foreground))"
-                                fontSize={11}
-                                domain={[0, 100]}
-                                tickFormatter={(v) => `${v}%`}
-                            />
-                            <Tooltip
-                                contentStyle={{
-                                    backgroundColor: "hsl(var(--card))",
-                                    border: "1px solid hsl(var(--border))",
-                                    borderRadius: "8px",
-                                }}
-                                formatter={(value: number) => [`${value}%`, "Ocupação"]}
-                            />
-                            <Bar dataKey="ocupacao" fill="#3b82f6" radius={[8, 8, 0, 0]} />
-                        </BarChart>
-                    </ResponsiveContainer>
-                )}
+
+                    <div>
+                        <h4 className="text-sm font-semibold mb-2">Média NPS por profissional</h4>
+                        {npsChartData.length === 0 ? (
+                            <div className="h-[270px] flex items-center justify-center text-sm text-muted-foreground">
+                                Nenhuma avaliação NPS
+                            </div>
+                        ) : (
+                            <ResponsiveContainer width="100%" height={270}>
+                                <BarChart data={npsChartData}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted))" opacity={0.2} />
+                                    <XAxis
+                                        dataKey="shortName"
+                                        stroke="hsl(var(--muted-foreground))"
+                                        fontSize={11}
+                                        interval={0}
+                                    />
+                                    <YAxis
+                                        stroke="hsl(var(--muted-foreground))"
+                                        fontSize={11}
+                                        domain={[0, 5]}
+                                        ticks={[0, 1, 2, 3, 4, 5]}
+                                    />
+                                    <Tooltip
+                                        contentStyle={{
+                                            backgroundColor: "hsl(var(--card))",
+                                            border: "1px solid hsl(var(--border))",
+                                            borderRadius: "8px",
+                                        }}
+                                        formatter={(value: number, _name, item: any) => [
+                                            `${value} / 5 (${item?.payload?.count} aval.)`,
+                                            "NPS",
+                                        ]}
+                                        labelFormatter={(_label, payload: any) =>
+                                            payload?.[0]?.payload?.name || _label
+                                        }
+                                    />
+                                    <Bar dataKey="nps" fill="#f59e0b" radius={[8, 8, 0, 0]} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        )}
+                    </div>
+                </div>
             </CardContent>
         </Card>
     );

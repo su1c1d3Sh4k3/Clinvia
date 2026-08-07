@@ -65,6 +65,30 @@ export function useAppointmentsRange(startISO: string, endISO: string) {
     });
 }
 
+export interface ProfessionalNps {
+    professional_id: string;
+    professional_name: string;
+    avg_nps: number | null;
+    nps_count: number;
+}
+
+// Média NPS por profissional (RPC get_professional_nps). Sem período = todo o histórico.
+export function useProfessionalNps(ownerId?: string | null, startISO?: string | null, endISO?: string | null) {
+    return useQuery({
+        queryKey: ["professional-nps", ownerId, startISO ?? null, endISO ?? null],
+        enabled: !!ownerId,
+        queryFn: async (): Promise<ProfessionalNps[]> => {
+            const { data, error } = await supabase.rpc("get_professional_nps" as any, {
+                p_owner: ownerId,
+                p_start: startISO ?? null,
+                p_end: endISO ?? null,
+            });
+            if (error) throw error;
+            return (data || []) as unknown as ProfessionalNps[];
+        },
+    });
+}
+
 export const formatCurrency = (value: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value || 0);
 

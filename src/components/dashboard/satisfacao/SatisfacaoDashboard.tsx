@@ -40,6 +40,8 @@ interface SatisfactionData {
         is_ai: boolean | null;
         duration_seconds: number | null;
         sentiment: number | null;
+        professional: string | null;
+        application: string | null;
     }>;
     agents: Array<{
         id: string;
@@ -47,7 +49,6 @@ interface SatisfactionData {
         is_ai: boolean;
         avg_response_seconds: number | null;
         total_attendance_seconds: number | null;
-        avg_nps: number | null;
         avg_sentiment: number | null;
         attendance_count: number;
     }>;
@@ -243,6 +244,8 @@ export const SatisfacaoDashboard = () => {
                                         <TableRow>
                                             <TableHead>Contato</TableHead>
                                             <TableHead>Telefone</TableHead>
+                                            <TableHead>Aplicação</TableHead>
+                                            <TableHead>Profissional</TableHead>
                                             <TableHead>Atendido por</TableHead>
                                             <TableHead>Tempo de atendimento</TableHead>
                                             <TableHead>Sentimento</TableHead>
@@ -254,6 +257,12 @@ export const SatisfacaoDashboard = () => {
                                             <TableRow key={i}>
                                                 <TableCell className="font-medium">{r.contact_name || "Sem nome"}</TableCell>
                                                 <TableCell className="text-muted-foreground">{r.phone || "—"}</TableCell>
+                                                <TableCell className="max-w-[180px] truncate" title={r.application || undefined}>
+                                                    {r.application || "—"}
+                                                </TableCell>
+                                                <TableCell className="max-w-[160px] truncate" title={r.professional || undefined}>
+                                                    {r.professional || "—"}
+                                                </TableCell>
                                                 <TableCell>
                                                     {r.attended_by ? (
                                                         <span className="flex items-center gap-1.5">
@@ -301,13 +310,6 @@ export const SatisfacaoDashboard = () => {
                                             <Timer className="h-3.5 w-3.5" /> Tempo total
                                         </div>
                                         <div className="text-right font-medium">{fmtDuration(a.total_attendance_seconds)}</div>
-
-                                        <div className="flex items-center gap-1.5 text-muted-foreground">
-                                            <Star className="h-3.5 w-3.5" /> Satisfação NPS
-                                        </div>
-                                        <div className={cn("text-right font-medium", npsColor(a.avg_nps))}>
-                                            {a.avg_nps != null ? `${a.avg_nps} / 5` : "—"}
-                                        </div>
 
                                         <div className="flex items-center gap-1.5 text-muted-foreground">
                                             <Brain className="h-3.5 w-3.5" /> Sentimento

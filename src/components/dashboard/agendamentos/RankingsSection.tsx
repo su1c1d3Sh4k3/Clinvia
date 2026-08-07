@@ -2,11 +2,13 @@ import { useMemo, useState } from "react";
 import { startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Stethoscope, Users } from "lucide-react";
+import { Star, Stethoscope, Users } from "lucide-react";
 import { MonthYearSelect, TodayToggle } from "./PeriodControls";
+import { useOwnerId } from "@/hooks/useOwnerId";
 import {
     useAppointmentsRange,
     useProfessionalsDashboard,
+    useProfessionalNps,
     formatCurrency,
 } from "@/hooks/useAppointmentsDashboard";
 
@@ -30,8 +32,12 @@ export function RankingsSection() {
         };
     }, [month, year, todayOn]);
 
+    const { data: ownerId } = useOwnerId();
     const { data: professionals } = useProfessionalsDashboard();
     const { data: appointments, isLoading } = useAppointmentsRange(startISO, endISO);
+    const { data: profNps } = useProfessionalNps(ownerId, startISO, endISO);
+
+    const npsOf = (id: string) => (profNps || []).find((n) => n.professional_id === id);
 
     const { topServices, topProfessionals } = useMemo(() => {
         const completed = (appointments || []).filter((a) => a.status === "completed");
@@ -188,6 +194,15 @@ export function RankingsSection() {
                                         <p className="text-sm font-semibold">{p.count} proced.</p>
                                         <p className="text-xs text-emerald-600 font-medium">
                                             {formatCurrency(p.total)}
+                                        </p>
+                                    </div>
+                                    <div className="text-right shrink-0 w-16">
+                                        <p className="text-sm font-semibold flex items-center justify-end gap-1">
+                                            <Star className="w-3.5 h-3.5 text-amber-500" />
+                                            {npsOf(p.id)?.avg_nps ?? "—"}
+                                        </p>
+                                        <p className="text-[11px] text-muted-foreground">
+                                            NPS{npsOf(p.id) ? ` (${npsOf(p.id)!.nps_count})` : ""}
                                         </p>
                                     </div>
                                 </div>
