@@ -318,6 +318,78 @@ serve(async (req) => {
             );
         }
 
+        // ── ACTION: close_ticket ──
+        // Encerra o ticket do contato: resolve conversas open/pending e move o
+        // card ativo (se houver) para a etapa terminal escolhida.
+        if (action === "close_ticket") {
+            if (!stage) throw new Error("Missing field: stage");
+
+            const matched = TERMINAL_STAGES.find(s => s.toLowerCase() === stage.toLowerCase());
+            if (!matched) {
+                return new Response(
+                    JSON.stringify({ error: `Etapa de encerramento inválida: "${stage}". Etapas válidas: ${TERMINAL_STAGES.join(', ')}` }),
+                    { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+                );
+            }
+
+            const cid = await resolveContactId();
+
+            // Card ativo → mover para a etapa terminal.
+            // Triggers do banco (crm_terminal_enforce_inactive + crm_terminal_resolve_tickets)
+            // desativam o card e resolvem as conversas open/pending do contato.
+            const { data: card } = await supabase
+                .from("crm_client")
+                .select("id, stage")
+                .eq("contact_id", cid)
+                .eq("is_active", true)
+                .maybeSingle();
+
+            let deal: any = null;
+            if (card) {
+                const updateData: any = {
+                    stage: matched,
+                    stage_changed_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                    is_active: false,
+                };
+                if (matched === 'Perdido' || matched === 'Sem Interesse') {
+                    updateData.loss_reason = loss_reason || 'other';
+                    updateData.loss_reason_other = loss_reason_other || null;
+                }
+                const { data: updated, error } = await supabase
+                    .from("crm_client")
+                    .update(updateData)
+                    .eq("id", card.id)
+                    .select("id, stage, is_active, value")
+                    .single();
+                if (error) throw error;
+                deal = updated;
+            }
+
+            // Sem card ativo (ou garantia extra): resolve as conversas diretamente
+            const { data: resolved, error: convError } = await supabase
+                .from("conversations")
+                .update({ status: "resolved" })
+                .eq("contact_id", cid)
+                .eq("user_id", user_id)
+                .in("status", ["open", "pending"])
+                .select("id");
+            if (convError) throw convError;
+
+            return new Response(
+                JSON.stringify({
+                    success: true,
+                    stage: matched,
+                    deal,
+                    conversations_resolved: (resolved || []).length,
+                    message: deal
+                        ? `Negociação movida para "${matched}" e ticket encerrado`
+                        : `Ticket encerrado (contato sem negociação ativa)`,
+                }),
+                { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+        }
+
         // ── ACTION: list_stages ──
         // Returns all available stages
         if (action === "list_stages") {
@@ -327,7 +399,7 @@ serve(async (req) => {
             );
         }
 
-        throw new Error(`Invalid action: "${action}". Valid: get_deal, move_stage, create_deal, list_stages`);
+        throw new Error(`Invalid action: "${action}". Valid: get_deal, move_stage, create_deal, add_service, close_ticket, list_stages`);
 
     } catch (error) {
         return new Response(
