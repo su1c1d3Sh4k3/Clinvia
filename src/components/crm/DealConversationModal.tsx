@@ -18,6 +18,7 @@ import { useState, useRef, useEffect } from "react";
 import { Send, Paperclip, Smile, Mic, Sparkles, CheckCircle, X } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { useSendMessage } from "@/hooks/useSendMessage";
+import { useMessages } from "@/hooks/useMessages";
 import EmojiPicker, { EmojiClickData } from "emoji-picker-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -51,36 +52,39 @@ export function DealConversationModal({ contactId, contactName, trigger }: DealC
         console.log("[DealModal] Component mounted/updated:", { contactId, contactName, ownerId });
     }, [contactId, contactName, ownerId]);
 
-    // Check for active tickets to enable/disable button and get conversation ID
-    const { data: activeConversationId } = useQuery({
-        queryKey: ["active-conversation-id", contactId, ownerId],
+    // Latest conversation for this contact: prefer open/pending (allows sending),
+    // fallback to most recent resolved (view-only history)
+    const { data: conversation } = useQuery({
+        queryKey: ["deal-conversation", contactId, ownerId],
         queryFn: async () => {
-            console.log("[DealModal] Fetching conversation ID:", { contactId, ownerId });
-
-            if (!ownerId) {
-                console.log("[DealModal] No ownerId for conversation query");
-                return null;
-            }
+            if (!ownerId) return null;
 
             const { data, error } = await supabase
                 .from("conversations")
-                .select("id")
+                .select("id, status")
                 .eq("contact_id", contactId)
                 .eq("user_id", ownerId)
-                .in("status", ["open", "pending"])
-                .limit(1);
+                .order("created_at", { ascending: false })
+                .limit(20);
 
             if (error) {
                 console.error("[DealModal] Conversation query error:", error);
                 return null;
             }
+            if (!data || data.length === 0) return null;
 
-            const conversationId = data && data.length > 0 ? data[0].id : null;
-            console.log("[DealModal] Found conversation ID:", conversationId);
-            return conversationId;
+            const active = data.find((c) => c.status === "open" || c.status === "pending");
+            return active ?? data[0];
         },
         enabled: !!contactId && !!ownerId,
     });
+
+    const conversationId = conversation?.id ?? null;
+    // Sending only allowed on active (open/pending) conversations
+    const activeConversationId =
+        conversation && (conversation.status === "open" || conversation.status === "pending")
+            ? conversation.id
+            : null;
 
     // Auto-resize textarea
     useEffect(() => {
@@ -153,7 +157,7 @@ export function DealConversationModal({ contactId, contactName, trigger }: DealC
             setSelectedFile(null);
             if (fileInputRef.current) fileInputRef.current.value = "";
             toast.success("Mensagem enviada!");
-            queryClient.invalidateQueries({ queryKey: ["deal-messages", activeConversationId] });
+            queryClient.invalidateQueries({ queryKey: ["messages", activeConversationId] });
         } catch (error) {
             console.error("Erro ao enviar mensagem:", error);
             toast.error("Erro ao enviar mensagem");
@@ -162,62 +166,9 @@ export function DealConversationModal({ contactId, contactName, trigger }: DealC
         }
     };
 
-    const { data: messages, isLoading } = useQuery({
-        queryKey: ["deal-messages", activeConversationId],
-        queryFn: async () => {
-            console.log("[DealModal] Starting messages query with conversation ID:", activeConversationId);
-
-            if (!activeConversationId) {
-                console.log("[DealModal] No conversation ID, returning empty array");
-                return [];
-            }
-
-            // Fetch messages directly by conversation_id (much faster than join)
-            console.log("[DealModal] Executing query...");
-            const { data, error } = await supabase
-                .from("messages")
-                .select("*")
-                .eq("conversation_id", activeConversationId)
-                .order("created_at", { ascending: false })
-                .limit(50);
-
-            if (error) {
-                console.error("[DealModal] Query error:", error);
-                throw error;
-            }
-
-            console.log("[DealModal] Query successful, messages count:", data?.length || 0);
-            console.log("[DealModal] Sample message data:", data?.[0]);
-            return data.reverse(); // Show oldest first
-        },
-        enabled: !!activeConversationId,
-    });
-
-    // Real-time subscription
-    useEffect(() => {
-        if (!activeConversationId) return;
-
-        const channel = supabase
-            .channel(`deal-messages-${activeConversationId}`)
-            .on(
-                "postgres_changes",
-                {
-                    event: "INSERT",
-                    schema: "public",
-                    table: "messages",
-                    filter: `conversation_id=eq.${activeConversationId}`,
-                },
-                (payload) => {
-                    console.log("New message received in deal modal:", payload);
-                    queryClient.invalidateQueries({ queryKey: ["deal-messages", activeConversationId] });
-                }
-            )
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [activeConversationId, contactId, queryClient]);
+    // Same source as the inbox: handles resolved conversations (messages_history JSON)
+    // and active ones (messages table + realtime)
+    const { messages, isLoading } = useMessages(conversationId ?? undefined);
 
 
 
@@ -225,7 +176,7 @@ export function DealConversationModal({ contactId, contactName, trigger }: DealC
         <Dialog>
             <DialogTrigger asChild>
                 {trigger ?? (
-                    <Button variant="ghost" size="icon" className="h-6 w-6 text-black dark:text-muted-foreground" title="Ver Conversa" disabled={!activeConversationId}>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 text-black dark:text-muted-foreground" title="Ver Conversa" disabled={!conversationId}>
                         <Eye className="h-3 w-3" />
                     </Button>
                 )}
@@ -237,9 +188,9 @@ export function DealConversationModal({ contactId, contactName, trigger }: DealC
                         <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => navigate(`/?conversationId=${activeConversationId}`)}
+                            onClick={() => navigate(`/?conversationId=${conversationId}`)}
                             className="ml-4"
-                            disabled={!activeConversationId}
+                            disabled={!conversationId}
                         >
                             <MessageSquare className="mr-2 h-4 w-4" />
                             Ir para Inbox
@@ -268,9 +219,11 @@ export function DealConversationModal({ contactId, contactName, trigger }: DealC
                                     >
                                         <p className="text-sm">{msg.body}</p>
                                     </div>
-                                    <span className="text-[10px] text-muted-foreground mt-1">
-                                        {format(new Date(msg.created_at), "dd/MM HH:mm")}
-                                    </span>
+                                    {msg.created_at && !isNaN(new Date(msg.created_at).getTime()) && (
+                                        <span className="text-[10px] text-muted-foreground mt-1">
+                                            {format(new Date(msg.created_at), "dd/MM HH:mm")}
+                                        </span>
+                                    )}
                                 </div>
                             ))}
                         </div>
