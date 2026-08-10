@@ -10,6 +10,7 @@ import { DealConversationModal } from "./DealConversationModal";
 import { LossReasonModal } from "./LossReasonModal";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { CLIENT_STAGE_BADGE, CLIENT_STAGE_LABEL, normalizeClientStage } from "@/lib/clientStage";
 import { format, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useState } from "react";
@@ -53,7 +54,7 @@ export const NewKanbanBoard = ({ onCardClick }: NewKanbanBoardProps) => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("crm_client" as any)
-        .select("*, contact:contacts(id, push_name, phone, number, profile_pic_url)")
+        .select("*, contact:contacts(id, push_name, phone, number, profile_pic_url, client_stage)")
         .order("stage_changed_at", { ascending: false });
       if (error) throw error;
       return data as CrmClient[];
@@ -311,6 +312,16 @@ export const NewKanbanBoard = ({ onCardClick }: NewKanbanBoardProps) => {
                               <span className="text-xs font-medium truncate flex-1 min-w-0">
                                 {client.contact?.push_name || "Sem nome"}
                               </span>
+                              {client.contact && (
+                                <span
+                                  className={cn(
+                                    "px-1 py-0 rounded text-[8px] font-bold uppercase tracking-wider border shrink-0",
+                                    CLIENT_STAGE_BADGE[normalizeClientStage((client.contact as any)?.client_stage)]
+                                  )}
+                                >
+                                  {CLIENT_STAGE_LABEL[normalizeClientStage((client.contact as any)?.client_stage)]}
+                                </span>
+                              )}
                               {/* Alert icon for waiting appointments */}
                               {hasWaiting && (
                                 <TooltipProvider>

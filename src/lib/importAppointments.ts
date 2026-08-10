@@ -319,7 +319,6 @@ export async function importAppointments(opts: {
             push_name: nameByNumber.get(n) || "Cliente",
             phone: n.replace(/@.*$/, ""),
             channel: "whatsapp",
-            is_lead: true,
         }));
         const { data: inserted, error } = await supabase
             .from("contacts")

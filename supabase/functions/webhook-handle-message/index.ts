@@ -1671,7 +1671,7 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                         // 1. Contact data
                         const { data: cData } = await supabase
                             .from('contacts')
-                            .select('id, push_name, number, phone, email, cpf, company, instagram, patient, is_lead, created_at')
+                            .select('id, push_name, number, phone, email, cpf, company, instagram, patient, is_lead, client_stage, created_at')
                             .eq('id', contactId)
                             .single();
                         enrichedContact = cData ? { ...cData, created_at: toSaoPaulo(cData.created_at) } : null;

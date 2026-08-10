@@ -3,12 +3,11 @@ import { Button } from "@/components/ui/button";
 import { CheckCircle, Star, Files, CircleCheck } from "lucide-react";
 import { QueueSelector } from "@/components/QueueSelector";
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { FavoriteMessagesModal } from "./FavoriteMessagesModal";
 import { ConversationMediaModal } from "./ConversationMediaModal";
 import { CloseNegotiationModal } from "./CloseNegotiationModal";
 import { cn } from "@/lib/utils";
+import { CLIENT_STAGE_BADGE, CLIENT_STAGE_LABEL, normalizeClientStage } from "@/lib/clientStage";
 
 interface ChatHeaderProps {
     isMobile?: boolean;
@@ -74,22 +73,6 @@ export const ChatHeader = ({
     const [isFavoritesModalOpen, setIsFavoritesModalOpen] = useState(false);
     const [isCloseNegotiationOpen, setIsCloseNegotiationOpen] = useState(false);
     const [isMediaModalOpen, setIsMediaModalOpen] = useState(false);
-    const queryClient = useQueryClient();
-
-    const toggleLeadMutation = useMutation({
-        mutationFn: async (newValue: boolean) => {
-            if (!contact?.id) return;
-            const { error } = await supabase
-                .from("contacts")
-                .update({ is_lead: newValue } as any)
-                .eq("id", contact.id);
-            if (error) throw error;
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["conversation", conversationId] });
-            queryClient.invalidateQueries({ queryKey: ["contacts"] });
-        },
-    });
 
     if (isMobile) return null;
 
@@ -111,18 +94,14 @@ export const ChatHeader = ({
                             {displayName}
                         </h3>
                         {!isGroup && contact && (
-                            <button
-                                onClick={() => toggleLeadMutation.mutate(!contact.is_lead)}
-                                disabled={toggleLeadMutation.isPending}
+                            <span
                                 className={cn(
-                                    "px-1.5 py-0 rounded text-[9px] font-bold uppercase tracking-wider border transition-colors flex-shrink-0",
-                                    contact.is_lead
-                                        ? "bg-emerald-500/15 text-emerald-500 border-emerald-500/30 hover:bg-emerald-500/25"
-                                        : "bg-gray-500/10 text-gray-400 border-gray-500/20 hover:bg-gray-500/20"
+                                    "px-1.5 py-0 rounded text-[9px] font-bold uppercase tracking-wider border flex-shrink-0",
+                                    CLIENT_STAGE_BADGE[normalizeClientStage(contact.client_stage)]
                                 )}
                             >
-                                LEAD
-                            </button>
+                                {CLIENT_STAGE_LABEL[normalizeClientStage(contact.client_stage)]}
+                            </span>
                         )}
                     </div>
                     {instanceName && (

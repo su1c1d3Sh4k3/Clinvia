@@ -183,7 +183,6 @@ export function AudienceFileUpload({ fileType, value, onChange }: AudienceFileUp
                         push_name: validByNumber.get(n)!.push_name,
                         phone: n.replace(/@.*$/, ""),
                         channel: "whatsapp",
-                        is_lead: true,
                     }));
                 for (let i = 0; i < toInsert.length; i += 100) {
                     const chunk = toInsert.slice(i, i + 100);

@@ -56,6 +56,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { usePermissions } from "@/hooks/usePermissions";
 import { cn } from "@/lib/utils";
+import { CLIENT_STAGE_BADGE, CLIENT_STAGE_LABEL, normalizeClientStage } from "@/lib/clientStage";
 
 interface Contact {
     id: string;
@@ -78,7 +79,7 @@ interface Contact {
     analysis?: { data: string; resumo: string }[];
     report?: string;
     ia_on?: boolean;
-    is_lead?: boolean;
+    client_stage?: string;
     nps?: { id?: string; dataPesquisa: string; nota: number | string; feedback: string }[];
 }
 
@@ -94,7 +95,7 @@ const Contacts = () => {
     const [selectedContactForMessage, setSelectedContactForMessage] = useState<Contact | null>(null);
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedTagFilter, setSelectedTagFilter] = useState<string>("all");
-    const [selectedChannelFilter, setSelectedChannelFilter] = useState<"all" | "whatsapp" | "instagram" | "leads">("all");
+    const [selectedChannelFilter, setSelectedChannelFilter] = useState<"all" | "whatsapp" | "instagram" | "contato" | "lead" | "cliente">("all");
 
     // Bulk Actions State
     const [selectedContactIds, setSelectedContactIds] = useState<Set<string>>(new Set());
@@ -145,8 +146,8 @@ const Contacts = () => {
             }
 
             // Canal
-            if (selectedChannelFilter === "leads") {
-                query = query.eq("is_lead", true);
+            if (["contato", "lead", "cliente"].includes(selectedChannelFilter)) {
+                query = query.eq("client_stage", selectedChannelFilter);
             } else if (selectedChannelFilter !== "all") {
                 query = query.eq("channel", selectedChannelFilter);
             }
@@ -288,26 +289,6 @@ const Contacts = () => {
         },
     });
 
-    const toggleLeadMutation = useMutation({
-        mutationFn: async ({ id, is_lead }: { id: string; is_lead: boolean }) => {
-            const { error } = await supabase
-                .from("contacts")
-                .update({ is_lead } as any)
-                .eq("id", id);
-            if (error) throw error;
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["contacts"] });
-        },
-        onError: (error) => {
-            toast({
-                title: "Erro ao atualizar status de lead",
-                description: error.message,
-                variant: "destructive",
-            });
-        },
-    });
-
     const handleEdit = (contact: Contact) => {
         setEditingContact(contact);
         setIsModalOpen(true);
@@ -399,7 +380,7 @@ const Contacts = () => {
             CPF: c.cpf || "",
             Email: c.email || "",
             Instagram: c.instagram || "",
-            Lead: c.is_lead ? "Sim" : "Não",
+            Categoria: CLIENT_STAGE_LABEL[normalizeClientStage(c.client_stage)],
             Etiquetas: c.contact_tags?.map((ct: any) => ct.tags?.name).filter(Boolean).join(", ") || "",
         }));
 
@@ -482,16 +463,40 @@ const Contacts = () => {
                             WhatsApp
                         </Button>
                         <Button
-                            variant={selectedChannelFilter === 'leads' ? 'secondary' : 'outline'}
+                            variant={selectedChannelFilter === 'contato' ? 'secondary' : 'outline'}
                             size="sm"
                             onClick={() => {
-                                setSelectedChannelFilter('leads');
+                                setSelectedChannelFilter('contato');
                                 setCurrentPage(1);
                             }}
-                            className={`h-8 gap-1 ${selectedChannelFilter !== 'leads' ? 'bg-white dark:bg-transparent border border-[#D4D5D6] dark:border-border' : ''}`}
+                            className={`h-8 gap-1 ${selectedChannelFilter !== 'contato' ? 'bg-white dark:bg-transparent border border-[#D4D5D6] dark:border-border' : ''}`}
+                        >
+                            <Users className="h-4 w-4 text-orange-500" />
+                            Contatos
+                        </Button>
+                        <Button
+                            variant={selectedChannelFilter === 'lead' ? 'secondary' : 'outline'}
+                            size="sm"
+                            onClick={() => {
+                                setSelectedChannelFilter('lead');
+                                setCurrentPage(1);
+                            }}
+                            className={`h-8 gap-1 ${selectedChannelFilter !== 'lead' ? 'bg-white dark:bg-transparent border border-[#D4D5D6] dark:border-border' : ''}`}
+                        >
+                            <Users className="h-4 w-4 text-yellow-500" />
+                            Leads
+                        </Button>
+                        <Button
+                            variant={selectedChannelFilter === 'cliente' ? 'secondary' : 'outline'}
+                            size="sm"
+                            onClick={() => {
+                                setSelectedChannelFilter('cliente');
+                                setCurrentPage(1);
+                            }}
+                            className={`h-8 gap-1 ${selectedChannelFilter !== 'cliente' ? 'bg-white dark:bg-transparent border border-[#D4D5D6] dark:border-border' : ''}`}
                         >
                             <Users className="h-4 w-4 text-emerald-500" />
-                            Leads
+                            Clientes
                         </Button>
                         <Button
                             variant={selectedChannelFilter === 'instagram' ? 'secondary' : 'outline'}
@@ -629,7 +634,7 @@ const Contacts = () => {
                                     <TableHead className="text-foreground dark:text-slate-400 font-semibold w-[25%] md:w-[20%]">Nome</TableHead>
                                     <TableHead className="text-foreground dark:text-slate-400 font-semibold hidden sm:table-cell w-[15%]">Telefone</TableHead>
                                     <TableHead className="text-foreground dark:text-slate-400 font-semibold hidden md:table-cell w-[12%]">Etiquetas</TableHead>
-                                    <TableHead className="text-foreground dark:text-slate-400 font-semibold text-center w-[6%] hidden sm:table-cell">Lead</TableHead>
+                                    <TableHead className="text-foreground dark:text-slate-400 font-semibold text-center w-[6%] hidden sm:table-cell">Categoria</TableHead>
                                     <TableHead className="text-foreground dark:text-slate-400 font-semibold text-center w-[6%] hidden sm:table-cell">IA</TableHead>
                                     {!isAgent && <TableHead className="text-foreground dark:text-slate-400 font-semibold text-center hidden lg:table-cell w-[8%]">Satisf.</TableHead>}
                                     {!isAgent && <TableHead className="text-foreground dark:text-slate-400 font-semibold text-center hidden lg:table-cell w-[8%]">Resumos</TableHead>}
@@ -717,18 +722,14 @@ const Contacts = () => {
                                                 </div>
                                             </TableCell>
                                             <TableCell className="text-center hidden sm:table-cell py-2 md:py-4">
-                                                <button
-                                                    onClick={() => toggleLeadMutation.mutate({ id: contact.id, is_lead: !contact.is_lead })}
-                                                    disabled={toggleLeadMutation.isPending}
+                                                <span
                                                     className={cn(
-                                                        "px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border transition-colors",
-                                                        contact.is_lead
-                                                            ? "bg-emerald-500/15 text-emerald-500 border-emerald-500/30 hover:bg-emerald-500/25"
-                                                            : "bg-gray-500/10 text-gray-400 border-gray-500/20 hover:bg-gray-500/20"
+                                                        "px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border",
+                                                        CLIENT_STAGE_BADGE[normalizeClientStage(contact.client_stage)]
                                                     )}
                                                 >
-                                                    LEAD
-                                                </button>
+                                                    {CLIENT_STAGE_LABEL[normalizeClientStage(contact.client_stage)]}
+                                                </span>
                                             </TableCell>
                                             <TableCell className="text-center hidden sm:table-cell py-2 md:py-4">
                                                 <Switch
