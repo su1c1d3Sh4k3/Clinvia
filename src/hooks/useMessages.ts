@@ -26,28 +26,16 @@ export const useMessages = (conversationId?: string) => {
     queryFn: async () => {
       if (!conversationId) return [];
 
-      // 1. Fetch conversation status first to decide source
-      const { data: conversation, error: convError } = await supabase
-        .from("conversations")
-        .select("status, messages_history")
-        .eq("id", conversationId)
-        .single();
-
-      if (convError) throw convError;
-
-      // 2. If resolved, parse JSON history
-      if (conversation.status === "resolved") {
-        const history = conversation.messages_history as any[];
+      // Maps a conversations.messages_history JSON array to Message[]
+      const mapHistory = (history: any, sourceId: string): Message[] => {
         if (!history || !Array.isArray(history)) return [];
-
-        // Map JSON history to Message interface
         return history.map((item, index) => {
           // Support both new (rich) and old (simple) formats
           const role = item.role || (item.user ? "user" : "assistant");
           const content = item.content || item.user || item.assistant;
 
           return {
-            id: item.id || `history-${index}`,
+            id: item.id || `history-${sourceId}-${index}`,
             conversation_id: conversationId,
             body: content,
             direction: role === "user" ? "inbound" : "outbound",
@@ -59,9 +47,43 @@ export const useMessages = (conversationId?: string) => {
             evolution_id: null
           } as Message;
         });
+      };
+
+      // 1. Fetch conversation status first to decide source
+      const { data: conversation, error: convError } = await supabase
+        .from("conversations")
+        .select("status, messages_history, contact_id, created_at")
+        .eq("id", conversationId)
+        .single();
+
+      if (convError) throw convError;
+
+      // 2. History from PREVIOUS resolved conversations of the same contact
+      //    (archived in conversations.messages_history JSON) — shown before the
+      //    current conversation so the inbox keeps full context per contact.
+      let previousHistory: Message[] = [];
+      if (conversation.contact_id) {
+        const { data: prevConvs } = await supabase
+          .from("conversations")
+          .select("id, messages_history, created_at")
+          .eq("contact_id", conversation.contact_id)
+          .eq("status", "resolved")
+          .neq("id", conversationId)
+          .lt("created_at", conversation.created_at)
+          .order("created_at", { ascending: false })
+          .limit(10); // bound payload: last 10 resolved conversations
+
+        previousHistory = (prevConvs || [])
+          .reverse() // chronological (oldest first)
+          .flatMap((c) => mapHistory(c.messages_history, c.id));
       }
 
-      // 3. If active, fetch from messages table.
+      // 3. If resolved, parse this conversation's JSON history
+      if (conversation.status === "resolved") {
+        return [...previousHistory, ...mapHistory(conversation.messages_history, conversationId)];
+      }
+
+      // 4. If active, fetch from messages table.
       // IMPORTANT: fetch in descending order (newest first) with explicit limit to avoid
       // Supabase's default 1000-row cap silently cutting off the newest messages in
       // conversations with >1000 messages. We then reverse so the array is chronological.
@@ -73,7 +95,7 @@ export const useMessages = (conversationId?: string) => {
         .limit(1000);
 
       if (error) throw error;
-      return (data as Message[]).reverse();
+      return [...previousHistory, ...(data as Message[]).reverse()];
     },
     enabled: !!conversationId,
   });
