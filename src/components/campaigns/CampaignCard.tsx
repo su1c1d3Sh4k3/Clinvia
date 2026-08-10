@@ -12,6 +12,7 @@ import {
 import { toast } from "sonner";
 import { cn, formatCurrency } from "@/lib/utils";
 import { Campaign, useCampaignMutations } from "@/hooks/useCampaigns";
+import { CampaignStatsRow } from "@/hooks/useCampaignDashboard";
 import { useUsdBrlRate } from "@/hooks/useUsdBrlRate";
 import { CampaignContactsTable } from "./CampaignContactsTable";
 
@@ -38,10 +39,11 @@ const EDITABLE_STATUSES = ["scheduled", "awaiting_template", "error"];
 
 interface CampaignCardProps {
     campaign: Campaign;
+    stats?: CampaignStatsRow;
     onEdit: (campaign: Campaign) => void;
 }
 
-export function CampaignCard({ campaign, onEdit }: CampaignCardProps) {
+export function CampaignCard({ campaign, stats, onEdit }: CampaignCardProps) {
     const [expanded, setExpanded] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
     const { deleteCampaign, regeneratePrompt, syncTemplates } = useCampaignMutations();
@@ -53,10 +55,15 @@ export function CampaignCard({ campaign, onEdit }: CampaignCardProps) {
     const isNotification = campaign.campaign_type === "notification";
     const editable = EDITABLE_STATUSES.includes(campaign.status);
     const counts = campaign.contact_counts || {};
-    const total = campaign.total_contacts || 0;
-    const validCount = total - (counts.invalid || 0);
+    // Mesma fonte da dashboard (RPC get_campaign_dashboard_stats) — fallback nos
+    // campos da campanha quando os stats ainda não carregaram
+    const total = stats?.total_contacts ?? campaign.total_contacts ?? 0;
+    const validCount = stats?.valid_contacts ?? (total - (counts.invalid || 0));
+    const sentCount = stats?.sent_count ?? counts.sent ?? 0;
     const rate = rateData?.rate ?? 5.5;
-    const estimatedCost = isUazapi ? 0 : validCount * COST_PER_MSG_USD * rate;
+    const estimatedCost = isUazapi
+        ? 0
+        : (sentCount > 0 ? sentCount : validCount) * COST_PER_MSG_USD * rate;
     const estimatedSeconds = Math.max(0, (validCount - 1) * (isUazapi ? 38 : 15));
     const durationLabel = estimatedSeconds < 60
         ? `${estimatedSeconds}s`
@@ -123,8 +130,8 @@ export function CampaignCard({ campaign, onEdit }: CampaignCardProps) {
                     <p className="text-xs text-muted-foreground mt-1">
                         Disparo: {new Date(campaign.scheduled_at).toLocaleString("pt-BR")} · Válida até:{" "}
                         {new Date(campaign.valid_until).toLocaleString("pt-BR")} · {total} contatos
-                        {counts.sent ? ` · ${counts.sent} enviados` : ""}
-                        {counts.failed ? ` · ${counts.failed} falhas` : ""}
+                        {sentCount ? ` · ${sentCount} enviados` : ""}
+                        {(stats?.failed_count ?? counts.failed) ? ` · ${stats?.failed_count ?? counts.failed} falhas` : ""}
                     </p>
                 </div>
                 <ChevronDown className={cn("w-4 h-4 text-muted-foreground shrink-0 transition-transform", expanded && "rotate-180")} />
@@ -184,6 +191,28 @@ export function CampaignCard({ campaign, onEdit }: CampaignCardProps) {
                             </div>
                         )}
                     </div>
+
+                    {/* Resultados (mesmos dados da dashboard) */}
+                    {stats && (
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
+                            <div className="border rounded-xl p-2.5">
+                                <p className="font-semibold">{stats.sent_count}</p>
+                                <p className="text-[10px] text-muted-foreground">enviadas</p>
+                            </div>
+                            <div className="border rounded-xl p-2.5">
+                                <p className="font-semibold text-emerald-600">{stats.delivered_count}</p>
+                                <p className="text-[10px] text-muted-foreground">entregues</p>
+                            </div>
+                            <div className="border rounded-xl p-2.5">
+                                <p className="font-semibold text-red-600">{stats.failed_count}</p>
+                                <p className="text-[10px] text-muted-foreground">rejeitadas</p>
+                            </div>
+                            <div className="border rounded-xl p-2.5">
+                                <p className="font-semibold text-violet-600">{stats.responded_count}</p>
+                                <p className="text-[10px] text-muted-foreground">respondidas</p>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Detalhes */}
                     <div className="text-sm space-y-1 border rounded-xl p-3">

@@ -4,6 +4,7 @@ import { Megaphone, Plus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useCampaigns, Campaign } from "@/hooks/useCampaigns";
+import { useCampaignDashboardStats } from "@/hooks/useCampaignDashboard";
 import { CampaignWizard } from "@/components/campaigns/CampaignWizard";
 import { CampaignCard } from "@/components/campaigns/CampaignCard";
 import { MetaQualityPanel } from "@/components/campaigns/MetaQualityPanel";
@@ -12,6 +13,7 @@ export default function Campaigns() {
     const navigate = useNavigate();
     const { data: userRole } = useUserRole();
     const { data: campaigns, isLoading } = useCampaigns();
+    const { data: stats } = useCampaignDashboardStats({ mode: "all" });
     const [wizardOpen, setWizardOpen] = useState(false);
     const [editing, setEditing] = useState<Campaign | null>(null);
 
@@ -71,7 +73,12 @@ export default function Campaigns() {
             ) : (
                 <div className="space-y-3">
                     {(campaigns || []).map((c) => (
-                        <CampaignCard key={c.id} campaign={c} onEdit={openEdit} />
+                        <CampaignCard
+                            key={c.id}
+                            campaign={c}
+                            stats={(stats || []).find((s) => s.campaign_id === c.id)}
+                            onEdit={openEdit}
+                        />
                     ))}
                 </div>
             )}
