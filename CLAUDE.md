@@ -24,6 +24,8 @@ npm run lint       # eslint
 npm test           # vitest (config: vitest.config.ts, setup: src/test/setup.ts)
 ```
 
+Frontend deploys via Vercel (vercel.json) on push to main.
+
 Python integration tests live in `tests/` (test_*.py) — run manually with python.
 
 ## Structure
@@ -38,6 +40,7 @@ Python integration tests live in `tests/` (test_*.py) — run manually with pyth
 - `supabase/migrations/` — SQL migrations
 - `docs/diagnostics/` and `docs/reports/` — incident post-mortems and client reports (write new diagnostics here)
 - `feegow/` — PRD for planned Feegow Clinic API integration (IA scheduling), not yet implemented
+- Repo root contains legacy one-off scripts/SQL (analyze_schema.js, manual_*.sql, etc.) — ignore them; put ad-hoc SQL in `supabase/.temp/`
 
 ## Conventions
 
