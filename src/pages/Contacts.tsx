@@ -52,6 +52,7 @@ import { TagAssignment } from "@/components/TagAssignment";
 import { WhatsAppImportModal } from "@/components/WhatsAppImportModal";
 import { ClientProfileModal } from "@/components/contacts/ClientProfileModal";
 import { Sparkles, FileText } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -702,23 +703,23 @@ const Contacts = () => {
                                             </TableCell>
                                             <TableCell className="hidden md:table-cell py-2 md:py-4 overflow-hidden">
                                                 <div className="flex flex-wrap gap-1 max-w-full overflow-hidden">
-                                                    {contact.contact_tags?.slice(0, 2).map((ct: any) => (
-                                                        <Badge
-                                                            key={ct.tags.id}
-                                                            variant="secondary"
-                                                            className="text-[10px]"
-                                                            style={{
-                                                                backgroundColor: ct.tags.color + '20',
-                                                                color: ct.tags.color,
-                                                                borderColor: ct.tags.color
-                                                            }}
-                                                        >
-                                                            {ct.tags.name}
-                                                        </Badge>
-                                                    ))}
-                                                    {contact.contact_tags?.length > 2 && (
-                                                        <Badge variant="outline" className="text-[10px]">+{contact.contact_tags.length - 2}</Badge>
-                                                    )}
+                                                    <TooltipProvider>
+                                                        {contact.contact_tags?.map((ct: any) => (
+                                                            <Tooltip key={ct.tags.id}>
+                                                                <TooltipTrigger asChild>
+                                                                    <span
+                                                                        className="p-0.5 rounded cursor-default"
+                                                                        style={{ backgroundColor: ct.tags.color + '20' }}
+                                                                    >
+                                                                        <Tag className="h-3.5 w-3.5" style={{ color: ct.tags.color }} />
+                                                                    </span>
+                                                                </TooltipTrigger>
+                                                                <TooltipContent>
+                                                                    <p className="text-xs">{ct.tags.name}</p>
+                                                                </TooltipContent>
+                                                            </Tooltip>
+                                                        ))}
+                                                    </TooltipProvider>
                                                 </div>
                                             </TableCell>
                                             <TableCell className="text-center hidden sm:table-cell py-2 md:py-4">
