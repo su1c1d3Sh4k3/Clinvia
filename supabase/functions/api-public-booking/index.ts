@@ -192,7 +192,7 @@ serve(async (req) => {
 
             // CRM sync: create/move card to Agendado + add service
             try {
-                const terminals = ['Ganho', 'Perdido', 'Finalizado'];
+                const terminals = ['Ganho', 'Perdido', 'Sem Contato', 'Sem Interesse', 'Finalizado'];
                 const { data: activeCard } = await supabase.from("crm_client")
                     .select("id, stage").eq("contact_id", contact_id).eq("is_active", true).maybeSingle();
 

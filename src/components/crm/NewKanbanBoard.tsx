@@ -183,8 +183,8 @@ export const NewKanbanBoard = ({ onCardClick }: NewKanbanBoardProps) => {
     const client = clients?.find((c) => c.id === clientId);
     if (!client || client.stage === targetStage) return;
 
-    // Intercept Perdido → open LossReasonModal
-    if (targetStage === "Perdido") {
+    // Intercept Perdido / Sem Interesse → open LossReasonModal
+    if (targetStage === "Perdido" || targetStage === "Sem Interesse") {
       setPendingDrop({ client, targetStage });
       setLossModalOpen(true);
       return;
@@ -203,11 +203,15 @@ export const NewKanbanBoard = ({ onCardClick }: NewKanbanBoardProps) => {
     if (!pendingDrop) return;
     moveStage.mutate({
       id: pendingDrop.client.id,
-      stage: "Perdido",
+      stage: pendingDrop.targetStage,
       lossReason: reason,
       lossReasonOther: otherDescription,
     });
-    toast.success("Negociação marcada como perdida");
+    toast.success(
+      pendingDrop.targetStage === "Perdido"
+        ? "Negociação marcada como perdida"
+        : "Negociação marcada como sem interesse"
+    );
     setLossModalOpen(false);
     setPendingDrop(null);
   };
@@ -277,7 +281,9 @@ export const NewKanbanBoard = ({ onCardClick }: NewKanbanBoardProps) => {
                 </div>
 
                 {/* Cards */}
-                <ScrollArea className="flex-1 px-2 py-2">
+                {/* !block no wrapper interno do viewport: Radix usa display:table, que
+                    expande além dos 240px da coluna com nomes longos e quebra o truncate */}
+                <ScrollArea className="flex-1 px-2 py-2 [&_[data-radix-scroll-area-viewport]>div]:!block">
                   <div className="space-y-2">
                     {cards.map((client) => {
                       const borderColor = client.priority ? PRIORITY_BORDER[client.priority] : "transparent";

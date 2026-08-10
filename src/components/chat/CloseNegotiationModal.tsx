@@ -71,7 +71,7 @@ export const CloseNegotiationModal = ({
           is_active: false,
         };
 
-        if (stage === "Perdido") {
+        if (stage === "Perdido" || stage === "Sem Interesse") {
           updateData.loss_reason = lossReason || null;
           updateData.loss_reason_other = lossReasonOther || null;
         }
@@ -110,12 +110,14 @@ export const CloseNegotiationModal = ({
               <SelectContent>
                 <SelectItem value="Ganho">Ganho (venda realizada)</SelectItem>
                 <SelectItem value="Perdido">Perdido (sem venda)</SelectItem>
+                <SelectItem value="Sem Contato">Sem Contato (não respondeu)</SelectItem>
+                <SelectItem value="Sem Interesse">Sem Interesse (recusou)</SelectItem>
                 <SelectItem value="Finalizado">Finalizado (encerrar sem decisão)</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          {stage === "Perdido" && (
+          {(stage === "Perdido" || stage === "Sem Interesse") && (
             <>
               <div className="space-y-1.5">
                 <Label>Motivo da perda</Label>

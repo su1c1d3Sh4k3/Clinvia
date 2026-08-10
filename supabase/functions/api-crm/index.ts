@@ -9,10 +9,10 @@ const corsHeaders = {
 const CRM_STAGES = [
     'Em Atendimento Humano', 'Em Atendimento IA', 'Qualificado', 'Agendado',
     'Pesquisa de Satisfação', 'Suporte', 'Financeiro', 'Pós-Venda', 'Recorrencia', 'Follow Up',
-    'Sem Contato', 'Sem Interesse', 'Ganho', 'Perdido', 'Finalizado',
+    'Ganho', 'Perdido', 'Sem Contato', 'Sem Interesse', 'Finalizado',
 ];
 
-const TERMINAL_STAGES = ['Ganho', 'Perdido', 'Finalizado'];
+const TERMINAL_STAGES = ['Ganho', 'Perdido', 'Sem Contato', 'Sem Interesse', 'Finalizado'];
 
 /** UTC → São Paulo (-03:00) */
 function toSaoPaulo(iso: string | null | undefined): string | null {
@@ -137,7 +137,7 @@ serve(async (req) => {
             // Terminal stage → deactivate
             if (TERMINAL_STAGES.includes(matched)) {
                 updateData.is_active = false;
-                if (matched === 'Perdido') {
+                if (matched === 'Perdido' || matched === 'Sem Interesse') {
                     updateData.loss_reason = loss_reason || 'other';
                     updateData.loss_reason_other = loss_reason_other || null;
                 }

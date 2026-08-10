@@ -243,7 +243,7 @@ serve(async (req) => {
                     .select("id, stage").eq("contact_id", cid).eq("is_active", true).maybeSingle();
 
                 if (activeCard) {
-                    const terminals = ['Ganho', 'Perdido', 'Finalizado'];
+                    const terminals = ['Ganho', 'Perdido', 'Sem Contato', 'Sem Interesse', 'Finalizado'];
                     if (terminals.includes(activeCard.stage)) {
                         // Terminal → create new card
                         const { data: newCard } = await supabase.from("crm_client").insert({

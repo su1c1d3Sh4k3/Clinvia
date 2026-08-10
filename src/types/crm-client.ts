@@ -9,16 +9,16 @@ export const CRM_STAGES = [
   'Pós-Venda',
   'Recorrencia',
   'Follow Up',
-  'Sem Contato',
-  'Sem Interesse',
   'Ganho',
   'Perdido',
+  'Sem Contato',
+  'Sem Interesse',
   'Finalizado',
 ] as const;
 
 export type CrmStage = typeof CRM_STAGES[number];
 
-export const TERMINAL_STAGES: CrmStage[] = ['Ganho', 'Perdido', 'Finalizado'];
+export const TERMINAL_STAGES: CrmStage[] = ['Ganho', 'Perdido', 'Sem Contato', 'Sem Interesse', 'Finalizado'];
 
 /** Stages that auto-route to a specific queue */
 export const STAGE_QUEUE_MAP: Partial<Record<CrmStage, string>> = {
