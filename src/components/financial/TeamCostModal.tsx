@@ -285,7 +285,7 @@ export function TeamCostModal({ open, onOpenChange, teamCost }: TeamCostModalPro
                     </div>
 
                     {/* Pagamento */}
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="payment_method">Pagamento</Label>
                             <Select

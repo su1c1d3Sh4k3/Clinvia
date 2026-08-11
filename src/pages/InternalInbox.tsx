@@ -294,8 +294,8 @@ const InternalInbox = () => {
 
             {/* SIDEBAR: Lista de Chats */}
             <div className={cn(
-                "w-full lg:w-80 lg:min-w-80 border-r border-[#1E2229] flex flex-col bg-background/95 dark:bg-[#12151A] transition-all",
-                activeChatId ? "hidden lg:flex" : "flex"
+                "w-full md:w-80 md:min-w-80 border-r border-[#1E2229] flex flex-col bg-background/95 dark:bg-[#12151A] transition-all",
+                activeChatId ? "hidden md:flex" : "flex"
             )}>
                 {/* Sidebar Header */}
                 <div className="p-4 flex flex-col gap-4 border-b border-border/50 dark:border-[#1E2229]">
@@ -533,7 +533,7 @@ const InternalInbox = () => {
             {/* MAIN CHAT AREA */}
             <div className={cn(
                 "flex-1 flex flex-col bg-background/50 dark:bg-[#0B0D10] relative",
-                !activeChatId ? "hidden lg:flex" : "flex"
+                !activeChatId ? "hidden md:flex" : "flex"
             )}>
                 {!activeChatId ? (
                     <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
@@ -553,7 +553,7 @@ const InternalInbox = () => {
                                 <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="lg:hidden -ml-2 hover:bg-muted/50 dark:hover:bg-[#1A1E24]"
+                                    className="md:hidden -ml-2 hover:bg-muted/50 dark:hover:bg-[#1A1E24]"
                                     onClick={() => setActiveChatId(null)}
                                 >
                                     <ArrowLeft className="w-5 h-5" />

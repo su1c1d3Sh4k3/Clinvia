@@ -626,7 +626,7 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
                 {/* Step 1 — Audiência */}
                 {step === 1 && (
                     <div className="space-y-3">
-                        <div className="grid grid-cols-3 gap-2">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                             {SOURCE_OPTIONS.map((opt) => (
                                 <button
                                     key={opt.value}

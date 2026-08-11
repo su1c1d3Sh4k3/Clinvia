@@ -191,7 +191,7 @@ export const NewCreateDealModal = () => {
           {/* Serviços — native selects to avoid Radix duplication bug */}
           <div className="border rounded-lg p-3 space-y-3 bg-muted/10 dark:bg-white/5">
             <Label className="text-sm font-medium">Adicionar Serviço</Label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <div>
                 <Label className="text-[11px]">Categoria</Label>
                 <select
