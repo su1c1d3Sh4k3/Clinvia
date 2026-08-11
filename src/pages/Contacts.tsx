@@ -622,7 +622,7 @@ const Contacts = () => {
                     </div>
 
                     <div className="rounded-md border overflow-x-auto bg-white dark:bg-transparent border-[#D4D5D6] dark:border-border min-w-0">
-                        <Table className="table-fixed w-full">
+                        <Table className="md:table-fixed w-full">
                             <TableHeader>
                                 <TableRow>
                                     <TableHead className="w-[40px] md:w-[50px]">
