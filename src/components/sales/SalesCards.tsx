@@ -131,7 +131,7 @@ export function SalesCards({ month, year }: SalesCardsProps) {
     }
 
     return (
-        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-6">
             {cards.map((card, index) => (
                 <Card
                     key={index}

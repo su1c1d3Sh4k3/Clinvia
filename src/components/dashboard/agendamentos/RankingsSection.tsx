@@ -117,7 +117,7 @@ export function RankingsSection() {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {/* ── Serviços ── */}
-                <Card className="rounded-2xl border border-border/50 shadow-sm h-[420px] flex flex-col">
+                <Card className="rounded-2xl border border-border/50 shadow-sm h-[320px] sm:h-[380px] lg:h-[420px] flex flex-col">
                     <CardHeader className="pb-2 shrink-0">
                         <CardTitle className="text-sm flex items-center gap-2">
                             <Stethoscope className="w-4 h-4 text-blue-500" />
@@ -157,7 +157,7 @@ export function RankingsSection() {
                 </Card>
 
                 {/* ── Profissionais ── */}
-                <Card className="rounded-2xl border border-border/50 shadow-sm h-[420px] flex flex-col">
+                <Card className="rounded-2xl border border-border/50 shadow-sm h-[320px] sm:h-[380px] lg:h-[420px] flex flex-col">
                     <CardHeader className="pb-2 shrink-0">
                         <CardTitle className="text-sm flex items-center gap-2">
                             <Users className="w-4 h-4 text-violet-500" />

@@ -166,7 +166,7 @@ export function CampaignCard({ campaign, stats, onEdit }: CampaignCardProps) {
                     )}
 
                     {/* Estimativas */}
-                    <div className={cn("grid gap-2", isUazapi ? "grid-cols-2" : "grid-cols-3")}>
+                    <div className={cn("grid gap-2", isUazapi ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-3")}>
                         <div className="border rounded-xl p-2.5 flex items-center gap-2">
                             <Users className="w-4 h-4 text-primary shrink-0" />
                             <div>
@@ -194,7 +194,7 @@ export function CampaignCard({ campaign, stats, onEdit }: CampaignCardProps) {
 
                     {/* Resultados (mesmos dados da dashboard) */}
                     {stats && (
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
                             <div className="border rounded-xl p-2.5">
                                 <p className="font-semibold">{stats.sent_count}</p>
                                 <p className="text-[10px] text-muted-foreground">enviadas</p>

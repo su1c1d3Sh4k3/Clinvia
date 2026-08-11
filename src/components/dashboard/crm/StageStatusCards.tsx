@@ -36,7 +36,7 @@ export function StageStatusCards({ title, stages }: StageStatusCardsProps) {
                     </CardContent>
                 </Card>
             ) : (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                     {stages.map((stage) => {
                         const row = data?.find((d) => d.stage === stage);
                         const color = STAGE_COLORS[stage] || "#8b5cf6";

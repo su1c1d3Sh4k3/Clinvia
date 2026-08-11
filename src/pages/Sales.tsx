@@ -91,7 +91,7 @@ const Sales = () => {
                         value={String(selectedMonth)}
                         onValueChange={(value) => setSelectedMonth(parseInt(value))}
                     >
-                        <SelectTrigger className="w-[140px]">
+                        <SelectTrigger className="w-full sm:w-[140px]">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -108,7 +108,7 @@ const Sales = () => {
                         value={String(selectedYear)}
                         onValueChange={(value) => setSelectedYear(parseInt(value))}
                     >
-                        <SelectTrigger className="w-[100px]">
+                        <SelectTrigger className="w-full sm:w-[100px]">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
