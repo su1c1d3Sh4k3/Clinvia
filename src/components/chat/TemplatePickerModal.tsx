@@ -216,7 +216,7 @@ export function TemplatePickerModal({ open, onOpenChange, instanceId, contactNum
 
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
-            <DialogContent className="max-w-3xl max-h-[85vh] p-0 gap-0 overflow-hidden">
+            <DialogContent className="w-[95vw] sm:w-full max-w-3xl max-h-[85vh] p-0 gap-0 overflow-hidden rounded-lg">
                 <DialogHeader className="p-4 pb-2">
                     <DialogTitle className="flex items-center gap-2">
                         <FileText className="w-5 h-5" />

@@ -82,7 +82,7 @@ export function LossReasonModal({
 
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
-            <DialogContent className="sm:max-w-[425px]">
+            <DialogContent className="w-[95vw] sm:w-full sm:max-w-[425px] max-h-[90vh] overflow-y-auto rounded-lg">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <XCircle className="h-5 w-5 text-red-500" />

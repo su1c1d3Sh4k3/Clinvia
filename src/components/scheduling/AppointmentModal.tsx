@@ -753,7 +753,7 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
+            <DialogContent className="w-[95vw] sm:w-full max-w-md max-h-[90vh] overflow-y-auto rounded-lg [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
                 <DialogHeader>
                     <DialogTitle>{appointmentToEdit ? "Editar" : "Novo"} {activeTab === "appointment" ? "Agendamento" : "Ausência"}</DialogTitle>
                 </DialogHeader>

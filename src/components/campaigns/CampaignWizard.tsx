@@ -530,7 +530,7 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
 
     return (
         <Dialog open={open} onOpenChange={(o) => !saving && onOpenChange(o)}>
-            <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="w-[95vw] sm:w-full sm:max-w-2xl max-h-[90vh] overflow-y-auto rounded-lg">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <Megaphone className="w-5 h-5 text-primary" />
@@ -971,7 +971,7 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
 
                 {/* Aviso: contatos em campanhas dos últimos 7 dias */}
                 <Dialog open={!!recentWarning} onOpenChange={(o) => !o && setRecentWarning(null)}>
-                    <DialogContent className="sm:max-w-md">
+                    <DialogContent className="w-[95vw] sm:w-full sm:max-w-md rounded-lg">
                         <DialogHeader>
                             <DialogTitle className="flex items-center gap-2">
                                 <AlertTriangle className="w-5 h-5 text-amber-500" />

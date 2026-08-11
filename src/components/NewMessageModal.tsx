@@ -409,7 +409,7 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[425px]">
+            <DialogContent className="w-[95vw] sm:w-full sm:max-w-[425px] max-h-[90vh] overflow-y-auto rounded-lg">
                 <DialogHeader>
                     <DialogTitle>Nova Mensagem</DialogTitle>
                 </DialogHeader>
