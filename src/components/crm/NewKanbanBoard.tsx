@@ -4,8 +4,16 @@ import { CrmClient, CRM_STAGES, STAGE_COLORS, TERMINAL_STAGES, CrmStage } from "
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, GripVertical, MessageSquare, AlertTriangle, CalendarClock } from "lucide-react";
+import { Loader2, GripVertical, MessageSquare, AlertTriangle, CalendarClock, ArrowRightLeft } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { DealConversationModal } from "./DealConversationModal";
 import { LossReasonModal } from "./LossReasonModal";
 import { toast } from "sonner";
@@ -174,14 +182,9 @@ export const NewKanbanBoard = ({ onCardClick }: NewKanbanBoardProps) => {
     e.dataTransfer.effectAllowed = "move";
   };
 
-  const handleDrop = (e: React.DragEvent, targetStage: CrmStage) => {
-    e.preventDefault();
-    const clientId = e.dataTransfer.getData("clientId");
-    if (!clientId) return;
-    setDragging(null);
-
-    const client = clients?.find((c) => c.id === clientId);
-    if (!client || client.stage === targetStage) return;
+  // Shared move logic — used by desktop drag&drop and mobile "Mover para" menu
+  const requestMove = (client: CrmClient, targetStage: CrmStage) => {
+    if (client.stage === targetStage) return;
 
     // Intercept Perdido / Sem Interesse → open LossReasonModal
     if (targetStage === "Perdido" || targetStage === "Sem Interesse") {
@@ -191,7 +194,18 @@ export const NewKanbanBoard = ({ onCardClick }: NewKanbanBoardProps) => {
     }
 
     // Ganho: apenas move — vendas são criadas na criação do agendamento (trigger no banco)
-    moveStage.mutate({ id: clientId, stage: targetStage });
+    moveStage.mutate({ id: client.id, stage: targetStage });
+  };
+
+  const handleDrop = (e: React.DragEvent, targetStage: CrmStage) => {
+    e.preventDefault();
+    const clientId = e.dataTransfer.getData("clientId");
+    if (!clientId) return;
+    setDragging(null);
+
+    const client = clients?.find((c) => c.id === clientId);
+    if (!client) return;
+    requestMove(client, targetStage);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -245,7 +259,7 @@ export const NewKanbanBoard = ({ onCardClick }: NewKanbanBoardProps) => {
 
   return (
     <>
-      <div className="flex-1 overflow-x-auto overflow-y-hidden crm-scrollbar">
+      <div className="flex-1 overflow-x-auto overflow-y-hidden crm-scrollbar snap-x snap-mandatory sm:snap-none">
         <div className="flex gap-3 h-full min-w-max pb-4 px-1">
           {CRM_STAGES.map((stage) => {
             const cards = grouped[stage] || [];
@@ -255,7 +269,7 @@ export const NewKanbanBoard = ({ onCardClick }: NewKanbanBoardProps) => {
             return (
               <div
                 key={stage}
-                className="w-[240px] flex flex-col bg-muted/30 dark:bg-[#1a1d24] rounded-lg border shrink-0"
+                className="w-[85vw] sm:w-[240px] flex flex-col bg-muted/30 dark:bg-[#1a1d24] rounded-lg border shrink-0 snap-start sm:snap-align-none"
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, stage)}
               >
@@ -353,6 +367,35 @@ export const NewKanbanBoard = ({ onCardClick }: NewKanbanBoardProps) => {
                                       </button>
                                     }
                                   />
+                                </div>
+                              )}
+                              {/* Mobile: mover card via menu (sem drag&drop no touch) */}
+                              {!isTerminal && (
+                                <div onClick={(e) => e.stopPropagation()} className="shrink-0 md:hidden">
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <button className="p-1 rounded hover:bg-accent transition-colors" title="Mover para etapa">
+                                        <ArrowRightLeft className="w-3.5 h-3.5 text-muted-foreground" />
+                                      </button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="max-h-[60vh] overflow-y-auto">
+                                      <DropdownMenuLabel className="text-xs">Mover para etapa</DropdownMenuLabel>
+                                      <DropdownMenuSeparator />
+                                      {CRM_STAGES.filter((s) => s !== stage).map((s) => (
+                                        <DropdownMenuItem
+                                          key={s}
+                                          className="text-xs gap-2"
+                                          onClick={() => requestMove(client, s)}
+                                        >
+                                          <span
+                                            className="w-2 h-2 rounded-full shrink-0"
+                                            style={{ backgroundColor: STAGE_COLORS[s] }}
+                                          />
+                                          {s}
+                                        </DropdownMenuItem>
+                                      ))}
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
                                 </div>
                               )}
                             </div>
