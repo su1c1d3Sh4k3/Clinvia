@@ -265,7 +265,7 @@ export default function PublicBooking() {
           <div className="space-y-4">
             <button onClick={() => setStep("service")} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="w-4 h-4" /> Voltar</button>
             <h2 className="text-sm font-semibold text-muted-foreground">Escolha o profissional</h2>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
               {filteredProfs.map(p => (
                 <button key={p.id} onClick={() => { setSelProf(p); setStep("datetime"); }}
                   className={cn("flex flex-col items-center gap-2 p-4 rounded-lg border transition-all", selProf?.id === p.id ? "border-primary bg-primary/5" : "border-border hover:border-primary/50")}>
@@ -303,7 +303,7 @@ export default function PublicBooking() {
                 <span className="text-sm font-medium capitalize">{format(calMonth, "MMMM yyyy", { locale: ptBR })}</span>
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCalMonth(d => { const n = new Date(d); n.setMonth(n.getMonth() + 1); return n; })}><ChevronRight className="w-4 h-4" /></Button>
               </div>
-              <div className="grid grid-cols-7 gap-1 text-center">
+              <div className="grid grid-cols-7 gap-0.5 sm:gap-1 text-center">
                 {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map(d => (
                   <div key={d} className="text-[10px] text-muted-foreground font-medium py-1">{d}</div>
                 ))}
@@ -333,7 +333,7 @@ export default function PublicBooking() {
                 ) : slots.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-4">Nenhum horário disponível neste dia</p>
                 ) : (
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5 sm:gap-2">
                     {slots.map(t => (
                       <button key={t} onClick={() => { setSelTime(t); if (step === "reschedule") {} else setStep("confirm"); }}
                         className={cn("py-2.5 rounded-lg border text-sm font-medium transition-all",
