@@ -68,7 +68,7 @@ export const ClientProfileModal = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl h-[90vh] p-0 gap-0 overflow-hidden flex flex-col">
+      <DialogContent className="w-[95vw] sm:w-full max-w-6xl h-[90vh] p-0 gap-0 overflow-hidden flex flex-col rounded-lg">
         <DialogTitle className="px-5 py-3 border-b bg-muted/30 text-base font-semibold truncate shrink-0">
           {effectiveContact.push_name || "Cliente"}
         </DialogTitle>
@@ -78,21 +78,21 @@ export const ClientProfileModal = ({
           {/* Left: Main content */}
           <div className="flex-1 flex flex-col overflow-hidden">
             <Tabs defaultValue="cadastro" className="flex flex-col flex-1 overflow-hidden">
-              <div className="px-5 pt-3 border-b">
-                <TabsList className="flex justify-between w-full h-auto">
-                  <TabsTrigger value="cadastro" className="flex-1 text-xs py-2">Cadastro</TabsTrigger>
-                  <TabsTrigger value="vendas" className="flex-1 text-xs py-2">Vendas</TabsTrigger>
-                  <TabsTrigger value="procedimentos" className="flex-1 text-xs py-2">Procedimentos</TabsTrigger>
-                  <TabsTrigger value="agendamentos" className="flex-1 text-xs py-2">Agendamentos</TabsTrigger>
-                  <TabsTrigger value="atendimentos" className="flex-1 text-xs py-2">Atendimentos</TabsTrigger>
-                  <TabsTrigger value="historico" className="flex-1 text-xs py-2">Histórico</TabsTrigger>
-                  <TabsTrigger value="avaliacao" className="flex-1 text-xs py-2">Avaliação</TabsTrigger>
-                  <TabsTrigger value="resumos" className="flex-1 text-xs py-2">Resumos</TabsTrigger>
-                  <TabsTrigger value="negociacoes" className="flex-1 text-xs py-2">Negociações</TabsTrigger>
+              <div className="px-3 sm:px-5 pt-3 border-b">
+                <TabsList className="flex md:justify-between w-full h-auto overflow-x-auto flex-nowrap justify-start [scrollbar-width:thin]">
+                  <TabsTrigger value="cadastro" className="md:flex-1 shrink-0 px-3 text-xs py-2">Cadastro</TabsTrigger>
+                  <TabsTrigger value="vendas" className="md:flex-1 shrink-0 px-3 text-xs py-2">Vendas</TabsTrigger>
+                  <TabsTrigger value="procedimentos" className="md:flex-1 shrink-0 px-3 text-xs py-2">Procedimentos</TabsTrigger>
+                  <TabsTrigger value="agendamentos" className="md:flex-1 shrink-0 px-3 text-xs py-2">Agendamentos</TabsTrigger>
+                  <TabsTrigger value="atendimentos" className="md:flex-1 shrink-0 px-3 text-xs py-2">Atendimentos</TabsTrigger>
+                  <TabsTrigger value="historico" className="md:flex-1 shrink-0 px-3 text-xs py-2">Histórico</TabsTrigger>
+                  <TabsTrigger value="avaliacao" className="md:flex-1 shrink-0 px-3 text-xs py-2">Avaliação</TabsTrigger>
+                  <TabsTrigger value="resumos" className="md:flex-1 shrink-0 px-3 text-xs py-2">Resumos</TabsTrigger>
+                  <TabsTrigger value="negociacoes" className="md:flex-1 shrink-0 px-3 text-xs py-2">Negociações</TabsTrigger>
                 </TabsList>
               </div>
 
-              <ScrollArea className="flex-1 px-5 py-4">
+              <ScrollArea className="flex-1 px-3 sm:px-5 py-4 [&_[data-radix-scroll-area-viewport]>div]:!block">
                 <TabsContent value="cadastro" className="mt-0"><CadastroTab contact={effectiveContact} /></TabsContent>
                 <TabsContent value="vendas" className="mt-0"><VendasTab contactId={effectiveContact.id} /></TabsContent>
                 <TabsContent value="procedimentos" className="mt-0"><ProcedimentosTab contactId={effectiveContact.id} /></TabsContent>
