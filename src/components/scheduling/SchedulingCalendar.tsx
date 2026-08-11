@@ -6,6 +6,7 @@ import { ThumbsUp, Clock, X, Check, Pen, ChevronLeft, ChevronRight, UserX, Arrow
 import { Button } from "@/components/ui/button";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { useProfessionalNps } from "@/hooks/useAppointmentsDashboard";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface SchedulingCalendarProps {
     date: Date;
@@ -23,14 +24,19 @@ interface SchedulingCalendarProps {
 
 const START_HOUR = 8;
 const END_HOUR = 22;
-const HOUR_HEIGHT = 120;
-const PX_PER_MIN = HOUR_HEIGHT / 60;
+// Alturas por hora: mobile mais compacto (tudo deriva de pxPerMin no componente)
+const HOUR_HEIGHT_DESKTOP = 120;
+const HOUR_HEIGHT_MOBILE = 80;
 
 export function SchedulingCalendar({ date, professionals, appointments, settings, onSlotClick, onEventClick, onStatusChange, onEditProfessional, canCreateAppointment = true, canEditAppointment = true, canEditProfessional = true }: SchedulingCalendarProps) {
     const startHour = settings?.start_hour ?? 8;
     const endHour = settings?.end_hour ?? 22;
     const workDays = settings?.work_days ?? [0, 1, 2, 3, 4, 5, 6];
     const isDayBlocked = !workDays.includes(date.getDay());
+
+    const isMobile = useIsMobile();
+    const HOUR_HEIGHT = isMobile ? HOUR_HEIGHT_MOBILE : HOUR_HEIGHT_DESKTOP;
+    const PX_PER_MIN = HOUR_HEIGHT / 60;
 
     // Média NPS por profissional (todo o histórico)
     const { data: ownerId } = useOwnerId();
@@ -183,7 +189,7 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                             <AvatarFallback className="text-xs md:text-base">{professional.name[0]}</AvatarFallback>
                         </Avatar>
                         <div className="flex flex-col items-start">
-                            <span className="font-medium text-xs md:text-sm truncate max-w-[60px] md:max-w-none">{professional.name}</span>
+                            <span className="font-medium text-xs md:text-sm truncate max-w-[80px] sm:max-w-[120px] md:max-w-none">{professional.name}</span>
                             <span className="text-[10px] md:text-xs text-muted-foreground hidden sm:block">{professional.role}</span>
                             {professional.commission > 0 && (
                                 <span className="text-[10px] md:text-xs text-orange-500 font-medium hidden md:block">
@@ -386,7 +392,7 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                             {apt.type !== "absence" && (
                                                 <div
                                                     className={cn(
-                                                        "absolute right-0 w-64 invisible opacity-0 group-hover/card:visible group-hover/card:opacity-100 transition-all duration-200 bg-background/95 backdrop-blur-sm border shadow-lg rounded-lg p-3 z-50 text-foreground cursor-pointer",
+                                                        "absolute right-0 w-64 max-w-[80vw] hidden md:block invisible opacity-0 group-hover/card:visible group-hover/card:opacity-100 transition-all duration-200 bg-background/95 backdrop-blur-sm border shadow-lg rounded-lg p-3 z-50 text-foreground cursor-pointer",
                                                         cardBelow ? "top-full mt-1" : "bottom-full mb-1"
                                                     )}
                                                 >

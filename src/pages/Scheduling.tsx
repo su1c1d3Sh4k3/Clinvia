@@ -422,7 +422,7 @@ export default function Scheduling() {
                         <Settings className="h-4 w-4" />
                     </Button>
 
-                    <div className="hidden md:block w-[40rem] self-stretch">
+                    <div className="hidden md:block md:w-72 lg:w-96 xl:w-[40rem] self-stretch">
                         <div className="relative w-full h-full">
                             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             <Input
@@ -504,6 +504,15 @@ export default function Scheduling() {
                 {/* Painel completo (desktop expandido no hover / mobile aberto) */}
                 <div className={`flex-col gap-4 md:gap-6 overflow-y-auto pb-4 md:pb-6 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none'] ${isSidebarOpen ? "flex" : "hidden"} ${isSidebarExpanded ? "md:flex animate-in fade-in slide-in-from-left-4 duration-200" : "md:hidden"}`}>
                     <div className="flex flex-col items-center gap-4 md:gap-6 origin-top md:scale-[0.8]">
+                        {/* Recolher no touch (mouseLeave não dispara em tablets) */}
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="hidden md:flex self-end -my-2 text-muted-foreground"
+                            onClick={() => setIsSidebarExpanded(false)}
+                        >
+                            <ChevronLeft className="w-4 h-4 mr-1" /> Recolher
+                        </Button>
                         <Card className="w-full">
                             <CardContent className="p-0">
                                 <Calendar
