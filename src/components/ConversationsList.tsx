@@ -366,7 +366,7 @@ export const ConversationsList = ({
                   <Filter className="h-3.5 w-3.5" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56 p-2 space-y-2">
+              <DropdownMenuContent align="start" className="w-56 max-w-[90vw] p-2 space-y-2">
                 <div className="space-y-1">
                   <span className="text-xs font-medium text-muted-foreground ml-2">Filas</span>
                   <select

@@ -262,7 +262,7 @@ export const MessageInput = ({
         <div className={cn("bg-white dark:bg-[#202c33] border-t border-[#1E2229]/20 dark:border-border px-4 py-2", isMobile ? "pb-4" : "")}>
             {/* Quick Message Popup */}
             {showQuickMessagePopup && (
-                <div className="absolute bottom-[80px] left-4 bg-popover border rounded-lg shadow-lg w-[300px] max-h-[300px] overflow-y-auto z-50">
+                <div className="absolute bottom-[80px] left-4 bg-popover border rounded-lg shadow-lg w-[calc(100vw-2rem)] sm:w-[300px] max-w-[300px] max-h-[300px] overflow-y-auto z-50">
                     <div className="p-2 text-xs font-semibold text-muted-foreground border-b">
                         Mensagens Rápidas
                     </div>
@@ -290,7 +290,7 @@ export const MessageInput = ({
 
             {/* Mention Popup */}
             {showMentionPopup && (
-                <div className="absolute bottom-[80px] left-4 bg-popover border rounded-lg shadow-lg w-[300px] max-h-[300px] overflow-y-auto z-50 animate-in fade-in slide-in-from-bottom-2">
+                <div className="absolute bottom-[80px] left-4 bg-popover border rounded-lg shadow-lg w-[calc(100vw-2rem)] sm:w-[300px] max-w-[300px] max-h-[300px] overflow-y-auto z-50 animate-in fade-in slide-in-from-bottom-2">
                     <div className="p-2 text-xs font-semibold text-muted-foreground border-b flex items-center gap-2">
                         <AtSign className="w-3 h-3" />
                         Mencionar Membro
@@ -392,7 +392,7 @@ export const MessageInput = ({
                                 <Smile className="w-5 h-5 text-muted-foreground" />
                             </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-80 p-0 border-none shadow-xl" align="start" side="top">
+                        <PopoverContent className="w-[calc(100vw-2rem)] sm:w-80 max-w-80 p-0 border-none shadow-xl" align="start" side="top">
                             <EmojiPicker onEmojiClick={onEmojiClick} searchPlaceholder="Buscar emoji..." width="100%" height={350} previewConfig={{ showPreview: false }} />
                         </PopoverContent>
                     </Popover>

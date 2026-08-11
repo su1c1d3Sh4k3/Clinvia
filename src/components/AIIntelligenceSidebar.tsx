@@ -229,7 +229,7 @@ export const AIIntelligenceSidebar = ({ conversationId }: AIIntelligenceSidebarP
       <div
         className={cn(
           "h-full border-l border-[#1E2229]/20 dark:border-border bg-white dark:bg-background/50 backdrop-blur-sm flex flex-col transition-all duration-300 ease-in-out overflow-hidden",
-          isHovered ? "w-[320px]" : "w-[60px]"
+          isHovered ? "w-[min(320px,calc(100vw-60px))]" : "w-[60px]"
         )}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
@@ -257,7 +257,15 @@ export const AIIntelligenceSidebar = ({ conversationId }: AIIntelligenceSidebarP
 
         {/* Expanded: full content */}
         {isHovered && (
-          <div className="flex flex-col gap-3 pt-4 px-3 pb-20 overflow-y-auto flex-1">
+          <div className="flex flex-col gap-3 pt-2 px-3 pb-20 overflow-y-auto flex-1">
+            {/* Fechar no touch (mouseLeave não existe) — invisível em dispositivos com hover */}
+            <button
+              className="self-end w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted [@media(hover:hover)]:hidden"
+              onClick={() => setIsHovered(false)}
+              aria-label="Recolher painel"
+            >
+              <ChevronUp className="w-4 h-4 rotate-90" />
+            </button>
 
             {/* ── CRM Section ── */}
             {!isGroup && contactId && (

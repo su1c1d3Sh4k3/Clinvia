@@ -327,7 +327,7 @@ const Index = () => {
 
         {/* Mobile: Actions Sheet (Right Sidebar Content) */}
         <Sheet open={isActionsSheetOpen} onOpenChange={setIsActionsSheetOpen}>
-          <SheetContent side="right" className="w-[85vw] max-w-[350px] p-0 overflow-y-auto">
+          <SheetContent side="right" className="w-[min(90vw,350px)] p-0 overflow-y-auto">
             <SheetHeader className="p-4 border-b">
               <SheetTitle className="text-left">Ações</SheetTitle>
             </SheetHeader>

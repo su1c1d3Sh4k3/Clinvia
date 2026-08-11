@@ -90,7 +90,7 @@ export const ChatHeader = ({
                 </Avatar>
                 <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
-                        <h3 className="font-semibold text-sm leading-tight truncate max-w-[160px] xl:max-w-[240px]">
+                        <h3 className="font-semibold text-sm leading-tight truncate max-w-[120px] sm:max-w-[160px] xl:max-w-[240px]">
                             {displayName}
                         </h3>
                         {!isGroup && contact && (
@@ -105,7 +105,7 @@ export const ChatHeader = ({
                         )}
                     </div>
                     {instanceName && (
-                        <span className="text-xs text-muted-foreground truncate block max-w-[160px] xl:max-w-[240px]">
+                        <span className="text-xs text-muted-foreground truncate block max-w-[120px] sm:max-w-[160px] xl:max-w-[240px]">
                             {instanceName}
                         </span>
                     )}
