@@ -4,7 +4,16 @@ import { CrmClient, CRM_STAGES, STAGE_COLORS, TERMINAL_STAGES, CrmStage } from "
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, GripVertical, MessageSquare, AlertTriangle, CalendarClock, ArrowRightLeft } from "lucide-react";
+import { Loader2, GripVertical, MessageSquare, AlertTriangle, CalendarClock, ArrowRightLeft, Filter, ArrowDownWideNarrow, ArrowUpNarrowWide, Search, X } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   DropdownMenu,
@@ -48,10 +57,43 @@ interface NewKanbanBoardProps {
   onCardClick?: (client: CrmClient) => void;
 }
 
+type DatePreset = "all" | "today" | "7d" | "30d" | "custom";
+type ContactTypeFilter = "all" | "contato" | "lead" | "cliente";
+
+const DATE_PRESET_LABELS: Record<DatePreset, string> = {
+  all: "Todo o período",
+  today: "Hoje",
+  "7d": "Últimos 7 dias",
+  "30d": "Últimos 30 dias",
+  custom: "Personalizado",
+};
+
+const CONTACT_TYPE_OPTIONS: { value: ContactTypeFilter; label: string }[] = [
+  { value: "all", label: "Todos os tipos" },
+  { value: "contato", label: "Contato" },
+  { value: "lead", label: "Lead" },
+  { value: "cliente", label: "Cliente" },
+];
+
+interface ColumnFilter {
+  search: string;
+  type: ContactTypeFilter;
+}
+
+const EMPTY_COL_FILTER: ColumnFilter = { search: "", type: "all" };
+
 export const NewKanbanBoard = ({ onCardClick }: NewKanbanBoardProps) => {
   const queryClient = useQueryClient();
   const { data: ownerId } = useOwnerId();
   const [dragging, setDragging] = useState<string | null>(null);
+
+  // Filters
+  const [dateFilter, setDateFilter] = useState<DatePreset>("all");
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
+  const [typeFilter, setTypeFilter] = useState<ContactTypeFilter>("all");
+  const [colFilters, setColFilters] = useState<Record<string, ColumnFilter>>({});
+  const [colSort, setColSort] = useState<Record<string, "desc" | "asc">>({});
 
   // Modal states
   const [lossModalOpen, setLossModalOpen] = useState(false);
@@ -247,18 +289,124 @@ export const NewKanbanBoard = ({ onCardClick }: NewKanbanBoardProps) => {
   // Finalizado) show closed cards (is_active=false). Cards deactivated in place
   // (e.g. appointment completion deactivates the Agendado card without changing
   // stage) must NOT reappear in their old column.
+  // Global date filter (card creation date)
+  const dateRange = (() => {
+    if (dateFilter === "all") return null;
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (dateFilter === "today") return { start: startOfToday.getTime(), end: Infinity };
+    if (dateFilter === "7d") return { start: startOfToday.getTime() - 7 * 86400000, end: Infinity };
+    if (dateFilter === "30d") return { start: startOfToday.getTime() - 30 * 86400000, end: Infinity };
+    // custom
+    const start = customStart ? new Date(`${customStart}T00:00:00`).getTime() : -Infinity;
+    const end = customEnd ? new Date(`${customEnd}T23:59:59.999`).getTime() : Infinity;
+    return { start, end };
+  })();
+
+  const matchesType = (c: CrmClient, type: ContactTypeFilter) =>
+    type === "all" || normalizeClientStage((c.contact as any)?.client_stage) === type;
+
+  const matchesGlobal = (c: CrmClient) => {
+    if (dateRange) {
+      const t = new Date(c.created_at).getTime();
+      if (t < dateRange.start || t > dateRange.end) return false;
+    }
+    return matchesType(c, typeFilter);
+  };
+
   const grouped = CRM_STAGES.reduce<Record<string, CrmClient[]>>((acc, stage) => {
-    acc[stage] = (clients || []).filter(
-      (c) => c.stage === stage && (TERMINAL_STAGES.includes(stage) || c.is_active)
-    );
+    const colFilter = colFilters[stage] || EMPTY_COL_FILTER;
+    const search = colFilter.search.trim().toLowerCase();
+    const sortDir = colSort[stage] || "desc";
+
+    acc[stage] = (clients || [])
+      .filter(
+        (c) => c.stage === stage && (TERMINAL_STAGES.includes(stage) || c.is_active)
+      )
+      .filter(matchesGlobal)
+      .filter((c) => matchesType(c, colFilter.type))
+      .filter((c) => {
+        if (!search) return true;
+        const name = (c.contact?.push_name || "").toLowerCase();
+        const phone = c.contact?.phone || c.contact?.number || "";
+        return name.includes(search) || phone.includes(search);
+      })
+      .sort((a, b) => {
+        const diff = new Date(a.stage_changed_at).getTime() - new Date(b.stage_changed_at).getTime();
+        return sortDir === "desc" ? -diff : diff;
+      });
     return acc;
   }, {} as Record<string, CrmClient[]>);
+
+  const hasColFilter = (stage: string) => {
+    const f = colFilters[stage];
+    return !!f && (f.search.trim() !== "" || f.type !== "all");
+  };
 
   const fmt = (v: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
   return (
     <>
+      {/* Filtros globais */}
+      <div className="flex flex-wrap items-center gap-2 mb-3 shrink-0">
+        <Filter className="w-4 h-4 text-muted-foreground shrink-0" />
+        <Select value={dateFilter} onValueChange={(v) => setDateFilter(v as DatePreset)}>
+          <SelectTrigger className="h-8 w-[150px] text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {(Object.keys(DATE_PRESET_LABELS) as DatePreset[]).map((p) => (
+              <SelectItem key={p} value={p} className="text-xs">
+                {DATE_PRESET_LABELS[p]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {dateFilter === "custom" && (
+          <div className="flex items-center gap-1.5">
+            <Input
+              type="date"
+              value={customStart}
+              onChange={(e) => setCustomStart(e.target.value)}
+              className="h-8 w-[135px] text-xs"
+            />
+            <span className="text-xs text-muted-foreground">até</span>
+            <Input
+              type="date"
+              value={customEnd}
+              onChange={(e) => setCustomEnd(e.target.value)}
+              className="h-8 w-[135px] text-xs"
+            />
+          </div>
+        )}
+        <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as ContactTypeFilter)}>
+          <SelectTrigger className="h-8 w-[140px] text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {CONTACT_TYPE_OPTIONS.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {(dateFilter !== "all" || typeFilter !== "all") && (
+          <button
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            onClick={() => {
+              setDateFilter("all");
+              setTypeFilter("all");
+              setCustomStart("");
+              setCustomEnd("");
+            }}
+          >
+            <X className="w-3.5 h-3.5" /> Limpar
+          </button>
+        )}
+      </div>
+
       <div className="flex-1 overflow-x-auto overflow-y-hidden crm-scrollbar snap-x snap-mandatory sm:snap-none">
         <div className="flex gap-3 h-full min-w-max pb-4 px-1">
           {CRM_STAGES.map((stage) => {
@@ -281,6 +429,84 @@ export const NewKanbanBoard = ({ onCardClick }: NewKanbanBoardProps) => {
                       style={{ backgroundColor: STAGE_COLORS[stage] }}
                     />
                     <span className="text-xs font-medium truncate">{stage}</span>
+                    {/* Filtro individual da coluna */}
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button
+                          className={cn(
+                            "p-0.5 rounded hover:bg-accent transition-colors shrink-0",
+                            hasColFilter(stage) ? "text-primary" : "text-muted-foreground"
+                          )}
+                          title="Filtrar coluna"
+                        >
+                          <Filter className={cn("w-3 h-3", hasColFilter(stage) && "fill-primary")} />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent align="start" className="w-56 p-3 space-y-2.5">
+                        <p className="text-xs font-medium">Filtrar "{stage}"</p>
+                        <div className="relative">
+                          <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
+                          <Input
+                            placeholder="Nome ou telefone..."
+                            value={colFilters[stage]?.search || ""}
+                            onChange={(e) =>
+                              setColFilters((prev) => ({
+                                ...prev,
+                                [stage]: { ...(prev[stage] || EMPTY_COL_FILTER), search: e.target.value },
+                              }))
+                            }
+                            className="h-7 pl-7 text-xs"
+                          />
+                        </div>
+                        <Select
+                          value={colFilters[stage]?.type || "all"}
+                          onValueChange={(v) =>
+                            setColFilters((prev) => ({
+                              ...prev,
+                              [stage]: { ...(prev[stage] || EMPTY_COL_FILTER), type: v as ContactTypeFilter },
+                            }))
+                          }
+                        >
+                          <SelectTrigger className="h-7 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {CONTACT_TYPE_OPTIONS.map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                                {opt.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {hasColFilter(stage) && (
+                          <button
+                            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                            onClick={() =>
+                              setColFilters((prev) => ({ ...prev, [stage]: EMPTY_COL_FILTER }))
+                            }
+                          >
+                            <X className="w-3 h-3" /> Limpar filtro
+                          </button>
+                        )}
+                      </PopoverContent>
+                    </Popover>
+                    {/* Ordenação da coluna */}
+                    <button
+                      className="p-0.5 rounded hover:bg-accent transition-colors shrink-0 text-muted-foreground"
+                      title={(colSort[stage] || "desc") === "desc" ? "Mais recentes primeiro" : "Mais antigos primeiro"}
+                      onClick={() =>
+                        setColSort((prev) => ({
+                          ...prev,
+                          [stage]: (prev[stage] || "desc") === "desc" ? "asc" : "desc",
+                        }))
+                      }
+                    >
+                      {(colSort[stage] || "desc") === "desc" ? (
+                        <ArrowDownWideNarrow className="w-3 h-3" />
+                      ) : (
+                        <ArrowUpNarrowWide className="w-3 h-3" />
+                      )}
+                    </button>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     <Badge variant="secondary" className="text-[10px] h-5 px-1.5">
