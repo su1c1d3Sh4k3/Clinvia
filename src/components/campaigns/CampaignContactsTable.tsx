@@ -15,10 +15,12 @@ const STATUS_META: Record<string, { label: string; className: string }> = {
     skipped: { label: "Ignorado", className: "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400" },
 };
 
-/** Status efetivo: refina 'sent' com o status real da mensagem (Meta reporta async) */
-function effectiveStatus(r: { status: string; message?: { status: string | null } | null }): string {
+/** Status efetivo: refina 'sent' com o status real da mensagem (Meta reporta async).
+ *  Fallback no snapshot message_status — mensagens são deletadas quando a conversa
+ *  é resolvida e a métrica NÃO pode se perder. */
+function effectiveStatus(r: { status: string; message_status?: string | null; message?: { status: string | null } | null }): string {
     if (r.status === "sent") {
-        const ms = r.message?.status;
+        const ms = r.message?.status ?? r.message_status;
         if (ms === "failed") return "failed";
         if (ms === "delivered" || ms === "read") return "delivered";
     }
