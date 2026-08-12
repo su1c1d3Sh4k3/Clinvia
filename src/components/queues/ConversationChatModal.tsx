@@ -16,6 +16,7 @@ import { MessageBubble } from "@/components/MessageBubble";
 import { useState, useRef, useEffect } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { useSendMessage } from "@/hooks/useSendMessage";
+import { useMessages } from "@/hooks/useMessages";
 import EmojiPicker, { EmojiClickData } from "emoji-picker-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -62,59 +63,57 @@ export function ConversationChatModal({
     const sendMessageMutation = useSendMessage();
     const { data: ownerId } = useOwnerId();
 
-    // Get active conversation ID
-    const { data: activeConversationId } = useQuery({
-        queryKey: ["active-conversation-id", contactId, ownerId],
+    // Get conversation: prefer active (open/pending), fallback to the most recent
+    // resolved one — the history must still be visible after the ticket is closed
+    const { data: convInfo } = useQuery({
+        queryKey: ["chat-modal-conversation", contactId, ownerId],
         queryFn: async () => {
             if (!ownerId) return null;
 
-            const { data, error } = await supabase
+            const { data: active } = await supabase
                 .from("conversations")
                 .select("id")
                 .eq("contact_id", contactId)
                 .eq("user_id", ownerId)
                 .in("status", ["open", "pending"])
+                .order("created_at", { ascending: false })
                 .limit(1);
+            if (active && active.length > 0) return { id: active[0].id, isActive: true };
 
-            if (error) return null;
-            return data && data.length > 0 ? data[0].id : null;
+            const { data: last } = await supabase
+                .from("conversations")
+                .select("id")
+                .eq("contact_id", contactId)
+                .eq("user_id", ownerId)
+                .order("created_at", { ascending: false })
+                .limit(1);
+            return last && last.length > 0 ? { id: last[0].id, isActive: false } : null;
         },
         enabled: !!contactId && !!ownerId && open,
     });
+    // View = any conversation (history readable); send = only active ones
+    const viewConversationId = convInfo?.id ?? null;
+    const activeConversationId = convInfo?.isActive ? convInfo.id : null;
 
     // Fetch conversation details (to check for Instagram/WhatsApp channel)
     const { data: conversation } = useQuery({
-        queryKey: ["conversation-details", activeConversationId],
+        queryKey: ["conversation-details", viewConversationId],
         queryFn: async () => {
-            if (!activeConversationId) return null;
+            if (!viewConversationId) return null;
             const { data, error } = await supabase
                 .from("conversations")
                 .select("*")
-                .eq("id", activeConversationId)
+                .eq("id", viewConversationId)
                 .single();
             if (error) return null;
             return data;
         },
-        enabled: !!activeConversationId
+        enabled: !!viewConversationId
     });
 
-    // Fetch messages
-    const { data: messages, isLoading } = useQuery({
-        queryKey: ["deal-messages", activeConversationId],
-        queryFn: async () => {
-            if (!activeConversationId) return [];
-
-            const { data, error } = await supabase
-                .from("messages")
-                .select("*")
-                .eq("conversation_id", activeConversationId)
-                .order("created_at", { ascending: true });
-
-            if (error) throw error;
-            return data;
-        },
-        enabled: !!activeConversationId && open,
-    });
+    // Same source as the inbox: handles resolved conversations (messages_history JSON),
+    // prepends the contact's previous resolved history and subscribes to realtime
+    const { messages, isLoading } = useMessages(open ? viewConversationId ?? undefined : undefined);
 
     // Auto-resize textarea
     useEffect(() => {
@@ -146,31 +145,6 @@ export function ConversationChatModal({
             }, 100);
         }
     }, [messages, open, modalOpenCount]);
-
-    // Real-time subscription
-    useEffect(() => {
-        if (!activeConversationId || !open) return;
-
-        const channel = supabase
-            .channel(`queue-modal-${activeConversationId}`)
-            .on(
-                "postgres_changes",
-                {
-                    event: "INSERT",
-                    schema: "public",
-                    table: "messages",
-                    filter: `conversation_id=eq.${activeConversationId}`,
-                },
-                () => {
-                    queryClient.invalidateQueries({ queryKey: ["deal-messages", activeConversationId] });
-                }
-            )
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [activeConversationId, open, queryClient]);
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
@@ -362,7 +336,7 @@ export function ConversationChatModal({
 
             setMessage("");
             setSelectedFile(null);
-            queryClient.invalidateQueries({ queryKey: ["deal-messages", activeConversationId] });
+            queryClient.invalidateQueries({ queryKey: ["messages", activeConversationId] });
         } catch (error) {
             console.error("Error sending message:", error);
             toast.error("Erro ao enviar mensagem");
@@ -384,10 +358,10 @@ export function ConversationChatModal({
                             variant="outline"
                             size="sm"
                             onClick={() => {
-                                navigate(`/?conversationId=${activeConversationId}`);
+                                navigate(`/?conversationId=${viewConversationId}`);
                                 onOpenChange(false);
                             }}
-                            disabled={!activeConversationId}
+                            disabled={!viewConversationId}
                         >
                             <MessageSquare className="mr-2 h-4 w-4" />
                             Ir para Inbox
