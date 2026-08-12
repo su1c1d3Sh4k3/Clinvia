@@ -220,6 +220,26 @@ export function useCampaignContactResponses(campaignId: string | null) {
     });
 }
 
+/** Map campaign_contact_id -> agendou (appointment criado após o envio; cancelados contam) */
+export function useCampaignContactAppointments(campaignId: string | null) {
+    return useQuery({
+        queryKey: ["campaign-contact-appointments", campaignId],
+        queryFn: async (): Promise<Map<string, boolean>> => {
+            const { data, error } = await (supabase.rpc as any)("get_campaign_contact_appointments", {
+                p_campaign_id: campaignId,
+            });
+            if (error) throw error;
+            const map = new Map<string, boolean>();
+            for (const r of (data || []) as { campaign_contact_id: string; scheduled: boolean }[]) {
+                map.set(r.campaign_contact_id, r.scheduled);
+            }
+            return map;
+        },
+        enabled: !!campaignId,
+        refetchInterval: 60_000,
+    });
+}
+
 export function isMetaInstance(i: any): boolean {
     return i?.provider === "meta" || (i?.instance_name || "").startsWith("meta-");
 }

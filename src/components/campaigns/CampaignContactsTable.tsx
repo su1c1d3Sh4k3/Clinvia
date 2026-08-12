@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Loader2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useCampaignContacts, useCampaignContactResponses } from "@/hooks/useCampaigns";
+import { useCampaignContacts, useCampaignContactResponses, useCampaignContactAppointments } from "@/hooks/useCampaigns";
 import { ConversationChatModal } from "@/components/queues/ConversationChatModal";
 
 const STATUS_META: Record<string, { label: string; className: string }> = {
@@ -32,9 +32,11 @@ interface CampaignContactsTableProps {
 export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps) {
     const { data: rows, isLoading } = useCampaignContacts(campaignId);
     const { data: responses } = useCampaignContactResponses(campaignId);
+    const { data: appointments } = useCampaignContactAppointments(campaignId);
     const [chatContact, setChatContact] = useState<{ id: string; name: string } | null>(null);
     const [statusFilter, setStatusFilter] = useState<string>("all");
     const [respondedFilter, setRespondedFilter] = useState<string>("all");
+    const [scheduledFilter, setScheduledFilter] = useState<string>("all");
 
     // Contagens por status efetivo e por respondida (sobre todos os rows)
     const statusCounts = useMemo(() => {
@@ -56,6 +58,16 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
         return { responded, pending };
     }, [rows, responses]);
 
+    const scheduledCounts = useMemo(() => {
+        let scheduled = 0, pending = 0;
+        for (const r of rows || []) {
+            if (r.status !== "sent") continue;
+            if (appointments?.get(r.id)) scheduled++;
+            else pending++;
+        }
+        return { scheduled, pending };
+    }, [rows, appointments]);
+
     const filteredRows = useMemo(() => {
         return (rows || []).filter((r) => {
             if (statusFilter !== "all" && effectiveStatus(r) !== statusFilter) return false;
@@ -65,9 +77,15 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
                 if (respondedFilter === "responded" && !isResponded) return false;
                 if (respondedFilter === "pending" && isResponded) return false;
             }
+            if (scheduledFilter !== "all") {
+                if (r.status !== "sent") return false;
+                const isScheduled = !!appointments?.get(r.id);
+                if (scheduledFilter === "scheduled" && !isScheduled) return false;
+                if (scheduledFilter === "pending" && isScheduled) return false;
+            }
             return true;
         });
-    }, [rows, statusFilter, respondedFilter, responses]);
+    }, [rows, statusFilter, respondedFilter, scheduledFilter, responses, appointments]);
 
     if (isLoading) {
         return (
@@ -111,7 +129,18 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
                     </SelectContent>
                 </Select>
 
-                {(statusFilter !== "all" || respondedFilter !== "all") && (
+                <Select value={scheduledFilter} onValueChange={setScheduledFilter}>
+                    <SelectTrigger className="h-8 w-[180px] text-xs bg-background">
+                        <SelectValue placeholder="Agendamento" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">Agendamento: todos</SelectItem>
+                        <SelectItem value="scheduled">Agendado ({scheduledCounts.scheduled})</SelectItem>
+                        <SelectItem value="pending">Pendente ({scheduledCounts.pending})</SelectItem>
+                    </SelectContent>
+                </Select>
+
+                {(statusFilter !== "all" || respondedFilter !== "all" || scheduledFilter !== "all") && (
                     <Badge variant="secondary" className="ml-auto text-xs">
                         {filteredRows.length} de {rows.length} contatos
                     </Badge>
@@ -119,20 +148,21 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
             </div>
 
             <div className="max-h-64 overflow-y-auto overflow-x-auto">
-                <table className="w-full min-w-[560px] text-sm">
+                <table className="w-full min-w-[660px] text-sm">
                     <thead className="bg-muted/50 sticky top-0">
                         <tr className="text-left text-xs text-muted-foreground">
                             <th className="px-3 py-2 font-medium">Contato</th>
                             <th className="px-3 py-2 font-medium">Telefone</th>
                             <th className="px-3 py-2 font-medium">Status</th>
                             <th className="px-3 py-2 font-medium">Respondida</th>
+                            <th className="px-3 py-2 font-medium">Agendamento</th>
                             <th className="px-3 py-2 font-medium">Enviado em</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y">
                         {filteredRows.length === 0 && (
                             <tr>
-                                <td colSpan={5} className="px-3 py-4 text-center text-xs text-muted-foreground">
+                                <td colSpan={6} className="px-3 py-4 text-center text-xs text-muted-foreground">
                                     Nenhum contato com os filtros selecionados.
                                 </td>
                             </tr>
@@ -176,6 +206,21 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
                                             responses?.get(r.id) ? (
                                                 <Badge variant="secondary" className="bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
                                                     Respondida
+                                                </Badge>
+                                            ) : (
+                                                <Badge variant="secondary" className="bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                                                    Pendente
+                                                </Badge>
+                                            )
+                                        ) : (
+                                            <span className="text-xs text-muted-foreground">—</span>
+                                        )}
+                                    </td>
+                                    <td className="px-3 py-1.5">
+                                        {r.status === "sent" ? (
+                                            appointments?.get(r.id) ? (
+                                                <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                                                    Agendado
                                                 </Badge>
                                             ) : (
                                                 <Badge variant="secondary" className="bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
