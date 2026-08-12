@@ -31,7 +31,7 @@ Python integration tests live in `tests/` (test_*.py) — run manually with pyth
 ## Structure
 
 - `src/pages/` — route pages (Index.tsx = inbox, CRM.tsx, Scheduling.tsx, Campaigns.tsx, IAConfig.tsx, etc.)
-- `src/components/<feature>/` — feature components (chat, crm, campaigns, scheduling, dashboard, settings, ia-wizard, ...)
+- `src/components/<feature>/` — feature components (chat, crm, campaigns, scheduling, dashboard, settings, connections, ...)
 - `src/components/ui/` — shadcn primitives (do not hand-edit style conventions)
 - `src/hooks/` — data hooks (useAuth, useOwnerId, usePermissions, useConversations, useMessages, ...)
 - `src/integrations/supabase/client.ts` — Supabase client (`import { supabase } from "@/integrations/supabase/client"`)
