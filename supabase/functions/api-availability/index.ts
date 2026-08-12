@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
+import { getWorkHoursForDay } from "../_shared/professional-schedule.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -55,7 +56,7 @@ async function getSlotsForDate(
         const workDays: number[] = prof.work_days || [0, 1, 2, 3, 4, 5, 6];
         if (!workDays.includes(dayOfWeek)) continue;
 
-        const wh = prof.work_hours || {};
+        const wh = getWorkHoursForDay(prof, dayOfWeek);
         const whStart = parseWorkTime(wh.start) ?? 8 * 60;
         const whEnd = parseWorkTime(wh.end) ?? 20 * 60;
         const breakStart = parseWorkTime(wh.break_start);
@@ -135,7 +136,7 @@ serve(async (req) => {
         }
 
         const { data: professionals } = await supabase
-            .from("professionals").select("id, name, work_hours, work_days").in("id", profIds);
+            .from("professionals").select("id, name, work_hours, work_days, use_daily_schedule, work_hours_daily").in("id", profIds);
         if (!professionals || professionals.length === 0) {
             return new Response(JSON.stringify({ error: "Profissionais não encontrados" }),
                 { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });

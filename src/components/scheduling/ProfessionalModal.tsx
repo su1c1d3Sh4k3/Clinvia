@@ -8,6 +8,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -46,18 +48,22 @@ function buildGoogleOAuthUrl(userId: string, professionalId: string | null): str
     return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
 }
 
+const dayHoursSchema = z.object({
+    start: z.string(),
+    end: z.string(),
+    break_start: z.string(),
+    break_end: z.string(),
+});
+
 const formSchema = z.object({
     name: z.string().min(1, "Nome é obrigatório"),
     role: z.string().optional(),
     commission: z.number().min(0).max(100).default(0),
     service_ids: z.array(z.string()).default([]),
     work_days: z.array(z.number()).default([]),
-    work_hours: z.object({
-        start: z.string(),
-        end: z.string(),
-        break_start: z.string(),
-        break_end: z.string(),
-    }),
+    work_hours: dayHoursSchema,
+    use_daily_schedule: z.boolean().default(false),
+    work_hours_daily: z.record(z.string(), dayHoursSchema).nullable().default(null),
 });
 
 interface ProfessionalModalProps {
@@ -83,6 +89,7 @@ export function ProfessionalModal({ open, onOpenChange, professionalToEdit }: Pr
     const [isLoading, setIsLoading] = useState(false);
     const [photoFile, setPhotoFile] = useState<File | null>(null);
     const [existingPhoto, setExistingPhoto] = useState<string | null>(null);
+    const [activeDayTab, setActiveDayTab] = useState<string>("1");
 
     const { data: services } = useQuery({
         queryKey: ["services-client-list", ownerId],
@@ -113,6 +120,8 @@ export function ProfessionalModal({ open, onOpenChange, professionalToEdit }: Pr
                 break_start: "12:00",
                 break_end: "13:00",
             },
+            use_daily_schedule: false,
+            work_hours_daily: null,
         },
     });
 
@@ -134,8 +143,12 @@ export function ProfessionalModal({ open, onOpenChange, professionalToEdit }: Pr
                     break_start: "12:00",
                     break_end: "13:00",
                 },
+                use_daily_schedule: professionalToEdit.use_daily_schedule || false,
+                work_hours_daily: professionalToEdit.work_hours_daily || null,
             });
             setExistingPhoto(professionalToEdit.photo_url);
+            const firstDay = (professionalToEdit.work_days || [1])[0];
+            setActiveDayTab(String(firstDay ?? 1));
         } else {
             form.reset({
                 name: "",
@@ -149,9 +162,12 @@ export function ProfessionalModal({ open, onOpenChange, professionalToEdit }: Pr
                     break_start: "12:00",
                     break_end: "13:00",
                 },
+                use_daily_schedule: false,
+                work_hours_daily: null,
             });
             setExistingPhoto(null);
             setPhotoFile(null);
+            setActiveDayTab("1");
         }
     }, [professionalToEdit, open, form, services]);
 
@@ -173,10 +189,48 @@ export function ProfessionalModal({ open, onOpenChange, professionalToEdit }: Pr
     const toggleDay = (dayId: number) => {
         const current = form.getValues("work_days");
         if (current.includes(dayId)) {
-            form.setValue("work_days", current.filter(d => d !== dayId));
+            const next = current.filter(d => d !== dayId);
+            form.setValue("work_days", next);
+            // Se a aba ativa era esse dia, move para o primeiro dia restante
+            if (activeDayTab === String(dayId) && next.length > 0) {
+                setActiveDayTab(String([...next].sort((a, b) => a - b)[0]));
+            }
         } else {
             form.setValue("work_days", [...current, dayId]);
+            // Modo individual ligado: semeia o dia novo com o horário global
+            if (form.getValues("use_daily_schedule")) {
+                const daily = { ...(form.getValues("work_hours_daily") || {}) };
+                if (!daily[String(dayId)]) {
+                    daily[String(dayId)] = { ...form.getValues("work_hours") };
+                    form.setValue("work_hours_daily", daily);
+                }
+            }
         }
+    };
+
+    // Liga/desliga horário individual por dia. Ao ligar: reaproveita a última config
+    // salva e semeia dias sem entrada com o horário global atual.
+    const handleToggleDailySchedule = (checked: boolean) => {
+        form.setValue("use_daily_schedule", checked);
+        if (checked) {
+            const workDays = form.getValues("work_days");
+            const global = form.getValues("work_hours");
+            const daily = { ...(form.getValues("work_hours_daily") || {}) };
+            for (const d of workDays) {
+                if (!daily[String(d)]) daily[String(d)] = { ...global };
+            }
+            form.setValue("work_hours_daily", daily);
+            const sorted = [...workDays].sort((a, b) => a - b);
+            if (!workDays.includes(Number(activeDayTab))) {
+                setActiveDayTab(String(sorted[0] ?? 1));
+            }
+        }
+    };
+
+    const setDailyHour = (day: string, field: "start" | "end" | "break_start" | "break_end", value: string) => {
+        const daily = { ...(form.getValues("work_hours_daily") || {}) };
+        daily[day] = { ...(daily[day] || form.getValues("work_hours")), [field]: value };
+        form.setValue("work_hours_daily", daily);
     };
 
     const onSubmit = async (values: z.infer<typeof formSchema>) => {
@@ -213,6 +267,8 @@ export function ProfessionalModal({ open, onOpenChange, professionalToEdit }: Pr
                 commission: values.commission,
                 work_days: values.work_days,
                 work_hours: values.work_hours,
+                use_daily_schedule: values.use_daily_schedule,
+                work_hours_daily: values.work_hours_daily,
                 photo_url: photoUrl,
             };
 
@@ -423,60 +479,138 @@ export function ProfessionalModal({ open, onOpenChange, professionalToEdit }: Pr
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
-                            <FormField
-                                control={form.control}
-                                name="work_hours.start"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Início</FormLabel>
-                                        <FormControl>
-                                            <Input type="time" {...field} />
-                                        </FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-                            <FormField
-                                control={form.control}
-                                name="work_hours.end"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Fim</FormLabel>
-                                        <FormControl>
-                                            <Input type="time" {...field} />
-                                        </FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-                            <FormField
-                                control={form.control}
-                                name="work_hours.break_start"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Início Intervalo</FormLabel>
-                                        <FormControl>
-                                            <Input type="time" {...field} />
-                                        </FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-                            <FormField
-                                control={form.control}
-                                name="work_hours.break_end"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Fim Intervalo</FormLabel>
-                                        <FormControl>
-                                            <Input type="time" {...field} />
-                                        </FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
+                        <div className="flex items-center justify-between rounded-lg border p-3">
+                            <div className="space-y-0.5 pr-4">
+                                <FormLabel className="cursor-pointer" onClick={() => handleToggleDailySchedule(!form.watch("use_daily_schedule"))}>
+                                    Configurar horário individualmente
+                                </FormLabel>
+                                <p className="text-xs text-muted-foreground">
+                                    Defina horários diferentes para cada dia de atendimento
+                                </p>
+                            </div>
+                            <Switch
+                                checked={form.watch("use_daily_schedule")}
+                                onCheckedChange={handleToggleDailySchedule}
                             />
                         </div>
+
+                        {!form.watch("use_daily_schedule") ? (
+                            <div className="grid grid-cols-2 gap-4">
+                                <FormField
+                                    control={form.control}
+                                    name="work_hours.start"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Início</FormLabel>
+                                            <FormControl>
+                                                <Input type="time" {...field} />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="work_hours.end"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Fim</FormLabel>
+                                            <FormControl>
+                                                <Input type="time" {...field} />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="work_hours.break_start"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Início Intervalo</FormLabel>
+                                            <FormControl>
+                                                <Input type="time" {...field} />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="work_hours.break_end"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Fim Intervalo</FormLabel>
+                                            <FormControl>
+                                                <Input type="time" {...field} />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            </div>
+                        ) : (() => {
+                            const selectedDays = [...form.watch("work_days")].sort((a, b) => a - b);
+                            if (selectedDays.length === 0) {
+                                return (
+                                    <p className="text-sm text-muted-foreground border rounded-md p-3">
+                                        Selecione ao menos um dia de atendimento para configurar os horários.
+                                    </p>
+                                );
+                            }
+                            const currentDay = selectedDays.includes(Number(activeDayTab))
+                                ? activeDayTab
+                                : String(selectedDays[0]);
+                            const daily = form.watch("work_hours_daily") || {};
+                            const dayCfg = daily[currentDay] || form.getValues("work_hours");
+                            return (
+                                <div className="space-y-3">
+                                    <Tabs value={currentDay} onValueChange={setActiveDayTab}>
+                                        <TabsList className="w-full justify-start overflow-x-auto flex-nowrap">
+                                            {selectedDays.map((d) => (
+                                                <TabsTrigger key={d} value={String(d)} className="shrink-0">
+                                                    {DAYS.find(day => day.id === d)?.label}
+                                                </TabsTrigger>
+                                            ))}
+                                        </TabsList>
+                                    </Tabs>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <FormLabel>Início</FormLabel>
+                                            <Input
+                                                type="time"
+                                                value={String(dayCfg.start ?? "")}
+                                                onChange={(e) => setDailyHour(currentDay, "start", e.target.value)}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <FormLabel>Fim</FormLabel>
+                                            <Input
+                                                type="time"
+                                                value={String(dayCfg.end ?? "")}
+                                                onChange={(e) => setDailyHour(currentDay, "end", e.target.value)}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <FormLabel>Início Intervalo</FormLabel>
+                                            <Input
+                                                type="time"
+                                                value={String(dayCfg.break_start ?? "")}
+                                                onChange={(e) => setDailyHour(currentDay, "break_start", e.target.value)}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <FormLabel>Fim Intervalo</FormLabel>
+                                            <Input
+                                                type="time"
+                                                value={String(dayCfg.break_end ?? "")}
+                                                onChange={(e) => setDailyHour(currentDay, "break_end", e.target.value)}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })()}
 
                         {/* Google Calendar – só disponível ao editar profissional existente */}
                         {professionalToEdit && (

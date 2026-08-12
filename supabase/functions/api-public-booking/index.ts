@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
+import { getWorkHoursForDay } from "../_shared/professional-schedule.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -95,11 +96,11 @@ serve(async (req) => {
 
             // Get professional work settings
             const { data: prof } = await supabase.from("professionals")
-                .select("work_hours, work_days").eq("id", professional_id).single();
+                .select("work_hours, work_days, use_daily_schedule, work_hours_daily").eq("id", professional_id).single();
 
-            const wh = prof?.work_hours || {};
             const workDays: number[] = prof?.work_days || [1, 2, 3, 4, 5];
             const reqDate = new Date(date + "T12:00:00");
+            const wh = getWorkHoursForDay(prof || {}, reqDate.getDay());
             if (!workDays.includes(reqDate.getDay())) {
                 return new Response(JSON.stringify({ slots: [] }),
                     { headers: { ...corsHeaders, "Content-Type": "application/json" } });

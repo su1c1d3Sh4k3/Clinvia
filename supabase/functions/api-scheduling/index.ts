@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
+import { getWorkHoursForDay } from "../_shared/professional-schedule.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -46,7 +47,7 @@ function validateWorkSchedule(prof: any, dateStr: string, timeStr: string, durat
     const start = h * 60 + (m || 0);
     const end = start + duration;
 
-    const wh = prof.work_hours || {};
+    const wh = getWorkHoursForDay(prof, dow);
     const whStart = parseWorkTime(wh.start) ?? 8 * 60;
     const whEnd = parseWorkTime(wh.end) ?? 20 * 60;
     if (start < whStart || end > whEnd) {
@@ -115,7 +116,7 @@ serve(async (req) => {
             if (profIds.length === 0) throw new Error(`Nenhum profissional atrelado ao serviço "${sc.name}"`);
 
             const { data: profs } = await supabase.from("professionals")
-                .select("id, name, work_hours, work_days")
+                .select("id, name, work_hours, work_days, use_daily_schedule, work_hours_daily")
                 .in("id", profIds);
             if (!profs || profs.length === 0) throw new Error(`Nenhum profissional encontrado para o serviço "${sc.name}"`);
 
@@ -341,7 +342,7 @@ serve(async (req) => {
             // Validate professional work schedule at the new date/time
             if (existing.professional_id) {
                 const { data: profRec } = await supabase.from("professionals")
-                    .select("id, name, work_hours, work_days")
+                    .select("id, name, work_hours, work_days, use_daily_schedule, work_hours_daily")
                     .eq("id", existing.professional_id).maybeSingle();
                 if (profRec) {
                     const scheduleError = validateWorkSchedule(profRec, new_date, new_time, durationMin);

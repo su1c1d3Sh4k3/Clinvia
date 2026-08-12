@@ -17,6 +17,7 @@ import {
     brasiliaDateTimeToUTC,
     utcToBrasiliaParts,
 } from "./timezone.ts";
+import { getWorkHoursForDay } from "./professional-schedule.ts";
 
 export interface Slot {
     time: string;       // 'HH:MM' in Brasília wall clock
@@ -83,7 +84,7 @@ export async function computeAvailableSlots(
     // 1. Fetch professional
     const { data: professional, error: profErr } = await supabase
         .from("professionals")
-        .select("id, work_days, work_hours")
+        .select("id, work_days, work_hours, use_daily_schedule, work_hours_daily")
         .eq("id", professionalId)
         .maybeSingle();
     if (profErr) throw profErr;
@@ -108,8 +109,8 @@ export async function computeAvailableSlots(
     const { weekday } = utcToBrasiliaParts(anchorUtc);
     if (!workDays.includes(weekday)) return [];
 
-    // 4. Parse work_hours (flexible: "HH:MM" or decimal number)
-    const wh = professional.work_hours || {};
+    // 4. Parse work_hours (flexible: "HH:MM" or decimal number) — per-day schedule aware
+    const wh = getWorkHoursForDay(professional, weekday);
     const start = parseTimeComponent(wh.start) || { hh: 9, mm: 0 };
     const end = parseTimeComponent(wh.end) || { hh: 18, mm: 0 };
     const breakStart = parseTimeComponent(wh.break_start);

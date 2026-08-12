@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { useProfessionalNps } from "@/hooks/useAppointmentsDashboard";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { getWorkHoursForDay } from "@/lib/professionalSchedule";
 
 interface SchedulingCalendarProps {
     date: Date;
@@ -150,7 +151,7 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
     const getOccupancy = (professional: any): number => {
         const profWorkDays = professional.work_days || settings?.work_days || [0, 1, 2, 3, 4, 5, 6];
         if (!profWorkDays.includes(date.getDay())) return 0;
-        const wh = professional.work_hours || { start: "08:00", end: "22:00", break_start: null, break_end: null };
+        const wh: any = { start: "08:00", end: "22:00", break_start: null, break_end: null, ...getWorkHoursForDay(professional, date.getDay()) };
         const toMin = (s: string) => {
             const [h, m] = (s || "").split(":").map(Number);
             return (h || 0) * 60 + (m || 0);
@@ -298,9 +299,9 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                 slotDate.setHours(hour, 0, 0, 0);
 
 
-                                // Parse professional settings
+                                // Parse professional settings (horário do dia exibido, se individual)
                                 const workDays = professional.work_days || settings?.work_days || [0, 1, 2, 3, 4, 5, 6];
-                                const workHours = professional.work_hours || { start: "08:00", end: "22:00", break_start: null, break_end: null };
+                                const workHours: any = { start: "08:00", end: "22:00", break_start: null, break_end: null, ...getWorkHoursForDay(professional, date.getDay()) };
 
                                 const startH = parseInt(workHours.start?.split(':')[0] || "8");
                                 const endH = parseInt(workHours.end?.split(':')[0] || "22");

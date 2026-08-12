@@ -1,17 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { getWorkHoursForDay, type DayHours } from "@/lib/professionalSchedule";
 
 export interface DashProfessional {
     id: string;
     name: string;
     photo_url: string | null;
     work_days: number[] | null;
-    work_hours: {
-        start?: string;
-        end?: string;
-        break_start?: string;
-        break_end?: string;
-    } | null;
+    work_hours: DayHours | null;
+    use_daily_schedule?: boolean | null;
+    work_hours_daily?: Record<string, DayHours> | null;
 }
 
 export interface DashAppointment {
@@ -38,7 +36,7 @@ export function useProfessionalsDashboard() {
         queryFn: async (): Promise<DashProfessional[]> => {
             const { data, error } = await supabase
                 .from("professionals" as any)
-                .select("id, name, photo_url, work_days, work_hours")
+                .select("id, name, photo_url, work_days, work_hours, use_daily_schedule, work_hours_daily")
                 .order("name");
             if (error) throw error;
             return (data || []) as unknown as DashProfessional[];
@@ -93,7 +91,7 @@ export const formatCurrency = (value: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value || 0);
 
 // Parse "HH:MM" or decimal hour into decimal hours (e.g. "09:30" -> 9.5)
-export function parseHour(value: string | number | undefined, fallback: number): number {
+export function parseHour(value: string | number | null | undefined, fallback: number): number {
     if (value === undefined || value === null || value === "") return fallback;
     if (typeof value === "number") return value;
     if (value.includes(":")) {
@@ -108,7 +106,7 @@ export function parseHour(value: string | number | undefined, fallback: number):
 export function dailyWorkMinutes(prof: DashProfessional, dayOfWeek: number): number {
     const workDays = prof.work_days || [];
     if (!workDays.includes(dayOfWeek)) return 0;
-    const wh = prof.work_hours || {};
+    const wh = getWorkHoursForDay(prof, dayOfWeek);
     const startH = parseHour(wh.start, 8);
     const endH = parseHour(wh.end, 18);
     const breakStartH = parseHour(wh.break_start, 0);

@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
+import { getWorkHoursForDay } from "@/lib/professionalSchedule";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -190,7 +191,7 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
             if (!watchProfessionalId) return null;
             const { data, error } = await supabase
                 .from("professionals")
-                .select("id, service_ids, work_hours, work_days")
+                .select("id, service_ids, work_hours, work_days, use_daily_schedule, work_hours_daily")
                 .eq("id", watchProfessionalId)
                 .single();
             if (error) throw error;
@@ -297,8 +298,9 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
             return isNaN(num) ? null : num * 60;
         };
 
-        // Usar work_hours do profissional; fallback 8:00 – 20:00
-        const wh = (selectedProfessional as any)?.work_hours;
+        // Usar work_hours do profissional (do dia da semana, se horário individual); fallback 8:00 – 20:00
+        const weekday = new Date(`${watchDate}T12:00:00`).getDay();
+        const wh = selectedProfessional ? (getWorkHoursForDay(selectedProfessional as any, weekday) as any) : undefined;
         const startMinutes = parseWorkTime(wh?.start) ?? 8 * 60;
         const endMinutes   = parseWorkTime(wh?.end)   ?? 20 * 60;
 
@@ -405,7 +407,8 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
             return isNaN(num) ? null : num * 60;
         };
 
-        const wh = (selectedProfessional as any)?.work_hours;
+        const lockedWeekday = new Date(`${watchDate}T12:00:00`).getDay();
+        const wh = selectedProfessional ? (getWorkHoursForDay(selectedProfessional as any, lockedWeekday) as any) : undefined;
         const breakStartMin = parseTime(wh?.break_start);
         const breakEndMin   = parseTime(wh?.break_end);
 
