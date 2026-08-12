@@ -100,34 +100,23 @@ serve(async (req) => {
                 item.error = (e as Error).message;
             }
 
-            // Uso da janela de 24h: contatos únicos com outbound nesta instância
+            // Uso da janela de 24h: contatos únicos com outbound nesta instância.
+            // RPC cobre messages vivas + outbound arquivado em conversations.messages_history
+            // (conversas resolvidas têm as messages deletadas — o contador não pode zerar).
             try {
-                const { data: convs } = await supabase
-                    .from("conversations")
-                    .select("id, contact_id")
-                    .eq("instance_id", inst.id);
-                const convIds = (convs || []).map((c) => c.id);
-                const contactByConv = new Map((convs || []).map((c) => [c.id, c.contact_id]));
+                const { data: usage, error: usageErr } = await supabase.rpc("get_meta_usage_24h", {
+                    p_instance_id: inst.id,
+                    p_since: since,
+                });
+                if (usageErr) throw new Error(usageErr.message);
 
                 // Primeiro outbound de cada contato dentro da janela (ordem de "consumo" do limite)
-                const firstOutboundByContact = new Map<string, string>();
-
-                // Pagina em blocos de conversation_ids para não estourar a URL
-                for (let i = 0; i < convIds.length; i += 200) {
-                    const chunk = convIds.slice(i, i + 200);
-                    const { data: msgs } = await supabase
-                        .from("messages")
-                        .select("conversation_id, created_at")
-                        .in("conversation_id", chunk)
-                        .eq("direction", "outbound")
-                        .gte("created_at", since);
-                    for (const m of msgs || []) {
-                        const contactId = contactByConv.get(m.conversation_id);
-                        if (!contactId) continue;
-                        const prev = firstOutboundByContact.get(contactId);
-                        if (!prev || m.created_at < prev) firstOutboundByContact.set(contactId, m.created_at);
-                    }
-                }
+                const firstOutboundByContact = new Map<string, string>(
+                    (usage || []).map((r: { contact_id: string; first_outbound: string }) => [
+                        r.contact_id,
+                        r.first_outbound,
+                    ]),
+                );
 
                 const used = firstOutboundByContact.size;
                 item.used_24h = used;
