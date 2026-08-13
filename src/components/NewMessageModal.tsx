@@ -127,6 +127,31 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
     const selectedInstanceObj = instances?.find((i: any) => i.name === selectedInstance);
     const isMetaSelected = (selectedInstanceObj as any)?.provider === "meta";
 
+    // Janela de atendimento de 24h (Meta): se o contato mandou mensagem nas
+    // últimas 24h, a API oficial aceita texto livre — template desnecessário.
+    // Fonte: conversations.last_customer_message_at (trigger preenche em todo inbound).
+    const { data: lastInbound } = useQuery({
+        queryKey: ["meta-service-window", selectedContact],
+        queryFn: async () => {
+            const { data } = await supabase
+                .from("conversations")
+                .select("last_customer_message_at")
+                .eq("contact_id", selectedContact!)
+                .not("last_customer_message_at", "is", null)
+                .order("last_customer_message_at", { ascending: false })
+                .limit(1)
+                .maybeSingle();
+            return (data as any)?.last_customer_message_at ?? null;
+        },
+        enabled: open && isMetaSelected && !!selectedContact,
+        staleTime: 30_000,
+    });
+    const windowExpiresAt = lastInbound ? new Date(lastInbound).getTime() + 24 * 60 * 60 * 1000 : null;
+    const windowOpen = isMetaSelected && windowExpiresAt != null && windowExpiresAt > Date.now();
+    const windowHoursLeft = windowOpen ? Math.max(1, Math.floor((windowExpiresAt! - Date.now()) / 3_600_000)) : 0;
+    // Texto livre permitido: API não oficial sempre; Meta só com janela aberta
+    const freeTextAllowed = !isMetaSelected || windowOpen;
+
     // Fetch templates for Meta instance
     const { data: metaTemplates, isLoading: loadingTemplates } = useQuery({
         queryKey: ["meta-templates-newmsg", selectedInstanceObj?.id],
@@ -169,11 +194,11 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
             toast({ title: "Campos obrigatórios", description: "Selecione instância e número.", variant: "destructive" });
             return;
         }
-        if (isMetaSelected && !selectedTemplate) {
+        if (isMetaSelected && !windowOpen && !selectedTemplate) {
             toast({ title: "Template obrigatório", description: "Selecione um template para enviar via API oficial.", variant: "destructive" });
             return;
         }
-        if (!isMetaSelected && !message) {
+        if (freeTextAllowed && !message) {
             toast({ title: "Campos obrigatórios", description: "Digite uma mensagem.", variant: "destructive" });
             return;
         }
@@ -187,10 +212,14 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
             return;
         }
 
+        // Meta com janela de 24h aberta = texto livre; envio adiado para depois
+        // da resolução da conversa (evolution-send-message salva a mensagem)
+        const metaFreeText = isMetaSelected && windowOpen;
+
         try {
             let apiData: any = {};
 
-            if (isMetaSelected) {
+            if (isMetaSelected && !metaFreeText) {
                 // Send via Meta template API
                 let templateComponents: any[] | undefined;
                 if (sendParams.length > 0 && sendParams.some(p => p.trim())) {
@@ -206,7 +235,7 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
                     template_components: templateComponents,
                 });
                 apiData = { key: { id: result.message_id } };
-            } else {
+            } else if (!isMetaSelected) {
                 // Send via UZAPI API
                 const response = await fetch(`https://clinvia.uazapi.com/send/text`, {
                     method: "POST",
@@ -357,25 +386,42 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
                 }
             }
 
-            // 2.3 Insert Message
-            const msgBody = isMetaSelected
-                ? `*Template enviado: ${selectedTemplate?.name}*\n${getPreviewText(selectedTemplate)}`
-                : message;
-            const { error: messageError } = await supabase
-                .from("messages")
-                .insert({
-                    conversation_id: conversation.id,
-                    body: msgBody,
-                    direction: "outbound",
-                    message_type: "text",
-                    evolution_id: apiData?.key?.id || null,
-                    user_id: ownerId,
+            // 2.3 Insert/Send Message
+            if (metaFreeText) {
+                // Janela 24h aberta: texto livre via evolution-send-message
+                // (roteia p/ meta-send-message e salva a mensagem server-side)
+                const session = (await supabase.auth.getSession()).data.session;
+                const { data: sendData, error: sendError } = await supabase.functions.invoke("evolution-send-message", {
+                    headers: session ? { Authorization: `Bearer ${session.access_token}` } : {},
+                    body: {
+                        conversationId: conversation.id,
+                        contactId: contact.id,
+                        body: message,
+                        messageType: "text",
+                    },
                 });
+                if (sendError) throw new Error(sendError.message || "Falha ao enviar mensagem");
+                if (sendData?.error) throw new Error(sendData.error);
+            } else {
+                const msgBody = isMetaSelected
+                    ? `*Template enviado: ${selectedTemplate?.name}*\n${getPreviewText(selectedTemplate)}`
+                    : message;
+                const { error: messageError } = await supabase
+                    .from("messages")
+                    .insert({
+                        conversation_id: conversation.id,
+                        body: msgBody,
+                        direction: "outbound",
+                        message_type: "text",
+                        evolution_id: apiData?.key?.id || null,
+                        user_id: ownerId,
+                    });
 
-            if (messageError) throw messageError;
+                if (messageError) throw messageError;
+            }
 
             // Log de envio de template para o dashboard Satisfação
-            if (isMetaSelected && selectedTemplate?.name && ownerId) {
+            if (isMetaSelected && !metaFreeText && selectedTemplate?.name && ownerId) {
                 await supabase.from("template_sends" as any).insert({
                     user_id: ownerId,
                     template_name: selectedTemplate.name,
@@ -386,7 +432,7 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
                 });
             }
 
-            toast({ title: isMetaSelected ? "Template enviado com sucesso!" : "Mensagem enviada com sucesso!" });
+            toast({ title: isMetaSelected && !metaFreeText ? "Template enviado com sucesso!" : "Mensagem enviada com sucesso!" });
             onOpenChange(false);
             setSelectedInstance("");
             setSelectedContact(null);
@@ -474,7 +520,7 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
                         </p>
                     </div>
 
-                    {isMetaSelected ? (
+                    {isMetaSelected && !windowOpen ? (
                         <div className="space-y-2">
                             <Label className="flex items-center gap-2">
                                 <LayoutTemplate className="w-4 h-4" />
@@ -544,6 +590,11 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
                     ) : (
                         <div className="space-y-2">
                             <Label>Mensagem</Label>
+                            {isMetaSelected && windowOpen && (
+                                <div className="rounded-md border border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40 p-2.5 text-xs text-emerald-800 dark:text-emerald-200">
+                                    Janela de atendimento aberta (~{windowHoursLeft}h restantes) — o cliente respondeu nas últimas 24h, então uma mensagem comum pode ser enviada sem necessidade de template.
+                                </div>
+                            )}
                             <Textarea
                                 value={message}
                                 onChange={(e) => setMessage(e.target.value)}
