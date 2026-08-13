@@ -213,24 +213,31 @@ export function MensagensAutomaticasSection() {
         enabled: !!ownerId,
     });
 
-    // Mensagens dos templates de sistema no dia selecionado
+    // Mensagens dos templates de sistema no dia selecionado — RPC une messages
+    // (vivas) + messages_history (arquivadas ao resolver a conversa); sem isso
+    // os dias passados zeravam conforme as conversas eram encerradas
     const { data: messages } = useQuery({
         queryKey: ["automation-msgs", ownerId, day.toDateString()],
         queryFn: async (): Promise<TplMessage[]> => {
             const start = new Date(day);
             const end = new Date(day);
             end.setDate(end.getDate() + 1);
-            const { data, error } = await supabase
-                .from("messages")
-                .select("id, body, status, created_at, conversation:conversations!inner(user_id, contact:contacts(id, push_name, phone, number))")
-                .eq("conversation.user_id", ownerId!)
-                .eq("direction", "outbound")
-                .ilike("body", "%Template enviado: sys\\_%")
-                .gte("created_at", start.toISOString())
-                .lt("created_at", end.toISOString())
-                .order("created_at", { ascending: true });
+            const { data, error } = await (supabase.rpc as any)("get_automation_template_messages", {
+                p_start: start.toISOString(),
+                p_end: end.toISOString(),
+            });
             if (error) throw error;
-            return (data || []) as unknown as TplMessage[];
+            return ((data || []) as any[]).map((r) => ({
+                id: r.id,
+                body: r.body,
+                status: r.status,
+                created_at: r.created_at,
+                conversation: {
+                    contact: r.contact_id
+                        ? { id: r.contact_id, push_name: r.contact_name, phone: r.contact_phone, number: null }
+                        : null,
+                },
+            }));
         },
         enabled: !!ownerId && !!hasMeta,
         refetchInterval: 60_000,
