@@ -9,6 +9,7 @@ import {
     AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
     AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import { cn, formatCurrency } from "@/lib/utils";
 import { Campaign, useCampaignMutations, useInstanceNames } from "@/hooks/useCampaigns";
@@ -36,6 +37,8 @@ export const TEMPLATE_STATUS: Record<string, { label: string; className: string 
 };
 
 const EDITABLE_STATUSES = ["scheduled", "awaiting_template", "error"];
+/** Campanhas concluídas (já disparadas ou vencidas) podem ser reenviadas. */
+export const RESENDABLE_STATUSES = ["dispatched", "expired"];
 
 /** Confirmação de reenvio de campanha disparada (compartilhado /campanhas + dashboard). */
 export function ResendCampaignDialog({
@@ -175,18 +178,23 @@ export function CampaignCard({ campaign, stats, onEdit, onResend }: CampaignCard
                         {(stats?.failed_count ?? counts.failed) ? ` · ${stats?.failed_count ?? counts.failed} falhas` : ""}
                     </p>
                 </div>
-                {campaign.status === "dispatched" && onResend && (
-                    <span
-                        role="button"
-                        tabIndex={0}
-                        title="Reenviar campanha"
-                        onClick={(e) => { e.stopPropagation(); setConfirmResend(true); }}
-                        onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); setConfirmResend(true); } }}
-                        className="shrink-0 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground border rounded-md px-2 py-1.5 hover:bg-muted transition-colors"
-                    >
-                        <RotateCcw className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">Reenviar campanha</span>
-                    </span>
+                {RESENDABLE_STATUSES.includes(campaign.status) && onResend && (
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <span
+                                    role="button"
+                                    tabIndex={0}
+                                    onClick={(e) => { e.stopPropagation(); setConfirmResend(true); }}
+                                    onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); setConfirmResend(true); } }}
+                                    className="shrink-0 flex items-center text-muted-foreground hover:text-foreground border rounded-md p-1.5 hover:bg-muted transition-colors"
+                                >
+                                    <RotateCcw className="w-3.5 h-3.5" />
+                                </span>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="text-xs">Reenviar campanha</TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
                 )}
                 <ChevronDown className={cn("w-4 h-4 text-muted-foreground shrink-0 transition-transform", expanded && "rotate-180")} />
             </button>

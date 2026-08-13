@@ -10,8 +10,10 @@ import {
     CAMPAIGN_STATUS,
     TEMPLATE_STATUS,
     COST_PER_MSG_USD,
+    RESENDABLE_STATUSES,
     ResendCampaignDialog,
 } from "@/components/campaigns/CampaignCard";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { CampaignContactsTable } from "@/components/campaigns/CampaignContactsTable";
 import { useUsdBrlRate } from "@/hooks/useUsdBrlRate";
 
@@ -110,18 +112,23 @@ export function CampaignExpandableCard({ campaign, stats, onResend }: CampaignEx
                     </div>
                 </div>
 
-                {campaign.status === "dispatched" && onResend && (
-                    <span
-                        role="button"
-                        tabIndex={0}
-                        title="Reenviar campanha"
-                        onClick={(e) => { e.stopPropagation(); setConfirmResend(true); }}
-                        onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); setConfirmResend(true); } }}
-                        className="shrink-0 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground border rounded-md px-2 py-1.5 hover:bg-muted transition-colors"
-                    >
-                        <RotateCcw className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">Reenviar campanha</span>
-                    </span>
+                {RESENDABLE_STATUSES.includes(campaign.status) && onResend && (
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <span
+                                    role="button"
+                                    tabIndex={0}
+                                    onClick={(e) => { e.stopPropagation(); setConfirmResend(true); }}
+                                    onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); setConfirmResend(true); } }}
+                                    className="shrink-0 flex items-center text-muted-foreground hover:text-foreground border rounded-md p-1.5 hover:bg-muted transition-colors"
+                                >
+                                    <RotateCcw className="w-3.5 h-3.5" />
+                                </span>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="text-xs">Reenviar campanha</TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
                 )}
                 <ChevronDown
                     className={cn("w-4 h-4 text-muted-foreground shrink-0 transition-transform", expanded && "rotate-180")}
