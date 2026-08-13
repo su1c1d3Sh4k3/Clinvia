@@ -152,6 +152,9 @@ serve(async (req) => {
                     now,
                 };
 
+                // Meta: planner materializa a fila (Agendadas do painel + retry 3x)
+                if (isMeta) await planQueue(ctx);
+
                 const r1 = await processConfirm24h(ctx);
                 const r2 = await processReminder2h(ctx);
                 const r3 = await processFeedback24h(ctx);
@@ -197,45 +200,295 @@ function isTemplateEnabled(ctx: CronContext, tplName: string): boolean {
         : isUazapiMessageEnabled(ctx.uazapiMessages, tplName);
 }
 
+// ---------------------------------------------------------------------------
+// Fila materializada (automation_send_queue) — SÓ Meta (decisão do usuário).
+// Planner projeta os envios futuros ('scheduled'); os senders processam a fila
+// com até 3 tentativas (30min entre elas) → 'sent' | 'failed' (Rejeitada) |
+// 'canceled' (agendamento cancelado antes do envio) | 'skipped' (sem número).
+// Template desligado NÃO entra na fila (não conta como Agendada).
+// ---------------------------------------------------------------------------
+
+const QUEUE_MAX_ATTEMPTS = 3;
+const QUEUE_RETRY_DELAY_MS = 30 * 60_000;
+
+interface QueueTarget {
+    contactId: string;
+    dateBR: string;
+    row?: any; // linha da automation_send_queue (modo Meta)
+}
+
+async function updateQueueRow(supabase: any, id: string, patch: Record<string, unknown>): Promise<void> {
+    try {
+        await supabase
+            .from("automation_send_queue")
+            .update({ ...patch, updated_at: new Date().toISOString() })
+            .eq("id", id);
+    } catch (err) {
+        console.error("[ac-cron] updateQueueRow error:", err);
+    }
+}
+
+async function queueAttemptFailed(supabase: any, row: any, errorMsg: string): Promise<void> {
+    const attempts = (row.attempts || 0) + 1;
+    const failedFinal = attempts >= QUEUE_MAX_ATTEMPTS;
+    await updateQueueRow(supabase, row.id, {
+        attempts,
+        last_error: String(errorMsg).slice(0, 500),
+        status: failedFinal ? "failed" : "scheduled",
+        next_attempt_at: failedFinal ? null : new Date(Date.now() + QUEUE_RETRY_DELAY_MS).toISOString(),
+    });
+}
+
+/** Linhas da fila prontas para envio; marca como 'failed' as que perderam a janela. */
+async function fetchDueQueueTargets(
+    ctx: CronContext,
+    flowType: string,
+    opts: { expireAfterMs?: number; expireIfDayArrived?: boolean },
+): Promise<QueueTarget[]> {
+    const { supabase, userId, now } = ctx;
+    const { data: rows } = await supabase
+        .from("automation_send_queue")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("flow_type", flowType)
+        .eq("status", "scheduled")
+        .lte("scheduled_for", now.toISOString())
+        .order("scheduled_for", { ascending: true });
+
+    const todayYmd = utcToBrasiliaParts(now).ymd;
+    const due: QueueTarget[] = [];
+    for (const row of rows || []) {
+        // confirm_24h só faz sentido na véspera ("amanhã às..."); no dia = janela perdida
+        const dayArrived = !!opts.expireIfDayArrived && row.appointment_date <= todayYmd;
+        const msExpired = opts.expireAfterMs != null &&
+            now.getTime() > new Date(row.scheduled_for).getTime() + opts.expireAfterMs;
+        if (dayArrived || msExpired) {
+            await updateQueueRow(supabase, row.id, {
+                status: "failed",
+                last_error: row.last_error || "janela de envio perdida (não enviada a tempo)",
+            });
+            continue;
+        }
+        if (row.next_attempt_at && new Date(row.next_attempt_at).getTime() > now.getTime()) continue;
+        due.push({ contactId: row.contact_id, dateBR: row.appointment_date, row });
+    }
+    return due;
+}
+
+/** Projeta envios futuros na fila + sweep de cancelamento. Roda a cada ciclo (Meta). */
+async function planQueue(ctx: CronContext): Promise<void> {
+    const { supabase, userId, now } = ctx;
+    try {
+        const todayYmd = utcToBrasiliaParts(now).ymd;
+        type Plan = {
+            flow: string;
+            groups: Map<string, any[]>;
+            tplFor: (g: any[]) => string;
+            schedFor: (g: any[]) => Date;
+        };
+        const plans: Plan[] = [];
+
+        // confirm_24h: agendamentos de dias FUTUROS (BRT) nas próximas 50h; envio = start−24h
+        const { data: confApts } = await supabase
+            .from("appointments")
+            .select("id, contact_id, start_time")
+            .eq("user_id", userId)
+            .eq("type", "appointment")
+            .in("status", ["pending", "confirmed", "rescheduled"])
+            .gte("start_time", now.toISOString())
+            .lte("start_time", new Date(now.getTime() + 50 * 3600_000).toISOString());
+        const confGroups = groupByContactAndDay(confApts || []);
+        for (const key of [...confGroups.keys()]) {
+            const dateBR = key.split("__")[1];
+            if (dateBR <= todayYmd) confGroups.delete(key); // confirmação é sempre na véspera
+        }
+        plans.push({
+            flow: "confirm_24h",
+            groups: confGroups,
+            tplFor: (g) => (g.length > 1 ? TPL_CONFIRM_MULTI : TPL_CONFIRM_SINGLE),
+            schedFor: (g) => new Date(new Date(g[0].start_time).getTime() - 24 * 3600_000),
+        });
+
+        // reminder_2h: agendamentos das próximas 26h; envio = start−2h
+        const { data: remApts } = await supabase
+            .from("appointments")
+            .select("id, contact_id, start_time")
+            .eq("user_id", userId)
+            .eq("type", "appointment")
+            .in("status", ["pending", "confirmed", "rescheduled"])
+            .gte("start_time", now.toISOString())
+            .lte("start_time", new Date(now.getTime() + 26 * 3600_000).toISOString());
+        plans.push({
+            flow: "reminder_2h",
+            groups: groupByContactAndDay(remApts || []),
+            tplFor: () => TPL_REMINDER,
+            schedFor: (g) => new Date(new Date(g[0].start_time).getTime() - 2 * 3600_000),
+        });
+
+        // feedback_24h: atendimentos encerrados nas últimas 48h; envio = end+24h
+        const { data: fbApts } = await supabase
+            .from("appointments")
+            .select("id, contact_id, start_time, end_time")
+            .eq("user_id", userId)
+            .eq("type", "appointment")
+            .in("status", ["confirmed", "completed", "waiting"])
+            .gte("end_time", new Date(now.getTime() - 48 * 3600_000).toISOString())
+            .lte("end_time", now.toISOString());
+        plans.push({
+            flow: "feedback_24h",
+            groups: groupByContactAndDay(fbApts || []),
+            tplFor: () => TPL_FEEDBACK,
+            schedFor: (g) => new Date(new Date(g[0].end_time || g[0].start_time).getTime() + 24 * 3600_000),
+        });
+
+        // Linhas existentes no horizonte (diff + sweep de cancelamento)
+        const { data: existingRows } = await supabase
+            .from("automation_send_queue")
+            .select("id, flow_type, contact_id, appointment_date, status, template_name, appointment_ids, scheduled_for")
+            .eq("user_id", userId)
+            .gte("scheduled_for", new Date(now.getTime() - 48 * 3600_000).toISOString());
+        const rowByKey = new Map<string, any>();
+        for (const r of existingRows || []) {
+            rowByKey.set(`${r.flow_type}__${r.contact_id}__${r.appointment_date}`, r);
+        }
+
+        const plannedKeys = new Set<string>();
+        const inserts: any[] = [];
+
+        for (const plan of plans) {
+            for (const [key, group] of plan.groups) {
+                const [contactId, dateBR] = key.split("__");
+                const tplName = plan.tplFor(group);
+                if (!isTemplateEnabled(ctx, tplName)) continue; // desligado ≠ Agendada
+                const mapKey = `${plan.flow}__${contactId}__${dateBR}`;
+                plannedKeys.add(mapKey);
+                const schedDate = plan.schedFor(group);
+                const ids = group.map((a: any) => a.id).sort();
+                const row = rowByKey.get(mapKey);
+                if (!row) {
+                    inserts.push({
+                        user_id: userId,
+                        flow_type: plan.flow,
+                        template_name: tplName,
+                        contact_id: contactId,
+                        appointment_ids: ids,
+                        appointment_date: dateBR,
+                        scheduled_for: schedDate.toISOString(),
+                    });
+                } else if (row.status === "scheduled") {
+                    // Replaneja enquanto não enviada (novo agendamento no dia,
+                    // reagendamento muda horário, single→multi etc.)
+                    const sameIds = JSON.stringify([...(row.appointment_ids || [])].sort()) === JSON.stringify(ids);
+                    const sameSched = Math.abs(new Date(row.scheduled_for).getTime() - schedDate.getTime()) < 1000;
+                    if (row.template_name !== tplName || !sameIds || !sameSched) {
+                        await updateQueueRow(supabase, row.id, {
+                            template_name: tplName,
+                            appointment_ids: ids,
+                            scheduled_for: schedDate.toISOString(),
+                        });
+                    }
+                }
+            }
+        }
+
+        if (inserts.length) {
+            await supabase
+                .from("automation_send_queue")
+                .upsert(inserts, { onConflict: "user_id,flow_type,contact_id,appointment_date", ignoreDuplicates: true });
+        }
+
+        // Sweep: linhas 'scheduled' que saíram do plano — se nenhum appointment
+        // do grupo continua válido → cancelada (não conta como Agendada).
+        // Se ainda houver appointment válido (só saiu da janela), a expiração
+        // do sender resolve (failed).
+        const unplanned = (existingRows || []).filter((r: any) =>
+            r.status === "scheduled" && !plannedKeys.has(`${r.flow_type}__${r.contact_id}__${r.appointment_date}`));
+        if (unplanned.length) {
+            const allIds = [...new Set(unplanned.flatMap((r: any) => r.appointment_ids || []))];
+            let statusById = new Map<string, string>();
+            if (allIds.length) {
+                const { data: apts } = await supabase
+                    .from("appointments")
+                    .select("id, status")
+                    .in("id", allIds);
+                statusById = new Map((apts || []).map((a: any) => [a.id, a.status]));
+            }
+            const validByFlow: Record<string, string[]> = {
+                confirm_24h: ["pending", "confirmed", "rescheduled"],
+                reminder_2h: ["pending", "confirmed", "rescheduled"],
+                feedback_24h: ["confirmed", "completed", "waiting"],
+            };
+            for (const r of unplanned) {
+                const stillValid = (r.appointment_ids || []).some((id: string) =>
+                    (validByFlow[r.flow_type] || []).includes(statusById.get(id) || ""));
+                if (!stillValid) {
+                    await updateQueueRow(supabase, r.id, {
+                        status: "canceled",
+                        last_error: "agendamento cancelado antes do envio",
+                    });
+                }
+            }
+        }
+    } catch (err) {
+        console.error("[ac-cron] planQueue error:", err);
+    }
+}
+
 async function processConfirm24h(ctx: CronContext): Promise<{ sent: number; errors: number }> {
     const { supabase, userId, now } = ctx;
-    const from = new Date(now.getTime() + 23 * 3600_000);
-    const to = new Date(now.getTime() + 25 * 3600_000);
 
-    // Find appointments in the 24h window (trigger)
-    const { data: windowAppointments } = await supabase
-        .from("appointments")
-        .select("id, contact_id, start_time, service_name, professional_name")
-        .eq("user_id", userId)
-        .eq("type", "appointment")
-        .in("status", ["pending", "confirmed", "rescheduled"])
-        .gte("start_time", from.toISOString())
-        .lte("start_time", to.toISOString());
+    let targets: QueueTarget[];
+    if (ctx.isMeta) {
+        // Meta: fila materializada (planner já projetou); expira quando o dia chega
+        targets = await fetchDueQueueTargets(ctx, "confirm_24h", { expireIfDayArrived: true });
+    } else {
+        // UAZAPI: varredura por janela (comportamento original, fora da fila)
+        const from = new Date(now.getTime() + 23 * 3600_000);
+        const to = new Date(now.getTime() + 25 * 3600_000);
+        const { data: windowAppointments } = await supabase
+            .from("appointments")
+            .select("id, contact_id, start_time, service_name, professional_name")
+            .eq("user_id", userId)
+            .eq("type", "appointment")
+            .in("status", ["pending", "confirmed", "rescheduled"])
+            .gte("start_time", from.toISOString())
+            .lte("start_time", to.toISOString());
 
-    if (!windowAppointments?.length) return { sent: 0, errors: 0 };
-
-    // Get unique contact+day pairs from window hits
-    const contactDays = new Map<string, { contactId: string; dateBR: string }>();
-    for (const apt of windowAppointments) {
-        if (!apt.contact_id) continue;
-        const dateBR = utcToBrasiliaParts(new Date(apt.start_time)).ymd;
-        const key = `${apt.contact_id}__${dateBR}`;
-        if (!contactDays.has(key)) contactDays.set(key, { contactId: apt.contact_id, dateBR });
+        const contactDays = new Map<string, QueueTarget>();
+        for (const apt of windowAppointments || []) {
+            if (!apt.contact_id) continue;
+            const dateBR = utcToBrasiliaParts(new Date(apt.start_time)).ymd;
+            const key = `${apt.contact_id}__${dateBR}`;
+            if (!contactDays.has(key)) contactDays.set(key, { contactId: apt.contact_id, dateBR });
+        }
+        targets = [...contactDays.values()];
     }
+
+    if (!targets.length) return { sent: 0, errors: 0 };
 
     let sent = 0, errors = 0;
 
-    for (const { contactId, dateBR } of contactDays.values()) {
+    for (const target of targets) {
+        const { contactId, dateBR, row } = target;
         try {
             // Check if already sent
             const { data: existing } = await supabase
                 .from("appointment_confirmation_sessions")
-                .select("id")
+                .select("id, created_at, last_prompt_message_id")
                 .eq("contact_id", contactId)
                 .eq("flow_type", "confirm_24h")
                 .eq("appointment_date", dateBR)
                 .maybeSingle();
-            if (existing) continue;
+            if (existing) {
+                if (row) {
+                    await updateQueueRow(supabase, row.id, {
+                        status: "sent",
+                        sent_at: existing.created_at,
+                        message_id: existing.last_prompt_message_id,
+                    });
+                }
+                continue;
+            }
 
             // Fetch ALL appointments for this contact on this day (not just window)
             const dayStart = `${dateBR}T00:00:00-03:00`;
@@ -252,31 +505,39 @@ async function processConfirm24h(ctx: CronContext): Promise<{ sent: number; erro
                 .order("start_time", { ascending: true });
 
             const group = (allDayAppointments || []).map((a: any) => ({ ...a, _dateBR: dateBR }));
-            if (!group.length) continue;
+            if (!group.length) {
+                if (row) await updateQueueRow(supabase, row.id, { status: "canceled", last_error: "agendamento cancelado antes do envio" });
+                continue;
+            }
 
             const { data: contact } = await supabase
                 .from("contacts")
                 .select("id, push_name, number, instance_id")
                 .eq("id", contactId)
                 .single();
-            if (!contact?.number) continue;
-
-            const { conversationId } = await resolveConversation(supabase, userId, ctx.instance.id, contact);
-
-            const firstName = (contact.push_name || "").split(" ")[0] || "cliente";
+            if (!contact?.number) {
+                if (row) await updateQueueRow(supabase, row.id, { status: "skipped", last_error: "contato sem número de WhatsApp" });
+                continue;
+            }
 
             // Switch liga/desliga (independente por provedor)
             const tplName = group.length === 1 ? TPL_CONFIRM_SINGLE : TPL_CONFIRM_MULTI;
             if (!isTemplateEnabled(ctx, tplName)) {
                 console.log(`[ac-cron] ${tplName} disabled by user — skipping confirm_24h for ${contactId}`);
+                if (row) await updateQueueRow(supabase, row.id, { status: "skipped", last_error: "template desativado pelo cliente", template_name: tplName });
                 continue;
             }
+
+            const { conversationId } = await resolveConversation(supabase, userId, ctx.instance.id, contact);
+
+            const firstName = (contact.push_name || "").split(" ")[0] || "cliente";
 
             let sendRes: { messageId: string | null };
             if (ctx.isMeta) {
                 // Meta: template obrigatório — só envia se APPROVED (sem fallback)
                 if (ctx.templateStatuses.get(tplName) !== "APPROVED") {
                     console.log(`[ac-cron] template ${tplName} not APPROVED — skipping confirm_24h for ${contactId}`);
+                    if (row) await queueAttemptFailed(supabase, row, `template ${tplName} não aprovado na Meta`);
                     continue;
                 }
                 const a = group[0];
@@ -358,11 +619,22 @@ async function processConfirm24h(ctx: CronContext): Promise<{ sent: number; erro
                 last_prompt_message_id: sendRes.messageId,
             });
 
+            if (row) {
+                await updateQueueRow(supabase, row.id, {
+                    status: "sent",
+                    sent_at: new Date().toISOString(),
+                    message_id: sendRes.messageId,
+                    template_name: tplName,
+                    appointment_ids: group.map((a: any) => a.id),
+                });
+            }
+
             sent++;
             if (STAGGER_MS > 0) await sleep(STAGGER_MS);
         } catch (err) {
             console.error("[ac-cron] confirm_24h error:", err);
             errors++;
+            if (row) await queueAttemptFailed(supabase, row, String((err as any)?.message || err));
         }
     }
 
@@ -375,40 +647,57 @@ async function processConfirm24h(ctx: CronContext): Promise<{ sent: number; erro
 
 async function processReminder2h(ctx: CronContext): Promise<{ sent: number; errors: number }> {
     const { supabase, userId, now } = ctx;
-    const from = new Date(now.getTime() + 110 * 60_000); // 1h50m
-    const to = new Date(now.getTime() + 130 * 60_000);   // 2h10m
 
-    const { data: windowAppointments } = await supabase
-        .from("appointments")
-        .select("id, contact_id, start_time, service_name, professional_name")
-        .eq("user_id", userId)
-        .eq("type", "appointment")
-        .in("status", ["pending", "confirmed", "rescheduled"])
-        .gte("start_time", from.toISOString())
-        .lte("start_time", to.toISOString());
+    let targets: QueueTarget[];
+    if (ctx.isMeta) {
+        // Meta: fila; expira quando chega o horário do atendimento (scheduled_for = start−2h)
+        targets = await fetchDueQueueTargets(ctx, "reminder_2h", { expireAfterMs: 2 * 3600_000 });
+    } else {
+        const from = new Date(now.getTime() + 110 * 60_000); // 1h50m
+        const to = new Date(now.getTime() + 130 * 60_000);   // 2h10m
+        const { data: windowAppointments } = await supabase
+            .from("appointments")
+            .select("id, contact_id, start_time, service_name, professional_name")
+            .eq("user_id", userId)
+            .eq("type", "appointment")
+            .in("status", ["pending", "confirmed", "rescheduled"])
+            .gte("start_time", from.toISOString())
+            .lte("start_time", to.toISOString());
 
-    if (!windowAppointments?.length) return { sent: 0, errors: 0 };
-
-    const contactDays = new Map<string, { contactId: string; dateBR: string }>();
-    for (const apt of windowAppointments) {
-        if (!apt.contact_id) continue;
-        const dateBR = utcToBrasiliaParts(new Date(apt.start_time)).ymd;
-        const key = `${apt.contact_id}__${dateBR}`;
-        if (!contactDays.has(key)) contactDays.set(key, { contactId: apt.contact_id, dateBR });
+        const contactDays = new Map<string, QueueTarget>();
+        for (const apt of windowAppointments || []) {
+            if (!apt.contact_id) continue;
+            const dateBR = utcToBrasiliaParts(new Date(apt.start_time)).ymd;
+            const key = `${apt.contact_id}__${dateBR}`;
+            if (!contactDays.has(key)) contactDays.set(key, { contactId: apt.contact_id, dateBR });
+        }
+        targets = [...contactDays.values()];
     }
+
+    if (!targets.length) return { sent: 0, errors: 0 };
 
     let sent = 0, errors = 0;
 
-    for (const { contactId, dateBR } of contactDays.values()) {
+    for (const target of targets) {
+        const { contactId, dateBR, row } = target;
         try {
             const { data: existing } = await supabase
                 .from("appointment_confirmation_sessions")
-                .select("id")
+                .select("id, created_at, last_prompt_message_id")
                 .eq("contact_id", contactId)
                 .eq("flow_type", "reminder_2h")
                 .eq("appointment_date", dateBR)
                 .maybeSingle();
-            if (existing) continue;
+            if (existing) {
+                if (row) {
+                    await updateQueueRow(supabase, row.id, {
+                        status: "sent",
+                        sent_at: existing.created_at,
+                        message_id: existing.last_prompt_message_id,
+                    });
+                }
+                continue;
+            }
 
             // Fetch ALL appointments for this contact on this day
             const dayStart = `${dateBR}T00:00:00-03:00`;
@@ -425,31 +714,40 @@ async function processReminder2h(ctx: CronContext): Promise<{ sent: number; erro
                 .order("start_time", { ascending: true });
 
             const group = (allDayAppointments || []).map((a: any) => ({ ...a, _dateBR: dateBR }));
-            if (!group.length) continue;
+            if (!group.length) {
+                if (row) await updateQueueRow(supabase, row.id, { status: "canceled", last_error: "agendamento cancelado antes do envio" });
+                continue;
+            }
 
             const { data: contact } = await supabase
                 .from("contacts")
                 .select("id, push_name, number, instance_id")
                 .eq("id", contactId)
                 .single();
-            if (!contact?.number) continue;
+            if (!contact?.number) {
+                if (row) await updateQueueRow(supabase, row.id, { status: "skipped", last_error: "contato sem número de WhatsApp" });
+                continue;
+            }
+
+            if (!isTemplateEnabled(ctx, TPL_REMINDER)) {
+                console.log(`[ac-cron] ${TPL_REMINDER} disabled by user — skipping reminder_2h for ${contactId}`);
+                if (row) await updateQueueRow(supabase, row.id, { status: "skipped", last_error: "template desativado pelo cliente" });
+                continue;
+            }
 
             const { conversationId } = await resolveConversation(supabase, userId, ctx.instance.id, contact);
 
             const firstName = (contact.push_name || "").split(" ")[0] || "cliente";
 
-            if (!isTemplateEnabled(ctx, TPL_REMINDER)) {
-                console.log(`[ac-cron] ${TPL_REMINDER} disabled by user — skipping reminder_2h for ${contactId}`);
-                continue;
-            }
-
+            let reminderMsgId: string | null = null;
             if (ctx.isMeta) {
                 if (ctx.templateStatuses.get(TPL_REMINDER) !== "APPROVED") {
                     console.log(`[ac-cron] template ${TPL_REMINDER} not APPROVED — skipping reminder_2h for ${contactId}`);
+                    if (row) await queueAttemptFailed(supabase, row, `template ${TPL_REMINDER} não aprovado na Meta`);
                     continue;
                 }
                 const times = group.map((g: any) => formatTimeBR(g.start_time)).join(" e ");
-                await sendMetaTemplate({
+                const res = await sendMetaTemplate({
                     conversationId,
                     templateName: TPL_REMINDER,
                     parameters: buildTemplateParameters(TPL_REMINDER, ctx.variableMaps, {
@@ -459,6 +757,7 @@ async function processReminder2h(ctx: CronContext): Promise<{ sent: number; erro
                     }),
                     bodyPreview: buildReminderMessage(firstName, group),
                 });
+                reminderMsgId = res?.messageId ?? null;
                 await logTemplateSend(supabase, {
                     userId, templateName: TPL_REMINDER, conversationId,
                     contactId, sentVia: "automation",
@@ -490,13 +789,24 @@ async function processReminder2h(ctx: CronContext): Promise<{ sent: number; erro
                 flow_type: "reminder_2h",
                 state: "completed",
                 ended_at: new Date().toISOString(),
+                last_prompt_message_id: reminderMsgId,
             });
+
+            if (row) {
+                await updateQueueRow(supabase, row.id, {
+                    status: "sent",
+                    sent_at: new Date().toISOString(),
+                    message_id: reminderMsgId,
+                    appointment_ids: group.map((a: any) => a.id),
+                });
+            }
 
             sent++;
             if (STAGGER_MS > 0) await sleep(STAGGER_MS);
         } catch (err) {
             console.error("[ac-cron] reminder_2h error:", err);
             errors++;
+            if (row) await queueAttemptFailed(supabase, row, String((err as any)?.message || err));
         }
     }
 
@@ -521,10 +831,9 @@ async function processFeedback24h(ctx: CronContext): Promise<{ sent: number; err
         .gte("end_time", from.toISOString())
         .lte("end_time", to.toISOString());
 
-    if (!windowAppointments?.length) return { sent: 0, errors: 0 };
-
-    // Update confirmed/waiting → completed for ALL found
-    for (const apt of windowAppointments) {
+    // Update confirmed/waiting → completed for ALL found (roda nos 2 modos —
+    // auto-complete independe da fila/switch de template)
+    for (const apt of windowAppointments || []) {
         if (apt.status === "confirmed" || apt.status === "waiting") {
             await supabase.from("appointments")
                 .update({ status: "completed" })
@@ -532,29 +841,49 @@ async function processFeedback24h(ctx: CronContext): Promise<{ sent: number; err
         }
     }
 
-    const contactDays = new Map<string, { contactId: string; dateBR: string }>();
-    for (const apt of windowAppointments) {
-        if (!apt.contact_id) continue;
-        const dateBR = utcToBrasiliaParts(new Date(apt.start_time)).ymd;
-        const key = `${apt.contact_id}__${dateBR}`;
-        if (!contactDays.has(key)) contactDays.set(key, { contactId: apt.contact_id, dateBR });
+    let targets: QueueTarget[];
+    if (ctx.isMeta) {
+        // Meta: fila; expira 24h após o horário previsto de envio
+        targets = await fetchDueQueueTargets(ctx, "feedback_24h", { expireAfterMs: 24 * 3600_000 });
+    } else {
+        const contactDays = new Map<string, QueueTarget>();
+        for (const apt of windowAppointments || []) {
+            if (!apt.contact_id) continue;
+            const dateBR = utcToBrasiliaParts(new Date(apt.start_time)).ymd;
+            const key = `${apt.contact_id}__${dateBR}`;
+            if (!contactDays.has(key)) contactDays.set(key, { contactId: apt.contact_id, dateBR });
+        }
+        targets = [...contactDays.values()];
     }
+
+    if (!targets.length) return { sent: 0, errors: 0 };
 
     let sent = 0, errors = 0;
 
-    for (const { contactId, dateBR } of contactDays.values()) {
+    for (const target of targets) {
+        const { contactId, dateBR, row } = target;
         try {
             const { data: existing } = await supabase
                 .from("appointment_confirmation_sessions")
-                .select("id")
+                .select("id, created_at, last_prompt_message_id")
                 .eq("contact_id", contactId)
                 .eq("flow_type", "feedback_24h")
                 .eq("appointment_date", dateBR)
                 .maybeSingle();
-            if (existing) continue;
+            if (existing) {
+                if (row) {
+                    await updateQueueRow(supabase, row.id, {
+                        status: "sent",
+                        sent_at: existing.created_at,
+                        message_id: existing.last_prompt_message_id,
+                    });
+                }
+                continue;
+            }
 
             if (!isTemplateEnabled(ctx, TPL_FEEDBACK)) {
                 console.log(`[ac-cron] ${TPL_FEEDBACK} disabled by user — skipping feedback_24h for ${contactId}`);
+                if (row) await updateQueueRow(supabase, row.id, { status: "skipped", last_error: "template desativado pelo cliente" });
                 continue;
             }
 
@@ -573,7 +902,10 @@ async function processFeedback24h(ctx: CronContext): Promise<{ sent: number; err
                 .order("start_time", { ascending: true });
 
             const group = (allDayAppointments || []).map((a: any) => ({ ...a, _dateBR: dateBR }));
-            if (!group.length) continue;
+            if (!group.length) {
+                if (row) await updateQueueRow(supabase, row.id, { status: "canceled", last_error: "agendamento cancelado antes do envio" });
+                continue;
+            }
 
             // Also mark any remaining confirmed/waiting as completed
             for (const apt of group) {
@@ -589,7 +921,10 @@ async function processFeedback24h(ctx: CronContext): Promise<{ sent: number; err
                 .select("id, push_name, number, instance_id")
                 .eq("id", contactId)
                 .single();
-            if (!contact?.number) continue;
+            if (!contact?.number) {
+                if (row) await updateQueueRow(supabase, row.id, { status: "skipped", last_error: "contato sem número de WhatsApp" });
+                continue;
+            }
 
             const { conversationId } = await resolveConversation(supabase, userId, ctx.instance.id, contact);
 
@@ -599,6 +934,7 @@ async function processFeedback24h(ctx: CronContext): Promise<{ sent: number; err
             if (ctx.isMeta) {
                 if (ctx.templateStatuses.get(TPL_FEEDBACK) !== "APPROVED") {
                     console.log(`[ac-cron] template ${TPL_FEEDBACK} not APPROVED — skipping feedback_24h for ${contactId}`);
+                    if (row) await queueAttemptFailed(supabase, row, `template ${TPL_FEEDBACK} não aprovado na Meta`);
                     continue;
                 }
                 sendRes = await sendMetaTemplate({
@@ -689,10 +1025,20 @@ async function processFeedback24h(ctx: CronContext): Promise<{ sent: number; err
                 console.error("[ac-cron] feedback_24h CRM card error:", crmErr);
             }
 
+            if (row) {
+                await updateQueueRow(supabase, row.id, {
+                    status: "sent",
+                    sent_at: new Date().toISOString(),
+                    message_id: sendRes.messageId,
+                    appointment_ids: group.map((a: any) => a.id),
+                });
+            }
+
             sent++;
             if (STAGGER_MS > 0) await sleep(STAGGER_MS);
         } catch (err) {
             console.error("[ac-cron] feedback_24h error:", err);
+            if (row) await queueAttemptFailed(supabase, row, String((err as any)?.message || err));
             errors++;
         }
     }
@@ -827,12 +1173,16 @@ async function resolveConversation(
     instanceId: string,
     contact: { id: string; number: string; push_name: string | null; instance_id: string | null },
 ): Promise<{ conversationId: string }> {
-    // Find existing open/pending conversation
+    // Find existing open/pending conversation NA MESMA instância do envio —
+    // meta-send-message usa a instância da conversa; reutilizar conversa de
+    // outra instância (ex.: UAZAPI antiga) quebrava com
+    // "Instance is not a Meta Cloud API instance"
     const { data: existingConv } = await supabase
         .from("conversations")
         .select("id, status")
         .eq("contact_id", contact.id)
         .eq("user_id", userId)
+        .eq("instance_id", instanceId)
         .in("status", ["pending", "open"])
         .order("created_at", { ascending: false })
         .limit(1)
