@@ -14,7 +14,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { FaWhatsapp, FaInstagram, FaFacebook } from "react-icons/fa";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, CheckCircle2, Loader2, Plus, RefreshCw, Trash2, Shield, ExternalLink, Smartphone, FileText } from "lucide-react";
+import { AlertCircle, AlertTriangle, CheckCircle2, Loader2, Plus, RefreshCw, Trash2, Shield, ExternalLink, Smartphone, FileText } from "lucide-react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import Templates from "./Templates";
 import AutomaticMessages from "@/components/connections/AutomaticMessages";
@@ -26,6 +26,32 @@ const META_CONFIG_ID = import.meta.env.VITE_META_CONFIG_ID || '1804825927169026'
 
 // Confirme se esse ID está correto. Às vezes o .env sobrescreve com um valor antigo de dev.
 const INSTAGRAM_APP_ID = import.meta.env.VITE_INSTAGRAM_APP_ID || '746674508461826';
+
+// Restrições da Meta detectadas pelo meta-verify-connection (instances.restriction_type).
+// O número fica "conectado" mas a Meta recusa TODOS os envios (erro #131037).
+const META_RESTRICTION_INFO: Record<string, { badge: string; title: string; description: string; steps: string[] }> = {
+    META_DISPLAY_NAME_DECLINED: {
+        badge: "Nome recusado pela Meta",
+        title: "Nome de exibição recusado — envios bloqueados",
+        description:
+            "A Meta recusou o nome de exibição deste número. Enquanto não houver um nome aprovado, NENHUMA mensagem pode ser enviada (erro #131037 do WhatsApp) — campanhas e conversas falharão, mesmo com o número conectado.",
+        steps: [
+            "Acesse o WhatsApp Manager da sua conta Meta Business (business.facebook.com → Contas do WhatsApp → seu número).",
+            "Em \"Nome de exibição\", solicite um novo nome. Ele deve corresponder ao nome real do seu negócio (igual ao site/perfil), sem termos promocionais.",
+            "Aguarde a aprovação da Meta (geralmente até 24-48h). Assim que aprovado, os envios voltam automaticamente.",
+        ],
+    },
+    META_DISPLAY_NAME_PENDING: {
+        badge: "Nome em análise pela Meta",
+        title: "Nome de exibição em análise — envios bloqueados",
+        description:
+            "O nome de exibição deste número está em análise pela Meta. Até a aprovação, nenhuma mensagem pode ser enviada (erro #131037 do WhatsApp).",
+        steps: [
+            "Aguarde a análise da Meta (geralmente até 24-48h).",
+            "Acompanhe o status no WhatsApp Manager (business.facebook.com → Contas do WhatsApp → seu número → Nome de exibição).",
+        ],
+    },
+};
 
 const Connections = () => {
     const { user } = useAuth();
@@ -312,6 +338,18 @@ const Connections = () => {
                         });
                     } else if (data.repaired || inst.status !== 'connected') {
                         changed = true;
+                    }
+                    // Restrição da Meta (ex: nome de exibição recusado) — número
+                    // conectado mas bloqueado para envios (erro #131037)
+                    if (data.restriction) {
+                        changed = true;
+                        toast({
+                            title: "WhatsApp Oficial com restrição da Meta",
+                            description: data.restriction.message,
+                            variant: "destructive",
+                        });
+                    } else if (inst.restriction_active && (inst.restriction_type || '').startsWith('META_')) {
+                        changed = true; // restrição foi liberada — atualiza o card
                     }
                 } catch {
                     // silencioso: verificação não deve quebrar a página
@@ -832,11 +870,16 @@ const Connections = () => {
                                     <p className="text-muted-foreground">Carregando...</p>
                                 ) : metaInstances && metaInstances.length > 0 ? (
                                     <div className="space-y-4">
-                                        {metaInstances.map((instance: any) => (
+                                        {metaInstances.map((instance: any) => {
+                                            const metaRestriction = instance.restriction_active
+                                                ? META_RESTRICTION_INFO[instance.restriction_type as string]
+                                                : undefined;
+                                            return (
                                             <div
                                                 key={instance.id}
-                                                className="flex flex-col md:flex-row md:items-center md:justify-between p-3 md:p-4 border rounded-lg bg-card gap-3 md:gap-4"
+                                                className="p-3 md:p-4 border rounded-lg bg-card space-y-3"
                                             >
+                                            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-4">
                                                 <div className="flex items-center gap-4 min-w-0">
                                                     <div className="p-2 bg-blue-500/10 rounded-full shrink-0">
                                                         <FaWhatsapp className="h-5 w-5 text-green-500" />
@@ -845,6 +888,11 @@ const Connections = () => {
                                                         <div className="flex items-center gap-2 flex-wrap">
                                                             <h4 className="font-medium truncate">{instance.name || instance.user_name || 'WhatsApp Oficial'}</h4>
                                                             <MetaQualityBadge rating={qualityByInstance.get(instance.id)?.quality_rating} />
+                                                            {metaRestriction && (
+                                                                <Badge className="text-[10px] md:text-xs border bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30">
+                                                                    <AlertTriangle className="w-3 h-3 mr-1" /> {metaRestriction.badge}
+                                                                </Badge>
+                                                            )}
                                                         </div>
                                                         <p className="text-xs text-muted-foreground truncate">
                                                             WABA: {instance.meta_waba_id}
@@ -858,12 +906,18 @@ const Connections = () => {
                                                     <Badge
                                                         className={`text-[10px] md:text-xs border ${
                                                             instance.status === "connected"
-                                                                ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"
+                                                                ? metaRestriction
+                                                                    ? "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30"
+                                                                    : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"
                                                                 : "bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/30"
                                                         }`}
                                                     >
                                                         {instance.status === "connected" ? (
-                                                            <><CheckCircle2 className="w-3 h-3 mr-1" /> Conectado</>
+                                                            metaRestriction ? (
+                                                                <><AlertTriangle className="w-3 h-3 mr-1" /> Conectado — envios bloqueados</>
+                                                            ) : (
+                                                                <><CheckCircle2 className="w-3 h-3 mr-1" /> Conectado</>
+                                                            )
                                                         ) : (
                                                             <><AlertCircle className="w-3 h-3 mr-1" /> Desconectado</>
                                                         )}
@@ -890,7 +944,36 @@ const Connections = () => {
                                                     )}
                                                 </div>
                                             </div>
-                                        ))}
+                                            {metaRestriction && (
+                                                <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
+                                                    <div className="flex items-center gap-2 font-semibold text-amber-700 dark:text-amber-300">
+                                                        <AlertTriangle className="w-4 h-4 shrink-0" />
+                                                        {metaRestriction.title}
+                                                    </div>
+                                                    <p className="mt-1.5 text-xs text-amber-700/90 dark:text-amber-300/90">
+                                                        {metaRestriction.description}
+                                                    </p>
+                                                    <div className="mt-2 text-xs text-amber-700/90 dark:text-amber-300/90">
+                                                        <span className="font-semibold">Como resolver:</span>
+                                                        <ol className="mt-1 list-decimal list-inside space-y-0.5">
+                                                            {metaRestriction.steps.map((step, i) => (
+                                                                <li key={i}>{step}</li>
+                                                            ))}
+                                                        </ol>
+                                                    </div>
+                                                    <a
+                                                        href="https://business.facebook.com/wa/manage/phone-numbers/"
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-300 underline underline-offset-2"
+                                                    >
+                                                        <ExternalLink className="w-3 h-3" /> Abrir WhatsApp Manager
+                                                    </a>
+                                                </div>
+                                            )}
+                                            </div>
+                                            );
+                                        })}
                                     </div>
                                 ) : (
                                     <div className="text-center py-6">
