@@ -1,6 +1,5 @@
 import { Outlet } from "react-router-dom";
 import { NavigationSidebar } from "./NavigationSidebar";
-import { BiaSupport } from "./support/BiaSupport";
 import { ImpersonationBanner } from "./ImpersonationBanner";
 import { DisconnectedInstancesBanner } from "./DisconnectedInstancesBanner";
 import { RestrictedInstancesBanner } from "./RestrictedInstancesBanner";
@@ -20,9 +19,6 @@ export const Layout = () => {
                     <Outlet />
                 </div>
             </div>
-
-            {/* Bia - Assistente de Suporte IA */}
-            <BiaSupport />
         </div>
     );
 };
