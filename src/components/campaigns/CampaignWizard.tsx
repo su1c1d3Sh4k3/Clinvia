@@ -100,9 +100,12 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
 
     // Limite diário da Meta (messaging_limit_tier) da instância selecionada
     const { data: metaQuality } = useMetaQuality();
-    const tierLimit = isMeta
-        ? (metaQuality || []).find((q) => q.instance_id === instanceId)?.tier_limit ?? null
-        : null;
+    const selectedQuality = isMeta
+        ? (metaQuality || []).find((q) => q.instance_id === instanceId)
+        : undefined;
+    const tierLimit = selectedQuality?.tier_limit ?? null;
+    // Nome de exibição recusado pela Meta = TODO envio rejeitado (#131037)
+    const sendBlocked = selectedQuality?.send_blocked === true;
 
     // Pré-preenche em edição / reseta em criação
     useEffect(() => {
@@ -254,6 +257,23 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
                     O risco de mensagens não entregues é <strong>extremamente alto</strong> e o número pode ser
                     penalizado ou banido pela Meta. Recomendamos dividir a audiência em disparos diários dentro do
                     limite. <strong>Não nos responsabilizamos por bloqueios e banimentos de números.</strong>
+                </p>
+            </div>
+        </div>
+    ) : null;
+
+    // Aviso: instância com nome de exibição recusado — Meta rejeita TODO envio (#131037)
+    const sendBlockedWarning = sendBlocked ? (
+        <div className="flex items-start gap-2.5 border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/40 rounded-xl p-3 animate-in fade-in duration-200">
+            <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+            <div className="text-xs space-y-1">
+                <p className="font-semibold text-red-700 dark:text-red-300">
+                    Este número está com envios bloqueados pela Meta — a campanha inteira será rejeitada
+                </p>
+                <p className="text-red-700/90 dark:text-red-300/90">
+                    O nome de exibição do número foi recusado pela Meta (erro #131037). Nenhuma mensagem será
+                    enviada até um novo nome ser aprovado no WhatsApp Manager. Corrija antes de agendar a campanha
+                    ou selecione outra instância.
                 </p>
             </div>
         </div>
@@ -586,6 +606,7 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
                                     Nenhuma instância de WhatsApp conectada.
                                 </p>
                             )}
+                            {sendBlocked && <div className="mt-2">{sendBlockedWarning}</div>}
                             {selectedInstance && !isMeta && (
                                 <div className="mt-2 flex items-start gap-2 border border-amber-500/40 bg-amber-500/10 rounded-lg p-2.5">
                                     <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
@@ -663,6 +684,7 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
                             </p>
                         )}
 
+                        {sendBlockedWarning}
                         {overTierWarning}
                     </div>
                 )}
@@ -924,6 +946,7 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
                                 </p>
                             )}
                         </div>
+                        {sendBlockedWarning}
                         {overTierWarning}
                         {!isMeta && (
                             <p className="text-[10px] text-amber-600">

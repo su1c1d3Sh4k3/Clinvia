@@ -10,6 +10,9 @@ export interface MetaQualityInstance {
     display_phone_number?: string | null;
     verified_name?: string | null;
     throughput_level?: string | null;
+    name_status?: string | null;
+    /** true quando o nome de exibição foi recusado pela Meta — nenhum envio sai (#131037) */
+    send_blocked?: boolean;
     used_24h?: number | null;
     window_resets_at?: string | null;
     error?: string;

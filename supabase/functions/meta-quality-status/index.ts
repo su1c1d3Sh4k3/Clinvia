@@ -79,12 +79,16 @@ serve(async (req) => {
             // Graph API: qualidade + tier + throughput
             try {
                 const resp = await fetch(
-                    `${GRAPH_API}/${inst.meta_phone_number_id}?fields=quality_rating,messaging_limit_tier,display_phone_number,verified_name,throughput`,
+                    `${GRAPH_API}/${inst.meta_phone_number_id}?fields=quality_rating,messaging_limit_tier,display_phone_number,verified_name,throughput,name_status`,
                     { headers: { Authorization: `Bearer ${inst.meta_access_token}` } }
                 );
                 if (resp.ok) {
                     const d = await resp.json();
                     item.quality_rating = d.quality_rating || "NA";
+                    // Nome de exibição recusado = Meta rejeita TODO envio (#131037).
+                    // Só DECLINED bloqueia — PENDING_REVIEW/NON_EXISTS enviam normal.
+                    item.name_status = d.name_status || null;
+                    item.send_blocked = d.name_status === "DECLINED";
                     item.messaging_limit_tier = d.messaging_limit_tier || null;
                     item.tier_limit = d.messaging_limit_tier != null
                         ? (TIER_LIMITS[d.messaging_limit_tier] ?? null)

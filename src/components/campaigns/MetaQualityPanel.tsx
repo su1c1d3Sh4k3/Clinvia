@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import {
     ShieldCheck, ShieldAlert, ShieldX, ShieldQuestion, Gauge, Timer,
-    ChevronDown, Lightbulb, Smartphone, TrendingUp,
+    ChevronDown, Lightbulb, Smartphone, TrendingUp, AlertTriangle, ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -106,7 +106,7 @@ function QualityCard({ inst }: { inst: MetaQualityInstance }) {
     }
 
     return (
-        <div className={cn("border border-l-4 rounded-xl bg-card overflow-hidden", meta.ring)}>
+        <div className={cn("border border-l-4 rounded-xl bg-card overflow-hidden", inst.send_blocked ? "border-l-red-500" : meta.ring)}>
             <div className="p-4 space-y-3">
                 {/* Cabeçalho: instância */}
                 <div className="flex items-center gap-2 min-w-0">
@@ -117,7 +117,36 @@ function QualityCard({ inst }: { inst: MetaQualityInstance }) {
                     {inst.display_phone_number && (
                         <span className="text-xs text-muted-foreground shrink-0">{inst.display_phone_number}</span>
                     )}
+                    {inst.send_blocked && (
+                        <Badge variant="outline" className="gap-1 text-[10px] md:text-xs bg-red-100 text-red-700 border-red-300 dark:bg-red-900/40 dark:text-red-300 dark:border-red-700 shrink-0">
+                            <AlertTriangle className="w-3 h-3" /> Envios bloqueados
+                        </Badge>
+                    )}
                 </div>
+
+                {/* Restrição da Meta: nome de exibição recusado — nenhum envio sai */}
+                {inst.send_blocked && (
+                    <div className="flex items-start gap-2.5 border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/40 rounded-xl p-3">
+                        <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+                        <div className="text-xs space-y-1 min-w-0">
+                            <p className="font-semibold text-red-700 dark:text-red-300">
+                                Nome de exibição recusado pela Meta — este número não consegue enviar mensagens
+                            </p>
+                            <p className="text-red-700/90 dark:text-red-300/90">
+                                Campanhas e conversas serão rejeitadas com o erro #131037 até um novo nome ser aprovado.
+                                Solicite um novo nome de exibição (igual ao nome real do negócio) no WhatsApp Manager.
+                            </p>
+                            <a
+                                href="https://business.facebook.com/wa/manage/phone-numbers/"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 font-medium text-red-700 dark:text-red-300 underline underline-offset-2"
+                            >
+                                <ExternalLink className="w-3 h-3" /> Abrir WhatsApp Manager
+                            </a>
+                        </div>
+                    </div>
+                )}
 
                 {/* Métricas */}
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
