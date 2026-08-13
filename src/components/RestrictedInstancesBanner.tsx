@@ -95,12 +95,8 @@ export function RestrictedInstancesBanner() {
         staleTime: 30_000,
     });
 
-    // Restrições da Meta (ex: nome de exibição recusado) não têm data de
-    // liberação — ficam ativas até o meta-verify-connection limpar a flag.
-    const metaRestricted = (restricted ?? []).filter((r) =>
-        (r.restriction_type || "").startsWith("META_")
-    );
-
+    // Restrições da Meta (META_*) NÃO aparecem aqui — são exibidas apenas no
+    // card da instância em Conexões (decisão do usuário, sem banner global).
     // Filtra entradas cuja data já passou (restrição expirou) — defesa em profundidade
     // contra o DB ficar com flag desatualizada antes do próximo envio.
     const stillRestricted = (restricted ?? []).filter((r) => {
@@ -110,43 +106,7 @@ export function RestrictedInstancesBanner() {
     });
 
     if (!validated) return null;
-    if (dismissed || (stillRestricted.length === 0 && metaRestricted.length === 0)) return null;
-
-    if (stillRestricted.length === 0) {
-        // Só restrições Meta: banner com instruções e link para Conexões
-        const metaNames = metaRestricted.map((i) => i.name).join(", ");
-        const pending = metaRestricted.every((i) => i.restriction_type === "META_DISPLAY_NAME_PENDING");
-        return (
-            <div className="flex items-start gap-3 px-4 py-2.5 bg-amber-500/10 border-b border-amber-500/30 text-sm animate-in slide-in-from-top-2 duration-300">
-                <Info className="w-4 h-4 mt-0.5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-baseline gap-x-2">
-                        <span className="font-semibold text-amber-700 dark:text-amber-300">
-                            WhatsApp Oficial com envios bloqueados pela Meta
-                        </span>
-                        <span className="text-amber-700/80 dark:text-amber-300/80 truncate">{metaNames}</span>
-                    </div>
-                    <div className="text-xs text-amber-700/70 dark:text-amber-300/70 mt-0.5">
-                        {pending
-                            ? "O nome de exibição do número está em análise pela Meta — nenhuma mensagem pode ser enviada até a aprovação."
-                            : "O nome de exibição do número foi recusado pela Meta — nenhuma mensagem (campanhas ou conversas) pode ser enviada até um novo nome ser aprovado."}{" "}
-                        <a href="/whatsapp-connection" className="underline underline-offset-2 font-medium">
-                            Ver instruções em Conexões
-                        </a>
-                    </div>
-                </div>
-                <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7 flex-shrink-0 text-amber-700/70 hover:text-amber-700 dark:text-amber-300/70"
-                    onClick={() => setDismissed(true)}
-                    title="Dispensar (voltará a aparecer após reload)"
-                >
-                    <X className="w-3.5 h-3.5" />
-                </Button>
-            </div>
-        );
-    }
+    if (dismissed || stillRestricted.length === 0) return null;
 
     // Pega a restrição mais longa (worst case)
     const target = stillRestricted.reduce((acc, cur) => {

@@ -162,24 +162,17 @@ serve(async (req) => {
             }
         }
 
-        // ── Check 3: nome de exibição aprovado? ──
-        // name_status fora de APPROVED/AVAILABLE_WITHOUT_REVIEW = Meta recusa
-        // TODOS os envios com erro #131037, mesmo com o número conectado.
-        const NAME_OK = ["APPROVED", "AVAILABLE_WITHOUT_REVIEW"];
+        // ── Check 3: nome de exibição recusado? ──
+        // SOMENTE name_status = DECLINED bloqueia envios (erro #131037 comprovado).
+        // PENDING_REVIEW / NON_EXISTS / NONE etc enviam normalmente — não alarmar
+        // (caso Marcelle: NON_EXISTS com campanhas funcionando).
         let restriction: { type: string; message: string } | null = null;
-        if (checks.token_valid && checks.name_status && !NAME_OK.includes(checks.name_status)) {
+        if (checks.token_valid && checks.name_status === "DECLINED") {
             const nameLabel = checks.verified_name ? `"${checks.verified_name}"` : "do número";
-            if (checks.new_name_status === "PENDING_REVIEW" || checks.name_status === "PENDING_REVIEW") {
-                restriction = {
-                    type: "META_DISPLAY_NAME_PENDING",
-                    message: `O nome de exibição ${nameLabel} está em análise pela Meta. Até a aprovação, o número não consegue enviar mensagens (erro #131037 do WhatsApp).`,
-                };
-            } else {
-                restriction = {
-                    type: "META_DISPLAY_NAME_DECLINED",
-                    message: `O nome de exibição ${nameLabel} foi recusado pela Meta (status: ${checks.name_status}). O número não consegue enviar nenhuma mensagem (erro #131037) até um novo nome ser aprovado. Solicite um novo nome no WhatsApp Manager.`,
-                };
-            }
+            restriction = {
+                type: "META_DISPLAY_NAME_DECLINED",
+                message: `O nome de exibição ${nameLabel} foi recusado pela Meta. O número não consegue enviar nenhuma mensagem (erro #131037) até um novo nome ser aprovado. Solicite um novo nome no WhatsApp Manager.`,
+            };
         }
 
         const connected =

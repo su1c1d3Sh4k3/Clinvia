@@ -41,16 +41,6 @@ const META_RESTRICTION_INFO: Record<string, { badge: string; title: string; desc
             "Aguarde a aprovação da Meta (geralmente até 24-48h). Assim que aprovado, os envios voltam automaticamente.",
         ],
     },
-    META_DISPLAY_NAME_PENDING: {
-        badge: "Nome em análise pela Meta",
-        title: "Nome de exibição em análise — envios bloqueados",
-        description:
-            "O nome de exibição deste número está em análise pela Meta. Até a aprovação, nenhuma mensagem pode ser enviada (erro #131037 do WhatsApp).",
-        steps: [
-            "Aguarde a análise da Meta (geralmente até 24-48h).",
-            "Acompanhe o status no WhatsApp Manager (business.facebook.com → Contas do WhatsApp → seu número → Nome de exibição).",
-        ],
-    },
 };
 
 const Connections = () => {
