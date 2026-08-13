@@ -241,6 +241,26 @@ export function useCampaignContactAppointments(campaignId: string | null) {
     });
 }
 
+/** Map campaign_contact_id -> { stage, agent } (estágio CRM ativo + atendente da conversa ativa; IA quando na fila Atendimento IA) */
+export function useCampaignContactCrmInfo(campaignId: string | null) {
+    return useQuery({
+        queryKey: ["campaign-contact-crm-info", campaignId],
+        queryFn: async (): Promise<Map<string, { stage: string | null; agent: string | null }>> => {
+            const { data, error } = await (supabase.rpc as any)("get_campaign_contact_crm_info", {
+                p_campaign_id: campaignId,
+            });
+            if (error) throw error;
+            const map = new Map<string, { stage: string | null; agent: string | null }>();
+            for (const r of (data || []) as { campaign_contact_id: string; stage: string | null; agent: string | null }[]) {
+                map.set(r.campaign_contact_id, { stage: r.stage, agent: r.agent });
+            }
+            return map;
+        },
+        enabled: !!campaignId,
+        refetchInterval: 60_000,
+    });
+}
+
 export function isMetaInstance(i: any): boolean {
     return i?.provider === "meta" || (i?.instance_name || "").startsWith("meta-");
 }

@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Loader2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useCampaignContacts, useCampaignContactResponses, useCampaignContactAppointments } from "@/hooks/useCampaigns";
+import { useCampaignContacts, useCampaignContactResponses, useCampaignContactAppointments, useCampaignContactCrmInfo } from "@/hooks/useCampaigns";
 import { ConversationChatModal } from "@/components/queues/ConversationChatModal";
 
 const STATUS_META: Record<string, { label: string; className: string }> = {
@@ -35,6 +35,7 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
     const { data: rows, isLoading } = useCampaignContacts(campaignId);
     const { data: responses } = useCampaignContactResponses(campaignId);
     const { data: appointments } = useCampaignContactAppointments(campaignId);
+    const { data: crmInfo } = useCampaignContactCrmInfo(campaignId);
     const [chatContact, setChatContact] = useState<{ id: string; name: string } | null>(null);
     const [statusFilter, setStatusFilter] = useState<string>("all");
     const [respondedFilter, setRespondedFilter] = useState<string>("all");
@@ -150,7 +151,7 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
             </div>
 
             <div className="max-h-64 overflow-y-auto overflow-x-auto">
-                <table className="w-full min-w-[660px] text-sm">
+                <table className="w-full min-w-[880px] text-sm">
                     <thead className="bg-muted/50 sticky top-0">
                         <tr className="text-left text-xs text-muted-foreground">
                             <th className="px-3 py-2 font-medium">Contato</th>
@@ -158,13 +159,15 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
                             <th className="px-3 py-2 font-medium">Status</th>
                             <th className="px-3 py-2 font-medium">Respondida</th>
                             <th className="px-3 py-2 font-medium">Agendamento</th>
+                            <th className="px-3 py-2 font-medium">Estágio</th>
+                            <th className="px-3 py-2 font-medium">Atendente</th>
                             <th className="px-3 py-2 font-medium">Enviado em</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y">
                         {filteredRows.length === 0 && (
                             <tr>
-                                <td colSpan={6} className="px-3 py-4 text-center text-xs text-muted-foreground">
+                                <td colSpan={8} className="px-3 py-4 text-center text-xs text-muted-foreground">
                                     Nenhum contato com os filtros selecionados.
                                 </td>
                             </tr>
@@ -228,6 +231,28 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
                                                 <Badge variant="secondary" className="bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
                                                     Pendente
                                                 </Badge>
+                                            )
+                                        ) : (
+                                            <span className="text-xs text-muted-foreground">—</span>
+                                        )}
+                                    </td>
+                                    <td className="px-3 py-1.5">
+                                        {crmInfo?.get(r.id)?.stage ? (
+                                            <Badge variant="secondary" className="bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300 whitespace-nowrap">
+                                                {crmInfo.get(r.id)!.stage}
+                                            </Badge>
+                                        ) : (
+                                            <span className="text-xs text-muted-foreground">—</span>
+                                        )}
+                                    </td>
+                                    <td className="px-3 py-1.5">
+                                        {crmInfo?.get(r.id)?.agent ? (
+                                            crmInfo.get(r.id)!.agent === "IA" ? (
+                                                <Badge variant="secondary" className="bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+                                                    IA
+                                                </Badge>
+                                            ) : (
+                                                <span className="text-xs whitespace-nowrap">{crmInfo.get(r.id)!.agent}</span>
                                             )
                                         ) : (
                                             <span className="text-xs text-muted-foreground">—</span>
