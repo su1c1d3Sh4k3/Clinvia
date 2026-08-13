@@ -70,12 +70,16 @@ export function ConversationChatModal({
         queryFn: async () => {
             if (!ownerId) return null;
 
+            // Ordena por última atividade (não por created_at): campanhas que
+            // falham deixam convs pending VAZIAS (last_message_at null) — elas
+            // nunca podem vencer a conversa que realmente tem as mensagens
             const { data: active } = await supabase
                 .from("conversations")
                 .select("id")
                 .eq("contact_id", contactId)
                 .eq("user_id", ownerId)
                 .in("status", ["open", "pending"])
+                .order("last_message_at", { ascending: false, nullsFirst: false })
                 .order("created_at", { ascending: false })
                 .limit(1);
             if (active && active.length > 0) return { id: active[0].id, isActive: true };
@@ -85,6 +89,7 @@ export function ConversationChatModal({
                 .select("id")
                 .eq("contact_id", contactId)
                 .eq("user_id", ownerId)
+                .order("last_message_at", { ascending: false, nullsFirst: false })
                 .order("created_at", { ascending: false })
                 .limit(1);
             return last && last.length > 0 ? { id: last[0].id, isActive: false } : null;

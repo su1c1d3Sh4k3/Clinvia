@@ -264,12 +264,31 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
             }
 
             // 2.1 Find or Create Contact
-            let { data: contact } = await supabase
-                .from("contacts")
-                .select("*")
-                .eq("number", remoteJid)
-                .eq("user_id", ownerId)
-                .single();
+            // Prioridade: contato explicitamente selecionado no picker — evita
+            // criar duplicata quando o número salvo não bate no formato buscado.
+            let contact: any = null;
+            if (selectedContact) {
+                const { data } = await supabase
+                    .from("contacts")
+                    .select("*")
+                    .eq("id", selectedContact)
+                    .maybeSingle();
+                contact = data;
+            }
+
+            if (!contact) {
+                // Fallback por número: contatos Meta são salvos SEM @s.whatsapp.net,
+                // UAZAPI com — aceitar ambos os formatos
+                const { data } = await supabase
+                    .from("contacts")
+                    .select("*")
+                    .in("number", [number, remoteJid])
+                    .eq("user_id", ownerId)
+                    .order("created_at", { ascending: true })
+                    .limit(1)
+                    .maybeSingle();
+                contact = data;
+            }
 
             if (!contact) {
                 const { data: newContact, error: contactError } = await supabase
