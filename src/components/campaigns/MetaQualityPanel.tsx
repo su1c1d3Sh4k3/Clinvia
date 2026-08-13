@@ -160,10 +160,18 @@ function QualityCard({ inst }: { inst: MetaQualityInstance }) {
                                     {used.toLocaleString("pt-BR")}
                                     <span className="text-sm font-normal text-muted-foreground"> / {limit.toLocaleString("pt-BR")}</span>
                                 </>
-                            ) : (
+                            ) : inst.messaging_limit_tier === "TIER_UNLIMITED" ? (
                                 "Ilimitado"
+                            ) : (
+                                <span className="text-sm font-semibold text-muted-foreground">Ainda não definido</span>
                             )}
                         </p>
+                        {limit == null && inst.messaging_limit_tier !== "TIER_UNLIMITED" && (
+                            <p className="text-[10px] text-muted-foreground leading-snug">
+                                A Meta atribui o limite (a partir de 250 contatos/24h) após o nome de exibição
+                                ser aprovado e os primeiros envios do número.
+                            </p>
+                        )}
                         {limit != null && (
                             <div className="h-1.5 rounded-full bg-muted overflow-hidden">
                                 <div
