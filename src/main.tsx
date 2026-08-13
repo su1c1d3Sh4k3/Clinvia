@@ -39,11 +39,35 @@ const updateSW = registerSW({
     },
     onRegistered(registration) {
         console.log('[PWA] Service Worker registered:', registration);
+        // O SW só checa update no load da página — usuários que mantêm o app
+        // aberto ficavam rodando bundle antigo por dias (fixes nunca chegavam).
+        // Checa a cada 5 min e sempre que a aba volta a ficar visível.
+        if (registration) {
+            setInterval(() => registration.update().catch(() => { }), 5 * 60 * 1000);
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') {
+                    registration.update().catch(() => { });
+                }
+            });
+        }
     },
     onRegisterError(error) {
         console.error('[PWA] Service Worker registration error:', error);
     }
 });
+
+// Quando um SW novo assume (skipWaiting + clientsClaim), recarrega uma vez para
+// carregar o bundle novo — sem isso a página continua com o JS antigo em memória.
+// Só escuta se a página JÁ era controlada (evita reload no primeiro acesso).
+if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+    let reloadingForUpdate = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (reloadingForUpdate) return;
+        reloadingForUpdate = true;
+        console.log('[PWA] New Service Worker active — reloading to apply update');
+        window.location.reload();
+    });
+}
 
 // Listen for messages from Service Worker (e.g., notification clicks)
 if ('serviceWorker' in navigator) {
