@@ -1,8 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Trash2, CheckCircle, XCircle, Wifi, Loader2, AlertTriangle, Clock } from "lucide-react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useEffect } from "react";
@@ -67,78 +66,6 @@ export const InstanceRow = ({ instance, onConnect }: InstanceRowProps) => {
         }
     });
 
-    const { data: queues } = useQuery({
-        queryKey: ["queues"],
-        queryFn: async () => {
-            const { data, error } = await supabase
-                .from("queues")
-                .select("*")
-                .eq("is_active", true);
-            if (error) throw error;
-            return data;
-        },
-    });
-
-    const { data: crmFunnels } = useQuery({
-        queryKey: ["crm-funnels"],
-        queryFn: async () => {
-            const { data, error } = await supabase
-                .from("crm_funnels")
-                .select("id, name")
-                .order('created_at', { ascending: true });
-            if (error) throw error;
-            return data;
-        },
-    });
-
-    const updateQueueMutation = useMutation({
-        mutationFn: async ({ instanceId, queueId }: { instanceId: string, queueId: string | null }) => {
-            const { error } = await supabase
-                .from("instances")
-                .update({ default_queue_id: queueId === "none" ? null : queueId })
-                .eq("id", instanceId);
-
-            if (error) throw error;
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["instances"] });
-            toast({
-                title: "Fila padrão atualizada",
-            });
-        },
-        onError: (error: any) => {
-            toast({
-                title: "Erro ao atualizar fila",
-                description: error.message,
-                variant: "destructive",
-            });
-        }
-    });
-
-    const updateAutoFunnelMutation = useMutation({
-        mutationFn: async ({ instanceId, funnelId }: { instanceId: string, funnelId: string | null }) => {
-            const { error } = await supabase
-                .from("instances")
-                .update({ auto_create_deal_funnel_id: funnelId === "none" ? null : funnelId })
-                .eq("id", instanceId);
-
-            if (error) throw error;
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["instances"] });
-            toast({
-                title: "Automação atualizada",
-            });
-        },
-        onError: (error: any) => {
-            toast({
-                title: "Erro ao atualizar automação",
-                description: error.message,
-                variant: "destructive",
-            });
-        }
-    });
-
     // Check connection on mount (skip Meta instances — they don't use UZAPI)
     useEffect(() => {
         if (instance.provider !== 'meta' && !(instance.instance_name || '').startsWith('meta-')) {
@@ -153,50 +80,6 @@ export const InstanceRow = ({ instance, onConnect }: InstanceRowProps) => {
             </div>
 
             <div className="flex flex-col sm:flex-row sm:items-center gap-2 md:gap-4">
-                {canEdit('connections') && (
-                    <div className="flex items-center gap-2">
-                        <span className="text-xs md:text-sm text-muted-foreground whitespace-nowrap">Fila:</span>
-                        <Select
-                            value={instance.default_queue_id || "none"}
-                            onValueChange={(value) => updateQueueMutation.mutate({ instanceId: instance.id, queueId: value })}
-                        >
-                            <SelectTrigger className="w-full sm:w-[140px] md:w-[180px] h-8 md:h-9 text-xs md:text-sm">
-                                <SelectValue placeholder="Selecione" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="none">Nenhuma</SelectItem>
-                                {queues?.map((queue) => (
-                                    <SelectItem key={queue.id} value={queue.id}>
-                                        {queue.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                )}
-
-                {(canEdit('connections') && queues?.find(q => q.id === instance.default_queue_id)?.name?.trim() !== "Atendimento IA") && (
-                    <div className="flex items-center gap-2">
-                        <span className="text-xs md:text-sm text-muted-foreground whitespace-nowrap">Criar Negociação:</span>
-                        <Select
-                            value={instance.auto_create_deal_funnel_id || "none"}
-                            onValueChange={(value) => updateAutoFunnelMutation.mutate({ instanceId: instance.id, funnelId: value })}
-                        >
-                            <SelectTrigger className="w-full sm:w-[140px] md:w-[180px] h-8 md:h-9 text-xs md:text-sm">
-                                <SelectValue placeholder="Desabilitado" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="none">Desabilitado</SelectItem>
-                                {crmFunnels?.map((funnel) => (
-                                    <SelectItem key={funnel.id} value={funnel.id}>
-                                        {funnel.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                )}
-
                 <div className="flex items-center gap-2 md:gap-3 flex-wrap">
                     <TooltipProvider>
                         <Tooltip>

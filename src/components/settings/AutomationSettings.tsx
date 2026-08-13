@@ -6,7 +6,18 @@ import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Loader2, Zap, Star } from "lucide-react";
+import { Loader2, Zap, Star, AlertTriangle } from "lucide-react";
+import { useState } from "react";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface AutomationInstance {
     id: string;
@@ -26,6 +37,7 @@ const AUTO_VALUE = "__auto__";
 export function AutomationSettings() {
     const { data: ownerId } = useOwnerId();
     const queryClient = useQueryClient();
+    const [pendingUazapiId, setPendingUazapiId] = useState<string | null>(null);
 
     const { data: instances, isLoading } = useQuery({
         queryKey: ["automation-instances", ownerId],
@@ -99,9 +111,18 @@ export function AutomationSettings() {
                 ) : (
                     <RadioGroup
                         value={selectedValue}
-                        onValueChange={(value) =>
-                            setPrimary.mutate(value === AUTO_VALUE ? null : value)
-                        }
+                        onValueChange={(value) => {
+                            if (value === AUTO_VALUE) {
+                                setPrimary.mutate(null);
+                                return;
+                            }
+                            const inst = list.find((i) => i.id === value);
+                            if (inst && !isMetaInstance(inst)) {
+                                setPendingUazapiId(value);
+                                return;
+                            }
+                            setPrimary.mutate(value);
+                        }}
                         className="space-y-2"
                     >
                         <div className="flex items-start gap-3 rounded-lg border p-3">
@@ -148,6 +169,39 @@ export function AutomationSettings() {
                         <Loader2 className="h-3 w-3 animate-spin" /> Salvando...
                     </div>
                 )}
+
+                <AlertDialog
+                    open={!!pendingUazapiId}
+                    onOpenChange={(open) => { if (!open) setPendingUazapiId(null); }}
+                >
+                    <AlertDialogContent className="w-[95vw] sm:w-full sm:max-w-md rounded-lg">
+                        <AlertDialogHeader>
+                            <AlertDialogTitle className="flex items-center gap-2">
+                                <AlertTriangle className="h-5 w-5 text-amber-500" />
+                                Usar API não oficial para disparos?
+                            </AlertDialogTitle>
+                            <AlertDialogDescription>
+                                As confirmações configuram disparos de mensagens, caso deseje continuar
+                                não nos responsabilizamos por restrições ou banimentos do número. Não
+                                aconselhamos a utilização da API não oficial por disparo, deseja
+                                continuar?
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel onClick={() => setPendingUazapiId(null)}>
+                                Não
+                            </AlertDialogCancel>
+                            <AlertDialogAction
+                                onClick={() => {
+                                    if (pendingUazapiId) setPrimary.mutate(pendingUazapiId);
+                                    setPendingUazapiId(null);
+                                }}
+                            >
+                                Sim, continuar
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
             </CardContent>
         </Card>
     );

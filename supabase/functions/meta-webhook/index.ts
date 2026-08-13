@@ -348,7 +348,7 @@ serve(async (req) => {
                 // Find instance by meta_phone_number_id
                 const { data: instance } = await supabase
                     .from("instances")
-                    .select("id, instance_name, apikey, user_id, meta_access_token, meta_waba_id, default_queue_id, webhook_url, ia_on_wpp, auto_create_deal_funnel_id, server_url")
+                    .select("id, instance_name, apikey, user_id, meta_access_token, meta_waba_id, webhook_url, ia_on_wpp, server_url")
                     .eq("meta_phone_number_id", phoneNumberId)
                     .eq("provider", "meta")
                     .maybeSingle();

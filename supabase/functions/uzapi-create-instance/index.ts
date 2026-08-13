@@ -168,8 +168,7 @@ serve(async (req) => {
         status: instanceStatus,
         qr_code: uzapiData.qrcode || uzapiData.qr || uzapiData.base64 || null,
         webhook_url: externalWebhook,
-        user_id: userId,
-        default_queue_id: defaultQueueId // ✅ Assign default queue
+        user_id: userId
       })
       .select()
       .single();

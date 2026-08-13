@@ -421,7 +421,6 @@ serve(async (req) => {
         let senderName: string | null = null;
         let senderJid: string | null = null;
         let senderProfilePicUrl: string | null = null;
-        let isNewContactForAutoDeal = false; // Flag para auto-create deal
         let conversation: any = null; // Declare in outer scope for webhook forwarding
 
         if (isGroup) {
@@ -668,7 +667,6 @@ serve(async (req) => {
             } else {
                 // Criar novo contato
                 const hasLetters = /[a-zA-Z]/.test(contactName || '');
-                isNewContactForAutoDeal = true;
 
                 const { data: newContact, error: createError } = await supabase
                     .from('contacts')
@@ -935,9 +933,10 @@ serve(async (req) => {
                     }
                 }
             } else {
-                // Padrão: IA desligada → fila default (Atendimento Humano);
-                // IA ligada (ia_config.ia_on + ia_on_wpp) → conversa nova SEMPRE na fila "Atendimento IA"
-                let newConvQueueId = instance.default_queue_id;
+                // Padrão único (user rule, vale p/ TODOS os providers): IA desligada →
+                // fila "Atendimento Humano"; IA ligada (ia_config.ia_on + ia_on_wpp) →
+                // fila "Atendimento IA". instances.default_queue_id foi removida.
+                let newConvQueueId: string | null = null;
                 let newConvQueueIsIa = false;
                 if (contactId && !groupId) {
                     try {
@@ -947,20 +946,29 @@ serve(async (req) => {
                             .eq('user_id', userId)
                             .maybeSingle();
 
-                        if (iaCfg?.ia_on === true && instance.ia_on_wpp !== false) {
-                            const { data: iaQueue } = await supabase
+                        const iaEffective = iaCfg?.ia_on === true && instance.ia_on_wpp !== false;
+                        const targetQueueName = iaEffective ? 'Atendimento IA' : 'Atendimento Humano';
+                        const { data: targetQueue } = await supabase
+                            .from('queues')
+                            .select('id')
+                            .eq('user_id', userId)
+                            .eq('name', targetQueueName)
+                            .maybeSingle();
+                        if (targetQueue?.id) {
+                            newConvQueueId = targetQueue.id;
+                            newConvQueueIsIa = iaEffective;
+                        } else if (iaEffective) {
+                            // Fila IA inexistente → cai na Humano
+                            const { data: humanQueue } = await supabase
                                 .from('queues')
                                 .select('id')
                                 .eq('user_id', userId)
-                                .eq('name', 'Atendimento IA')
+                                .eq('name', 'Atendimento Humano')
                                 .maybeSingle();
-                            if (iaQueue?.id) {
-                                newConvQueueId = iaQueue.id;
-                                newConvQueueIsIa = true;
-                            }
+                            newConvQueueId = humanQueue?.id || null;
                         }
                     } catch (queueErr) {
-                        console.warn('[webhook-handle-message] IA queue lookup failed, using default queue:', queueErr);
+                        console.warn('[webhook-handle-message] queue lookup failed:', queueErr);
                     }
                 }
 
@@ -1032,18 +1040,8 @@ serve(async (req) => {
                                 .maybeSingle();
 
                             if (!existingDeal) {
-                                // Determine CRM stage based on queue (fila efetiva da conversa)
-                                let crmStage = newConvQueueIsIa ? 'Em Atendimento IA' : 'Em Atendimento Humano';
-                                if (!newConvQueueIsIa && instance.default_queue_id) {
-                                    const { data: qData } = await supabase
-                                        .from('queues')
-                                        .select('name')
-                                        .eq('id', instance.default_queue_id)
-                                        .single();
-                                    if (qData?.name === 'Atendimento IA') {
-                                        crmStage = 'Em Atendimento IA';
-                                    }
-                                }
+                                // CRM stage segue a fila efetiva da conversa
+                                const crmStage = newConvQueueIsIa ? 'Em Atendimento IA' : 'Em Atendimento Humano';
 
                                 await supabase.from('crm_client').insert({
                                     user_id: userId,
@@ -1174,42 +1172,6 @@ serve(async (req) => {
                     );
                 } else {
                     console.log('[webhook-handle-message] Message saved:', savedMessage.id);
-
-                    // ========================================
-                    // CRIAÇÃO AUTOMÁTICA DE NEGOCIAÇÃO (DEAL)
-                    // ========================================
-                    if (isNewContactForAutoDeal && !fromMe && contactId && instance.auto_create_deal_funnel_id) {
-                        const hasValidName = /[a-zA-Z]/.test(senderName || '');
-                        if (hasValidName && senderProfilePicUrl) {
-                            try {
-                                const { data: stages } = await supabase
-                                    .from('crm_stages')
-                                    .select('id')
-                                    .eq('funnel_id', instance.auto_create_deal_funnel_id)
-                                    .order('position', { ascending: true })
-                                    .limit(1);
-
-                                if (stages && stages.length > 0) {
-                                    const { error: dealError } = await supabase
-                                        .from('crm_deals')
-                                        .insert({
-                                            title: senderName || 'Novo Cliente',
-                                            description: 'Criado automaticamente pelo sistema',
-                                            contact_id: contactId,
-                                            stage_id: stages[0].id,
-                                            user_id: userId,
-                                            status: 'active'
-                                        });
-
-                                    if (dealError) {
-                                        console.error('[webhook-handle-message] Error auto-creating deal:', dealError);
-                                    }
-                                }
-                            } catch (err) {
-                                console.error('[webhook-handle-message] Exception auto-creating deal:', err);
-                            }
-                        }
-                    }
 
                     // ========================================
                     // NPS RESPONSE DETECTION WITH AI FEEDBACK

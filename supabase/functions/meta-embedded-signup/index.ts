@@ -300,7 +300,6 @@ async function processSignup(
             status: "connected",
             client_number: displayPhoneNumber,
             user_name: verifiedName,
-            default_queue_id: defaultQueueId,
             webhook_url: webhookUrl,
         })
         .select()

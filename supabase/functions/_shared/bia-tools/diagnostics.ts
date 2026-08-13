@@ -132,7 +132,7 @@ async function checkConnections(
 ): Promise<FunctionResult> {
     const { data, error } = await supabase
         .from('instances')
-        .select('id, instance_name, status, client_number, default_queue_id, created_at')
+        .select('id, instance_name, status, client_number, created_at')
         .eq('user_id', context.owner_id);
 
     if (error) {
@@ -158,7 +158,6 @@ async function checkConnections(
                 name: i.instance_name,
                 status: i.status || 'unknown',
                 phone: i.client_number || 'Não informado',
-                has_default_queue: !!i.default_queue_id,
                 created_at: formatDateBR(i.created_at)
             }))
         }
