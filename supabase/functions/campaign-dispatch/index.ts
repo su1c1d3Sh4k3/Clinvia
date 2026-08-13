@@ -307,18 +307,26 @@ async function tagContact(supabase: any, campaign: any, contactId: string) {
 }
 
 // ── Conversa: find-or-create ─────────────────────────────────────────────────
-async function findOrCreateConversation(supabase: any, campaign: any, contactId: string): Promise<string> {
+// `created` = conversa criada só para este envio — se o envio falhar e ela
+// continuar vazia, o chamador a remove (senão o inbox enche de cards vazios)
+async function findOrCreateConversation(
+    supabase: any,
+    campaign: any,
+    contactId: string,
+): Promise<{ id: string; created: boolean }> {
+    // Reusa qualquer conversa ativa do contato (sem filtrar por instância):
+    // evita conversa duplicada quando a campanha sai por outra instância
     const { data: existing } = await supabase
         .from("conversations")
         .select("id")
         .eq("contact_id", contactId)
-        .eq("instance_id", campaign.instance_id)
         .eq("user_id", campaign.user_id)
         .in("status", ["pending", "open"])
+        .order("last_message_at", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
-    if (existing) return existing.id;
+    if (existing) return { id: existing.id, created: false };
 
     const iaEnabled = campaign.ia_enabled !== false;
     const queueName = iaEnabled ? "Atendimento IA" : "Atendimento Humano";
@@ -336,7 +344,18 @@ async function findOrCreateConversation(supabase: any, campaign: any, contactId:
         .select("id")
         .single();
     if (error) throw new Error(`Falha ao criar conversa: ${error.message}`);
-    return newConv.id;
+    return { id: newConv.id, created: true };
+}
+
+// Remove conversa criada só para o envio se ela ficou vazia (envio falhou)
+async function cleanupEmptyConversation(supabase: any, conversationId: string) {
+    const { count } = await supabase
+        .from("messages")
+        .select("id", { count: "exact", head: true })
+        .eq("conversation_id", conversationId);
+    if ((count ?? 0) === 0) {
+        await supabase.from("conversations").delete().eq("id", conversationId);
+    }
 }
 
 // ── Fase 2: envio ────────────────────────────────────────────────────────────
@@ -402,7 +421,8 @@ async function dispatchBatch(supabase: any) {
                 continue;
             }
 
-            const conversationId = await findOrCreateConversation(supabase, campaign, row.contact_id);
+            const conv = await findOrCreateConversation(supabase, campaign, row.contact_id);
+            const conversationId = conv.id;
             const rawData = row.raw_data || {};
 
             let ok: boolean;
@@ -451,6 +471,7 @@ async function dispatchBatch(supabase: any) {
                     .update({ status: "failed", error: String(errMsg).slice(0, 500) })
                     .eq("id", row.id);
                 console.warn(`[campaign-dispatch] Send failed for ${row.contact_id}:`, errMsg);
+                if (conv.created) await cleanupEmptyConversation(supabase, conversationId);
                 continue;
             }
 

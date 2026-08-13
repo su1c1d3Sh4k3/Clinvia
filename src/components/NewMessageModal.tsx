@@ -278,11 +278,13 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
 
             if (!contact) {
                 // Fallback por número: contatos Meta são salvos SEM @s.whatsapp.net,
-                // UAZAPI com — aceitar ambos os formatos
+                // UAZAPI com — casar pelos últimos 8 dígitos (mesmo padrão do
+                // webhook-handle-message) para NUNCA criar contato duplicado
+                const last8 = number.replace(/\D/g, "").slice(-8);
                 const { data } = await supabase
                     .from("contacts")
                     .select("*")
-                    .in("number", [number, remoteJid])
+                    .like("number", `%${last8}%`)
                     .eq("user_id", ownerId)
                     .order("created_at", { ascending: true })
                     .limit(1)
@@ -294,7 +296,8 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
                 const { data: newContact, error: contactError } = await supabase
                     .from("contacts")
                     .insert({
-                        number: remoteJid,
+                        // Meta salva sem sufixo; UAZAPI com @s.whatsapp.net
+                        number: isMetaSelected ? number : remoteJid,
                         push_name: number, // Use number as initial name
                         user_id: ownerId,
                         instance_id: instance.id,

@@ -69,19 +69,24 @@ export const ForwardMessageModal = ({ open, onOpenChange, messageToForward }: Fo
                 throw new Error("Usuário não autenticado");
             }
 
-            // Find or Create Contact
+            // Find or Create Contact — match pelos últimos 8 dígitos (padrão do
+            // sistema): Meta salva sem @s.whatsapp.net, UAZAPI com; nunca duplicar
+            const last8 = number.replace(/\D/g, "").slice(-8);
             let { data: contact } = await supabase
                 .from("contacts")
                 .select("*")
-                .eq("number", remoteJid)
+                .like("number", `%${last8}%`)
                 .eq("user_id", ownerId)
-                .single();
+                .order("created_at", { ascending: true })
+                .limit(1)
+                .maybeSingle();
 
             if (!contact) {
+                const isMetaInstance = (instance as any)?.provider === "meta";
                 const { data: newContact, error: contactError } = await supabase
                     .from("contacts")
                     .insert({
-                        number: remoteJid,
+                        number: isMetaInstance ? number : remoteJid,
                         push_name: number,
                         user_id: ownerId,
                         instance_id: instance.id,
