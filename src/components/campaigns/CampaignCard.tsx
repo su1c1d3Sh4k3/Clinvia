@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
     ChevronDown, Clock, DollarSign, Users, Pencil, Trash2, RefreshCw,
-    Sparkles, AlertTriangle, Loader2, Bot, User as UserIcon,
+    Sparkles, AlertTriangle, Loader2, Bot, User as UserIcon, Send, RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { cn, formatCurrency } from "@/lib/utils";
-import { Campaign, useCampaignMutations } from "@/hooks/useCampaigns";
+import { Campaign, useCampaignMutations, useInstanceNames } from "@/hooks/useCampaigns";
 import { CampaignStatsRow } from "@/hooks/useCampaignDashboard";
 import { useUsdBrlRate } from "@/hooks/useUsdBrlRate";
 import { CampaignContactsTable } from "./CampaignContactsTable";
@@ -37,15 +37,51 @@ export const TEMPLATE_STATUS: Record<string, { label: string; className: string 
 
 const EDITABLE_STATUSES = ["scheduled", "awaiting_template", "error"];
 
+/** Confirmação de reenvio de campanha disparada (compartilhado /campanhas + dashboard). */
+export function ResendCampaignDialog({
+    campaign, open, onOpenChange, onConfirm,
+}: {
+    campaign: Campaign;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    onConfirm: () => void;
+}) {
+    return (
+        <AlertDialog open={open} onOpenChange={onOpenChange}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle className="flex items-center gap-2">
+                        <AlertTriangle className="h-5 w-5 text-amber-500" />
+                        Reenviar campanha "{campaign.name}"?
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                        Essa campanha já foi enviada e reenviar para os mesmos leads em um período
+                        curto de tempo pode acarretar em prejuízos para sua conta junto à Meta.
+                        Deseja continuar com o reenvio da campanha?
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>Não</AlertDialogCancel>
+                    <AlertDialogAction onClick={onConfirm}>Sim, continuar</AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+    );
+}
+
 interface CampaignCardProps {
     campaign: Campaign;
     stats?: CampaignStatsRow;
     onEdit: (campaign: Campaign) => void;
+    onResend?: (campaign: Campaign) => void;
 }
 
-export function CampaignCard({ campaign, stats, onEdit }: CampaignCardProps) {
+export function CampaignCard({ campaign, stats, onEdit, onResend }: CampaignCardProps) {
     const [expanded, setExpanded] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
+    const [confirmResend, setConfirmResend] = useState(false);
+    const { data: instanceNames } = useInstanceNames();
+    const instanceName = campaign.instance_id ? instanceNames?.get(campaign.instance_id) : null;
     const { deleteCampaign, regeneratePrompt, syncTemplates } = useCampaignMutations();
     const { data: rateData } = useUsdBrlRate();
 
@@ -112,6 +148,11 @@ export function CampaignCard({ campaign, stats, onEdit }: CampaignCardProps) {
                     <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold truncate">{campaign.name}</span>
                         <Badge variant="secondary" className={statusMeta.className}>{statusMeta.label}</Badge>
+                        {instanceName && (
+                            <Badge variant="outline" className="gap-1">
+                                <Send className="w-3 h-3" /> {instanceName}
+                            </Badge>
+                        )}
                         <Badge variant="outline">{isNotification ? "Notificação" : "Promoção"}</Badge>
                         {isUazapi && (
                             <Badge variant="secondary" className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
@@ -134,6 +175,19 @@ export function CampaignCard({ campaign, stats, onEdit }: CampaignCardProps) {
                         {(stats?.failed_count ?? counts.failed) ? ` · ${stats?.failed_count ?? counts.failed} falhas` : ""}
                     </p>
                 </div>
+                {campaign.status === "dispatched" && onResend && (
+                    <span
+                        role="button"
+                        tabIndex={0}
+                        title="Reenviar campanha"
+                        onClick={(e) => { e.stopPropagation(); setConfirmResend(true); }}
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); setConfirmResend(true); } }}
+                        className="shrink-0 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground border rounded-md px-2 py-1.5 hover:bg-muted transition-colors"
+                    >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Reenviar campanha</span>
+                    </span>
+                )}
                 <ChevronDown className={cn("w-4 h-4 text-muted-foreground shrink-0 transition-transform", expanded && "rotate-180")} />
             </button>
 
@@ -275,6 +329,17 @@ export function CampaignCard({ campaign, stats, onEdit }: CampaignCardProps) {
                     </div>
                 </div>
             )}
+
+            {/* Confirmação de reenvio */}
+            <ResendCampaignDialog
+                campaign={campaign}
+                open={confirmResend}
+                onOpenChange={setConfirmResend}
+                onConfirm={() => {
+                    setConfirmResend(false);
+                    onResend?.(campaign);
+                }}
+            />
 
             {/* Confirmação de exclusão */}
             <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>

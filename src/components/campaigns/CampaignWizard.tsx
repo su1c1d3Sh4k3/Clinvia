@@ -55,6 +55,9 @@ interface CampaignWizardProps {
     onOpenChange: (open: boolean) => void;
     /** Campanha em edição (null = criação). */
     campaign?: Campaign | null;
+    /** Campanha disparada usada como base de reenvio — cria uma NOVA campanha
+     *  pré-preenchida (datas de disparo/vencimento em branco). */
+    resendFrom?: Campaign | null;
 }
 
 function toLocalInputValue(iso: string): string {
@@ -71,8 +74,11 @@ function formatDuration(totalSeconds: number): string {
     return `${h}h ${m}min`;
 }
 
-export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardProps) {
+export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: CampaignWizardProps) {
     const isEdit = !!campaign;
+    // Base de pré-preenchimento: campanha em edição OU campanha original do reenvio
+    const baseCampaign = campaign || resendFrom || null;
+    const isResend = !campaign && !!resendFrom;
     const { data: instances } = useCampaignInstances();
     const { createCampaign, updateCampaign } = useCampaignMutations();
     const { data: rateData } = useUsdBrlRate();
@@ -110,21 +116,22 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
     // Pré-preenche em edição / reseta em criação
     useEffect(() => {
         if (!open) return;
-        if (campaign) {
-            setName(campaign.name);
-            setInstanceId(campaign.instance_id || "");
-            setScheduledAt(toLocalInputValue(campaign.scheduled_at));
-            setValidUntil(toLocalInputValue(campaign.valid_until));
-            setSourceType(campaign.source_type);
-            setAudience({ entries: [], invalidRows: [], config: campaign.source_config || {} });
-            setCampaignType(campaign.campaign_type || "promotion");
-            setSelectedServices(campaign.services || []);
-            setDiscountPct(campaign.discount_pct != null ? String(campaign.discount_pct) : "");
-            setExistingTemplateId(campaign.template_mode === "existing" ? campaign.template_id || "" : "");
+        if (baseCampaign) {
+            setName(isResend ? `${baseCampaign.name} (reenvio)` : baseCampaign.name);
+            setInstanceId(baseCampaign.instance_id || "");
+            // Reenvio: datas em branco para o cliente definir
+            setScheduledAt(isResend ? "" : toLocalInputValue(baseCampaign.scheduled_at));
+            setValidUntil(isResend ? "" : toLocalInputValue(baseCampaign.valid_until));
+            setSourceType(baseCampaign.source_type);
+            setAudience({ entries: [], invalidRows: [], config: baseCampaign.source_config || {} });
+            setCampaignType(baseCampaign.campaign_type || "promotion");
+            setSelectedServices(baseCampaign.services || []);
+            setDiscountPct(baseCampaign.discount_pct != null ? String(baseCampaign.discount_pct) : "");
+            setExistingTemplateId(baseCampaign.template_mode === "existing" ? baseCampaign.template_id || "" : "");
             setVarMapping({});
-            setMessage(campaign.template_mode === "none" ? campaign.initial_message : "");
-            setObjective(campaign.objective);
-            setIaEnabled(campaign.ia_enabled);
+            setMessage(baseCampaign.template_mode === "none" ? baseCampaign.initial_message : "");
+            setObjective(baseCampaign.objective);
+            setIaEnabled(baseCampaign.ia_enabled);
         } else {
             setName("");
             setInstanceId("");
@@ -143,7 +150,7 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
         }
         setStep(0);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open, campaign?.id]);
+    }, [open, campaign?.id, resendFrom?.id]);
 
     // Carrega contatos existentes da campanha em edição (para manter audiência se não mudar)
     const { data: existingContactIds } = useQuery({
@@ -158,6 +165,30 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
         },
         enabled: !!campaign?.id && open,
     });
+
+    // Reenvio: carrega a audiência original com as vars do snapshot (raw_data)
+    // como entries de CRIAÇÃO — o cliente pode substituir na etapa Audiência
+    const { data: resendEntries } = useQuery({
+        queryKey: ["campaign-resend-entries", resendFrom?.id],
+        queryFn: async (): Promise<AudienceSelection["entries"]> => {
+            const { data } = await supabase
+                .from("campaign_contacts" as any)
+                .select("contact_id, raw_data")
+                .eq("campaign_id", resendFrom!.id)
+                .not("contact_id", "is", null);
+            return ((data || []) as any[]).map((r) => ({
+                contactId: r.contact_id,
+                vars: r.raw_data || {},
+            }));
+        },
+        enabled: isResend && !!resendFrom?.id && open,
+    });
+
+    useEffect(() => {
+        if (!open || !isResend || !resendEntries || resendEntries.length === 0) return;
+        setAudience((a) => (a.entries.length > 0 ? a : { ...a, entries: resendEntries }));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open, isResend, resendEntries]);
 
     const { data: services } = useQuery({
         queryKey: ["campaign-services"],
@@ -226,9 +257,9 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
 
     // Em edição de campanha com template existente, pré-preenche o mapeamento salvo
     useEffect(() => {
-        if (!isEdit || campaign?.template_mode !== "existing" || !selectedTemplate) return;
+        if (!baseCampaign || baseCampaign.template_mode !== "existing" || !selectedTemplate) return;
         if (Object.keys(varMapping).length > 0) return;
-        const saved: string[] = campaign?.variable_map || [];
+        const saved: string[] = baseCampaign?.variable_map || [];
         if (saved.length === 0) return;
         const next: Record<number, string> = {};
         templateVarNums.forEach((n, idx) => {
@@ -297,13 +328,13 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
             for (const k of SOURCE_VAR_KEYS[sourceType]) if (!keys.includes(k)) keys.push(k);
         }
         if (sourceType === "csv" || sourceType === "xml") {
-            const fileKeys: string[] = audience.config?.var_keys || campaign?.source_config?.var_keys || [];
+            const fileKeys: string[] = audience.config?.var_keys || baseCampaign?.source_config?.var_keys || [];
             for (const k of fileKeys) {
                 if (k && !keys.includes(k) && !keys.map(slugVarKey).includes(k)) keys.push(k);
             }
         }
         return keys;
-    }, [campaignType, sourceType, audience.config, campaign?.source_config]);
+    }, [campaignType, sourceType, audience.config, baseCampaign?.source_config]);
 
     const insertVariable = (variable: string) => {
         const el = messageRef.current;
@@ -554,7 +585,7 @@ export function CampaignWizard({ open, onOpenChange, campaign }: CampaignWizardP
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <Megaphone className="w-5 h-5 text-primary" />
-                        {isEdit ? "Editar campanha" : "Nova campanha"}
+                        {isEdit ? "Editar campanha" : isResend ? "Reenvio de campanha" : "Nova campanha"}
                     </DialogTitle>
                 </DialogHeader>
 

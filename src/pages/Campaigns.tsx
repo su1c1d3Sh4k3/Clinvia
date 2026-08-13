@@ -16,6 +16,7 @@ export default function Campaigns() {
     const { data: stats } = useCampaignDashboardStats({ mode: "all" });
     const [wizardOpen, setWizardOpen] = useState(false);
     const [editing, setEditing] = useState<Campaign | null>(null);
+    const [resending, setResending] = useState<Campaign | null>(null);
 
     // Agentes não acessam campanhas
     useEffect(() => {
@@ -26,11 +27,19 @@ export default function Campaigns() {
 
     const openCreate = () => {
         setEditing(null);
+        setResending(null);
         setWizardOpen(true);
     };
 
     const openEdit = (campaign: Campaign) => {
         setEditing(campaign);
+        setResending(null);
+        setWizardOpen(true);
+    };
+
+    const openResend = (campaign: Campaign) => {
+        setEditing(null);
+        setResending(campaign);
         setWizardOpen(true);
     };
 
@@ -78,12 +87,21 @@ export default function Campaigns() {
                             campaign={c}
                             stats={(stats || []).find((s) => s.campaign_id === c.id)}
                             onEdit={openEdit}
+                            onResend={openResend}
                         />
                     ))}
                 </div>
             )}
 
-            <CampaignWizard open={wizardOpen} onOpenChange={setWizardOpen} campaign={editing} />
+            <CampaignWizard
+                open={wizardOpen}
+                onOpenChange={(o) => {
+                    setWizardOpen(o);
+                    if (!o) setResending(null);
+                }}
+                campaign={editing}
+                resendFrom={resending}
+            />
         </div>
     );
 }

@@ -1,15 +1,16 @@
 import { useState } from "react";
 import {
-    ChevronDown, Megaphone, Bot, Users, Clock, DollarSign, TrendingUp,
+    ChevronDown, Megaphone, Bot, Users, Clock, DollarSign, TrendingUp, Send, RotateCcw,
 } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
-import { Campaign } from "@/hooks/useCampaigns";
+import { Campaign, useInstanceNames } from "@/hooks/useCampaigns";
 import { CampaignStatsRow } from "@/hooks/useCampaignDashboard";
 import {
     CAMPAIGN_STATUS,
     TEMPLATE_STATUS,
     COST_PER_MSG_USD,
+    ResendCampaignDialog,
 } from "@/components/campaigns/CampaignCard";
 import { CampaignContactsTable } from "@/components/campaigns/CampaignContactsTable";
 import { useUsdBrlRate } from "@/hooks/useUsdBrlRate";
@@ -17,15 +18,19 @@ import { useUsdBrlRate } from "@/hooks/useUsdBrlRate";
 interface CampaignExpandableCardProps {
     campaign: Campaign;
     stats?: CampaignStatsRow;
+    onResend?: (campaign: Campaign) => void;
 }
 
 function formatDateTimeBR(iso: string): string {
     return new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 }
 
-export function CampaignExpandableCard({ campaign, stats }: CampaignExpandableCardProps) {
+export function CampaignExpandableCard({ campaign, stats, onResend }: CampaignExpandableCardProps) {
     const [expanded, setExpanded] = useState(false);
+    const [confirmResend, setConfirmResend] = useState(false);
     const { data: rateData } = useUsdBrlRate();
+    const { data: instanceNames } = useInstanceNames();
+    const instanceName = campaign.instance_id ? instanceNames?.get(campaign.instance_id) : null;
 
     const statusMeta = CAMPAIGN_STATUS[campaign.status] || CAMPAIGN_STATUS.scheduled;
     const tplMeta = campaign.template_status ? TEMPLATE_STATUS[campaign.template_status] : null;
@@ -61,6 +66,11 @@ export function CampaignExpandableCard({ campaign, stats }: CampaignExpandableCa
                         <Megaphone className="w-4 h-4 text-primary shrink-0" />
                         <span className="font-semibold truncate">{campaign.name}</span>
                         <Badge variant="secondary" className={statusMeta.className}>{statusMeta.label}</Badge>
+                        {instanceName && (
+                            <Badge variant="outline" className="gap-1">
+                                <Send className="w-3 h-3" /> {instanceName}
+                            </Badge>
+                        )}
                         {tplMeta && (
                             <Badge variant="secondary" className={tplMeta.className}>{tplMeta.label}</Badge>
                         )}
@@ -100,6 +110,19 @@ export function CampaignExpandableCard({ campaign, stats }: CampaignExpandableCa
                     </div>
                 </div>
 
+                {campaign.status === "dispatched" && onResend && (
+                    <span
+                        role="button"
+                        tabIndex={0}
+                        title="Reenviar campanha"
+                        onClick={(e) => { e.stopPropagation(); setConfirmResend(true); }}
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); setConfirmResend(true); } }}
+                        className="shrink-0 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground border rounded-md px-2 py-1.5 hover:bg-muted transition-colors"
+                    >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Reenviar campanha</span>
+                    </span>
+                )}
                 <ChevronDown
                     className={cn("w-4 h-4 text-muted-foreground shrink-0 transition-transform", expanded && "rotate-180")}
                 />
@@ -180,6 +203,16 @@ export function CampaignExpandableCard({ campaign, stats }: CampaignExpandableCa
                     <CampaignContactsTable campaignId={campaign.id} />
                 </div>
             )}
+
+            <ResendCampaignDialog
+                campaign={campaign}
+                open={confirmResend}
+                onOpenChange={setConfirmResend}
+                onConfirm={() => {
+                    setConfirmResend(false);
+                    onResend?.(campaign);
+                }}
+            />
         </div>
     );
 }

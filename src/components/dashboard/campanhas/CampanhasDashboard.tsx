@@ -1,14 +1,17 @@
 import { useState } from "react";
 import { Megaphone } from "lucide-react";
 import { useCampaignDashboard, CampanhasPeriod } from "@/hooks/useCampaignDashboard";
+import { Campaign } from "@/hooks/useCampaigns";
 import { CampanhasPeriodFilter } from "./CampanhasPeriodFilter";
 import { CampanhasKpiCards } from "./CampanhasKpiCards";
 import { CampaignExpandableCard } from "./CampaignExpandableCard";
 import { RecurrenceMonthCard } from "./RecurrenceMonthCard";
 import { MetaQualityPanel } from "@/components/campaigns/MetaQualityPanel";
+import { CampaignWizard } from "@/components/campaigns/CampaignWizard";
 
 export function CampanhasDashboard() {
     const [period, setPeriod] = useState<CampanhasPeriod>({ mode: "all" });
+    const [resending, setResending] = useState<Campaign | null>(null);
     const { kpis, items, isLoading } = useCampaignDashboard(period);
 
     return (
@@ -39,6 +42,7 @@ export function CampanhasDashboard() {
                                 key={`c-${item.campaign.id}`}
                                 campaign={item.campaign}
                                 stats={item.stats}
+                                onResend={setResending}
                             />
                         ) : (
                             <RecurrenceMonthCard key={`r-${item.agg.monthKey}`} agg={item.agg} />
@@ -46,6 +50,12 @@ export function CampanhasDashboard() {
                     )}
                 </div>
             )}
+
+            <CampaignWizard
+                open={!!resending}
+                onOpenChange={(o) => { if (!o) setResending(null); }}
+                resendFrom={resending}
+            />
         </div>
     );
 }

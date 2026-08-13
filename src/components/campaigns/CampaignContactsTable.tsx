@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
-import { Loader2 } from "lucide-react";
+import { Loader2, Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCampaignContacts, useCampaignContactResponses, useCampaignContactAppointments, useCampaignContactCrmInfo } from "@/hooks/useCampaigns";
 import { ConversationChatModal } from "@/components/queues/ConversationChatModal";
@@ -31,6 +32,20 @@ interface CampaignContactsTableProps {
     campaignId: string;
 }
 
+/** Nome de exibição do contato (mesma derivação da renderização da tabela). */
+function rowName(r: { contact?: { push_name: string | null } | null; raw_data?: any }): string {
+    return String(
+        r.contact?.push_name
+        || r.raw_data?.push_name || r.raw_data?.nome || r.raw_data?.name
+        || "—"
+    );
+}
+
+/** Normaliza para busca: minúsculas e sem acentos. */
+function normalizeTxt(s: string): string {
+    return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
 export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps) {
     const { data: rows, isLoading } = useCampaignContacts(campaignId);
     const { data: responses } = useCampaignContactResponses(campaignId);
@@ -40,6 +55,9 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
     const [statusFilter, setStatusFilter] = useState<string>("all");
     const [respondedFilter, setRespondedFilter] = useState<string>("all");
     const [scheduledFilter, setScheduledFilter] = useState<string>("all");
+    const [stageFilter, setStageFilter] = useState<string>("all");
+    const [agentFilter, setAgentFilter] = useState<string>("all");
+    const [search, setSearch] = useState("");
 
     // Contagens por status efetivo e por respondida (sobre todos os rows)
     const statusCounts = useMemo(() => {
@@ -71,7 +89,27 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
         return { scheduled, pending };
     }, [rows, appointments]);
 
+    // Estágios/atendentes presentes NESTA campanha (só os que têm contatos), com contagem
+    const stageCounts = useMemo(() => {
+        const counts = new Map<string, number>();
+        for (const r of rows || []) {
+            const stage = crmInfo?.get(r.id)?.stage;
+            if (stage) counts.set(stage, (counts.get(stage) || 0) + 1);
+        }
+        return counts;
+    }, [rows, crmInfo]);
+
+    const agentCounts = useMemo(() => {
+        const counts = new Map<string, number>();
+        for (const r of rows || []) {
+            const agent = crmInfo?.get(r.id)?.agent;
+            if (agent) counts.set(agent, (counts.get(agent) || 0) + 1);
+        }
+        return counts;
+    }, [rows, crmInfo]);
+
     const filteredRows = useMemo(() => {
+        const q = normalizeTxt(search.trim());
         return (rows || []).filter((r) => {
             if (statusFilter !== "all" && effectiveStatus(r) !== statusFilter) return false;
             if (respondedFilter !== "all") {
@@ -86,9 +124,12 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
                 if (scheduledFilter === "scheduled" && !isScheduled) return false;
                 if (scheduledFilter === "pending" && isScheduled) return false;
             }
+            if (stageFilter !== "all" && crmInfo?.get(r.id)?.stage !== stageFilter) return false;
+            if (agentFilter !== "all" && crmInfo?.get(r.id)?.agent !== agentFilter) return false;
+            if (q && !normalizeTxt(rowName(r)).includes(q)) return false;
             return true;
         });
-    }, [rows, statusFilter, respondedFilter, scheduledFilter, responses, appointments]);
+    }, [rows, statusFilter, respondedFilter, scheduledFilter, stageFilter, agentFilter, search, responses, appointments, crmInfo]);
 
     if (isLoading) {
         return (
@@ -143,11 +184,53 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
                     </SelectContent>
                 </Select>
 
-                {(statusFilter !== "all" || respondedFilter !== "all" || scheduledFilter !== "all") && (
-                    <Badge variant="secondary" className="ml-auto text-xs">
-                        {filteredRows.length} de {rows.length} contatos
-                    </Badge>
+                {stageCounts.size > 0 && (
+                    <Select value={stageFilter} onValueChange={setStageFilter}>
+                        <SelectTrigger className="h-8 w-[180px] text-xs bg-background">
+                            <SelectValue placeholder="Estágio" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">Estágio: todos</SelectItem>
+                            {[...stageCounts.entries()].sort((a, b) => b[1] - a[1]).map(([stage, count]) => (
+                                <SelectItem key={stage} value={stage}>
+                                    {stage} ({count})
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                 )}
+
+                {agentCounts.size > 0 && (
+                    <Select value={agentFilter} onValueChange={setAgentFilter}>
+                        <SelectTrigger className="h-8 w-[180px] text-xs bg-background">
+                            <SelectValue placeholder="Atendente" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">Atendente: todos</SelectItem>
+                            {[...agentCounts.entries()].sort((a, b) => b[1] - a[1]).map(([agent, count]) => (
+                                <SelectItem key={agent} value={agent}>
+                                    {agent} ({count})
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                )}
+
+                <div className="relative">
+                    <Search className="w-3.5 h-3.5 text-muted-foreground absolute left-2.5 top-1/2 -translate-y-1/2" />
+                    <Input
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder="Buscar cliente..."
+                        className="h-8 w-[180px] text-xs bg-background pl-8"
+                    />
+                </div>
+
+                <Badge variant="secondary" className="ml-auto text-xs">
+                    {filteredRows.length === rows.length
+                        ? `${rows.length} contatos`
+                        : `${filteredRows.length} de ${rows.length} contatos`}
+                </Badge>
             </div>
 
             <div className="max-h-64 overflow-y-auto overflow-x-auto">

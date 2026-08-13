@@ -261,6 +261,25 @@ export function useCampaignContactCrmInfo(campaignId: string | null) {
     });
 }
 
+/** Map instance_id -> nome de exibição (todas as instâncias, conectadas ou não). */
+export function useInstanceNames() {
+    return useQuery({
+        queryKey: ["instance-names"],
+        queryFn: async (): Promise<Map<string, string>> => {
+            const { data, error } = await supabase
+                .from("instances")
+                .select("id, name, instance_name");
+            if (error) throw error;
+            const map = new Map<string, string>();
+            for (const i of (data || []) as any[]) {
+                map.set(i.id, i.name || i.instance_name || "Instância");
+            }
+            return map;
+        },
+        staleTime: 60_000,
+    });
+}
+
 export function isMetaInstance(i: any): boolean {
     return i?.provider === "meta" || (i?.instance_name || "").startsWith("meta-");
 }
