@@ -58,6 +58,7 @@ import { useOwnerId } from "@/hooks/useOwnerId";
 import { usePermissions } from "@/hooks/usePermissions";
 import { cn } from "@/lib/utils";
 import { CLIENT_STAGE_BADGE, CLIENT_STAGE_LABEL, normalizeClientStage } from "@/lib/clientStage";
+import { useSuporteTour } from "@/lib/suporteTours";
 
 interface Contact {
     id: string;
@@ -86,6 +87,7 @@ interface Contact {
 
 
 const Contacts = () => {
+    useSuporteTour();
     const { canCreate, canEdit, canDelete } = usePermissions();
     const { data: userRole } = useUserRole();
     const isAgent = userRole === 'agent';
@@ -399,7 +401,7 @@ const Contacts = () => {
                 <div className="max-w-6xl mx-auto space-y-4 md:space-y-8">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div>
-                            <h1 className="text-2xl md:text-3xl font-bold">Contatos</h1>
+                            <h1 data-tour="clientes-title" className="text-2xl md:text-3xl font-bold">Contatos</h1>
                             <p className="text-muted-foreground text-sm md:text-base mt-1 md:mt-2">
                                 Gerencie seus contatos
                             </p>
@@ -439,7 +441,7 @@ const Contacts = () => {
                     </div>
 
                     {/* Channel Tabs */}
-                    <div className="flex gap-2">
+                    <div data-tour="clientes-filtros" className="flex gap-2">
                         <Button
                             variant={selectedChannelFilter === 'all' ? 'secondary' : 'outline'}
                             size="sm"
@@ -621,7 +623,7 @@ const Contacts = () => {
                         )}
                     </div>
 
-                    <div className="rounded-md border overflow-x-auto bg-white dark:bg-transparent border-[#D4D5D6] dark:border-border min-w-0">
+                    <div data-tour="clientes-tabela" className="rounded-md border overflow-x-auto bg-white dark:bg-transparent border-[#D4D5D6] dark:border-border min-w-0">
                         <Table className="md:table-fixed w-full">
                             <TableHeader>
                                 <TableRow>

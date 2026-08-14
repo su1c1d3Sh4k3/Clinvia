@@ -72,6 +72,24 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
                 "Arraste os cards entre colunas conforme a conversa evolui. Lembre: mover o card também muda a fila da conversa no inbox (e vice-versa).",
         },
     ],
+    "clientes-tour": [
+        {
+            element: '[data-tour="clientes-title"]',
+            title: "Página de Clientes",
+            description: "Todo mundo que já falou com a clínica está aqui — quem chega pelo WhatsApp/Instagram entra sozinho.",
+        },
+        {
+            element: '[data-tour="clientes-filtros"]',
+            title: "Filtros por canal e categoria",
+            description: "Filtre por WhatsApp/Instagram ou pelo selo automático: Contatos, Leads e Clientes.",
+        },
+        {
+            element: '[data-tour="clientes-tabela"]',
+            title: "A tabela",
+            description:
+                "Clique no NOME para abrir o perfil completo (9 abas). Na coluna IA, o interruptor liga/desliga a assistente só para aquele contato.",
+        },
+    ],
     "dashboard-abas": [
         {
             element: '[data-tour="dash-notifications"]',
