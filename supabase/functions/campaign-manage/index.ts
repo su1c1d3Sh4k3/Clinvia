@@ -277,11 +277,19 @@ interface EntryPayload {
     vars?: Record<string, string>;
 }
 
-/** Normaliza entries (novo formato) ou contact_ids (legado) em EntryPayload[]. */
+/** Normaliza entries (novo formato) ou contact_ids (legado) em EntryPayload[].
+ *  Regra: cada contato só pode ter UMA entrada por campanha — dedupe mantendo a
+ *  primeira ocorrência (o frontend já envia a entrada mais relevante primeiro). */
 function normalizeEntries(body: any): EntryPayload[] | undefined {
     if (body.entries !== undefined) {
+        const seen = new Set<string>();
         return ((body.entries || []) as any[])
             .filter((e) => e?.contact_id)
+            .filter((e) => {
+                if (seen.has(e.contact_id)) return false;
+                seen.add(e.contact_id);
+                return true;
+            })
             .map((e) => ({ contact_id: e.contact_id, vars: e.vars || {} }));
     }
     if (body.contact_ids !== undefined) {
@@ -597,7 +605,7 @@ serve(async (req) => {
                 if (aiPrompt) updates.ai_prompt = aiPrompt;
             }
 
-            // Audiência: substituição das linhas pendentes (entradas podem repetir contato)
+            // Audiência: substituição das linhas pendentes (1 entrada por contato)
             const entries = normalizeEntries(body);
             if (entries !== undefined) {
                 const { data: existing } = await supabase
@@ -621,8 +629,11 @@ serve(async (req) => {
                     .eq("campaign_id", campaign_id)
                     .in("status", ["pending", "invalid"]);
 
+                // Não reinsere contato que já tem linha mantida (sent etc.) — índice único
                 await insertCampaignContacts(
-                    supabase, campaign_id, ownerId, entries, (body.invalid_rows as any[]) || []
+                    supabase, campaign_id, ownerId,
+                    entries.filter((e) => !keptIds.has(e.contact_id)),
+                    (body.invalid_rows as any[]) || []
                 );
 
                 const toAdd = newIds.filter((id) => !oldIds.includes(id));

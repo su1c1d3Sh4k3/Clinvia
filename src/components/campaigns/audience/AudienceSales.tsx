@@ -14,7 +14,8 @@ export function AudienceSales({ value, onChange }: AudienceSalesProps) {
     const [from, setFrom] = useState<string>(value.config?.from || "");
     const [to, setTo] = useState<string>(value.config?.to || "");
 
-    // 1 entrada POR VENDA — o mesmo contato pode receber várias mensagens
+    // 1 entrada POR CONTATO — se o contato tem várias vendas no período,
+    // usa a mais recente para as variáveis
     const { data: entries } = useQuery({
         queryKey: ["audience-sales", from, to],
         queryFn: async (): Promise<AudienceEntry[]> => {
@@ -28,7 +29,11 @@ export function AudienceSales({ value, onChange }: AudienceSalesProps) {
             if (to) query = query.lte("sale_date", to);
             const { data, error } = await query;
             if (error) throw error;
-            return ((data || []) as any[]).map((r) => ({
+            // Dedupe por contato: ordenado por sale_date asc — a última ocorrência
+            // (venda mais recente) sobrescreve as anteriores
+            const byContact = new Map<string, any>();
+            for (const r of (data || []) as any[]) byContact.set(r.contact_id, r);
+            return [...byContact.values()].map((r) => ({
                 contactId: r.contact_id,
                 vars: {
                     data_venda: r.sale_date ? new Date(r.sale_date + "T12:00:00").toLocaleDateString("pt-BR") : "",
@@ -47,8 +52,6 @@ export function AudienceSales({ value, onChange }: AudienceSalesProps) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [entries]);
 
-    const uniqueContacts = new Set((entries || []).map((e) => e.contactId)).size;
-
     return (
         <div className="space-y-3">
             <div className="grid grid-cols-2 gap-2">
@@ -62,11 +65,8 @@ export function AudienceSales({ value, onChange }: AudienceSalesProps) {
                 </div>
             </div>
             <p className="text-sm text-muted-foreground">
-                <span className="font-semibold text-foreground">{entries?.length ?? "..."}</span> vendas
-                {entries != null && uniqueContacts !== entries.length && (
-                    <> de <span className="font-semibold text-foreground">{uniqueContacts}</span> contatos</>
-                )}{" "}
-                no período — cada venda gera uma mensagem
+                <span className="font-semibold text-foreground">{entries?.length ?? "..."}</span> contatos
+                no período — 1 mensagem por contato (usa a venda mais recente)
             </p>
         </div>
     );

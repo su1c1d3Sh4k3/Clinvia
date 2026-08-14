@@ -44,7 +44,8 @@ export function AudienceAppointments({ value, onChange }: AudienceAppointmentsPr
         },
     });
 
-    // 1 entrada POR AGENDAMENTO — o mesmo contato pode receber várias mensagens
+    // 1 entrada POR CONTATO — se o contato tem vários agendamentos no período,
+    // usa o próximo futuro (senão o mais recente) para as variáveis
     const { data: entries } = useQuery({
         queryKey: ["audience-appointments", professionalId, status, from, to],
         queryFn: async (): Promise<AudienceEntry[]> => {
@@ -61,7 +62,26 @@ export function AudienceAppointments({ value, onChange }: AudienceAppointmentsPr
             if (to) query = query.lte("start_time", new Date(to + "T23:59:59").toISOString());
             const { data, error } = await query;
             if (error) throw error;
-            return ((data || []) as any[]).map((r) => {
+            // Dedupe por contato: linhas vêm ordenadas por start_time asc —
+            // primeiro agendamento futuro vence; sem futuro, fica o último passado
+            const now = Date.now();
+            const byContact = new Map<string, any>();
+            for (const r of (data || []) as any[]) {
+                const ts = r.start_time ? new Date(r.start_time).getTime() : 0;
+                const cur = byContact.get(r.contact_id);
+                if (!cur) {
+                    byContact.set(r.contact_id, r);
+                    continue;
+                }
+                const curTs = cur.start_time ? new Date(cur.start_time).getTime() : 0;
+                const curFuture = curTs >= now;
+                const isFuture = ts >= now;
+                // já temos futuro (o mais próximo, pois asc): não troca
+                if (curFuture) continue;
+                // atual é passado: futuro ganha; entre passados, o mais recente (asc → substitui)
+                if (isFuture || ts > curTs) byContact.set(r.contact_id, r);
+            }
+            return [...byContact.values()].map((r) => {
                 const start = r.start_time ? new Date(r.start_time) : null;
                 return {
                     contactId: r.contact_id,
@@ -90,8 +110,6 @@ export function AudienceAppointments({ value, onChange }: AudienceAppointmentsPr
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [entries]);
-
-    const uniqueContacts = new Set((entries || []).map((e) => e.contactId)).size;
 
     return (
         <div className="space-y-3">
@@ -135,11 +153,8 @@ export function AudienceAppointments({ value, onChange }: AudienceAppointmentsPr
                 </div>
             </div>
             <p className="text-sm text-muted-foreground">
-                <span className="font-semibold text-foreground">{entries?.length ?? "..."}</span> agendamentos
-                {entries != null && uniqueContacts !== entries.length && (
-                    <> de <span className="font-semibold text-foreground">{uniqueContacts}</span> contatos</>
-                )}{" "}
-                — cada agendamento gera uma mensagem
+                <span className="font-semibold text-foreground">{entries?.length ?? "..."}</span> contatos
+                — 1 mensagem por contato (usa o próximo agendamento ou o mais recente)
             </p>
         </div>
     );
