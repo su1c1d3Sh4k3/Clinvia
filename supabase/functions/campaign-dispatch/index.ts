@@ -103,6 +103,21 @@ function renderMessage(campaign: any, contact: any, rawData: any): string {
     );
 }
 
+// Marca a campanha como error e libera as entradas nunca enviadas (skipped):
+// campanha 'error' não é mais pega pelo pick, então pending ficaria preso
+// para sempre inflando as métricas (caso Density 200).
+async function failCampaign(supabase: any, campaignId: string, message: string) {
+    await supabase
+        .from("campaigns")
+        .update({ status: "error", error_message: message })
+        .eq("id", campaignId);
+    await supabase
+        .from("campaign_contacts")
+        .update({ status: "skipped", error: "Campanha com erro antes do envio" })
+        .eq("campaign_id", campaignId)
+        .in("status", ["pending", "sending"]);
+}
+
 // ── Fase 1: promoção ─────────────────────────────────────────────────────────
 async function promoteCampaigns(supabase: any) {
     const { data: due } = await supabase
@@ -114,10 +129,7 @@ async function promoteCampaigns(supabase: any) {
     for (const camp of due || []) {
         try {
             if (!camp.instance_id) {
-                await supabase
-                    .from("campaigns")
-                    .update({ status: "error", error_message: "Instância da campanha removida" })
-                    .eq("id", camp.id);
+                await failCampaign(supabase, camp.id, "Instância da campanha removida");
                 continue;
             }
 
@@ -132,10 +144,7 @@ async function promoteCampaigns(supabase: any) {
             }
 
             if (!camp.template_name) {
-                await supabase
-                    .from("campaigns")
-                    .update({ status: "error", error_message: "Template não foi criado" })
-                    .eq("id", camp.id);
+                await failCampaign(supabase, camp.id, "Template não foi criado");
                 continue;
             }
 
@@ -164,13 +173,7 @@ async function promoteCampaigns(supabase: any) {
             } else if (tplStatus === "PENDING" || tplStatus === null) {
                 const delay = Date.now() - new Date(camp.scheduled_at).getTime();
                 if (delay > MAX_TEMPLATE_WAIT_MS) {
-                    await supabase
-                        .from("campaigns")
-                        .update({
-                            status: "error",
-                            error_message: "Template não foi aprovado pela Meta a tempo",
-                        })
-                        .eq("id", camp.id);
+                    await failCampaign(supabase, camp.id, "Template não foi aprovado pela Meta a tempo");
                 } else if (camp.status !== "awaiting_template") {
                     await supabase
                         .from("campaigns")
@@ -179,13 +182,11 @@ async function promoteCampaigns(supabase: any) {
                 }
             } else {
                 // REJECTED / DISABLED / PAUSED
-                await supabase
-                    .from("campaigns")
-                    .update({
-                        status: "error",
-                        error_message: `Template rejeitado pela Meta${tpl?.rejection_reason ? ` (${tpl.rejection_reason})` : ""} — recrie a mensagem`,
-                    })
-                    .eq("id", camp.id);
+                await failCampaign(
+                    supabase,
+                    camp.id,
+                    `Template rejeitado pela Meta${tpl?.rejection_reason ? ` (${tpl.rejection_reason})` : ""} — recrie a mensagem`,
+                );
             }
         } catch (err) {
             console.error(`[campaign-dispatch] promote error for ${camp.id}:`, err);
@@ -314,13 +315,16 @@ async function findOrCreateConversation(
     campaign: any,
     contactId: string,
 ): Promise<{ id: string; created: boolean }> {
-    // Reusa qualquer conversa ativa do contato (sem filtrar por instância):
-    // evita conversa duplicada quando a campanha sai por outra instância
+    // Reusa conversa ativa do contato NA MESMA instância da campanha.
+    // Sem o filtro, campanha Meta podia reusar conversa UAZAPI (e vice-versa):
+    // envio saía pelo número errado ou falhava, e o bd_data.campaign da IA
+    // não achava a campanha (filtra pela instância da conversa).
     const { data: existing } = await supabase
         .from("conversations")
         .select("id")
         .eq("contact_id", contactId)
         .eq("user_id", campaign.user_id)
+        .eq("instance_id", campaign.instance_id)
         .in("status", ["pending", "open"])
         .order("last_message_at", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false })
