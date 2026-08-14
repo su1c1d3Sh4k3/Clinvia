@@ -123,6 +123,7 @@ export function CampaignCard({ campaign, stats, onEdit, onResend }: CampaignCard
     const total = stats?.total_contacts ?? campaign.total_contacts ?? 0;
     const validCount = stats?.valid_contacts ?? (total - (counts.invalid || 0));
     const sentCount = stats?.sent_count ?? counts.sent ?? 0;
+    const sendPct = validCount > 0 ? Math.round((sentCount / validCount) * 100) : 0;
     const rate = rateData?.rate ?? 5.5;
     const estimatedCost = isUazapi
         ? 0
@@ -201,6 +202,21 @@ export function CampaignCard({ campaign, stats, onEdit, onResend }: CampaignCard
                         {sentCount ? ` · ${sentCount} enviados` : ""}
                         {(stats?.failed_count ?? counts.failed) ? ` · ${stats?.failed_count ?? counts.failed} falhas` : ""}
                     </p>
+                </div>
+                {/* Barra de conclusão do envio (mesma da dashboard) */}
+                <div className="flex-1 min-w-[120px] max-w-full sm:max-w-[280px] ml-auto shrink-0">
+                    <p className="text-[10px] text-muted-foreground mb-1 text-right">
+                        Envios ({sentCount}/{validCount})
+                    </p>
+                    <div className="flex items-center gap-2">
+                        <div className="flex-1 h-2.5 bg-muted rounded-full overflow-hidden">
+                            <div
+                                className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-green-400 transition-all duration-500"
+                                style={{ width: `${sendPct}%` }}
+                            />
+                        </div>
+                        <span className="text-xs text-muted-foreground w-9 text-right">{sendPct}%</span>
+                    </div>
                 </div>
                 {RESENDABLE_STATUSES.includes(campaign.status) && onResend && (
                     <TooltipProvider>
