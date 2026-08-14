@@ -12,6 +12,7 @@ import { Headphones, Users, ShoppingCart, CalendarDays, Megaphone, Smile } from 
 import { useUserRole } from "@/hooks/useUserRole";
 import { useFinancialAccess } from "@/hooks/useFinancialAccess";
 import { cn } from "@/lib/utils";
+import { useSuporteTour } from "@/lib/suporteTours";
 
 type DashboardTab = "monitoramento" | "crm" | "vendas" | "agendamentos" | "campanhas" | "satisfacao";
 
@@ -22,6 +23,7 @@ const Dashboard = () => {
     const activeTab = urlTab as DashboardTab;
 
     const canViewSales = userRole === 'admin' || (userRole === 'supervisor' && financialAccess !== false);
+    useSuporteTour(!!userRole);
 
     // Forçar aba "crm" para agentes
     useEffect(() => {
@@ -37,11 +39,13 @@ const Dashboard = () => {
             </div>
 
             <div className="space-y-4 md:space-y-6">
-                <NotificationsBoard />
+                <div data-tour="dash-notifications">
+                    <NotificationsBoard />
+                </div>
 
                 {/* Dashboard Tabs - Agentes só veem Painel de Negócios */}
                 <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as DashboardTab)} className="w-full">
-                    <TabsList className={cn(
+                    <TabsList data-tour="dash-tabs" className={cn(
                         "grid w-full max-w-5xl mx-auto",
                         userRole === 'agent' ? "grid-cols-1" : canViewSales ? "grid-cols-6" : "grid-cols-5"
                     )}>

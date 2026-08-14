@@ -72,6 +72,19 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
                 "Arraste os cards entre colunas conforme a conversa evolui. Lembre: mover o card também muda a fila da conversa no inbox (e vice-versa).",
         },
     ],
+    "dashboard-abas": [
+        {
+            element: '[data-tour="dash-notifications"]',
+            title: "Quadro de avisos",
+            description: "Notificações do sistema para toda a equipe aparecem aqui, no topo do Dashboard.",
+        },
+        {
+            element: '[data-tour="dash-tabs"]',
+            title: "As abas do Dashboard",
+            description:
+                "Monitoramento (ao vivo), CRM (funil), Vendas (financeiro), Agendamentos (ocupação + mensagens automáticas), Campanhas e Satisfação (NPS). O que você vê depende do seu papel.",
+        },
+    ],
     "agenda-tour": [
         {
             element: '[data-tour="agenda-nav"]',
