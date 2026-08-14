@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { driver } from "driver.js";
 import "driver.js/dist/driver.css";
 
@@ -33,6 +35,27 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
         },
     ],
 };
+
+/**
+ * Wiring padrão do `?tour=<id>` nas páginas reais: aguarda a renderização,
+ * inicia o tour e limpa o parâmetro preservando os demais (ex.: ?tab=).
+ */
+export function useSuporteTour(ready = true) {
+    const [searchParams, setSearchParams] = useSearchParams();
+    const tourId = searchParams.get("tour");
+    useEffect(() => {
+        if (!tourId || !ready) return;
+        const t = setTimeout(() => {
+            startSuporteTour(tourId);
+            setSearchParams((prev) => {
+                const next = new URLSearchParams(prev);
+                next.delete("tour");
+                return next;
+            }, { replace: true });
+        }, 400);
+        return () => clearTimeout(t);
+    }, [tourId, ready, setSearchParams]);
+}
 
 export function startSuporteTour(tourId: string) {
     const steps = TOURS[tourId];

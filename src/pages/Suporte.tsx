@@ -1,14 +1,58 @@
+import { ComponentType } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Megaphone } from "lucide-react";
+import {
+    LayoutDashboard, MessageSquare, KanbanSquare, Package, Users, ShieldCheck,
+    Calendar, Repeat, Megaphone, Bot, Plug, Settings, Construction, LucideIcon,
+} from "lucide-react";
 import { CampaignsGuide } from "@/components/suporte/CampaignsGuide";
 import { useUrlTab } from "@/hooks/useUrlTab";
 
+/** Placeholder para guias ainda não escritos (e para Recorrência, em aprovação). */
+function GuidePlaceholder({ title }: { title: string }) {
+    return (
+        <div className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed p-10 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+                <Construction className="h-6 w-6" />
+            </div>
+            <div>
+                <p className="font-semibold">Guia de {title} em construção</p>
+                <p className="text-sm text-muted-foreground">
+                    As regras desta ferramenta estão em aprovação — o manual será publicado em breve.
+                </p>
+            </div>
+        </div>
+    );
+}
+
+interface GuideTab {
+    value: string;
+    label: string;
+    icon: LucideIcon;
+    component: ComponentType;
+}
+
+/** Ordem espelha a sidebar do sistema. */
+const GUIDE_TABS: GuideTab[] = [
+    { value: "dashboard", label: "Dashboard", icon: LayoutDashboard, component: () => <GuidePlaceholder title="Dashboard" /> },
+    { value: "inbox", label: "Inbox", icon: MessageSquare, component: () => <GuidePlaceholder title="Inbox" /> },
+    { value: "crm", label: "CRM", icon: KanbanSquare, component: () => <GuidePlaceholder title="CRM" /> },
+    { value: "servicos", label: "Serviços", icon: Package, component: () => <GuidePlaceholder title="Serviços" /> },
+    { value: "clientes", label: "Clientes", icon: Users, component: () => <GuidePlaceholder title="Clientes" /> },
+    { value: "equipe", label: "Equipe", icon: ShieldCheck, component: () => <GuidePlaceholder title="Equipe" /> },
+    { value: "agenda", label: "Agenda", icon: Calendar, component: () => <GuidePlaceholder title="Agenda" /> },
+    { value: "recorrencia", label: "Recorrência", icon: Repeat, component: () => <GuidePlaceholder title="Recorrência" /> },
+    { value: "campanhas", label: "Campanhas", icon: Megaphone, component: CampaignsGuide },
+    { value: "ia", label: "IA", icon: Bot, component: () => <GuidePlaceholder title="IA" /> },
+    { value: "conexoes", label: "Conexões", icon: Plug, component: () => <GuidePlaceholder title="Conexões" /> },
+    { value: "configuracoes", label: "Configurações", icon: Settings, component: () => <GuidePlaceholder title="Configurações" /> },
+];
+
 /**
  * Página Suporte — manual interativo do sistema.
- * Cada aba documenta uma ferramenta (por enquanto: Campanhas).
+ * Cada aba documenta uma ferramenta, na mesma ordem da sidebar.
  */
 export default function Suporte() {
-    const [tab, setTab] = useUrlTab("campanhas");
+    const [tab, setTab] = useUrlTab("dashboard");
     return (
         <div className="mx-auto w-full max-w-7xl p-4 md:p-6">
             <div className="mb-4">
@@ -19,14 +63,18 @@ export default function Suporte() {
             </div>
             <Tabs value={tab} onValueChange={setTab}>
                 <TabsList className="mb-4 flex w-full justify-start overflow-x-auto flex-nowrap">
-                    <TabsTrigger value="campanhas" className="shrink-0 gap-1.5">
-                        <Megaphone className="h-4 w-4" />
-                        Campanhas
-                    </TabsTrigger>
+                    {GUIDE_TABS.map((t) => (
+                        <TabsTrigger key={t.value} value={t.value} className="shrink-0 gap-1.5">
+                            <t.icon className="h-4 w-4" />
+                            {t.label}
+                        </TabsTrigger>
+                    ))}
                 </TabsList>
-                <TabsContent value="campanhas">
-                    <CampaignsGuide />
-                </TabsContent>
+                {GUIDE_TABS.map((t) => (
+                    <TabsContent key={t.value} value={t.value}>
+                        <t.component />
+                    </TabsContent>
+                ))}
             </Tabs>
         </div>
     );
