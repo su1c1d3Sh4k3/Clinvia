@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { useGroupMembers } from "@/hooks/useGroupMembers";
 import { ContactCard } from "@/components/chat/ContactCard";
 import { CustomAudioPlayer } from "@/components/chat/CustomAudioPlayer";
+import { FormattedText, parseTemplateBody } from "@/components/chat/FormattedText";
 
 interface MessageListProps {
     messages: any[];
@@ -204,77 +205,35 @@ export const MessageList = ({
     // Render helpers
     const { data: groupMembers } = useGroupMembers(conversation?.id, true);
 
-    const HighlightText = ({ text, highlight }: { text: string, highlight: string }) => {
-        // Regex to match URLs OR Mentions (@number)
-        // Matches:
-        // 1. URLs (http/https)
-        // 2. Mentions (@number)
-        const tokenRegex = /(https?:\/\/[^\s]+)|(@\d+)|(\*[^*\n]+\*)|(_[^_\n]+_)/gi;
-
-        // Split and filter undefined captures (because of capture groups in split)
-        const parts = text.split(tokenRegex).filter(part => part !== undefined && part !== "");
-
-        return (
-            <span>
-                {parts.map((part, i) => {
-                    // URL Handling
-                    if (/^https?:\/\//i.test(part)) {
-                        return <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline break-all" onClick={(e) => e.stopPropagation()}>{part}</a>;
-                    }
-
-                    // Mention Handling
-                    // Mention Handling
-                    // Matches @digits (e.g. @55119999999) or @lid (e.g. @12345678)
-                    if (/^@\d+(@[a-zA-Z.]+)?$/.test(part)) {
-                        const rawId = part.substring(1).split('@')[0]; // Extract just digits/id
-
-                        const member = groupMembers?.find(m => {
-                            // 1. Try match by LID
-                            if (m.lid && m.lid === rawId) return true;
-                            // 2. Try match by Clean Number (fallback for old mentions)
-                            const mClean = m.cleanNumber || m.number?.split('@')[0];
-                            return mClean === rawId;
-                        });
-
-                        if (member) {
-                            return (
-                                <span
-                                    key={i}
-                                    className="text-blue-500 font-medium cursor-pointer hover:underline"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        // Open chat/profile with this person
-                                        if (onOpenNewMessage) onOpenNewMessage(member.cleanNumber || member.number);
-                                    }}
-                                >
-                                    @{member.push_name || member.cleanNumber || member.number}
-                                </span>
-                            );
-                        }
-                    }
-
-                    // Bold *text*
-                    if (/^\*[^*\n]+\*$/.test(part)) {
-                        return <strong key={i}>{part.slice(1, -1)}</strong>;
-                    }
-
-                    // Italic _text_
-                    if (/^_[^_\n]+_$/.test(part)) {
-                        return <em key={i}>{part.slice(1, -1)}</em>;
-                    }
-
-                    // Search Highlight Handling
-                    if (!highlight.trim()) return <span key={i}>{part}</span>;
-                    const highlightParts = part.split(new RegExp(`(${highlight})`, 'gi'));
-                    return (
-                        <span key={i}>
-                            {highlightParts.map((hPart, j) => hPart.toLowerCase() === highlight.toLowerCase() ? <span key={j} className="bg-yellow-200 text-black font-medium px-0.5 rounded">{hPart}</span> : hPart)}
-                        </span>
-                    );
-                })}
-            </span>
-        );
-    };
+    // Formatação compartilhada (FormattedText) + resolução de menções de grupo
+    const HighlightText = ({ text, highlight }: { text: string, highlight: string }) => (
+        <FormattedText
+            text={text}
+            highlight={highlight}
+            renderMention={(rawId) => {
+                const member = groupMembers?.find(m => {
+                    // 1. Try match by LID
+                    if (m.lid && m.lid === rawId) return true;
+                    // 2. Try match by Clean Number (fallback for old mentions)
+                    const mClean = m.cleanNumber || m.number?.split('@')[0];
+                    return mClean === rawId;
+                });
+                if (!member) return null;
+                return (
+                    <span
+                        className="text-blue-500 font-medium cursor-pointer hover:underline"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            // Open chat/profile with this person
+                            if (onOpenNewMessage) onOpenNewMessage(member.cleanNumber || member.number);
+                        }}
+                    >
+                        @{member.push_name || member.cleanNumber || member.number}
+                    </span>
+                );
+            }}
+        />
+    );
 
     const cleanMessageBody = (body: string) => body ? body.replace(/^\*[^*]+:\*\n/, "") : "";
 
@@ -528,7 +487,7 @@ export const MessageList = ({
                                 }
 
                                 // Template messages: "*Template enviado: name*\nbody"
-                                const tplMatch = body.match(/^\*Template enviado: ([^*]+)\*\n([\s\S]*)$/);
+                                const tplMatch = parseTemplateBody(body);
                                 if (tplMatch) {
                                     return (
                                         <div className="text-sm break-words [overflow-wrap:anywhere]">

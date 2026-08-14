@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
+import { TERMINAL_STAGES } from "../_shared/crm-stages.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -12,7 +13,6 @@ const CRM_STAGES = [
     'Ganho', 'Perdido', 'Sem Contato', 'Sem Interesse', 'Finalizado',
 ];
 
-const TERMINAL_STAGES = ['Ganho', 'Perdido', 'Sem Contato', 'Sem Interesse', 'Finalizado'];
 
 /** UTC → São Paulo (-03:00) */
 function toSaoPaulo(iso: string | null | undefined): string | null {

@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { addMinutes, parse, format, isBefore, isEqual, parseISO } from "https://esm.sh/date-fns@2.30.0";
+import { getWorkHoursForDay } from "../_shared/professional-schedule.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -58,6 +59,8 @@ serve(async (req) => {
         let breakEndHour: number | null = null;
 
         // 2. Fetch Professional Specifics (if provided)
+        // Horas aplicadas depois de conhecer o dia da semana (horário individual por dia)
+        let professionalRow: Record<string, unknown> | null = null;
         if (professional_id) {
             const { data: professional, error: proError } = await supabase
                 .from("professionals")
@@ -68,17 +71,9 @@ serve(async (req) => {
             if (proError) throw proError;
 
             if (professional) {
+                professionalRow = professional;
                 if (professional.work_days && professional.work_days.length > 0) {
                     workDays = professional.work_days;
-                }
-                if (professional.work_hours) {
-                    const wh = professional.work_hours;
-                    // work_hours é JSONB com valores numéricos (horas decimais)
-                    // ex: { start: 8, end: 18, break_start: 12, break_end: 13 }
-                    if (wh.start != null) startHour = Number(wh.start);
-                    if (wh.end   != null) endHour   = Number(wh.end);
-                    if (wh.break_start != null) breakStartHour = Number(wh.break_start);
-                    if (wh.break_end   != null) breakEndHour   = Number(wh.break_end);
                 }
             }
         }
@@ -105,6 +100,23 @@ serve(async (req) => {
                 JSON.stringify({ available_slots: [], message: "Day is not a work day" }),
                 { headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
+        }
+
+        // Horário do profissional para ESTE dia (respeita horário individual por dia)
+        if (professionalRow) {
+            const toHour = (v: string | number | null | undefined): number | null => {
+                if (v == null || v === "") return null;
+                if (typeof v === "number") return v;
+                const m = String(v).match(/^(\d{1,2})(?::(\d{2}))?$/);
+                if (!m) { const n = Number(v); return Number.isNaN(n) ? null : n; }
+                return parseInt(m[1], 10) + (m[2] ? parseInt(m[2], 10) / 60 : 0);
+            };
+            const wh = getWorkHoursForDay(professionalRow as any, dayOfWeek);
+            const s = toHour(wh.start), e = toHour(wh.end);
+            if (s != null) startHour = s;
+            if (e != null) endHour = e;
+            breakStartHour = toHour(wh.break_start);
+            breakEndHour = toHour(wh.break_end);
         }
 
         // 5. Fetch Existing Appointments + Clinic-wide GCal Absences
@@ -143,10 +155,10 @@ serve(async (req) => {
         // 6. Calculate Slots
         const slots: string[] = [];
         let currentSlot = new Date(requestedDate);
-        currentSlot.setHours(startHour, 0, 0, 0);
+        currentSlot.setHours(Math.floor(startHour), Math.round((startHour % 1) * 60), 0, 0);
 
         const endTime = new Date(requestedDate);
-        endTime.setHours(endHour, 0, 0, 0);
+        endTime.setHours(Math.floor(endHour), Math.round((endHour % 1) * 60), 0, 0);
 
         // Pre-calcular início/fim do break em Date para comparação
         let breakStartDate: Date | null = null;

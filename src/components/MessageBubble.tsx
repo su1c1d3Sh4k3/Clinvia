@@ -4,6 +4,7 @@ import { Download, Clock, AlertCircle, Check, CheckCheck, FileText } from "lucid
 import { cn } from "@/lib/utils";
 import { LazyMedia } from "@/components/LazyMedia";
 import { CustomAudioPlayer } from "@/components/chat/CustomAudioPlayer";
+import { FormattedText, parseTemplateBody } from "@/components/chat/FormattedText";
 import { toast } from "sonner";
 
 interface MessageBubbleProps {
@@ -78,62 +79,10 @@ export function MessageBubble({
         }
     };
 
-    const HighlightText = ({ text, highlight }: { text: string, highlight: string }) => {
-        // Split by URLs, bold (*text*), and italic (_text_)
-        const tokenRegex = /(https?:\/\/[^\s]+|\*[^*\n]+\*|_[^_\n]+_)/gi;
-        const parts = text.split(tokenRegex);
-
-        return (
-            <span>
-                {parts.map((part, i) => {
-                    // URLs
-                    if (/^https?:\/\//i.test(part)) {
-                        return (
-                            <a
-                                key={i}
-                                href={part}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-400 hover:text-blue-300 underline break-all"
-                                onClick={(e) => e.stopPropagation()}
-                            >
-                                {part}
-                            </a>
-                        );
-                    }
-
-                    // Bold *text*
-                    if (/^\*[^*]+\*$/.test(part)) {
-                        const inner = part.slice(1, -1);
-                        return <strong key={i}>{inner}</strong>;
-                    }
-
-                    // Italic _text_
-                    if (/^_[^_]+_$/.test(part)) {
-                        const inner = part.slice(1, -1);
-                        return <em key={i}>{inner}</em>;
-                    }
-
-                    if (!highlight.trim()) return <span key={i}>{part}</span>;
-
-                    const highlightParts = part.split(new RegExp(`(${highlight.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
-                    return (
-                        <span key={i}>
-                            {highlightParts.map((hPart, j) =>
-                                hPart.toLowerCase() === highlight.toLowerCase() ? (
-                                    <span key={j} className="bg-yellow-200 text-black font-medium px-0.5 rounded">
-                                        {hPart}
-                                    </span>
-                                ) : (
-                                    hPart
-                                )
-                            )}
-                        </span>
-                    );
-                })}
-            </span>
-        );
-    };
+    // Formatação compartilhada com o Inbox — regras novas vão em FormattedText
+    const HighlightText = ({ text, highlight }: { text: string, highlight: string }) => (
+        <FormattedText text={text} highlight={highlight} />
+    );
 
     const cleanMessageBody = (body: string) => {
         if (!body) return "";
@@ -241,7 +190,7 @@ export function MessageBubble({
             {msg.body && msg.message_type !== 'document' && msg.message_type !== 'audio' && msg.body !== '[Áudio]' && (() => {
                 const body = cleanMessageBody(msg.body);
                 // Template messages: "*Template enviado: name*\nbody"
-                const tplMatch = body.match(/^\*Template enviado: ([^*]+)\*\n([\s\S]*)$/);
+                const tplMatch = parseTemplateBody(body);
                 if (tplMatch) {
                     return (
                         <div className="text-sm break-words">

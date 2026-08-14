@@ -16,6 +16,7 @@ import { FaWhatsapp, FaInstagram, FaFacebook } from "react-icons/fa";
 import { Badge } from "@/components/ui/badge";
 import { AlertCircle, AlertTriangle, CheckCircle2, Loader2, Plus, RefreshCw, Trash2, Shield, ExternalLink, Smartphone, FileText } from "lucide-react";
 import { useSearchParams, useNavigate } from "react-router-dom";
+import { useUrlTab } from "@/hooks/useUrlTab";
 import Templates from "./Templates";
 import AutomaticMessages from "@/components/connections/AutomaticMessages";
 import { MetaQualityBadge } from "@/components/campaigns/MetaQualityPanel";
@@ -67,11 +68,8 @@ const Connections = () => {
     const [isConnectingMeta, setIsConnectingMeta] = useState(false);
 
     // Outer tab: Conexões | Templates (Meta) | Mensagens API não oficial (UAZAPI)
-    // Deep-links: ?tab=templates | ?tab=automessages
-    const initialTab = searchParams.get("tab");
-    const [outerTab, setOuterTab] = useState(
-        initialTab === "templates" ? "templates" : initialTab === "automessages" ? "automessages" : "connections"
-    );
+    // Persistida na URL: ?tab=templates | ?tab=automessages
+    const [outerTab, setOuterTab] = useUrlTab("connections");
 
     // All Instances Query — filter by provider in JS (provider column not in generated types)
     const { data: allInstances, isLoading: loadingInstances } = useQuery({

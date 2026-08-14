@@ -14,6 +14,9 @@ import {
     Dialog, DialogContent, DialogDescription, DialogFooter,
     DialogHeader, DialogTitle
 } from "@/components/ui/dialog";
+// Corpos default — FONTE ÚNICA em supabase/functions/_shared/uazapi-automation-messages.ts
+// (arquivo puro, sem imports Deno — compartilhado entre edge e frontend)
+import { DEFAULT_UAZAPI_BODIES as DEFAULT_BODIES } from "../../../supabase/functions/_shared/uazapi-automation-messages";
 
 // ── Mensagens automáticas da API não oficial (UAZAPI) ───────────────────────
 // Espelham os 4 templates de sistema da Meta, com corpo editável e switch
@@ -69,17 +72,6 @@ const AUTO_MSG_META: Record<string, {
 
 const AUTO_MSG_ORDER = Object.keys(AUTO_MSG_META);
 
-// Corpos default — devem espelhar _shared/uazapi-automation-messages.ts
-const DEFAULT_BODIES: Record<string, string> = {
-    sys_confirm_24h_v1:
-        "Olá {{nome_cliente}}, tudo bem com você? Estou entrando em contato para confirmar seu agendamento amanhã às {{horario}} aqui na {{clinica}} para o procedimento de {{servico}} com {{profissional}}. Posso confirmar sua presença?",
-    sys_confirm_multi_v1:
-        "Olá {{nome_cliente}}, tudo bem com você? Estou entrando em contato para confirmar seus agendamentos de amanhã aqui na {{clinica}}:\n\n{{agendamentos}}\n\nPosso confirmar sua presença em todos?",
-    sys_reminder_2h_v1:
-        "Olá {{nome_cliente}}, passando para reforçar seu atendimento às {{horarios}} aqui na clínica, se puder chegar com pelo menos 30 min de antecedencia seria o ideal, estamos te aguardando.",
-    sys_feedback_24h_v1:
-        "Como vai {{nome_cliente}}, espero que esteja bem, estou passando para pedir seu feedback sobre seu atendimento aqui na clínica ontem, se puder por gentileza nos dar seu feedback:",
-};
 
 const AutomaticMessages = () => {
     const { toast } = useToast();

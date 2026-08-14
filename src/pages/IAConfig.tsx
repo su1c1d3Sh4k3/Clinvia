@@ -4,6 +4,7 @@ import { useOwnerId } from "@/hooks/useOwnerId";
 import { useUserRole } from "@/hooks/useUserRole";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useNavigate } from "react-router-dom";
+import { useUrlTab } from "@/hooks/useUrlTab";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -130,6 +131,7 @@ export default function IAConfig() {
     const { hasAnyAccess, isReady } = usePermissions();
     const navigate = useNavigate();
     const queryClient = useQueryClient();
+    const [tab, setTab] = useUrlTab("company");
     const [loading, setLoading] = useState(false);
     const [config, setConfig] = useState<IAConfigData>(defaultConfig);
 
@@ -785,7 +787,7 @@ export default function IAConfig() {
                 <h1 className="text-2xl md:text-3xl font-bold text-foreground">Definições de IA</h1>
             </div>
 
-            <Tabs defaultValue="company" className="w-full">
+            <Tabs value={tab} onValueChange={setTab} className="w-full">
                 <TabsList className="grid w-full grid-cols-3 mb-4 md:mb-8 h-auto">
                     <TabsTrigger value="company" className="flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
                         <Building2 className="h-4 w-4" />

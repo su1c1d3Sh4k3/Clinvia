@@ -22,6 +22,15 @@ const RED = "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300";
 const SLATE = "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400";
 const ORANGE = "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300";
 const PURPLE = "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300";
+const SKY = "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300";
+
+// Cores + rótulo por motivo de congelamento (resultado fixado no 1º desfecho)
+const FROZEN_META: Record<string, { className: string; title: string }> = {
+    scheduled: { className: GREEN, title: "Congelado: agendou" },
+    resolved: { className: SKY, title: "Congelado: ticket encerrado" },
+    moved: { className: ORANGE, title: "Congelado: movido no CRM" },
+    expired: { className: SLATE, title: "Congelado: campanha expirada" },
+};
 
 /** Status efetivo: refina 'sent' com o status real da mensagem (Meta reporta async).
  *  Fallback no snapshot message_status — mensagens são deletadas quando a conversa
@@ -370,7 +379,8 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
                                             rep.frozen ? (
                                                 <Badge
                                                     variant="secondary"
-                                                    className={`${rep.frozen_reason === "scheduled" ? GREEN : ORANGE} whitespace-nowrap`}
+                                                    className={`${(FROZEN_META[rep.frozen_reason || ""] || { className: ORANGE }).className} whitespace-nowrap`}
+                                                    title={FROZEN_META[rep.frozen_reason || ""]?.title}
                                                 >
                                                     {rep.agent}
                                                 </Badge>

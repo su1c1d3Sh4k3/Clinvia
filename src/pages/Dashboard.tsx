@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
+import { useUrlTab } from "@/hooks/useUrlTab";
 import { MonitoramentoTab } from "@/components/dashboard/monitoramento/MonitoramentoTab";
 import { NotificationsBoard } from "@/components/dashboard/NotificationsBoard";
 import { SalesDashboard } from "@/components/dashboard/SalesDashboard";
@@ -17,7 +18,8 @@ type DashboardTab = "monitoramento" | "crm" | "vendas" | "agendamentos" | "campa
 const Dashboard = () => {
     const { data: userRole } = useUserRole();
     const { data: financialAccess } = useFinancialAccess();
-    const [activeTab, setActiveTab] = useState<DashboardTab>("crm");
+    const [urlTab, setActiveTab] = useUrlTab("crm");
+    const activeTab = urlTab as DashboardTab;
 
     const canViewSales = userRole === 'admin' || (userRole === 'supervisor' && financialAccess !== false);
 
