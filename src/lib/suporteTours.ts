@@ -54,6 +54,24 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
                 "Passe o mouse para expandir: dados do cliente, etapa do CRM, negociação rápida, resumo da IA e atalhos de venda/agendamento.",
         },
     ],
+    "crm-board": [
+        {
+            element: '[data-tour="crm-title"]',
+            title: "CRM — o funil da clínica",
+            description: "Cada coluna é uma etapa da jornada; cada card é um cliente com sua negociação.",
+        },
+        {
+            element: '[data-tour="crm-new-deal"]',
+            title: "Nova negociação",
+            description: "Crie um card manualmente — escolha o cliente, os serviços de interesse e o valor.",
+        },
+        {
+            element: '[data-tour="crm-board"]',
+            title: "O quadro",
+            description:
+                "Arraste os cards entre colunas conforme a conversa evolui. Lembre: mover o card também muda a fila da conversa no inbox (e vice-versa).",
+        },
+    ],
     "ia-config": [
         {
             element: '[data-tour="ia-tabs"]',

@@ -7,6 +7,7 @@ import {
 import { CampaignsGuide } from "@/components/suporte/CampaignsGuide";
 import { IaGuide } from "@/components/suporte/IaGuide";
 import { InboxGuide } from "@/components/suporte/InboxGuide";
+import { CrmGuide } from "@/components/suporte/CrmGuide";
 import { useUrlTab } from "@/hooks/useUrlTab";
 
 /** Placeholder para guias ainda não escritos (e para Recorrência, em aprovação). */
@@ -37,7 +38,7 @@ interface GuideTab {
 const GUIDE_TABS: GuideTab[] = [
     { value: "dashboard", label: "Dashboard", icon: LayoutDashboard, component: () => <GuidePlaceholder title="Dashboard" /> },
     { value: "inbox", label: "Inbox", icon: MessageSquare, component: InboxGuide },
-    { value: "crm", label: "CRM", icon: KanbanSquare, component: () => <GuidePlaceholder title="CRM" /> },
+    { value: "crm", label: "CRM", icon: KanbanSquare, component: CrmGuide },
     { value: "servicos", label: "Serviços", icon: Package, component: () => <GuidePlaceholder title="Serviços" /> },
     { value: "clientes", label: "Clientes", icon: Users, component: () => <GuidePlaceholder title="Clientes" /> },
     { value: "equipe", label: "Equipe", icon: ShieldCheck, component: () => <GuidePlaceholder title="Equipe" /> },
