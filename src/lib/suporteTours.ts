@@ -34,6 +34,20 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
                 "Cada campanha vira um card. Expanda para ver os 8 cards de resumo e a tabela contato a contato.",
         },
     ],
+    "ia-config": [
+        {
+            element: '[data-tour="ia-tabs"]',
+            title: "Definições de IA",
+            description:
+                "Três abas: Empresa (o que a IA sabe da clínica), F.A.Q (respostas prontas) e Config (ligar/desligar, delay, voz).",
+        },
+        {
+            element: '[data-tour="ia-toggle"]',
+            title: "Ligar IA",
+            description:
+                "O interruptor geral. Com ele ligado, aparecem abaixo os botões de cada conexão — você escolhe quais números têm IA.",
+        },
+    ],
 };
 
 /**

@@ -5,6 +5,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useNavigate } from "react-router-dom";
 import { useUrlTab } from "@/hooks/useUrlTab";
+import { useSuporteTour } from "@/lib/suporteTours";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -132,6 +133,7 @@ export default function IAConfig() {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const [tab, setTab] = useUrlTab("company");
+    useSuporteTour();
     const [loading, setLoading] = useState(false);
     const [config, setConfig] = useState<IAConfigData>(defaultConfig);
 
@@ -788,7 +790,7 @@ export default function IAConfig() {
             </div>
 
             <Tabs value={tab} onValueChange={setTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-3 mb-4 md:mb-8 h-auto">
+                <TabsList data-tour="ia-tabs" className="grid w-full grid-cols-3 mb-4 md:mb-8 h-auto">
                     <TabsTrigger value="company" className="flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
                         <Building2 className="h-4 w-4" />
                         <span className="hidden sm:inline">Empresa</span>
@@ -1042,7 +1044,7 @@ export default function IAConfig() {
                         </CardHeader>
                         <CardContent className="p-4 md:p-6 pt-0 md:pt-0 space-y-3 md:space-y-6">
                             {/* Ligar IA */}
-                            <div className="p-3 md:p-4 border rounded-lg space-y-4">
+                            <div data-tour="ia-toggle" className="p-3 md:p-4 border rounded-lg space-y-4">
                                 <div className="flex items-center justify-between gap-3">
                                     <div className="space-y-0.5">
                                         <h4 className="font-medium text-sm md:text-base">Ligar IA</h4>

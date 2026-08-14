@@ -5,6 +5,7 @@ import {
     Calendar, Repeat, Megaphone, Bot, Plug, Settings, Construction, LucideIcon,
 } from "lucide-react";
 import { CampaignsGuide } from "@/components/suporte/CampaignsGuide";
+import { IaGuide } from "@/components/suporte/IaGuide";
 import { useUrlTab } from "@/hooks/useUrlTab";
 
 /** Placeholder para guias ainda não escritos (e para Recorrência, em aprovação). */
@@ -42,7 +43,7 @@ const GUIDE_TABS: GuideTab[] = [
     { value: "agenda", label: "Agenda", icon: Calendar, component: () => <GuidePlaceholder title="Agenda" /> },
     { value: "recorrencia", label: "Recorrência", icon: Repeat, component: () => <GuidePlaceholder title="Recorrência" /> },
     { value: "campanhas", label: "Campanhas", icon: Megaphone, component: CampaignsGuide },
-    { value: "ia", label: "IA", icon: Bot, component: () => <GuidePlaceholder title="IA" /> },
+    { value: "ia", label: "IA", icon: Bot, component: IaGuide },
     { value: "conexoes", label: "Conexões", icon: Plug, component: () => <GuidePlaceholder title="Conexões" /> },
     { value: "configuracoes", label: "Configurações", icon: Settings, component: () => <GuidePlaceholder title="Configurações" /> },
 ];
