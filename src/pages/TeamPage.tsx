@@ -6,12 +6,14 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { TeamSettings } from "@/components/settings/TeamSettings";
 import { PermissionsSettings } from "@/components/settings/PermissionsSettings";
 import { useUrlTab } from "@/hooks/useUrlTab";
+import { useSuporteTour } from "@/lib/suporteTours";
 
 export default function TeamPage() {
     // isPending (not isLoading): while `user` hydrates the query is disabled and
     // isLoading stays false — redirecting then would bounce admins to "/".
     const { data: userRole, isPending } = useUserRole();
     const [tab, setTab] = useUrlTab("team");
+    useSuporteTour(!isPending);
 
     if (isPending) {
         return (
@@ -30,7 +32,7 @@ export default function TeamPage() {
             <h1 className="text-2xl md:text-3xl font-bold mb-4 md:mb-8 text-foreground">Equipe</h1>
 
             <Tabs value={tab} onValueChange={setTab} className="w-full">
-                <TabsList className="flex w-full justify-between mb-4 md:mb-8 h-auto">
+                <TabsList data-tour="equipe-tabs" className="flex w-full justify-between mb-4 md:mb-8 h-auto">
                     <TabsTrigger value="team" className="flex-1 flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
                         <Users className="h-4 w-4" />
                         Equipes

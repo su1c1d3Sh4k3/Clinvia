@@ -13,6 +13,7 @@ import { DashboardGuide } from "@/components/suporte/DashboardGuide";
 import { ClientesGuide } from "@/components/suporte/ClientesGuide";
 import { ServicosGuide } from "@/components/suporte/ServicosGuide";
 import { ConexoesGuide } from "@/components/suporte/ConexoesGuide";
+import { EquipeGuide } from "@/components/suporte/EquipeGuide";
 import { useUrlTab } from "@/hooks/useUrlTab";
 
 /** Placeholder para guias ainda não escritos (e para Recorrência, em aprovação). */
@@ -46,7 +47,7 @@ const GUIDE_TABS: GuideTab[] = [
     { value: "crm", label: "CRM", icon: KanbanSquare, component: CrmGuide },
     { value: "servicos", label: "Serviços", icon: Package, component: ServicosGuide },
     { value: "clientes", label: "Clientes", icon: Users, component: ClientesGuide },
-    { value: "equipe", label: "Equipe", icon: ShieldCheck, component: () => <GuidePlaceholder title="Equipe" /> },
+    { value: "equipe", label: "Equipe", icon: ShieldCheck, component: EquipeGuide },
     { value: "agenda", label: "Agenda", icon: Calendar, component: AgendaGuide },
     { value: "recorrencia", label: "Recorrência", icon: Repeat, component: () => <GuidePlaceholder title="Recorrência" /> },
     { value: "campanhas", label: "Campanhas", icon: Megaphone, component: CampaignsGuide },

@@ -72,6 +72,14 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
                 "Arraste os cards entre colunas conforme a conversa evolui. Lembre: mover o card também muda a fila da conversa no inbox (e vice-versa).",
         },
     ],
+    "equipe-tour": [
+        {
+            element: '[data-tour="equipe-tabs"]',
+            title: "As duas abas da Equipe",
+            description:
+                "Equipes: adicione membros e escolha o papel (Admin, Supervisor ou Agente). Permissões: ajuste fino do que cada nível pode criar, editar e apagar em cada módulo.",
+        },
+    ],
     "conexoes-tour": [
         {
             element: '[data-tour="conexoes-tabs"]',
