@@ -3,19 +3,21 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Plus, Search, Package, Upload } from "lucide-react";
+import { Loader2, Plus, Search, Package, Upload, FolderPlus } from "lucide-react";
 import { ImportWizard } from "@/components/import/ImportWizard";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { ServiceClient, ServiceName, ServiceCategory } from "@/types/services";
 import { ServiceCategoryCard } from "@/components/services/ServiceCategoryCard";
 import { DirectCategoryCard } from "@/components/services/DirectCategoryCard";
 import { AddByCategoryModal } from "@/components/services/AddByCategoryModal";
+import { AddCategoryModal } from "@/components/services/AddCategoryModal";
 
 export default function ProductsServices() {
   const { data: ownerId } = useOwnerId();
   const [searchTerm, setSearchTerm] = useState("");
   const [importWizardOpen, setImportWizardOpen] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
 
   const { data: categories } = useQuery({
     queryKey: ["services-categories"],
@@ -83,11 +85,10 @@ export default function ProductsServices() {
     })
     .filter((group) => group.apps.length > 0);
 
-  // Find default service_name_id for a direct category
+  // Find default service_name_id for a direct category (template first, fallback to user-created)
   const getDirectServiceNameId = (categoryId: string) => {
-    const svc = (serviceNames || []).find(
-      (s) => s.category_id === categoryId && !s.user_id
-    );
+    const inCategory = (serviceNames || []).filter((s) => s.category_id === categoryId);
+    const svc = inCategory.find((s) => !s.user_id) || inCategory[0];
     return svc?.id || "";
   };
 
@@ -107,6 +108,10 @@ export default function ProductsServices() {
           <Button variant="outline" onClick={() => setImportWizardOpen(true)} className="gap-2">
             <Upload className="w-4 h-4" />
             Importar
+          </Button>
+          <Button variant="outline" onClick={() => setShowAddCategoryModal(true)} className="gap-2">
+            <FolderPlus className="w-4 h-4" />
+            Adicionar Categoria
           </Button>
           <Button onClick={() => setShowAddModal(true)} className="gap-2">
             <Plus className="w-4 h-4" />
@@ -181,6 +186,11 @@ export default function ProductsServices() {
       <AddByCategoryModal
         open={showAddModal}
         onOpenChange={setShowAddModal}
+      />
+
+      <AddCategoryModal
+        open={showAddCategoryModal}
+        onOpenChange={setShowAddCategoryModal}
       />
 
       <ImportWizard

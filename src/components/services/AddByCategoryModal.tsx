@@ -39,6 +39,11 @@ import {
 } from "@/types/services";
 import { RecurrenceTab, RecurrenceData } from "./RecurrenceTab";
 import { DirectEntryModal } from "./DirectEntryModal";
+import { AddApplicationModal } from "./AddApplicationModal";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+
+const CREATE_NEW_VALUE = "__create_new__";
 
 const defaultRecurrence: RecurrenceData = {
   msg_recurrence_1: "",
@@ -68,6 +73,11 @@ export const AddByCategoryModal = ({
   const [recurrence, setRecurrence] = useState<RecurrenceData>(defaultRecurrence);
   const [saving, setSaving] = useState(false);
   const [directModal, setDirectModal] = useState<{ categoryId: string; categoryName: string; serviceNameId: string } | null>(null);
+  const [isCreatingNewService, setIsCreatingNewService] = useState(false);
+  const [newServiceName, setNewServiceName] = useState("");
+  const [newServiceDescription, setNewServiceDescription] = useState("");
+  const [savingNewService, setSavingNewService] = useState(false);
+  const [showCustomAppModal, setShowCustomAppModal] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -76,6 +86,10 @@ export const AddByCategoryModal = ({
       setSelectedAppIds(new Set());
       setRecurrence(defaultRecurrence);
       setDirectModal(null);
+      setIsCreatingNewService(false);
+      setNewServiceName("");
+      setNewServiceDescription("");
+      setShowCustomAppModal(false);
     }
   }, [open]);
 
@@ -128,10 +142,9 @@ export const AddByCategoryModal = ({
   const handleCategoryChange = (catId: string) => {
     const cat = (categories || []).find((c) => c.id === catId);
     if (cat?.category_type === "direct") {
-      // Find default service_name for this direct category
-      const defaultSvc = (allServiceNames || []).find(
-        (s) => s.category_id === catId && !s.user_id
-      );
+      // Find default service_name for this direct category (template first, fallback to user-created)
+      const inCategory = (allServiceNames || []).filter((s) => s.category_id === catId);
+      const defaultSvc = inCategory.find((s) => !s.user_id) || inCategory[0];
       setDirectModal({
         categoryId: catId,
         categoryName: cat.name,
@@ -159,7 +172,52 @@ export const AddByCategoryModal = ({
     setSelectedServiceId("");
     setSelectedAppIds(new Set());
     setRecurrence(defaultRecurrence);
+    setIsCreatingNewService(false);
+    setNewServiceName("");
+    setNewServiceDescription("");
   }, [selectedCategoryId]);
+
+  const handleServiceChange = (value: string) => {
+    if (value === CREATE_NEW_VALUE) {
+      setIsCreatingNewService(true);
+      setSelectedServiceId("");
+    } else {
+      setIsCreatingNewService(false);
+      setSelectedServiceId(value);
+    }
+  };
+
+  const handleCreateService = async () => {
+    if (!ownerId || !selectedCategoryId || !newServiceName.trim()) return;
+    setSavingNewService(true);
+    try {
+      const { data, error } = await supabase
+        .from("service_name" as any)
+        .insert({
+          category_id: selectedCategoryId,
+          user_id: ownerId,
+          name: newServiceName.trim(),
+          description: newServiceDescription.trim() || null,
+        })
+        .select("id")
+        .single();
+
+      if (error) throw error;
+
+      queryClient.invalidateQueries({ queryKey: ["service-names"] });
+      queryClient.invalidateQueries({ queryKey: ["service-names-all"] });
+      toast.success(`Serviço "${newServiceName.trim()}" criado com sucesso`);
+
+      setIsCreatingNewService(false);
+      setSelectedServiceId((data as any).id);
+      setNewServiceName("");
+      setNewServiceDescription("");
+    } catch (err: any) {
+      toast.error("Erro ao criar serviço: " + err.message);
+    } finally {
+      setSavingNewService(false);
+    }
+  };
 
   useEffect(() => {
     setSelectedAppIds(new Set());
@@ -247,7 +305,7 @@ export const AddByCategoryModal = ({
 
   return (
     <>
-    <Dialog open={open && !directModal} onOpenChange={onOpenChange}>
+    <Dialog open={open && !directModal && !showCustomAppModal} onOpenChange={onOpenChange}>
       <DialogContent className="w-[95vw] sm:w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-lg">
         <DialogHeader>
           <DialogTitle>Adicionar Serviço por Categoria</DialogTitle>
@@ -278,8 +336,8 @@ export const AddByCategoryModal = ({
           <div className="space-y-2">
             <Label className="text-sm font-medium">2. Serviço</Label>
             <Select
-              value={selectedServiceId}
-              onValueChange={setSelectedServiceId}
+              value={isCreatingNewService ? CREATE_NEW_VALUE : selectedServiceId}
+              onValueChange={handleServiceChange}
               disabled={!selectedCategoryId}
             >
               <SelectTrigger>
@@ -295,9 +353,50 @@ export const AddByCategoryModal = ({
                     {svc.name}
                   </SelectItem>
                 ))}
+                <SelectItem value={CREATE_NEW_VALUE} className="font-medium text-primary">
+                  + Criar novo serviço
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
+
+          {/* Create New Service Form */}
+          {isCreatingNewService && (
+            <div className="space-y-4 p-4 border rounded-md bg-muted/30">
+              <h4 className="text-sm font-medium">Novo Serviço</h4>
+              <div className="space-y-1.5">
+                <Label>Nome</Label>
+                <Input
+                  value={newServiceName}
+                  onChange={(e) => setNewServiceName(e.target.value)}
+                  placeholder="Ex: Laser CO2"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Descrição</Label>
+                <Textarea
+                  value={newServiceDescription}
+                  onChange={(e) => setNewServiceDescription(e.target.value)}
+                  rows={2}
+                  placeholder="Descrição do serviço..."
+                />
+              </div>
+              <Button
+                onClick={handleCreateService}
+                disabled={savingNewService || !newServiceName.trim()}
+                size="sm"
+              >
+                {savingNewService ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Criando...
+                  </>
+                ) : (
+                  "Criar Serviço"
+                )}
+              </Button>
+            </div>
+          )}
 
           {/* Step 3: Tabs (Applications + Recurrence) */}
           {selectedServiceId && (
@@ -323,8 +422,11 @@ export const AddByCategoryModal = ({
                       <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
                     </div>
                   ) : templateApps.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground text-sm border rounded-md">
-                      Nenhuma aplicação template cadastrada para este serviço.
+                    <div className="text-center py-8 text-muted-foreground text-sm border rounded-md space-y-3">
+                      <p>Nenhuma aplicação template cadastrada para este serviço.</p>
+                      <Button variant="outline" size="sm" onClick={() => setShowCustomAppModal(true)}>
+                        Criar Aplicação Personalizada
+                      </Button>
                     </div>
                   ) : (
                     <div className="rounded-md border overflow-x-auto">
@@ -412,6 +514,18 @@ export const AddByCategoryModal = ({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {showCustomAppModal && selectedCategoryId && selectedServiceId && (
+      <AddApplicationModal
+        open={showCustomAppModal}
+        onOpenChange={(v) => {
+          setShowCustomAppModal(v);
+          if (!v) onOpenChange(false);
+        }}
+        categoryId={selectedCategoryId}
+        serviceNameId={selectedServiceId}
+      />
+    )}
 
     {directModal && (
       <DirectEntryModal

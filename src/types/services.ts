@@ -3,6 +3,7 @@ export interface ServiceCategory {
   name: string;
   description: string | null;
   category_type: 'standard' | 'direct';
+  user_id: string | null; // null = template global; preenchido = categoria criada pelo usuário
   created_at: string;
 }
 
