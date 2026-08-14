@@ -72,6 +72,14 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
                 "Arraste os cards entre colunas conforme a conversa evolui. Lembre: mover o card também muda a fila da conversa no inbox (e vice-versa).",
         },
     ],
+    "config-tour": [
+        {
+            element: '[data-tour="config-tabs"]',
+            title: "As abas de Configurações",
+            description:
+                "Perfil (seus dados e foto), Empresa (dados da clínica), Segurança (e-mail e senha), Sistema (notificações, sons e instalação do app), Tags e Automações (só admin: instância primária dos disparos automáticos).",
+        },
+    ],
     "equipe-tour": [
         {
             element: '[data-tour="equipe-tabs"]',
