@@ -101,6 +101,9 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
     const { data: ownerId } = useOwnerId();
     const { onAppointmentCreated: syncCrmOnCreate } = useCrmAppointmentSync();
 
+    // ── Vínculo com campanha ativa (obrigatório quando o contato está em campanha) ──
+    const [selectedCampaignId, setSelectedCampaignId] = useState<string>("");
+
     const isPast = appointmentToEdit && new Date(appointmentToEdit.end_time) < new Date();
 
     // Detectar modo "hora travada" — ativo APENAS quando prop lockHour=true (clique em slot específico)
@@ -165,6 +168,7 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
 
     // Watch professional_id and date to fetch existing appointments
     const watchProfessionalId = form.watch("professional_id");
+    const watchContactId = form.watch("contact_id");
     const watchDate = form.watch("date");
     const watchDuration = form.watch("duration") || 30;
     const watchStartTime = form.watch("start_time");
@@ -173,6 +177,41 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
     const currentHour   = watchStartTime?.split(":")[0] ?? "";
     const currentMinute = watchStartTime?.split(":")[1] ?? "";
     const watchPrice = form.watch("price") || 0;
+
+    // Campanhas ativas em que o contato recebeu disparo (janela viva: valid_until > agora)
+    const { data: contactCampaigns } = useQuery({
+        queryKey: ["contact-active-campaigns", watchContactId],
+        queryFn: async () => {
+            if (!watchContactId) return [];
+            const { data: camps, error } = await supabase
+                .from("campaigns")
+                .select("id, name")
+                .in("status", ["dispatching", "dispatched"])
+                .gt("valid_until", new Date().toISOString());
+            if (error || !camps?.length) return [];
+            const { data: entries } = await supabase
+                .from("campaign_contacts")
+                .select("campaign_id")
+                .eq("contact_id", watchContactId)
+                .eq("status", "sent")
+                .in("campaign_id", camps.map((c) => c.id));
+            const ids = new Set((entries || []).map((e) => e.campaign_id));
+            return camps.filter((c) => ids.has(c.id));
+        },
+        enabled: open && !!watchContactId && !appointmentToEdit,
+    });
+
+    // Auto-seleção: 1 campanha = default; 0 = limpa; 2+ = usuário escolhe
+    useEffect(() => {
+        if (!contactCampaigns?.length) {
+            setSelectedCampaignId("");
+        } else if (contactCampaigns.length === 1) {
+            setSelectedCampaignId(contactCampaigns[0].id);
+        } else if (!contactCampaigns.some((c) => c.id === selectedCampaignId)) {
+            setSelectedCampaignId("");
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [contactCampaigns]);
 
     // ── Preview do parcelamento (mesma regra do módulo de vendas: juros simples, 1ª parcela sem juros) ──
     const formatCurrency = (v: number) =>
@@ -651,6 +690,11 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                 }
             }
 
+            // Campanha obrigatória quando o contato está em campanha ativa
+            if (!appointmentToEdit && values.type === "appointment" && (contactCampaigns?.length || 0) > 0 && !selectedCampaignId) {
+                throw new Error("Este contato está em campanha ativa — selecione a campanha do agendamento.");
+            }
+
             // Check overlap
             const { data: isOverlap, error: overlapError } = await supabase.rpc("check_appointment_overlap", {
                 p_professional_id: values.professional_id,
@@ -692,9 +736,26 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                     }).catch(() => {});
                 }
             } else {
+                // created_by = team_member do usuário logado (para congelar atendente da campanha)
+                let createdBy: string | null = null;
+                try {
+                    const { data: tm } = await supabase
+                        .from("team_members")
+                        .select("id")
+                        .eq("auth_user_id", user.id)
+                        .maybeSingle();
+                    createdBy = tm?.id ?? null;
+                } catch { /* fire-and-forget */ }
+
+                const insertPayload = {
+                    ...payload,
+                    campaign_id: values.type === "appointment" ? (selectedCampaignId || null) : null,
+                    created_by: createdBy,
+                    created_via: "manual",
+                };
                 const { data: created, error } = await supabase
                     .from("appointments")
-                    .insert(payload)
+                    .insert(insertPayload)
                     .select()
                     .single();
                 if (error) throw error;
@@ -836,6 +897,25 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                                             </FormItem>
                                         )}
                                     />
+
+                                    {!appointmentToEdit && (contactCampaigns?.length || 0) > 0 && (
+                                        <div className="space-y-1.5">
+                                            <Label>Campanha <span className="text-destructive">*</span></Label>
+                                            <Select value={selectedCampaignId} onValueChange={setSelectedCampaignId}>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Selecione a campanha" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {contactCampaigns!.map((c) => (
+                                                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            <p className="text-xs text-muted-foreground">
+                                                Este contato está em campanha ativa — o agendamento será vinculado à campanha selecionada.
+                                            </p>
+                                        </div>
+                                    )}
 
                                     <FormField
                                         control={form.control}

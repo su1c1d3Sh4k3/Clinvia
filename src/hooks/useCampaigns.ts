@@ -98,7 +98,7 @@ export interface CampaignContactRow {
     campaign_id: string;
     contact_id: string | null;
     raw_data: any;
-    status: "pending" | "sending" | "sent" | "failed" | "invalid" | "skipped";
+    status: "pending" | "sending" | "sent" | "failed" | "invalid" | "skipped" | "open_ticket";
     error: string | null;
     sent_at: string | null;
     message_status?: string | null;
@@ -201,18 +201,34 @@ export function useCampaignContacts(campaignId: string | null) {
     });
 }
 
-/** Map campaign_contact_id -> respondeu (msg inbound após o envio; mesmo critério do responded_count) */
-export function useCampaignContactResponses(campaignId: string | null) {
+export interface CampaignContactReport {
+    responded: boolean;
+    scheduled: boolean;
+    stage: string | null;
+    agent: string | null;
+    frozen: boolean;
+    frozen_reason: "scheduled" | "resolved" | "moved" | "expired" | null;
+}
+
+/** Map campaign_contact_id -> relatório congelado/vivo (RPC frozen-aware get_campaign_contact_report). */
+export function useCampaignContactReport(campaignId: string | null) {
     return useQuery({
-        queryKey: ["campaign-contact-responses", campaignId],
-        queryFn: async (): Promise<Map<string, boolean>> => {
-            const { data, error } = await (supabase.rpc as any)("get_campaign_contact_responses", {
+        queryKey: ["campaign-contact-report", campaignId],
+        queryFn: async (): Promise<Map<string, CampaignContactReport>> => {
+            const { data, error } = await (supabase.rpc as any)("get_campaign_contact_report", {
                 p_campaign_id: campaignId,
             });
             if (error) throw error;
-            const map = new Map<string, boolean>();
-            for (const r of (data || []) as { campaign_contact_id: string; responded: boolean }[]) {
-                map.set(r.campaign_contact_id, r.responded);
+            const map = new Map<string, CampaignContactReport>();
+            for (const r of (data || []) as (CampaignContactReport & { campaign_contact_id: string })[]) {
+                map.set(r.campaign_contact_id, {
+                    responded: !!r.responded,
+                    scheduled: !!r.scheduled,
+                    stage: r.stage,
+                    agent: r.agent,
+                    frozen: !!r.frozen,
+                    frozen_reason: r.frozen_reason as CampaignContactReport["frozen_reason"],
+                });
             }
             return map;
         },
@@ -221,44 +237,25 @@ export function useCampaignContactResponses(campaignId: string | null) {
     });
 }
 
-/** Map campaign_contact_id -> agendou (appointment criado após o envio; cancelados contam) */
-export function useCampaignContactAppointments(campaignId: string | null) {
-    return useQuery({
-        queryKey: ["campaign-contact-appointments", campaignId],
-        queryFn: async (): Promise<Map<string, boolean>> => {
-            const { data, error } = await (supabase.rpc as any)("get_campaign_contact_appointments", {
-                p_campaign_id: campaignId,
-            });
-            if (error) throw error;
-            const map = new Map<string, boolean>();
-            for (const r of (data || []) as { campaign_contact_id: string; scheduled: boolean }[]) {
-                map.set(r.campaign_contact_id, r.scheduled);
-            }
-            return map;
-        },
-        enabled: !!campaignId,
-        refetchInterval: 60_000,
-    });
-}
-
-/** Map campaign_contact_id -> { stage, agent } (estágio CRM ativo + atendente da conversa ativa; IA quando na fila Atendimento IA) */
-export function useCampaignContactCrmInfo(campaignId: string | null) {
-    return useQuery({
-        queryKey: ["campaign-contact-crm-info", campaignId],
-        queryFn: async (): Promise<Map<string, { stage: string | null; agent: string | null }>> => {
-            const { data, error } = await (supabase.rpc as any)("get_campaign_contact_crm_info", {
-                p_campaign_id: campaignId,
-            });
-            if (error) throw error;
-            const map = new Map<string, { stage: string | null; agent: string | null }>();
-            for (const r of (data || []) as { campaign_contact_id: string; stage: string | null; agent: string | null }[]) {
-                map.set(r.campaign_contact_id, { stage: r.stage, agent: r.agent });
-            }
-            return map;
-        },
-        enabled: !!campaignId,
-        refetchInterval: 60_000,
-    });
+/** Consulta campanhas ativas em conflito com os contatos informados (aviso do wizard). */
+export async function checkCampaignConflicts(
+    ownerId: string,
+    instanceId: string,
+    contactIds: string[],
+    excludeCampaignId?: string | null
+): Promise<string[]> {
+    try {
+        const data = await callCampaignApi({
+            action: "check_conflicts",
+            user_id: ownerId,
+            instance_id: instanceId,
+            contact_ids: contactIds,
+            exclude_campaign_id: excludeCampaignId || null,
+        });
+        return (data.conflict_contact_ids || []) as string[];
+    } catch {
+        return []; // falha na checagem não bloqueia a criação
+    }
 }
 
 /** Map instance_id -> nome de exibição (todas as instâncias, conectadas ou não). */

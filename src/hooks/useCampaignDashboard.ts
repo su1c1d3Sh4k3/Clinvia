@@ -59,6 +59,9 @@ export interface CampaignStatsRow {
     failed_count: number;
     responded_count: number;
     converted_count: number;
+    scheduled_count: number;
+    resolved_count: number;
+    no_response_count: number;
 }
 
 export function useCampaignDashboardStats(period: CampanhasPeriod) {

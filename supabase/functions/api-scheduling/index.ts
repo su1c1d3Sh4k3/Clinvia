@@ -132,6 +132,43 @@ serve(async (req) => {
             throw new Error(`Serviço "${sc.name}" tem mais de um profissional — informe professional_name. Disponíveis: ${names}`);
         };
 
+        // Helper: campanha ativa da instância onde o contato recebeu envio.
+        // Usado no create_appointment (campo opcional `instance`: id ou nome) para
+        // vincular o agendamento à campanha → congela a entrada como 'Agendado'.
+        const resolveCampaignForContact = async (cid: string, instanceRef?: string): Promise<string | null> => {
+            if (!instanceRef) return null;
+            try {
+                const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(instanceRef);
+                const instQ = supabase.from("instances").select("id").eq("user_id", user_id);
+                const { data: inst } = isUuid
+                    ? await instQ.eq("id", instanceRef).maybeSingle()
+                    : await instQ.ilike("instance_name", instanceRef).limit(1).maybeSingle();
+                if (!inst) return null;
+
+                const { data: camps } = await supabase.from("campaigns")
+                    .select("id")
+                    .eq("user_id", user_id)
+                    .eq("instance_id", inst.id)
+                    .in("status", ["dispatching", "dispatched"])
+                    .gt("valid_until", new Date().toISOString())
+                    .order("scheduled_at", { ascending: false });
+
+                for (const c of camps || []) {
+                    const { data: cc } = await supabase.from("campaign_contacts")
+                        .select("id")
+                        .eq("campaign_id", c.id)
+                        .eq("contact_id", cid)
+                        .eq("status", "sent")
+                        .limit(1)
+                        .maybeSingle();
+                    if (cc) return c.id;
+                }
+            } catch (err) {
+                console.warn("[api-scheduling] resolveCampaignForContact error:", err);
+            }
+            return null;
+        };
+
         // ══════════════════════════════════════════════
         // ACTION: fetch_appointments
         // ══════════════════════════════════════════════
@@ -172,10 +209,11 @@ serve(async (req) => {
         // ACTION: create_appointment
         // ══════════════════════════════════════════════
         if (action === "create_appointment") {
-            const { service_name, date, time, professional_name, phone_number, contact_id, description } = body;
+            const { service_name, date, time, professional_name, phone_number, contact_id, description, instance } = body;
             if (!service_name || !date || !time) throw new Error("Missing service_name, date or time");
 
             const cid = await resolveContact(contact_id, phone_number);
+            const campaignId = await resolveCampaignForContact(cid, instance);
             const sc = await resolveService(service_name);
             const prof = await resolveProfessional(sc, professional_name);
             const duration = sc.duration_minutes || 30;
@@ -222,6 +260,8 @@ serve(async (req) => {
                 price: sc.price || 0,
                 description: description || null,
                 type: "appointment",
+                campaign_id: campaignId,
+                created_via: "ia",
             };
 
             const { data: created, error } = await supabase.from("appointments").insert(payload).select().single();

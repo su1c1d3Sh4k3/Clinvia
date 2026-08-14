@@ -72,6 +72,29 @@ export function ResendCampaignDialog({
     );
 }
 
+/** Grade de resultados da campanha (compartilhada /campanhas + dashboard). */
+export function CampaignStatsGrid({ stats }: { stats: CampaignStatsRow }) {
+    const cells: { value: number; label: string; className?: string }[] = [
+        { value: stats.sent_count, label: "enviadas" },
+        { value: stats.delivered_count, label: "entregues", className: "text-emerald-600" },
+        { value: stats.failed_count, label: "rejeitadas", className: "text-red-600" },
+        { value: stats.responded_count, label: "respondidas", className: "text-violet-600" },
+        { value: stats.no_response_count ?? 0, label: "sem resposta", className: "text-red-600" },
+        { value: stats.scheduled_count ?? 0, label: "agendados", className: "text-emerald-600" },
+        { value: stats.resolved_count ?? 0, label: "resolvidos", className: "text-orange-600" },
+    ];
+    return (
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2 text-sm">
+            {cells.map((c) => (
+                <div key={c.label} className="border rounded-xl p-2.5">
+                    <p className={cn("font-semibold", c.className)}>{c.value}</p>
+                    <p className="text-[10px] text-muted-foreground">{c.label}</p>
+                </div>
+            ))}
+        </div>
+    );
+}
+
 interface CampaignCardProps {
     campaign: Campaign;
     stats?: CampaignStatsRow;
@@ -255,26 +278,7 @@ export function CampaignCard({ campaign, stats, onEdit, onResend }: CampaignCard
                     </div>
 
                     {/* Resultados (mesmos dados da dashboard) */}
-                    {stats && (
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-                            <div className="border rounded-xl p-2.5">
-                                <p className="font-semibold">{stats.sent_count}</p>
-                                <p className="text-[10px] text-muted-foreground">enviadas</p>
-                            </div>
-                            <div className="border rounded-xl p-2.5">
-                                <p className="font-semibold text-emerald-600">{stats.delivered_count}</p>
-                                <p className="text-[10px] text-muted-foreground">entregues</p>
-                            </div>
-                            <div className="border rounded-xl p-2.5">
-                                <p className="font-semibold text-red-600">{stats.failed_count}</p>
-                                <p className="text-[10px] text-muted-foreground">rejeitadas</p>
-                            </div>
-                            <div className="border rounded-xl p-2.5">
-                                <p className="font-semibold text-violet-600">{stats.responded_count}</p>
-                                <p className="text-[10px] text-muted-foreground">respondidas</p>
-                            </div>
-                        </div>
-                    )}
+                    {stats && <CampaignStatsGrid stats={stats} />}
 
                     {/* Detalhes */}
                     <div className="text-sm space-y-1 border rounded-xl p-3">

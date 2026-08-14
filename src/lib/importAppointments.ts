@@ -372,6 +372,7 @@ export async function importAppointments(opts: {
                 description: row.data.notes,
                 type: "appointment",
                 status,
+                created_via: "import",
             },
             contactId, professionalId, svc, price, status, start,
         });

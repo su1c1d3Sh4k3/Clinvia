@@ -20,7 +20,7 @@ async function callApi(body: any) {
   return data;
 }
 
-interface BookingParams { user_id: string; contact_id: string; contact_name: string; }
+interface BookingParams { user_id: string; contact_id: string; contact_name: string; instance_id?: string; }
 type Step = "home" | "service" | "professional" | "datetime" | "confirm" | "done" | "reschedule" | "canceled";
 
 export default function PublicBooking() {
@@ -65,7 +65,7 @@ export default function PublicBooking() {
     setLoading(true);
     try {
       const [svcData, profData, aptData] = await Promise.all([
-        callApi({ action: "get_services", user_id: params.user_id, contact_id: params.contact_id }),
+        callApi({ action: "get_services", user_id: params.user_id, contact_id: params.contact_id, instance_id: params.instance_id || null }),
         callApi({ action: "get_prof_list", user_id: params.user_id }),
         callApi({ action: "get_pending", user_id: params.user_id, contact_id: params.contact_id }),
       ]);
@@ -116,7 +116,7 @@ export default function PublicBooking() {
     if (!params || !selApp || !selProf || !selDate || !selTime) return;
     setSubmitting(true); setError("");
     try {
-      await callApi({ action: "create_booking", user_id: params.user_id, contact_id: params.contact_id, service_id: selApp.id, professional_id: selProf.id, date: format(selDate, "yyyy-MM-dd"), time: selTime });
+      await callApi({ action: "create_booking", user_id: params.user_id, contact_id: params.contact_id, instance_id: params.instance_id || null, service_id: selApp.id, professional_id: selProf.id, date: format(selDate, "yyyy-MM-dd"), time: selTime });
       setStep("done");
       loadData();
     } catch (err: any) { setError(err.message); }

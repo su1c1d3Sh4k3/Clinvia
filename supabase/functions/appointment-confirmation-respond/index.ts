@@ -209,6 +209,7 @@ async function handleAwaitingConfirmation(
             user_id: session.user_id,
             contact_id: session.contact_id,
             contact_name: firstName,
+            instance_id: session.instance_id ?? null,
         }));
         const link = `https://app.clinbia.ai/agendar?d=${token}`;
 

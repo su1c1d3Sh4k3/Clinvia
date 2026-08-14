@@ -421,6 +421,25 @@ async function dispatchBatch(supabase: any) {
                 continue;
             }
 
+            // Atendimento em aberto (conversa open) é intocável: não envia,
+            // entrada fica como 'open_ticket' (coluna Status "Atendimento Em Aberto")
+            const { data: openConv } = await supabase
+                .from("conversations")
+                .select("id")
+                .eq("contact_id", row.contact_id)
+                .eq("user_id", campaign.user_id)
+                .eq("status", "open")
+                .limit(1)
+                .maybeSingle();
+            if (openConv) {
+                await supabase
+                    .from("campaign_contacts")
+                    .update({ status: "open_ticket", error: null })
+                    .eq("id", row.id);
+                console.log(`[campaign-dispatch] Contact ${row.contact_id} has open ticket — skipped`);
+                continue;
+            }
+
             const conv = await findOrCreateConversation(supabase, campaign, row.contact_id);
             const conversationId = conv.id;
             const rawData = row.raw_data || {};
@@ -481,6 +500,7 @@ async function dispatchBatch(supabase: any) {
                     status: "sent",
                     sent_at: new Date().toISOString(),
                     message_id: result?.messageId || null,
+                    conversation_id: conversationId,
                     error: null,
                 })
                 .eq("id", row.id);

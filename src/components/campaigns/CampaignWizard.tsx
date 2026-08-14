@@ -20,7 +20,8 @@ import {
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { cn, formatCurrency } from "@/lib/utils";
-import { useCampaignInstances, isMetaInstance, useCampaignMutations, Campaign, CampaignService } from "@/hooks/useCampaigns";
+import { useCampaignInstances, isMetaInstance, useCampaignMutations, checkCampaignConflicts, Campaign, CampaignService } from "@/hooks/useCampaigns";
+import { useOwnerId } from "@/hooks/useOwnerId";
 import { useMetaQuality } from "@/hooks/useMetaQuality";
 import { useUsdBrlRate } from "@/hooks/useUsdBrlRate";
 import {
@@ -80,6 +81,7 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
     const baseCampaign = campaign || resendFrom || null;
     const isResend = !campaign && !!resendFrom;
     const { data: instances } = useCampaignInstances();
+    const { data: ownerId } = useOwnerId();
     const { createCampaign, updateCampaign } = useCampaignMutations();
     const { data: rateData } = useUsdBrlRate();
 
@@ -496,7 +498,33 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
         };
     };
 
+    // ── Aviso: contatos já ativos em outra campanha da mesma instância ──
+    // (takeover T-1h: 1h antes do disparo eles são encerrados da campanha anterior)
+    const [conflictCount, setConflictCount] = useState<number | null>(null);
+
     const submit = async () => {
+        const entriesToSend = audience.entries;
+        if ((!isEdit || entriesToSend.length > 0) && instanceId && ownerId) {
+            const contactIds = [...new Set(entriesToSend.map((e) => e.contactId).filter(Boolean))] as string[];
+            if (contactIds.length > 0) {
+                setCheckingRecent(true);
+                try {
+                    const conflicts = await checkCampaignConflicts(
+                        ownerId, instanceId, contactIds, campaign?.id || resendFrom?.id
+                    );
+                    if (conflicts.length > 0) {
+                        setConflictCount(conflicts.length);
+                        return;
+                    }
+                } finally {
+                    setCheckingRecent(false);
+                }
+            }
+        }
+        await submitAfterConflictCheck();
+    };
+
+    const submitAfterConflictCheck = async () => {
         const entriesToSend = audience.entries;
         if (!isEdit || entriesToSend.length > 0) {
             setCheckingRecent(true);
@@ -568,6 +596,8 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
             } else {
                 payload.entries = entriesToSend.map((e) => ({ contact_id: e.contactId, vars: e.vars }));
                 payload.invalid_rows = audience.invalidRows;
+                // Reenvio: a campanha mãe é encerrada pelo campaign-manage (rotina de expiração)
+                if (isResend && resendFrom?.id) payload.resend_from_campaign_id = resendFrom.id;
                 await createCampaign.mutateAsync(payload);
                 toast.success("Campanha criada!");
             }
@@ -1022,6 +1052,37 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
                         </Button>
                     )}
                 </div>
+
+                {/* Aviso: contatos ativos em outra campanha (takeover T-1h) */}
+                <Dialog open={conflictCount !== null} onOpenChange={(o) => !o && setConflictCount(null)}>
+                    <DialogContent className="w-[95vw] sm:w-full sm:max-w-md rounded-lg">
+                        <DialogHeader>
+                            <DialogTitle className="flex items-center gap-2">
+                                <AlertTriangle className="w-5 h-5 text-amber-500" />
+                                Contatos em campanha ativa
+                            </DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-2 text-sm">
+                            <p>
+                                <strong>{conflictCount}</strong>{" "}
+                                {conflictCount === 1 ? "cliente desta campanha está atribuído" : "clientes desta campanha estão atribuídos"}{" "}
+                                a outra campanha ativa desta instância.
+                            </p>
+                            <p>
+                                1 hora antes do início desta campanha, eles serão automaticamente
+                                encerrados da campanha anterior. Deseja continuar?
+                            </p>
+                        </div>
+                        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-1">
+                            <Button variant="ghost" onClick={() => setConflictCount(null)}>
+                                Cancelar
+                            </Button>
+                            <Button onClick={async () => { setConflictCount(null); await submitAfterConflictCheck(); }}>
+                                Continuar
+                            </Button>
+                        </div>
+                    </DialogContent>
+                </Dialog>
 
                 {/* Aviso: contatos em campanhas dos últimos 7 dias */}
                 <Dialog open={!!recentWarning} onOpenChange={(o) => !o && setRecentWarning(null)}>

@@ -12,6 +12,7 @@ import {
     COST_PER_MSG_USD,
     RESENDABLE_STATUSES,
     ResendCampaignDialog,
+    CampaignStatsGrid,
 } from "@/components/campaigns/CampaignCard";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { CampaignContactsTable } from "@/components/campaigns/CampaignContactsTable";
@@ -163,26 +164,7 @@ export function CampaignExpandableCard({ campaign, stats, onResend }: CampaignEx
                     </div>
 
                     {/* Resultados */}
-                    {stats && (
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-                            <div className="border rounded-xl p-2.5">
-                                <p className="font-semibold">{stats.sent_count}</p>
-                                <p className="text-[10px] text-muted-foreground">enviadas</p>
-                            </div>
-                            <div className="border rounded-xl p-2.5">
-                                <p className="font-semibold text-emerald-600">{stats.delivered_count}</p>
-                                <p className="text-[10px] text-muted-foreground">entregues</p>
-                            </div>
-                            <div className="border rounded-xl p-2.5">
-                                <p className="font-semibold text-red-600">{stats.failed_count}</p>
-                                <p className="text-[10px] text-muted-foreground">rejeitadas</p>
-                            </div>
-                            <div className="border rounded-xl p-2.5">
-                                <p className="font-semibold text-violet-600">{stats.responded_count}</p>
-                                <p className="text-[10px] text-muted-foreground">respondidas</p>
-                            </div>
-                        </div>
-                    )}
+                    {stats && <CampaignStatsGrid stats={stats} />}
 
                     {/* Detalhes */}
                     <div className="text-sm space-y-1 border rounded-xl p-3">

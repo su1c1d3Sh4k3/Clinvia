@@ -15,7 +15,7 @@ serve(async (req) => {
     }
 
     try {
-        const { action, user_id, contact_id, service_id, professional_id, date, time, appointment_id } = await req.json();
+        const { action, user_id, contact_id, service_id, professional_id, date, time, appointment_id, instance_id } = await req.json();
 
         if (!user_id) {
             return new Response(JSON.stringify({ error: "Missing user_id" }),
@@ -26,6 +26,34 @@ serve(async (req) => {
             Deno.env.get("SUPABASE_URL") ?? "",
             Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
         );
+
+        // Campanha ativa da instância do link (payload `d` com instance_id) onde o
+        // contato recebeu envio — links legados sem instance_id: comportamento atual.
+        const resolveActiveCampaign = async (): Promise<{ id: string; services: any[] } | null> => {
+            if (!instance_id || !contact_id) return null;
+            try {
+                const { data: camps } = await supabase.from("campaigns")
+                    .select("id, services")
+                    .eq("user_id", user_id)
+                    .eq("instance_id", instance_id)
+                    .in("status", ["dispatching", "dispatched"])
+                    .gt("valid_until", new Date().toISOString())
+                    .order("scheduled_at", { ascending: false });
+                for (const c of camps || []) {
+                    const { data: cc } = await supabase.from("campaign_contacts")
+                        .select("id")
+                        .eq("campaign_id", c.id)
+                        .eq("contact_id", contact_id)
+                        .eq("status", "sent")
+                        .limit(1)
+                        .maybeSingle();
+                    if (cc) return { id: c.id, services: c.services || [] };
+                }
+            } catch (err) {
+                console.warn("[api-public-booking] resolveActiveCampaign error:", err);
+            }
+            return null;
+        };
 
         // ── get_services: categories + service_names + applications ──
         // Exibe APENAS a categoria Avaliação + serviços comprados e ainda não agendados (sem preços)
@@ -55,8 +83,14 @@ serve(async (req) => {
                 for (const s of pendingSales || []) purchasedServiceIds.add(s.service_client_id);
             }
 
+            // Serviços da campanha ativa do link (se houver) também entram no catálogo
+            const campaign = await resolveActiveCampaign();
+            const campaignServiceIds = new Set<string>(
+                (campaign?.services || []).map((s: any) => s?.id).filter(Boolean)
+            );
+
             const visibleApps = (sc || []).filter((s: any) =>
-                avaliacaoCatIds.has(s.category_id) || purchasedServiceIds.has(s.id));
+                avaliacaoCatIds.has(s.category_id) || purchasedServiceIds.has(s.id) || campaignServiceIds.has(s.id));
 
             const catIds = [...new Set(visibleApps.map((s: any) => s.category_id))];
             const snIds = [...new Set(visibleApps.map((s: any) => s.service_name_id))];
@@ -174,6 +208,8 @@ serve(async (req) => {
                     { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } });
             }
 
+            const campaign = await resolveActiveCampaign();
+
             const { data: created, error: insertErr } = await supabase.from("appointments").insert({
                 user_id,
                 professional_id,
@@ -187,6 +223,8 @@ serve(async (req) => {
                 end_time: endDate.toISOString(),
                 price: svc.price || 0,
                 type: "appointment",
+                campaign_id: campaign?.id ?? null,
+                created_via: "public_link",
             }).select().single();
 
             if (insertErr) throw insertErr;

@@ -1802,6 +1802,7 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                             user_id: userId,
                             contact_id: contactId,
                             contact_name: enrichedContact.push_name || "",
+                            instance_id: instance.id,
                         }));
                         bookingLink = `https://app.clinbia.ai/agendar?d=${token}`;
                     }

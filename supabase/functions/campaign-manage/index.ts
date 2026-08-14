@@ -14,9 +14,12 @@ import { makeOpenAIRequest, trackTokenUsage } from "../_shared/token-tracker.ts"
  *
  * Actions:
  *   - create:            cria campanha + tag + campaign_contacts (com vars por entrada) + ai_prompt
+ *                        (resend_from_campaign_id: encerra a campanha-mãe antes — rotina de expiry)
  *   - update:            edita campanha (revalida template existente; regenera prompt)
  *   - delete:            remove campanha (bloqueado em dispatching/dispatched)
  *   - regenerate_prompt: regenera apenas o ai_prompt
+ *   - check_conflicts:   contatos já presentes em outra campanha ativa da MESMA instância
+ *                        (aviso do wizard: serão encerrados da anterior em T-1h)
  */
 
 const corsHeaders = {
@@ -359,6 +362,47 @@ serve(async (req) => {
         if (!user_id) throw new Error("Missing field: user_id");
         const ownerId: string = user_id;
 
+        // ══ CHECK_CONFLICTS ═════════════════════════════════════════════════
+        // Contatos da audiência que já estão em outra campanha ativa da mesma
+        // instância (janela ativa: ainda não vencida). O sweep T-1h os encerrará.
+        if (action === "check_conflicts") {
+            const { instance_id, contact_ids, exclude_campaign_id } = body;
+            if (!instance_id) throw new Error("Missing field: instance_id");
+            const ids = [...new Set(((contact_ids || []) as string[]).filter(Boolean))];
+
+            let conflictIds: string[] = [];
+            if (ids.length > 0) {
+                let q = supabase
+                    .from("campaigns")
+                    .select("id")
+                    .eq("user_id", ownerId)
+                    .eq("instance_id", instance_id)
+                    .in("status", ["scheduled", "awaiting_template", "dispatching", "dispatched"])
+                    .gt("valid_until", new Date().toISOString());
+                if (exclude_campaign_id) q = q.neq("id", exclude_campaign_id);
+                const { data: camps } = await q;
+                const campIds = (camps || []).map((c: any) => c.id);
+
+                if (campIds.length > 0) {
+                    const found = new Set<string>();
+                    for (let i = 0; i < ids.length; i += 500) {
+                        const { data } = await supabase
+                            .from("campaign_contacts")
+                            .select("contact_id")
+                            .in("campaign_id", campIds)
+                            .in("contact_id", ids.slice(i, i + 500));
+                        for (const r of data || []) if (r.contact_id) found.add(r.contact_id);
+                    }
+                    conflictIds = [...found];
+                }
+            }
+
+            return new Response(
+                JSON.stringify({ success: true, conflict_contact_ids: conflictIds }),
+                { headers: corsHeaders }
+            );
+        }
+
         // ══ CREATE ══════════════════════════════════════════════════════════
         if (action === "create") {
             const {
@@ -445,6 +489,38 @@ serve(async (req) => {
                 .select()
                 .single();
             if (campErr) throw new Error(`Falha ao criar campanha: ${campErr.message}`);
+
+            // Reenvio: encerra a campanha-mãe primeiro (mesma rotina do expiry —
+            // congela entradas 'expired' respeitando conversas abertas + remove tag)
+            const resendFromId = body.resend_from_campaign_id as string | undefined;
+            if (resendFromId) {
+                try {
+                    const { data: mother } = await supabase
+                        .from("campaigns")
+                        .select("id, tag_id, status, expired_processed")
+                        .eq("id", resendFromId)
+                        .eq("user_id", ownerId)
+                        .maybeSingle();
+                    if (mother && !mother.expired_processed) {
+                        await supabase.rpc("campaign_close_entries", { p_campaign_id: mother.id });
+                        if (mother.tag_id) {
+                            await supabase.from("contact_tags").delete().eq("tag_id", mother.tag_id);
+                        }
+                        await supabase
+                            .from("campaigns")
+                            .update({
+                                expired_processed: true,
+                                status: ["dispatching", "dispatched"].includes(mother.status)
+                                    ? "expired"
+                                    : mother.status,
+                            })
+                            .eq("id", mother.id);
+                        console.log(`[campaign-manage] Resend: mother campaign ${mother.id} closed`);
+                    }
+                } catch (err: any) {
+                    console.warn("[campaign-manage] resend mother close failed:", err?.message || err);
+                }
+            }
 
             // campaign_contacts (válidos com vars + inválidos)
             await insertCampaignContacts(supabase, campaign.id, ownerId, entries, invalid_rows || []);
@@ -711,7 +787,7 @@ serve(async (req) => {
         }
 
         throw new Error(
-            `Invalid action: "${action}". Valid: create, update, delete, regenerate_prompt`
+            `Invalid action: "${action}". Valid: create, update, delete, regenerate_prompt, check_conflicts`
         );
     } catch (error: any) {
         console.error("[campaign-manage] Error:", error);
