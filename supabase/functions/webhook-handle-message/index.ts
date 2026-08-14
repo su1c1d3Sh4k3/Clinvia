@@ -1807,24 +1807,42 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                         bookingLink = `https://app.clinbia.ai/agendar?d=${token}`;
                     }
 
-                    // 6. Campaign prompt: campanha ativa mais recente enviada a este contato
+                    // 6. Campanha ativa do contato NESTA instância (regra: 1 campanha ativa por contato por instância)
+                    //    Bloco `campaign` sempre presente no bd_data: campaign_tag = nome da tag/campanha ou 'sem campanha ativa'
                     let campaignPrompt: string | null = null;
+                    let campaignBlock: Record<string, unknown> = { campaign_tag: 'sem campanha ativa' };
                     if (contactId) {
                         try {
                             const { data: campSent } = await supabase
                                 .from('campaign_contacts')
-                                .select('sent_at, campaigns!inner(ai_prompt, ia_enabled, valid_until, status)')
+                                .select('sent_at, campaigns!inner(id, name, objective, services, discount_pct, initial_message, ai_prompt, ia_enabled, scheduled_at, valid_until, status, instance_id)')
                                 .eq('contact_id', contactId)
                                 .eq('status', 'sent')
-                                .eq('campaigns.ia_enabled', true)
+                                .eq('campaigns.instance_id', instance.id)
                                 .gte('campaigns.valid_until', new Date().toISOString())
                                 .in('campaigns.status', ['dispatching', 'dispatched'])
                                 .order('sent_at', { ascending: false })
                                 .limit(1)
                                 .maybeSingle();
-                            campaignPrompt = (campSent as any)?.campaigns?.ai_prompt || null;
+                            const camp = (campSent as any)?.campaigns;
+                            if (camp) {
+                                if (camp.ia_enabled) campaignPrompt = camp.ai_prompt || null;
+                                campaignBlock = {
+                                    campaign_tag: camp.name,
+                                    campaign_id: camp.id,
+                                    name: camp.name,
+                                    objective: camp.objective || null,
+                                    services: camp.services || [],
+                                    discount_pct: camp.discount_pct ?? null,
+                                    initial_message: camp.initial_message || null,
+                                    scheduled_at: toSaoPaulo(camp.scheduled_at),
+                                    valid_until: toSaoPaulo(camp.valid_until),
+                                    ia_enabled: !!camp.ia_enabled,
+                                    campaign_prompt: camp.ai_prompt || null,
+                                };
+                            }
                         } catch (campErr) {
-                            console.warn('[webhook-handle-message] campaign_prompt lookup failed:', campErr);
+                            console.warn('[webhook-handle-message] campaign lookup failed:', campErr);
                         }
                     }
 
@@ -1846,6 +1864,7 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                             last_summary: enrichedLastSummary,
                             booking_link: bookingLink,
                             campaign_prompt: campaignPrompt,
+                            campaign: campaignBlock,
                         }
                     };
 

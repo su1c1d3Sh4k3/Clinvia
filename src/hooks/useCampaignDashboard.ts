@@ -62,6 +62,7 @@ export interface CampaignStatsRow {
     scheduled_count: number;
     resolved_count: number;
     no_response_count: number;
+    in_progress_count: number;
 }
 
 export function useCampaignDashboardStats(period: CampanhasPeriod) {
