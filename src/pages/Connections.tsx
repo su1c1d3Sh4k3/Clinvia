@@ -21,6 +21,7 @@ import Templates from "./Templates";
 import AutomaticMessages from "@/components/connections/AutomaticMessages";
 import { MetaQualityBadge } from "@/components/campaigns/MetaQualityPanel";
 import { useMetaQuality } from "@/hooks/useMetaQuality";
+import { useSuporteTour } from "@/lib/suporteTours";
 
 const META_APP_ID = import.meta.env.VITE_META_APP_ID || '1328505766119863';
 const META_CONFIG_ID = import.meta.env.VITE_META_CONFIG_ID || '1804825927169026';
@@ -70,6 +71,7 @@ const Connections = () => {
     // Outer tab: Conexões | Templates (Meta) | Mensagens API não oficial (UAZAPI)
     // Persistida na URL: ?tab=templates | ?tab=automessages
     const [outerTab, setOuterTab] = useUrlTab("connections");
+    useSuporteTour();
 
     // All Instances Query — filter by provider in JS (provider column not in generated types)
     const { data: allInstances, isLoading: loadingInstances } = useQuery({
@@ -747,7 +749,7 @@ const Connections = () => {
                 </div>
 
                 <Tabs value={outerTab} onValueChange={setOuterTab} className="w-full">
-                    <TabsList className="flex w-full justify-between mb-2 h-auto">
+                    <TabsList data-tour="conexoes-tabs" className="flex w-full justify-between mb-2 h-auto">
                         <TabsTrigger value="connections" className="flex-1 flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
                             <Smartphone className="h-4 w-4" />
                             Conexões
@@ -768,7 +770,7 @@ const Connections = () => {
 
                     <TabsContent value="connections">
                 <Tabs defaultValue="whatsapp" className="w-full">
-                    <TabsList className="grid w-full grid-cols-3">
+                    <TabsList data-tour="conexoes-canais" className="grid w-full grid-cols-3">
                         <TabsTrigger value="whatsapp" className="flex items-center gap-2">
                             <FaWhatsapp className="h-4 w-4 text-green-500" />
                             <span className="hidden sm:inline">WhatsApp</span>

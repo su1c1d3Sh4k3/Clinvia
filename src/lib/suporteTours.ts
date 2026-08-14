@@ -72,6 +72,20 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
                 "Arraste os cards entre colunas conforme a conversa evolui. Lembre: mover o card também muda a fila da conversa no inbox (e vice-versa).",
         },
     ],
+    "conexoes-tour": [
+        {
+            element: '[data-tour="conexoes-tabs"]',
+            title: "Abas da página",
+            description:
+                "Conexões (seus canais), Templates (só com número oficial Meta) e Mensagens API não oficial (só com conexão por QR code).",
+        },
+        {
+            element: '[data-tour="conexoes-canais"]',
+            title: "Os 3 canais",
+            description:
+                "WhatsApp (não oficial, QR code), WA Oficial (API Meta) e Instagram. Cada card mostra status, qualidade e ações de reconexão.",
+        },
+    ],
     "servicos-tour": [
         {
             element: '[data-tour="servicos-title"]',
