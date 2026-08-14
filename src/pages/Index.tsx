@@ -13,6 +13,7 @@ import { Menu, X, MoreVertical, ArrowLeft } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { useMobileMenu } from "@/contexts/MobileMenuContext";
+import { useSuporteTour } from "@/lib/suporteTours";
 
 // Mobile view states
 type MobileView = "list" | "chat";
@@ -23,6 +24,7 @@ const Index = () => {
   const [searchParams] = useSearchParams();
   const [selectedConversationId, setSelectedConversationId] = useState<string>();
   const { setHideFloatingButton } = useMobileMenu();
+  useSuporteTour(!loading);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);

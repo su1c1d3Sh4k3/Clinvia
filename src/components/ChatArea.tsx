@@ -846,7 +846,7 @@ export const ChatArea = ({
   }
 
   return (
-    <div className={cn("flex-1 flex flex-col bg-background relative w-full min-w-0 min-h-0", isMobile ? "h-full" : "h-full")}>
+    <div data-tour="inbox-chat" className={cn("flex-1 flex flex-col bg-background relative w-full min-w-0 min-h-0", isMobile ? "h-full" : "h-full")}>
       <ChatHeader
         isMobile={isMobile}
         displayName={displayName}

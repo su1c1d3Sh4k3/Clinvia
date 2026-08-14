@@ -227,6 +227,7 @@ export const AIIntelligenceSidebar = ({ conversationId }: AIIntelligenceSidebarP
       />
 
       <div
+        data-tour="inbox-sidebar"
         className={cn(
           "h-full border-l border-[#1E2229]/20 dark:border-border bg-white dark:bg-background/50 backdrop-blur-sm flex flex-col transition-all duration-300 ease-in-out overflow-hidden",
           isHovered ? "w-[min(320px,calc(100vw-60px))]" : "w-[60px]"

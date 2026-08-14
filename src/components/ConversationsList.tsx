@@ -334,7 +334,7 @@ export const ConversationsList = ({
   };
 
   return (
-    <div className="w-full md:w-[360px] h-full border-r border-[#1E2229]/20 dark:border-border flex flex-col bg-white dark:bg-background overflow-hidden">
+    <div data-tour="inbox-list" className="w-full md:w-[360px] h-full border-r border-[#1E2229]/20 dark:border-border flex flex-col bg-white dark:bg-background overflow-hidden">
       <div className="p-3 border-b border-[#1E2229]/20 dark:border-border space-y-2">
         {/* Top bar: Channel toggle + Action buttons */}
         <div className="flex items-center gap-2">

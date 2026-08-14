@@ -34,6 +34,26 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
                 "Cada campanha vira um card. Expanda para ver os 8 cards de resumo e a tabela contato a contato.",
         },
     ],
+    "inbox-atender": [
+        {
+            element: '[data-tour="inbox-list"]',
+            title: "Lista de conversas",
+            description:
+                "Todas as conversas da clínica, com filtros por canal, fila e status. Clique numa conversa para abrir o chat.",
+        },
+        {
+            element: '[data-tour="inbox-chat"]',
+            title: "Área do chat",
+            description:
+                "Aqui você conversa com o cliente. No topo, os botões Atender (assumir a conversa — a IA para) e Resolver (encerrar e arquivar).",
+        },
+        {
+            element: '[data-tour="inbox-sidebar"]',
+            title: "Painel de inteligência",
+            description:
+                "Passe o mouse para expandir: dados do cliente, etapa do CRM, negociação rápida, resumo da IA e atalhos de venda/agendamento.",
+        },
+    ],
     "ia-config": [
         {
             element: '[data-tour="ia-tabs"]',
