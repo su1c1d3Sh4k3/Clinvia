@@ -33,8 +33,8 @@ function buildMetaPayload(
         to,
     };
 
-    // Reply context
-    if (replyId) {
+    // Reply context (não se aplica a reações — nelas o replyId é o alvo da reação)
+    if (replyId && messageType !== "reaction") {
         payload.context = { message_id: replyId };
     }
 

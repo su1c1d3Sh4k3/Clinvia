@@ -34,6 +34,8 @@ interface MessageListProps {
     profilePic: string | null;
     isGroup: boolean;
     conversation: any;
+    /** Conversa em instância Meta Cloud API: oculta Editar/Apagar (não suportado pela API oficial) */
+    hideEditDelete?: boolean;
 }
 
 export const MessageList = ({
@@ -57,7 +59,8 @@ export const MessageList = ({
     displayName,
     profilePic,
     isGroup,
-    conversation
+    conversation,
+    hideEditDelete = false
 }: MessageListProps) => {
 
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -340,7 +343,7 @@ export const MessageList = ({
 
                 <div className={cn("group relative flex items-end gap-1 min-w-0", isMobile ? "max-w-[calc(100%-3rem)]" : "max-w-[70%]")}>
                     {msg.direction === "outbound" && (
-                        <MessageActionsMenu message={msg as any} onReply={() => onReply(msg)} onEdit={() => onEdit(msg)} onDelete={() => onDelete(msg)} onReact={() => onReact(msg)} onCopy={() => onCopy(msg)} onToggleFavorite={() => onToggleFavorite(msg)} onForward={() => onForward(msg)} className="self-center shrink-0" />
+                        <MessageActionsMenu message={msg as any} onReply={() => onReply(msg)} onEdit={() => onEdit(msg)} onDelete={() => onDelete(msg)} onReact={() => onReact(msg)} onCopy={() => onCopy(msg)} onToggleFavorite={() => onToggleFavorite(msg)} onForward={() => onForward(msg)} hideEditDelete={hideEditDelete} className="self-center shrink-0" />
                     )}
 
                     {/* Wrapper gives space for the badge below the bubble */}
@@ -571,6 +574,7 @@ export const MessageList = ({
                             onCopy={() => onCopy(msg)}
                             onToggleFavorite={() => onToggleFavorite(msg)}
                             onForward={() => onForward(msg)}
+                            hideEditDelete={hideEditDelete}
                             className="self-center shrink-0"
                         />
                     )}

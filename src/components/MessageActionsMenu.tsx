@@ -27,6 +27,8 @@ interface MessageActionsMenuProps {
     onCopy: (message: Message) => void;
     onToggleFavorite: (message: Message) => void;
     onForward: (message: Message) => void;
+    /** Oculta Editar/Apagar (API oficial Meta não suporta editar nem revogar mensagens) */
+    hideEditDelete?: boolean;
     className?: string;
 }
 
@@ -39,6 +41,7 @@ export function MessageActionsMenu({
     onCopy,
     onToggleFavorite,
     onForward,
+    hideEditDelete = false,
     className,
 }: MessageActionsMenuProps) {
     const [open, setOpen] = useState(false);
@@ -113,7 +116,7 @@ export function MessageActionsMenu({
                 </DropdownMenuItem>
 
                 {/* Opções para mensagens enviadas (outbound) */}
-                {isOutbound && (
+                {isOutbound && !hideEditDelete && (
                     <>
                         <DropdownMenuItem
                             onClick={() => {

@@ -516,18 +516,33 @@ export const ChatArea = ({
   };
 
   const executeReact = async (emoji: string) => {
-    if (!reactingToMessage?.evolution_id || !instance?.apikey || !reactingToMessage.clientNumber) return;
+    if (!reactingToMessage?.evolution_id) return;
     try {
-      await uzapi.reactToMessage(instance.apikey, reactingToMessage.clientNumber, reactingToMessage.evolution_id, emoji);
-      // Save reaction to DB so it renders as an emoji badge on the message
-      await supabase.from("messages").insert({
-        conversation_id: conversationId,
-        body: emoji,
-        direction: "outbound",
-        message_type: "reaction" as any,
-        reply_to_id: reactingToMessage.evolution_id,
-        user_id: (await supabase.auth.getSession()).data.session?.user?.id,
-      });
+      if (isMetaInstance) {
+        // API oficial Meta: reação via Graph API (edge function salva a mensagem no DB)
+        const { data, error } = await supabase.functions.invoke("evolution-send-message", {
+          body: {
+            conversationId,
+            body: emoji,
+            messageType: "reaction",
+            replyId: reactingToMessage.evolution_id,
+            message: { wasSentByApi: true }, // reação não deve assumir/assinar a conversa
+          },
+        });
+        if (error || data?.error) throw new Error(data?.message || error?.message || "Erro ao reagir");
+      } else {
+        if (!instance?.apikey || !reactingToMessage.clientNumber) return;
+        await uzapi.reactToMessage(instance.apikey, reactingToMessage.clientNumber, reactingToMessage.evolution_id, emoji);
+        // Save reaction to DB so it renders as an emoji badge on the message
+        await supabase.from("messages").insert({
+          conversation_id: conversationId,
+          body: emoji,
+          direction: "outbound",
+          message_type: "reaction" as any,
+          reply_to_id: reactingToMessage.evolution_id,
+          user_id: (await supabase.auth.getSession()).data.session?.user?.id,
+        });
+      }
       queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
       toast.success(`Reagiu com ${emoji}`);
       setShowEmojiPicker(false);
@@ -870,6 +885,7 @@ export const ChatArea = ({
         profilePic={profilePic}
         isGroup={isGroup}
         conversation={conversation}
+        hideEditDelete={isMetaInstance}
       />
 
       {isWindowClosed ? (
