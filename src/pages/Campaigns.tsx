@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { startSuporteTour } from "@/lib/suporteTours";
 import { Megaphone, Plus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -17,6 +18,19 @@ export default function Campaigns() {
     const [wizardOpen, setWizardOpen] = useState(false);
     const [editing, setEditing] = useState<Campaign | null>(null);
     const [resending, setResending] = useState<Campaign | null>(null);
+    const [searchParams, setSearchParams] = useSearchParams();
+
+    // Tour guiado vindo da página Suporte (?tour=nova-campanha)
+    const tourId = searchParams.get("tour");
+    useEffect(() => {
+        if (!tourId || isLoading) return;
+        // Aguarda a renderização dos alvos antes de iniciar o destaque
+        const t = setTimeout(() => {
+            startSuporteTour(tourId);
+            setSearchParams({}, { replace: true });
+        }, 400);
+        return () => clearTimeout(t);
+    }, [tourId, isLoading, setSearchParams]);
 
     // Agentes não acessam campanhas
     useEffect(() => {
@@ -46,7 +60,7 @@ export default function Campaigns() {
     return (
         <div className="w-full p-4 md:p-8 space-y-4 md:space-y-6">
             <div className="flex items-center justify-between gap-3">
-                <div>
+                <div data-tour="campaigns-title">
                     <h1 className="text-xl font-bold flex items-center gap-2">
                         <Megaphone className="w-5 h-5 text-primary" /> Campanhas
                     </h1>
@@ -54,19 +68,21 @@ export default function Campaigns() {
                         Disparos em massa de templates Meta com atendimento por IA
                     </p>
                 </div>
-                <Button onClick={openCreate}>
+                <Button onClick={openCreate} data-tour="new-campaign">
                     <Plus className="w-4 h-4 mr-1.5" /> Nova campanha
                 </Button>
             </div>
 
-            <MetaQualityPanel />
+            <div data-tour="meta-quality">
+                <MetaQualityPanel />
+            </div>
 
             {isLoading ? (
                 <div className="flex items-center justify-center py-16 text-muted-foreground gap-2">
                     <Loader2 className="w-5 h-5 animate-spin" /> Carregando campanhas...
                 </div>
             ) : (campaigns || []).length === 0 ? (
-                <div className="border-2 border-dashed rounded-2xl p-10 flex flex-col items-center gap-3 text-center">
+                <div data-tour="campaign-list" className="border-2 border-dashed rounded-2xl p-10 flex flex-col items-center gap-3 text-center">
                     <Megaphone className="w-10 h-10 text-muted-foreground/50" />
                     <div>
                         <p className="font-medium">Nenhuma campanha ainda</p>
@@ -80,7 +96,7 @@ export default function Campaigns() {
                     </Button>
                 </div>
             ) : (
-                <div className="space-y-3">
+                <div data-tour="campaign-list" className="space-y-3">
                     {(campaigns || []).map((c) => (
                         <CampaignCard
                             key={c.id}

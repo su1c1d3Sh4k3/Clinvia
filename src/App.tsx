@@ -44,6 +44,7 @@ const Financial = React.lazy(() => import("./pages/Financial"));
 const Sales = React.lazy(() => import("./pages/Sales"));
 const FollowUp = React.lazy(() => import("./pages/FollowUp"));
 const Support = React.lazy(() => import("./pages/Support"));
+const Suporte = React.lazy(() => import("./pages/Suporte"));
 const Delivery = React.lazy(() => import("./pages/Delivery"));
 const Admin = React.lazy(() => import("./pages/Admin"));
 const AdminAuth = React.lazy(() => import("./pages/AdminAuth"));
@@ -179,6 +180,7 @@ const App = () => (
                   <Route path="/follow-up" element={<FollowUp />} />
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/support" element={<Support />} />
+                  <Route path="/suporte" element={<Suporte />} />
                   <Route path="/delivery" element={<Delivery />} />
                   <Route path="/reports" element={<Reports />} />
                   <Route path="/auto-messages" element={<AutoMessages />} />

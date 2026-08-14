@@ -1,7 +1,7 @@
 import {
   Users, Settings, LayoutDashboard, MessageSquare, Briefcase,
   Smartphone, LogOut, BookUser, Calendar, Repeat,
-  Package, Bot, Megaphone
+  Package, Bot, Megaphone, LifeBuoy
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -39,6 +39,7 @@ const menuStructure: MenuItem[] = [
   { icon: Megaphone, label: "Campanhas", id: "campaigns", path: "/campanhas" },
   { icon: Bot, label: "IA", id: "ia-config", path: "/ia-config" },
   { icon: Smartphone, label: "Conexões", id: "whatsapp", path: "/whatsapp-connection" },
+  { icon: LifeBuoy, label: "Suporte", id: "suporte", path: "/suporte" },
   { icon: Settings, label: "Configurações", id: "settings", path: "/settings" },
 ];
 
