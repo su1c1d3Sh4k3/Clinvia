@@ -72,6 +72,19 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
                 "Arraste os cards entre colunas conforme a conversa evolui. Lembre: mover o card também muda a fila da conversa no inbox (e vice-versa).",
         },
     ],
+    "servicos-tour": [
+        {
+            element: '[data-tour="servicos-title"]',
+            title: "Catálogo de Serviços",
+            description: "A fonte de verdade de preços e procedimentos — a IA, a Agenda e as vendas leem daqui.",
+        },
+        {
+            element: '[data-tour="servicos-acoes"]',
+            title: "Os 3 botões",
+            description:
+                "Importar (planilha em massa), Adicionar Categoria (categoria própria) e Adicionar Serviço por Categoria — o caminho principal para montar o catálogo.",
+        },
+    ],
     "clientes-tour": [
         {
             element: '[data-tour="clientes-title"]',

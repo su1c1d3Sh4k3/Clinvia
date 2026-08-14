@@ -11,6 +11,7 @@ import { CrmGuide } from "@/components/suporte/CrmGuide";
 import { AgendaGuide } from "@/components/suporte/AgendaGuide";
 import { DashboardGuide } from "@/components/suporte/DashboardGuide";
 import { ClientesGuide } from "@/components/suporte/ClientesGuide";
+import { ServicosGuide } from "@/components/suporte/ServicosGuide";
 import { useUrlTab } from "@/hooks/useUrlTab";
 
 /** Placeholder para guias ainda não escritos (e para Recorrência, em aprovação). */
@@ -42,7 +43,7 @@ const GUIDE_TABS: GuideTab[] = [
     { value: "dashboard", label: "Dashboard", icon: LayoutDashboard, component: DashboardGuide },
     { value: "inbox", label: "Inbox", icon: MessageSquare, component: InboxGuide },
     { value: "crm", label: "CRM", icon: KanbanSquare, component: CrmGuide },
-    { value: "servicos", label: "Serviços", icon: Package, component: () => <GuidePlaceholder title="Serviços" /> },
+    { value: "servicos", label: "Serviços", icon: Package, component: ServicosGuide },
     { value: "clientes", label: "Clientes", icon: Users, component: ClientesGuide },
     { value: "equipe", label: "Equipe", icon: ShieldCheck, component: () => <GuidePlaceholder title="Equipe" /> },
     { value: "agenda", label: "Agenda", icon: Calendar, component: AgendaGuide },

@@ -11,9 +11,11 @@ import { ServiceCategoryCard } from "@/components/services/ServiceCategoryCard";
 import { DirectCategoryCard } from "@/components/services/DirectCategoryCard";
 import { AddByCategoryModal } from "@/components/services/AddByCategoryModal";
 import { AddCategoryModal } from "@/components/services/AddCategoryModal";
+import { useSuporteTour } from "@/lib/suporteTours";
 
 export default function ProductsServices() {
   const { data: ownerId } = useOwnerId();
+  useSuporteTour();
   const [searchTerm, setSearchTerm] = useState("");
   const [importWizardOpen, setImportWizardOpen] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -99,12 +101,12 @@ export default function ProductsServices() {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 md:gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold">Serviços</h1>
+          <h1 data-tour="servicos-title" className="text-2xl md:text-3xl font-bold">Serviços</h1>
           <p className="text-muted-foreground text-sm md:text-base">
             Gerencie suas categorias, serviços e aplicações
           </p>
         </div>
-        <div className="flex gap-2">
+        <div data-tour="servicos-acoes" className="flex gap-2">
           <Button variant="outline" onClick={() => setImportWizardOpen(true)} className="gap-2">
             <Upload className="w-4 h-4" />
             Importar
