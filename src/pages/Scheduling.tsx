@@ -21,9 +21,11 @@ import { generateDailyReport } from "@/utils/generateDailyReport";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useCrmAppointmentSync } from "@/hooks/useCrmAppointmentSync";
+import { useSuporteTour } from "@/lib/suporteTours";
 
 export default function Scheduling() {
     const { toast } = useToast();
+    useSuporteTour();
     const { canCreate, canEdit, canDelete } = usePermissions();
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
@@ -399,7 +401,7 @@ export default function Scheduling() {
                         <Filter className="h-4 w-4" />
                     </Button>
 
-                    <div className="flex items-center border rounded-md bg-white dark:bg-background border-[#D4D5D6] dark:border-border">
+                    <div data-tour="agenda-nav" className="flex items-center border rounded-md bg-white dark:bg-background border-[#D4D5D6] dark:border-border">
                         <Button variant="ghost" size="icon" onClick={handlePreviousDay} className="h-9 w-9 rounded-none rounded-l-md border-r">
                             <ChevronLeft className="h-4 w-4" />
                         </Button>
@@ -435,7 +437,7 @@ export default function Scheduling() {
                     </div>
 
                     {canCreate('appointments') && (
-                        <Button onClick={() => {
+                        <Button data-tour="agenda-criar" onClick={() => {
                             setSelectedSlot(undefined);
                             setAppointmentToEdit(null);
                             setIsAppointmentModalOpen(true);
@@ -464,6 +466,7 @@ export default function Scheduling() {
             <div className="flex-1 flex flex-col md:flex-row gap-4 md:gap-6 overflow-hidden">
             {/* Sidebar: rail de ícones no desktop (expande no hover, empurrando a agenda); painel completo no mobile */}
             <div
+                data-tour="agenda-sidebar"
                 className={`shrink-0 flex-col transition-all duration-300 ${isSidebarOpen ? "flex w-full" : "hidden"} md:flex ${isSidebarExpanded ? "md:w-80" : "md:w-14"}`}
                 onMouseEnter={() => setIsSidebarExpanded(true)}
                 onMouseLeave={() => setIsSidebarExpanded(false)}
@@ -627,7 +630,7 @@ export default function Scheduling() {
             </div>
 
             {/* Main Calendar */}
-            <div className={`flex-1 flex flex-col overflow-hidden ${isSidebarOpen ? "hidden md:flex" : "flex"}`}>
+            <div data-tour="agenda-grade" className={`flex-1 flex flex-col overflow-hidden ${isSidebarOpen ? "hidden md:flex" : "flex"}`}>
                 {date && (
                     <SchedulingCalendar
                         date={date}

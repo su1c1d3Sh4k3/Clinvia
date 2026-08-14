@@ -8,6 +8,7 @@ import { CampaignsGuide } from "@/components/suporte/CampaignsGuide";
 import { IaGuide } from "@/components/suporte/IaGuide";
 import { InboxGuide } from "@/components/suporte/InboxGuide";
 import { CrmGuide } from "@/components/suporte/CrmGuide";
+import { AgendaGuide } from "@/components/suporte/AgendaGuide";
 import { useUrlTab } from "@/hooks/useUrlTab";
 
 /** Placeholder para guias ainda não escritos (e para Recorrência, em aprovação). */
@@ -42,7 +43,7 @@ const GUIDE_TABS: GuideTab[] = [
     { value: "servicos", label: "Serviços", icon: Package, component: () => <GuidePlaceholder title="Serviços" /> },
     { value: "clientes", label: "Clientes", icon: Users, component: () => <GuidePlaceholder title="Clientes" /> },
     { value: "equipe", label: "Equipe", icon: ShieldCheck, component: () => <GuidePlaceholder title="Equipe" /> },
-    { value: "agenda", label: "Agenda", icon: Calendar, component: () => <GuidePlaceholder title="Agenda" /> },
+    { value: "agenda", label: "Agenda", icon: Calendar, component: AgendaGuide },
     { value: "recorrencia", label: "Recorrência", icon: Repeat, component: () => <GuidePlaceholder title="Recorrência" /> },
     { value: "campanhas", label: "Campanhas", icon: Megaphone, component: CampaignsGuide },
     { value: "ia", label: "IA", icon: Bot, component: IaGuide },

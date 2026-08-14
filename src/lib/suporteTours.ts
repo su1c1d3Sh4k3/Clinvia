@@ -72,6 +72,31 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
                 "Arraste os cards entre colunas conforme a conversa evolui. Lembre: mover o card também muda a fila da conversa no inbox (e vice-versa).",
         },
     ],
+    "agenda-tour": [
+        {
+            element: '[data-tour="agenda-nav"]',
+            title: "Navegação de dias",
+            description: "A agenda mostra um dia por vez. Use as setas ou o botão Hoje para trocar o dia.",
+        },
+        {
+            element: '[data-tour="agenda-sidebar"]',
+            title: "Barra lateral",
+            description:
+                "Passe o mouse para expandir: mini-calendário, Adicionar Profissional, Importar Agendamentos, Relatório Diário e filtro por serviço.",
+        },
+        {
+            element: '[data-tour="agenda-criar"]',
+            title: "Criar Agendamento",
+            description:
+                "Abre o modal completo. Dica: clicar direto num horário vago da grade já preenche profissional, data e hora.",
+        },
+        {
+            element: '[data-tour="agenda-grade"]',
+            title: "A grade",
+            description:
+                "Uma coluna por profissional. Passe o mouse num evento para ver detalhes e mudar o status; clique no nome do profissional para a visão solo.",
+        },
+    ],
     "ia-config": [
         {
             element: '[data-tour="ia-tabs"]',
