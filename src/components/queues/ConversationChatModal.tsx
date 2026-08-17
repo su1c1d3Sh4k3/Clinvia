@@ -346,6 +346,38 @@ export function ConversationChatModal({
                 caption = message.trim();
             }
 
+            // Conversas Instagram usam função dedicada (Graph API), não a de
+            // WhatsApp — mesmo branch do inbox (ChatArea executeSendMessage)
+            if ((conversation as any)?.channel === 'instagram') {
+                const igPayload: any = {
+                    conversation_id: activeConversationId,
+                    message_type: messageType === 'document' ? 'text' : messageType, // Instagram não suporta document
+                    message_text: message.trim() || undefined,
+                    audio_url: messageType === 'audio' ? mediaUrl : undefined,
+                    image_url: messageType === 'image' ? mediaUrl : undefined,
+                };
+
+                const { data, error } = await supabase.functions.invoke('instagram-send-message', { body: igPayload });
+
+                if (error || !data?.success) {
+                    let serverMessage: string | undefined;
+                    if (error && 'context' in (error as any) && (error as any).context) {
+                        try {
+                            const body = await (error as any).context.json();
+                            serverMessage = body?.message || body?.error;
+                            console.error("[ConversationChatModal/instagram] Edge Function body:", body);
+                        } catch { /* ignore */ }
+                    }
+                    toast.error(`Erro ao enviar: ${serverMessage || data?.error || error?.message || 'Erro desconhecido'}`);
+                    return;
+                }
+
+                setMessage("");
+                setSelectedFile(null);
+                queryClient.invalidateQueries({ queryKey: ["messages", activeConversationId] });
+                return;
+            }
+
             await sendMessageMutation.mutateAsync({
                 conversationId: activeConversationId,
                 body: messageType === 'text' ? message.trim() : (selectedFile?.name || "Arquivo"), // Fallback body
