@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import {
   Phone, Mail, CreditCard, User, Calendar, MessageSquare,
   Star, Ticket, ListFilter, Link2, Unlink, Instagram,
+  Tag as TagIcon, Trash2,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -138,6 +139,71 @@ export const ClientSidebar = ({ contact, sourceContact, contactIds }: ClientSide
       return data;
     },
   });
+
+  // Tags do cliente
+  const { data: contactTags } = useQuery({
+    queryKey: ["contact-tags", contact.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("contact_tags")
+        .select("tag_id, tags(*)")
+        .eq("contact_id", contact.id);
+      if (error) throw error;
+      return data.map((item: any) => item.tags).filter(Boolean);
+    },
+  });
+
+  const { data: allTags } = useQuery({
+    queryKey: ["tags"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tags")
+        .select("*")
+        .eq("is_active", true)
+        .order("name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const invalidateTags = () => {
+    queryClient.invalidateQueries({ queryKey: ["contact-tags", contact.id] });
+    queryClient.invalidateQueries({ queryKey: ["contacts"] });
+  };
+
+  const assignTagMutation = useMutation({
+    mutationFn: async (tagId: string) => {
+      const { error } = await supabase
+        .from("contact_tags")
+        .insert({ contact_id: contact.id, tag_id: tagId });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      invalidateTags();
+      toast.success("Tag atribuída");
+    },
+    onError: (error: any) => toast.error("Erro ao atribuir tag: " + error.message),
+  });
+
+  const removeTagMutation = useMutation({
+    mutationFn: async (tagId: string) => {
+      const { error } = await supabase
+        .from("contact_tags")
+        .delete()
+        .eq("contact_id", contact.id)
+        .eq("tag_id", tagId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      invalidateTags();
+      toast.success("Tag removida");
+    },
+    onError: (error: any) => toast.error("Erro ao remover tag: " + error.message),
+  });
+
+  const availableTags = (allTags || []).filter(
+    (tag: any) => !(contactTags || []).some((t: any) => t.id === tag.id)
+  );
 
   // Satisfaction index (average NPS)
   const npsArray = contact.nps as any[] | null;
@@ -276,6 +342,48 @@ export const ClientSidebar = ({ contact, sourceContact, contactIds }: ClientSide
           value={satisfactionIndex ? `${satisfactionIndex} / 5` : "Sem avaliações"}
           className={satisfactionIndex ? "font-medium" : "text-muted-foreground italic"}
         />
+
+        {/* Tags do cliente */}
+        <div className="pt-2 mt-1 border-t space-y-1">
+          <p className="text-[10px] text-muted-foreground leading-none pt-1">Tags</p>
+
+          {(contactTags || []).length === 0 && (
+            <p className="text-xs text-muted-foreground italic">Nenhuma tag atribuída</p>
+          )}
+
+          {(contactTags || []).map((tag: any) => (
+            <div key={tag.id} className="flex items-center gap-2 py-0.5">
+              <TagIcon className="w-3.5 h-3.5 shrink-0" style={{ color: tag.color }} />
+              <span className="text-xs truncate flex-1" title={tag.name}>{tag.name}</span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-5 w-5 shrink-0 text-muted-foreground hover:text-destructive"
+                title="Remover tag"
+                disabled={removeTagMutation.isPending}
+                onClick={() => removeTagMutation.mutate(tag.id)}
+              >
+                <Trash2 className="w-3 h-3" />
+              </Button>
+            </div>
+          ))}
+
+          <select
+            className="w-full h-7 text-xs rounded-md border border-input bg-background px-2 focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+            value=""
+            disabled={assignTagMutation.isPending || availableTags.length === 0}
+            onChange={(e) => {
+              if (e.target.value) assignTagMutation.mutate(e.target.value);
+            }}
+          >
+            <option value="">
+              {availableTags.length === 0 ? "Sem tags disponíveis" : "Adicionar tag..."}
+            </option>
+            {availableTags.map((tag: any) => (
+              <option key={tag.id} value={tag.id}>{tag.name}</option>
+            ))}
+          </select>
+        </div>
       </div>
     </div>
   );
