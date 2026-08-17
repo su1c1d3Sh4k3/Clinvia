@@ -1,7 +1,7 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, Star, Files, CircleCheck } from "lucide-react";
-import { QueueSelector } from "@/components/QueueSelector";
+import { CheckCircle, Star, Files, CircleCheck, ArrowRightLeft } from "lucide-react";
+import { TransferAtendimentoModal } from "@/components/queues/TransferAtendimentoModal";
 import { useState } from "react";
 import { FavoriteMessagesModal } from "./FavoriteMessagesModal";
 import { ConversationMediaModal } from "./ConversationMediaModal";
@@ -50,7 +50,7 @@ const ExpandButton = ({
         )}
     >
         <span className="flex-shrink-0">{icon}</span>
-        <span className="max-w-0 overflow-hidden whitespace-nowrap text-sm transition-[max-width,margin] duration-200 group-hover:max-w-[140px] group-hover:ml-1.5">
+        <span className="max-w-0 overflow-hidden whitespace-nowrap text-sm transition-[max-width,margin] duration-200 group-hover:max-w-[180px] group-hover:ml-1.5">
             {label}
         </span>
     </Button>
@@ -71,6 +71,7 @@ export const ChatHeader = ({
     onJumpToMessage,
 }: ChatHeaderProps) => {
     const [isFavoritesModalOpen, setIsFavoritesModalOpen] = useState(false);
+    const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
     const [isCloseNegotiationOpen, setIsCloseNegotiationOpen] = useState(false);
     const [isMediaModalOpen, setIsMediaModalOpen] = useState(false);
 
@@ -117,10 +118,11 @@ export const ChatHeader = ({
 
                 {!isGroup && (
                     <>
-                        {/* Seletor de fila */}
-                        <QueueSelector
-                            conversationId={conversationId}
-                            currentQueueId={(conversation as any)?.queue_id}
+                        {/* Transferir Atendimento (fila + responsável) */}
+                        <ExpandButton
+                            icon={<ArrowRightLeft className="w-4 h-4" />}
+                            label="Transferir Atendimento"
+                            onClick={() => setIsTransferModalOpen(true)}
                         />
 
                         {/* Atender / Ticket Aberto */}
@@ -158,6 +160,12 @@ export const ChatHeader = ({
                 />
             </div>
 
+            <TransferAtendimentoModal
+                open={isTransferModalOpen}
+                onOpenChange={setIsTransferModalOpen}
+                conversationId={conversationId}
+                conversation={conversation}
+            />
             <FavoriteMessagesModal
                 open={isFavoritesModalOpen}
                 onOpenChange={setIsFavoritesModalOpen}
