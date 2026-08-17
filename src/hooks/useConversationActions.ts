@@ -48,9 +48,25 @@ export function useConversationActions() {
     // Resolve conversation (set status to closed)
     const resolveConversation = useMutation({
         mutationFn: async (conversationId: string) => {
+            // USER RULE: quem encerra o atendimento leva a atribuição
+            let resolverId: string | null = null;
+            const { data: auth } = await supabase.auth.getUser();
+            if (auth?.user) {
+                const { data: tm } = await supabase
+                    .from('team_members')
+                    .select('id')
+                    .eq('auth_user_id', auth.user.id)
+                    .limit(1)
+                    .maybeSingle();
+                resolverId = tm?.id ?? null;
+            }
+
             const { error } = await supabase
                 .from('conversations')
-                .update({ status: 'closed' })
+                .update({
+                    status: 'closed',
+                    ...(resolverId ? { assigned_agent_id: resolverId } : {})
+                })
                 .eq('id', conversationId);
 
             if (error) throw error;

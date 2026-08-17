@@ -141,11 +141,14 @@ export function useMonitorConversations(range: MonitorRange) {
                 });
             });
 
-            // Resolvidos por atendente + última conversa resolvida por contato
-            // (usada para enriquecer os cards finalizados com canal/instância/atendente)
+            // Resolvidos por atendente + última conversa resolvida COM atendente por
+            // contato. USER RULE: o board Finalizados só mostra atendimentos
+            // encerrados por um usuário — resoluções automáticas (campanha/cron,
+            // sem assigned_agent_id) ficam de fora.
             const resolvedByContact = new Map<string, any>();
             (resolvedRes.data || []).forEach((c: any) => {
                 bumpAgent(c.assigned_agent_id, "resolved");
+                if (!c.assigned_agent_id) return;
                 const prev = resolvedByContact.get(c.contact_id);
                 if (!prev || (c.resolved_at || "") > (prev.resolved_at || "")) {
                     resolvedByContact.set(c.contact_id, c);
@@ -153,32 +156,35 @@ export function useMonitorConversations(range: MonitorRange) {
             });
 
             const finalizados: MonitorCard[] = [];
+            const seenContacts = new Set<string>();
+            // terminalRes vem ordenado por stage_changed_at desc → 1 card (o mais
+            // recente) por contato, evitando key duplicada quando o contato tem
+            // mais de um desfecho no período
             (terminalRes.data || []).forEach((d: any) => {
                 if (!d.contact_id || !d.contacts) return;
+                if (seenContacts.has(d.contact_id)) return;
                 const conv = resolvedByContact.get(d.contact_id);
+                if (!conv) return; // finalizado sem usuário que encerrou → não aparece
+                seenContacts.add(d.contact_id);
                 const channel: "whatsapp" | "instagram" =
-                    conv?.channel === "instagram" ? "instagram" : "whatsapp";
+                    conv.channel === "instagram" ? "instagram" : "whatsapp";
                 finalizados.push({
-                    conversationId: conv?.id || `final-${d.id}`,
+                    conversationId: conv.id,
                     contactId: d.contact_id,
                     contact: d.contacts,
                     stage: d.stage,
                     status: "resolved",
-                    assignedAgentId: conv?.assigned_agent_id || null,
+                    assignedAgentId: conv.assigned_agent_id,
                     channel,
-                    instanceId: conv
-                        ? channel === "instagram"
-                            ? conv.instagram_instance_id
-                            : conv.instance_id
-                        : null,
-                    instanceName: conv
-                        ? channel === "instagram"
+                    instanceId:
+                        channel === "instagram" ? conv.instagram_instance_id : conv.instance_id,
+                    instanceName:
+                        channel === "instagram"
                             ? conv.instagram_instances?.account_name || "Instagram"
-                            : conv.instances?.name || "—"
-                        : "—",
+                            : conv.instances?.name || "—",
                     isOfficialApi: false,
-                    createdAt: conv?.created_at || d.stage_changed_at,
-                    lastMessageAt: conv?.last_message_at || null,
+                    createdAt: conv.created_at,
+                    lastMessageAt: conv.last_message_at,
                     lastCustomerMessageAt: null,
                     finalizedAt: d.stage_changed_at,
                 });

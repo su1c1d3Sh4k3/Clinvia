@@ -150,7 +150,8 @@ export function CrmGuide() {
                 ]} />
                 <Callout type="atencao" title="Mover para terminal encerra o ticket!">
                     É intencional: um cliente "Perdido" com conversa aberta seria um contrassenso. Se ainda precisa conversar,
-                    mova o card só quando o papo terminar.
+                    mova o card só quando o papo terminar. E quem move leva a atribuição: a conversa encerrada passa a contar
+                    como atendimento de quem arrastou o card (aparece no Monitoramento em seu nome).
                 </Callout>
             </TopicSection>
 

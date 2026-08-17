@@ -102,9 +102,9 @@ export function DashboardGuide() {
                 </p>
                 <MiniMonitorSimulator />
                 <StepByStep steps={[
-                    { title: "Quadro Finalizados", description: "Abaixo de Follow Up fica o quadro Finalizados: todos os atendimentos que chegaram a uma etapa de conclusão (Ganho, Perdido, Sem Contato, Sem Interesse ou Finalizado) dentro do período. Cada card traz um selo com a etapa e a cor dela." },
-                    { title: "Total atendido no período", description: "Somando os quadros ao vivo com o Finalizados, você sabe quantos clientes no total foram atendidos no período — inclusive os que já foram encerrados." },
-                    { title: "Detalhamento por atendente", description: "Cada atendente mostra abertos, pendentes e resolvidos no período selecionado, além do status online/offline." },
+                    { title: "Quadro Finalizados", description: "Abaixo de Follow Up fica o quadro Finalizados: atendimentos que chegaram a uma etapa de conclusão (Ganho, Perdido, Sem Contato, Sem Interesse ou Finalizado) dentro do período e foram encerrados por alguém da equipe. Cada card traz um selo com a etapa e a cor dela." },
+                    { title: "Só encerramentos humanos", description: "Resoluções automáticas — encerramento de campanhas, rotinas do sistema — não aparecem no quadro nem contam para os atendentes. Quem encerra um atendimento leva a atribuição dele, mesmo que a conversa não estivesse atribuída antes." },
+                    { title: "Detalhamento por atendente", description: "Cada atendente mostra abertos, pendentes e resolvidos no período selecionado, além do status online/offline. Resolvidos = conversas que aquele usuário encerrou." },
                 ]} />
                 <Callout type="pratica" title="Rotina de 3 minutos">
                     Duas vezes ao dia, varra os quadros procurando cards onde o <strong>cliente falou por último</strong> —

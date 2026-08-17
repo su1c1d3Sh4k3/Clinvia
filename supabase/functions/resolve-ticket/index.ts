@@ -32,6 +32,28 @@ serve(async (req) => {
 
         const conversationUserId = conversation.user_id;
 
+        // USER RULE: quem encerra o atendimento leva a atribuição da conversa.
+        // Resolve o team_member do chamador via JWT; chamadas sem usuário
+        // (service role/automação) não alteram a atribuição.
+        let resolverTeamMemberId: string | null = null;
+        try {
+            const jwt = (req.headers.get('Authorization') || '').replace('Bearer ', '');
+            if (jwt) {
+                const { data: userData } = await supabase.auth.getUser(jwt);
+                if (userData?.user) {
+                    const { data: tm } = await supabase
+                        .from('team_members')
+                        .select('id')
+                        .eq('auth_user_id', userData.user.id)
+                        .eq('user_id', conversationUserId)
+                        .maybeSingle();
+                    resolverTeamMemberId = tm?.id ?? null;
+                }
+            }
+        } catch (e) {
+            console.error('Could not resolve caller team member:', e);
+        }
+
         // 2. Generate Summary if not exists (or always, as per prompt implication "ao clicar... o resumo deve ser criado")
         // We will generate it to ensure we have the quality score.
 
@@ -114,7 +136,8 @@ serve(async (req) => {
                 status: 'resolved',
                 summary: analysis.summary,
                 sentiment_score: analysis.sentiment_score,
-                unread_count: 0
+                unread_count: 0,
+                ...(resolverTeamMemberId ? { assigned_agent_id: resolverTeamMemberId } : {})
             })
             .eq('id', conversationId);
 
