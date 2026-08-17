@@ -24,7 +24,7 @@ npm run lint       # eslint
 npm test           # vitest (config: vitest.config.ts, setup: src/test/setup.ts)
 ```
 
-Frontend deploys via Vercel (vercel.json) on push to main.
+Frontend deploys via Vercel (vercel.json) on push to main. Do NOT wait for local `npm run build` to verify (PWA precache + OneDrive makes it take 8-10 min) — push and let Vercel build.
 
 Python integration tests live in `tests/` (test_*.py) — run manually with python.
 
