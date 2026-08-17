@@ -11,8 +11,9 @@ interface StageStatusCardsProps {
 }
 
 /**
- * Section with one small card per stage: total deals + breakdown of
- * conversation status (Aberto / Pendente / Concluído no dia).
+ * Section with one small card per stage: total deals + breakdown by the
+ * contact's latest conversation status (Aberto / Pendente / Concluído).
+ * The three lines always sum to the total.
  */
 export function StageStatusCards({ title, stages }: StageStatusCardsProps) {
     const [date, setDate] = useState(new Date());
