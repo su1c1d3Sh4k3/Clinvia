@@ -5,6 +5,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { cn } from "@/lib/utils";
+import { STAGE_COLORS } from "@/types/crm-client";
 import { MonitorCard, lastMsgFromClient, windowRemainingMs } from "@/hooks/useMonitoramento";
 
 interface ConversationCardProps {
@@ -15,6 +16,8 @@ interface ConversationCardProps {
     onOpenProfile: (card: MonitorCard) => void;
     /** re-render tick (1/min) for time-based labels */
     nowTick: number;
+    /** Badge colorido com a etapa de conclusão (board Finalizados) */
+    showStageBadge?: boolean;
 }
 
 function borderClass(card: MonitorCard): string {
@@ -32,10 +35,13 @@ export function ConversationCard({
     onOpenChat,
     onOpenProfile,
     nowTick: _nowTick,
+    showStageBadge,
 }: ConversationCardProps) {
     const name = card.contact.push_name || "Sem nome";
     const phone = card.contact.phone || card.contact.number || "—";
     const fromClient = lastMsgFromClient(card);
+    const isResolved = card.status === "resolved";
+    const stageColor = STAGE_COLORS[card.stage as keyof typeof STAGE_COLORS] || "#6b7280";
 
     const winMs = windowRemainingMs(card);
     let windowLabel: string | null = null;
@@ -60,21 +66,38 @@ export function ConversationCard({
         <div
             className={cn(
                 "relative rounded-xl border-2 bg-card p-2.5 shadow-sm transition-shadow",
-                borderClass(card),
+                !isResolved && borderClass(card),
                 canOpenChat && "cursor-pointer hover:shadow-md"
             )}
+            style={isResolved ? { borderColor: `${stageColor}b3` } : undefined}
             onClick={() => canOpenChat && onOpenChat(card)}
         >
-            {/* last-message dot */}
-            <span
-                className={cn(
-                    "absolute top-2 right-2 h-2.5 w-2.5 rounded-full",
-                    fromClient ? "bg-orange-500" : "bg-emerald-500"
-                )}
-                title={fromClient ? "Última mensagem do cliente" : "Última mensagem do atendente"}
-            />
+            {/* last-message dot (conversas ativas) */}
+            {!isResolved && (
+                <span
+                    className={cn(
+                        "absolute top-2 right-2 h-2.5 w-2.5 rounded-full",
+                        fromClient ? "bg-orange-500" : "bg-emerald-500"
+                    )}
+                    title={fromClient ? "Última mensagem do cliente" : "Última mensagem do atendente"}
+                />
+            )}
 
-            <div className="flex items-start gap-2 pr-4">
+            {/* badge da etapa de conclusão */}
+            {showStageBadge && (
+                <span
+                    className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide border"
+                    style={{
+                        color: stageColor,
+                        borderColor: `${stageColor}66`,
+                        backgroundColor: `${stageColor}1a`,
+                    }}
+                >
+                    {card.stage}
+                </span>
+            )}
+
+            <div className={cn("flex items-start gap-2", showStageBadge ? "pr-16" : "pr-4")}>
                 <Avatar className="h-9 w-9 shrink-0">
                     <AvatarImage src={card.contact.profile_pic_url || undefined} alt={name} />
                     <AvatarFallback className="text-xs">
@@ -102,7 +125,9 @@ export function ConversationCard({
                 <div className="min-w-0 flex-1">
                     <p className="text-[11px] font-medium truncate">{attendantName}</p>
                     <p className="text-[10px] text-muted-foreground truncate">
-                        {format(new Date(card.createdAt), "dd/MM/yy")} · {lastMsgAgo}
+                        {isResolved && card.finalizedAt
+                            ? `Finalizado em ${format(new Date(card.finalizedAt), "dd/MM/yy HH:mm")}`
+                            : `${format(new Date(card.createdAt), "dd/MM/yy")} · ${lastMsgAgo}`}
                         {windowLabel && (
                             <>
                                 {" · "}

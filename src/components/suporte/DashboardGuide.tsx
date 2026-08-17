@@ -95,12 +95,24 @@ export function DashboardGuide() {
                 subtitle="A sala de controle ao vivo — quadros por etapa do CRM">
                 <p className="text-sm text-muted-foreground">
                     Mostra as <strong className="text-foreground">conversas abertas e pendentes agrupadas pela etapa do
-                    CRM</strong>, com quem está online na equipe. O segredo é saber ler cada card:
+                    CRM</strong>, com quem está online na equipe. Tudo obedece ao{" "}
+                    <strong className="text-foreground">filtro de período</strong> (Hoje por padrão — troque para Ontem,
+                    7 dias, mês, ano ou um intervalo personalizado): os quadros mostram as conversas iniciadas no período
+                    e os contadores dos atendentes contam só esse recorte. O segredo é saber ler cada card:
                 </p>
                 <MiniMonitorSimulator />
+                <StepByStep steps={[
+                    { title: "Quadro Finalizados", description: "Abaixo de Follow Up fica o quadro Finalizados: todos os atendimentos que chegaram a uma etapa de conclusão (Ganho, Perdido, Sem Contato, Sem Interesse ou Finalizado) dentro do período. Cada card traz um selo com a etapa e a cor dela." },
+                    { title: "Total atendido no período", description: "Somando os quadros ao vivo com o Finalizados, você sabe quantos clientes no total foram atendidos no período — inclusive os que já foram encerrados." },
+                    { title: "Detalhamento por atendente", description: "Cada atendente mostra abertos, pendentes e resolvidos no período selecionado, além do status online/offline." },
+                ]} />
                 <Callout type="pratica" title="Rotina de 3 minutos">
                     Duas vezes ao dia, varra os quadros procurando cards onde o <strong>cliente falou por último</strong> —
                     são vendas esfriando. O indicador de janela 24h diz quem precisa de resposta urgente no número oficial.
+                </Callout>
+                <Callout type="atencao" title="Filtrou 'Hoje' e sumiu conversa?">
+                    O período olha a data em que a conversa <strong>começou</strong>. Uma conversa aberta ontem que segue
+                    em andamento aparece no filtro Ontem (ou 7 dias) — amplie o período para vê-la.
                 </Callout>
             </TopicSection>
 

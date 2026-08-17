@@ -1,6 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { FaWhatsapp, FaInstagram } from "react-icons/fa";
-import { Search } from "lucide-react";
+import { CalendarDays, Search } from "lucide-react";
+import {
+    endOfDay,
+    endOfMonth,
+    endOfYear,
+    startOfDay,
+    startOfMonth,
+    startOfYear,
+    subDays,
+} from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -27,11 +36,51 @@ import { AtendentesSection } from "./AtendentesSection";
 
 const UNASSIGNED_STAGES = ["Em Atendimento Humano", "Suporte", "Financeiro", "Pós-Venda"];
 
+type PeriodKey = "hoje" | "ontem" | "7d" | "mes" | "ano" | "custom";
+
+const PERIOD_OPTIONS: { value: PeriodKey; label: string }[] = [
+    { value: "hoje", label: "Hoje" },
+    { value: "ontem", label: "Ontem" },
+    { value: "7d", label: "Últimos 7 dias" },
+    { value: "mes", label: "Este mês" },
+    { value: "ano", label: "Este ano" },
+    { value: "custom", label: "Personalizado" },
+];
+
 export function MonitoramentoTab() {
     const { data: userRole } = useUserRole();
     const { data: currentTeamMember } = useCurrentTeamMember();
     const { data: staff } = useStaff();
-    const { data: monitorData, isLoading } = useMonitorConversations();
+
+    const [period, setPeriod] = useState<PeriodKey>("hoje");
+    const [customStart, setCustomStart] = useState("");
+    const [customEnd, setCustomEnd] = useState("");
+
+    const range = useMemo(() => {
+        const now = new Date();
+        switch (period) {
+            case "ontem": {
+                const y = subDays(now, 1);
+                return { start: startOfDay(y), end: endOfDay(y) };
+            }
+            case "7d":
+                return { start: startOfDay(subDays(now, 6)), end: endOfDay(now) };
+            case "mes":
+                return { start: startOfMonth(now), end: endOfMonth(now) };
+            case "ano":
+                return { start: startOfYear(now), end: endOfYear(now) };
+            case "custom": {
+                const s = customStart ? startOfDay(new Date(`${customStart}T00:00:00`)) : startOfDay(now);
+                const e = customEnd ? endOfDay(new Date(`${customEnd}T00:00:00`)) : endOfDay(now);
+                return { start: s, end: e };
+            }
+            case "hoje":
+            default:
+                return { start: startOfDay(now), end: endOfDay(now) };
+        }
+    }, [period, customStart, customEnd]);
+
+    const { data: monitorData, isLoading } = useMonitorConversations(range);
     const { data: instances } = useMonitorInstances();
 
     const [channel, setChannel] = useState<"whatsapp" | "instagram">("whatsapp");
@@ -58,43 +107,57 @@ export function MonitoramentoTab() {
         return map;
     }, [staff]);
 
-    const filteredCards = useMemo(() => {
-        let cards = (monitorData?.cards || []).filter((c) => c.channel === channel);
-
-        if (attendantFilter === "ia") {
-            cards = cards.filter((c) => c.stage === "Em Atendimento IA");
-        } else if (attendantFilter === "unassigned") {
-            cards = cards.filter(
-                (c) => UNASSIGNED_STAGES.includes(c.stage) && !c.assignedAgentId
-            );
-        } else if (attendantFilter !== "all") {
-            cards = cards.filter((c) => c.assignedAgentId === attendantFilter);
-        }
-
-        if (responseFilter === "sem_resposta") {
-            cards = cards.filter((c) => lastMsgFromClient(c));
-        } else if (responseFilter === "respondido") {
-            cards = cards.filter((c) => !lastMsgFromClient(c));
-        }
-
-        if (instanceFilter !== "all") {
-            cards = cards.filter((c) => c.instanceId === instanceFilter);
-        }
-
+    const applyFilters = useMemo(() => {
         const term = search.trim().toLowerCase();
-        if (term) {
-            const digits = term.replace(/\D/g, "");
-            cards = cards.filter((c) => {
-                const name = (c.contact.push_name || "").toLowerCase();
-                if (name.includes(term)) return true;
-                if (!digits) return false;
-                const phone = (c.contact.phone || c.contact.number || "").replace(/\D/g, "");
-                return phone.includes(digits);
-            });
-        }
+        const digits = term.replace(/\D/g, "");
+        return (input: MonitorCard[]) => {
+            let cards = input.filter((c) => c.channel === channel);
 
-        return cards;
-    }, [monitorData, channel, attendantFilter, responseFilter, instanceFilter, search]);
+            if (attendantFilter === "ia") {
+                cards = cards.filter((c) => c.stage === "Em Atendimento IA");
+            } else if (attendantFilter === "unassigned") {
+                cards = cards.filter(
+                    (c) =>
+                        (UNASSIGNED_STAGES.includes(c.stage) || c.status === "resolved") &&
+                        !c.assignedAgentId
+                );
+            } else if (attendantFilter !== "all") {
+                cards = cards.filter((c) => c.assignedAgentId === attendantFilter);
+            }
+
+            if (responseFilter === "sem_resposta") {
+                cards = cards.filter((c) => lastMsgFromClient(c));
+            } else if (responseFilter === "respondido") {
+                cards = cards.filter((c) => !lastMsgFromClient(c));
+            }
+
+            if (instanceFilter !== "all") {
+                cards = cards.filter((c) => c.instanceId === instanceFilter);
+            }
+
+            if (term) {
+                cards = cards.filter((c) => {
+                    const name = (c.contact.push_name || "").toLowerCase();
+                    if (name.includes(term)) return true;
+                    if (!digits) return false;
+                    const phone = (c.contact.phone || c.contact.number || "").replace(/\D/g, "");
+                    return phone.includes(digits);
+                });
+            }
+
+            return cards;
+        };
+    }, [channel, attendantFilter, responseFilter, instanceFilter, search]);
+
+    const filteredCards = useMemo(
+        () => applyFilters(monitorData?.cards || []),
+        [monitorData, applyFilters]
+    );
+
+    const filteredFinalizados = useMemo(
+        () => applyFilters(monitorData?.finalizados || []),
+        [monitorData, applyFilters]
+    );
 
     const cardsByStage = useMemo(() => {
         const map = new Map<string, MonitorCard[]>();
@@ -107,8 +170,8 @@ export function MonitoramentoTab() {
 
     const attendantNameOf = (card: MonitorCard): string => {
         if (card.stage === "Em Atendimento IA") return "Atendimento IA";
-        if (!card.assignedAgentId) return "Pendente";
-        return staffById.get(card.assignedAgentId) || "Pendente";
+        if (!card.assignedAgentId) return card.status === "resolved" ? "—" : "Pendente";
+        return staffById.get(card.assignedAgentId) || (card.status === "resolved" ? "—" : "Pendente");
     };
 
     const canOpenChat = (card: MonitorCard): boolean => {
@@ -152,6 +215,38 @@ export function MonitoramentoTab() {
                         />
                     </Button>
                 </div>
+
+                <Select value={period} onValueChange={(v) => setPeriod(v as PeriodKey)}>
+                    <SelectTrigger className="h-8 w-[150px] text-xs">
+                        <CalendarDays className="h-3.5 w-3.5 mr-1.5 text-muted-foreground shrink-0" />
+                        <SelectValue placeholder="Período" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {PERIOD_OPTIONS.map((o) => (
+                            <SelectItem key={o.value} value={o.value}>
+                                {o.label}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+
+                {period === "custom" && (
+                    <div className="flex items-center gap-1.5">
+                        <Input
+                            type="date"
+                            value={customStart}
+                            onChange={(e) => setCustomStart(e.target.value)}
+                            className="h-8 w-[135px] text-xs"
+                        />
+                        <span className="text-xs text-muted-foreground">até</span>
+                        <Input
+                            type="date"
+                            value={customEnd}
+                            onChange={(e) => setCustomEnd(e.target.value)}
+                            className="h-8 w-[135px] text-xs"
+                        />
+                    </div>
+                )}
 
                 <Select value={attendantFilter} onValueChange={setAttendantFilter}>
                     <SelectTrigger className="h-8 w-[190px] text-xs">
@@ -226,6 +321,17 @@ export function MonitoramentoTab() {
                             nowTick={nowTick}
                         />
                     ))}
+                    <StageBoard
+                        stage="Finalizado"
+                        title="Finalizados"
+                        showStageBadge
+                        cards={filteredFinalizados}
+                        attendantNameOf={attendantNameOf}
+                        canOpenChat={canOpenChat}
+                        onOpenChat={setChatCard}
+                        onOpenProfile={setProfileCard}
+                        nowTick={nowTick}
+                    />
                 </div>
             )}
 

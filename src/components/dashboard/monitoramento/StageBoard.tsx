@@ -9,6 +9,10 @@ import { ConversationCard } from "./ConversationCard";
 
 interface StageBoardProps {
     stage: string;
+    /** Título alternativo do board (default: o nome da etapa) */
+    title?: string;
+    /** Mostra em cada card o badge colorido da etapa de conclusão (board Finalizados) */
+    showStageBadge?: boolean;
     cards: MonitorCard[];
     attendantNameOf: (card: MonitorCard) => string;
     canOpenChat: (card: MonitorCard) => boolean;
@@ -19,6 +23,8 @@ interface StageBoardProps {
 
 export function StageBoard({
     stage,
+    title,
+    showStageBadge,
     cards,
     attendantNameOf,
     canOpenChat,
@@ -38,7 +44,7 @@ export function StageBoard({
                             className="h-2.5 w-2.5 rounded-full shrink-0"
                             style={{ backgroundColor: color }}
                         />
-                        <span className="text-sm font-semibold">{stage}</span>
+                        <span className="text-sm font-semibold">{title || stage}</span>
                         <span className="text-xs text-muted-foreground font-medium">
                             ({cards.length})
                         </span>
@@ -67,6 +73,7 @@ export function StageBoard({
                                         onOpenChat={onOpenChat}
                                         onOpenProfile={onOpenProfile}
                                         nowTick={nowTick}
+                                        showStageBadge={showStageBadge}
                                     />
                                 ))}
                             </div>

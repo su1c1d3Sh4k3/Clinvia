@@ -28,7 +28,8 @@ export function AtendentesSection({ agentCounts }: AtendentesSectionProps) {
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                         {staff.map((m) => {
                             const online = onlineSet?.has(m.id) ?? false;
-                            const counts = agentCounts?.get(m.id) || { open: 0, pending: 0 };
+                            const counts =
+                                agentCounts?.get(m.id) || { open: 0, pending: 0, resolved: 0 };
                             return (
                                 <div
                                     key={m.id}
@@ -43,7 +44,8 @@ export function AtendentesSection({ agentCounts }: AtendentesSectionProps) {
                                     <div className="min-w-0 flex-1">
                                         <p className="text-sm font-medium truncate">{m.name}</p>
                                         <p className="text-[11px] text-muted-foreground">
-                                            {counts.open} abertos · {counts.pending} pendentes
+                                            {counts.open} abertos · {counts.pending} pendentes ·{" "}
+                                            {counts.resolved} resolvidos
                                         </p>
                                     </div>
                                     <div className="flex items-center gap-1.5 shrink-0">

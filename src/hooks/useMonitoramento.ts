@@ -19,7 +19,7 @@ export interface MonitorCard {
     contactId: string;
     contact: MonitorContact;
     stage: string;
-    status: "open" | "pending";
+    status: "open" | "pending" | "resolved";
     assignedAgentId: string | null;
     channel: "whatsapp" | "instagram";
     instanceId: string | null;
@@ -28,22 +28,35 @@ export interface MonitorCard {
     createdAt: string;
     lastMessageAt: string | null;
     lastCustomerMessageAt: string | null;
+    /** Timestamp em que o card entrou na etapa final (só cards Finalizados) */
+    finalizedAt?: string;
 }
 
 export interface AgentTicketCounts {
     open: number;
     pending: number;
+    resolved: number;
+}
+
+export interface MonitorRange {
+    start: Date;
+    end: Date;
 }
 
 /**
- * Open/pending conversations joined (client-side) with active crm_client deals.
- * Also returns per-agent ticket counts over ALL open/pending conversations.
+ * Conversas do período (created_at no range) joinadas (client-side) com deals
+ * ativos do crm_client + cards finalizados (etapa terminal no período — pela
+ * regra do negócio, entrar em etapa final ≡ conversa resolvida).
+ * Também retorna contadores por atendente (abertos/pendentes/resolvidos), todos
+ * restritos ao período.
  */
-export function useMonitorConversations() {
+export function useMonitorConversations(range: MonitorRange) {
+    const startIso = range.start.toISOString();
+    const endIso = range.end.toISOString();
     return useQuery({
-        queryKey: ["monitor-conversations"],
+        queryKey: ["monitor-conversations", startIso, endIso],
         queryFn: async () => {
-            const [dealsRes, convsRes] = await Promise.all([
+            const [dealsRes, convsRes, terminalRes, resolvedRes] = await Promise.all([
                 supabase
                     .from("crm_client" as any)
                     .select("contact_id, stage, contacts(id, push_name, phone, number, profile_pic_url)")
@@ -55,10 +68,33 @@ export function useMonitorConversations() {
                         "id, contact_id, status, assigned_agent_id, instance_id, instagram_instance_id, channel, created_at, last_message_at, last_customer_message_at, instances(name, provider), instagram_instances(account_name)"
                     )
                     .in("status", ["open", "pending"])
+                    .gte("created_at", startIso)
+                    .lte("created_at", endIso)
+                    .limit(10000),
+                supabase
+                    .from("crm_client" as any)
+                    .select(
+                        "id, contact_id, stage, stage_changed_at, contacts(id, push_name, phone, number, profile_pic_url)"
+                    )
+                    .in("stage", TERMINAL_STAGES)
+                    .gte("stage_changed_at", startIso)
+                    .lte("stage_changed_at", endIso)
+                    .order("stage_changed_at", { ascending: false })
+                    .limit(5000),
+                supabase
+                    .from("conversations" as any)
+                    .select(
+                        "id, contact_id, assigned_agent_id, instance_id, instagram_instance_id, channel, created_at, resolved_at, last_message_at, instances(name, provider), instagram_instances(account_name)"
+                    )
+                    .eq("status", "resolved")
+                    .gte("resolved_at", startIso)
+                    .lte("resolved_at", endIso)
                     .limit(10000),
             ]);
             if (dealsRes.error) throw dealsRes.error;
             if (convsRes.error) throw convsRes.error;
+            if (terminalRes.error) throw terminalRes.error;
+            if (resolvedRes.error) throw resolvedRes.error;
 
             const dealByContact = new Map<string, { stage: string; contact: MonitorContact }>();
             (dealsRes.data || []).forEach((d: any) => {
@@ -70,13 +106,15 @@ export function useMonitorConversations() {
             const cards: MonitorCard[] = [];
             const agentCounts = new Map<string, AgentTicketCounts>();
 
+            const bumpAgent = (agentId: string | null, key: keyof AgentTicketCounts) => {
+                if (!agentId) return;
+                const counts = agentCounts.get(agentId) || { open: 0, pending: 0, resolved: 0 };
+                counts[key] += 1;
+                agentCounts.set(agentId, counts);
+            };
+
             (convsRes.data || []).forEach((c: any) => {
-                if (c.assigned_agent_id) {
-                    const counts = agentCounts.get(c.assigned_agent_id) || { open: 0, pending: 0 };
-                    if (c.status === "open") counts.open += 1;
-                    else counts.pending += 1;
-                    agentCounts.set(c.assigned_agent_id, counts);
-                }
+                bumpAgent(c.assigned_agent_id, c.status === "open" ? "open" : "pending");
 
                 const deal = dealByContact.get(c.contact_id);
                 if (!deal) return;
@@ -103,7 +141,50 @@ export function useMonitorConversations() {
                 });
             });
 
-            return { cards, agentCounts };
+            // Resolvidos por atendente + última conversa resolvida por contato
+            // (usada para enriquecer os cards finalizados com canal/instância/atendente)
+            const resolvedByContact = new Map<string, any>();
+            (resolvedRes.data || []).forEach((c: any) => {
+                bumpAgent(c.assigned_agent_id, "resolved");
+                const prev = resolvedByContact.get(c.contact_id);
+                if (!prev || (c.resolved_at || "") > (prev.resolved_at || "")) {
+                    resolvedByContact.set(c.contact_id, c);
+                }
+            });
+
+            const finalizados: MonitorCard[] = [];
+            (terminalRes.data || []).forEach((d: any) => {
+                if (!d.contact_id || !d.contacts) return;
+                const conv = resolvedByContact.get(d.contact_id);
+                const channel: "whatsapp" | "instagram" =
+                    conv?.channel === "instagram" ? "instagram" : "whatsapp";
+                finalizados.push({
+                    conversationId: conv?.id || `final-${d.id}`,
+                    contactId: d.contact_id,
+                    contact: d.contacts,
+                    stage: d.stage,
+                    status: "resolved",
+                    assignedAgentId: conv?.assigned_agent_id || null,
+                    channel,
+                    instanceId: conv
+                        ? channel === "instagram"
+                            ? conv.instagram_instance_id
+                            : conv.instance_id
+                        : null,
+                    instanceName: conv
+                        ? channel === "instagram"
+                            ? conv.instagram_instances?.account_name || "Instagram"
+                            : conv.instances?.name || "—"
+                        : "—",
+                    isOfficialApi: false,
+                    createdAt: conv?.created_at || d.stage_changed_at,
+                    lastMessageAt: conv?.last_message_at || null,
+                    lastCustomerMessageAt: null,
+                    finalizedAt: d.stage_changed_at,
+                });
+            });
+
+            return { cards, finalizados, agentCounts };
         },
         refetchInterval: 60_000,
     });
