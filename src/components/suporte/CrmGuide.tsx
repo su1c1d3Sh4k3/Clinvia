@@ -129,8 +129,13 @@ export function CrmGuide() {
                 subtitle="A regra mais importante do CRM — teste no simulador">
                 <StageSyncSimulator />
                 <Callout type="dica" title="Vale nos dois sentidos">
-                    Mover a <strong>conversa de fila</strong> no inbox também move o card: mandar para a fila Suporte leva o
-                    card para a etapa Suporte, e vice-versa. Você nunca precisa atualizar os dois lugares.
+                    Mover a <strong>conversa de fila</strong> no inbox (botão Transferir Atendimento) também move o card:
+                    mandar para a fila Suporte leva o card para a etapa Suporte, e vice-versa. Você nunca precisa atualizar os
+                    dois lugares.
+                </Callout>
+                <Callout type="atencao" title="Atendentes com escopo veem menos cards">
+                    Se um agente tem escopo de visão (conexões/filas liberadas na página Equipe), o quadro dele mostra apenas os
+                    cards das conversas dentro do escopo. Admin vê o quadro completo — não é card sumido, é filtro.
                 </Callout>
             </TopicSection>
 

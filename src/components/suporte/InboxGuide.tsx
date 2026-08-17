@@ -1,14 +1,14 @@
 import { useNavigate } from "react-router-dom";
 import {
     MessageSquare, ListChecks, Headset, Bot, PanelRight, Paperclip, Archive,
-    HelpCircle, ExternalLink,
+    HelpCircle, ExternalLink, ArrowRightLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
     Accordion, AccordionContent, AccordionItem, AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Callout, LearnChip, StepByStep, SubNav, TopicSection } from "./blocks";
-import { ConversationFlowSimulator } from "./simulators-inbox";
+import { ConversationFlowSimulator, TransferFlowSimulator } from "./simulators-inbox";
 
 // ---------------------------------------------------------------------------
 // Manual da aba Inbox
@@ -18,6 +18,7 @@ const TOPICS = [
     { id: "o-que-e", label: "O que é" },
     { id: "filas-e-status", label: "Filas e status" },
     { id: "atendendo", label: "Atendendo" },
+    { id: "transferindo", label: "Transferindo" },
     { id: "ia-no-inbox", label: "IA no inbox" },
     { id: "sidebar", label: "Painel lateral" },
     { id: "midias-acoes", label: "Mídias e ações" },
@@ -50,6 +51,7 @@ export function InboxGuide() {
                     <div className="flex flex-wrap gap-2">
                         <LearnChip topicId="filas-e-status">Filas, pendente × em atendimento</LearnChip>
                         <LearnChip topicId="atendendo">Assumir e encerrar conversas</LearnChip>
+                        <LearnChip topicId="transferindo">Transferir para filas e colegas</LearnChip>
                         <LearnChip topicId="sidebar">Usar o painel de inteligência</LearnChip>
                         <LearnChip topicId="historico">Onde ficam as conversas antigas</LearnChip>
                     </div>
@@ -81,7 +83,9 @@ export function InboxGuide() {
                 <p className="text-sm text-muted-foreground">
                     Além do status, cada conversa vive numa <strong className="text-foreground">fila</strong>: Atendimento IA,
                     Atendimento Humano, Suporte, Financeiro, Pós-Venda... As filas organizam o trabalho da equipe e definem se a
-                    IA pode atuar (só na fila Atendimento IA).
+                    IA pode atuar (só na fila Atendimento IA). E uma regra de ouro:{" "}
+                    <strong className="text-foreground">toda conversa sempre pertence a uma fila</strong> — ela nasce na fila da
+                    IA ou na humana e, dali em diante, só muda de fila (nunca fica "sem fila").
                 </p>
                 <Callout type="atencao" title="Fila ≠ status">
                     Status é o momento da conversa (pendente / em atendimento / resolvida). Fila é o setor responsável. Uma
@@ -96,6 +100,7 @@ export function InboxGuide() {
                     { title: "Encontre a conversa", description: "Use os filtros da lista (fila, status, busca por nome/telefone) ou o sino de notificações. Conversas pendentes têm destaque." },
                     { title: "Assuma o atendimento", description: <>Clique em <strong>Atender</strong>. A conversa vira "em atendimento", ganha seu nome como responsável e a IA para na hora.</>, },
                     { title: "Converse", description: "Texto, áudio, imagem, documento, resposta citada, encaminhamento... tudo pelo campo de mensagem. O cliente recebe no WhatsApp normalmente." },
+                    { title: "Precisa de outro setor? Transfira", description: <>Clique em <strong>Transferir Atendimento</strong> no topo do chat: escolha a fila e, se quiser, o colega responsável (detalhes no próximo tópico).</>, },
                     { title: "Encerre quando resolver", description: <>Clique em <strong>Resolver</strong>. As mensagens vão para o histórico do contato e, se o cliente voltar, nasce uma conversa nova.</>, },
                 ]} />
                 <Callout type="pratica" title="Encerre sempre que concluir">
@@ -105,7 +110,34 @@ export function InboxGuide() {
             </TopicSection>
 
             {/* 4 */}
-            <TopicSection id="ia-no-inbox" index={4} icon={Bot} title="A IA dentro do inbox"
+            <TopicSection id="transferindo" index={4} icon={ArrowRightLeft} title="Transferindo atendimentos"
+                subtitle="Fila certa, pessoa certa — em dois cliques">
+                <p className="text-sm text-muted-foreground">
+                    No topo do chat fica o botão <strong className="text-foreground">Transferir Atendimento</strong>. Ele abre
+                    um modal em <strong className="text-foreground">duas etapas</strong>: primeiro você escolhe a fila de
+                    destino; depois, quem será o responsável — ou a opção{" "}
+                    <strong className="text-foreground">"Não atribuir usuário"</strong>, que manda a conversa para a fila sem
+                    dono fixo (qualquer pessoa com acesso pode assumir).
+                </p>
+                <TransferFlowSimulator />
+                <StepByStep steps={[
+                    { title: "Escolha a fila", description: "Só filas ativas aparecem. A fila atual da conversa vem marcada, para você se localizar." },
+                    { title: "Escolha o responsável", description: "A lista mostra apenas quem realmente pode atender ali: admins e supervisores sempre; atendentes, só se a fila e a conexão da conversa estiverem no escopo deles." },
+                    { title: "Confirme", description: "A conversa muda de fila (e de responsável) na hora — o card do CRM acompanha, como sempre." },
+                ]} />
+                <Callout type="atencao" title="Por que nem todo colega aparece na lista?">
+                    Atendentes podem ter <strong>escopo de visão</strong> (definido em Equipe): conexões liberadas e filas
+                    atribuídas. Se a fila escolhida ou a conexão da conversa estiver fora do escopo do colega, ele não aparece —
+                    de nada adiantaria transferir para quem não enxerga a conversa.
+                </Callout>
+                <Callout type="dica" title="Devolver para a IA">
+                    Transferir para a fila <strong>Atendimento IA</strong> devolve a conversa para a assistente (se os portões
+                    da IA estiverem abertos). E não existe mais "Sem Fila": toda conversa fica sempre em alguma fila.
+                </Callout>
+            </TopicSection>
+
+            {/* 5 */}
+            <TopicSection id="ia-no-inbox" index={5} icon={Bot} title="A IA dentro do inbox"
                 subtitle="Quando ela atua e como tirar (ou devolver) uma conversa dela">
                 <p className="text-sm text-muted-foreground">
                     A IA só responde conversas <strong className="text-foreground">pendentes</strong> que estão na fila{" "}
@@ -119,8 +151,8 @@ export function InboxGuide() {
                 ]} />
             </TopicSection>
 
-            {/* 5 */}
-            <TopicSection id="sidebar" index={5} icon={PanelRight} title="Painel de inteligência"
+            {/* 6 */}
+            <TopicSection id="sidebar" index={6} icon={PanelRight} title="Painel de inteligência"
                 subtitle="O raio-x do cliente sem sair da conversa">
                 <p className="text-sm text-muted-foreground">
                     Passe o mouse sobre a barra à direita do chat e ela expande, mostrando tudo do cliente:
@@ -140,8 +172,8 @@ export function InboxGuide() {
                 </div>
             </TopicSection>
 
-            {/* 6 */}
-            <TopicSection id="midias-acoes" index={6} icon={Paperclip} title="Mídias e ações nas mensagens"
+            {/* 7 */}
+            <TopicSection id="midias-acoes" index={7} icon={Paperclip} title="Mídias e ações nas mensagens"
                 subtitle="O que dá (e o que não dá) para fazer em cada tipo de WhatsApp">
                 <p className="text-sm text-muted-foreground">
                     Clique com o botão direito (ou no menu ⋮) de uma mensagem para <strong className="text-foreground">responder,
@@ -171,8 +203,8 @@ export function InboxGuide() {
                 </Callout>
             </TopicSection>
 
-            {/* 7 */}
-            <TopicSection id="historico" index={7} icon={Archive} title="Histórico de conversas"
+            {/* 8 */}
+            <TopicSection id="historico" index={8} icon={Archive} title="Histórico de conversas"
                 subtitle="Nada se perde ao resolver">
                 <p className="text-sm text-muted-foreground">
                     Ao resolver uma conversa, as mensagens são <strong className="text-foreground">arquivadas no histórico do
@@ -185,8 +217,8 @@ export function InboxGuide() {
                 </Callout>
             </TopicSection>
 
-            {/* 8 */}
-            <TopicSection id="faq" index={8} icon={HelpCircle} title="Perguntas frequentes">
+            {/* 9 */}
+            <TopicSection id="faq" index={9} icon={HelpCircle} title="Perguntas frequentes">
                 <Accordion type="single" collapsible className="rounded-xl border px-4">
                     {[
                         {
@@ -206,8 +238,12 @@ export function InboxGuide() {
                             a: "Mensagens não lidas. Ao abrir a conversa, o contador zera.",
                         },
                         {
-                            q: "Como transfiro uma conversa para outro setor?",
-                            a: "Mude a fila da conversa (menu da conversa > fila). Lembre: tirar da fila Atendimento IA desliga a IA para aquela conversa.",
+                            q: "Como transfiro uma conversa para outro setor ou colega?",
+                            a: "Use o botão Transferir Atendimento no topo do chat: escolha a fila e depois o responsável (ou 'Não atribuir usuário'). Lembre: tirar da fila Atendimento IA desliga a IA para aquela conversa.",
+                        },
+                        {
+                            q: "Por que um colega não aparece na lista de transferência?",
+                            a: "Ele é um atendente com escopo de visão restrito: só aparece se a fila escolhida E a conexão da conversa estiverem liberadas para ele. O admin ajusta isso na página Equipe, ao editar o membro. Admins e supervisores aparecem sempre.",
                         },
                         {
                             q: "Cliente escreveu no Instagram e no WhatsApp. São duas conversas?",

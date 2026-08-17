@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
-import { Inbox, Headset, Archive, Bot, KanbanSquare, MessageCircle } from "lucide-react";
+import {
+    Inbox, Headset, Archive, Bot, KanbanSquare, MessageCircle,
+    ArrowRightLeft, Users, Check, EyeOff, Crown, Eye,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -96,6 +99,144 @@ export function ConversationFlowSimulator() {
             <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <MessageCircle className="h-3.5 w-3.5" />
                 Clique nos estados acima para navegar. Toda conversa percorre esse caminho — às vezes várias vezes com o mesmo cliente.
+            </p>
+        </div>
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Simulador — Transferir Atendimento (fila → responsável, respeitando o escopo)
+// ---------------------------------------------------------------------------
+
+const TRANSFER_QUEUES = [
+    { key: "ia", label: "Atendimento IA", hint: "Devolve a conversa para a assistente" },
+    { key: "humano", label: "Atendimento Humano", hint: "Fila geral da equipe" },
+    { key: "suporte", label: "Suporte", hint: "Dúvidas e problemas" },
+    { key: "financeiro", label: "Financeiro", hint: "Pagamentos e cobranças" },
+] as const;
+
+type TransferQueueKey = (typeof TRANSFER_QUEUES)[number]["key"];
+
+// Equipe fictícia: admins/supervisores aparecem sempre; agentes só quando a fila
+// está no escopo deles (null = todas as filas)
+const TRANSFER_TEAM: {
+    name: string;
+    role: "Admin" | "Supervisor" | "Agente";
+    icon: typeof Crown;
+    queues: TransferQueueKey[] | null;
+}[] = [
+    { name: "Ana", role: "Admin", icon: Crown, queues: null },
+    { name: "Carla", role: "Supervisor", icon: Eye, queues: null },
+    { name: "Pedro", role: "Agente", icon: Headset, queues: null },
+    { name: "João", role: "Agente", icon: Headset, queues: ["humano", "suporte"] },
+];
+
+export function TransferFlowSimulator() {
+    const [queueKey, setQueueKey] = useState<TransferQueueKey>("suporte");
+    const [agent, setAgent] = useState<string | null>(null); // null = não atribuir
+    const [panelRef] = useAutoAnimate();
+
+    const queue = TRANSFER_QUEUES.find((q) => q.key === queueKey)!;
+    const inScope = (m: (typeof TRANSFER_TEAM)[number]) => !m.queues || m.queues.includes(queueKey);
+
+    const pickQueue = (key: TransferQueueKey) => {
+        setQueueKey(key);
+        setAgent(null); // troca de fila reinicia a escolha do responsável
+    };
+
+    return (
+        <div className="rounded-2xl border bg-card p-4 md:p-5 space-y-4">
+            <p className="text-sm font-semibold">Simulação: transferindo um atendimento</p>
+
+            {/* Etapa 1 — fila */}
+            <div>
+                <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Etapa 1 · Escolha a fila de destino
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                    {TRANSFER_QUEUES.map((q) => (
+                        <button
+                            key={q.key}
+                            onClick={() => pickQueue(q.key)}
+                            className={cn(
+                                "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                                queueKey === q.key
+                                    ? "border-primary bg-primary text-primary-foreground"
+                                    : "text-muted-foreground hover:border-primary/40 hover:text-foreground",
+                            )}
+                        >
+                            {q.label}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* Etapa 2 — responsável */}
+            <div ref={panelRef}>
+                <div key={`agents-${queueKey}`} className="space-y-1.5 rounded-xl bg-muted/50 p-3.5">
+                    <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Etapa 2 · Quem atende na fila {queue.label}?
+                    </p>
+
+                    <button
+                        onClick={() => setAgent(null)}
+                        className={cn(
+                            "flex w-full items-center gap-2 rounded-lg border bg-background p-2.5 text-left transition-colors hover:border-primary/40",
+                            agent === null && "border-primary",
+                        )}
+                    >
+                        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                            <Users className="h-3.5 w-3.5 text-primary" />
+                        </div>
+                        <span className="flex-1 text-sm font-medium">Não atribuir usuário</span>
+                        {agent === null && <Check className="h-4 w-4 shrink-0 text-primary" />}
+                    </button>
+
+                    {TRANSFER_TEAM.map((m) => {
+                        const ok = inScope(m);
+                        return (
+                            <button
+                                key={m.name}
+                                disabled={!ok}
+                                onClick={() => setAgent(m.name)}
+                                className={cn(
+                                    "flex w-full items-center gap-2 rounded-lg border bg-background p-2.5 text-left transition-colors",
+                                    ok ? "hover:border-primary/40" : "opacity-45 cursor-not-allowed",
+                                    agent === m.name && "border-primary",
+                                )}
+                            >
+                                <m.icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                <span className="flex-1 text-sm">{m.name}</span>
+                                <Badge variant="outline" className="shrink-0 text-[10px]">{m.role}</Badge>
+                                {!ok && (
+                                    <span className="flex shrink-0 items-center gap-1 text-[10px] text-muted-foreground">
+                                        <EyeOff className="h-3 w-3" />
+                                        sem acesso a esta fila
+                                    </span>
+                                )}
+                                {ok && agent === m.name && <Check className="h-4 w-4 shrink-0 text-primary" />}
+                            </button>
+                        );
+                    })}
+
+                    {/* Resultado */}
+                    <p key={`result-${queueKey}-${agent ?? "none"}`} className="flex items-start gap-1.5 pt-1.5 text-xs text-muted-foreground">
+                        <ArrowRightLeft className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                        <span>
+                            A conversa vai para <strong className="text-foreground">{queue.label}</strong>
+                            {agent
+                                ? <> com <strong className="text-foreground">{agent}</strong> como responsável.</>
+                                : <> <strong className="text-foreground">sem responsável fixo</strong> — qualquer pessoa com acesso à fila pode assumir.</>}
+                            {" "}{queue.hint}.
+                        </span>
+                    </p>
+                </div>
+            </div>
+
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <MessageCircle className="h-3.5 w-3.5" />
+                Repare no João: como o escopo dele não inclui a fila Financeiro nem a de IA, ele some das opções — é
+                exatamente assim no botão Transferir Atendimento.
             </p>
         </div>
     );

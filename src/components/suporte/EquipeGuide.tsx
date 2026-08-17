@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import {
-    ShieldCheck, UserPlus, SlidersHorizontal, Wifi, HelpCircle, ExternalLink, Users,
+    ShieldCheck, UserPlus, SlidersHorizontal, Wifi, HelpCircle, ExternalLink, Users, ScanEye,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,6 +17,7 @@ const TOPICS = [
     { id: "o-que-e", label: "O que é" },
     { id: "papeis", label: "Os 3 papéis" },
     { id: "convidando", label: "Convidando" },
+    { id: "escopo", label: "Escopo de visão" },
     { id: "permissoes", label: "Permissões finas" },
     { id: "online", label: "Quem está online" },
     { id: "faq", label: "FAQ" },
@@ -47,6 +48,7 @@ export function EquipeGuide() {
                     <div className="flex flex-wrap gap-2">
                         <LearnChip topicId="papeis">Admin, Supervisor e Agente</LearnChip>
                         <LearnChip topicId="convidando">Adicionar um membro</LearnChip>
+                        <LearnChip topicId="escopo">Limitar o que o atendente enxerga</LearnChip>
                         <LearnChip topicId="permissoes">Liberar/bloquear ações por módulo</LearnChip>
                     </div>
                 </div>
@@ -88,6 +90,7 @@ export function EquipeGuide() {
                 <StepByStep steps={[
                     { title: "Adicionar membro", description: "Na aba Equipes, informe nome, e-mail e papel. A pessoa recebe as credenciais e já entra na conta da clínica." },
                     { title: "Escolha o papel com calma", description: "O papel define o alcance (veja o tópico anterior). Supervisor com acesso financeiro vê a aba Vendas; sem, não." },
+                    { title: "Se for Agente, defina o escopo", description: <>Aparecem dois campos extras: <strong>Instâncias liberadas</strong> e <strong>Filas atribuídas</strong>. Marque o que ele pode ver — ou deixe "Todas" para não restringir (próximo tópico).</>, },
                     { title: "Desativar quando sair", description: "Funcionário saiu? Remova/desative o membro — o histórico de atendimentos dele permanece registrado." },
                 ]} />
                 <Callout type="atencao" title="Nunca compartilhe um login">
@@ -97,7 +100,47 @@ export function EquipeGuide() {
             </TopicSection>
 
             {/* 4 */}
-            <TopicSection id="permissoes" index={4} icon={SlidersHorizontal} title="Permissões finas"
+            <TopicSection id="escopo" index={4} icon={ScanEye} title="Escopo de visão do Atendente"
+                subtitle="Quais conexões e quais filas cada agente enxerga">
+                <p className="text-sm text-muted-foreground">
+                    Agentes podem ter a visão <strong className="text-foreground">limitada por dois filtros</strong>, definidos
+                    ao criar ou editar o membro (e visíveis nas colunas da tabela de membros):
+                </p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-xl border p-3.5">
+                        <p className="text-sm font-semibold">Instâncias liberadas</p>
+                        <p className="mt-0.5 text-sm text-muted-foreground">
+                            Quais conexões (números de WhatsApp / contas de Instagram) o agente pode ver. "Todas" = sem restrição.
+                        </p>
+                    </div>
+                    <div className="rounded-xl border p-3.5">
+                        <p className="text-sm font-semibold">Filas atribuídas</p>
+                        <p className="mt-0.5 text-sm text-muted-foreground">
+                            Quais filas (setores) o agente pode ver. "Todas" = sem restrição.
+                        </p>
+                    </div>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                    Os dois filtros funcionam <strong className="text-foreground">juntos (E, não OU)</strong>: o agente só
+                    enxerga a conversa se a conexão dela estiver liberada <strong className="text-foreground">e</strong> a fila
+                    dela estiver atribuída. O escopo vale para o <strong className="text-foreground">Inbox, o CRM
+                    (kanban e monitoramento) e os números do Dashboard</strong> — a página Clientes continua mostrando todos os
+                    contatos da conta.
+                </p>
+                <Callout type="pratica" title="Exemplo: clínica com 2 números">
+                    A recepcionista da unidade A recebe só a instância "Número Unidade A" e as filas Atendimento Humano e
+                    Suporte. Pronto: ela não vê (nem é notificada sobre) conversas da unidade B ou do Financeiro — menos ruído,
+                    mais foco.
+                </Callout>
+                <Callout type="atencao" title="O escopo também controla as transferências">
+                    No inbox, o botão <strong>Transferir Atendimento</strong> só lista atendentes cujo escopo cobre a fila
+                    escolhida e a conexão da conversa. Se um agente "sumiu" da lista de transferência, confira o escopo dele
+                    aqui. Admins e supervisores nunca são filtrados.
+                </Callout>
+            </TopicSection>
+
+            {/* 5 */}
+            <TopicSection id="permissoes" index={5} icon={SlidersHorizontal} title="Permissões finas"
                 subtitle="Criar / Editar / Apagar, módulo por módulo">
                 <p className="text-sm text-muted-foreground">
                     Na aba <strong className="text-foreground">Permissões</strong>, você define para Supervisores e Agentes
@@ -111,8 +154,8 @@ export function EquipeGuide() {
                 </Callout>
             </TopicSection>
 
-            {/* 5 */}
-            <TopicSection id="online" index={5} icon={Wifi} title="Quem está online"
+            {/* 6 */}
+            <TopicSection id="online" index={6} icon={Wifi} title="Quem está online"
                 subtitle="O termômetro da operação em tempo real">
                 <p className="text-sm text-muted-foreground">
                     O Dashboard (aba Monitoramento) mostra o <strong className="text-foreground">status online</strong> de
@@ -121,8 +164,8 @@ export function EquipeGuide() {
                 </p>
             </TopicSection>
 
-            {/* 6 */}
-            <TopicSection id="faq" index={6} icon={HelpCircle} title="Perguntas frequentes">
+            {/* 7 */}
+            <TopicSection id="faq" index={7} icon={HelpCircle} title="Perguntas frequentes">
                 <Accordion type="single" collapsible className="rounded-xl border px-4">
                     {[
                         {
@@ -134,8 +177,12 @@ export function EquipeGuide() {
                             a: "É o esperado: sem a permissão fina, o botão nem aparece. Ajuste em Equipe > Permissões e peça para a pessoa recarregar a página.",
                         },
                         {
-                            q: "Um membro não enxerga clientes/serviços que o admin vê.",
-                            a: "Não deveria acontecer — os dados são da conta, não da pessoa. Confirme que o membro foi convidado pela página Equipe (e não criou uma conta avulsa própria). Persistindo, acione o suporte Clinvia.",
+                            q: "Um agente não enxerga conversas/cards que o admin vê.",
+                            a: "Primeira coisa a conferir: o escopo de visão dele (colunas Instâncias liberadas e Filas atribuídas na aba Equipes). Se a conversa está numa conexão ou fila fora do escopo, é o comportamento esperado. Escopo em 'Todas' e mesmo assim faltando dados? Confirme que o membro foi convidado pela página Equipe (e não criou conta avulsa própria); persistindo, acione o suporte Clinvia.",
+                        },
+                        {
+                            q: "Como restrinjo um atendente a um único número ou setor?",
+                            a: "Edite o membro na aba Equipes e marque, em Instâncias liberadas e Filas atribuídas, apenas o que ele deve ver. A restrição só existe para Agentes — supervisores e admins sempre veem tudo.",
                         },
                         {
                             q: "Posso ter dois admins?",

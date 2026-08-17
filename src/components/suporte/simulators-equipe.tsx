@@ -46,10 +46,10 @@ const ROLES: Role[] = [
         key: "agent",
         label: "Agente",
         icon: Headset,
-        summary: "O atendente: focado em conversar e atender. Sem configurações nem números financeiros.",
+        summary: "O atendente: focado em conversar e atender. Sem configurações nem números financeiros. Pode ter escopo de visão: só as conexões e filas liberadas para ele (ou tudo, se o escopo for 'Todas').",
         rows: [
-            { area: "Inbox, CRM, Agenda, Clientes", access: "depende", note: "Usa no dia a dia; criar/editar/apagar conforme permissões finas" },
-            { area: "Dashboard", access: "depende", note: "Só a aba CRM" },
+            { area: "Inbox, CRM, Agenda, Clientes", access: "depende", note: "Usa no dia a dia; no Inbox e CRM vê só as conexões/filas do seu escopo; criar/editar/apagar conforme permissões finas" },
+            { area: "Dashboard", access: "depende", note: "Só a aba CRM (números limitados ao escopo dele)" },
             { area: "IA, Conexões, Campanhas", access: "nao", note: "Não configura canais nem IA" },
             { area: "Equipe e Permissões", access: "nao", note: "Página exclusiva de admin" },
         ],

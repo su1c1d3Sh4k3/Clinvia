@@ -78,8 +78,9 @@ export function DashboardGuide() {
                 </div>
                 <Callout type="dica" title="Quem vê o quê">
                     Admins veem tudo. Supervisores veem tudo (Vendas depende da permissão financeira). Atendentes veem
-                    apenas a aba CRM. No topo, o <strong>quadro de avisos</strong> <Bell className="inline h-3.5 w-3.5" />{" "}
-                    traz notificações do sistema para toda a equipe.
+                    apenas a aba CRM — e, se tiverem escopo de visão (conexões/filas liberadas na página Equipe), os números
+                    refletem só o que está no escopo deles. No topo, o <strong>quadro de avisos</strong>{" "}
+                    <Bell className="inline h-3.5 w-3.5" /> traz notificações do sistema para toda a equipe.
                 </Callout>
                 <div className="flex flex-wrap gap-2">
                     <Button size="sm" variant="outline" onClick={() => navigate("/dashboard?tour=dashboard-abas")}>
