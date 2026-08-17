@@ -33,7 +33,57 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Plus, Pencil, Trash2, Users, Briefcase } from "lucide-react";
+
+interface ScopeOption {
+    id: string;
+    label: string;
+}
+
+/**
+ * Multi-select de escopo (instâncias/filas) com opção "Todas".
+ * `value === null` significa "todas"; array = seleção específica.
+ */
+const ScopeSelector = ({
+    label,
+    options,
+    value,
+    onChange,
+}: {
+    label: string;
+    options: ScopeOption[];
+    value: string[] | null;
+    onChange: (v: string[] | null) => void;
+}) => (
+    <div className="space-y-2">
+        <Label>{label}</Label>
+        <div className="rounded-md border p-2 space-y-1.5 max-h-36 overflow-y-auto">
+            <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                <Checkbox
+                    checked={value === null}
+                    onCheckedChange={(checked) => onChange(checked ? null : [])}
+                />
+                Todas
+            </label>
+            {options.map((opt) => (
+                <label key={opt.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                    <Checkbox
+                        checked={value !== null && value.includes(opt.id)}
+                        onCheckedChange={(checked) => {
+                            const current = value ?? [];
+                            onChange(checked ? [...current, opt.id] : current.filter((id) => id !== opt.id));
+                        }}
+                    />
+                    <span className="truncate">{opt.label}</span>
+                </label>
+            ))}
+            {options.length === 0 && (
+                <p className="text-xs text-muted-foreground">Nenhuma opção disponível</p>
+            )}
+        </div>
+    </div>
+);
 
 export const TeamSettings = () => {
     const { data: userRole } = useUserRole();
@@ -56,6 +106,9 @@ export const TeamSettings = () => {
         password: "",
         commission: 0,
     });
+    // Escopo de visibilidade (só para Atendente): null = todas
+    const [allowedInstanceIds, setAllowedInstanceIds] = useState<string[] | null>(null);
+    const [assignedQueueIds, setAssignedQueueIds] = useState<string[] | null>(null);
 
     const { data: teamMembers, isLoading } = useQuery({
         queryKey: ["team-members", ownerId],
@@ -72,6 +125,45 @@ export const TeamSettings = () => {
     });
 
     const { data: professionals, isLoading: isProfessionalsLoading } = useProfessionals();
+
+    // Instâncias (WhatsApp + Instagram) e filas do owner p/ escopo de visibilidade
+    const { data: instanceOptions } = useQuery({
+        queryKey: ["team-scope-instances", ownerId],
+        enabled: !!ownerId,
+        queryFn: async (): Promise<ScopeOption[]> => {
+            const [wpp, ig] = await Promise.all([
+                supabase.from("instances").select("id, name").eq("user_id", ownerId).order("name"),
+                supabase.from("instagram_instances").select("id, account_name").eq("user_id", ownerId),
+            ]);
+            return [
+                ...(wpp.data || []).map((i: any) => ({ id: i.id, label: i.name })),
+                ...(ig.data || []).map((i: any) => ({ id: i.id, label: `${i.account_name} (Instagram)` })),
+            ];
+        },
+    });
+
+    const { data: queueOptions } = useQuery({
+        queryKey: ["team-scope-queues", ownerId],
+        enabled: !!ownerId,
+        queryFn: async (): Promise<ScopeOption[]> => {
+            const { data, error } = await supabase
+                .from("queues")
+                .select("id, name")
+                .eq("user_id", ownerId)
+                .order("name");
+            if (error) throw error;
+            return (data || []).map((q: any) => ({ id: q.id, label: q.name }));
+        },
+    });
+
+    const scopeLabel = (ids: string[] | null | undefined, options: ScopeOption[] | undefined, role: string) => {
+        if (role !== "agent" || !ids) return "Todas";
+        if (ids.length === 0) return "-";
+        return ids
+            .map((id) => options?.find((o) => o.id === id)?.label)
+            .filter(Boolean)
+            .join(", ") || "-";
+    };
 
     const { data: services } = useQuery({
         queryKey: ["services-for-professionals"],
@@ -138,6 +230,8 @@ export const TeamSettings = () => {
             queryClient.invalidateQueries({ queryKey: ["team-members"] });
             setIsAddOpen(false);
             setFormData({ name: "", email: "", phone: "", role: "agent", password: "", commission: 0 });
+            setAllowedInstanceIds(null);
+            setAssignedQueueIds(null);
             toast({ title: "Membro adicionado com sucesso!" });
         },
         onError: (error: any) => {
@@ -149,7 +243,14 @@ export const TeamSettings = () => {
         mutationFn: async (member: any) => {
             const { error } = await supabase
                 .from("team_members")
-                .update({ name: member.name, phone: member.phone, role: member.role, commission: member.commission || 0 })
+                .update({
+                    name: member.name,
+                    phone: member.phone,
+                    role: member.role,
+                    commission: member.commission || 0,
+                    allowed_instance_ids: member.role === "agent" ? member.allowed_instance_ids : null,
+                    assigned_queue_ids: member.role === "agent" ? member.assigned_queue_ids : null,
+                } as any)
                 .eq("id", member.id);
             if (error) throw error;
         },
@@ -187,15 +288,39 @@ export const TeamSettings = () => {
         },
     });
 
+    const validateScope = () => {
+        if (formData.role !== "agent") return true;
+        if (allowedInstanceIds !== null && allowedInstanceIds.length === 0) {
+            toast({ title: "Selecione ao menos uma instância liberada (ou marque Todas)", variant: "destructive" });
+            return false;
+        }
+        if (assignedQueueIds !== null && assignedQueueIds.length === 0) {
+            toast({ title: "Selecione ao menos uma fila atribuída (ou marque Todas)", variant: "destructive" });
+            return false;
+        }
+        return true;
+    };
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        createMemberMutation.mutate(formData);
+        if (!validateScope()) return;
+        createMemberMutation.mutate({
+            ...formData,
+            allowed_instance_ids: formData.role === "agent" ? allowedInstanceIds : null,
+            assigned_queue_ids: formData.role === "agent" ? assignedQueueIds : null,
+        });
     };
 
     const handleUpdate = (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedMember) return;
-        updateMemberMutation.mutate({ ...formData, id: selectedMember.id });
+        if (!validateScope()) return;
+        updateMemberMutation.mutate({
+            ...formData,
+            id: selectedMember.id,
+            allowed_instance_ids: allowedInstanceIds,
+            assigned_queue_ids: assignedQueueIds,
+        });
     };
 
     return (
@@ -211,7 +336,14 @@ export const TeamSettings = () => {
                         Gerencie membros e permissões de acesso
                     </p>
                 </div>
-                <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+                <Dialog open={isAddOpen} onOpenChange={(o) => {
+                    setIsAddOpen(o);
+                    if (o) {
+                        // Reset do escopo ao abrir (pode ter sobrado estado da edição)
+                        setAllowedInstanceIds(null);
+                        setAssignedQueueIds(null);
+                    }
+                }}>
                     {canCreate('team_members') && (
                         <DialogTrigger asChild>
                             <Button size="sm" className="h-8 md:h-9 text-xs md:text-sm w-fit">
@@ -257,6 +389,22 @@ export const TeamSettings = () => {
                                     <Input id="create-commission" type="number" min={0} max={100} value={formData.commission} onChange={(e) => setFormData({ ...formData, commission: Number(e.target.value) || 0 })} placeholder="0" />
                                 </div>
                             )}
+                            {formData.role === "agent" && (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <ScopeSelector
+                                        label="Instâncias liberadas"
+                                        options={instanceOptions || []}
+                                        value={allowedInstanceIds}
+                                        onChange={setAllowedInstanceIds}
+                                    />
+                                    <ScopeSelector
+                                        label="Filas atribuídas"
+                                        options={queueOptions || []}
+                                        value={assignedQueueIds}
+                                        onChange={setAssignedQueueIds}
+                                    />
+                                </div>
+                            )}
                             <Button type="submit" className="w-full" disabled={createMemberMutation.isPending}>
                                 {createMemberMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                 Criar Membro
@@ -273,12 +421,14 @@ export const TeamSettings = () => {
                         <TableHead className="hidden md:table-cell">Email</TableHead>
                         <TableHead>Função</TableHead>
                         <TableHead className="hidden sm:table-cell">Telefone</TableHead>
+                        <TableHead className="hidden md:table-cell">Instâncias liberadas</TableHead>
+                        <TableHead className="hidden md:table-cell">Filas atribuídas</TableHead>
                         <TableHead className="text-right">Ações</TableHead>
                     </TableHeader>
                     <TableBody>
                         {isLoading ? (
                             <TableRow>
-                                <TableCell colSpan={5} className="text-center py-8">
+                                <TableCell colSpan={7} className="text-center py-8">
                                     <Loader2 className="h-6 w-6 animate-spin mx-auto" />
                                 </TableCell>
                             </TableRow>
@@ -293,12 +443,24 @@ export const TeamSettings = () => {
                                         </Badge>
                                     </TableCell>
                                     <TableCell className="hidden sm:table-cell text-sm py-2 md:py-4">{member.phone || "-"}</TableCell>
+                                    <TableCell className="hidden md:table-cell max-w-[180px] py-2 md:py-4">
+                                        <span className="text-xs text-muted-foreground truncate block" title={scopeLabel(member.allowed_instance_ids, instanceOptions, member.role)}>
+                                            {scopeLabel(member.allowed_instance_ids, instanceOptions, member.role)}
+                                        </span>
+                                    </TableCell>
+                                    <TableCell className="hidden md:table-cell max-w-[180px] py-2 md:py-4">
+                                        <span className="text-xs text-muted-foreground truncate block" title={scopeLabel(member.assigned_queue_ids, queueOptions, member.role)}>
+                                            {scopeLabel(member.assigned_queue_ids, queueOptions, member.role)}
+                                        </span>
+                                    </TableCell>
                                     <TableCell className="text-right py-2 md:py-4">
                                         <div className="flex justify-end gap-1">
                                             {canEdit('team_members') && (
                                                 <Button variant="ghost" size="icon" className="h-7 w-7 md:h-8 md:w-8" onClick={() => {
                                                     setSelectedMember(member);
                                                     setFormData({ name: member.name, email: member.email, phone: member.phone || "", role: member.role, password: "", commission: member.commission || 0 });
+                                                    setAllowedInstanceIds(member.allowed_instance_ids ?? null);
+                                                    setAssignedQueueIds(member.assigned_queue_ids ?? null);
                                                     setIsEditOpen(true);
                                                 }}>
                                                     <Pencil className="h-3.5 w-3.5 md:h-4 md:w-4" />
@@ -348,6 +510,22 @@ export const TeamSettings = () => {
                             <div className="space-y-2">
                                 <Label htmlFor="commission">Comissão (%)</Label>
                                 <Input id="commission" type="number" min={0} max={100} value={formData.commission} onChange={(e) => setFormData({ ...formData, commission: Number(e.target.value) || 0 })} placeholder="0" />
+                            </div>
+                        )}
+                        {formData.role === "agent" && (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <ScopeSelector
+                                    label="Instâncias liberadas"
+                                    options={instanceOptions || []}
+                                    value={allowedInstanceIds}
+                                    onChange={setAllowedInstanceIds}
+                                />
+                                <ScopeSelector
+                                    label="Filas atribuídas"
+                                    options={queueOptions || []}
+                                    value={assignedQueueIds}
+                                    onChange={setAssignedQueueIds}
+                                />
                             </div>
                         )}
                         <Button type="submit" className="w-full" disabled={updateMemberMutation.isPending}>

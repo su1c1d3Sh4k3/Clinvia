@@ -28,7 +28,8 @@ export default function TeamPage() {
     }
 
     return (
-        <div className="container mx-auto py-4 md:py-10 px-3 md:px-6 max-w-5xl animate-in fade-in duration-500">
+        // max-w-5xl (64rem) + 20% p/ cada lado = 89.6rem
+        <div className="container mx-auto py-4 md:py-10 px-3 md:px-6 max-w-[89.6rem] animate-in fade-in duration-500">
             <h1 className="text-2xl md:text-3xl font-bold mb-4 md:mb-8 text-foreground">Equipe</h1>
 
             <Tabs value={tab} onValueChange={setTab} className="w-full">
