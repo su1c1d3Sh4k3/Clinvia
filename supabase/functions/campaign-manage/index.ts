@@ -504,7 +504,9 @@ serve(async (req) => {
                     if (mother && !mother.expired_processed) {
                         await supabase.rpc("campaign_close_entries", { p_campaign_id: mother.id });
                         if (mother.tag_id) {
-                            await supabase.from("contact_tags").delete().eq("tag_id", mother.tag_id);
+                            // Exclui a TAG da campanha-mãe (CASCADE remove contact_tags;
+                            // campaigns.tag_id vira NULL) — user rule 2026-08-17
+                            await supabase.from("tags").delete().eq("id", mother.tag_id);
                         }
                         await supabase
                             .from("campaigns")
