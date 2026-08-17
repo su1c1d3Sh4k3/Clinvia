@@ -8,7 +8,7 @@ import {
     Accordion, AccordionContent, AccordionItem, AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Callout, LearnChip, StepByStep, SubNav, TopicSection } from "./blocks";
-import { ConversationFlowSimulator, TransferFlowSimulator } from "./simulators-inbox";
+import { ConversationFlowSimulator, TransferFlowSimulator, TransferWalkthrough } from "./simulators-inbox";
 
 // ---------------------------------------------------------------------------
 // Manual da aba Inbox
@@ -117,23 +117,30 @@ export function InboxGuide() {
                     um modal em <strong className="text-foreground">duas etapas</strong>: primeiro você escolhe a fila de
                     destino; depois, quem será o responsável — ou a opção{" "}
                     <strong className="text-foreground">"Não atribuir usuário"</strong>, que manda a conversa para a fila sem
-                    dono fixo (qualquer pessoa com acesso pode assumir).
+                    dono fixo (qualquer pessoa com acesso pode assumir). Navegue pelo guia visual abaixo — cada tela é uma
+                    réplica do que você verá no sistema:
                 </p>
-                <TransferFlowSimulator />
-                <StepByStep steps={[
-                    { title: "Escolha a fila", description: "Só filas ativas aparecem. A fila atual da conversa vem marcada, para você se localizar." },
-                    { title: "Escolha o responsável", description: "A lista mostra apenas quem realmente pode atender ali: admins e supervisores sempre; atendentes, só se a fila e a conexão da conversa estiverem no escopo deles." },
-                    { title: "Confirme", description: "A conversa muda de fila (e de responsável) na hora — o card do CRM acompanha, como sempre." },
-                ]} />
+                <TransferWalkthrough />
                 <Callout type="atencao" title="Por que nem todo colega aparece na lista?">
                     Atendentes podem ter <strong>escopo de visão</strong> (definido em Equipe): conexões liberadas e filas
                     atribuídas. Se a fila escolhida ou a conexão da conversa estiver fora do escopo do colega, ele não aparece —
                     de nada adiantaria transferir para quem não enxerga a conversa.
                 </Callout>
+                <p className="text-sm text-muted-foreground">
+                    Agora experimente você: no simulador abaixo, troque a fila de destino e veja a lista de responsáveis mudar
+                    em tempo real, exatamente como no modal de verdade.
+                </p>
+                <TransferFlowSimulator />
                 <Callout type="dica" title="Devolver para a IA">
                     Transferir para a fila <strong>Atendimento IA</strong> devolve a conversa para a assistente (se os portões
                     da IA estiverem abertos). E não existe mais "Sem Fila": toda conversa fica sempre em alguma fila.
                 </Callout>
+                <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" onClick={() => navigate("/?tour=inbox-transferir")}>
+                        <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                        Me mostre na prática
+                    </Button>
+                </div>
             </TopicSection>
 
             {/* 5 */}

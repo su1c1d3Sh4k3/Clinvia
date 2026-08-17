@@ -32,18 +32,21 @@ const ExpandButton = ({
     onClick,
     disabled,
     className,
+    dataTour,
 }: {
     icon: React.ReactNode;
     label: string;
     onClick?: () => void;
     disabled?: boolean;
     className?: string;
+    dataTour?: string;
 }) => (
     <Button
         variant="outline"
         size="sm"
         onClick={onClick}
         disabled={disabled}
+        data-tour={dataTour}
         className={cn(
             "group flex items-center gap-0 overflow-hidden px-2 transition-all duration-200 hover:px-3",
             className
@@ -123,6 +126,7 @@ export const ChatHeader = ({
                             icon={<ArrowRightLeft className="w-4 h-4" />}
                             label="Transferir Atendimento"
                             onClick={() => setIsTransferModalOpen(true)}
+                            dataTour="chat-transfer"
                         />
 
                         {/* Atender / Ticket Aberto */}

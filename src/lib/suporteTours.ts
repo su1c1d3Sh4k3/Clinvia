@@ -54,6 +54,20 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
                 "Passe o mouse para expandir: dados do cliente, etapa do CRM, negociação rápida, resumo da IA e atalhos de venda/agendamento.",
         },
     ],
+    "inbox-transferir": [
+        {
+            element: '[data-tour="inbox-list"]',
+            title: "1. Abra uma conversa",
+            description:
+                "O botão de transferência fica dentro do chat. Clique em qualquer conversa da lista para abri-la.",
+        },
+        {
+            element: '[data-tour="chat-transfer"]',
+            title: "2. Transferir Atendimento",
+            description:
+                "Este é o botão (ele expande ao passar o mouse). Clique nele para abrir o modal de duas etapas: primeiro a fila de destino, depois o responsável — ou 'Não atribuir usuário'. Só aparecem colegas com acesso àquela fila e àquela conexão.",
+        },
+    ],
     "crm-board": [
         {
             element: '[data-tour="crm-title"]',

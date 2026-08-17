@@ -3,6 +3,7 @@ import { useAutoAnimate } from "@formkit/auto-animate/react";
 import {
     Inbox, Headset, Archive, Bot, KanbanSquare, MessageCircle,
     ArrowRightLeft, Users, Check, EyeOff, Crown, Eye,
+    ChevronLeft, ChevronRight, CheckCircle, CircleCheck, Star, Files, MousePointerClick, ArrowLeft,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -100,6 +101,265 @@ export function ConversationFlowSimulator() {
                 <MessageCircle className="h-3.5 w-3.5" />
                 Clique nos estados acima para navegar. Toda conversa percorre esse caminho — às vezes várias vezes com o mesmo cliente.
             </p>
+        </div>
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Guia visual — Transferir Atendimento passo a passo (réplica da UI real)
+// ---------------------------------------------------------------------------
+
+/** Destaque pulsante usado para apontar "clique aqui" nos frames */
+const ClickHint = ({ children }: { children: React.ReactNode }) => (
+    <div className="relative inline-flex">
+        <div className="absolute -inset-1 animate-pulse rounded-lg ring-2 ring-primary/70" />
+        {children}
+    </div>
+);
+
+/** Moldura de modal fake, no estilo do modal real */
+const FakeModal = ({ title, subtitle, children, footer }: {
+    title: string; subtitle: React.ReactNode; children: React.ReactNode; footer?: React.ReactNode;
+}) => (
+    <div className="mx-auto w-full max-w-[380px] rounded-xl border bg-background p-4 shadow-lg">
+        <p className="flex items-center gap-1.5 text-sm font-bold">
+            <ArrowRightLeft className="h-4 w-4 text-primary" />
+            {title}
+        </p>
+        <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>
+        <div className="mt-3 space-y-1.5">{children}</div>
+        {footer && <div className="mt-3 flex justify-end gap-2 border-t pt-3">{footer}</div>}
+    </div>
+);
+
+const FakeButton = ({ children, primary, dimmed }: { children: React.ReactNode; primary?: boolean; dimmed?: boolean }) => (
+    <span className={cn(
+        "inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium",
+        primary ? "border-primary bg-primary text-primary-foreground" : "bg-background",
+        dimmed && "opacity-50",
+    )}>
+        {children}
+    </span>
+);
+
+const WALK_STEPS = [
+    { key: "botao", label: "O botão" },
+    { key: "fila", label: "Etapa 1: fila" },
+    { key: "resp", label: "Etapa 2: responsável" },
+    { key: "pronto", label: "Pronto!" },
+] as const;
+
+export function TransferWalkthrough() {
+    const [idx, setIdx] = useState(0);
+    const [frameRef] = useAutoAnimate();
+    const step = WALK_STEPS[idx];
+
+    return (
+        <div className="rounded-2xl border bg-card p-4 md:p-5 space-y-4">
+            <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold">Guia visual: uma transferência de verdade, tela a tela</p>
+                <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                    {idx + 1} de {WALK_STEPS.length}
+                </span>
+            </div>
+
+            {/* Linha do tempo */}
+            <div className="flex items-center">
+                {WALK_STEPS.map((st, i) => (
+                    <div key={st.key} className={cn("flex items-center", i > 0 && "flex-1")}>
+                        {i > 0 && (
+                            <div className={cn("h-0.5 flex-1 rounded transition-colors duration-500", i <= idx ? "bg-primary" : "bg-border")} />
+                        )}
+                        <button
+                            onClick={() => setIdx(i)}
+                            className={cn(
+                                "mx-1 flex h-8 shrink-0 items-center gap-1.5 rounded-full border-2 bg-background px-2.5 text-[11px] font-medium transition-all duration-300",
+                                i <= idx ? "border-primary" : "border-border opacity-50",
+                                i === idx && "ring-2 ring-primary/30",
+                            )}
+                        >
+                            <span className={cn("flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold", i <= idx ? "bg-primary text-primary-foreground" : "bg-muted")}>{i + 1}</span>
+                            <span className="hidden sm:inline">{st.label}</span>
+                        </button>
+                    </div>
+                ))}
+            </div>
+
+            {/* Frame */}
+            <div ref={frameRef}>
+                <div key={step.key} className="space-y-3 rounded-xl bg-muted/50 p-3.5">
+                    {step.key === "botao" && (
+                        <>
+                            <p className="text-sm text-muted-foreground">
+                                Com a conversa aberta, olhe o <strong className="text-foreground">topo do chat</strong>. O botão{" "}
+                                <strong className="text-foreground">Transferir Atendimento</strong> fica ao lado de Atender e
+                                Resolver (ele expande ao passar o mouse):
+                            </p>
+                            {/* Mock do header do chat */}
+                            <div className="rounded-xl border bg-background p-2.5">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="flex min-w-0 items-center gap-2">
+                                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary">M</div>
+                                        <div className="min-w-0">
+                                            <p className="truncate text-xs font-semibold">Maria Souza</p>
+                                            <p className="truncate text-[10px] text-muted-foreground">Número Recepção</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                        <ClickHint>
+                                            <FakeButton primary><ArrowRightLeft className="h-3 w-3" />Transferir Atendimento</FakeButton>
+                                        </ClickHint>
+                                        <FakeButton><CheckCircle className="h-3 w-3" /></FakeButton>
+                                        <FakeButton><CircleCheck className="h-3 w-3" /></FakeButton>
+                                        <FakeButton><Files className="h-3 w-3" /></FakeButton>
+                                        <FakeButton><Star className="h-3 w-3 text-yellow-500" /></FakeButton>
+                                    </div>
+                                </div>
+                            </div>
+                            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                <MousePointerClick className="h-3.5 w-3.5 text-primary" />
+                                Um clique abre o modal de transferência.
+                            </p>
+                        </>
+                    )}
+
+                    {step.key === "fila" && (
+                        <>
+                            <p className="text-sm text-muted-foreground">
+                                <strong className="text-foreground">Etapa 1 — escolha a fila de destino.</strong> Só filas ativas
+                                aparecem, e a fila atual da conversa vem sinalizada. Aqui, a conversa está em Atendimento Humano
+                                e vamos mandá-la para o Suporte:
+                            </p>
+                            <FakeModal title="Transferir Atendimento" subtitle="Escolha a fila de destino da conversa.">
+                                <div className="flex items-center justify-between rounded-md border border-primary/60 bg-primary/5 px-2.5 py-2 text-xs">
+                                    Atendimento Humano
+                                    <span className="text-[9px] font-semibold uppercase text-primary">Fila atual</span>
+                                </div>
+                                <div className="rounded-md border px-2.5 py-2 text-xs">Atendimento IA</div>
+                                <ClickHint>
+                                    <div className="w-full rounded-md border bg-accent px-2.5 py-2 text-xs font-medium">Suporte</div>
+                                </ClickHint>
+                                <div className="rounded-md border px-2.5 py-2 text-xs">Financeiro</div>
+                            </FakeModal>
+                            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                <MousePointerClick className="h-3.5 w-3.5 text-primary" />
+                                Clicar na fila já avança para a etapa 2. Não existe opção "Sem Fila" — toda conversa vive em uma fila.
+                            </p>
+                        </>
+                    )}
+
+                    {step.key === "resp" && (
+                        <>
+                            <p className="text-sm text-muted-foreground">
+                                <strong className="text-foreground">Etapa 2 — escolha o responsável.</strong> A lista mostra só
+                                quem pode atender ali: admins e supervisores sempre; atendentes, apenas se a fila{" "}
+                                <strong className="text-foreground">e</strong> a conexão da conversa estiverem no escopo deles.
+                                Repare no João, fora do escopo:
+                            </p>
+                            <FakeModal
+                                title="Transferir Atendimento"
+                                subtitle={<>Fila: <strong className="text-foreground">Suporte</strong>. Escolha quem será o responsável.</>}
+                                footer={
+                                    <>
+                                        <FakeButton><ArrowLeft className="h-3 w-3" />Voltar</FakeButton>
+                                        <FakeButton>Cancelar</FakeButton>
+                                        <ClickHint><FakeButton primary>Transferir</FakeButton></ClickHint>
+                                    </>
+                                }
+                            >
+                                <div className="flex items-center gap-2 rounded-md border px-2.5 py-2 text-xs">
+                                    <Users className="h-3.5 w-3.5 text-primary" />
+                                    <span className="flex-1 font-medium">Não atribuir usuário</span>
+                                </div>
+                                <div className="flex items-center gap-2 rounded-md border px-2.5 py-2 text-xs">
+                                    <Crown className="h-3.5 w-3.5 text-muted-foreground" />
+                                    <span className="flex-1">Ana</span>
+                                    <Badge variant="outline" className="text-[9px]">Admin</Badge>
+                                </div>
+                                <div className="flex items-center gap-2 rounded-md border border-primary bg-primary/5 px-2.5 py-2 text-xs">
+                                    <Eye className="h-3.5 w-3.5 text-muted-foreground" />
+                                    <span className="flex-1 font-medium">Carla</span>
+                                    <Badge variant="outline" className="text-[9px]">Supervisor</Badge>
+                                    <Check className="h-3.5 w-3.5 text-primary" />
+                                </div>
+                                <div className="flex items-center gap-2 rounded-md border px-2.5 py-2 text-xs">
+                                    <Headset className="h-3.5 w-3.5 text-muted-foreground" />
+                                    <span className="flex-1">Pedro</span>
+                                    <Badge variant="outline" className="text-[9px]">Agente</Badge>
+                                </div>
+                                <div className="flex items-center gap-2 rounded-md border px-2.5 py-2 text-xs opacity-45">
+                                    <Headset className="h-3.5 w-3.5 text-muted-foreground" />
+                                    <span className="flex-1">João</span>
+                                    <Badge variant="outline" className="text-[9px]">Agente</Badge>
+                                    <span className="flex items-center gap-1 text-[9px] text-muted-foreground">
+                                        <EyeOff className="h-3 w-3" />fora do escopo
+                                    </span>
+                                </div>
+                            </FakeModal>
+                            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                <MousePointerClick className="h-3.5 w-3.5 text-primary" />
+                                Selecionamos a Carla e clicamos em Transferir. Se ninguém deve ficar como dono, use "Não atribuir usuário".
+                            </p>
+                        </>
+                    )}
+
+                    {step.key === "pronto" && (
+                        <>
+                            <p className="text-sm text-muted-foreground">
+                                <strong className="text-foreground">Feito!</strong> A conversa muda de fila e de responsável na
+                                hora — e tudo que depende disso acompanha:
+                            </p>
+                            <div className="mx-auto w-full max-w-[380px] rounded-xl border bg-background p-3 shadow-lg">
+                                <p className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600">
+                                    <CheckCircle className="h-3.5 w-3.5" />
+                                    Atendimento transferido
+                                </p>
+                                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                                    Conversa enviada para Suporte — responsável: Carla.
+                                </p>
+                            </div>
+                            <div className="grid gap-2 sm:grid-cols-2">
+                                <div className="rounded-lg border bg-background p-3">
+                                    <p className="flex items-center gap-1.5 text-xs font-semibold"><Inbox className="h-3.5 w-3.5 text-primary" />No inbox</p>
+                                    <p className="mt-0.5 text-xs text-muted-foreground">
+                                        A conversa aparece na fila Suporte com a Carla como responsável. Quem tem a fila Suporte no escopo passa a vê-la; quem não tem, deixa de ver.
+                                    </p>
+                                </div>
+                                <div className="rounded-lg border bg-background p-3">
+                                    <p className="flex items-center gap-1.5 text-xs font-semibold"><KanbanSquare className="h-3.5 w-3.5 text-primary" />No CRM</p>
+                                    <p className="mt-0.5 text-xs text-muted-foreground">
+                                        O card do cliente acompanha e vai para a etapa Suporte do funil — fila e etapa andam sempre juntas.
+                                    </p>
+                                </div>
+                            </div>
+                            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                <Bot className="h-3.5 w-3.5 text-primary" />
+                                Quer devolver para a assistente? Transfira para a fila Atendimento IA — se os portões da IA estiverem abertos, ela reassume.
+                            </p>
+                        </>
+                    )}
+                </div>
+            </div>
+
+            {/* Navegação */}
+            <div className="flex items-center justify-between">
+                <button
+                    onClick={() => setIdx((i) => Math.max(0, i - 1))}
+                    disabled={idx === 0}
+                    className="flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-accent disabled:opacity-40"
+                >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                    Anterior
+                </button>
+                <button
+                    onClick={() => setIdx((i) => Math.min(WALK_STEPS.length - 1, i + 1))}
+                    disabled={idx === WALK_STEPS.length - 1}
+                    className="flex items-center gap-1 rounded-md border border-primary bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40"
+                >
+                    Próximo
+                    <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+            </div>
         </div>
     );
 }
