@@ -26,6 +26,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
+import { ClientProfileModal } from "@/components/contacts/ClientProfileModal";
 
 interface ConversationChatModalProps {
     open: boolean;
@@ -49,6 +50,7 @@ export function ConversationChatModal({
     const [isEmojiOpen, setIsEmojiOpen] = useState(false);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [isUploading, setIsUploading] = useState(false);
+    const [isProfileOpen, setIsProfileOpen] = useState(false);
 
     // Audio Recording State
     const [isRecording, setIsRecording] = useState(false);
@@ -62,6 +64,20 @@ export function ConversationChatModal({
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const sendMessageMutation = useSendMessage();
     const { data: ownerId } = useOwnerId();
+
+    // Full contact row for the client profile modal (opened by clicking the name)
+    const { data: contactRow } = useQuery({
+        queryKey: ["chat-modal-contact", contactId],
+        queryFn: async () => {
+            const { data } = await supabase
+                .from("contacts")
+                .select("*")
+                .eq("id", contactId)
+                .single();
+            return data;
+        },
+        enabled: !!contactId && open,
+    });
 
     // Get conversation: prefer active (open/pending), fallback to the most recent
     // resolved one — the history must still be visible after the ticket is closed
@@ -354,11 +370,22 @@ export function ConversationChatModal({
     };
 
     return (
+        <>
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-2xl h-[80vh] flex flex-col">
                 <DialogHeader>
                     <DialogTitle className="flex justify-between items-center">
-                        <span>Conversa com {contactName}</span>
+                        <span>
+                            Conversa com{" "}
+                            <button
+                                type="button"
+                                onClick={() => setIsProfileOpen(true)}
+                                className="text-primary hover:underline cursor-pointer font-semibold"
+                                title="Ver perfil do cliente"
+                            >
+                                {contactName}
+                            </button>
+                        </span>
                         <Button
                             variant="outline"
                             size="sm"
@@ -537,5 +564,12 @@ export function ConversationChatModal({
                 </div>
             </DialogContent>
         </Dialog>
+
+        <ClientProfileModal
+            open={isProfileOpen}
+            onOpenChange={setIsProfileOpen}
+            contact={contactRow ?? (contactId ? { id: contactId, push_name: contactName } : null)}
+        />
+        </>
     );
 }
