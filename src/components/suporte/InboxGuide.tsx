@@ -97,7 +97,7 @@ export function InboxGuide() {
             <TopicSection id="atendendo" index={3} icon={Headset} title="Atendendo um cliente"
                 subtitle="Assumir, conversar, encerrar">
                 <StepByStep steps={[
-                    { title: "Encontre a conversa", description: "Use os filtros da lista (fila, status, busca por nome/telefone) ou o sino de notificações. Conversas pendentes têm destaque." },
+                    { title: "Encontre a conversa", description: "Use os filtros da lista (fila, tag, instância, usuário responsável, status, busca por nome/telefone) ou o sino de notificações. O filtro de usuário mostra todas as conversas atribuídas a um colega — ou as sem atribuição. Conversas pendentes têm destaque." },
                     { title: "Assuma o atendimento", description: <>Clique em <strong>Atender</strong>. A conversa vira "em atendimento", ganha seu nome como responsável e a IA para na hora.</>, },
                     { title: "Converse", description: "Texto, áudio, imagem, documento, resposta citada, encaminhamento... tudo pelo campo de mensagem. O cliente recebe no WhatsApp normalmente." },
                     { title: "Precisa de outro setor? Transfira", description: <>Clique em <strong>Transferir Atendimento</strong> no topo do chat: escolha a fila e, se quiser, o colega responsável (detalhes no próximo tópico).</>, },

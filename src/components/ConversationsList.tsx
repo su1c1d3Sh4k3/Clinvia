@@ -132,6 +132,7 @@ export const ConversationsList = ({
   const [selectedQueueFilter, setSelectedQueueFilter] = useState<string | null>(null);
   const [selectedTagFilter, setSelectedTagFilter] = useState<string | null>(null);
   const [selectedInstanceFilter, setSelectedInstanceFilter] = useState<string | null>(null);
+  const [selectedAgentFilter, setSelectedAgentFilter] = useState<string | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isContactDetailsOpen, setIsContactDetailsOpen] = useState(false);
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
@@ -310,13 +311,19 @@ export const ConversationsList = ({
       ? (conv as any).instance_id === selectedInstanceFilter
       : true;
 
+    const matchesAgent = selectedAgentFilter
+      ? selectedAgentFilter === "unassigned"
+        ? !(conv as any).assigned_agent_id
+        : (conv as any).assigned_agent_id === selectedAgentFilter
+      : true;
+
     // Filter by People vs Groups
     const matchesType = selectedTypeFilter === "groups" ? isGroup : !isGroup;
 
     // Filter by unread only
     const matchesUnread = unreadOnly ? (conv.unread_count || 0) > 0 : true;
 
-    return matchesSearch && matchesQueue && matchesTag && matchesInstance && matchesType && matchesUnread;
+    return matchesSearch && matchesQueue && matchesTag && matchesInstance && matchesAgent && matchesType && matchesUnread;
   });
 
   const selectedConversation = conversations.find(c => c.id === selectedId);
@@ -409,7 +416,22 @@ export const ConversationsList = ({
                   </select>
                 </div>
 
-                {(selectedQueueFilter || selectedTagFilter || selectedInstanceFilter) && (
+                <div className="space-y-1">
+                  <span className="text-xs font-medium text-muted-foreground ml-2">Usuários</span>
+                  <select
+                    className="w-full text-sm border rounded p-1 bg-background"
+                    value={selectedAgentFilter || ""}
+                    onChange={(e) => setSelectedAgentFilter(e.target.value || null)}
+                  >
+                    <option value="">Todos os Usuários</option>
+                    <option value="unassigned">Sem atribuição</option>
+                    {staffMembers?.map((m: any) => (
+                      <option key={m.id} value={m.id}>{m.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {(selectedQueueFilter || selectedTagFilter || selectedInstanceFilter || selectedAgentFilter) && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -418,6 +440,7 @@ export const ConversationsList = ({
                       setSelectedQueueFilter(null);
                       setSelectedTagFilter(null);
                       setSelectedInstanceFilter(null);
+                      setSelectedAgentFilter(null);
                     }}
                   >
                     Limpar Filtros
