@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { getWorkHoursForDay } from "../_shared/professional-schedule.ts";
 import { TERMINAL_STAGES } from "../_shared/crm-stages.ts";
+import { applyCampaignDiscount, type CampaignDiscountInfo } from "../_shared/campaign-discount.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -30,11 +31,11 @@ serve(async (req) => {
 
         // Campanha ativa da instância do link (payload `d` com instance_id) onde o
         // contato recebeu envio — links legados sem instance_id: comportamento atual.
-        const resolveActiveCampaign = async (): Promise<{ id: string; services: any[] } | null> => {
+        const resolveActiveCampaign = async (): Promise<CampaignDiscountInfo | null> => {
             if (!instance_id || !contact_id) return null;
             try {
                 const { data: camps } = await supabase.from("campaigns")
-                    .select("id, services")
+                    .select("id, discount_pct, services")
                     .eq("user_id", user_id)
                     .eq("instance_id", instance_id)
                     .in("status", ["dispatching", "dispatched"])
@@ -48,7 +49,7 @@ serve(async (req) => {
                         .eq("status", "sent")
                         .limit(1)
                         .maybeSingle();
-                    if (cc) return { id: c.id, services: c.services || [] };
+                    if (cc) return c as CampaignDiscountInfo;
                 }
             } catch (err) {
                 console.warn("[api-public-booking] resolveActiveCampaign error:", err);
@@ -210,6 +211,9 @@ serve(async (req) => {
             }
 
             const campaign = await resolveActiveCampaign();
+            // Preço com desconto de campanha (se o serviço agendado estiver na campanha
+            // ativa); a venda criada pelo trigger herda esse valor
+            const finalPrice = applyCampaignDiscount(svc.price || 0, campaign, service_id);
 
             const { data: created, error: insertErr } = await supabase.from("appointments").insert({
                 user_id,
@@ -222,7 +226,7 @@ serve(async (req) => {
                 professional_name: prof?.name || "",
                 start_time: startDate.toISOString(),
                 end_time: endDate.toISOString(),
-                price: svc.price || 0,
+                price: finalPrice,
                 type: "appointment",
                 campaign_id: campaign?.id ?? null,
                 created_via: "public_link",
@@ -247,9 +251,9 @@ serve(async (req) => {
                         if (newCard) {
                             await supabase.from("crm_client_services").insert({
                                 crm_client_id: newCard.id, service_client_id: service_id,
-                                service_name: svc.name, quantity: 1, unit_price: svc.price || 0, min_price: 0,
+                                service_name: svc.name, quantity: 1, unit_price: finalPrice, min_price: 0,
                             });
-                            await supabase.from("crm_client").update({ value: svc.price || 0 }).eq("id", newCard.id);
+                            await supabase.from("crm_client").update({ value: finalPrice }).eq("id", newCard.id);
                         }
                     } else {
                         // Move to Agendado
@@ -264,7 +268,7 @@ serve(async (req) => {
                         if (!existingSvc) {
                             await supabase.from("crm_client_services").insert({
                                 crm_client_id: activeCard.id, service_client_id: service_id,
-                                service_name: svc.name, quantity: 1, unit_price: svc.price || 0, min_price: 0,
+                                service_name: svc.name, quantity: 1, unit_price: finalPrice, min_price: 0,
                             });
                             const { data: allSvcs } = await supabase.from("crm_client_services")
                                 .select("unit_price, quantity").eq("crm_client_id", activeCard.id);
@@ -276,13 +280,13 @@ serve(async (req) => {
                     // No card → create
                     const { data: newCard } = await supabase.from("crm_client").insert({
                         user_id, contact_id, stage: "Agendado",
-                        stage_changed_at: new Date().toISOString(), value: svc.price || 0,
+                        stage_changed_at: new Date().toISOString(), value: finalPrice,
                         professional_id, priority: "medium", is_active: true,
                     }).select().single();
                     if (newCard) {
                         await supabase.from("crm_client_services").insert({
                             crm_client_id: newCard.id, service_client_id: service_id,
-                            service_name: svc.name, quantity: 1, unit_price: svc.price || 0, min_price: 0,
+                            service_name: svc.name, quantity: 1, unit_price: finalPrice, min_price: 0,
                         });
                     }
                 }

@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { getWorkHoursForDay } from "../_shared/professional-schedule.ts";
 import { TERMINAL_STAGES } from "../_shared/crm-stages.ts";
+import { applyCampaignDiscount, type CampaignDiscountInfo } from "../_shared/campaign-discount.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -135,8 +136,9 @@ serve(async (req) => {
 
         // Helper: campanha ativa da instância onde o contato recebeu envio.
         // Usado no create_appointment (campo opcional `instance`: id ou nome) para
-        // vincular o agendamento à campanha → congela a entrada como 'Agendado'.
-        const resolveCampaignForContact = async (cid: string, instanceRef?: string): Promise<string | null> => {
+        // vincular o agendamento à campanha → congela a entrada como 'Agendado' e,
+        // se o serviço agendado estiver na campanha, aplica discount_pct no preço.
+        const resolveCampaignForContact = async (cid: string, instanceRef?: string): Promise<CampaignDiscountInfo | null> => {
             if (!instanceRef) return null;
             try {
                 const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(instanceRef);
@@ -147,7 +149,7 @@ serve(async (req) => {
                 if (!inst) return null;
 
                 const { data: camps } = await supabase.from("campaigns")
-                    .select("id")
+                    .select("id, discount_pct, services")
                     .eq("user_id", user_id)
                     .eq("instance_id", inst.id)
                     .in("status", ["dispatching", "dispatched"])
@@ -162,7 +164,7 @@ serve(async (req) => {
                         .eq("status", "sent")
                         .limit(1)
                         .maybeSingle();
-                    if (cc) return c.id;
+                    if (cc) return c as CampaignDiscountInfo;
                 }
             } catch (err) {
                 console.warn("[api-scheduling] resolveCampaignForContact error:", err);
@@ -214,10 +216,13 @@ serve(async (req) => {
             if (!service_name || !date || !time) throw new Error("Missing service_name, date or time");
 
             const cid = await resolveContact(contact_id, phone_number);
-            const campaignId = await resolveCampaignForContact(cid, instance);
+            const campaign = await resolveCampaignForContact(cid, instance);
             const sc = await resolveService(service_name);
             const prof = await resolveProfessional(sc, professional_name);
             const duration = sc.duration_minutes || 30;
+            // Preço com desconto de campanha (se o serviço estiver na campanha ativa);
+            // a venda criada pelo trigger herda esse valor
+            const finalPrice = applyCampaignDiscount(sc.price || 0, campaign, sc.id);
 
             // Build datetime (input is local BRT → store as UTC+3)
             const startISO = `${date}T${time}:00-03:00`;
@@ -258,10 +263,10 @@ serve(async (req) => {
                 service_name_id: sc.service_name_id,
                 start_time: startDate.toISOString(),
                 end_time: endDate.toISOString(),
-                price: sc.price || 0,
+                price: finalPrice,
                 description: description || null,
                 type: "appointment",
-                campaign_id: campaignId,
+                campaign_id: campaign?.id ?? null,
                 created_via: "ia",
             };
 
@@ -296,9 +301,9 @@ serve(async (req) => {
                         if (newCard) {
                             await supabase.from("crm_client_services").insert({
                                 crm_client_id: newCard.id, service_client_id: sc.id,
-                                service_name: sc.name, quantity: 1, unit_price: sc.price || 0, min_price: sc.min_price || 0,
+                                service_name: sc.name, quantity: 1, unit_price: finalPrice, min_price: sc.min_price || 0,
                             });
-                            await supabase.from("crm_client").update({ value: sc.price || 0 }).eq("id", newCard.id);
+                            await supabase.from("crm_client").update({ value: finalPrice }).eq("id", newCard.id);
                         }
                     } else {
                         // Move to Agendado
@@ -313,7 +318,7 @@ serve(async (req) => {
                         if (!existingSvc) {
                             await supabase.from("crm_client_services").insert({
                                 crm_client_id: activeCard.id, service_client_id: sc.id,
-                                service_name: sc.name, quantity: 1, unit_price: sc.price || 0, min_price: sc.min_price || 0,
+                                service_name: sc.name, quantity: 1, unit_price: finalPrice, min_price: sc.min_price || 0,
                             });
                             // Recalc value
                             const { data: allSvcs } = await supabase.from("crm_client_services")
@@ -326,13 +331,13 @@ serve(async (req) => {
                     // No card → create
                     const { data: newCard } = await supabase.from("crm_client").insert({
                         user_id, contact_id: cid, stage: "Agendado",
-                        stage_changed_at: new Date().toISOString(), value: sc.price || 0,
+                        stage_changed_at: new Date().toISOString(), value: finalPrice,
                         professional_id: prof.id, priority: "medium", is_active: true,
                     }).select().single();
                     if (newCard) {
                         await supabase.from("crm_client_services").insert({
                             crm_client_id: newCard.id, service_client_id: sc.id,
-                            service_name: sc.name, quantity: 1, unit_price: sc.price || 0, min_price: sc.min_price || 0,
+                            service_name: sc.name, quantity: 1, unit_price: finalPrice, min_price: sc.min_price || 0,
                         });
                     }
                 }
