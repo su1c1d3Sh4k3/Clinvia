@@ -412,10 +412,53 @@ export function ConversationChatModal({
         toast.info(`Ação de IA: ${action} (em desenvolvimento)`);
     };
 
+    // Drag & drop de arquivo do desktop → anexa como selectedFile
+    const [isDragOver, setIsDragOver] = useState(false);
+    const dragCounter = useRef(0);
+
+    const handleDragEnter = (e: React.DragEvent) => {
+        if (!e.dataTransfer.types.includes("Files")) return;
+        e.preventDefault();
+        dragCounter.current++;
+        setIsDragOver(true);
+    };
+    const handleDragOver = (e: React.DragEvent) => {
+        if (!e.dataTransfer.types.includes("Files")) return;
+        e.preventDefault();
+    };
+    const handleDragLeave = (e: React.DragEvent) => {
+        if (!e.dataTransfer.types.includes("Files")) return;
+        e.preventDefault();
+        dragCounter.current = Math.max(0, dragCounter.current - 1);
+        if (dragCounter.current === 0) setIsDragOver(false);
+    };
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        dragCounter.current = 0;
+        setIsDragOver(false);
+        if (!activeConversationId) return;
+        const file = e.dataTransfer.files?.[0];
+        if (file) setSelectedFile(file);
+    };
+
     return (
         <>
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-2xl h-[80vh] flex flex-col">
+            <DialogContent
+                className="max-w-2xl h-[80vh] flex flex-col"
+                onDragEnter={handleDragEnter}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+            >
+                {isDragOver && activeConversationId && (
+                    <div className="absolute inset-0 z-50 flex items-center justify-center rounded-lg bg-background/80 backdrop-blur-sm pointer-events-none">
+                        <div className="flex flex-col items-center gap-2 border-2 border-dashed border-primary rounded-xl px-10 py-8 text-primary">
+                            <Paperclip className="w-8 h-8" />
+                            <p className="text-sm font-medium">Solte o arquivo para anexar</p>
+                        </div>
+                    </div>
+                )}
                 <DialogHeader>
                     <DialogTitle className="flex justify-between items-center">
                         <span>

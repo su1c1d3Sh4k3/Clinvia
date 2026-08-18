@@ -204,6 +204,12 @@ export function InboxGuide() {
                         </tbody>
                     </table>
                 </div>
+                <p className="text-sm text-muted-foreground">
+                    Para anexar arquivos você pode usar o <strong className="text-foreground">clipe</strong> (Fotos e Vídeos,
+                    Documento ou Contato), <strong className="text-foreground">colar</strong> uma imagem copiada (Ctrl+V) ou
+                    simplesmente <strong className="text-foreground">arrastar o arquivo do computador e soltar sobre a
+                    conversa</strong> — aparece a área "Solte o arquivo para anexar" e o arquivo fica pronto para envio.
+                </p>
                 <Callout type="atencao" title="Janela de 24h no WhatsApp Oficial">
                     No número oficial, você só pode mandar texto livre até <strong>24h após a última mensagem do cliente</strong>.
                     Passou disso, é preciso usar um template aprovado (ou esperar o cliente escrever). O sistema avisa quando a
@@ -215,8 +221,8 @@ export function InboxGuide() {
             <TopicSection id="notas" index={8} icon={StickyNote} title="Notas internas da conversa"
                 subtitle="Recados roxos para a equipe — o cliente nunca vê">
                 <p className="text-sm text-muted-foreground">
-                    O botão roxo <strong className="text-foreground">Adicionar nota</strong> (ícone de nota, ao lado dos
-                    anexos) abre um campo de texto para registrar uma <strong className="text-foreground">nota interna</strong>{" "}
+                    O botão lilás <strong className="text-foreground">Adicionar nota</strong> (ícone de nota, ao lado das
+                    Mensagens Rápidas) abre um campo de texto para registrar uma <strong className="text-foreground">nota interna</strong>{" "}
                     na conversa. A nota aparece na timeline como uma <strong className="text-foreground">bolha roxa</strong>{" "}
                     com o título "Nota de Conversa - nome - data/hora" — visível no inbox e no modal de conversa para toda a
                     equipe, mas <strong className="text-foreground">nunca é enviada ao cliente</strong>.

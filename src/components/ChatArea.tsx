@@ -36,7 +36,7 @@ import { QuickMessageConfirmationModal } from "@/components/QuickMessageConfirma
 import { TemplatePickerModal } from "@/components/chat/TemplatePickerModal";
 import { AddNoteModal } from "@/components/chat/AddNoteModal";
 import { useConversationNotes, mergeNotesIntoMessages } from "@/hooks/useConversationNotes";
-import { LayoutTemplate, Clock } from "lucide-react";
+import { LayoutTemplate, Clock, Paperclip } from "lucide-react";
 
 // Performance: Limit messages rendered at once
 const MESSAGES_PER_PAGE = 50;
@@ -846,6 +846,34 @@ export const ChatArea = ({
     }
   };
 
+  // Drag & drop de arquivo do desktop → anexa como selectedFile
+  const [isDragOver, setIsDragOver] = useState(false);
+  const dragCounter = useRef(0);
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes("Files")) return;
+    e.preventDefault();
+    dragCounter.current++;
+    setIsDragOver(true);
+  };
+  const handleDragOver = (e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes("Files")) return;
+    e.preventDefault();
+  };
+  const handleDragLeave = (e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes("Files")) return;
+    e.preventDefault();
+    dragCounter.current = Math.max(0, dragCounter.current - 1);
+    if (dragCounter.current === 0) setIsDragOver(false);
+  };
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounter.current = 0;
+    setIsDragOver(false);
+    if (isWindowClosed) return;
+    const file = e.dataTransfer.files?.[0];
+    if (file) setSelectedFile(file);
+  };
 
   if (!conversationId) {
     return (
@@ -856,7 +884,22 @@ export const ChatArea = ({
   }
 
   return (
-    <div data-tour="inbox-chat" className={cn("flex-1 flex flex-col bg-background relative w-full min-w-0 min-h-0", isMobile ? "h-full" : "h-full")}>
+    <div
+      data-tour="inbox-chat"
+      className={cn("flex-1 flex flex-col bg-background relative w-full min-w-0 min-h-0", isMobile ? "h-full" : "h-full")}
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {isDragOver && !isWindowClosed && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm pointer-events-none">
+          <div className="flex flex-col items-center gap-2 border-2 border-dashed border-primary rounded-xl px-10 py-8 text-primary">
+            <Paperclip className="w-8 h-8" />
+            <p className="text-sm font-medium">Solte o arquivo para anexar</p>
+          </div>
+        </div>
+      )}
       <ChatHeader
         isMobile={isMobile}
         displayName={displayName}
