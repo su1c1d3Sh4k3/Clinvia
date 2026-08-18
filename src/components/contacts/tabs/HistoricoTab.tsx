@@ -164,7 +164,12 @@ export const HistoricoTab = ({ contactId }: HistoricoTabProps) => {
                     <FileText className="w-5 h-5 text-muted-foreground mt-0.5 shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium">{doc.title}</p>
-                      {doc.description && <p className="text-xs text-muted-foreground">{doc.description}</p>}
+                      {doc.description && <p className="text-xs text-muted-foreground whitespace-pre-wrap">{doc.description}</p>}
+                      {doc.edited_from && (
+                        <p className="text-[10px] italic text-muted-foreground mt-0.5 cursor-help" title={doc.edited_from}>
+                          editado de "{doc.edited_from.length > 40 ? `${doc.edited_from.slice(0, 40)}...` : doc.edited_from}"
+                        </p>
+                      )}
                       <p className="text-[10px] text-muted-foreground mt-1">
                         {format(new Date(doc.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
                       </p>
@@ -175,9 +180,12 @@ export const HistoricoTab = ({ contactId }: HistoricoTabProps) => {
                           <a href={doc.file_url} target="_blank" rel="noopener noreferrer"><Download className="h-3.5 w-3.5" /></a>
                         </Button>
                       )}
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDelete(doc.id)}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                      {/* Notas de Conversa (conversation_id preenchido) nunca podem ser apagadas — regra do usuário */}
+                      {!doc.conversation_id && (
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDelete(doc.id)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 ))}

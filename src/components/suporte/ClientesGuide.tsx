@@ -118,7 +118,7 @@ export function ClientesGuide() {
                         ["Procedimentos", "o que já foi aplicado"],
                         ["Agendamentos", "histórico e futuros"],
                         ["Atendimentos", "conversas anteriores"],
-                        ["Histórico", "documentos e arquivos (5 categorias)"],
+                        ["Histórico", "documentos e arquivos (5 categorias); em Notas ficam também as Notas de Conversa do inbox (com autor e data — não podem ser apagadas)"],
                         ["Avaliação", "notas NPS dadas"],
                         ["Resumos", "resumos de conversa gerados pela IA"],
                         ["Negociações", "cards do CRM, ativos e encerrados"],

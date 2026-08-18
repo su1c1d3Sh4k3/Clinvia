@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import {
     MessageSquare, ListChecks, Headset, Bot, PanelRight, Paperclip, Archive,
-    HelpCircle, ExternalLink, ArrowRightLeft,
+    HelpCircle, ExternalLink, ArrowRightLeft, StickyNote,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,6 +22,7 @@ const TOPICS = [
     { id: "ia-no-inbox", label: "IA no inbox" },
     { id: "sidebar", label: "Painel lateral" },
     { id: "midias-acoes", label: "Mídias e ações" },
+    { id: "notas", label: "Notas internas" },
     { id: "historico", label: "Histórico" },
     { id: "faq", label: "FAQ" },
 ];
@@ -211,7 +212,28 @@ export function InboxGuide() {
             </TopicSection>
 
             {/* 8 */}
-            <TopicSection id="historico" index={8} icon={Archive} title="Histórico de conversas"
+            <TopicSection id="notas" index={8} icon={StickyNote} title="Notas internas da conversa"
+                subtitle="Recados roxos para a equipe — o cliente nunca vê">
+                <p className="text-sm text-muted-foreground">
+                    O botão roxo <strong className="text-foreground">Adicionar nota</strong> (ícone de nota, ao lado dos
+                    anexos) abre um campo de texto para registrar uma <strong className="text-foreground">nota interna</strong>{" "}
+                    na conversa. A nota aparece na timeline como uma <strong className="text-foreground">bolha roxa</strong>{" "}
+                    com o título "Nota de Conversa - nome - data/hora" — visível no inbox e no modal de conversa para toda a
+                    equipe, mas <strong className="text-foreground">nunca é enviada ao cliente</strong>.
+                </p>
+                <StepByStep steps={[
+                    { title: "Escreva e anexe", description: "Clique no botão roxo, escreva o recado (ex.: 'cliente prefere contato à tarde') e anexe. A nota entra na conversa na hora." },
+                    { title: "Quem lê", description: "Qualquer atendente que abrir a conversa vê a nota no ponto da timeline em que foi criada — ideal para passar contexto no troca-turno." },
+                    { title: "Editar (nunca apagar)", description: "Notas não podem ser excluídas. Ao editar (lápis ao lado da bolha), a nota mostra 'editado de ...' com o início do texto anterior — passe o mouse para ler o texto antigo completo." },
+                ]} />
+                <Callout type="dica" title="Catalogadas no perfil do cliente">
+                    Toda nota também fica registrada no perfil do cliente (página Clientes &gt; nome &gt; aba Histórico &gt;
+                    sub-aba Notas), com autor e data. A IA também pode registrar notas — elas aparecem com o autor "IA".
+                </Callout>
+            </TopicSection>
+
+            {/* 9 */}
+            <TopicSection id="historico" index={9} icon={Archive} title="Histórico de conversas"
                 subtitle="Nada se perde ao resolver">
                 <p className="text-sm text-muted-foreground">
                     Ao resolver uma conversa, as mensagens são <strong className="text-foreground">arquivadas no histórico do
@@ -224,8 +246,8 @@ export function InboxGuide() {
                 </Callout>
             </TopicSection>
 
-            {/* 9 */}
-            <TopicSection id="faq" index={9} icon={HelpCircle} title="Perguntas frequentes">
+            {/* 10 */}
+            <TopicSection id="faq" index={10} icon={HelpCircle} title="Perguntas frequentes">
                 <Accordion type="single" collapsible className="rounded-xl border px-4">
                     {[
                         {

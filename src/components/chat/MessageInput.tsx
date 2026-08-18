@@ -2,7 +2,7 @@ import { useRef, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Send, Paperclip, Smile, Mic, Sparkles, X, StopCircle, Image as ImageIcon, Video, FileText, Zap, ClipboardList, CheckCircle, AtSign, UserCircle, LayoutTemplate } from "lucide-react";
+import { Send, Paperclip, Smile, Mic, Sparkles, X, StopCircle, Image as ImageIcon, Video, FileText, Zap, ClipboardList, CheckCircle, AtSign, UserCircle, LayoutTemplate, StickyNote } from "lucide-react";
 import { cn } from "@/lib/utils";
 import EmojiPicker, { EmojiClickData } from "emoji-picker-react";
 import { QuickMessagesMenu } from "@/components/QuickMessagesMenu";
@@ -71,6 +71,8 @@ interface MessageInputProps {
     onOpenTemplatePicker?: () => void;
     /** Whether to show the template button (Meta instances only) */
     showTemplateButton?: boolean;
+    /** Handler to open the "Adicionar nota" modal (nota interna da conversa) */
+    onAddNote?: () => void;
 }
 
 /**
@@ -111,6 +113,7 @@ export const MessageInput = ({
     isGroup = false,
     onOpenTemplatePicker,
     showTemplateButton = false,
+    onAddNote,
 }: MessageInputProps) => {
 
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -347,7 +350,7 @@ export const MessageInput = ({
                 <div className="flex gap-2 pb-2">
                     <Popover>
                         <PopoverTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-muted/50">
+                            <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-muted/50" title="Anexar arquivo">
                                 <Paperclip className="w-5 h-5 text-muted-foreground" />
                             </Button>
                         </PopoverTrigger>
@@ -388,7 +391,7 @@ export const MessageInput = ({
 
                     <Popover open={isEmojiOpen} onOpenChange={setIsEmojiOpen}>
                         <PopoverTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-muted/50">
+                            <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-muted/50" title="Emojis">
                                 <Smile className="w-5 h-5 text-muted-foreground" />
                             </Button>
                         </PopoverTrigger>
@@ -396,6 +399,19 @@ export const MessageInput = ({
                             <EmojiPicker onEmojiClick={onEmojiClick} searchPlaceholder="Buscar emoji..." width="100%" height={350} previewConfig={{ showPreview: false }} />
                         </PopoverContent>
                     </Popover>
+
+                    {/* Nota de Conversa — interna, sempre visível (todos os inboxes, mobile incluso) */}
+                    {onAddNote && (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-10 w-10 rounded-full bg-purple-600 hover:bg-purple-700 text-white shrink-0 shadow-sm"
+                            onClick={onAddNote}
+                            title="Adicionar nota"
+                        >
+                            <StickyNote className="w-5 h-5 text-white" />
+                        </Button>
+                    )}
                 </div>
 
                 <div className="flex-1 relative bg-white dark:bg-[#2A3942] rounded-2xl border border-transparent focus-within:border-primary/50 transition-colors">
@@ -444,7 +460,7 @@ export const MessageInput = ({
                                 </PopoverContent>
                             </Popover>
                         )}
-                        <Button onClick={onSendClick} disabled={isUploading} size="icon" className="h-11 w-11 rounded-full shrink-0 shadow-sm transition-all duration-200 hover:scale-105 active:scale-95 bg-primary hover:bg-primary/90">
+                        <Button onClick={onSendClick} disabled={isUploading} size="icon" title="Enviar mensagem" className="h-11 w-11 rounded-full shrink-0 shadow-sm transition-all duration-200 hover:scale-105 active:scale-95 bg-primary hover:bg-primary/90">
                             <Send className="w-5 h-5 text-primary-foreground ml-0.5" />
                         </Button>
                     </div>
@@ -472,6 +488,7 @@ export const MessageInput = ({
                             size="icon"
                             className={cn("h-11 w-11 rounded-full transition-all duration-300", isRecording ? "animate-pulse shadow-lg scale-110" : "hover:bg-muted/50")}
                             onClick={isRecording ? handleStopRecording : handleStartRecording}
+                            title={isRecording ? "Parar gravação" : "Gravar áudio"}
                         >
                             {isRecording ? <StopCircle className="w-6 h-6" /> : <Mic className="w-5 h-5 text-muted-foreground" />}
                         </Button>
@@ -480,7 +497,7 @@ export const MessageInput = ({
                         {!isRecording && (
                             <Popover>
                                 <PopoverTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-11 w-11 rounded-full hover:bg-muted/50 transition-colors">
+                                    <Button variant="ghost" size="icon" className="h-11 w-11 rounded-full hover:bg-muted/50 transition-colors" title="Opções de IA">
                                         <Sparkles className="w-5 h-5 text-yellow-500/80" />
                                     </Button>
                                 </PopoverTrigger>

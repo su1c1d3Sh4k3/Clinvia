@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useRef, useDeferredValue } from "react";
+import { useState, useEffect, useRef, useDeferredValue, useMemo } from "react";
 import { useTypingContext } from "@/contexts/TypingContext";
 import { useMessages } from "@/hooks/useMessages";
 import { useSendMessage } from "@/hooks/useSendMessage";
@@ -34,6 +34,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { QuickMessageConfirmationModal } from "@/components/QuickMessageConfirmationModal";
 import { TemplatePickerModal } from "@/components/chat/TemplatePickerModal";
+import { AddNoteModal } from "@/components/chat/AddNoteModal";
+import { useConversationNotes, mergeNotesIntoMessages } from "@/hooks/useConversationNotes";
 import { LayoutTemplate, Clock } from "lucide-react";
 
 // Performance: Limit messages rendered at once
@@ -151,6 +153,14 @@ export const ChatArea = ({
 
   // Core Hooks
   const { messages, isLoading } = useMessages(conversationId);
+
+  // Notas de conversa (internas, roxas) — mescladas na timeline por created_at
+  const { notes, addNote, editNote } = useConversationNotes(conversationId);
+  const messagesWithNotes = useMemo(
+    () => mergeNotesIntoMessages(messages || [], notes),
+    [messages, notes]
+  );
+  const [noteModal, setNoteModal] = useState<{ open: boolean; editing?: any }>({ open: false });
 
   // Jump to a specific message: expand visible range if needed, then scroll
   useEffect(() => {
@@ -864,7 +874,7 @@ export const ChatArea = ({
       />
 
       <MessageList
-        messages={messages || []}
+        messages={messagesWithNotes}
         isLoading={isLoading}
         searchTerm={searchTerm}
         currentMatchIndex={currentMatchIndex}
@@ -886,6 +896,7 @@ export const ChatArea = ({
         isGroup={isGroup}
         conversation={conversation}
         hideEditDelete={isMetaInstance}
+        onEditNote={(note) => setNoteModal({ open: true, editing: note })}
       />
 
       {isWindowClosed ? (
@@ -936,10 +947,33 @@ export const ChatArea = ({
           onSendContact={() => setIsContactPickerOpen(true)}
           showTemplateButton={isMetaInstance}
           onOpenTemplatePicker={() => setIsTemplatePickerOpen(true)}
+          onAddNote={() => setNoteModal({ open: true })}
         />
       )}
 
       {/* Modals */}
+      <AddNoteModal
+        open={noteModal.open}
+        onOpenChange={(open) => setNoteModal((prev) => ({ ...prev, open }))}
+        isEditing={!!noteModal.editing}
+        initialText={noteModal.editing?.body || noteModal.editing?.description || ""}
+        isSaving={addNote.isPending || editNote.isPending}
+        onSave={async (text) => {
+          try {
+            if (noteModal.editing) {
+              await editNote.mutateAsync({ note: { ...noteModal.editing, id: noteModal.editing.note_id || noteModal.editing.id, description: noteModal.editing.body ?? noteModal.editing.description }, text });
+              toast.success("Nota editada");
+            } else {
+              if (!contact?.id) { toast.error("Contato não encontrado"); return; }
+              await addNote.mutateAsync({ text, contactId: contact.id });
+              toast.success("Nota anexada à conversa");
+            }
+            setNoteModal({ open: false });
+          } catch (err: any) {
+            toast.error("Erro ao salvar nota: " + (err?.message || ""));
+          }
+        }}
+      />
       <InstanceSelectorModal open={isInstanceModalOpen} onOpenChange={setIsInstanceModalOpen} onSelect={handleInstanceSelect} />
       <EditMessageModal open={isEditModalOpen} onOpenChange={setIsEditModalOpen} messageBody={editingMessage?.body || ""} onSave={executeEdit} />
       <DeleteMessageModal open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen} onConfirm={executeDelete} />

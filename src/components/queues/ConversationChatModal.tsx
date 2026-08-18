@@ -8,12 +8,12 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { MessageSquare, X, Send, Paperclip, Smile, Sparkles, CheckCircle, Mic, StopCircle, Trash2 } from "lucide-react";
+import { MessageSquare, X, Send, Paperclip, Smile, Sparkles, CheckCircle, Mic, StopCircle, Trash2, StickyNote } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { MessageBubble } from "@/components/MessageBubble";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { useSendMessage } from "@/hooks/useSendMessage";
 import { useMessages } from "@/hooks/useMessages";
@@ -27,6 +27,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { ClientProfileModal } from "@/components/contacts/ClientProfileModal";
+import { NoteBubble } from "@/components/chat/NoteBubble";
+import { AddNoteModal } from "@/components/chat/AddNoteModal";
+import { useConversationNotes, mergeNotesIntoMessages } from "@/hooks/useConversationNotes";
 
 interface ConversationChatModalProps {
     open: boolean;
@@ -135,6 +138,14 @@ export function ConversationChatModal({
     // Same source as the inbox: handles resolved conversations (messages_history JSON),
     // prepends the contact's previous resolved history and subscribes to realtime
     const { messages, isLoading } = useMessages(open ? viewConversationId ?? undefined : undefined);
+
+    // Notas de conversa (internas, roxas) — mescladas na timeline por created_at
+    const { notes, addNote, editNote } = useConversationNotes(open ? viewConversationId : null);
+    const messagesWithNotes = useMemo(
+        () => mergeNotesIntoMessages(messages || [], notes),
+        [messages, notes]
+    );
+    const [noteModal, setNoteModal] = useState<{ open: boolean; editing?: any }>({ open: false });
 
     // Auto-resize textarea
     useEffect(() => {
@@ -436,9 +447,9 @@ export function ConversationChatModal({
                 <ScrollArea ref={scrollContainerRef} className="flex-1 p-4 border rounded-md bg-muted/10">
                     {isLoading ? (
                         <div className="flex justify-center p-4">Carregando mensagens...</div>
-                    ) : messages && messages.length > 0 ? (
+                    ) : messagesWithNotes && messagesWithNotes.length > 0 ? (
                         <div className="space-y-4">
-                            {messages.map((msg) => (
+                            {messagesWithNotes.map((msg: any) => (
                                 <div
                                     key={msg.id}
                                     className={`flex max-w-[80%] ${msg.direction === 'outbound'
@@ -446,10 +457,17 @@ export function ConversationChatModal({
                                         : 'mr-auto justify-start'
                                         }`}
                                 >
-                                    <MessageBubble
-                                        message={msg}
-                                    // searchTerm="" // Modal doesn't have search yet
-                                    />
+                                    {msg._note ? (
+                                        <NoteBubble
+                                            note={msg}
+                                            onEdit={() => setNoteModal({ open: true, editing: msg })}
+                                        />
+                                    ) : (
+                                        <MessageBubble
+                                            message={msg}
+                                        // searchTerm="" // Modal doesn't have search yet
+                                        />
+                                    )}
                                 </div>
                             ))}
                         </div>
@@ -502,13 +520,25 @@ export function ConversationChatModal({
                                     className="hidden"
                                     onChange={handleFileSelect}
                                 />
-                                <Button variant="ghost" size="icon" onClick={() => fileInputRef.current?.click()} disabled={!activeConversationId}>
+                                <Button variant="ghost" size="icon" onClick={() => fileInputRef.current?.click()} disabled={!activeConversationId} title="Anexar arquivo">
                                     <Paperclip className="w-5 h-5" />
+                                </Button>
+
+                                {/* Nota de Conversa — interna, sempre visível */}
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="bg-purple-600 hover:bg-purple-700 text-white rounded-full shrink-0"
+                                    onClick={() => setNoteModal({ open: true })}
+                                    disabled={!viewConversationId}
+                                    title="Adicionar nota"
+                                >
+                                    <StickyNote className="w-5 h-5 text-white" />
                                 </Button>
 
                                 <Popover open={isEmojiOpen} onOpenChange={setIsEmojiOpen}>
                                     <PopoverTrigger asChild>
-                                        <Button variant="ghost" size="icon" disabled={!activeConversationId}>
+                                        <Button variant="ghost" size="icon" disabled={!activeConversationId} title="Emojis">
                                             <Smile className="w-5 h-5" />
                                         </Button>
                                     </PopoverTrigger>
@@ -540,6 +570,7 @@ export function ConversationChatModal({
                                         onClick={handleStartRecording}
                                         disabled={!activeConversationId || isUploading}
                                         className="text-muted-foreground hover:text-foreground"
+                                        title="Gravar áudio"
                                     >
                                         <Mic className="w-5 h-5" />
                                     </Button>
@@ -552,6 +583,7 @@ export function ConversationChatModal({
                                         onClick={() => handleAiAction('generate')}
                                         className="bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0 hover:opacity-90"
                                         disabled={!activeConversationId}
+                                        title="Opções de IA"
                                     >
                                         <Sparkles className="w-5 h-5" />
                                     </Button>
@@ -586,6 +618,7 @@ export function ConversationChatModal({
                                     <Button
                                         onClick={handleSend}
                                         disabled={sendMessageMutation.isPending || isUploading || !activeConversationId}
+                                        title="Enviar mensagem"
                                     >
                                         {isUploading ? "..." : <Send className="w-4 h-4" />}
                                     </Button>
@@ -601,6 +634,31 @@ export function ConversationChatModal({
             open={isProfileOpen}
             onOpenChange={setIsProfileOpen}
             contact={contactRow ?? (contactId ? { id: contactId, push_name: contactName } : null)}
+        />
+
+        <AddNoteModal
+            open={noteModal.open}
+            onOpenChange={(o) => setNoteModal((prev) => ({ ...prev, open: o }))}
+            isEditing={!!noteModal.editing}
+            initialText={noteModal.editing?.body || noteModal.editing?.description || ""}
+            isSaving={addNote.isPending || editNote.isPending}
+            onSave={async (text) => {
+                try {
+                    if (noteModal.editing) {
+                        await editNote.mutateAsync({
+                            note: { ...noteModal.editing, id: noteModal.editing.note_id || noteModal.editing.id, description: noteModal.editing.body ?? noteModal.editing.description },
+                            text,
+                        });
+                        toast.success("Nota editada");
+                    } else {
+                        await addNote.mutateAsync({ text, contactId });
+                        toast.success("Nota anexada à conversa");
+                    }
+                    setNoteModal({ open: false });
+                } catch (err: any) {
+                    toast.error("Erro ao salvar nota: " + (err?.message || ""));
+                }
+            }}
         />
         </>
     );

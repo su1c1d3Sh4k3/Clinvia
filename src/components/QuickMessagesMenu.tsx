@@ -224,7 +224,7 @@ export function QuickMessagesMenu() {
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
-                <Button variant="ghost" size="icon" className="text-yellow-500 hover:text-yellow-600 hover:bg-yellow-100/10">
+                <Button variant="ghost" size="icon" className="text-yellow-500 hover:text-yellow-600 hover:bg-yellow-100/10" title="Mensagens rápidas">
                     <Zap className="w-5 h-5" />
                 </Button>
             </DialogTrigger>

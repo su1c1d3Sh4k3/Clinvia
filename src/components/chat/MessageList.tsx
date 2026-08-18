@@ -12,6 +12,7 @@ import { useGroupMembers } from "@/hooks/useGroupMembers";
 import { ContactCard } from "@/components/chat/ContactCard";
 import { CustomAudioPlayer } from "@/components/chat/CustomAudioPlayer";
 import { FormattedText, parseTemplateBody } from "@/components/chat/FormattedText";
+import { NoteBubble } from "@/components/chat/NoteBubble";
 
 interface MessageListProps {
     messages: any[];
@@ -37,6 +38,8 @@ interface MessageListProps {
     conversation: any;
     /** Conversa em instância Meta Cloud API: oculta Editar/Apagar (não suportado pela API oficial) */
     hideEditDelete?: boolean;
+    /** Abre o modal de edição de uma nota de conversa (itens _note na timeline) */
+    onEditNote?: (note: any) => void;
 }
 
 export const MessageList = ({
@@ -61,7 +64,8 @@ export const MessageList = ({
     profilePic,
     isGroup,
     conversation,
-    hideEditDelete = false
+    hideEditDelete = false,
+    onEditNote
 }: MessageListProps) => {
 
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -253,6 +257,15 @@ export const MessageList = ({
     };
 
     const renderMessage = (msg: any) => {
+        // Nota de Conversa (interna, roxa) — nunca enviada ao cliente
+        if (msg._note) {
+            return (
+                <div key={msg.id} id={`message-${msg.id}`} className="flex gap-2 items-end mb-4 px-4 justify-end">
+                    <NoteBubble note={msg} isMobile={isMobile} onEdit={onEditNote ? () => onEditNote(msg) : undefined} />
+                </div>
+            );
+        }
+
         const isMatch = searchTerm && msg.body?.toLowerCase().includes(searchTerm.toLowerCase());
         const matchIndex = isMatch ? searchMatches.findIndex(m => m.id === msg.id) : -1;
         const isGroupMsg = !!conversation?.group_id;
