@@ -242,6 +242,7 @@ REQUISITOS DO BLOCO GERADO:
 
 async function syncContactTags(
     supabase: any,
+    ownerId: string,
     tagId: string | null,
     addContactIds: string[],
     removeContactIds: string[]
@@ -255,7 +256,10 @@ async function syncContactTags(
             .in("contact_id", removeContactIds);
     }
     if (addContactIds.length > 0) {
-        const payload = addContactIds.map((id) => ({ contact_id: id, tag_id: tagId }));
+        // user_id OBRIGATÓRIO: rodamos com service role, então o trigger
+        // set_contact_tags_user_id não resolve o dono (auth.uid() é null) —
+        // sem user_id a RLS esconde a tag do front (bug campanha 2026-08-17)
+        const payload = addContactIds.map((id) => ({ contact_id: id, tag_id: tagId, user_id: ownerId }));
         const { error } = await supabase
             .from("contact_tags")
             .upsert(payload, { onConflict: "contact_id,tag_id", ignoreDuplicates: true });
@@ -528,7 +532,7 @@ serve(async (req) => {
             await insertCampaignContacts(supabase, campaign.id, ownerId, entries, invalid_rows || []);
 
             // Tag em todos os contatos válidos
-            await syncContactTags(supabase, tag.id, uniqueContactIds, []);
+            await syncContactTags(supabase, ownerId, tag.id, uniqueContactIds, []);
 
             // ai_prompt (não bloqueante)
             const aiPrompt = await generateAiPrompt(supabase, ownerId, {
@@ -716,7 +720,7 @@ serve(async (req) => {
 
                 const toAdd = newIds.filter((id) => !oldIds.includes(id));
                 const toRemove = oldIds.filter((id) => !newSet.has(id) && !keptIds.has(id));
-                await syncContactTags(supabase, campaign.tag_id, toAdd, toRemove);
+                await syncContactTags(supabase, ownerId, campaign.tag_id, toAdd, toRemove);
             }
 
             const { data: updated, error: updErr } = await supabase
