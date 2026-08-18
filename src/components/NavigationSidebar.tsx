@@ -301,7 +301,8 @@ export const NavigationSidebar = () => {
         <div className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col py-3 scrollbar-none">
           {menuStructure
             .filter(item => {
-              if (item.id === "team") return userRole === "admin";
+              if (item.id === "team") return userRole === "admin" || hasAnyAccess("team_members");
+              if (item.id === "campaigns") return userRole === "admin" || hasAnyAccess("campaigns");
               if (item.id === "ia-config") return userRole === "admin" || hasAnyAccess("ia_config");
               return true;
             })

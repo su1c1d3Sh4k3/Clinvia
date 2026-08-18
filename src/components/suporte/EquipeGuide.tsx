@@ -37,7 +37,7 @@ export function EquipeGuide() {
                     <div>
                         <h1 className="text-xl font-bold">Manual de Equipe</h1>
                         <p className="text-sm text-muted-foreground">
-                            Convide sua equipe, escolha papéis e ajuste fino do que cada um pode fazer. Página exclusiva de administradores.
+                            Convide sua equipe, escolha papéis e ajuste fino do que cada um pode fazer. Supervisores com a permissão "Membros da Equipe" também acessam a aba Equipes; a aba Permissões é exclusiva do admin.
                         </p>
                     </div>
                 </div>
@@ -145,9 +145,14 @@ export function EquipeGuide() {
                 <p className="text-sm text-muted-foreground">
                     Na aba <strong className="text-foreground">Permissões</strong>, você define para Supervisores e Agentes
                     o que cada nível pode <strong className="text-foreground">criar, editar e apagar</strong> em cada módulo
-                    (contatos, agendamentos, profissionais, vendas...). Os botões correspondentes simplesmente somem da
-                    interface de quem não tem a permissão.
+                    (contatos, agendamentos, profissionais, vendas, campanhas, automações, empresa, relatórios...). Os botões
+                    correspondentes simplesmente somem da interface de quem não tem a permissão.
                 </p>
+                <Callout type="dica" title="Supervisor com acesso total">
+                    Ligando todas as chaves de Supervisor, ele passa a ter acesso a tudo que o admin tem — inclusive cadastrar
+                    membros da equipe (via "Membros da Equipe"), a aba Automações das Configurações, os dados da Empresa e os
+                    Relatórios. A única exceção é a aba Permissões, que continua exclusiva do admin.
+                </Callout>
                 <Callout type="pratica" title="Configuração comum">
                     Agentes: criar contatos e agendamentos, sem apagar nada. Supervisores: tudo exceto apagar vendas.
                     Apagar é a permissão mais perigosa — dê a poucos.

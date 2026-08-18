@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Users, ShieldCheck, Loader2 } from "lucide-react";
 import { Navigate } from "react-router-dom";
 import { useUserRole } from "@/hooks/useUserRole";
+import { usePermissions } from "@/hooks/usePermissions";
 import { TeamSettings } from "@/components/settings/TeamSettings";
 import { PermissionsSettings } from "@/components/settings/PermissionsSettings";
 import { useUrlTab } from "@/hooks/useUrlTab";
@@ -12,10 +13,12 @@ export default function TeamPage() {
     // isPending (not isLoading): while `user` hydrates the query is disabled and
     // isLoading stays false — redirecting then would bounce admins to "/".
     const { data: userRole, isPending } = useUserRole();
+    const { hasAnyAccess, isReady } = usePermissions();
     const [tab, setTab] = useUrlTab("team");
+    const isAdmin = userRole === "admin";
     useSuporteTour(!isPending);
 
-    if (isPending) {
+    if (isPending || (!isAdmin && !isReady)) {
         return (
             <div className="flex items-center justify-center py-20">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -23,31 +26,38 @@ export default function TeamPage() {
         );
     }
 
-    if (userRole !== "admin") {
+    // Admin sempre acessa; supervisor/agent precisam da permissão de Membros da Equipe
+    if (!isAdmin && !hasAnyAccess("team_members")) {
         return <Navigate to="/" replace />;
     }
+
+    // A aba Permissões continua exclusiva do admin (evita auto-escalação de privilégios)
+    const activeTab = !isAdmin && tab === "permissions" ? "team" : tab;
 
     return (
         // max-w-5xl (64rem) + 20% p/ cada lado = 89.6rem
         <div className="container mx-auto py-4 md:py-10 px-3 md:px-6 max-w-[89.6rem] animate-in fade-in duration-500">
             <h1 className="text-2xl md:text-3xl font-bold mb-4 md:mb-8 text-foreground">Equipe</h1>
 
-            <Tabs value={tab} onValueChange={setTab} className="w-full">
+            <Tabs value={activeTab} onValueChange={setTab} className="w-full">
                 <TabsList data-tour="equipe-tabs" className="flex w-full justify-between mb-4 md:mb-8 h-auto">
                     <TabsTrigger value="team" className="flex-1 flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
                         <Users className="h-4 w-4" />
                         Equipes
                     </TabsTrigger>
-                    <TabsTrigger value="permissions" className="flex-1 flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
-                        <ShieldCheck className="h-4 w-4" />
-                        Permissões
-                    </TabsTrigger>
+                    {isAdmin && (
+                        <TabsTrigger value="permissions" className="flex-1 flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
+                            <ShieldCheck className="h-4 w-4" />
+                            Permissões
+                        </TabsTrigger>
+                    )}
                 </TabsList>
 
                 <TabsContent value="team">
                     <TeamSettings />
                 </TabsContent>
 
+                {isAdmin && (
                 <TabsContent value="permissions">
                     <Card>
                         <CardHeader className="p-4 md:p-6">
@@ -65,6 +75,7 @@ export default function TeamPage() {
                         </CardContent>
                     </Card>
                 </TabsContent>
+                )}
             </Tabs>
         </div>
     );

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useReportData, calcEvolution } from "@/hooks/useReportData";
 
 import { useUserRole } from "@/hooks/useUserRole";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,12 +55,13 @@ export default function BusinessReports() {
     const navigate = useNavigate();
 
     const { data: userRole } = useUserRole();
-    // Admin-only guard
+    const { hasAnyAccess, isReady } = usePermissions();
+    // Admin sempre acessa; demais precisam da permissão 'reports'
     useEffect(() => {
-        if (userRole && userRole !== "admin") {
+        if (userRole && userRole !== "admin" && isReady && !hasAnyAccess("reports")) {
             navigate("/");
         }
-    }, [userRole, navigate]);
+    }, [userRole, isReady, hasAnyAccess, navigate]);
 
     // Main period query
     const startISO = startDate ? `${startDate}T00:00:00` : null;

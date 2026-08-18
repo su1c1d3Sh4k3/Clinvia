@@ -61,7 +61,7 @@ export function ConfiguracoesGuide() {
                     <strong className="text-foreground">Perfil</strong>, <strong className="text-foreground">Empresa</strong>,{" "}
                     <strong className="text-foreground">Segurança</strong> e <strong className="text-foreground">Sistema</strong>{" "}
                     cuidam da sua conta e preferências. <strong className="text-foreground">Tags</strong> organiza os
-                    contatos, e <strong className="text-foreground">Automações</strong> (só admin) define o número que envia
+                    contatos, e <strong className="text-foreground">Automações</strong> (admin ou permissão liberada) define o número que envia
                     as mensagens automáticas da clínica.
                 </p>
                 <div className="flex flex-wrap gap-2">
@@ -130,7 +130,7 @@ export function ConfiguracoesGuide() {
             </TopicSection>
 
             {/* 6 */}
-            <TopicSection id="automacoes" index={6} icon={Zap} title="Automações (admin)"
+            <TopicSection id="automacoes" index={6} icon={Zap} title="Automações"
                 subtitle="Qual número envia as mensagens automáticas">
                 <p className="text-sm text-muted-foreground">
                     Aqui o admin escolhe a <strong className="text-foreground">instância primária de disparos</strong> — o
@@ -150,7 +150,7 @@ export function ConfiguracoesGuide() {
                     {[
                         {
                             q: "Não vejo a aba Automações.",
-                            a: "Ela é exclusiva de administradores. Supervisores e agentes veem as demais abas normalmente.",
+                            a: "Ela aparece para administradores e para quem tem a permissão 'Automações' liberada em Equipe > Permissões. Sem a permissão, as demais abas seguem normais.",
                         },
                         {
                             q: "Ativei as notificações mas nada chega.",

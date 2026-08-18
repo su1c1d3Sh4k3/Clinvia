@@ -4,6 +4,7 @@ import { startSuporteTour } from "@/lib/suporteTours";
 import { Megaphone, Plus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useUserRole } from "@/hooks/useUserRole";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useCampaigns, Campaign } from "@/hooks/useCampaigns";
 import { useCampaignDashboardStats } from "@/hooks/useCampaignDashboard";
 import { CampaignWizard } from "@/components/campaigns/CampaignWizard";
@@ -13,6 +14,7 @@ import { MetaQualityPanel } from "@/components/campaigns/MetaQualityPanel";
 export default function Campaigns() {
     const navigate = useNavigate();
     const { data: userRole } = useUserRole();
+    const { hasAnyAccess, canCreate, isReady } = usePermissions();
     const { data: campaigns, isLoading } = useCampaigns();
     const { data: stats } = useCampaignDashboardStats({ mode: "all" });
     const [wizardOpen, setWizardOpen] = useState(false);
@@ -32,12 +34,12 @@ export default function Campaigns() {
         return () => clearTimeout(t);
     }, [tourId, isLoading, setSearchParams]);
 
-    // Agentes não acessam campanhas
+    // Acesso via matriz de permissões (admin sempre; supervisor liberado por padrão)
     useEffect(() => {
-        if (userRole === "agent") {
+        if (userRole !== "admin" && isReady && !hasAnyAccess("campaigns")) {
             navigate("/", { replace: true });
         }
-    }, [userRole, navigate]);
+    }, [userRole, isReady, hasAnyAccess, navigate]);
 
     const openCreate = () => {
         setEditing(null);
@@ -68,9 +70,11 @@ export default function Campaigns() {
                         Disparos em massa de templates Meta com atendimento por IA
                     </p>
                 </div>
-                <Button onClick={openCreate} data-tour="new-campaign">
-                    <Plus className="w-4 h-4 mr-1.5" /> Nova campanha
-                </Button>
+                {(userRole === "admin" || canCreate("campaigns")) && (
+                    <Button onClick={openCreate} data-tour="new-campaign">
+                        <Plus className="w-4 h-4 mr-1.5" /> Nova campanha
+                    </Button>
+                )}
             </div>
 
             <div data-tour="meta-quality">
@@ -91,9 +95,11 @@ export default function Campaigns() {
                             disparo em massa via WhatsApp API (Meta).
                         </p>
                     </div>
-                    <Button onClick={openCreate}>
-                        <Plus className="w-4 h-4 mr-1.5" /> Criar campanha
-                    </Button>
+                    {(userRole === "admin" || canCreate("campaigns")) && (
+                        <Button onClick={openCreate}>
+                            <Plus className="w-4 h-4 mr-1.5" /> Criar campanha
+                        </Button>
+                    )}
                 </div>
             ) : (
                 <div data-tour="campaign-list" className="space-y-3">

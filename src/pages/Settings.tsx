@@ -15,6 +15,7 @@ import { TagsSettings } from "@/components/settings/TagsSettings";
 import { FaInstagram } from "react-icons/fa";
 import { Switch } from "@/components/ui/switch";
 import { useUserRole } from "@/hooks/useUserRole";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useCurrentTeamMember } from "@/hooks/useStaff";
 import { useInstallPWA } from "@/hooks/useInstallPWA";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
@@ -39,6 +40,9 @@ export default function Settings() {
     const queryClient = useQueryClient();
     const { user } = useAuth();
     const { data: userRole } = useUserRole();
+    const { canEdit, hasAnyAccess } = usePermissions();
+    const canEditCompany = userRole === 'admin' || canEdit('company_settings');
+    const canSeeAutomations = userRole === 'admin' || hasAnyAccess('automations');
     const { data: currentTeamMember } = useCurrentTeamMember();
     const [tab, setTab] = useUrlTab("profile");
     useSuporteTour();
@@ -183,7 +187,7 @@ export default function Settings() {
     };
 
     const updateCompany = async () => {
-        if (userRole !== 'admin') {
+        if (!canEditCompany) {
             toast.error("Você não tem permissão para alterar dados da empresa.");
             return;
         }
@@ -520,7 +524,7 @@ export default function Settings() {
                         <TagIcon className="h-4 w-4" />
                         <span className="hidden md:inline">Tags</span>
                     </TabsTrigger>
-                    {userRole === 'admin' && (
+                    {canSeeAutomations && (
                         <TabsTrigger value="automations" className="flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
                             <Zap className="h-4 w-4" />
                             <span className="hidden md:inline">Automações</span>
@@ -679,12 +683,12 @@ export default function Settings() {
                                     value={companyName}
                                     onChange={(e) => setCompanyName(e.target.value)}
                                     placeholder="Nome da sua empresa"
-                                    disabled={userRole !== 'admin'}
+                                    disabled={!canEditCompany}
                                 />
                             </div>
                         </CardContent>
                         <CardFooter>
-                            {userRole === 'admin' && (
+                            {canEditCompany && (
                                 <Button onClick={updateCompany} disabled={loading} className="ml-auto">
                                     {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                     Salvar Alterações
@@ -1097,8 +1101,8 @@ export default function Settings() {
                     <TagsSettings />
                 </TabsContent>
 
-                {/* Automations Tab — admin only */}
-                {userRole === 'admin' && (
+                {/* Automations Tab — admin ou permissão 'automations' */}
+                {canSeeAutomations && (
                     <TabsContent value="automations">
                         <AutomationSettings />
                     </TabsContent>

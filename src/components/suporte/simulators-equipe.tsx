@@ -27,19 +27,19 @@ const ROLES: Role[] = [
             { area: "Inbox, CRM, Agenda, Clientes", access: "sim", note: "Acesso total" },
             { area: "Dashboard (todas as abas)", access: "sim", note: "Inclui Vendas/financeiro" },
             { area: "IA, Conexões, Campanhas", access: "sim", note: "Configura tudo" },
-            { area: "Equipe e Permissões", access: "sim", note: "Só admin convida e define permissões" },
+            { area: "Equipe e Permissões", access: "sim", note: "Só admin define permissões; convidar pode ser delegado" },
         ],
     },
     {
         key: "supervisor",
         label: "Supervisor",
         icon: Eye,
-        summary: "O gerente: quase tudo do admin, exceto gerenciar a equipe. O financeiro depende de permissão.",
+        summary: "O gerente: com todas as permissões ligadas, tem acesso a tudo que o admin tem — exceto a aba Permissões.",
         rows: [
             { area: "Inbox, CRM, Agenda, Clientes", access: "sim", note: "Acesso total (criar/editar conforme permissões)" },
             { area: "Dashboard (todas as abas)", access: "depende", note: "Vendas só com acesso financeiro liberado" },
             { area: "IA, Conexões, Campanhas", access: "sim", note: "Pode configurar" },
-            { area: "Equipe e Permissões", access: "nao", note: "Página exclusiva de admin" },
+            { area: "Equipe e Permissões", access: "depende", note: "Aba Equipes com a permissão 'Membros da Equipe'; aba Permissões é só do admin" },
         ],
     },
     {
@@ -50,8 +50,8 @@ const ROLES: Role[] = [
         rows: [
             { area: "Inbox, CRM, Agenda, Clientes", access: "depende", note: "Usa no dia a dia; no Inbox e CRM vê só as conexões/filas do seu escopo; criar/editar/apagar conforme permissões finas" },
             { area: "Dashboard", access: "depende", note: "Só a aba CRM (números limitados ao escopo dele)" },
-            { area: "IA, Conexões, Campanhas", access: "nao", note: "Não configura canais nem IA" },
-            { area: "Equipe e Permissões", access: "nao", note: "Página exclusiva de admin" },
+            { area: "IA, Conexões, Campanhas", access: "nao", note: "Sem acesso por padrão (liberável em Permissões)" },
+            { area: "Equipe e Permissões", access: "nao", note: "Sem acesso por padrão" },
         ],
     },
 ];

@@ -379,11 +379,11 @@ export const TeamSettings = () => {
                                     <SelectTrigger><SelectValue /></SelectTrigger>
                                     <SelectContent position="popper">
                                         <SelectItem value="agent">Atendente</SelectItem>
-                                        {userRole === "admin" && <SelectItem value="supervisor">Supervisor</SelectItem>}
+                                        {userRole !== "agent" && <SelectItem value="supervisor">Supervisor</SelectItem>}
                                     </SelectContent>
                                 </Select>
                             </div>
-                            {userRole === "admin" && (
+                            {userRole !== "agent" && (
                                 <div className="space-y-2">
                                     <Label htmlFor="create-commission">Comissão (%)</Label>
                                     <Input id="create-commission" type="number" min={0} max={100} value={formData.commission} onChange={(e) => setFormData({ ...formData, commission: Number(e.target.value) || 0 })} placeholder="0" />
@@ -455,7 +455,7 @@ export const TeamSettings = () => {
                                     </TableCell>
                                     <TableCell className="text-right py-2 md:py-4">
                                         <div className="flex justify-end gap-1">
-                                            {canEdit('team_members') && (
+                                            {canEdit('team_members') && (userRole === "admin" || member.role !== "admin") && (
                                                 <Button variant="ghost" size="icon" className="h-7 w-7 md:h-8 md:w-8" onClick={() => {
                                                     setSelectedMember(member);
                                                     setFormData({ name: member.name, email: member.email, phone: member.phone || "", role: member.role, password: "", commission: member.commission || 0 });
@@ -498,15 +498,15 @@ export const TeamSettings = () => {
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="edit-role">Função</Label>
-                            <Select value={formData.role} onValueChange={(value) => setFormData({ ...formData, role: value })} disabled={userRole === "supervisor"}>
+                            <Select value={formData.role} onValueChange={(value) => setFormData({ ...formData, role: value })} disabled={userRole === "agent"}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent position="popper">
                                     <SelectItem value="agent">Atendente</SelectItem>
-                                    {userRole === "admin" && <SelectItem value="supervisor">Supervisor</SelectItem>}
+                                    {userRole !== "agent" && <SelectItem value="supervisor">Supervisor</SelectItem>}
                                 </SelectContent>
                             </Select>
                         </div>
-                        {userRole === "admin" && (
+                        {userRole !== "agent" && (
                             <div className="space-y-2">
                                 <Label htmlFor="commission">Comissão (%)</Label>
                                 <Input id="commission" type="number" min={0} max={100} value={formData.commission} onChange={(e) => setFormData({ ...formData, commission: Number(e.target.value) || 0 })} placeholder="0" />

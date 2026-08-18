@@ -20,7 +20,11 @@ export type PermissionFeature =
     | "followup"
     | "connections"
     | "ia_config"
-    | "quick_messages";
+    | "quick_messages"
+    | "campaigns"
+    | "automations"
+    | "company_settings"
+    | "reports";
 
 export interface FeatureDef {
     key: PermissionFeature;
@@ -44,6 +48,10 @@ export const PERMISSION_FEATURES: FeatureDef[] = [
     { key: "connections", label: "Conexões", icon: "Wifi" },
     { key: "ia_config", label: "Configuração da IA", icon: "Bot" },
     { key: "quick_messages", label: "Mensagens Rápidas", icon: "Zap" },
+    { key: "campaigns", label: "Campanhas", icon: "Megaphone" },
+    { key: "automations", label: "Automações", icon: "Zap" },
+    { key: "company_settings", label: "Empresa", icon: "Building2" },
+    { key: "reports", label: "Relatórios", icon: "BarChart3" },
 ];
 
 // ─── Default permissions (mirrors current hardcoded behavior) ─────────────────
@@ -73,6 +81,12 @@ export const DEFAULT_PERMISSIONS: Record<"supervisor" | "agent", DefaultPermissi
         connections:       { can_create: false, can_edit: false, can_delete: false },
         ia_config:         { can_create: true,  can_edit: true,  can_delete: false },
         quick_messages:    { can_create: true,  can_edit: true,  can_delete: true  },
+        // Campanhas já eram acessíveis a supervisores (só agents eram bloqueados)
+        campaigns:         { can_create: true,  can_edit: true,  can_delete: true  },
+        // Módulos historicamente admin-only: liberar via matriz de permissões
+        automations:       { can_create: false, can_edit: false, can_delete: false },
+        company_settings:  { can_create: false, can_edit: false, can_delete: false },
+        reports:           { can_create: false, can_edit: false, can_delete: false },
     },
     agent: {
         contacts:          { can_create: true,  can_edit: true,  can_delete: true  },
@@ -90,6 +104,10 @@ export const DEFAULT_PERMISSIONS: Record<"supervisor" | "agent", DefaultPermissi
         connections:       { can_create: false, can_edit: false, can_delete: false },
         ia_config:         { can_create: false, can_edit: false, can_delete: false },
         quick_messages:    { can_create: true,  can_edit: true,  can_delete: true  },
+        campaigns:         { can_create: false, can_edit: false, can_delete: false },
+        automations:       { can_create: false, can_edit: false, can_delete: false },
+        company_settings:  { can_create: false, can_edit: false, can_delete: false },
+        reports:           { can_create: false, can_edit: false, can_delete: false },
     },
 };
 

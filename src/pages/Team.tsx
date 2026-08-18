@@ -337,13 +337,13 @@ export default function Team() {
                                     </SelectTrigger>
                                     <SelectContent position="popper">
                                         <SelectItem value="agent">Atendente</SelectItem>
-                                        {userRole === "admin" && (
+                                        {userRole !== "agent" && (
                                             <SelectItem value="supervisor">Supervisor</SelectItem>
                                         )}
                                     </SelectContent>
                                 </Select>
                             </div>
-                            {userRole === "admin" && (
+                            {userRole !== "agent" && (
                                 <div className="space-y-2">
                                     <Label htmlFor="create-commission">Comissão (%)</Label>
                                     <Input
@@ -395,7 +395,7 @@ export default function Team() {
                                     <TableCell className="hidden sm:table-cell text-sm py-2 md:py-4">{member.phone || "-"}</TableCell>
                                     <TableCell className="text-right py-2 md:py-4">
                                         <div className="flex justify-end gap-1">
-                                            {canEdit('team_members') && (
+                                            {canEdit('team_members') && (userRole === "admin" || member.role !== "admin") && (
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
@@ -469,20 +469,20 @@ export default function Team() {
                             <Select
                                 value={formData.role}
                                 onValueChange={(value) => setFormData({ ...formData, role: value })}
-                                disabled={userRole === "supervisor"}
+                                disabled={userRole === "agent"}
                             >
                                 <SelectTrigger>
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent position="popper">
                                     <SelectItem value="agent">Atendente</SelectItem>
-                                    {userRole === "admin" && (
+                                    {userRole !== "agent" && (
                                         <SelectItem value="supervisor">Supervisor</SelectItem>
                                     )}
                                 </SelectContent>
                             </Select>
                         </div>
-                        {userRole === "admin" && (
+                        {userRole !== "agent" && (
                             <div className="space-y-2">
                                 <Label htmlFor="commission">Comissão (%)</Label>
                                 <Input

@@ -15,6 +15,8 @@ import { cn, formatCurrency } from "@/lib/utils";
 import { Campaign, useCampaignMutations, useInstanceNames } from "@/hooks/useCampaigns";
 import { CampaignStatsRow } from "@/hooks/useCampaignDashboard";
 import { useUsdBrlRate } from "@/hooks/useUsdBrlRate";
+import { useUserRole } from "@/hooks/useUserRole";
+import { usePermissions } from "@/hooks/usePermissions";
 import { CampaignContactsTable } from "./CampaignContactsTable";
 
 export const COST_PER_MSG_USD = 0.0625;
@@ -111,6 +113,12 @@ export function CampaignCard({ campaign, stats, onEdit, onResend }: CampaignCard
     const instanceName = campaign.instance_id ? instanceNames?.get(campaign.instance_id) : null;
     const { deleteCampaign, regeneratePrompt, syncTemplates } = useCampaignMutations();
     const { data: rateData } = useUsdBrlRate();
+    const { data: userRole } = useUserRole();
+    const { canCreate, canEdit, canDelete } = usePermissions();
+    const isAdmin = userRole === "admin";
+    const mayCreate = isAdmin || canCreate("campaigns");
+    const mayEdit = isAdmin || canEdit("campaigns");
+    const mayDelete = isAdmin || canDelete("campaigns");
 
     const statusMeta = CAMPAIGN_STATUS[campaign.status] || CAMPAIGN_STATUS.scheduled;
     const isUazapi = campaign.template_mode === "none";
@@ -218,7 +226,7 @@ export function CampaignCard({ campaign, stats, onEdit, onResend }: CampaignCard
                         <span className="text-xs text-muted-foreground w-9 text-right">{sendPct}%</span>
                     </div>
                 </div>
-                {RESENDABLE_STATUSES.includes(campaign.status) && onResend && (
+                {RESENDABLE_STATUSES.includes(campaign.status) && onResend && mayCreate && (
                     <TooltipProvider>
                         <Tooltip>
                             <TooltipTrigger asChild>
@@ -326,7 +334,7 @@ export function CampaignCard({ campaign, stats, onEdit, onResend }: CampaignCard
 
                     {/* Ações */}
                     <div className="flex items-center gap-2 flex-wrap">
-                        {editable && (
+                        {editable && mayEdit && (
                             <Button size="sm" variant="outline" onClick={() => onEdit(campaign)}>
                                 <Pencil className="w-3.5 h-3.5 mr-1.5" /> Editar
                             </Button>
@@ -345,7 +353,7 @@ export function CampaignCard({ campaign, stats, onEdit, onResend }: CampaignCard
                             )}
                             Regenerar prompt IA
                         </Button>
-                        {!["dispatching", "dispatched"].includes(campaign.status) && (
+                        {!["dispatching", "dispatched"].includes(campaign.status) && mayDelete && (
                             <Button
                                 size="sm"
                                 variant="outline"
