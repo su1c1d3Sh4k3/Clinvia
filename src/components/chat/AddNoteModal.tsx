@@ -43,7 +43,7 @@ export function AddNoteModal({ open, onOpenChange, onSave, initialText = "", isE
             <DialogContent className="w-[95vw] sm:w-full sm:max-w-md rounded-lg">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
-                        <StickyNote className="w-5 h-5 text-purple-600" />
+                        <StickyNote className="w-5 h-5 text-[#6d5f8d]" />
                         {isEditing ? "Editar nota" : "Adicionar nota"}
                     </DialogTitle>
                     <DialogDescription>
@@ -65,7 +65,7 @@ export function AddNoteModal({ open, onOpenChange, onSave, initialText = "", isE
                     <Button
                         onClick={handleSave}
                         disabled={!text.trim() || isSaving}
-                        className="bg-purple-600 hover:bg-purple-700 text-white"
+                        className="bg-[#6d5f8d] hover:bg-[#5e5279] text-white"
                     >
                         {isSaving ? "Salvando..." : isEditing ? "Salvar edição" : "Anexar nota"}
                     </Button>

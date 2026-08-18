@@ -400,18 +400,6 @@ export const MessageInput = ({
                         </PopoverContent>
                     </Popover>
 
-                    {/* Nota de Conversa — interna, sempre visível (todos os inboxes, mobile incluso) */}
-                    {onAddNote && (
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-10 w-10 rounded-full bg-purple-600 hover:bg-purple-700 text-white shrink-0 shadow-sm"
-                            onClick={onAddNote}
-                            title="Adicionar nota"
-                        >
-                            <StickyNote className="w-5 h-5 text-white" />
-                        </Button>
-                    )}
                 </div>
 
                 <div className="flex-1 relative bg-white dark:bg-[#2A3942] rounded-2xl border border-transparent focus-within:border-primary/50 transition-colors">
@@ -431,6 +419,21 @@ export const MessageInput = ({
                         rows={1}
                     />
                 </div>
+
+                {/* Nota de Conversa — interna, sempre visível, ao lado das mensagens rápidas */}
+                {onAddNote && (
+                    <div className="pb-1">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-11 w-11 rounded-full hover:bg-muted/50 transition-colors shrink-0"
+                            onClick={onAddNote}
+                            title="Adicionar nota"
+                        >
+                            <StickyNote className="w-5 h-5 text-[#6d5f8d]" />
+                        </Button>
+                    </div>
+                )}
 
                 {message.trim() || selectedFile ? (
                     <div className="flex items-center gap-2">

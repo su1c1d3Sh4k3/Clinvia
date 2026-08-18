@@ -35,14 +35,14 @@ export const NoteBubble = ({ note, onEdit, isMobile = false }: NoteBubbleProps) 
                 <Button
                     variant="ghost"
                     size="icon"
-                    className="h-7 w-7 self-center shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-purple-600 hover:text-purple-700"
+                    className="h-7 w-7 self-center shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-[#6d5f8d] hover:text-[#5e5279]"
                     onClick={onEdit}
                     title="Editar nota"
                 >
                     <Pencil className="w-3.5 h-3.5" />
                 </Button>
             )}
-            <div className="flex flex-col gap-0 rounded-lg p-3 overflow-hidden min-w-0 break-words shadow-sm bg-purple-600 text-white">
+            <div className="flex flex-col gap-0 rounded-lg p-3 overflow-hidden min-w-0 break-words shadow-sm bg-[#6d5f8d] text-white">
                 <p className="text-xs font-bold mb-1 flex items-center gap-1.5">
                     <StickyNote className="w-3.5 h-3.5 shrink-0" />
                     {note.title}

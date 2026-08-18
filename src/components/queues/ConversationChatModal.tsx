@@ -528,12 +528,12 @@ export function ConversationChatModal({
                                 <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="bg-purple-600 hover:bg-purple-700 text-white rounded-full shrink-0"
+                                    className="shrink-0"
                                     onClick={() => setNoteModal({ open: true })}
                                     disabled={!viewConversationId}
                                     title="Adicionar nota"
                                 >
-                                    <StickyNote className="w-5 h-5 text-white" />
+                                    <StickyNote className="w-5 h-5 text-[#6d5f8d]" />
                                 </Button>
 
                                 <Popover open={isEmojiOpen} onOpenChange={setIsEmojiOpen}>
