@@ -531,8 +531,8 @@ serve(async (req) => {
             // campaign_contacts (válidos com vars + inválidos)
             await insertCampaignContacts(supabase, campaign.id, ownerId, entries, invalid_rows || []);
 
-            // Tag em todos os contatos válidos
-            await syncContactTags(supabase, ownerId, tag.id, uniqueContactIds, []);
+            // Tag NÃO é aplicada na criação — USER RULE 2026-08-18: a tag é
+            // atribuída aos contatos 1h antes do disparo (campaign_takeover_sweep)
 
             // ai_prompt (não bloqueante)
             const aiPrompt = await generateAiPrompt(supabase, ownerId, {
@@ -718,9 +718,13 @@ serve(async (req) => {
                     (body.invalid_rows as any[]) || []
                 );
 
-                const toAdd = newIds.filter((id) => !oldIds.includes(id));
-                const toRemove = oldIds.filter((id) => !newSet.has(id) && !keptIds.has(id));
-                await syncContactTags(supabase, ownerId, campaign.tag_id, toAdd, toRemove);
+                // Tags só existem após o T-1h (campaign_takeover_sweep); antes
+                // disso não há vínculo para sincronizar — USER RULE 2026-08-18
+                if (campaign.takeover_processed) {
+                    const toAdd = newIds.filter((id) => !oldIds.includes(id));
+                    const toRemove = oldIds.filter((id) => !newSet.has(id) && !keptIds.has(id));
+                    await syncContactTags(supabase, ownerId, campaign.tag_id, toAdd, toRemove);
+                }
             }
 
             const { data: updated, error: updErr } = await supabase

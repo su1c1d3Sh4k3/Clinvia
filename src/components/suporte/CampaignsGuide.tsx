@@ -248,7 +248,7 @@ export function CampaignsGuide() {
                     },
                     {
                         title: "Tag automática",
-                        description: "Cada contato que recebeu ganha uma etiqueta com o nome da campanha — útil para montar públicos futuros e para o aviso de 7 dias.",
+                        description: "1 hora antes do disparo, os contatos da audiência ganham uma etiqueta com o nome da campanha — útil para montar públicos futuros e para o aviso de 7 dias. Cada contato tem no máximo uma tag de campanha por conexão: se ele entra em outra campanha da mesma conexão, a tag antiga sai; quando a campanha encerra, a tag é removida de todos.",
                     },
                 ]} />
             </TopicSection>

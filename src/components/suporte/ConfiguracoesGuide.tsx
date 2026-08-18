@@ -120,7 +120,8 @@ export function ConfiguracoesGuide() {
                     Crie e gerencie as <strong className="text-foreground">tags</strong> que você aplica aos contatos
                     (ex.: "VIP", "Convênio X"). Elas aparecem no perfil do cliente e servem de filtro. As{" "}
                     <strong className="text-foreground">campanhas criam tags automaticamente</strong> com o nome da
-                    campanha em cada contato que recebeu o disparo — é assim que o sistema avisa quando você tenta
+                    campanha (aplicadas 1h antes do disparo; no máximo uma tag de campanha por conexão, removida
+                    quando a campanha encerra) — é assim que o sistema avisa quando você tenta
                     disparar de novo para quem já recebeu campanha nos últimos 7 dias.
                 </p>
                 <Callout type="evite" title="Não use tag para o que já é automático">
