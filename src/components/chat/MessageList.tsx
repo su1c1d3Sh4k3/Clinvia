@@ -280,6 +280,17 @@ export const MessageList = ({
         }
         const senderPic = msg.sender_profile_pic_url || (isGroupMsg ? undefined : profilePic);
 
+        // Remetente de mensagens outbound: SEMPRE exibido (user rule), mesmo com
+        // a assinatura de WhatsApp desligada. Fallbacks: coluna sender_name →
+        // prefixo de assinatura "*Nome:*\n" no corpo/caption (retroativo) → IA.
+        // Mensagens otimistas (ainda sem resposta do servidor) não mostram "IA".
+        const bodySignature = typeof msg.body === "string" ? msg.body.match(/^\*([^*]+):\*\n/) : null;
+        const captionSignature = typeof (msg as any).caption === "string" ? (msg as any).caption.match(/^\*([^*]+):\*\n/) : null;
+        const outboundSenderName = msg.direction === "outbound"
+            ? (msg.sender_name || bodySignature?.[1] || captionSignature?.[1]
+                || ((msg as any)._optimistic || (msg as any).status === "sending" ? null : "IA"))
+            : null;
+
         const evolutionId = (msg as any).evolution_id as string | undefined;
         const reactionEmojis = evolutionId ? (reactionMap.get(evolutionId) ?? []) : [];
 
@@ -326,12 +337,13 @@ export const MessageList = ({
                             msg.message_type !== 'sticker' && (msg.direction === "outbound" ? "bg-[#DCF7C5] text-gray-800 dark:bg-[#044740] dark:text-white" : "bg-white dark:bg-[hsl(var(--chat-customer))] text-gray-800 dark:text-foreground")
                         )}>
                             {isGroup && msg.direction === 'inbound' && <p className="text-xs font-bold mb-1 text-primary-foreground/80">{senderName}</p>}
+                            {outboundSenderName && <p className="text-xs font-bold mb-1 text-emerald-700 dark:text-emerald-300">{outboundSenderName}</p>}
                             {(msg as any).quoted_body && <QuotedMessage quotedBody={(msg as any).quoted_body} quotedSender={(msg as any).quoted_sender} isOutbound={msg.direction === "outbound"} />}
 
                             {msg.message_type === 'image' && msg.media_url && <LazyMedia type="image" src={msg.media_url} alt="Imagem" />}
                             {msg.message_type === 'image' && !!((msg as any).caption || msg.body) && (
                                 <p className="text-sm break-words [overflow-wrap:anywhere] whitespace-pre-wrap mt-1 px-1">
-                                    <HighlightText text={(msg as any).caption || msg.body || ''} highlight={searchTerm} />
+                                    <HighlightText text={cleanMessageBody((msg as any).caption || msg.body || '')} highlight={searchTerm} />
                                 </p>
                             )}
                             {msg.message_type === 'audio' && msg.media_url && (
@@ -347,7 +359,7 @@ export const MessageList = ({
                             {msg.message_type === 'video' && msg.media_url && <LazyMedia type="video" src={msg.media_url} />}
                             {msg.message_type === 'video' && !!((msg as any).caption || msg.body) && (
                                 <p className="text-sm break-words [overflow-wrap:anywhere] whitespace-pre-wrap mt-1 px-1">
-                                    <HighlightText text={(msg as any).caption || msg.body || ''} highlight={searchTerm} />
+                                    <HighlightText text={cleanMessageBody((msg as any).caption || msg.body || '')} highlight={searchTerm} />
                                 </p>
                             )}
                             {/* Sticker Rendering - no background */}

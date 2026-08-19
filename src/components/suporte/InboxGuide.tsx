@@ -287,6 +287,14 @@ export function InboxGuide() {
                             a: "Ele é um atendente com escopo de visão restrito: só aparece se a fila escolhida E a conexão da conversa estiverem liberadas para ele. O admin ajusta isso na página Equipe, ao editar o membro. Admins e supervisores aparecem sempre.",
                         },
                         {
+                            q: "Quem enviou cada mensagem? E se a assinatura estiver desligada?",
+                            a: "Toda mensagem enviada mostra o nome de quem a enviou acima do balão verde (ou 'IA' quando foi a assistente/automação). Isso independe da opção 'Assinar mensagens' das Configurações: ela controla apenas se o nome vai junto no texto que o CLIENTE recebe no WhatsApp — no painel, o remetente aparece sempre.",
+                        },
+                        {
+                            q: "O modal de conversa (janelinha) mostra tudo que o inbox mostra?",
+                            a: "Sim — mesma timeline: mensagens, notas roxas, transferências (pílula azul) e o remetente de cada envio. Abaixo do nome do contato ele mostra o atendente responsável e a fila da conversa, atualizados em tempo real quando há transferência.",
+                        },
+                        {
                             q: "Cliente escreveu no Instagram e no WhatsApp. São duas conversas?",
                             a: "Sim, uma por canal — mas você pode vincular o contato do Instagram ao do WhatsApp (página Clientes), e o sistema passa a tratá-los como a mesma pessoa.",
                         },

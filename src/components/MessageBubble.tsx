@@ -84,10 +84,18 @@ export function MessageBubble({
         <FormattedText text={text} highlight={highlight} />
     );
 
-    const cleanMessageBody = (body: string) => {
-        if (!body) return "";
-        return body;
-    };
+    // Mesma regra do inbox (MessageList): o prefixo de assinatura "*Nome:*\n"
+    // sai do corpo e o remetente vira label acima da bolha
+    const cleanMessageBody = (body: string) => body ? body.replace(/^\*[^*]+:\*\n/, "") : "";
+
+    // Remetente de mensagens outbound: SEMPRE exibido (user rule) — coluna
+    // sender_name → prefixo de assinatura no corpo/caption (retroativo) → IA
+    const bodySignature = typeof msg.body === "string" ? msg.body.match(/^\*([^*]+):\*\n/) : null;
+    const captionSignature = typeof (msg as any).caption === "string" ? (msg as any).caption.match(/^\*([^*]+):\*\n/) : null;
+    const outboundSenderName = msg.direction === "outbound"
+        ? (msg.sender_name || bodySignature?.[1] || captionSignature?.[1]
+            || ((msg as any)._optimistic || (msg as any).status === "sending" ? null : "IA"))
+        : null;
 
     return (
         <div
@@ -104,6 +112,13 @@ export function MessageBubble({
             {isGroup && msg.direction === 'inbound' && msg.sender_name && (
                 <p className="text-xs font-bold mb-1 text-primary-foreground/80">
                     {msg.sender_name}
+                </p>
+            )}
+
+            {/* Remetente (outbound) — sempre visível, mesmo sem assinatura no WhatsApp */}
+            {outboundSenderName && (
+                <p className="text-xs font-bold mb-1 text-emerald-700 dark:text-emerald-300">
+                    {outboundSenderName}
                 </p>
             )}
 

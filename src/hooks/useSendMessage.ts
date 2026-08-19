@@ -57,9 +57,12 @@ export const useSendMessage = () => {
           quoted_body: quotedBody || null,
           quoted_sender: quotedSender || null,
           is_deleted: false,
+          // Nome real vem do servidor (messages.sender_name); enquanto isso o
+          // front esconde o label via flag _optimistic (evita mostrar "IA")
           sender_name: null,
           sender_jid: null,
-          sender_profile_pic_url: null
+          sender_profile_pic_url: null,
+          _optimistic: true
         };
 
         // ✨ ADICIONAR mensagem à UI IMEDIATAMENTE (antes de enviar ao servidor)

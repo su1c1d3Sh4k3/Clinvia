@@ -277,17 +277,26 @@ serve(async (req) => {
         const signerAgentId = authenticatedAgentId || conversation.assigned_agent_id;
         let finalBody = body;
 
-        if (conversation.status === "open" && messageType === "text" && signerAgentId) {
+        // Identidade de quem envia: SEMPRE registrada em messages.sender_name
+        // (o front exibe o remetente em TODAS as mensagens). A assinatura no corpo
+        // enviado ao WhatsApp continua respeitando sign_messages.
+        let senderDisplayName: string | null = null;
+        let signerSignsMessages = false;
+        if (!isApiMessage && signerAgentId) {
             const { data: teamMember } = await supabase
                 .from("team_members")
                 .select("full_name, name, sign_messages")
                 .eq("id", signerAgentId)
                 .single();
 
-            if (teamMember && teamMember.sign_messages !== false) {
-                const senderName = teamMember.full_name || teamMember.name || "Atendente";
-                finalBody = `*${senderName}:*\n${body}`;
+            if (teamMember) {
+                senderDisplayName = teamMember.full_name || teamMember.name || "Atendente";
+                signerSignsMessages = teamMember.sign_messages !== false;
             }
+        }
+
+        if (conversation.status === "open" && messageType === "text" && senderDisplayName && signerSignsMessages) {
+            finalBody = `*${senderDisplayName}:*\n${body}`;
         }
 
         // ── Update conversation status if needed ──
@@ -355,16 +364,8 @@ serve(async (req) => {
         let insertBody = messageType === "text" ? finalBody : body;
         let insertCaption = caption || null;
 
-        if (messageType === "document" && caption && signerAgentId) {
-            const { data: teamMember } = await supabase
-                .from("team_members")
-                .select("full_name, name, sign_messages")
-                .eq("id", signerAgentId)
-                .single();
-            if (teamMember && teamMember.sign_messages !== false) {
-                const senderName = teamMember.full_name || teamMember.name || "Atendente";
-                insertCaption = `*${senderName}:*\n${caption}`;
-            }
+        if (messageType === "document" && caption && senderDisplayName && signerSignsMessages) {
+            insertCaption = `*${senderDisplayName}:*\n${caption}`;
         }
 
         const { data: message, error: messageError } = await supabase
@@ -382,6 +383,7 @@ serve(async (req) => {
                 quoted_body: quotedBody || null,
                 quoted_sender: quotedSender || null,
                 caption: insertCaption,
+                sender_name: senderDisplayName,
                 status: "sent",
             })
             .select("id, conversation_id, body, direction, message_type, created_at")

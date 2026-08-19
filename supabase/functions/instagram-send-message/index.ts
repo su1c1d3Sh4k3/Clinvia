@@ -131,6 +131,7 @@ serve(async (req) => {
         // =============================================
         const authHeader = req.headers.get('Authorization');
         let authenticatedAgentId: string | null = null;
+        let senderDisplayName: string | null = null;
 
         if (authHeader) {
             try {
@@ -140,12 +141,13 @@ serve(async (req) => {
                 if (user && !userError) {
                     const { data: teamMember } = await supabase
                         .from('team_members')
-                        .select('id')
+                        .select('id, full_name, name')
                         .eq('auth_user_id', user.id)
                         .single();
 
                     if (teamMember) {
                         authenticatedAgentId = teamMember.id;
+                        senderDisplayName = teamMember.full_name || teamMember.name || "Atendente";
                         console.log('[INSTAGRAM SEND] Authenticated agent:', authenticatedAgentId);
                     }
                 }
@@ -779,6 +781,7 @@ serve(async (req) => {
                     message_type: message_type,
                     evolution_id: messageId,
                     user_id: instance.user_id,
+                    sender_name: isApiMessage ? null : senderDisplayName,
                     status: 'sent',
                     media_url: message_type === 'audio' ? finalAudioUrl : (message_type === 'image' ? image_url : null)
                 });

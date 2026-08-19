@@ -8,7 +8,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { MessageSquare, X, Send, Paperclip, Smile, Sparkles, CheckCircle, Mic, StopCircle, Trash2, StickyNote } from "lucide-react";
+import { MessageSquare, X, Send, Paperclip, Smile, Sparkles, CheckCircle, Mic, StopCircle, Trash2, StickyNote, ArrowLeftRight, User, Inbox } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
@@ -134,6 +134,50 @@ export function ConversationChatModal({
         },
         enabled: !!viewConversationId
     });
+
+    // Nome do atendente + fila da conversa (exibidos abaixo do nome do contato)
+    const assignedAgentId = (conversation as any)?.assigned_agent_id ?? null;
+    const queueId = (conversation as any)?.queue_id ?? null;
+    const { data: headerInfo } = useQuery({
+        queryKey: ["chat-modal-header", assignedAgentId, queueId],
+        queryFn: async () => {
+            const [agentRes, queueRes] = await Promise.all([
+                assignedAgentId
+                    ? supabase.from("team_members").select("full_name, name").eq("id", assignedAgentId).maybeSingle()
+                    : Promise.resolve({ data: null } as any),
+                queueId
+                    ? supabase.from("queues").select("name").eq("id", queueId).maybeSingle()
+                    : Promise.resolve({ data: null } as any),
+            ]);
+            return {
+                agentName: agentRes.data?.full_name || agentRes.data?.name || null,
+                queueName: queueRes.data?.name || null,
+            };
+        },
+        enabled: !!conversation,
+    });
+
+    // Realtime: mudanças na conversa (transferência de fila/atendente, status)
+    // refletem imediatamente no header do modal
+    useEffect(() => {
+        if (!open || !viewConversationId) return;
+        const channel = supabase
+            .channel(`chat-modal-conv-${viewConversationId}`)
+            .on(
+                "postgres_changes",
+                { event: "UPDATE", schema: "public", table: "conversations" },
+                (payload: any) => {
+                    if (payload.new?.id === viewConversationId) {
+                        queryClient.invalidateQueries({ queryKey: ["conversation-details", viewConversationId] });
+                        queryClient.invalidateQueries({ queryKey: ["chat-modal-conversation", contactId, ownerId] });
+                    }
+                }
+            )
+            .subscribe();
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [open, viewConversationId, queryClient, contactId, ownerId]);
 
     // Same source as the inbox: handles resolved conversations (messages_history JSON),
     // prepends the contact's previous resolved history and subscribes to realtime
@@ -485,6 +529,17 @@ export function ConversationChatModal({
                             Ir para Inbox
                         </Button>
                     </DialogTitle>
+                    {/* Atendente responsável + fila — atualiza em tempo real */}
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                            <User className="w-3.5 h-3.5" />
+                            {headerInfo?.agentName || "Sem atendente atribuído"}
+                        </span>
+                        <span className="flex items-center gap-1">
+                            <Inbox className="w-3.5 h-3.5" />
+                            {headerInfo?.queueName || "Sem fila"}
+                        </span>
+                    </div>
                 </DialogHeader>
 
                 <ScrollArea ref={scrollContainerRef} className="flex-1 p-4 border rounded-md bg-muted/10">
@@ -492,27 +547,44 @@ export function ConversationChatModal({
                         <div className="flex justify-center p-4">Carregando mensagens...</div>
                     ) : messagesWithNotes && messagesWithNotes.length > 0 ? (
                         <div className="space-y-4">
-                            {messagesWithNotes.map((msg: any) => (
-                                <div
-                                    key={msg.id}
-                                    className={`flex max-w-[80%] ${msg.direction === 'outbound'
-                                        ? 'ml-auto justify-end'
-                                        : 'mr-auto justify-start'
-                                        }`}
-                                >
-                                    {msg._note ? (
-                                        <NoteBubble
-                                            note={msg}
-                                            onEdit={() => setNoteModal({ open: true, editing: msg })}
-                                        />
-                                    ) : (
-                                        <MessageBubble
-                                            message={msg}
-                                        // searchTerm="" // Modal doesn't have search yet
-                                        />
-                                    )}
-                                </div>
-                            ))}
+                            {messagesWithNotes.map((msg: any) => {
+                                // Mensagem de sistema de transferência — mesmo pill do inbox (MessageList)
+                                const isSystemTransfer = !msg._note && msg.body &&
+                                    (msg.body.includes('transferida de') || msg.body.includes('transferiu para'));
+                                if (isSystemTransfer) {
+                                    const cleanTransferText = msg.body.replace(/^Conversa \d+\s+/i, '');
+                                    const timeStr = new Date(msg.created_at || "").toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+                                    return (
+                                        <div key={msg.id} className="flex justify-center my-6">
+                                            <div className="bg-[#1e253c] dark:bg-[#1a2235] text-[#93c5fd] text-xs font-medium px-4 py-2 rounded-full flex items-center gap-2.5 shadow-sm border border-[#2a3655]/50 select-none">
+                                                <ArrowLeftRight className="w-3.5 h-3.5 opacity-80" />
+                                                <span>{timeStr} {cleanTransferText}</span>
+                                            </div>
+                                        </div>
+                                    );
+                                }
+                                return (
+                                    <div
+                                        key={msg.id}
+                                        className={`flex max-w-[80%] ${msg.direction === 'outbound'
+                                            ? 'ml-auto justify-end'
+                                            : 'mr-auto justify-start'
+                                            }`}
+                                    >
+                                        {msg._note ? (
+                                            <NoteBubble
+                                                note={msg}
+                                                onEdit={() => setNoteModal({ open: true, editing: msg })}
+                                            />
+                                        ) : (
+                                            <MessageBubble
+                                                message={msg}
+                                            // searchTerm="" // Modal doesn't have search yet
+                                            />
+                                        )}
+                                    </div>
+                                );
+                            })}
                         </div>
                     ) : (
                         <div className="text-center text-muted-foreground p-4">

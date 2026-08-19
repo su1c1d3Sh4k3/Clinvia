@@ -43,6 +43,7 @@ export const useMessages = (conversationId?: string) => {
             created_at: item.created_at || null,
             media_url: item.media_url || null,
             transcription: item.transcription || null,
+            sender_name: item.sender_name || null,
             status: "read",
             evolution_id: null
           } as Message;
