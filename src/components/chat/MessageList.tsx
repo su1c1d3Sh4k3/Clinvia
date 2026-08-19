@@ -13,6 +13,7 @@ import { ContactCard } from "@/components/chat/ContactCard";
 import { CustomAudioPlayer } from "@/components/chat/CustomAudioPlayer";
 import { FormattedText, parseTemplateBody } from "@/components/chat/FormattedText";
 import { NoteBubble } from "@/components/chat/NoteBubble";
+import { resolveOutboundSenderName } from "@/lib/messageSender";
 
 interface MessageListProps {
     messages: any[];
@@ -281,15 +282,8 @@ export const MessageList = ({
         const senderPic = msg.sender_profile_pic_url || (isGroupMsg ? undefined : profilePic);
 
         // Remetente de mensagens outbound: SEMPRE exibido (user rule), mesmo com
-        // a assinatura de WhatsApp desligada. Fallbacks: coluna sender_name →
-        // prefixo de assinatura "*Nome:*\n" no corpo/caption (retroativo) → IA.
-        // Mensagens otimistas (ainda sem resposta do servidor) não mostram "IA".
-        const bodySignature = typeof msg.body === "string" ? msg.body.match(/^\*([^*]+):\*\n/) : null;
-        const captionSignature = typeof (msg as any).caption === "string" ? (msg as any).caption.match(/^\*([^*]+):\*\n/) : null;
-        const outboundSenderName = msg.direction === "outbound"
-            ? (msg.sender_name || bodySignature?.[1] || captionSignature?.[1]
-                || ((msg as any)._optimistic || (msg as any).status === "sending" ? null : "IA"))
-            : null;
+        // a assinatura de WhatsApp desligada — lógica compartilhada em lib/messageSender
+        const outboundSenderName = resolveOutboundSenderName(msg);
 
         const evolutionId = (msg as any).evolution_id as string | undefined;
         const reactionEmojis = evolutionId ? (reactionMap.get(evolutionId) ?? []) : [];
