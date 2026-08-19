@@ -122,6 +122,12 @@ export function InboxGuide() {
                     réplica do que você verá no sistema:
                 </p>
                 <TransferWalkthrough />
+                <Callout type="atencao" title="Atendimento atribuído é exclusivo">
+                    Quando a conversa tem um <strong>atendente responsável</strong>, ela fica visível <strong>somente para
+                    ele</strong> — nenhum outro atendente vê o atendimento, nem na lista. Admins e supervisores continuam vendo
+                    tudo. Conversas <strong>sem atribuição</strong> ficam visíveis para todos os atendentes com acesso à fila e
+                    à conexão, até alguém assumir.
+                </Callout>
                 <Callout type="atencao" title="Por que nem todo colega aparece na lista?">
                     Atendentes podem ter <strong>escopo de visão</strong> (definido em Equipe): conexões liberadas e filas
                     atribuídas. Se a fila escolhida ou a conexão da conversa estiver fora do escopo do colega, ele não aparece —

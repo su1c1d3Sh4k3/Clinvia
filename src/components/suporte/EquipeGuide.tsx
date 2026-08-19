@@ -183,7 +183,7 @@ export function EquipeGuide() {
                         },
                         {
                             q: "Um agente não enxerga conversas/cards que o admin vê.",
-                            a: "Primeira coisa a conferir: o escopo de visão dele (colunas Instâncias liberadas e Filas atribuídas na aba Equipes). Se a conversa está numa conexão ou fila fora do escopo, é o comportamento esperado. Escopo em 'Todas' e mesmo assim faltando dados? Confirme que o membro foi convidado pela página Equipe (e não criou conta avulsa própria); persistindo, acione o suporte Clinvia.",
+                            a: "Primeira coisa a conferir: se a conversa está atribuída a OUTRO atendente — atendimento atribuído é exclusivo do responsável (nenhum outro atendente vê; admins e supervisores veem tudo). Depois, o escopo de visão dele (colunas Instâncias liberadas e Filas atribuídas na aba Equipes). Se a conversa está numa conexão ou fila fora do escopo, é o comportamento esperado. Escopo em 'Todas' e mesmo assim faltando dados? Confirme que o membro foi convidado pela página Equipe (e não criou conta avulsa própria); persistindo, acione o suporte Clinvia.",
                         },
                         {
                             q: "Como restrinjo um atendente a um único número ou setor?",
