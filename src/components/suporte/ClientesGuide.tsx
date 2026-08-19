@@ -180,7 +180,7 @@ export function ClientesGuide() {
                 <StepByStep steps={[
                     { title: "Crie e atribua", description: "Selecione vários contatos com as caixinhas e use 'Atribuir Tags' para etiquetar em massa (ex.: 'Pós-botox', 'Indicação', 'Evento Julho')." },
                     { title: "Filtre por tag", description: "O seletor 'Filtrar Tag' mostra só os contatos daquela etiqueta — a base para listas de trabalho da equipe." },
-                    { title: "Tags de campanha são automáticas", description: "1 hora antes do disparo, os contatos da campanha ganham uma tag com o nome dela (no máximo uma tag de campanha por conexão; sai quando a campanha encerra ou quando o contato entra em outra campanha). É assim que o sistema te avisa se você tentar disparar de novo para quem já recebeu há menos de 7 dias." },
+                    { title: "Tags de campanha são automáticas", description: "1 hora antes do disparo, os contatos da campanha ganham uma tag com o nome dela (no máximo uma tag de campanha por conexão; sai quando a campanha encerra ou quando o contato entra em outra campanha). É assim que o sistema te avisa se você tentar disparar de novo para quem já recebeu há menos de 7 dias. Atenção: se você atribuir manualmente uma tag de campanha a um contato, a tag de campanha anterior dele naquela conexão é removida na hora — a regra de uma por conexão vale sempre." },
                 ]} />
             </TopicSection>
 
