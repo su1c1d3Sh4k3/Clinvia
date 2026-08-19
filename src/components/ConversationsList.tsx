@@ -276,7 +276,29 @@ export const ConversationsList = ({
     return () => clearInterval(interval);
   }, [metaConvIds.length]);
 
-  const unreadCounts = useUnreadCounts(user?.id);
+  const unreadRows = useUnreadCounts(user?.id);
+
+  // Balões das abas: mesmos filtros avançados aplicados à lista (regra do
+  // usuário: o balão sempre se adapta ao filtro — se os clientes filtrados
+  // não têm não lidas, o balão some).
+  const unreadCounts = useMemo(() => {
+    const acc = { open: 0, pending: 0, groups: 0 };
+    for (const r of unreadRows) {
+      if ((r.channel || "whatsapp") !== selectedChannelFilter) continue;
+      if (selectedQueueFilter && r.queue_id !== selectedQueueFilter) continue;
+      if (selectedInstanceFilter && r.instance_id !== selectedInstanceFilter) continue;
+      if (selectedAgentFilter) {
+        if (selectedAgentFilter === "unassigned") {
+          if (r.assigned_agent_id) continue;
+        } else if (r.assigned_agent_id !== selectedAgentFilter) continue;
+      }
+      if (selectedTagFilter && !r.contacts?.contact_tags?.some((ct) => ct.tag_id === selectedTagFilter)) continue;
+      if (r.group_id) acc.groups += r.unread_count || 0;
+      else if (r.status === "open") acc.open += r.unread_count || 0;
+      else if (r.status === "pending") acc.pending += r.unread_count || 0;
+    }
+    return acc;
+  }, [unreadRows, selectedChannelFilter, selectedQueueFilter, selectedInstanceFilter, selectedAgentFilter, selectedTagFilter]);
 
   const filteredConversations = conversations.filter((conv) => {
     const contact = conv.contacts;
@@ -486,9 +508,9 @@ export const ConversationsList = ({
             <TabsTrigger value="open" className="flex flex-col items-center gap-0.5 py-1.5 h-auto relative data-[state=active]:text-primary">
               <MessageSquare className="h-4 w-4" />
               <span className="text-[10px] font-medium">Abertos</span>
-              {((unreadCounts as any)[selectedChannelFilter]?.open || 0) > 0 && (
+              {unreadCounts.open > 0 && (
                 <Badge className="absolute top-0.5 right-1 h-4 min-w-[1rem] px-0.5 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] border-[1.5px] border-background">
-                  {(unreadCounts as any)[selectedChannelFilter]?.open || 0}
+                  {unreadCounts.open}
                 </Badge>
               )}
             </TabsTrigger>
@@ -496,9 +518,9 @@ export const ConversationsList = ({
             <TabsTrigger value="pending" className="flex flex-col items-center gap-0.5 py-1.5 h-auto relative data-[state=active]:text-primary">
               <Clock className="h-4 w-4" />
               <span className="text-[10px] font-medium">Pendentes</span>
-              {((unreadCounts as any)[selectedChannelFilter]?.pending || 0) > 0 && (
+              {unreadCounts.pending > 0 && (
                 <Badge className="absolute top-0.5 right-1 h-4 min-w-[1rem] px-0.5 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] border-[1.5px] border-background">
-                  {(unreadCounts as any)[selectedChannelFilter]?.pending || 0}
+                  {unreadCounts.pending}
                 </Badge>
               )}
             </TabsTrigger>
@@ -512,9 +534,9 @@ export const ConversationsList = ({
               <TabsTrigger value="groups" className="flex flex-col items-center gap-0.5 py-1.5 h-auto relative data-[state=active]:text-primary">
                 <MessageSquare className="h-4 w-4" />
                 <span className="text-[10px] font-medium">Grupos</span>
-                {((unreadCounts as any)[selectedChannelFilter]?.groups || 0) > 0 && (
+                {unreadCounts.groups > 0 && (
                   <Badge className="absolute top-0.5 right-1 h-4 min-w-[1rem] px-0.5 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] border-[1.5px] border-background">
-                    {(unreadCounts as any)[selectedChannelFilter]?.groups || 0}
+                    {unreadCounts.groups}
                   </Badge>
                 )}
               </TabsTrigger>

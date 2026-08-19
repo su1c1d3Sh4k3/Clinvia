@@ -2,68 +2,39 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect } from "react";
 
-export const useUnreadCounts = (userId?: string, channel?: "whatsapp" | "instagram") => {
+export interface UnreadConvRow {
+    group_id: string | null;
+    unread_count: number;
+    status: string;
+    channel: string | null;
+    queue_id: string | null;
+    instance_id: string | null;
+    assigned_agent_id: string | null;
+    contacts: { id: string; contact_tags: { tag_id: string }[] } | null;
+}
+
+/**
+ * Linhas de conversas open/pending com unread_count > 0, com os campos usados
+ * pelos Filtros Avançados do inbox (fila/tag/instância/usuário). Os balões de
+ * notificação das abas Abertos/Pendentes/Grupos são calculados no consumidor
+ * aplicando os MESMOS filtros da lista — regra do usuário: o balão sempre se
+ * adapta ao filtro aplicado.
+ */
+export const useUnreadCounts = (userId?: string) => {
     const queryClient = useQueryClient();
 
-    const { data: counts = { people: 0, groups: 0, open: 0, pending: 0, whatsapp: { people: 0, groups: 0, open: 0, pending: 0 }, instagram: { people: 0, groups: 0, open: 0, pending: 0 } } } = useQuery({
-        queryKey: ["unread-counts", userId, channel],
+    const { data: rows = [] } = useQuery({
+        queryKey: ["unread-counts", userId],
         queryFn: async () => {
-            const query = supabase
+            const { data, error } = await supabase
                 .from("conversations")
-                .select("group_id, unread_count, status, channel")
+                .select("group_id, unread_count, status, channel, queue_id, instance_id, assigned_agent_id, contacts(id, contact_tags(tag_id))")
                 .gt("unread_count", 0)
-                .in("status", ["open", "pending"]);
-
-            const { data, error } = await query.limit(5000);
+                .in("status", ["open", "pending"])
+                .limit(5000);
 
             if (error) throw error;
-
-            // Calculate counts with channel breakdown
-            const result = (data as any[]).reduce(
-                (acc, curr) => {
-                    const convChannel = curr.channel || "whatsapp";
-
-                    if (curr.group_id) {
-                        acc.groups += curr.unread_count;
-                        if (convChannel === "whatsapp") {
-                            acc.whatsapp.groups += curr.unread_count;
-                        } else if (convChannel === "instagram") {
-                            acc.instagram.groups += curr.unread_count;
-                        }
-                    } else {
-                        acc.people += curr.unread_count;
-                        if (convChannel === "whatsapp") {
-                            acc.whatsapp.people += curr.unread_count;
-                        } else if (convChannel === "instagram") {
-                            acc.instagram.people += curr.unread_count;
-                        }
-
-                        if (curr.status === 'open') {
-                            acc.open += curr.unread_count;
-                            if (convChannel === "whatsapp") {
-                                acc.whatsapp.open += curr.unread_count;
-                            } else if (convChannel === "instagram") {
-                                acc.instagram.open += curr.unread_count;
-                            }
-                        } else if (curr.status === 'pending') {
-                            acc.pending += curr.unread_count;
-                            if (convChannel === "whatsapp") {
-                                acc.whatsapp.pending += curr.unread_count;
-                            } else if (convChannel === "instagram") {
-                                acc.instagram.pending += curr.unread_count;
-                            }
-                        }
-                    }
-                    return acc;
-                },
-                {
-                    people: 0, groups: 0, open: 0, pending: 0,
-                    whatsapp: { people: 0, groups: 0, open: 0, pending: 0 },
-                    instagram: { people: 0, groups: 0, open: 0, pending: 0 }
-                }
-            );
-
-            return result;
+            return (data || []) as unknown as UnreadConvRow[];
         },
         enabled: !!userId,
         // 30s de cache. O realtime já invalida imediatamente quando uma
@@ -94,5 +65,5 @@ export const useUnreadCounts = (userId?: string, channel?: "whatsapp" | "instagr
         };
     }, [queryClient]);
 
-    return counts;
+    return rows;
 };
