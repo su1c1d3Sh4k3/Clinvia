@@ -1,7 +1,8 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Search, GripHorizontal } from "lucide-react";
+import { Loader2, Search, GripHorizontal, RefreshCw } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCampaignContacts, useCampaignContactReport, CampaignContactReport } from "@/hooks/useCampaigns";
 import { ConversationChatModal } from "@/components/queues/ConversationChatModal";
@@ -63,9 +64,17 @@ function normalizeTxt(s: string): string {
 }
 
 export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps) {
-    const { data: rows, isLoading } = useCampaignContacts(campaignId);
-    const { data: report } = useCampaignContactReport(campaignId);
+    const { data: rows, isLoading, refetch: refetchRows, isFetching: fetchingRows } = useCampaignContacts(campaignId);
+    const { data: report, refetch: refetchReport, isFetching: fetchingReport } = useCampaignContactReport(campaignId);
     const [chatContact, setChatContact] = useState<{ id: string; name: string } | null>(null);
+
+    // A tabela não é realtime — atualiza sob demanda: ao aplicar filtro, ao
+    // clicar no nome do cliente e pelo botão de refresh ao lado da busca
+    const isRefreshing = fetchingRows || fetchingReport;
+    const refresh = useCallback(() => {
+        refetchRows();
+        refetchReport();
+    }, [refetchRows, refetchReport]);
     const [statusFilter, setStatusFilter] = useState<string>("all");
     const [respondedFilter, setRespondedFilter] = useState<string>("all");
     const [scheduledFilter, setScheduledFilter] = useState<string>("all");
@@ -193,7 +202,7 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
         <div className="border rounded-xl overflow-hidden">
             {/* Barra de filtros */}
             <div className="flex flex-wrap items-center gap-2 px-3 py-2 bg-muted/30 border-b">
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); refresh(); }}>
                     <SelectTrigger className="h-8 w-[180px] text-xs bg-background">
                         <SelectValue placeholder="Status" />
                     </SelectTrigger>
@@ -209,7 +218,7 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
                     </SelectContent>
                 </Select>
 
-                <Select value={respondedFilter} onValueChange={setRespondedFilter}>
+                <Select value={respondedFilter} onValueChange={(v) => { setRespondedFilter(v); refresh(); }}>
                     <SelectTrigger className="h-8 w-[180px] text-xs bg-background">
                         <SelectValue placeholder="Respondida" />
                     </SelectTrigger>
@@ -221,7 +230,7 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
                     </SelectContent>
                 </Select>
 
-                <Select value={scheduledFilter} onValueChange={setScheduledFilter}>
+                <Select value={scheduledFilter} onValueChange={(v) => { setScheduledFilter(v); refresh(); }}>
                     <SelectTrigger className="h-8 w-[180px] text-xs bg-background">
                         <SelectValue placeholder="Agendamento" />
                     </SelectTrigger>
@@ -234,7 +243,7 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
                 </Select>
 
                 {stageCounts.size > 0 && (
-                    <Select value={stageFilter} onValueChange={setStageFilter}>
+                    <Select value={stageFilter} onValueChange={(v) => { setStageFilter(v); refresh(); }}>
                         <SelectTrigger className="h-8 w-[180px] text-xs bg-background">
                             <SelectValue placeholder="Estágio" />
                         </SelectTrigger>
@@ -250,7 +259,7 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
                 )}
 
                 {agentCounts.size > 0 && (
-                    <Select value={agentFilter} onValueChange={setAgentFilter}>
+                    <Select value={agentFilter} onValueChange={(v) => { setAgentFilter(v); refresh(); }}>
                         <SelectTrigger className="h-8 w-[180px] text-xs bg-background">
                             <SelectValue placeholder="Atendente" />
                         </SelectTrigger>
@@ -274,6 +283,17 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
                         className="h-8 w-[180px] text-xs bg-background pl-8"
                     />
                 </div>
+
+                <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8 bg-background"
+                    onClick={refresh}
+                    disabled={isRefreshing}
+                    title="Atualizar dados da tabela"
+                >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
+                </Button>
 
                 <Badge variant="secondary" className="ml-auto text-xs">
                     {filteredRows.length === rows.length
@@ -326,6 +346,7 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
                                                 title="Abrir chat com este cliente"
                                                 onClick={(e) => {
                                                     e.stopPropagation();
+                                                    refresh();
                                                     setChatContact({ id: r.contact_id!, name: String(name) });
                                                 }}
                                             >

@@ -288,6 +288,11 @@ export function CampaignsGuide() {
                     Use os filtros no topo da tabela (Status, Respondida, Agendamento, Estágio, Atendente) para responder perguntas
                     como "quem recebeu e não respondeu?" — esse é o público perfeito para um reenvio.
                 </Callout>
+                <Callout type="info">
+                    A tabela não atualiza sozinha em tempo real: os dados são recarregados sempre que você aplica um filtro ou
+                    clica no nome de um cliente — e você pode forçar a atualização a qualquer momento pelo botão de{" "}
+                    <strong className="text-foreground">atualizar (ícone de setas circulares)</strong> ao lado da busca.
+                </Callout>
             </TopicSection>
 
             {/* 7. Congelamento */}
