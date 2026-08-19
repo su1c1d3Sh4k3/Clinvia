@@ -190,6 +190,10 @@ export function EquipeGuide() {
                             a: "Edite o membro na aba Equipes e marque, em Instâncias liberadas e Filas atribuídas, apenas o que ele deve ver. A restrição só existe para Agentes — supervisores e admins sempre veem tudo.",
                         },
                         {
+                            q: "Supervisor pode editar membros da equipe?",
+                            a: "Sim — com a permissão 'Membros da Equipe' (ligada por padrão), o supervisor cria e edita Atendentes e outros Supervisores: nome, telefone, função, comissão e escopo de visão. Ele não edita o Admin nem promove ninguém a Admin.",
+                        },
+                        {
                             q: "Posso ter dois admins?",
                             a: "O ideal é um admin principal (o dono da conta). Para gestores, o papel Supervisor com todas as permissões cobre o dia a dia sem expor a administração da equipe.",
                         },
