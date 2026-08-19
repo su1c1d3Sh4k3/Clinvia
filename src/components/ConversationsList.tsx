@@ -129,10 +129,14 @@ export const ConversationsList = ({
   const { data: currentTeamMember } = useCurrentTeamMember();
   const [searchQuery, setSearchQuery] = useState("");
   const [tab, setTab] = useState<"open" | "pending" | "resolved">("open");
-  const [selectedQueueFilter, setSelectedQueueFilter] = useState<string | null>(null);
-  const [selectedTagFilter, setSelectedTagFilter] = useState<string | null>(null);
-  const [selectedInstanceFilter, setSelectedInstanceFilter] = useState<string | null>(null);
-  const [selectedAgentFilter, setSelectedAgentFilter] = useState<string | null>(null);
+  // Filtros Avançados multi-seleção: vazio = todos; dentro da categoria é OR,
+  // entre categorias é AND (user rule).
+  const [selectedQueueFilter, setSelectedQueueFilter] = useState<string[]>([]);
+  const [selectedTagFilter, setSelectedTagFilter] = useState<string[]>([]);
+  const [selectedInstanceFilter, setSelectedInstanceFilter] = useState<string[]>([]);
+  const [selectedAgentFilter, setSelectedAgentFilter] = useState<string[]>([]);
+  const toggleFilterValue = (setter: React.Dispatch<React.SetStateAction<string[]>>, value: string) =>
+    setter((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]));
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isContactDetailsOpen, setIsContactDetailsOpen] = useState(false);
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
@@ -285,14 +289,15 @@ export const ConversationsList = ({
     const acc = { open: 0, pending: 0, groups: 0 };
     for (const r of unreadRows) {
       if ((r.channel || "whatsapp") !== selectedChannelFilter) continue;
-      if (selectedQueueFilter && r.queue_id !== selectedQueueFilter) continue;
-      if (selectedInstanceFilter && r.instance_id !== selectedInstanceFilter) continue;
-      if (selectedAgentFilter) {
-        if (selectedAgentFilter === "unassigned") {
-          if (r.assigned_agent_id) continue;
-        } else if (r.assigned_agent_id !== selectedAgentFilter) continue;
+      if (selectedQueueFilter.length > 0 && !selectedQueueFilter.includes(r.queue_id || "")) continue;
+      if (selectedInstanceFilter.length > 0 && !selectedInstanceFilter.includes(r.instance_id || "")) continue;
+      if (selectedAgentFilter.length > 0) {
+        const matchesAgent =
+          (selectedAgentFilter.includes("unassigned") && !r.assigned_agent_id) ||
+          (!!r.assigned_agent_id && selectedAgentFilter.includes(r.assigned_agent_id));
+        if (!matchesAgent) continue;
       }
-      if (selectedTagFilter && !r.contacts?.contact_tags?.some((ct) => ct.tag_id === selectedTagFilter)) continue;
+      if (selectedTagFilter.length > 0 && !r.contacts?.contact_tags?.some((ct) => selectedTagFilter.includes(ct.tag_id))) continue;
       if (r.group_id) acc.groups += r.unread_count || 0;
       else if (r.status === "open") acc.open += r.unread_count || 0;
       else if (r.status === "pending") acc.pending += r.unread_count || 0;
@@ -321,22 +326,21 @@ export const ConversationsList = ({
       (conv as any).ticket_id?.toString().includes(searchQuery) ||
       conv.id.includes(searchQuery);
 
-    const matchesQueue = selectedQueueFilter
-      ? (conv as any).queue_id === selectedQueueFilter
+    const matchesQueue = selectedQueueFilter.length > 0
+      ? selectedQueueFilter.includes((conv as any).queue_id || "")
       : true;
 
-    const matchesTag = selectedTagFilter
-      ? contact?.contact_tags?.some((ct: any) => ct.tags.id === selectedTagFilter)
+    const matchesTag = selectedTagFilter.length > 0
+      ? contact?.contact_tags?.some((ct: any) => selectedTagFilter.includes(ct.tags.id))
       : true;
 
-    const matchesInstance = selectedInstanceFilter
-      ? (conv as any).instance_id === selectedInstanceFilter
+    const matchesInstance = selectedInstanceFilter.length > 0
+      ? selectedInstanceFilter.includes((conv as any).instance_id || "")
       : true;
 
-    const matchesAgent = selectedAgentFilter
-      ? selectedAgentFilter === "unassigned"
-        ? !(conv as any).assigned_agent_id
-        : (conv as any).assigned_agent_id === selectedAgentFilter
+    const matchesAgent = selectedAgentFilter.length > 0
+      ? (selectedAgentFilter.includes("unassigned") && !(conv as any).assigned_agent_id) ||
+        (!!(conv as any).assigned_agent_id && selectedAgentFilter.includes((conv as any).assigned_agent_id))
       : true;
 
     // Filter by People vs Groups
@@ -395,74 +399,102 @@ export const ConversationsList = ({
                   <Filter className="h-3.5 w-3.5" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56 max-w-[90vw] p-2 space-y-2">
+              <DropdownMenuContent align="start" className="w-56 max-w-[90vw] max-h-[70vh] overflow-y-auto p-2 space-y-2">
                 <div className="space-y-1">
-                  <span className="text-xs font-medium text-muted-foreground ml-2">Filas</span>
-                  <select
-                    className="w-full text-sm border rounded p-1 bg-background"
-                    value={selectedQueueFilter || ""}
-                    onChange={(e) => setSelectedQueueFilter(e.target.value || null)}
-                  >
-                    <option value="">Todas as Filas</option>
+                  <span className="text-xs font-medium text-muted-foreground ml-2">
+                    Filas{selectedQueueFilter.length > 0 && ` (${selectedQueueFilter.length})`}
+                  </span>
+                  <div className="max-h-32 overflow-y-auto border rounded p-1 space-y-0.5">
                     {queues?.map((q: any) => (
-                      <option key={q.id} value={q.id}>{q.name}</option>
+                      <label key={q.id} className="flex items-center gap-2 px-1 py-0.5 rounded hover:bg-muted/50 cursor-pointer text-sm">
+                        <input
+                          type="checkbox"
+                          className="accent-primary shrink-0"
+                          checked={selectedQueueFilter.includes(q.id)}
+                          onChange={() => toggleFilterValue(setSelectedQueueFilter, q.id)}
+                        />
+                        <span className="truncate">{q.name}</span>
+                      </label>
                     ))}
-                  </select>
+                  </div>
                 </div>
 
                 <div className="space-y-1">
-                  <span className="text-xs font-medium text-muted-foreground ml-2">Tags</span>
-                  <select
-                    className="w-full text-sm border rounded p-1 bg-background"
-                    value={selectedTagFilter || ""}
-                    onChange={(e) => setSelectedTagFilter(e.target.value || null)}
-                  >
-                    <option value="">Todas as Tags</option>
+                  <span className="text-xs font-medium text-muted-foreground ml-2">
+                    Tags{selectedTagFilter.length > 0 && ` (${selectedTagFilter.length})`}
+                  </span>
+                  <div className="max-h-32 overflow-y-auto border rounded p-1 space-y-0.5">
                     {tags?.map((t: any) => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
+                      <label key={t.id} className="flex items-center gap-2 px-1 py-0.5 rounded hover:bg-muted/50 cursor-pointer text-sm">
+                        <input
+                          type="checkbox"
+                          className="accent-primary shrink-0"
+                          checked={selectedTagFilter.includes(t.id)}
+                          onChange={() => toggleFilterValue(setSelectedTagFilter, t.id)}
+                        />
+                        <span className="truncate">{t.name}</span>
+                      </label>
                     ))}
-                  </select>
+                  </div>
                 </div>
 
                 <div className="space-y-1">
-                  <span className="text-xs font-medium text-muted-foreground ml-2">Instâncias</span>
-                  <select
-                    className="w-full text-sm border rounded p-1 bg-background"
-                    value={selectedInstanceFilter || ""}
-                    onChange={(e) => setSelectedInstanceFilter(e.target.value || null)}
-                  >
-                    <option value="">Todas as Instâncias</option>
+                  <span className="text-xs font-medium text-muted-foreground ml-2">
+                    Instâncias{selectedInstanceFilter.length > 0 && ` (${selectedInstanceFilter.length})`}
+                  </span>
+                  <div className="max-h-32 overflow-y-auto border rounded p-1 space-y-0.5">
                     {instances?.map((i: any) => (
-                      <option key={i.id} value={i.id}>{i.name}</option>
+                      <label key={i.id} className="flex items-center gap-2 px-1 py-0.5 rounded hover:bg-muted/50 cursor-pointer text-sm">
+                        <input
+                          type="checkbox"
+                          className="accent-primary shrink-0"
+                          checked={selectedInstanceFilter.includes(i.id)}
+                          onChange={() => toggleFilterValue(setSelectedInstanceFilter, i.id)}
+                        />
+                        <span className="truncate">{i.name}</span>
+                      </label>
                     ))}
-                  </select>
+                  </div>
                 </div>
 
                 <div className="space-y-1">
-                  <span className="text-xs font-medium text-muted-foreground ml-2">Usuários</span>
-                  <select
-                    className="w-full text-sm border rounded p-1 bg-background"
-                    value={selectedAgentFilter || ""}
-                    onChange={(e) => setSelectedAgentFilter(e.target.value || null)}
-                  >
-                    <option value="">Todos os Usuários</option>
-                    <option value="unassigned">Sem atribuição</option>
+                  <span className="text-xs font-medium text-muted-foreground ml-2">
+                    Usuários{selectedAgentFilter.length > 0 && ` (${selectedAgentFilter.length})`}
+                  </span>
+                  <div className="max-h-32 overflow-y-auto border rounded p-1 space-y-0.5">
+                    <label className="flex items-center gap-2 px-1 py-0.5 rounded hover:bg-muted/50 cursor-pointer text-sm">
+                      <input
+                        type="checkbox"
+                        className="accent-primary shrink-0"
+                        checked={selectedAgentFilter.includes("unassigned")}
+                        onChange={() => toggleFilterValue(setSelectedAgentFilter, "unassigned")}
+                      />
+                      <span className="truncate">Sem atribuição</span>
+                    </label>
                     {staffMembers?.map((m: any) => (
-                      <option key={m.id} value={m.id}>{m.name}</option>
+                      <label key={m.id} className="flex items-center gap-2 px-1 py-0.5 rounded hover:bg-muted/50 cursor-pointer text-sm">
+                        <input
+                          type="checkbox"
+                          className="accent-primary shrink-0"
+                          checked={selectedAgentFilter.includes(m.id)}
+                          onChange={() => toggleFilterValue(setSelectedAgentFilter, m.id)}
+                        />
+                        <span className="truncate">{m.name}</span>
+                      </label>
                     ))}
-                  </select>
+                  </div>
                 </div>
 
-                {(selectedQueueFilter || selectedTagFilter || selectedInstanceFilter || selectedAgentFilter) && (
+                {(selectedQueueFilter.length > 0 || selectedTagFilter.length > 0 || selectedInstanceFilter.length > 0 || selectedAgentFilter.length > 0) && (
                   <Button
                     variant="ghost"
                     size="sm"
                     className="w-full text-xs h-7"
                     onClick={() => {
-                      setSelectedQueueFilter(null);
-                      setSelectedTagFilter(null);
-                      setSelectedInstanceFilter(null);
-                      setSelectedAgentFilter(null);
+                      setSelectedQueueFilter([]);
+                      setSelectedTagFilter([]);
+                      setSelectedInstanceFilter([]);
+                      setSelectedAgentFilter([]);
                     }}
                   >
                     Limpar Filtros
