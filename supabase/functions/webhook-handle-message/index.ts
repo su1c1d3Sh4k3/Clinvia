@@ -1815,7 +1815,7 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                         try {
                             const { data: campSent } = await supabase
                                 .from('campaign_contacts')
-                                .select('sent_at, campaigns!inner(id, name, objective, services, discount_pct, initial_message, ai_prompt, ia_enabled, scheduled_at, valid_until, status, instance_id, recurrence_service_client_id)')
+                                .select('sent_at, raw_data, campaigns!inner(id, name, objective, services, discount_pct, initial_message, ai_prompt, ia_enabled, scheduled_at, valid_until, status, instance_id, recurrence_service_client_id)')
                                 .eq('contact_id', contactId)
                                 .eq('status', 'sent')
                                 .eq('campaigns.instance_id', instance.id)
@@ -1827,11 +1827,22 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                             const camp = (campSent as any)?.campaigns;
                             if (camp) {
                                 if (camp.ia_enabled) campaignPrompt = camp.ai_prompt || null;
+                                // Objetivo por contato: interpola placeholders <var> a partir do
+                                // raw_data da entry (campanhas de recorrência gravam o objetivo
+                                // fixo da etapa com placeholders — a campanha agrupa contatos).
+                                let objectiveText: string | null = camp.objective || null;
+                                const entryVars = (campSent as any)?.raw_data;
+                                if (objectiveText && entryVars && typeof entryVars === 'object') {
+                                    objectiveText = objectiveText.replace(/<([a-z0-9_]+)>/gi, (match: string, key: string) => {
+                                        const v = (entryVars as Record<string, unknown>)[key];
+                                        return v != null && String(v).trim() !== '' ? String(v).trim() : match;
+                                    });
+                                }
                                 campaignBlock = {
                                     campaign_tag: camp.name,
                                     campaign_id: camp.id,
                                     name: camp.name,
-                                    objective: camp.objective || null,
+                                    objective: objectiveText,
                                     services: camp.services || [],
                                     discount_pct: camp.discount_pct ?? null,
                                     initial_message: camp.initial_message || null,

@@ -25,6 +25,7 @@ function row(partial: Partial<RecurrenceTrackingRow>): RecurrenceTrackingRow {
         service_name: "Toxina Botulínica",
         application_name: "Botox Full Face",
         scheduled: false,
+        procedure_date: "2026-07-21",
         approach_1_date: null,
         approach_1_status: "pendente",
         approach_2_date: null,
@@ -128,11 +129,12 @@ describe("groupDueApproaches", () => {
 describe("buildRecurrenceVars", () => {
     const due = collectDueApproaches([row({ approach_1_date: TODAY })], TODAY)[0];
 
-    it("monta as 6 variáveis do editor", () => {
+    it("monta as 6 variáveis do editor + dados do procedimento", () => {
         const vars = buildRecurrenceVars(due, {
             clinicName: "Clínica Exemplo",
             price: 1200,
             professionalByAppointment: { a1: "Dra. Ana" },
+            todayISO: TODAY,
         });
         expect(vars).toEqual({
             nome_cliente: "Maria",
@@ -141,19 +143,28 @@ describe("buildRecurrenceVars", () => {
             aplicacao: "Botox Full Face",
             preco: formatPriceBRL(1200),
             profissional: "Dra. Ana",
+            data_procedimento: "21/07/2026",
+            dias_do_procedimento: "30 dias",
         });
         expect(vars.preco).toMatch(/1\.200,00/);
     });
 
-    it("fallbacks: sem clínica/preço/profissional", () => {
-        const vars = buildRecurrenceVars(due, {
+    it("fallbacks: sem clínica/preço/profissional/procedure_date", () => {
+        const dueNoProc = collectDueApproaches(
+            [row({ approach_1_date: TODAY, procedure_date: null })],
+            TODAY,
+        )[0];
+        const vars = buildRecurrenceVars(dueNoProc, {
             clinicName: "",
             price: null,
             professionalByAppointment: {},
+            todayISO: TODAY,
         });
         expect(vars.nome_clinica).toBe("nossa clínica");
         expect(vars.preco).toBe("");
         expect(vars.profissional).toBe("nossa equipe");
+        expect(vars.data_procedimento).toBe("");
+        expect(vars.dias_do_procedimento).toBe("");
     });
 });
 

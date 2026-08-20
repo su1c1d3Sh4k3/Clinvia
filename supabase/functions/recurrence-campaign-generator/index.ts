@@ -15,12 +15,13 @@ import {
     groupDueApproaches,
     buildRecurrenceVars,
     buildRecurrenceCampaignName,
+    buildRecurrenceObjective,
+    RECURRENCE_STAGE_PROMPTS,
     toDispatchMessage,
     deriveApproachOutcome,
     type RecurrenceTrackingRow,
     type DueApproach,
 } from "../_shared/recurrence-campaign.ts";
-import { generateCampaignAiPrompt } from "../_shared/campaign-ai-prompt.ts";
 
 /**
  * recurrence-campaign-generator (pg_cron diário 05:00 BRT)
@@ -269,7 +270,9 @@ async function processOwner(
             ).toISOString();
             const discountPct = sc[`recurrence_discount_pct_${msgNumber}`] ?? null;
             const initialMessage = toDispatchMessage(messageText);
-            const objective = `Trazer o cliente de volta para uma nova sessão de ${serviceName} (${sc.name}) — ciclo de recorrência, abordagem ${msgNumber} de 3.`;
+            // Objetivo fixo por etapa (Prévia/Vencimento/Pós) — placeholders <var>
+            // interpolados por contato no payload do n8n via raw_data da entry
+            const objective = buildRecurrenceObjective(msgNumber);
             const services = [{ id: sc.id, name: `${serviceName} — ${sc.name}`, price: sc.price }];
 
             const tagId = await findOrCreateTag(supabase, ownerId, name);
@@ -289,6 +292,7 @@ async function processOwner(
                     initial_message: initialMessage,
                     variable_map: isMeta ? template?.variable_map || [] : [],
                     objective,
+                    ai_prompt: RECURRENCE_STAGE_PROMPTS[msgNumber],
                     ia_enabled: true,
                     tag_id: tagId,
                     template_version: 1,
@@ -315,6 +319,7 @@ async function processOwner(
                     clinicName,
                     price: sc.price,
                     professionalByAppointment,
+                    todayISO: today,
                 }),
                 status: "pending",
             }));
@@ -342,24 +347,6 @@ async function processOwner(
                         updated_at: new Date().toISOString(),
                     })
                     .eq("id", due.trackingId);
-            }
-
-            // ai_prompt (mesmo gerador do campaign-manage — não bloqueante)
-            const aiPrompt = await generateCampaignAiPrompt(
-                supabase,
-                ownerId,
-                {
-                    name,
-                    objective,
-                    services,
-                    discount_pct: discountPct,
-                    valid_until: validUntil,
-                    initial_message: messageText,
-                },
-                "recurrence-campaign-generator",
-            );
-            if (aiPrompt) {
-                await supabase.from("campaigns").update({ ai_prompt: aiPrompt }).eq("id", campaign.id);
             }
 
             result.created++;
