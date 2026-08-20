@@ -248,7 +248,7 @@ export function CampaignsGuide() {
                     },
                     {
                         title: "Tag automática",
-                        description: "1 hora antes do disparo, os contatos da audiência ganham uma etiqueta com o nome da campanha — útil para montar públicos futuros e para o aviso de 7 dias. Cada contato tem no máximo uma tag de campanha por conexão: se ele entra em outra campanha da mesma conexão, a tag antiga sai; quando a campanha encerra, a tag é removida de todos.",
+                        description: "1 hora antes do disparo, os contatos da audiência ganham uma etiqueta com o nome da campanha — útil para montar públicos futuros e para o aviso de 7 dias. Cada contato tem no máximo uma tag de campanha por conexão: se ele entra em outra campanha da mesma conexão, a tag antiga sai; quando a campanha encerra, a tag é removida de todos. As campanhas de Recorrência seguem a mesma regra: elas sobrepõem uma campanha de disparo antiga (o contato fica com a tag de recorrência) e podem ser sobrepostas por uma campanha nova criada depois.",
                     },
                 ]} />
             </TopicSection>
