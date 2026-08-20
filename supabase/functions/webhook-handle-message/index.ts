@@ -1852,7 +1852,9 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                                     campaign_prompt: camp.ai_prompt || null,
                                     service_description: null as string | null,
                                 };
-                                // Serviço atrelado à campanha → descrição (services_client.description)
+                                // Serviço(s) atrelado(s) à campanha → descrição por item do array
+                                // services (services_client.description); service_description no
+                                // topo continua como agregado (compat n8n).
                                 try {
                                     const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
                                     const svcList: any[] = Array.isArray(camp.services) ? camp.services : [];
@@ -1865,14 +1867,25 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                                             .from('services_client')
                                             .select('id, name, description')
                                             .in('id', svcIds);
+                                        const descById = new Map<string, string>(
+                                            (svcRows || [])
+                                                .filter((s: any) => s.description && String(s.description).trim() !== '')
+                                                .map((s: any) => [s.id, String(s.description).trim()]),
+                                        );
+                                        // Cada serviço do array leva sua própria descrição
+                                        campaignBlock.services = svcList.map((s: any) =>
+                                            s && typeof s === 'object'
+                                                ? { ...s, description: descById.get(s.id) ?? null }
+                                                : s,
+                                        );
                                         const withDesc = (svcRows || []).filter(
-                                            (s: any) => s.description && String(s.description).trim() !== '',
+                                            (s: any) => descById.has(s.id),
                                         );
                                         if (withDesc.length === 1) {
-                                            campaignBlock.service_description = String(withDesc[0].description).trim();
+                                            campaignBlock.service_description = descById.get(withDesc[0].id) ?? null;
                                         } else if (withDesc.length > 1) {
                                             campaignBlock.service_description = withDesc
-                                                .map((s: any) => `${s.name}: ${String(s.description).trim()}`)
+                                                .map((s: any) => `${s.name}: ${descById.get(s.id)}`)
                                                 .join('\n');
                                         }
                                     }
