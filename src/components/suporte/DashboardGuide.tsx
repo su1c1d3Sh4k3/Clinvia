@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import {
     LayoutDashboard, Headphones, Users, ShoppingCart, CalendarDays, Megaphone,
-    Smile, HelpCircle, ExternalLink, Bell,
+    RefreshCcw, Smile, HelpCircle, ExternalLink, Bell,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,6 +21,7 @@ const TOPICS = [
     { id: "vendas", label: "Aba Vendas" },
     { id: "agendamentos", label: "Aba Agendamentos" },
     { id: "campanhas-dash", label: "Aba Campanhas" },
+    { id: "recorrencia-dash", label: "Aba Recorrência" },
     { id: "satisfacao", label: "Aba Satisfação" },
     { id: "faq", label: "FAQ" },
 ];
@@ -68,6 +69,7 @@ export function DashboardGuide() {
                         { icon: ShoppingCart, t: "Vendas", d: "Quanto entrou, o que está pendente, quem vendeu?" },
                         { icon: CalendarDays, t: "Agendamentos", d: "Ocupação dos profissionais e mensagens automáticas." },
                         { icon: Megaphone, t: "Campanhas", d: "Resultado dos disparos em massa, contato a contato." },
+                        { icon: RefreshCcw, t: "Recorrência", d: "Abordagens de recompra mês a mês: fases, contatos e conversão." },
                         { icon: Smile, t: "Satisfação", d: "Notas NPS, avaliações recentes e tempo de atendimento." },
                     ].map((c) => (
                         <div key={c.t} className="rounded-xl border p-3.5">
@@ -174,7 +176,27 @@ export function DashboardGuide() {
             </TopicSection>
 
             {/* 7 */}
-            <TopicSection id="satisfacao" index={7} icon={Smile} title="Aba Satisfação"
+            <TopicSection id="recorrencia-dash" index={7} icon={RefreshCcw} title="Aba Recorrência"
+                subtitle="As abordagens de recompra, mês a mês">
+                <p className="text-sm text-muted-foreground">
+                    Antes misturada à aba Campanhas, a recorrência agora tem aba própria com a mesma estrutura:
+                    filtro de período, cards de resumo e um card por mês. Cada card mostra as três fases
+                    (<strong className="text-foreground">Prévia, Vencimento e Pós</strong>), quantos contatos agendaram
+                    e, ao expandir, a tabela completa de recorrência daquele mês — a mesma da página Recorrência.
+                </p>
+                <StepByStep steps={[
+                    { title: "Cards de resumo", description: "Total de contatos no período, abordagens realizadas, clientes em contato, quantos agendaram, taxa de conversão e custo estimado das mensagens." },
+                    { title: "Card do mês", description: "As bolinhas indicam as fases concluídas; a barra mostra o avanço da fase atual. A % 'agendaram' é a conversão do mês." },
+                    { title: "Tabela detalhada", description: "Clique no card para expandir a tabela contato a contato, com datas e status de cada abordagem." },
+                ]} />
+                <Callout type="dica" title="Onde edito as recorrências?">
+                    Aqui é o painel de acompanhamento. O cadastro e a atualização das abordagens continuam na página{" "}
+                    <strong>Recorrência</strong> do menu lateral.
+                </Callout>
+            </TopicSection>
+
+            {/* 8 */}
+            <TopicSection id="satisfacao" index={8} icon={Smile} title="Aba Satisfação"
                 subtitle="NPS, últimas avaliações e desempenho do atendimento">
                 <StepByStep steps={[
                     { title: "De onde vêm as notas", description: "Da pesquisa automática enviada 24h após o atendimento (nota 1 a 5 por botões). A nota é atribuída ao profissional do agendamento." },
@@ -187,8 +209,8 @@ export function DashboardGuide() {
                 </Callout>
             </TopicSection>
 
-            {/* 8 */}
-            <TopicSection id="faq" index={8} icon={HelpCircle} title="Perguntas frequentes">
+            {/* 9 */}
+            <TopicSection id="faq" index={9} icon={HelpCircle} title="Perguntas frequentes">
                 <Accordion type="single" collapsible className="rounded-xl border px-4">
                     {[
                         {

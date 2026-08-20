@@ -6,15 +6,16 @@ import { SalesDashboard } from "@/components/dashboard/SalesDashboard";
 import { CrmDashboard } from "@/components/dashboard/crm/CrmDashboard";
 import { AgendamentosDashboard } from "@/components/dashboard/agendamentos/AgendamentosDashboard";
 import { CampanhasDashboard } from "@/components/dashboard/campanhas/CampanhasDashboard";
+import { RecorrenciaDashboard } from "@/components/dashboard/recorrencia/RecorrenciaDashboard";
 import { SatisfacaoDashboard } from "@/components/dashboard/satisfacao/SatisfacaoDashboard";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Headphones, Users, ShoppingCart, CalendarDays, Megaphone, Smile } from "lucide-react";
+import { Headphones, Users, ShoppingCart, CalendarDays, Megaphone, RefreshCcw, Smile } from "lucide-react";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useFinancialAccess } from "@/hooks/useFinancialAccess";
 import { cn } from "@/lib/utils";
 import { useSuporteTour } from "@/lib/suporteTours";
 
-type DashboardTab = "monitoramento" | "crm" | "vendas" | "agendamentos" | "campanhas" | "satisfacao";
+type DashboardTab = "monitoramento" | "crm" | "vendas" | "agendamentos" | "campanhas" | "recorrencia" | "satisfacao";
 
 const Dashboard = () => {
     const { data: userRole } = useUserRole();
@@ -47,7 +48,7 @@ const Dashboard = () => {
                 <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as DashboardTab)} className="w-full">
                     <TabsList data-tour="dash-tabs" className={cn(
                         "grid w-full max-w-5xl mx-auto",
-                        userRole === 'agent' ? "grid-cols-1" : canViewSales ? "grid-cols-6" : "grid-cols-5"
+                        userRole === 'agent' ? "grid-cols-1" : canViewSales ? "grid-cols-7" : "grid-cols-6"
                     )}>
                         {userRole !== 'agent' && (
                             <TabsTrigger
@@ -94,6 +95,15 @@ const Dashboard = () => {
                         )}
                         {userRole !== 'agent' && (
                             <TabsTrigger
+                                value="recorrencia"
+                                className="flex items-center gap-2"
+                            >
+                                <RefreshCcw className="h-4 w-4 shrink-0 transition-transform duration-300 data-[state=active]:scale-110" />
+                                <span className="hidden sm:inline">Recorrência</span>
+                            </TabsTrigger>
+                        )}
+                        {userRole !== 'agent' && (
+                            <TabsTrigger
                                 value="satisfacao"
                                 className="flex items-center gap-2"
                             >
@@ -121,6 +131,10 @@ const Dashboard = () => {
 
                 {activeTab === "campanhas" && userRole !== 'agent' && (
                     <CampanhasDashboard />
+                )}
+
+                {activeTab === "recorrencia" && userRole !== 'agent' && (
+                    <RecorrenciaDashboard />
                 )}
 
                 {activeTab === "satisfacao" && userRole !== 'agent' && (

@@ -5,7 +5,6 @@ import { Campaign } from "@/hooks/useCampaigns";
 import { CampanhasPeriodFilter } from "./CampanhasPeriodFilter";
 import { CampanhasKpiCards } from "./CampanhasKpiCards";
 import { CampaignExpandableCard } from "./CampaignExpandableCard";
-import { RecurrenceMonthCard } from "./RecurrenceMonthCard";
 import { MetaQualityPanel } from "@/components/campaigns/MetaQualityPanel";
 import { CampaignWizard } from "@/components/campaigns/CampaignWizard";
 
@@ -31,23 +30,19 @@ export function CampanhasDashboard() {
             ) : items.length === 0 ? (
                 <div className="border rounded-xl p-10 text-center text-muted-foreground">
                     <Megaphone className="w-8 h-8 mx-auto mb-3 opacity-40" />
-                    <p className="font-medium">Nenhuma campanha ou recorrência no período</p>
+                    <p className="font-medium">Nenhuma campanha no período</p>
                     <p className="text-sm mt-1">Ajuste o filtro ou crie uma campanha em /campanhas.</p>
                 </div>
             ) : (
                 <div className="space-y-3">
-                    {items.map((item) =>
-                        item.kind === "campaign" ? (
-                            <CampaignExpandableCard
-                                key={`c-${item.campaign.id}`}
-                                campaign={item.campaign}
-                                stats={item.stats}
-                                onResend={setResending}
-                            />
-                        ) : (
-                            <RecurrenceMonthCard key={`r-${item.agg.monthKey}`} agg={item.agg} />
-                        )
-                    )}
+                    {items.map((item) => (
+                        <CampaignExpandableCard
+                            key={item.campaign.id}
+                            campaign={item.campaign}
+                            stats={item.stats}
+                            onResend={setResending}
+                        />
+                    ))}
                 </div>
             )}
 

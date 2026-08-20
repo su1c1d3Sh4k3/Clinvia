@@ -130,16 +130,28 @@ export interface RecurrenceMonthAgg {
     sortDate: Date; // dia 1 do mês
 }
 
-export type DashboardListItem =
-    | { kind: "campaign"; campaign: Campaign; stats?: CampaignStatsRow; sortDate: Date }
-    | { kind: "recurrence"; agg: RecurrenceMonthAgg; sortDate: Date };
+export interface CampaignListItem {
+    campaign: Campaign;
+    stats?: CampaignStatsRow;
+    sortDate: Date;
+}
 
 export interface CampanhasKpis {
     totalContacts: number;
     sentMessages: number;
     errorMessages: number;
     respondedMessages: number;
-    conversionPct: number; // só campanhas
+    conversionPct: number;
+    costBRL: number;
+    rateIsFallback: boolean;
+}
+
+export interface RecorrenciaKpis {
+    totalContacts: number;
+    realizedApproaches: number;
+    inContactCount: number;
+    scheduledCount: number;
+    conversionPct: number; // agendaram / contatos
     costBRL: number;
     rateIsFallback: boolean;
 }
@@ -202,7 +214,6 @@ function aggregateRecurrenceMonth(monthKey: string, entries: RecurrenceEntry[]):
 export function useCampaignDashboard(period: CampanhasPeriod) {
     const { data: campaigns, isLoading: loadingCampaigns } = useCampaigns();
     const { data: stats, isLoading: loadingStats } = useCampaignDashboardStats(period);
-    const { data: recurrence, isLoading: loadingRecurrence } = useRecurrenceEntries();
     const { data: rateData } = useUsdBrlRate();
 
     const range = periodToRange(period);
@@ -211,11 +222,56 @@ export function useCampaignDashboard(period: CampanhasPeriod) {
         const statsMap = new Map<string, CampaignStatsRow>();
         for (const s of stats || []) statsMap.set(s.campaign_id, s);
 
-        // Campanhas no período (scheduled_at)
-        const filteredCampaigns = (campaigns || []).filter((c) =>
-            inRange(new Date(c.scheduled_at), range)
-        );
+        // Campanhas no período (scheduled_at), mais recentes primeiro
+        const items: CampaignListItem[] = (campaigns || [])
+            .filter((c) => inRange(new Date(c.scheduled_at), range))
+            .map((c) => ({
+                campaign: c,
+                stats: statsMap.get(c.id),
+                sortDate: new Date(c.scheduled_at),
+            }))
+            .sort((a, b) => b.sortDate.getTime() - a.sortDate.getTime());
 
+        // KPIs
+        let campTotal = 0, campDelivered = 0, campFailed = 0, campResponded = 0, campConverted = 0, campSent = 0;
+        for (const item of items) {
+            const s = item.stats;
+            if (!s) continue;
+            campTotal += s.total_contacts;
+            campSent += s.sent_count;
+            campDelivered += s.delivered_count;
+            campFailed += s.failed_count;
+            campResponded += s.responded_count;
+            campConverted += s.converted_count;
+        }
+
+        const rate = rateData?.rate ?? 5.5;
+        const kpis: CampanhasKpis = {
+            totalContacts: campTotal,
+            sentMessages: campDelivered,
+            errorMessages: campFailed,
+            respondedMessages: campResponded,
+            conversionPct: campTotal > 0 ? (campConverted / campTotal) * 100 : 0,
+            costBRL: campSent * COST_PER_MSG_USD * rate,
+            rateIsFallback: rateData?.isFallback ?? true,
+        };
+
+        return {
+            kpis,
+            items,
+            isLoading: loadingCampaigns || loadingStats,
+        };
+    }, [campaigns, stats, rateData, range.from?.getTime(), range.to?.getTime(), loadingCampaigns, loadingStats]);
+}
+
+/** Dashboard da aba Recorrência: mesma estrutura da aba Campanhas, só recorrência. */
+export function useRecorrenciaDashboard(period: CampanhasPeriod) {
+    const { data: recurrence, isLoading } = useRecurrenceEntries();
+    const { data: rateData } = useUsdBrlRate();
+
+    const range = periodToRange(period);
+
+    return useMemo(() => {
         // Recorrências no período (recurrence_date) agrupadas por mês
         const monthMap = new Map<string, RecurrenceEntry[]>();
         for (const e of recurrence || []) {
@@ -226,63 +282,29 @@ export function useCampaignDashboard(period: CampanhasPeriod) {
             if (!monthMap.has(key)) monthMap.set(key, []);
             monthMap.get(key)!.push(e);
         }
-        const monthAggs = [...monthMap.entries()].map(([key, entries]) =>
-            aggregateRecurrenceMonth(key, entries)
-        );
+        const months = [...monthMap.entries()]
+            .map(([key, entries]) => aggregateRecurrenceMonth(key, entries))
+            .sort((a, b) => b.sortDate.getTime() - a.sortDate.getTime());
 
-        // Lista unificada, mais recentes primeiro (empate: campanha antes)
-        const items: DashboardListItem[] = [
-            ...filteredCampaigns.map((c) => ({
-                kind: "campaign" as const,
-                campaign: c,
-                stats: statsMap.get(c.id),
-                sortDate: new Date(c.scheduled_at),
-            })),
-            ...monthAggs.map((agg) => ({
-                kind: "recurrence" as const,
-                agg,
-                sortDate: agg.sortDate,
-            })),
-        ].sort((a, b) => {
-            const diff = b.sortDate.getTime() - a.sortDate.getTime();
-            if (diff !== 0) return diff;
-            return a.kind === "campaign" ? -1 : 1;
-        });
-
-        // KPIs
-        let campTotal = 0, campDelivered = 0, campFailed = 0, campResponded = 0, campConverted = 0, campSent = 0;
-        for (const c of filteredCampaigns) {
-            const s = statsMap.get(c.id);
-            if (!s) continue;
-            campTotal += s.total_contacts;
-            campSent += s.sent_count;
-            campDelivered += s.delivered_count;
-            campFailed += s.failed_count;
-            campResponded += s.responded_count;
-            campConverted += s.converted_count;
-        }
-        let recContacts = 0, recRealized = 0, recInContact = 0;
-        for (const agg of monthAggs) {
+        let recContacts = 0, recRealized = 0, recInContact = 0, recScheduled = 0;
+        for (const agg of months) {
             recContacts += agg.contactCount;
             recRealized += agg.realizedApproaches;
             recInContact += agg.inContactCount;
+            recScheduled += agg.scheduledCount;
         }
 
         const rate = rateData?.rate ?? 5.5;
-        const kpis: CampanhasKpis = {
-            totalContacts: campTotal + recContacts,
-            sentMessages: campDelivered + recRealized,
-            errorMessages: campFailed,
-            respondedMessages: campResponded + recInContact,
-            conversionPct: campTotal > 0 ? (campConverted / campTotal) * 100 : 0,
-            costBRL: (campSent + recRealized) * COST_PER_MSG_USD * rate,
+        const kpis: RecorrenciaKpis = {
+            totalContacts: recContacts,
+            realizedApproaches: recRealized,
+            inContactCount: recInContact,
+            scheduledCount: recScheduled,
+            conversionPct: recContacts > 0 ? (recScheduled / recContacts) * 100 : 0,
+            costBRL: recRealized * COST_PER_MSG_USD * rate,
             rateIsFallback: rateData?.isFallback ?? true,
         };
 
-        return {
-            kpis,
-            items,
-            isLoading: loadingCampaigns || loadingStats || loadingRecurrence,
-        };
-    }, [campaigns, stats, recurrence, rateData, range.from?.getTime(), range.to?.getTime(), loadingCampaigns, loadingStats, loadingRecurrence]);
+        return { kpis, months, isLoading };
+    }, [recurrence, rateData, range.from?.getTime(), range.to?.getTime(), isLoading]);
 }
