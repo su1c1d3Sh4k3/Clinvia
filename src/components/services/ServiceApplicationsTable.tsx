@@ -16,6 +16,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { EditApplicationModal } from "./EditApplicationModal";
 import { AddApplicationModal } from "./AddApplicationModal";
+import { RecurrenceTemplateBadge } from "./RecurrenceTemplateBadge";
+import { useRecurrenceTemplateBadges } from "@/hooks/useRecurrenceTemplateBadges";
 import { cn } from "@/lib/utils";
 
 interface ServiceApplicationsTableProps {
@@ -32,6 +34,7 @@ export const ServiceApplicationsTable = ({
   const queryClient = useQueryClient();
   const [editApp, setEditApp] = useState<ServiceClient | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const { data: templateBadges } = useRecurrenceTemplateBadges();
 
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat("pt-BR", {
@@ -142,7 +145,12 @@ export const ServiceApplicationsTable = ({
               >
                 <TableCell>
                   <div>
-                    <span className="font-medium text-sm">{app.name}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-medium text-sm">{app.name}</span>
+                      {templateBadges?.hasMeta && (
+                        <RecurrenceTemplateBadge status={templateBadges.badges[app.id]} />
+                      )}
+                    </div>
                     {app.description && (
                       <p className="text-xs text-muted-foreground truncate max-w-[250px]">
                         {app.description}

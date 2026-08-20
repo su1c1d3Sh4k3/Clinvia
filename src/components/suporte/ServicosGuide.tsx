@@ -174,8 +174,12 @@ export function ServicosGuide() {
                     cliente vai receber antes de salvar.
                 </Callout>
                 <Callout type="atencao" title="API oficial (Meta)">
-                    Para quem usa a API oficial, essas mensagens são enviadas como template aprovado pela Meta. Quem usa
-                    API não oficial recebe o texto livre com as variáveis já substituídas.
+                    Para quem usa a API oficial, ao salvar o serviço os templates são{" "}
+                    <strong>enviados automaticamente para aprovação da Meta</strong> — um selo ao lado do nome da
+                    aplicação mostra o status: <strong>template aprovado</strong> (verde),{" "}
+                    <strong>aprovação pendente</strong> (âmbar) ou <strong>aprovação negada</strong> (vermelho). Editou a
+                    mensagem? Uma nova versão é submetida e o selo volta a pendente. Quem usa API não oficial recebe o
+                    texto livre com as variáveis já substituídas (sem aprovação).
                 </Callout>
             </TopicSection>
 

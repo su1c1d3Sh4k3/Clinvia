@@ -38,6 +38,7 @@ import {
   ServiceApplication,
 } from "@/types/services";
 import { RecurrenceTab, RecurrenceData, defaultRecurrenceData, hasInvalidRecurrenceVariables } from "./RecurrenceTab";
+import { syncRecurrenceTemplates } from "@/lib/recurrenceTemplateSync";
 import { DirectEntryModal } from "./DirectEntryModal";
 import { AddApplicationModal } from "./AddApplicationModal";
 import { Input } from "@/components/ui/input";
@@ -284,13 +285,18 @@ export const AddByCategoryModal = ({
         recurrence_discount_pct_3: recurrence.recurrence_discount_pct_3,
       }));
 
-      const { error } = await supabase
+      const { data: inserted, error } = await supabase
         .from("services_client" as any)
-        .insert(rows);
+        .insert(rows)
+        .select("id");
 
       if (error) throw error;
 
+      // Templates Meta de recorrência (fire-and-forget; no-op sem instância Meta)
+      syncRecurrenceTemplates(((inserted as any[]) || []).map((r) => r.id));
+
       queryClient.invalidateQueries({ queryKey: ["services-client"] });
+      queryClient.invalidateQueries({ queryKey: ["recurrence-template-badges"] });
       toast.success(`${rows.length} aplicações adicionadas com sucesso`);
       onOpenChange(false);
     } catch (err: any) {

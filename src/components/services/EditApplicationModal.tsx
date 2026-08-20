@@ -16,6 +16,7 @@ import { ProfessionalSelector } from "./ProfessionalSelector";
 import { RecurrenceTab, RecurrenceData, defaultRecurrenceData, hasInvalidRecurrenceVariables } from "./RecurrenceTab";
 import { ServiceClient } from "@/types/services";
 import { supabase } from "@/integrations/supabase/client";
+import { syncRecurrenceTemplates } from "@/lib/recurrenceTemplateSync";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -135,7 +136,11 @@ export const EditApplicationModal = ({
           .eq("service_name_id", application.service_name_id);
       }
 
+      // Templates Meta de recorrência (fire-and-forget; no-op sem instância Meta)
+      syncRecurrenceTemplates([application.id]);
+
       queryClient.invalidateQueries({ queryKey: ["services-client"] });
+      queryClient.invalidateQueries({ queryKey: ["recurrence-template-badges"] });
       toast.success("Aplicação atualizada com sucesso");
       onOpenChange(false);
     } catch (err: any) {
