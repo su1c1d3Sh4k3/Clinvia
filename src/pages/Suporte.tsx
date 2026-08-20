@@ -2,7 +2,7 @@ import { ComponentType } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
     LayoutDashboard, MessageSquare, KanbanSquare, Package, Users, ShieldCheck,
-    Calendar, Repeat, Megaphone, Bot, Plug, Settings, Construction, LucideIcon,
+    Calendar, Repeat, Megaphone, Bot, Plug, Settings, LucideIcon,
 } from "lucide-react";
 import { CampaignsGuide } from "@/components/suporte/CampaignsGuide";
 import { IaGuide } from "@/components/suporte/IaGuide";
@@ -15,24 +15,8 @@ import { ServicosGuide } from "@/components/suporte/ServicosGuide";
 import { ConexoesGuide } from "@/components/suporte/ConexoesGuide";
 import { EquipeGuide } from "@/components/suporte/EquipeGuide";
 import { ConfiguracoesGuide } from "@/components/suporte/ConfiguracoesGuide";
+import { RecorrenciaGuide } from "@/components/suporte/RecorrenciaGuide";
 import { useUrlTab } from "@/hooks/useUrlTab";
-
-/** Placeholder para guias ainda não escritos (e para Recorrência, em aprovação). */
-function GuidePlaceholder({ title }: { title: string }) {
-    return (
-        <div className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed p-10 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
-                <Construction className="h-6 w-6" />
-            </div>
-            <div>
-                <p className="font-semibold">Guia de {title} em construção</p>
-                <p className="text-sm text-muted-foreground">
-                    As regras desta ferramenta estão em aprovação — o manual será publicado em breve.
-                </p>
-            </div>
-        </div>
-    );
-}
 
 interface GuideTab {
     value: string;
@@ -50,7 +34,7 @@ const GUIDE_TABS: GuideTab[] = [
     { value: "clientes", label: "Clientes", icon: Users, component: ClientesGuide },
     { value: "equipe", label: "Equipe", icon: ShieldCheck, component: EquipeGuide },
     { value: "agenda", label: "Agenda", icon: Calendar, component: AgendaGuide },
-    { value: "recorrencia", label: "Recorrência", icon: Repeat, component: () => <GuidePlaceholder title="Recorrência" /> },
+    { value: "recorrencia", label: "Recorrência", icon: Repeat, component: RecorrenciaGuide },
     { value: "campanhas", label: "Campanhas", icon: Megaphone, component: CampaignsGuide },
     { value: "ia", label: "IA", icon: Bot, component: IaGuide },
     { value: "conexoes", label: "Conexões", icon: Plug, component: ConexoesGuide },

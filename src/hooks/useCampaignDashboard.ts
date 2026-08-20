@@ -10,6 +10,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { useUsdBrlRate } from "@/hooks/useUsdBrlRate";
 import { useCampaigns, Campaign } from "@/hooks/useCampaigns";
+import {
+    isRecurrenceCampaign,
+    groupRecurrenceCampaignsByDate,
+    RecurrenceDayGroup,
+} from "@/lib/recurrenceCampaigns";
 import { COST_PER_MSG_USD } from "@/components/campaigns/CampaignCard";
 import { RecurrenceEntry } from "@/components/recurrence/RecurrenceMonthTable";
 
@@ -222,9 +227,10 @@ export function useCampaignDashboard(period: CampanhasPeriod) {
         const statsMap = new Map<string, CampaignStatsRow>();
         for (const s of stats || []) statsMap.set(s.campaign_id, s);
 
-        // Campanhas no período (scheduled_at), mais recentes primeiro
+        // Campanhas no período (scheduled_at), mais recentes primeiro.
+        // Recorrência fica FORA da aba Campanhas (aba Recorrência da dash).
         const items: CampaignListItem[] = (campaigns || [])
-            .filter((c) => inRange(new Date(c.scheduled_at), range))
+            .filter((c) => !isRecurrenceCampaign(c) && inRange(new Date(c.scheduled_at), range))
             .map((c) => ({
                 campaign: c,
                 stats: statsMap.get(c.id),
@@ -262,6 +268,36 @@ export function useCampaignDashboard(period: CampanhasPeriod) {
             isLoading: loadingCampaigns || loadingStats,
         };
     }, [campaigns, stats, rateData, range.from?.getTime(), range.to?.getTime(), loadingCampaigns, loadingStats]);
+}
+
+/**
+ * Campanhas de recorrência agrupadas por dia (container pai "Recorrencia - dd/MM/yyyy").
+ * Reusa useCampaigns + get_campaign_dashboard_stats; filtra pelo período (recurrence_date).
+ */
+export function useRecurrenceCampaignGroups(period: CampanhasPeriod): {
+    groups: RecurrenceDayGroup<Campaign>[];
+    statsMap: Map<string, CampaignStatsRow>;
+    isLoading: boolean;
+} {
+    const { data: campaigns, isLoading: loadingCampaigns } = useCampaigns();
+    const { data: stats, isLoading: loadingStats } = useCampaignDashboardStats(period);
+    const range = periodToRange(period);
+
+    return useMemo(() => {
+        const statsMap = new Map<string, CampaignStatsRow>();
+        for (const s of stats || []) statsMap.set(s.campaign_id, s);
+
+        const recCampaigns = (campaigns || []).filter(
+            (c) =>
+                isRecurrenceCampaign(c) &&
+                inRange(new Date(c.recurrence_date + "T12:00:00"), range),
+        );
+        return {
+            groups: groupRecurrenceCampaignsByDate(recCampaigns),
+            statsMap,
+            isLoading: loadingCampaigns || loadingStats,
+        };
+    }, [campaigns, stats, range.from?.getTime(), range.to?.getTime(), loadingCampaigns, loadingStats]);
 }
 
 /** Dashboard da aba Recorrência: mesma estrutura da aba Campanhas, só recorrência. */

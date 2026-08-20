@@ -189,9 +189,19 @@ export function DashboardGuide() {
                     { title: "Card do mês", description: "As bolinhas indicam as fases concluídas; a barra mostra o avanço da fase atual. A % 'agendaram' é a conversão do mês." },
                     { title: "Tabela detalhada", description: "Clique no card para expandir a tabela contato a contato, com datas e status de cada abordagem." },
                 ]} />
+                <p className="text-sm text-muted-foreground">
+                    Abaixo dos meses fica a seção <strong className="text-foreground">Campanhas de Recorrência</strong>:
+                    um container por dia (<em>Recorrencia - dd/mm/aaaa</em>) agrupando as campanhas geradas
+                    automaticamente naquele dia — uma por serviço e por número de mensagem. Expanda o dia para ver
+                    cada campanha com envios, entregas, respostas e a tabela de contatos, igual à aba Campanhas.
+                    Se um template da Meta ainda não foi aprovado, a campanha aparece com um alerta vermelho{" "}
+                    <em>"Campanha interrompida devido a não aprovação do template da Meta"</em> — os contatos entram
+                    na campanha do dia em que o template for aprovado.
+                </p>
                 <Callout type="dica" title="Onde edito as recorrências?">
                     Aqui é o painel de acompanhamento. O cadastro e a atualização das abordagens continuam na página{" "}
-                    <strong>Recorrência</strong> do menu lateral.
+                    <strong>Recorrência</strong> do menu lateral — e as mensagens/descontos de cada abordagem, na
+                    aba Recorrência de cada aplicação em <strong>Serviços</strong>.
                 </Callout>
             </TopicSection>
 

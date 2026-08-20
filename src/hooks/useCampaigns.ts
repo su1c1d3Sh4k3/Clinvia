@@ -65,7 +65,7 @@ export interface Campaign {
     user_id: string;
     instance_id: string | null;
     name: string;
-    source_type: "csv" | "xml" | "crm" | "tag" | "appointments" | "sales";
+    source_type: "csv" | "xml" | "crm" | "tag" | "appointments" | "sales" | "recurrence";
     source_config: any;
     scheduled_at: string;
     valid_until: string;
@@ -82,8 +82,13 @@ export interface Campaign {
     template_id: string | null;
     template_name: string | null;
     template_version: number;
-    status: "scheduled" | "awaiting_template" | "dispatching" | "dispatched" | "error" | "cancelled" | "expired";
+    status: "scheduled" | "awaiting_template" | "dispatching" | "dispatched" | "error" | "cancelled" | "expired" | "blocked";
     error_message: string | null;
+    // Recorrência (Fase 4/5 — campanhas geradas pelo recurrence-campaign-generator)
+    recurrence_date?: string | null; // "yyyy-MM-dd"
+    recurrence_service_client_id?: string | null;
+    recurrence_msg_number?: number | null;
+    blocked_reason?: string | null;
     created_at: string;
     updated_at: string;
     // Enriquecidos client-side

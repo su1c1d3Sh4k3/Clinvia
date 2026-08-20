@@ -29,6 +29,7 @@ export const CAMPAIGN_STATUS: Record<string, { label: string; className: string 
     error: { label: "Erro", className: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" },
     cancelled: { label: "Cancelada", className: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400" },
     expired: { label: "Expirada", className: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400" },
+    blocked: { label: "Bloqueada", className: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" },
 };
 
 export const TEMPLATE_STATUS: Record<string, { label: string; className: string }> = {
