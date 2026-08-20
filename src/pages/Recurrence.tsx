@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useOwnerId } from "@/hooks/useOwnerId";
-import { Search, ChevronDown, ChevronRight, CalendarDays } from "lucide-react";
+import { Search, ChevronDown, ChevronRight, CalendarDays, Settings } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { RecurrenceMonthTable, RecurrenceEntry } from "@/components/recurrence/RecurrenceMonthTable";
+import { RecurrenceConfigModal } from "@/components/recurrence/RecurrenceConfigModal";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -44,6 +45,7 @@ const Recurrence = () => {
   const [customFrom, setCustomFrom] = useState<Date | undefined>();
   const [customTo, setCustomTo] = useState<Date | undefined>();
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
+  const [configOpen, setConfigOpen] = useState(false);
 
   // Fetch data
   const { data: entries, isLoading } = useQuery({
@@ -136,12 +138,24 @@ const Recurrence = () => {
       <div className="flex-1 overflow-auto p-4 md:p-8">
         <div className="max-w-6xl mx-auto space-y-4 md:space-y-6">
           {/* Header */}
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold">Recorrência</h1>
-            <p className="text-muted-foreground text-sm md:text-base mt-1">
-              Acompanhe o ciclo de recorrência dos clientes por serviço
-            </p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold">Recorrência</h1>
+              <p className="text-muted-foreground text-sm md:text-base mt-1">
+                Acompanhe o ciclo de recorrência dos clientes por serviço
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="icon"
+              className="shrink-0"
+              title="Configurações de recorrência"
+              onClick={() => setConfigOpen(true)}
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
           </div>
+          <RecurrenceConfigModal open={configOpen} onOpenChange={setConfigOpen} />
 
           {/* Filters */}
           <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 flex-wrap">

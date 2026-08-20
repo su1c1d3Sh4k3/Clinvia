@@ -138,6 +138,13 @@ export function ConfiguracoesGuide() {
                     número que envia confirmações de agendamento (24h antes), lembretes (2h antes) e pesquisas de
                     satisfação. Sem escolha manual, o sistema prefere um número oficial Meta conectado.
                 </p>
+                <p className="text-sm text-muted-foreground">
+                    A aba tem dois cartões separados: <strong className="text-foreground">Envios Automáticos</strong>{" "}
+                    (confirmações, lembretes e feedback de agendamento) e{" "}
+                    <strong className="text-foreground">Recorrência</strong> — o número que dispara as campanhas diárias
+                    de recorrência dos serviços. Cada um pode usar uma instância diferente. A instância e o horário da
+                    Recorrência também podem ser ajustados pelo botão de engrenagem na página Recorrência.
+                </p>
                 <Callout type="atencao" title="Prefira o número oficial (Meta)">
                     Selecionar uma conexão por QR code (não oficial) como primária exibe um alerta de risco: disparos
                     automáticos em volume por número não oficial aumentam a chance de banimento pelo WhatsApp. O número

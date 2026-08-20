@@ -18,6 +18,7 @@ export interface AutomationInstance {
     meta_phone_number_id: string | null;
     meta_access_token: string | null;
     is_automation_primary: boolean;
+    is_recurrence_primary?: boolean;
 }
 
 export function isMetaInstance(i: {
@@ -49,4 +50,36 @@ export async function pickAutomationInstance(
     if (meta) return meta;
 
     return list[0];
+}
+
+// ── Recorrência (R14/R18) ────────────────────────────────────────────────────
+// Prioridade: is_recurrence_primary → Meta → mais antiga (lista já ordenada).
+
+/** Seleção pura (testável): primária de recorrência → Meta → primeira da lista. */
+export function selectRecurrenceInstance(
+    list: AutomationInstance[],
+): AutomationInstance | null {
+    if (!list.length) return null;
+    const primary = list.find((i) => i.is_recurrence_primary);
+    if (primary) return primary;
+    const meta = list.find(isMetaInstance);
+    if (meta) return meta;
+    return list[0];
+}
+
+/** Instância usada pelas campanhas de recorrência do owner. */
+export async function pickRecurrenceInstance(
+    supabase: any,
+    userId: string,
+): Promise<AutomationInstance | null> {
+    const { data } = await supabase
+        .from("instances")
+        .select(
+            "id, apikey, provider, instance_name, status, user_id, meta_waba_id, meta_phone_number_id, meta_access_token, is_automation_primary, is_recurrence_primary",
+        )
+        .eq("user_id", userId)
+        .eq("status", "connected")
+        .order("created_at", { ascending: true });
+
+    return selectRecurrenceInstance((data || []) as AutomationInstance[]);
 }
