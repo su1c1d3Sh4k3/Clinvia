@@ -40,7 +40,7 @@ export function DashboardGuide() {
                     <div>
                         <h1 className="text-xl font-bold">Manual do Dashboard</h1>
                         <p className="text-sm text-muted-foreground">
-                            A visão de comando da clínica: 6 abas de métricas para saber, em segundos, onde agir hoje.
+                            A visão de comando da clínica: 7 abas de métricas para saber, em segundos, onde agir hoje.
                         </p>
                     </div>
                 </div>
@@ -61,7 +61,7 @@ export function DashboardGuide() {
 
             {/* 1 */}
             <TopicSection id="o-que-e" index={1} icon={LayoutDashboard} title="O que é o Dashboard?"
-                subtitle="6 abas, cada uma responde uma pergunta">
+                subtitle="7 abas, cada uma responde uma pergunta">
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                     {[
                         { icon: Headphones, t: "Monitoramento", d: "O que está acontecendo AGORA nas conversas?" },
@@ -116,6 +116,12 @@ export function DashboardGuide() {
                     O período olha a data em que a conversa <strong>começou</strong>. Uma conversa aberta ontem que segue
                     em andamento aparece no filtro Ontem (ou 7 dias) — amplie o período para vê-la.
                 </Callout>
+                <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" onClick={() => navigate("/dashboard?tab=monitoramento&tour=monitoramento-tour")}>
+                        <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                        Me mostre na prática
+                    </Button>
+                </div>
             </TopicSection>
 
             {/* 3 */}

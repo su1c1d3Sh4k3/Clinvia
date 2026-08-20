@@ -19,6 +19,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { format, subDays, startOfYear, endOfYear, startOfMonth, endOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useSuporteTour } from "@/lib/suporteTours";
 
 // ---------------------------------------------------------------------------
 // Types & helpers
@@ -37,6 +38,7 @@ const MONTH_NAMES = [
 
 const Recurrence = () => {
   const { data: ownerId } = useOwnerId();
+  useSuporteTour();
 
   // Filters
   const [searchName, setSearchName] = useState("");
@@ -139,13 +141,14 @@ const Recurrence = () => {
         <div className="max-w-6xl mx-auto space-y-4 md:space-y-6">
           {/* Header */}
           <div className="flex items-start justify-between gap-3">
-            <div>
+            <div data-tour="recurrence-title">
               <h1 className="text-2xl md:text-3xl font-bold">Recorrência</h1>
               <p className="text-muted-foreground text-sm md:text-base mt-1">
                 Acompanhe o ciclo de recorrência dos clientes por serviço
               </p>
             </div>
             <Button
+              data-tour="recurrence-config"
               variant="outline"
               size="icon"
               className="shrink-0"
@@ -158,7 +161,7 @@ const Recurrence = () => {
           <RecurrenceConfigModal open={configOpen} onOpenChange={setConfigOpen} />
 
           {/* Filters */}
-          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 flex-wrap">
+          <div data-tour="recurrence-filtros" className="flex flex-col sm:flex-row gap-2 sm:gap-3 flex-wrap">
             {/* Search by name */}
             <div className="relative flex-1 min-w-[180px]">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />

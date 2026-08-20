@@ -395,7 +395,7 @@ export const ConversationsList = ({
           <div className="grid grid-cols-4 gap-1.5 flex-1">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="icon" className="h-7 w-full" title="Filtros Avançados">
+                <Button data-tour="inbox-filtros" variant="outline" size="icon" className="h-7 w-full" title="Filtros Avançados">
                   <Filter className="h-3.5 w-3.5" />
                 </Button>
               </DropdownMenuTrigger>

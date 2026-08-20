@@ -1,6 +1,8 @@
+import { useNavigate } from "react-router-dom";
 import {
-    Repeat, CalendarClock, MessageSquareText, BadgeCheck, Settings2, Megaphone, HelpCircle,
+    Repeat, CalendarClock, MessageSquareText, BadgeCheck, Settings2, Megaphone, HelpCircle, ExternalLink,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
     Accordion, AccordionContent, AccordionItem, AccordionTrigger,
 } from "@/components/ui/accordion";
@@ -21,6 +23,7 @@ const TOPICS = [
 ];
 
 export function RecorrenciaGuide() {
+    const navigate = useNavigate();
     return (
         <div className="space-y-8">
             {/* Hero */}
@@ -136,6 +139,12 @@ export function RecorrenciaGuide() {
                     { title: "Duração das campanhas", description: "Quantos dias cada campanha de recorrência fica ativa (padrão 3 dias). Ao terminar, a campanha expira e a tag é removida dos contatos." },
                     { title: "Instância de envio", description: "Escolha qual número dispara a recorrência (mesma configuração disponível em Configurações > Automações, card Recorrência). No automático, prioriza o WhatsApp oficial." },
                 ]} />
+                <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" onClick={() => navigate("/recurrence?tour=recorrencia-config")}>
+                        <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                        Me mostre na prática
+                    </Button>
+                </div>
             </TopicSection>
 
             {/* 6 */}

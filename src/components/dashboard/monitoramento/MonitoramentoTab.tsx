@@ -190,7 +190,7 @@ export function MonitoramentoTab() {
     return (
         <div className="space-y-4 md:space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
             {/* ── Filter bar ── */}
-            <div className="flex flex-wrap items-center gap-2">
+            <div data-tour="monitor-filtros" className="flex flex-wrap items-center gap-2">
                 <div className="flex items-center gap-0.5 bg-muted rounded-lg p-0.5 shrink-0">
                     <Button
                         variant={channel === "whatsapp" ? "secondary" : "ghost"}
@@ -308,7 +308,7 @@ export function MonitoramentoTab() {
                     ))}
                 </div>
             ) : (
-                <div className="space-y-3">
+                <div data-tour="monitor-boards" className="space-y-3">
                     {MONITOR_STAGES.map((stage) => (
                         <StageBoard
                             key={stage}
@@ -321,22 +321,26 @@ export function MonitoramentoTab() {
                             nowTick={nowTick}
                         />
                     ))}
-                    <StageBoard
-                        stage="Finalizado"
-                        title="Finalizados"
-                        showStageBadge
-                        cards={filteredFinalizados}
-                        attendantNameOf={attendantNameOf}
-                        canOpenChat={canOpenChat}
-                        onOpenChat={setChatCard}
-                        onOpenProfile={setProfileCard}
-                        nowTick={nowTick}
-                    />
+                    <div data-tour="monitor-finalizados">
+                        <StageBoard
+                            stage="Finalizado"
+                            title="Finalizados"
+                            showStageBadge
+                            cards={filteredFinalizados}
+                            attendantNameOf={attendantNameOf}
+                            canOpenChat={canOpenChat}
+                            onOpenChat={setChatCard}
+                            onOpenProfile={setProfileCard}
+                            nowTick={nowTick}
+                        />
+                    </div>
                 </div>
             )}
 
             {/* ── Atendentes ── */}
-            <AtendentesSection agentCounts={monitorData?.agentCounts} />
+            <div data-tour="monitor-atendentes">
+                <AtendentesSection agentCounts={monitorData?.agentCounts} />
+            </div>
 
             {/* ── Modals ── */}
             {chatCard && (

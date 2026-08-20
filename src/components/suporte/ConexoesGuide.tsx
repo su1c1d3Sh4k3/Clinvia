@@ -138,6 +138,13 @@ export function ConexoesGuide() {
                     A Meta rejeita textos com cara de spam, promessas exageradas ou categoria errada. Ajuste o texto antes de
                     reenviar — rejeições repetidas pesam contra o número. Limites da Meta: 1 edição/24h, 10 edições/30 dias.
                 </Callout>
+                <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline"
+                        onClick={() => navigate("/whatsapp-connection?tab=templates&tour=conexoes-templates")}>
+                        <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                        Me mostre na prática
+                    </Button>
+                </div>
             </TopicSection>
 
             {/* 5 */}

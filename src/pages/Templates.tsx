@@ -747,7 +747,7 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
                         </CardTitle>
                         {/* Abas por tipo: Personalizados (cliente) | Automáticos (sys_*) | Recorrência (rec_*) */}
                         <Tabs value={kindTab} onValueChange={(v) => setKindTab(v as TemplateKind)}>
-                            <TabsList className="w-full sm:w-auto overflow-x-auto flex-nowrap justify-start">
+                            <TabsList data-tour="templates-kinds" className="w-full sm:w-auto overflow-x-auto flex-nowrap justify-start">
                                 {TEMPLATE_KINDS.map((kind) => (
                                     <TabsTrigger key={kind} value={kind} className="shrink-0 text-xs md:text-sm">
                                         {kind === "custom" ? "Templates Personalizados" : TEMPLATE_KIND_LABELS[kind]}

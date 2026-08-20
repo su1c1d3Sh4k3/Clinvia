@@ -69,10 +69,19 @@ export function InboxGuide() {
                     Instagram</strong> da clínica. À esquerda, a lista de conversas com filtros; no centro, o chat; à direita,
                     o painel de inteligência com os dados do cliente e a negociação do CRM.
                 </p>
+                <Callout type="dica" title="Filtros Avançados (o funil no topo da lista)">
+                    Filtre a lista por <strong>Filas, Tags, Conexões e Usuários</strong> (incluindo "sem atribuição") com
+                    múltiplas seleções: dentro da mesma categoria vale OU (qualquer uma das marcadas), entre categorias
+                    vale E (todas juntas). Os balões de não lidas se adaptam ao filtro ativo.
+                </Callout>
                 <div className="flex flex-wrap gap-2">
                     <Button size="sm" variant="outline" onClick={() => navigate("/?tour=inbox-atender")}>
                         <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
                         Me mostre na prática
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => navigate("/?tour=inbox-filtros")}>
+                        <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                        Tour: Filtros Avançados
                     </Button>
                 </div>
             </TopicSection>
@@ -242,6 +251,12 @@ export function InboxGuide() {
                     Toda nota também fica registrada no perfil do cliente (página Clientes &gt; nome &gt; aba Histórico &gt;
                     sub-aba Notas), com autor e data. A IA também pode registrar notas — elas aparecem com o autor "IA".
                 </Callout>
+                <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" onClick={() => navigate("/?tour=inbox-notas")}>
+                        <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                        Me mostre na prática
+                    </Button>
+                </div>
             </TopicSection>
 
             {/* 9 */}

@@ -142,8 +142,9 @@ export function ConfiguracoesGuide() {
                     A aba tem dois cartões separados: <strong className="text-foreground">Envios Automáticos</strong>{" "}
                     (confirmações, lembretes e feedback de agendamento) e{" "}
                     <strong className="text-foreground">Recorrência</strong> — o número que dispara as campanhas diárias
-                    de recorrência dos serviços. Cada um pode usar uma instância diferente. A instância e o horário da
-                    Recorrência também podem ser ajustados pelo botão de engrenagem na página Recorrência.
+                    de recorrência dos serviços. Cada um pode usar uma instância diferente. A instância, o horário e a
+                    duração das campanhas de Recorrência (padrão 3 dias) também podem ser ajustados pelo botão de
+                    engrenagem na página Recorrência.
                 </p>
                 <Callout type="atencao" title="Prefira o número oficial (Meta)">
                     Selecionar uma conexão por QR code (não oficial) como primária exibe um alerta de risco: disparos

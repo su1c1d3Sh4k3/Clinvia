@@ -54,6 +54,34 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
                 "Passe o mouse para expandir: dados do cliente, etapa do CRM, negociação rápida, resumo da IA e atalhos de venda/agendamento.",
         },
     ],
+    "inbox-filtros": [
+        {
+            element: '[data-tour="inbox-filtros"]',
+            title: "Filtros Avançados",
+            description:
+                "Clique no funil para filtrar a lista por Filas, Tags, Conexões e Usuários (inclui 'sem atribuição'). Você pode marcar várias opções: dentro da mesma categoria vale OU; entre categorias vale E. Os balões de não lidas se adaptam ao filtro ativo.",
+        },
+        {
+            element: '[data-tour="inbox-list"]',
+            title: "A lista obedece ao filtro",
+            description:
+                "Com filtros ativos, só as conversas que combinam aparecem — ótimo para focar numa fila ou num número específico. Limpe os filtros para voltar a ver tudo.",
+        },
+    ],
+    "inbox-notas": [
+        {
+            element: '[data-tour="inbox-list"]',
+            title: "1. Abra uma conversa",
+            description:
+                "As Notas de Conversa ficam dentro do chat. Clique em qualquer conversa da lista para abri-la.",
+        },
+        {
+            element: '[data-tour="chat-note"]',
+            title: "2. Nota de Conversa",
+            description:
+                "O botão roxo cria uma nota interna: ela aparece como um balão roxo na linha do tempo, visível SÓ para a equipe — o cliente nunca vê. Notas nunca são apagadas e ficam guardadas também no perfil do cliente (aba Histórico).",
+        },
+    ],
     "inbox-transferir": [
         {
             element: '[data-tour="inbox-list"]',
@@ -102,6 +130,20 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
                 "Equipes: adicione membros e escolha o papel (Admin, Supervisor ou Agente). Permissões: ajuste fino do que cada nível pode criar, editar e apagar em cada módulo.",
         },
     ],
+    "conexoes-templates": [
+        {
+            element: '[data-tour="conexoes-tabs"]',
+            title: "Aba Templates",
+            description:
+                "Disponível quando há um número oficial Meta conectado. É aqui que vivem os modelos de mensagem aprovados pela Meta.",
+        },
+        {
+            element: '[data-tour="templates-kinds"]',
+            title: "Três tipos de template",
+            description:
+                "Templates Personalizados (criados por você, para campanhas), Automáticos (sys_*: confirmação, lembrete e pesquisa — editáveis, mas não excluíveis) e Recorrência (rec_*: gerados sozinhos a partir das mensagens de recompra em Serviços).",
+        },
+    ],
     "conexoes-tour": [
         {
             element: '[data-tour="conexoes-tabs"]',
@@ -147,6 +189,32 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
                 "Clique no NOME para abrir o perfil completo (9 abas). Na coluna IA, o interruptor liga/desliga a assistente só para aquele contato.",
         },
     ],
+    "monitoramento-tour": [
+        {
+            element: '[data-tour="monitor-filtros"]',
+            title: "Filtros do Monitoramento",
+            description:
+                "Canal (WhatsApp/Instagram), período (Hoje por padrão — tudo na aba obedece a ele), atendente, resposta, conexão e busca por nome ou telefone.",
+        },
+        {
+            element: '[data-tour="monitor-boards"]',
+            title: "Quadros por etapa",
+            description:
+                "As conversas abertas e pendentes do período, agrupadas pela etapa do CRM. Cada card mostra quem falou por último e a janela de 24h do número oficial.",
+        },
+        {
+            element: '[data-tour="monitor-finalizados"]',
+            title: "Quadro Finalizados",
+            description:
+                "Atendimentos que chegaram a uma etapa final (Ganho, Perdido, Sem Contato, Sem Interesse ou Finalizado) no período e foram encerrados por alguém da equipe — cada card traz o selo colorido da etapa.",
+        },
+        {
+            element: '[data-tour="monitor-atendentes"]',
+            title: "Atendentes",
+            description:
+                "Quem está online agora e, para o período filtrado, quantos atendimentos cada um tem abertos, pendentes e resolvidos.",
+        },
+    ],
     "dashboard-abas": [
         {
             element: '[data-tour="dash-notifications"]',
@@ -157,7 +225,7 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
             element: '[data-tour="dash-tabs"]',
             title: "As abas do Dashboard",
             description:
-                "Monitoramento (ao vivo), CRM (funil), Vendas (financeiro), Agendamentos (ocupação + mensagens automáticas), Campanhas e Satisfação (NPS). O que você vê depende do seu papel.",
+                "Monitoramento (ao vivo), CRM (funil), Vendas (financeiro), Agendamentos (ocupação + mensagens automáticas), Campanhas, Recorrência (recompra) e Satisfação (NPS). O que você vê depende do seu papel.",
         },
     ],
     "agenda-tour": [
@@ -183,6 +251,25 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
             title: "A grade",
             description:
                 "Uma coluna por profissional. Passe o mouse num evento para ver detalhes e mudar o status; clique no nome do profissional para a visão solo.",
+        },
+    ],
+    "recorrencia-config": [
+        {
+            element: '[data-tour="recurrence-title"]',
+            title: "Página Recorrência",
+            description:
+                "Todos os clientes no ciclo de recompra, mês a mês, com o status das 3 abordagens de cada um.",
+        },
+        {
+            element: '[data-tour="recurrence-filtros"]',
+            title: "Filtros",
+            description: "Busque por cliente, filtre por serviço e escolha o período das datas de recorrência.",
+        },
+        {
+            element: '[data-tour="recurrence-config"]',
+            title: "Configurações (engrenagem)",
+            description:
+                "Aqui você define a hora base do disparo diário (janela de 1h), a duração das campanhas (padrão 3 dias) e qual conexão envia a recorrência.",
         },
     ],
     "ia-config": [

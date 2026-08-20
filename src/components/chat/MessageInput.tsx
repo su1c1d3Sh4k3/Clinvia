@@ -424,6 +424,7 @@ export const MessageInput = ({
                 {onAddNote && (
                     <div className="pb-1">
                         <Button
+                            data-tour="chat-note"
                             variant="ghost"
                             size="icon"
                             className="h-11 w-11 rounded-full hover:bg-muted/50 transition-colors shrink-0"
