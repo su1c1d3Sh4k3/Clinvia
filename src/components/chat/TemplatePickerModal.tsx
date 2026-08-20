@@ -12,6 +12,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { toast } from "sonner";
 import { Search, Send, FileText, Loader2 } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { getTemplateKind, TEMPLATE_KINDS, TEMPLATE_KIND_LABELS, type TemplateKind } from "@/lib/templateKind";
 
 const SUPABASE_URL = "https://swfshqvvbohnahdyndch.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN3ZnNocXZ2Ym9obmFoZHluZGNoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1OTAyMzIsImV4cCI6MjA3OTE2NjIzMn0.rUja2PsYj9kWODdizhJNS6HjfA9Tg7DrJJylUH8RTnY";
@@ -58,6 +60,7 @@ export function TemplatePickerModal({ open, onOpenChange, instanceId, contactNum
     const { user } = useAuth();
     const { data: ownerId } = useOwnerId();
     const [search, setSearch] = useState("");
+    const [kindTab, setKindTab] = useState<TemplateKind>("custom");
     const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
     const [sendParams, setSendParams] = useState<string[]>([]);
     const [isSending, setIsSending] = useState(false);
@@ -78,13 +81,14 @@ export function TemplatePickerModal({ open, onOpenChange, instanceId, contactNum
 
     const filtered = useMemo(() => {
         if (!templates) return [];
-        if (!search.trim()) return templates;
+        const byKind = templates.filter((t: any) => getTemplateKind(t.name) === kindTab);
+        if (!search.trim()) return byKind;
         const q = search.toLowerCase();
-        return templates.filter((t: any) =>
+        return byKind.filter((t: any) =>
             t.name?.toLowerCase().includes(q) ||
             t.components?.find((c: any) => c.type === "BODY")?.text?.toLowerCase().includes(q)
         );
-    }, [templates, search]);
+    }, [templates, search, kindTab]);
 
     const getBodyText = (tpl: any): string => {
         return tpl?.components?.find((c: any) => c.type === "BODY")?.text || "";
@@ -208,6 +212,7 @@ export function TemplatePickerModal({ open, onOpenChange, instanceId, contactNum
             setSelectedTemplate(null);
             setSendParams([]);
             setSearch("");
+            setKindTab("custom");
         }
         onOpenChange(v);
     };
@@ -227,7 +232,16 @@ export function TemplatePickerModal({ open, onOpenChange, instanceId, contactNum
                 <div className="flex flex-1 min-h-0 border-t" style={{ height: "65vh" }}>
                     {/* Left - Template List */}
                     <div className="w-[280px] border-r flex flex-col">
-                        <div className="p-3">
+                        <div className="p-3 space-y-2">
+                            <Tabs value={kindTab} onValueChange={(v) => { setKindTab(v as TemplateKind); setSelectedTemplate(null); setSendParams([]); }}>
+                                <TabsList className="w-full h-8">
+                                    {TEMPLATE_KINDS.map((kind) => (
+                                        <TabsTrigger key={kind} value={kind} className="flex-1 text-xs h-6">
+                                            {TEMPLATE_KIND_LABELS[kind]}
+                                        </TabsTrigger>
+                                    ))}
+                                </TabsList>
+                            </Tabs>
                             <div className="relative">
                                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                                 <Input

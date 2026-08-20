@@ -17,6 +17,8 @@ import { CRM_STAGES, STAGE_QUEUE_MAP, TERMINAL_STAGES, CrmStage } from "@/types/
 import { useAuth } from "@/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { getTemplateKind, TEMPLATE_KINDS, TEMPLATE_KIND_LABELS, type TemplateKind } from "@/lib/templateKind";
 
 const SUPABASE_URL = "https://swfshqvvbohnahdyndch.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN3ZnNocXZ2Ym9obmFoZHluZGNoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1OTAyMzIsImV4cCI6MjA3OTE2NjIzMn0.rUja2PsYj9kWODdizhJNS6HjfA9Tg7DrJJylUH8RTnY";
@@ -65,6 +67,7 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
     const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
     const [sendParams, setSendParams] = useState<string[]>([]);
     const [templateSearch, setTemplateSearch] = useState("");
+    const [templateKindTab, setTemplateKindTab] = useState<TemplateKind>("custom");
     const { toast } = useToast();
     const { data: ownerId } = useOwnerId();
     const { user } = useAuth();
@@ -85,6 +88,7 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
             setSelectedTemplate(null);
             setSendParams([]);
             setTemplateSearch("");
+            setTemplateKindTab("custom");
         }
     }, [open, prefilledContact]);
 
@@ -164,6 +168,7 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
     });
 
     const filteredTemplates = (metaTemplates || []).filter((t: any) => {
+        if (getTemplateKind(t.name) !== templateKindTab) return false;
         if (!templateSearch.trim()) return true;
         const q = templateSearch.toLowerCase();
         return t.name?.toLowerCase().includes(q) || t.components?.find((c: any) => c.type === "BODY")?.text?.toLowerCase().includes(q);
@@ -549,8 +554,17 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
                                 Template (obrigatório na API oficial)
                             </Label>
                             <div className="border rounded-lg overflow-hidden">
-                                {/* Search */}
-                                <div className="p-2 border-b">
+                                {/* Tipo de template + busca */}
+                                <div className="p-2 border-b space-y-2">
+                                    <Tabs value={templateKindTab} onValueChange={(v) => { setTemplateKindTab(v as TemplateKind); setSelectedTemplate(null); setSendParams([]); }}>
+                                        <TabsList className="w-full h-8">
+                                            {TEMPLATE_KINDS.map((kind) => (
+                                                <TabsTrigger key={kind} value={kind} className="flex-1 text-xs h-6">
+                                                    {TEMPLATE_KIND_LABELS[kind]}
+                                                </TabsTrigger>
+                                            ))}
+                                        </TabsList>
+                                    </Tabs>
                                     <div className="relative">
                                         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                                         <Input

@@ -129,6 +129,7 @@ export function ConexoesGuide() {
                     você cria, edita e acompanha o status de cada um (Pendente → Aprovado/Rejeitado).
                 </p>
                 <StepByStep steps={[
+                    { title: "Três abas por tipo", description: "A lista é dividida em Templates Personalizados (criados por você), Automáticos (confirmação/lembrete/pesquisa) e Recorrência (mensagens de recorrência dos serviços). As mesmas abas aparecem nos modais de envio de template (nova mensagem e chat)." },
                     { title: "Crie com variáveis", description: "Use {{1}}, {{2}} para os campos dinâmicos (nome, data...). A Meta avalia em minutos a algumas horas." },
                     { title: "Templates do sistema", description: "Confirmação, lembrete e pesquisa de satisfação são criados automaticamente (badge azul 'Template Automatizado'). Você pode editar o texto — os botões de resposta, não." },
                     { title: "Ligue/desligue por template", description: "Cada template automatizado tem um switch — desligado, aquela mensagem automática não é enviada." },

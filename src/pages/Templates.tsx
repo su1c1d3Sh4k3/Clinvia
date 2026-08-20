@@ -20,6 +20,8 @@ import {
     Dialog, DialogContent, DialogDescription, DialogFooter,
     DialogHeader, DialogTitle, DialogTrigger
 } from "@/components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { getTemplateKind, TEMPLATE_KINDS, TEMPLATE_KIND_LABELS, type TemplateKind } from "@/lib/templateKind";
 
 const SUPABASE_URL = "https://swfshqvvbohnahdyndch.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN3ZnNocXZ2Ym9obmFoZHluZGNoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1OTAyMzIsImV4cCI6MjA3OTE2NjIzMn0.rUja2PsYj9kWODdizhJNS6HjfA9Tg7DrJJylUH8RTnY";
@@ -144,6 +146,7 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
 
     const [createDialogOpen, setCreateDialogOpen] = useState(false);
     const [sendDialogOpen, setSendDialogOpen] = useState(false);
+    const [kindTab, setKindTab] = useState<TemplateKind>("custom");
     const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
     const [expandedTemplate, setExpandedTemplate] = useState<string | null>(null);
 
@@ -738,19 +741,30 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
                 </div>
 
                 <Card>
-                    <CardHeader className="p-4 md:p-6">
+                    <CardHeader className="p-4 md:p-6 space-y-3">
                         <CardTitle className="text-base md:text-lg">
                             Templates ({templates?.length || 0})
                         </CardTitle>
+                        {/* Abas por tipo: Personalizados (cliente) | Automáticos (sys_*) | Recorrência (rec_*) */}
+                        <Tabs value={kindTab} onValueChange={(v) => setKindTab(v as TemplateKind)}>
+                            <TabsList className="w-full sm:w-auto overflow-x-auto flex-nowrap justify-start">
+                                {TEMPLATE_KINDS.map((kind) => (
+                                    <TabsTrigger key={kind} value={kind} className="shrink-0 text-xs md:text-sm">
+                                        {kind === "custom" ? "Templates Personalizados" : TEMPLATE_KIND_LABELS[kind]}
+                                        {" "}({(templates || []).filter((t: any) => getTemplateKind(t.name) === kind).length})
+                                    </TabsTrigger>
+                                ))}
+                            </TabsList>
+                        </Tabs>
                     </CardHeader>
                     <CardContent className="p-4 md:p-6 pt-0 md:pt-0">
                         {loadingTemplates ? (
                             <div className="flex items-center justify-center py-8">
                                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                             </div>
-                        ) : templates && templates.length > 0 ? (
+                        ) : templates && templates.filter((t: any) => getTemplateKind(t.name) === kindTab).length > 0 ? (
                             <div className="space-y-3">
-                                {templates.map((tpl: any) => {
+                                {templates.filter((t: any) => getTemplateKind(t.name) === kindTab).map((tpl: any) => {
                                     const bodyComponent = tpl.components?.find((c: any) => c.type === 'BODY');
                                     const headerComponent = tpl.components?.find((c: any) => c.type === 'HEADER');
                                     const footerComponent = tpl.components?.find((c: any) => c.type === 'FOOTER');
@@ -866,9 +880,19 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
                         ) : (
                             <div className="text-center py-8">
                                 <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                                <p className="text-muted-foreground mb-2">Nenhum template encontrado.</p>
+                                <p className="text-muted-foreground mb-2">
+                                    {kindTab === "custom"
+                                        ? "Nenhum template personalizado encontrado."
+                                        : kindTab === "system"
+                                            ? "Nenhum template automático encontrado."
+                                            : "Nenhum template de recorrência encontrado."}
+                                </p>
                                 <p className="text-xs text-muted-foreground">
-                                    Clique em "Sincronizar" para buscar templates existentes ou crie um novo.
+                                    {kindTab === "custom"
+                                        ? 'Clique em "Sincronizar" para buscar templates existentes ou crie um novo.'
+                                        : kindTab === "system"
+                                            ? "Os templates de confirmação/lembrete/pesquisa são criados automaticamente pelo sistema."
+                                            : "Os templates de recorrência são criados automaticamente ao salvar as mensagens de recorrência dos serviços."}
                                 </p>
                             </div>
                         )}
