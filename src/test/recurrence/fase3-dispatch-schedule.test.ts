@@ -3,6 +3,7 @@
 import { describe, it, expect } from "vitest";
 import {
     clampDispatchHour,
+    clampRecurrenceDurationDays,
     randomDispatchTimeUtc,
     dispatchWindowLabel,
 } from "../../../supabase/functions/_shared/recurrence-schedule";
@@ -32,6 +33,29 @@ describe("clampDispatchHour", () => {
         expect(clampDispatchHour(undefined)).toBe(9);
         expect(clampDispatchHour("10")).toBe(9);
         expect(clampDispatchHour(NaN)).toBe(9);
+    });
+});
+
+// ── clampRecurrenceDurationDays ──────────────────────────────────────────────
+
+describe("clampRecurrenceDurationDays", () => {
+    it("mantém durações válidas 1..30", () => {
+        expect(clampRecurrenceDurationDays(1)).toBe(1);
+        expect(clampRecurrenceDurationDays(3)).toBe(3);
+        expect(clampRecurrenceDurationDays(30)).toBe(30);
+    });
+
+    it("trunca decimais", () => {
+        expect(clampRecurrenceDurationDays(5.9)).toBe(5);
+    });
+
+    it("cai no padrão 3 para valores inválidos", () => {
+        expect(clampRecurrenceDurationDays(0)).toBe(3);
+        expect(clampRecurrenceDurationDays(31)).toBe(3);
+        expect(clampRecurrenceDurationDays(null)).toBe(3);
+        expect(clampRecurrenceDurationDays(undefined)).toBe(3);
+        expect(clampRecurrenceDurationDays("7")).toBe(3);
+        expect(clampRecurrenceDurationDays(NaN)).toBe(3);
     });
 });
 

@@ -160,9 +160,9 @@ describe("buildRecurrenceVars", () => {
 // ── nome da campanha + mensagem de disparo ───────────────────────────────────
 
 describe("buildRecurrenceCampaignName", () => {
-    it("Recorrencia - <serviço> - Msg<N> - <dd/MM/yyyy> (R8)", () => {
+    it("Recorrência - <serviço> - Msg<N> - <dd/MM/yyyy> (R8, grafia com acento)", () => {
         expect(buildRecurrenceCampaignName("Toxina Botulínica", 2, "2026-08-20")).toBe(
-            "Recorrencia - Toxina Botulínica - Msg2 - 20/08/2026",
+            "Recorrência - Toxina Botulínica - Msg2 - 20/08/2026",
         );
     });
 });

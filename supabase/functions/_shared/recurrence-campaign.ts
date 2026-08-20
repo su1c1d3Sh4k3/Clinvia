@@ -4,7 +4,7 @@
 //
 // Fluxo: recurrence_tracking → abordagens vencidas hoje (excluindo scheduled e
 // já vinculadas a campanha) → agrupadas por (service_client_id, msg N) →
-// campanhas "Recorrencia - <serviço> - Msg<N> - <dd/MM/yyyy>" com entries e
+// campanhas "Recorrência - <serviço> - Msg<N> - <dd/MM/yyyy>" com entries e
 // vars snapshot (mesmo pipeline do campaign-dispatch). Writeback deriva
 // approach_N_status do desfecho em campaign_contacts.
 // ---------------------------------------------------------------------------
@@ -129,14 +129,14 @@ export function buildRecurrenceVars(
     };
 }
 
-/** "Recorrencia - <serviço> - Msg<N> - <dd/MM/yyyy>" (R8). */
+/** "Recorrência - <serviço> - Msg<N> - <dd/MM/yyyy>" (R8). */
 export function buildRecurrenceCampaignName(
     serviceName: string,
     msgNumber: number,
     dateISO: string,
 ): string {
     const [y, m, d] = dateISO.split("-");
-    return `Recorrencia - ${serviceName} - Msg${msgNumber} - ${d}/${m}/${y}`;
+    return `Recorrência - ${serviceName} - Msg${msgNumber} - ${d}/${m}/${y}`;
 }
 
 /**

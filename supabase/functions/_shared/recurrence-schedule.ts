@@ -35,3 +35,12 @@ export function dispatchWindowLabel(hour: number): string {
     const h = clampDispatchHour(hour);
     return `entre ${h}h e ${(h + 1) % 24}h`;
 }
+
+/** Duração padrão (dias) da campanha de recorrência (valid_until = disparo + N dias). */
+export const DEFAULT_RECURRENCE_DURATION_DAYS = 3;
+
+/** Normaliza a duração configurada para 1..30 dias (fallback 3). */
+export function clampRecurrenceDurationDays(days: unknown): number {
+    const d = typeof days === "number" && Number.isFinite(days) ? Math.trunc(days) : DEFAULT_RECURRENCE_DURATION_DAYS;
+    return d >= 1 && d <= 30 ? d : DEFAULT_RECURRENCE_DURATION_DAYS;
+}

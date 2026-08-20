@@ -133,6 +133,7 @@ export function RecorrenciaGuide() {
                 <StepByStep steps={[
                     { title: "Abra as configurações", description: "Na página Recorrência, clique no botão de engrenagem no canto superior direito." },
                     { title: "Horário do disparo", description: "Escolha a hora base (padrão 9h). O envio de cada campanha é sorteado dentro dessa janela de 1 hora — ex.: hora 9 dispara entre 9h e 10h." },
+                    { title: "Duração das campanhas", description: "Quantos dias cada campanha de recorrência fica ativa (padrão 3 dias). Ao terminar, a campanha expira e a tag é removida dos contatos." },
                     { title: "Instância de envio", description: "Escolha qual número dispara a recorrência (mesma configuração disponível em Configurações > Automações, card Recorrência). No automático, prioriza o WhatsApp oficial." },
                 ]} />
             </TopicSection>
@@ -142,10 +143,17 @@ export function RecorrenciaGuide() {
                 subtitle="Todo dia, uma campanha por serviço e por mensagem">
                 <p className="text-sm text-muted-foreground">
                     De madrugada, o sistema junta as abordagens que vencem no dia, agrupa por serviço e número da
-                    mensagem e cria campanhas <em>Recorrencia - serviço - MsgN - data</em>. Elas usam o mesmo motor
+                    mensagem e cria campanhas <em>Recorrência - serviço - MsgN - data</em>. Elas usam o mesmo motor
                     das campanhas normais: tag própria, IA respondendo com o contexto da oferta e métricas completas
-                    (envios, entregas, respostas, agendamentos).
+                    (envios, entregas, respostas, agendamentos). Cada campanha fica ativa pela{" "}
+                    <strong className="text-foreground">duração configurada</strong> (padrão 3 dias — ajustável na
+                    engrenagem da página Recorrência); depois disso ela expira e a tag é removida dos contatos.
                 </p>
+                <Callout type="dica" title="E se o cliente já estiver em outra campanha?">
+                    Vale a regra padrão de 1 campanha por contato: a campanha mais recente assume. Se o cliente
+                    estava em uma campanha de disparo antiga, a de recorrência a sobrepõe e atribui a tag de
+                    recorrência; da mesma forma, uma campanha nova criada depois pode sobrepor a de recorrência.
+                </Callout>
                 <StepByStep steps={[
                     { title: "Onde acompanhar", description: "Dashboard > aba Recorrência > seção Campanhas de Recorrência: um container por dia; expanda para ver cada campanha e sua tabela de contatos." },
                     { title: "Elas não aparecem em Campanhas", description: "A página e a aba Campanhas mostram só as campanhas criadas por você — as de recorrência vivem na aba Recorrência." },

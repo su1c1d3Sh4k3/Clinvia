@@ -190,7 +190,7 @@ export function DashboardGuide() {
                 ]} />
                 <p className="text-sm text-muted-foreground">
                     Na sub-aba Campanhas ficam os containers de <strong className="text-foreground">Campanhas de Recorrência</strong>:
-                    um por dia (<em>Recorrencia - dd/mm/aaaa</em>) agrupando as campanhas geradas
+                    um por dia (<em>Recorrência - dd/mm/aaaa</em>) agrupando as campanhas geradas
                     automaticamente naquele dia — uma por serviço e por número de mensagem. Expanda o dia para ver
                     cada campanha com envios, entregas, respostas e a tabela de contatos, igual à aba Campanhas.
                     Se um template da Meta ainda não foi aprovado, a campanha aparece com um alerta vermelho{" "}

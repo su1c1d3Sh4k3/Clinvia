@@ -39,9 +39,9 @@ describe("isRecurrenceCampaign / filtros", () => {
 });
 
 describe("recurrenceDayLabel", () => {
-    it('"Recorrencia - dd/MM/yyyy"', () => {
-        expect(recurrenceDayLabel("2026-08-20")).toBe("Recorrencia - 20/08/2026");
-        expect(recurrenceDayLabel("2026-01-05")).toBe("Recorrencia - 05/01/2026");
+    it('"Recorrência - dd/MM/yyyy" (grafia com acento)', () => {
+        expect(recurrenceDayLabel("2026-08-20")).toBe("Recorrência - 20/08/2026");
+        expect(recurrenceDayLabel("2026-01-05")).toBe("Recorrência - 05/01/2026");
     });
 });
 
@@ -54,7 +54,7 @@ describe("groupRecurrenceCampaignsByDate", () => {
         ]);
         expect(groups).toHaveLength(2);
         expect(groups[0].dateISO).toBe("2026-08-20");
-        expect(groups[0].label).toBe("Recorrencia - 20/08/2026");
+        expect(groups[0].label).toBe("Recorrência - 20/08/2026");
         expect(groups[0].campaigns.map((c) => c.name)).toEqual([
             "Recorrencia - A - Msg1",
             "Recorrencia - Z - Msg2",

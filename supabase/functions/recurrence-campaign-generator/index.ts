@@ -7,6 +7,7 @@ import {
 } from "../_shared/automation-instance.ts";
 import {
     clampDispatchHour,
+    clampRecurrenceDurationDays,
     randomDispatchTimeUtc,
 } from "../_shared/recurrence-schedule.ts";
 import {
@@ -30,7 +31,7 @@ import { generateCampaignAiPrompt } from "../_shared/campaign-ai-prompt.ts";
  *  1. Writeback R12: approach_N_status ← desfecho em campaign_contacts.
  *  2. Coleta abordagens vencendo hoje (recurrence_tracking, excluindo
  *     scheduled=true e já vinculadas), agrupa por (serviço, msg N).
- *  3. Cria campanhas "Recorrencia - <serviço> - Msg<N> - <dd/MM/yyyy>":
+ *  3. Cria campanhas "Recorrência - <serviço> - Msg<N> - <dd/MM/yyyy>":
  *     instância R14 (is_recurrence_primary → Meta → mais antiga), scheduled_at
  *     aleatório na janela [X:00, X+1:00) BRT (R18), desconto da mensagem,
  *     entries com vars snapshot, ai_prompt pelo mesmo gerador do campaign-manage.
@@ -44,8 +45,6 @@ const corsHeaders = {
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
     "Content-Type": "application/json; charset=utf-8",
 };
-
-const VALIDITY_DAYS = 7;
 
 function getSupabase() {
     return createClient(
@@ -202,10 +201,11 @@ async function processOwner(
 
     const { data: profile } = await supabase
         .from("profiles")
-        .select("recurrence_dispatch_hour")
+        .select("recurrence_dispatch_hour, recurrence_campaign_duration_days")
         .eq("id", ownerId)
         .maybeSingle();
     const hour = clampDispatchHour(profile?.recurrence_dispatch_hour);
+    const durationDays = clampRecurrenceDurationDays(profile?.recurrence_campaign_duration_days);
     const clinicName = await getClinicName(supabase, ownerId);
     const professionalByAppointment = await getProfessionalNames(
         supabase,
@@ -265,7 +265,7 @@ async function processOwner(
             const name = buildRecurrenceCampaignName(serviceName, msgNumber, today);
             const scheduledAt = randomDispatchTimeUtc(today, hour);
             const validUntil = new Date(
-                new Date(scheduledAt).getTime() + VALIDITY_DAYS * 24 * 60 * 60 * 1000,
+                new Date(scheduledAt).getTime() + durationDays * 24 * 60 * 60 * 1000,
             ).toISOString();
             const discountPct = sc[`recurrence_discount_pct_${msgNumber}`] ?? null;
             const initialMessage = toDispatchMessage(messageText);

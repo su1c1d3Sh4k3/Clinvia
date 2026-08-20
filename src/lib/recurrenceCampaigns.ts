@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // Campanhas de recorrência (Fase 5 do plano 2026-08-20_plano_recorrencia_templates)
 // Helpers puros: separação recorrência × campanhas comuns, agrupamento por dia
-// (container pai "Recorrencia - <dd/MM/yyyy>") e alerta de campanha bloqueada (R9).
+// (container pai "Recorrência - <dd/MM/yyyy>") e alerta de campanha bloqueada (R9).
 // ---------------------------------------------------------------------------
 
 export const RECURRENCE_BLOCKED_ALERT =
@@ -28,10 +28,10 @@ export function filterRecurrenceOnly<T extends RecurrenceCampaignLike>(list: T[]
     return list.filter((c) => isRecurrenceCampaign(c));
 }
 
-/** Rótulo do container pai do dia: "Recorrencia - dd/MM/yyyy". */
+/** Rótulo do container pai do dia: "Recorrência - dd/MM/yyyy". */
 export function recurrenceDayLabel(dateISO: string): string {
     const [y, m, d] = dateISO.split("-");
-    return `Recorrencia - ${d}/${m}/${y}`;
+    return `Recorrência - ${d}/${m}/${y}`;
 }
 
 export interface RecurrenceDayGroup<T extends RecurrenceCampaignLike> {
