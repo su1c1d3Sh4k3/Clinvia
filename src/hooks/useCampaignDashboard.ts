@@ -132,6 +132,7 @@ export interface RecurrenceMonthAgg {
     scheduledCount: number;
     realizedApproaches: number; // Σ abordagens status != 'pendente'
     inContactCount: number; // entries com algum approach 'cliente em contato'
+    noResponseCount: number; // entries já abordadas, sem contato e sem agendamento
     sortDate: Date; // dia 1 do mês
 }
 
@@ -161,6 +162,13 @@ export interface RecorrenciaKpis {
     rateIsFallback: boolean;
 }
 
+/** Cards de status da sub-aba Recorrência: Prévia | Vencimento | Pós | Agendados | Sem Resposta */
+export interface RecorrenciaStatusCards {
+    phases: { label: string; realized: number; total: number }[]; // [Prévia, Vencimento, Pós]
+    scheduledCount: number;
+    noResponseCount: number;
+}
+
 function aggregateRecurrenceMonth(monthKey: string, entries: RecurrenceEntry[]): RecurrenceMonthAgg {
     const approachOf = (e: RecurrenceEntry, i: number): { date: string | null; status: string } => {
         if (i === 0) return { date: e.approach_1_date, status: e.approach_1_status };
@@ -188,14 +196,20 @@ function aggregateRecurrenceMonth(monthKey: string, entries: RecurrenceEntry[]):
 
     let realizedApproaches = 0;
     let inContactCount = 0;
+    let noResponseCount = 0;
     for (const e of entries) {
         let inContact = false;
+        let approached = false;
         for (let i = 0; i < 3; i++) {
             const a = approachOf(e, i);
-            if (a.date && a.status !== "pendente") realizedApproaches++;
+            if (a.date && a.status !== "pendente") {
+                realizedApproaches++;
+                approached = true;
+            }
             if (a.status === "cliente em contato") inContact = true;
         }
         if (inContact) inContactCount++;
+        if (approached && !inContact && !e.scheduled) noResponseCount++;
     }
 
     const scheduledCount = entries.filter((e) => e.scheduled).length;
@@ -212,6 +226,7 @@ function aggregateRecurrenceMonth(monthKey: string, entries: RecurrenceEntry[]):
         scheduledCount,
         realizedApproaches,
         inContactCount,
+        noResponseCount,
         sortDate: new Date(y, m - 1, 1),
     };
 }
@@ -322,12 +337,18 @@ export function useRecorrenciaDashboard(period: CampanhasPeriod) {
             .map(([key, entries]) => aggregateRecurrenceMonth(key, entries))
             .sort((a, b) => b.sortDate.getTime() - a.sortDate.getTime());
 
-        let recContacts = 0, recRealized = 0, recInContact = 0, recScheduled = 0;
+        let recContacts = 0, recRealized = 0, recInContact = 0, recScheduled = 0, recNoResponse = 0;
+        const phaseTotals = RECURRENCE_PHASES.map((label) => ({ label, realized: 0, total: 0 }));
         for (const agg of months) {
             recContacts += agg.contactCount;
             recRealized += agg.realizedApproaches;
             recInContact += agg.inContactCount;
             recScheduled += agg.scheduledCount;
+            recNoResponse += agg.noResponseCount;
+            agg.phases.forEach((p, i) => {
+                phaseTotals[i].realized += p.completed;
+                phaseTotals[i].total += p.total;
+            });
         }
 
         const rate = rateData?.rate ?? 5.5;
@@ -341,6 +362,12 @@ export function useRecorrenciaDashboard(period: CampanhasPeriod) {
             rateIsFallback: rateData?.isFallback ?? true,
         };
 
-        return { kpis, months, isLoading };
+        const statusCards: RecorrenciaStatusCards = {
+            phases: phaseTotals,
+            scheduledCount: recScheduled,
+            noResponseCount: recNoResponse,
+        };
+
+        return { kpis, statusCards, months, isLoading };
     }, [recurrence, rateData, range.from?.getTime(), range.to?.getTime(), isLoading]);
 }

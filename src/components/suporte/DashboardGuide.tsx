@@ -179,19 +179,18 @@ export function DashboardGuide() {
             <TopicSection id="recorrencia-dash" index={7} icon={RefreshCcw} title="Aba Recorrência"
                 subtitle="As abordagens de recompra, mês a mês">
                 <p className="text-sm text-muted-foreground">
-                    Antes misturada à aba Campanhas, a recorrência agora tem aba própria com a mesma estrutura:
-                    filtro de período, cards de resumo e um card por mês. Cada card mostra as três fases
-                    (<strong className="text-foreground">Prévia, Vencimento e Pós</strong>), quantos contatos agendaram
-                    e, ao expandir, a tabela completa de recorrência daquele mês — a mesma da página Recorrência.
+                    A aba tem o filtro de período e duas sub-abas:{" "}
+                    <strong className="text-foreground">Recorrência</strong> (as abordagens mês a mês) e{" "}
+                    <strong className="text-foreground">Campanhas</strong> (os disparos automáticos por dia).
                 </p>
                 <StepByStep steps={[
-                    { title: "Cards de resumo", description: "Total de contatos no período, abordagens realizadas, clientes em contato, quantos agendaram, taxa de conversão e custo estimado das mensagens." },
-                    { title: "Card do mês", description: "As bolinhas indicam as fases concluídas; a barra mostra o avanço da fase atual. A % 'agendaram' é a conversão do mês." },
-                    { title: "Tabela detalhada", description: "Clique no card para expandir a tabela contato a contato, com datas e status de cada abordagem." },
+                    { title: "Sub-aba Recorrência — cards de status", description: "Prévia, Vencimento e Pós (abordagens realizadas de cada fase), Agendados e Sem Resposta (já abordados que não responderam nem agendaram)." },
+                    { title: "Card do mês", description: "As bolinhas indicam as fases concluídas; a barra mostra o avanço da fase atual. A % 'agendaram' é a conversão do mês. Clique para expandir a tabela contato a contato — a mesma da página Recorrência." },
+                    { title: "Sub-aba Campanhas — cards de resumo", description: "Total de contatos, abordagens realizadas, clientes em contato, quantos agendaram, taxa de conversão e custo estimado das mensagens." },
                 ]} />
                 <p className="text-sm text-muted-foreground">
-                    Abaixo dos meses fica a seção <strong className="text-foreground">Campanhas de Recorrência</strong>:
-                    um container por dia (<em>Recorrencia - dd/mm/aaaa</em>) agrupando as campanhas geradas
+                    Na sub-aba Campanhas ficam os containers de <strong className="text-foreground">Campanhas de Recorrência</strong>:
+                    um por dia (<em>Recorrencia - dd/mm/aaaa</em>) agrupando as campanhas geradas
                     automaticamente naquele dia — uma por serviço e por número de mensagem. Expanda o dia para ver
                     cada campanha com envios, entregas, respostas e a tabela de contatos, igual à aba Campanhas.
                     Se um template da Meta ainda não foi aprovado, a campanha aparece com um alerta vermelho{" "}
