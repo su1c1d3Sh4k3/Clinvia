@@ -84,7 +84,7 @@ export function ConversationChatModal({
 
     // Get conversation: prefer active (open/pending), fallback to the most recent
     // resolved one — the history must still be visible after the ticket is closed
-    const { data: convInfo } = useQuery({
+    const { data: convInfo, isPending: isConvPending } = useQuery({
         queryKey: ["chat-modal-conversation", contactId, ownerId],
         queryFn: async () => {
             if (!ownerId) return null;
@@ -92,7 +92,12 @@ export function ConversationChatModal({
             // Ordena por última atividade (não por created_at): campanhas que
             // falham deixam convs pending VAZIAS (last_message_at null) — elas
             // nunca podem vencer a conversa que realmente tem as mensagens
-            const { data: active } = await supabase
+            //
+            // IMPORTANTE: erros dessas queries DEVEM ser lançados. Antes eles
+            // eram engolidos (data null) → o React Query cacheava "sem conversa"
+            // sem retry e o modal ficava permanentemente vazio mesmo com a
+            // conversa e as mensagens existindo (caso Maria Luciene / campanha).
+            const { data: active, error: activeError } = await supabase
                 .from("conversations")
                 .select("id")
                 .eq("contact_id", contactId)
@@ -101,9 +106,10 @@ export function ConversationChatModal({
                 .order("last_message_at", { ascending: false, nullsFirst: false })
                 .order("created_at", { ascending: false })
                 .limit(1);
+            if (activeError) throw activeError;
             if (active && active.length > 0) return { id: active[0].id, isActive: true };
 
-            const { data: last } = await supabase
+            const { data: last, error: lastError } = await supabase
                 .from("conversations")
                 .select("id")
                 .eq("contact_id", contactId)
@@ -111,6 +117,7 @@ export function ConversationChatModal({
                 .order("last_message_at", { ascending: false, nullsFirst: false })
                 .order("created_at", { ascending: false })
                 .limit(1);
+            if (lastError) throw lastError;
             return last && last.length > 0 ? { id: last[0].id, isActive: false } : null;
         },
         enabled: !!contactId && !!ownerId && open,
@@ -543,7 +550,10 @@ export function ConversationChatModal({
                 </DialogHeader>
 
                 <ScrollArea ref={scrollContainerRef} className="flex-1 p-4 border rounded-md bg-muted/10">
-                    {isLoading ? (
+                    {/* Enquanto a conversa ainda está sendo resolvida (convInfo pending),
+                        useMessages está disabled e isLoading=false — sem este gate o modal
+                        mostrava "Nenhuma mensagem encontrada" durante o carregamento */}
+                    {isConvPending || isLoading ? (
                         <div className="flex justify-center p-4">Carregando mensagens...</div>
                     ) : messagesWithNotes && messagesWithNotes.length > 0 ? (
                         <div className="space-y-4">
