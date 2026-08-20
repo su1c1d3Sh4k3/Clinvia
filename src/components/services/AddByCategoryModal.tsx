@@ -37,7 +37,7 @@ import {
   ServiceName,
   ServiceApplication,
 } from "@/types/services";
-import { RecurrenceTab, RecurrenceData } from "./RecurrenceTab";
+import { RecurrenceTab, RecurrenceData, defaultRecurrenceData, hasInvalidRecurrenceVariables } from "./RecurrenceTab";
 import { DirectEntryModal } from "./DirectEntryModal";
 import { AddApplicationModal } from "./AddApplicationModal";
 import { Input } from "@/components/ui/input";
@@ -45,14 +45,7 @@ import { Textarea } from "@/components/ui/textarea";
 
 const CREATE_NEW_VALUE = "__create_new__";
 
-const defaultRecurrence: RecurrenceData = {
-  msg_recurrence_1: "",
-  msg_recurrence_2: "",
-  msg_recurrence_3: "",
-  time_recurrence_1: null,
-  time_recurrence_2: null,
-  time_recurrence_3: null,
-};
+const defaultRecurrence: RecurrenceData = defaultRecurrenceData;
 
 interface AddByCategoryModalProps {
   open: boolean;
@@ -257,6 +250,10 @@ export const AddByCategoryModal = ({
       toast.error("Selecione ao menos uma aplicação");
       return;
     }
+    if (hasInvalidRecurrenceVariables(recurrence)) {
+      toast.error("Mensagem de recorrência com variável desconhecida — use os botões de variáveis");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -282,6 +279,9 @@ export const AddByCategoryModal = ({
         time_recurrence_1: recurrence.time_recurrence_1,
         time_recurrence_2: recurrence.time_recurrence_2 ?? app.default_expiry_months * 30,
         time_recurrence_3: recurrence.time_recurrence_3,
+        recurrence_discount_pct_1: recurrence.recurrence_discount_pct_1,
+        recurrence_discount_pct_2: recurrence.recurrence_discount_pct_2,
+        recurrence_discount_pct_3: recurrence.recurrence_discount_pct_3,
       }));
 
       const { error } = await supabase

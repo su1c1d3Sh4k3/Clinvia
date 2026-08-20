@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import {
     Package, GitBranch, FolderPlus, PlusCircle, UserCheck, CircleDollarSign,
-    HelpCircle, ExternalLink,
+    HelpCircle, ExternalLink, Repeat,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,6 +21,7 @@ const TOPICS = [
     { id: "categorias-proprias", label: "Categorias próprias" },
     { id: "profissionais", label: "Profissionais vinculados" },
     { id: "precos", label: "Preços" },
+    { id: "recorrencia", label: "Mensagens de recorrência" },
     { id: "faq", label: "FAQ" },
 ];
 
@@ -150,7 +151,36 @@ export function ServicosGuide() {
             </TopicSection>
 
             {/* 7 */}
-            <TopicSection id="faq" index={7} icon={HelpCircle} title="Perguntas frequentes">
+            <TopicSection id="recorrencia" index={7} icon={Repeat} title="Mensagens de recorrência"
+                subtitle="Templates com variáveis + desconto por abordagem">
+                <p className="text-sm text-muted-foreground">
+                    Cada aplicação tem uma aba <strong className="text-foreground">Recorrência</strong> (ao criar ou ao{" "}
+                    <strong className="text-foreground">Editar Aplicação</strong>) com até 3 mensagens automáticas de
+                    retorno. As mensagens são escritas em <strong className="text-foreground">formato template</strong>:
+                    clique nos botões de variáveis para inserir{" "}
+                    <strong className="text-foreground">
+                        {"{{nome_cliente}}, {{nome_clinica}}, {{servico}}, {{aplicacao}}, {{preco}} e {{profissional}}"}
+                    </strong>{" "}
+                    — na hora do envio elas viram os dados reais do cliente (o preço é sempre o valor cadastrado da
+                    aplicação, e o profissional é o do atendimento original).
+                </p>
+                <StepByStep steps={[
+                    { title: "Escreva a mensagem", description: "Use os botões de variáveis acima do campo — digitar variável à mão fora do catálogo bloqueia o salvamento (aviso vermelho indica qual corrigir)." },
+                    { title: "Defina o tempo (dias)", description: "Quantos dias após o procedimento cada abordagem 1/2/3 deve ser enviada." },
+                    { title: "Defina o desconto (%)", description: "Cada mensagem 1/2/3 tem seu próprio desconto opcional — ele vira o desconto da campanha daquela abordagem (não é uma variável do texto)." },
+                ]} />
+                <Callout type="dica" title="Prévia em tempo real">
+                    Abaixo do campo aparece uma prévia com dados de exemplo (Maria, Botox Full Face...) — confira como o
+                    cliente vai receber antes de salvar.
+                </Callout>
+                <Callout type="atencao" title="API oficial (Meta)">
+                    Para quem usa a API oficial, essas mensagens são enviadas como template aprovado pela Meta. Quem usa
+                    API não oficial recebe o texto livre com as variáveis já substituídas.
+                </Callout>
+            </TopicSection>
+
+            {/* 8 */}
+            <TopicSection id="faq" index={8} icon={HelpCircle} title="Perguntas frequentes">
                 <Accordion type="single" collapsible className="rounded-xl border px-4">
                     {[
                         {

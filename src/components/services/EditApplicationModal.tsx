@@ -11,7 +11,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProfessionalSelector } from "./ProfessionalSelector";
+import { RecurrenceTab, RecurrenceData, defaultRecurrenceData, hasInvalidRecurrenceVariables } from "./RecurrenceTab";
 import { ServiceClient } from "@/types/services";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
@@ -45,6 +47,7 @@ export const EditApplicationModal = ({
     professionals: [] as string[],
     commission_pct: 0,
   });
+  const [recurrenceData, setRecurrenceData] = useState<RecurrenceData>(defaultRecurrenceData);
 
   useEffect(() => {
     if (application) {
@@ -61,12 +64,27 @@ export const EditApplicationModal = ({
         professionals: application.professionals || [],
         commission_pct: application.commission_pct,
       });
+      setRecurrenceData({
+        msg_recurrence_1: application.msg_recurrence_1 || "",
+        msg_recurrence_2: application.msg_recurrence_2 || "",
+        msg_recurrence_3: application.msg_recurrence_3 || "",
+        time_recurrence_1: application.time_recurrence_1,
+        time_recurrence_2: application.time_recurrence_2,
+        time_recurrence_3: application.time_recurrence_3,
+        recurrence_discount_pct_1: application.recurrence_discount_pct_1 ?? null,
+        recurrence_discount_pct_2: application.recurrence_discount_pct_2 ?? null,
+        recurrence_discount_pct_3: application.recurrence_discount_pct_3 ?? null,
+      });
       setApplyProfToAll(false);
     }
   }, [application]);
 
   const handleSave = async () => {
     if (!application) return;
+    if (hasInvalidRecurrenceVariables(recurrenceData)) {
+      toast.error("Mensagem de recorrência com variável desconhecida — use os botões de variáveis");
+      return;
+    }
     setSaving(true);
     try {
       const updateData: any = {
@@ -81,6 +99,15 @@ export const EditApplicationModal = ({
         duration_minutes: form.duration_minutes,
         professionals: form.professionals,
         commission_pct: form.commission_pct,
+        msg_recurrence_1: recurrenceData.msg_recurrence_1 || null,
+        msg_recurrence_2: recurrenceData.msg_recurrence_2 || null,
+        msg_recurrence_3: recurrenceData.msg_recurrence_3 || null,
+        time_recurrence_1: recurrenceData.time_recurrence_1,
+        time_recurrence_2: recurrenceData.time_recurrence_2,
+        time_recurrence_3: recurrenceData.time_recurrence_3,
+        recurrence_discount_pct_1: recurrenceData.recurrence_discount_pct_1,
+        recurrence_discount_pct_2: recurrenceData.recurrence_discount_pct_2,
+        recurrence_discount_pct_3: recurrenceData.recurrence_discount_pct_3,
       };
 
       const { error } = await supabase
@@ -128,6 +155,13 @@ export const EditApplicationModal = ({
           <DialogTitle>Editar Aplicação</DialogTitle>
         </DialogHeader>
 
+        <Tabs defaultValue="dados">
+          <TabsList>
+            <TabsTrigger value="dados">Dados</TabsTrigger>
+            <TabsTrigger value="recurrence">Recorrência</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="dados">
         <div className="grid gap-4 py-4">
           {/* Row 1: Name */}
           <div className="space-y-1.5">
@@ -267,6 +301,12 @@ export const EditApplicationModal = ({
           </div>
 
         </div>
+          </TabsContent>
+
+          <TabsContent value="recurrence" className="py-4">
+            <RecurrenceTab data={recurrenceData} onChange={setRecurrenceData} />
+          </TabsContent>
+        </Tabs>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>

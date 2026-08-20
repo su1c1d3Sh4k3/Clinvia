@@ -53,6 +53,9 @@ export interface ServiceClient {
   time_recurrence_1: number | null;
   time_recurrence_2: number | null;
   time_recurrence_3: number | null;
+  recurrence_discount_pct_1: number | null;
+  recurrence_discount_pct_2: number | null;
+  recurrence_discount_pct_3: number | null;
   recurrence_stage: 'stg_1' | 'stg_2' | 'stg_3' | 'recuperado' | 'perdido' | null;
   created_at: string;
   updated_at: string;

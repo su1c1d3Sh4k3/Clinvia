@@ -37,18 +37,11 @@ import {
   ServiceName,
   ServiceApplication,
 } from "@/types/services";
-import { RecurrenceTab, RecurrenceData } from "./RecurrenceTab";
+import { RecurrenceTab, RecurrenceData, defaultRecurrenceData, hasInvalidRecurrenceVariables } from "./RecurrenceTab";
 
 const CREATE_NEW_VALUE = "__create_new__";
 
-const defaultRecurrence: RecurrenceData = {
-  msg_recurrence_1: "",
-  msg_recurrence_2: "",
-  msg_recurrence_3: "",
-  time_recurrence_1: null,
-  time_recurrence_2: null,
-  time_recurrence_3: null,
-};
+const defaultRecurrence: RecurrenceData = defaultRecurrenceData;
 
 interface AddServiceModalProps {
   open: boolean;
@@ -206,6 +199,11 @@ export const AddServiceModal = ({
       return;
     }
 
+    if (hasInvalidRecurrenceVariables(recurrence)) {
+      toast.error("Mensagem de recorrência com variável desconhecida — use os botões de variáveis");
+      return;
+    }
+
     setSaving(true);
     try {
       const rows = appsToInsert.map((app) => ({
@@ -230,6 +228,9 @@ export const AddServiceModal = ({
         time_recurrence_1: recurrence.time_recurrence_1,
         time_recurrence_2: recurrence.time_recurrence_2 ?? app.default_expiry_months * 30,
         time_recurrence_3: recurrence.time_recurrence_3,
+        recurrence_discount_pct_1: recurrence.recurrence_discount_pct_1,
+        recurrence_discount_pct_2: recurrence.recurrence_discount_pct_2,
+        recurrence_discount_pct_3: recurrence.recurrence_discount_pct_3,
       }));
 
       const { error } = await supabase

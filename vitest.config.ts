@@ -7,6 +7,8 @@ export default defineConfig({
     test: {
         globals: true,
         environment: 'jsdom',
+        include: ['src/**/*.test.{ts,tsx}'],
+        exclude: ['node_modules/**', '.claude/**', '.aios-core/**'],
         setupFiles: ['./src/test/setup.ts'],
         alias: {
             '@': path.resolve(__dirname, './src'),
