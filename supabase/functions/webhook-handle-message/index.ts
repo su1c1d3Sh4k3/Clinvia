@@ -1815,7 +1815,7 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                         try {
                             const { data: campSent } = await supabase
                                 .from('campaign_contacts')
-                                .select('sent_at, campaigns!inner(id, name, objective, services, discount_pct, initial_message, ai_prompt, ia_enabled, scheduled_at, valid_until, status, instance_id)')
+                                .select('sent_at, campaigns!inner(id, name, objective, services, discount_pct, initial_message, ai_prompt, ia_enabled, scheduled_at, valid_until, status, instance_id, recurrence_service_client_id)')
                                 .eq('contact_id', contactId)
                                 .eq('status', 'sent')
                                 .eq('campaigns.instance_id', instance.id)
@@ -1839,7 +1839,35 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                                     valid_until: toSaoPaulo(camp.valid_until),
                                     ia_enabled: !!camp.ia_enabled,
                                     campaign_prompt: camp.ai_prompt || null,
+                                    service_description: null as string | null,
                                 };
+                                // Serviço atrelado à campanha → descrição (services_client.description)
+                                try {
+                                    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                                    const svcList: any[] = Array.isArray(camp.services) ? camp.services : [];
+                                    const svcIds = [...new Set(
+                                        [...svcList.map((s: any) => s?.id), camp.recurrence_service_client_id]
+                                            .filter((id: any) => typeof id === 'string' && uuidRe.test(id)),
+                                    )];
+                                    if (svcIds.length > 0) {
+                                        const { data: svcRows } = await supabase
+                                            .from('services_client')
+                                            .select('id, name, description')
+                                            .in('id', svcIds);
+                                        const withDesc = (svcRows || []).filter(
+                                            (s: any) => s.description && String(s.description).trim() !== '',
+                                        );
+                                        if (withDesc.length === 1) {
+                                            campaignBlock.service_description = String(withDesc[0].description).trim();
+                                        } else if (withDesc.length > 1) {
+                                            campaignBlock.service_description = withDesc
+                                                .map((s: any) => `${s.name}: ${String(s.description).trim()}`)
+                                                .join('\n');
+                                        }
+                                    }
+                                } catch (svcErr) {
+                                    console.warn('[webhook-handle-message] campaign service description lookup failed:', svcErr);
+                                }
                             }
                         } catch (campErr) {
                             console.warn('[webhook-handle-message] campaign lookup failed:', campErr);
