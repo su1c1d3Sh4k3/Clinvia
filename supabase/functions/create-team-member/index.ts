@@ -24,6 +24,20 @@ serve(async (req) => {
             throw new Error("owner_id is required");
         }
 
+        // Resolver o dono REAL do tenant: se o chamador for um membro de equipe
+        // (ex.: supervisor criando membro), o frontend envia o auth id DELE como
+        // owner_id — traduzir para o user_id (dono) do registro dele em team_members.
+        // Sem isso o membro nasce num "tenant fantasma" e some da tabela de Equipe.
+        let resolvedOwnerId = owner_id;
+        const { data: callerMember } = await supabaseAdmin
+            .from("team_members")
+            .select("user_id")
+            .eq("auth_user_id", owner_id)
+            .maybeSingle();
+        if (callerMember?.user_id) {
+            resolvedOwnerId = callerMember.user_id;
+        }
+
         // 0a. Verificar se email já existe em qualquer conta do sistema (auth.users)
         //     Isso impede que um email de dono de empresa seja cadastrado como membro de outra empresa
         const { data: authEmailExists } = await supabaseAdmin
@@ -82,7 +96,7 @@ serve(async (req) => {
         const { error: dbError } = await supabaseAdmin
             .from("team_members")
             .insert({
-                user_id: owner_id,           // ID do ADMIN (owner)
+                user_id: resolvedOwnerId,    // ID do ADMIN (owner) — resolvido acima
                 auth_user_id: authData.user.id, // ID do NOVO membro
                 name,
                 email,
