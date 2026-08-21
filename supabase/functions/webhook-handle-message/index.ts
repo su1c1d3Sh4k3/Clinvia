@@ -12,6 +12,7 @@ import {
     validateWebhookPayload
 } from "../_shared/utils.ts";
 import { makeOpenAIRequest, trackTokenUsage } from "../_shared/token-tracker.ts";
+import { buildRecurrenceObjective, RECURRENCE_STAGE_PROMPTS } from "../_shared/recurrence-campaign.ts";
 
 // EdgeRuntime.waitUntil mantém o processo vivo após o return 200 para que
 // tasks de background (persistir foto, download de mídia) terminem mesmo
@@ -1815,7 +1816,7 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                         try {
                             const { data: campSent } = await supabase
                                 .from('campaign_contacts')
-                                .select('sent_at, raw_data, campaigns!inner(id, name, objective, services, discount_pct, initial_message, ai_prompt, ia_enabled, scheduled_at, valid_until, status, instance_id, recurrence_service_client_id)')
+                                .select('sent_at, raw_data, campaigns!inner(id, name, objective, services, discount_pct, initial_message, ai_prompt, ia_enabled, scheduled_at, valid_until, status, instance_id, source_type, recurrence_service_client_id, recurrence_msg_number)')
                                 .eq('contact_id', contactId)
                                 .eq('status', 'sent')
                                 .eq('campaigns.instance_id', instance.id)
@@ -1826,11 +1827,22 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                                 .maybeSingle();
                             const camp = (campSent as any)?.campaigns;
                             if (camp) {
-                                if (camp.ia_enabled) campaignPrompt = camp.ai_prompt || null;
+                                // USER RULE: recorrência tem objetivo e prompt FIXOS por etapa
+                                // (Msg1=Prévia/Msg2=Vencimento/Msg3=Pós) — ignora o que está no
+                                // DB; só o desconto varia (já vai em discount_pct/services).
+                                const recMsg = camp.recurrence_msg_number;
+                                const isRecurrenceCamp = camp.source_type === 'recurrence'
+                                    && (recMsg === 1 || recMsg === 2 || recMsg === 3);
+                                let objectiveText: string | null = isRecurrenceCamp
+                                    ? buildRecurrenceObjective(recMsg as 1 | 2 | 3)
+                                    : (camp.objective || null);
+                                const aiPromptText: string | null = isRecurrenceCamp
+                                    ? RECURRENCE_STAGE_PROMPTS[recMsg as 1 | 2 | 3]
+                                    : (camp.ai_prompt || null);
+                                if (camp.ia_enabled) campaignPrompt = aiPromptText;
                                 // Objetivo por contato: interpola placeholders <var> a partir do
                                 // raw_data da entry (campanhas de recorrência gravam o objetivo
                                 // fixo da etapa com placeholders — a campanha agrupa contatos).
-                                let objectiveText: string | null = camp.objective || null;
                                 const entryVars = (campSent as any)?.raw_data;
                                 if (objectiveText && entryVars && typeof entryVars === 'object') {
                                     objectiveText = objectiveText.replace(/<([a-z0-9_]+)>/gi, (match: string, key: string) => {
@@ -1849,7 +1861,7 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                                     scheduled_at: toSaoPaulo(camp.scheduled_at),
                                     valid_until: toSaoPaulo(camp.valid_until),
                                     ia_enabled: !!camp.ia_enabled,
-                                    campaign_prompt: camp.ai_prompt || null,
+                                    campaign_prompt: aiPromptText,
                                     service_description: null as string | null,
                                 };
                                 // Serviço(s) atrelado(s) à campanha → descrição por item do array
