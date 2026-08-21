@@ -177,7 +177,8 @@ export const ConversationsList = ({
     userId: user?.id,
     role: userRole,
     teamMemberId: currentTeamMember?.id,
-    channel: selectedChannelFilter
+    channel: selectedChannelFilter,
+    onlyGroups: selectedTypeFilter === "groups"
   });
 
   // Buscar lista de membros da equipe para exibir nome do atendente atribuído

@@ -22,10 +22,14 @@ interface UseConversationsOptions {
   role?: string;
   teamMemberId?: string;
   channel?: 'whatsapp' | 'instagram';
+  /** true = só conversas de grupo (filtro server-side — sem ele, tenants com
+   * alto volume estouram o cap de 1000 linhas do PostgREST e os grupos, com
+   * last_message_at mais antigo, ficam fora do corte). */
+  onlyGroups?: boolean;
 }
 
 export const useConversations = (options: UseConversationsOptions = {}) => {
-  const { tab = "open", userId, role, teamMemberId, channel } = options;
+  const { tab = "open", userId, role, teamMemberId, channel, onlyGroups } = options;
   const queryClient = useQueryClient();
   const isTyping = useIsTyping();
   const isTypingRef = useRef(isTyping);
@@ -36,7 +40,7 @@ export const useConversations = (options: UseConversationsOptions = {}) => {
   }, [isTyping]);
 
   const { data: conversations, isLoading } = useQuery({
-    queryKey: ["conversations", tab, userId, role, teamMemberId, channel],
+    queryKey: ["conversations", tab, userId, role, teamMemberId, channel, onlyGroups ?? false],
     queryFn: async () => {
       let query = supabase
         .from("conversations")
@@ -55,6 +59,12 @@ export const useConversations = (options: UseConversationsOptions = {}) => {
           )
         `)
         .order("last_message_at", { ascending: false });
+
+      // Aba Grupos: filtro server-side (grupos têm last_message_at antigo e
+      // caíam fora do cap de 1000 linhas do PostgREST em tenants com volume)
+      if (onlyGroups) {
+        query = query.not("group_id", "is", null);
+      }
 
       // Apply filters based on tab
       if (tab === "open") {
