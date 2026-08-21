@@ -47,9 +47,33 @@ export function TokensSection() {
     }));
 
     const cards = [
-        { label: "Total de Tokens", icon: <Coins className="w-4 h-4 text-purple-500" />, tokens: stats?.total_tokens || 0, cost: stats?.total_cost_brl || 0 },
-        { label: "Consumo Mensal", icon: <Calendar className="w-4 h-4 text-blue-500" />, tokens: stats?.month_tokens || 0, cost: stats?.month_cost_brl || 0 },
-        { label: "Consumo Diário", icon: <TrendingUp className="w-4 h-4 text-emerald-500" />, tokens: stats?.today_tokens || 0, cost: stats?.today_cost_brl || 0 },
+        {
+            label: "Total de Tokens",
+            icon: <Coins className="w-4 h-4 text-purple-500" />,
+            tokens: stats?.total_tokens || 0,
+            cost: stats?.total_cost_brl || 0,
+            gradient: "from-purple-500/10 via-purple-500/[0.03] to-transparent",
+            iconBg: "bg-purple-500/15",
+            bar: "bg-purple-500",
+        },
+        {
+            label: "Consumo Mensal",
+            icon: <Calendar className="w-4 h-4 text-blue-500" />,
+            tokens: stats?.month_tokens || 0,
+            cost: stats?.month_cost_brl || 0,
+            gradient: "from-blue-500/10 via-blue-500/[0.03] to-transparent",
+            iconBg: "bg-blue-500/15",
+            bar: "bg-blue-500",
+        },
+        {
+            label: "Consumo Diário",
+            icon: <TrendingUp className="w-4 h-4 text-emerald-500" />,
+            tokens: stats?.today_tokens || 0,
+            cost: stats?.today_cost_brl || 0,
+            gradient: "from-emerald-500/10 via-emerald-500/[0.03] to-transparent",
+            iconBg: "bg-emerald-500/15",
+            bar: "bg-emerald-500",
+        },
     ];
 
     return (
@@ -63,13 +87,21 @@ export function TokensSection() {
             <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {cards.map((c) => (
-                        <div key={c.label} className="p-3 rounded-lg border border-border/40 bg-muted/20">
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-                                {c.icon}
-                                {c.label}
+                        <div
+                            key={c.label}
+                            className={`relative overflow-hidden p-4 rounded-xl border border-border/40 bg-gradient-to-br ${c.gradient} transition-shadow hover:shadow-md`}
+                        >
+                            <div className={`absolute left-0 top-0 h-full w-1 ${c.bar}`} />
+                            <div className="flex items-center justify-between mb-3">
+                                <span className="text-xs font-medium text-muted-foreground">{c.label}</span>
+                                <div className={`w-8 h-8 rounded-lg ${c.iconBg} flex items-center justify-center shrink-0`}>
+                                    {c.icon}
+                                </div>
                             </div>
-                            <p className="text-xl font-bold">{formatNumber(c.tokens)}</p>
-                            <p className="text-xs text-emerald-600 font-medium">{brl(c.cost)}</p>
+                            <p className="text-2xl font-bold tracking-tight tabular-nums">{brl(c.cost)}</p>
+                            <p className="text-xs text-muted-foreground mt-1.5">
+                                <span className="font-semibold text-foreground/80 tabular-nums">{formatNumber(c.tokens)}</span> tokens
+                            </p>
                         </div>
                     ))}
                 </div>

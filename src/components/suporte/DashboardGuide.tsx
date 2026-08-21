@@ -233,7 +233,7 @@ export function DashboardGuide() {
                     status da IA e desempenho dos colaboradores.
                 </p>
                 <StepByStep steps={[
-                    { title: "Consumo de Tokens da IA", description: "Cards de Total, Consumo Mensal e Consumo Diário (quantidade de tokens x custo em R$, somando a IA das conversas e a do sistema; a conversão usa a cotação real do dólar). Abaixo, os gráficos de consumo mensal (com filtro de ano) e diário (7, 15 ou 30 dias)." },
+                    { title: "Consumo de Tokens da IA", description: "Cards de Total, Consumo Mensal e Consumo Diário (custo em R$ em destaque e a quantidade de tokens logo abaixo, somando a IA das conversas e a do sistema; a conversão usa a cotação real do dólar). Abaixo, os gráficos de consumo mensal (com filtro de ano) e diário (7, 15 ou 30 dias)." },
                     { title: "Conexões", description: "Cada instância conectada com o tipo (WhatsApp Oficial, Não Oficial ou Instagram), o status da conexão e, nos números oficiais, o selo de qualidade da Meta." },
                     { title: "IA", description: "Nome do agente, empresa, se a IA está ligada ou desligada e em quais instâncias ela está ativa." },
                     { title: "Colaboradores", description: "Quadro de Atendentes (abertos/pendentes/resolvidos + tempo de resposta, tempo de atendimento, sentimento e nº de atendimentos) e Ranking de Profissionais com o gauge circular de ocupação da agenda ao lado do nome. O filtro de período (Hoje, 7 dias, Mês, Ano, Total) vale para o container inteiro." },

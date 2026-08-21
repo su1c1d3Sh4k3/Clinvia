@@ -43,7 +43,7 @@ const Dashboard = () => {
                 {/* Dashboard Tabs - Agentes só veem Painel de Negócios */}
                 <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as DashboardTab)} className="w-full">
                     <TabsList data-tour="dash-tabs" className={cn(
-                        "grid w-full max-w-5xl mx-auto",
+                        "grid w-full max-w-[89.6rem] mx-auto",
                         userRole === 'agent' ? "grid-cols-1" : userRole === 'admin' ? "grid-cols-8" : canViewSales ? "grid-cols-7" : "grid-cols-6"
                     )}>
                         {userRole !== 'agent' && (
