@@ -93,6 +93,8 @@ export const useConversations = (options: UseConversationsOptions = {}) => {
       // Agentes podem ver: conversas atribuídas a eles OU conversas pendentes
       if (role === "agent" && teamMemberId) {
         filteredData = filteredData.filter((conv) => {
+          // Grupos nunca têm atribuição — sempre visíveis a todos (user rule)
+          if (conv.group_id) return true;
           // Agente pode ver conversas pendentes (para pegar novos tickets)
           if (conv.status === "pending") return true;
           // Agente pode ver conversas abertas atribuídas a ele

@@ -294,6 +294,10 @@ export function InboxGuide() {
                             a: "Mensagens não lidas. Ao abrir a conversa, o contador zera. Os balões vermelhos nas abas Abertos/Pendentes/Grupos somam as não lidas e respeitam os Filtros Avançados: com um filtro de fila, tag, conexão ou usuário aplicado, o balão mostra só as não lidas daquele recorte — se os clientes do filtro não têm nada não lido, o balão some.",
                         },
                         {
+                            q: "Grupos de WhatsApp têm atendente responsável?",
+                            a: "Não. Conversa de grupo nunca é atribuída a um atendente — ela fica sempre visível para toda a equipe na aba Grupos, independente de escopo ou atribuição. Se alguém tentar atribuir, o sistema ignora e o grupo continua compartilhado.",
+                        },
+                        {
                             q: "Como transfiro uma conversa para outro setor ou colega?",
                             a: "Use o botão Transferir Atendimento no topo do chat: escolha a fila e depois o responsável (ou 'Não atribuir usuário'). Lembre: tirar da fila Atendimento IA desliga a IA para aquela conversa.",
                         },
