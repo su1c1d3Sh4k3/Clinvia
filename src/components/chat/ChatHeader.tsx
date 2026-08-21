@@ -1,10 +1,12 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, Star, Files, CircleCheck, ArrowRightLeft } from "lucide-react";
+import { CheckCircle, Star, Files, CircleCheck, ArrowRightLeft, EyeOff } from "lucide-react";
 import { TransferAtendimentoModal } from "@/components/queues/TransferAtendimentoModal";
 import { useState } from "react";
+import { useUserRole } from "@/hooks/useUserRole";
 import { FavoriteMessagesModal } from "./FavoriteMessagesModal";
 import { ConversationMediaModal } from "./ConversationMediaModal";
+import { RestrictGroupModal } from "./RestrictGroupModal";
 import { CloseNegotiationModal } from "./CloseNegotiationModal";
 import { cn } from "@/lib/utils";
 import { CLIENT_STAGE_BADGE, CLIENT_STAGE_LABEL, normalizeClientStage } from "@/lib/clientStage";
@@ -77,6 +79,8 @@ export const ChatHeader = ({
     const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
     const [isCloseNegotiationOpen, setIsCloseNegotiationOpen] = useState(false);
     const [isMediaModalOpen, setIsMediaModalOpen] = useState(false);
+    const [isRestrictGroupOpen, setIsRestrictGroupOpen] = useState(false);
+    const { data: userRole } = useUserRole();
 
     if (isMobile) return null;
 
@@ -149,6 +153,16 @@ export const ChatHeader = ({
                     </>
                 )}
 
+                {/* Restringir Grupo — admin restringe atendentes+supervisores,
+                    supervisor só atendentes; agents não veem o botão */}
+                {isGroup && conversation?.group_id && userRole && userRole !== "agent" && (
+                    <ExpandButton
+                        icon={<EyeOff className="w-4 h-4" />}
+                        label="Restringir Grupo"
+                        onClick={() => setIsRestrictGroupOpen(true)}
+                    />
+                )}
+
                 {/* Mídia */}
                 <ExpandButton
                     icon={<Files className="w-4 h-4" />}
@@ -175,6 +189,14 @@ export const ChatHeader = ({
                 onOpenChange={setIsFavoritesModalOpen}
                 conversationId={conversationId}
             />
+            {isGroup && conversation?.group_id && (
+                <RestrictGroupModal
+                    open={isRestrictGroupOpen}
+                    onOpenChange={setIsRestrictGroupOpen}
+                    groupId={conversation.group_id}
+                    groupName={displayName}
+                />
+            )}
             <ConversationMediaModal
                 open={isMediaModalOpen}
                 onOpenChange={setIsMediaModalOpen}

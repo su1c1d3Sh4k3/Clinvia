@@ -295,7 +295,11 @@ export function InboxGuide() {
                         },
                         {
                             q: "Grupos de WhatsApp têm atendente responsável?",
-                            a: "Não. Conversa de grupo nunca é atribuída a um atendente — ela fica sempre visível para toda a equipe na aba Grupos, independente de escopo ou atribuição. Se alguém tentar atribuir, o sistema ignora e o grupo continua compartilhado.",
+                            a: "Não. Conversa de grupo nunca é atribuída a um atendente — ela fica visível para toda a equipe na aba Grupos, independente de escopo ou atribuição. Se alguém tentar atribuir, o sistema ignora e o grupo continua compartilhado. A exceção é o botão Restringir Grupo (abaixo).",
+                        },
+                        {
+                            q: "Posso esconder um grupo de alguns membros da equipe?",
+                            a: "Sim. Abra o grupo e clique em Restringir Grupo no topo do chat: todos começam marcados (visível); desmarque quem não deve ver aquele grupo e salve — o grupo some do inbox da pessoa. Supervisores podem restringir apenas atendentes; o admin restringe atendentes e supervisores. Admins nunca podem ser restringidos.",
                         },
                         {
                             q: "Como transfiro uma conversa para outro setor ou colega?",
