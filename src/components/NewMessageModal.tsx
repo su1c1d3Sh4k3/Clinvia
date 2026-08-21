@@ -74,6 +74,40 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
     const { data: ownerId } = useOwnerId();
     const { user } = useAuth();
 
+    // Modo "telefone pré-preenchido" (ex.: clique em membro de grupo): o contato
+    // é resolvido automaticamente pelos últimos 8 dígitos — se existir, trava o
+    // seletor no contato; se não, o seletor é ocultado e só o telefone aparece
+    const phoneMode = !prefilledContact && !!prefilledPhone;
+    const { data: resolvedContact, isLoading: resolvingContact } = useQuery({
+        queryKey: ["newmsg-resolve-contact", prefilledPhone, ownerId],
+        queryFn: async () => {
+            const l8 = (prefilledPhone || "").replace(/\D/g, "").slice(-8);
+            if (l8.length < 8) return null;
+            const { data, error } = await supabase
+                .from("contacts")
+                .select("id, push_name, number")
+                .like("number", `%${l8}%`)
+                .eq("user_id", ownerId!)
+                .order("created_at", { ascending: true })
+                .limit(1)
+                .maybeSingle();
+            if (error) throw error;
+            return (data as PrefilledContact | null) ?? null;
+        },
+        enabled: open && phoneMode && !!ownerId,
+        staleTime: 30_000,
+    });
+    const lockedContact = prefilledContact || resolvedContact || null;
+
+    // Contato resolvido automaticamente → seleciona e usa o número salvo
+    useEffect(() => {
+        if (open && resolvedContact) {
+            setSelectedContact(resolvedContact.id);
+            const phone = resolvedContact.number?.split('@')[0] || prefilledPhone;
+            if (phone) setNumber(phone);
+        }
+    }, [open, resolvedContact, prefilledPhone]);
+
     // Pre-populate from prefilledContact whenever modal opens or contact changes
     useEffect(() => {
         if (open && prefilledContact) {
@@ -518,14 +552,23 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
                         </Select>
                     </div>
 
+                    {/* Seletor de contato: travado quando há contato (prefilled ou
+                        resolvido por últimos 8 dígitos); oculto quando o telefone
+                        veio pré-preenchido e NÃO há correspondência na agenda */}
+                    {(lockedContact || !phoneMode || resolvingContact) && (
                     <div className="space-y-2 flex flex-col">
                         <Label>Selecionar contato</Label>
-                        {prefilledContact ? (
+                        {resolvingContact && !lockedContact ? (
+                            <div className="flex items-center gap-2 h-10 w-full rounded-md border border-input bg-muted px-3 py-2 text-sm text-muted-foreground">
+                                <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                                Buscando contato...
+                            </div>
+                        ) : lockedContact ? (
                             // Contact locked — show read-only display
                             <div className="flex items-center gap-2 h-10 w-full rounded-md border border-input bg-muted px-3 py-2 text-sm">
                                 <User className="h-4 w-4 text-muted-foreground shrink-0" />
                                 <span className="font-medium truncate">
-                                    {prefilledContact.push_name || prefilledContact.phone || prefilledContact.number?.split('@')[0] || "Contato"}
+                                    {lockedContact.push_name || lockedContact.phone || lockedContact.number?.split('@')[0] || "Contato"}
                                 </span>
                             </div>
                         ) : (
@@ -544,6 +587,7 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
                             />
                         )}
                     </div>
+                    )}
 
                     <div className="space-y-2">
                         <Label>Telefone</Label>

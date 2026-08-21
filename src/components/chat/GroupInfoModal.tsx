@@ -1,15 +1,14 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
-import { useOwnerId } from "@/hooks/useOwnerId";
 import { formatPhoneNumber } from "@/utils/formatters";
 import { NewMessageModal } from "@/components/NewMessageModal";
 import { ConversationMediaModal } from "./ConversationMediaModal";
-import { Files, Loader2, MessageSquarePlus, Users } from "lucide-react";
+import { Files, Loader2, MessageSquarePlus, Search, Users } from "lucide-react";
 import { toast } from "sonner";
 
 interface GroupInfoModalProps {
@@ -39,10 +38,12 @@ function phoneFromJid(jid?: string | null): string {
 }
 
 export function GroupInfoModal({ open, onOpenChange, groupId, conversationId, instance, onJumpToMessage }: GroupInfoModalProps) {
-    const { data: ownerId } = useOwnerId();
     const [isMediaOpen, setIsMediaOpen] = useState(false);
-    const [sendTarget, setSendTarget] = useState<{ contact: any | null; phone: string } | null>(null);
-    const [resolvingPhone, setResolvingPhone] = useState<string | null>(null);
+    const [sendTarget, setSendTarget] = useState<{ phone: string } | null>(null);
+    const [search, setSearch] = useState("");
+    // Fotos buscadas ao vivo na UAZAPI (chat/details) por telefone
+    const [livePics, setLivePics] = useState<Record<string, string>>({});
+    const fetchedPicsRef = useRef<Set<string>>(new Set());
 
     // Dados persistidos no banco (webhook popula conforme membros enviam mensagens)
     const { data: dbData, isLoading: dbLoading } = useQuery({
@@ -135,6 +136,53 @@ export function GroupInfoModal({ open, onOpenChange, groupId, conversationId, in
     // Ordena: com nome primeiro, depois por número
     participants.sort((a, b) => (a.name || "zzz" + a.phone).localeCompare(b.name || "zzz" + b.phone, "pt-BR"));
 
+    // Busca por nome ou número
+    const q = search.trim().toLowerCase();
+    const displayed = q
+        ? participants.filter(
+              (p) => (p.name || "").toLowerCase().includes(q) || p.phone.includes(q.replace(/\D/g, "") || "\u0000")
+          )
+        : participants;
+
+    // Fotos ao vivo: UAZAPI POST /chat/details {number, preview} retorna
+    // imagePreview quando a foto do contato é acessível — busca em lotes
+    // pequenos só p/ os participantes exibidos sem foto no banco
+    const displayedKey = displayed.map((p) => p.phone).join(",");
+    useEffect(() => {
+        if (!open || !instance?.apikey) return;
+        const targets = displayed
+            .filter((p) => p.phone && !p.profilePicUrl && !fetchedPicsRef.current.has(p.phone))
+            .slice(0, 40);
+        if (!targets.length) return;
+        targets.forEach((p) => fetchedPicsRef.current.add(p.phone));
+        let cancelled = false;
+        (async () => {
+            for (let i = 0; i < targets.length; i += 6) {
+                const batch = targets.slice(i, i + 6);
+                const results = await Promise.all(
+                    batch.map(async (p) => {
+                        try {
+                            const r = await fetch("https://clinvia.uazapi.com/chat/details", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json", Accept: "application/json", token: instance.apikey },
+                                body: JSON.stringify({ number: p.phone, preview: true }),
+                            });
+                            const d = r.ok ? await r.json() : null;
+                            return [p.phone, d?.imagePreview || d?.image || ""] as const;
+                        } catch {
+                            return [p.phone, ""] as const;
+                        }
+                    })
+                );
+                if (cancelled) return;
+                const found = results.filter(([, url]) => url);
+                if (found.length) setLivePics((prev) => ({ ...prev, ...Object.fromEntries(found) }));
+            }
+        })();
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open, instance?.apikey, displayedKey]);
+
     const description = liveData?.description || "";
 
     // Últimas imagens da conversa (amostra; galeria completa no ConversationMediaModal)
@@ -156,30 +204,14 @@ export function GroupInfoModal({ open, onOpenChange, groupId, conversationId, in
         enabled: open && !!conversationId,
     });
 
-    // Clique no participante: resolve contato existente pelos últimos 8 dígitos
-    // (regra do projeto — Meta salva sem @s.whatsapp.net, UAZAPI com) e abre o
-    // modal de nova mensagem; sem contato, o NewMessageModal cria ao enviar.
-    const handleParticipantClick = async (p: Participant) => {
+    // Clique no participante: o NewMessageModal resolve o contato pelos últimos
+    // 8 dígitos (trava o seletor se existir; senão mostra só o telefone)
+    const handleParticipantClick = (p: Participant) => {
         if (!p.phone || p.phone.length < 8) {
             toast.error("Número deste participante não está disponível.");
             return;
         }
-        setResolvingPhone(p.phone);
-        try {
-            const { data: contact } = await supabase
-                .from("contacts")
-                .select("id, push_name, number")
-                .like("number", `%${p.phone.slice(-8)}%`)
-                .eq("user_id", ownerId!)
-                .order("created_at", { ascending: true })
-                .limit(1)
-                .maybeSingle();
-            setSendTarget({ contact: contact || null, phone: p.phone });
-        } catch {
-            setSendTarget({ contact: null, phone: p.phone });
-        } finally {
-            setResolvingPhone(null);
-        }
+        setSendTarget({ phone: p.phone });
     };
 
     return (
@@ -254,47 +286,53 @@ export function GroupInfoModal({ open, onOpenChange, groupId, conversationId, in
                                 <span className="text-sm font-medium flex items-center gap-1.5">
                                     <Users className="h-3.5 w-3.5" /> Participantes ({participants.length})
                                 </span>
+                                {participants.length > 0 && (
+                                    <div className="relative">
+                                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                                        <Input
+                                            placeholder="Buscar por nome ou número..."
+                                            value={search}
+                                            onChange={(e) => setSearch(e.target.value)}
+                                            className="pl-8 h-8 text-sm"
+                                        />
+                                    </div>
+                                )}
                                 {liveLoading && !participants.length ? (
                                     <p className="text-xs text-muted-foreground py-2">Carregando participantes...</p>
                                 ) : !participants.length ? (
                                     <p className="text-xs text-muted-foreground py-2">
                                         Nenhum participante identificado ainda — a lista é preenchida conforme os membros interagem no grupo.
                                     </p>
+                                ) : !displayed.length ? (
+                                    <p className="text-xs text-muted-foreground py-2">Nenhum participante encontrado para "{search}".</p>
                                 ) : (
-                                    <ScrollArea className="max-h-[32vh]">
-                                        <div className="space-y-0.5 pr-3">
-                                            {participants.map((p, i) => (
-                                                <button
-                                                    key={`${p.phone}-${i}`}
-                                                    onClick={() => handleParticipantClick(p)}
-                                                    disabled={resolvingPhone !== null}
-                                                    className="w-full flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted transition-colors text-left group"
-                                                >
-                                                    <Avatar className="h-8 w-8 shrink-0">
-                                                        <AvatarImage src={p.profilePicUrl || undefined} />
-                                                        <AvatarFallback className="text-xs">
-                                                            {(p.name || p.phone || "?")[0]?.toUpperCase()}
-                                                        </AvatarFallback>
-                                                    </Avatar>
-                                                    <div className="min-w-0 flex-1">
-                                                        <p className="text-sm font-medium truncate">
-                                                            {p.name || formatPhoneNumber(p.phone) || "Desconhecido"}
+                                    <div className="max-h-[300px] overflow-y-auto space-y-0.5 pr-1">
+                                        {displayed.map((p, i) => (
+                                            <button
+                                                key={`${p.phone}-${i}`}
+                                                onClick={() => handleParticipantClick(p)}
+                                                className="w-full flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted transition-colors text-left group"
+                                            >
+                                                <Avatar className="h-8 w-8 shrink-0">
+                                                    <AvatarImage src={p.profilePicUrl || livePics[p.phone] || undefined} />
+                                                    <AvatarFallback className="text-xs">
+                                                        {(p.name || p.phone || "?")[0]?.toUpperCase()}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="text-sm font-medium truncate">
+                                                        {p.name || formatPhoneNumber(p.phone) || "Desconhecido"}
+                                                    </p>
+                                                    {p.name && (
+                                                        <p className="text-xs text-muted-foreground truncate">
+                                                            {p.phone ? formatPhoneNumber(p.phone) : "Número indisponível"}
                                                         </p>
-                                                        {p.name && (
-                                                            <p className="text-xs text-muted-foreground truncate">
-                                                                {p.phone ? formatPhoneNumber(p.phone) : "Número indisponível"}
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                    {resolvingPhone === p.phone ? (
-                                                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
-                                                    ) : (
-                                                        <MessageSquarePlus className="h-4 w-4 text-muted-foreground shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
                                                     )}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </ScrollArea>
+                                                </div>
+                                                <MessageSquarePlus className="h-4 w-4 text-muted-foreground shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                            </button>
+                                        ))}
+                                    </div>
                                 )}
                             </div>
                         </div>
@@ -313,7 +351,6 @@ export function GroupInfoModal({ open, onOpenChange, groupId, conversationId, in
                 <NewMessageModal
                     open={!!sendTarget}
                     onOpenChange={(o) => !o && setSendTarget(null)}
-                    prefilledContact={sendTarget.contact}
                     prefilledPhone={sendTarget.phone}
                     defaultInstanceId={instance?.id}
                 />

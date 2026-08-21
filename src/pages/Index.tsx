@@ -210,7 +210,7 @@ const Index = () => {
       if (!selectedConversationId) return null;
       const { data, error } = await supabase
         .from("conversations")
-        .select("group_id")
+        .select("group_id, instance_id")
         .eq("id", selectedConversationId)
         .single();
       if (error) return null;
@@ -344,8 +344,12 @@ const Index = () => {
 
       <NewMessageModal
         open={isNewMessageOpen}
-        onOpenChange={setIsNewMessageOpen}
+        onOpenChange={(o) => {
+          setIsNewMessageOpen(o);
+          if (!o) setPrefilledPhone("");
+        }}
         prefilledPhone={prefilledPhone}
+        defaultInstanceId={prefilledPhone ? (conversation as any)?.instance_id || undefined : undefined}
       />
     </div>
   );

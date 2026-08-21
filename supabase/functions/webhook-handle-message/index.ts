@@ -545,7 +545,9 @@ serve(async (req) => {
                     .eq('number', senderPn)
                     .single();
 
+                let memberJustCreated = false;
                 if (!member) {
+                    memberJustCreated = true;
                     const { data: newMember } = await supabase
                         .from('group_members')
                         .insert({
@@ -586,6 +588,42 @@ serve(async (req) => {
                         // Update local object for this execution
                         if (updates.push_name) member.push_name = updates.push_name;
                         if (updates.profile_pic_url) member.profile_pic_url = updates.profile_pic_url;
+                    }
+                }
+
+                // Membro sem foto: o webhook de grupo NÃO traz a foto do remetente —
+                // busca ao vivo na UAZAPI (POST /chat/details {number, preview}) e
+                // persiste em group_members p/ exibir no inbox e no GroupInfoModal
+                // Throttle: sempre p/ membro recém-criado; p/ existentes sem foto,
+                // amostragem (foto privada retorna vazio — evita 1 chamada por msg)
+                if (member && !member.profile_pic_url && payload.token && (memberJustCreated || Math.random() < 0.15)) {
+                    try {
+                        const baseUrl = payload.BaseUrl || 'https://clinvia.uazapi.com';
+                        const senderDigits = String(senderPn).split('@')[0].replace(/\D/g, '');
+                        if (senderDigits.length >= 8) {
+                            const ctrl = new AbortController();
+                            const t = setTimeout(() => ctrl.abort(), 4000);
+                            const resp = await fetch(`${baseUrl}/chat/details`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', token: payload.token },
+                                body: JSON.stringify({ number: senderDigits, preview: true }),
+                                signal: ctrl.signal,
+                            });
+                            clearTimeout(t);
+                            if (resp.ok) {
+                                const det = await resp.json();
+                                const picUrl = det?.imagePreview || det?.image || null;
+                                if (picUrl) {
+                                    await supabase
+                                        .from('group_members')
+                                        .update({ profile_pic_url: picUrl })
+                                        .eq('id', member.id);
+                                    member.profile_pic_url = picUrl;
+                                }
+                            }
+                        }
+                    } catch (picErr) {
+                        console.warn('[webhook-handle-message] Member pic fetch failed:', picErr?.message || picErr);
                     }
                 }
 
