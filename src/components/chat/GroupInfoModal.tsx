@@ -144,44 +144,34 @@ export function GroupInfoModal({ open, onOpenChange, groupId, conversationId, in
           )
         : participants;
 
-    // Fotos ao vivo: UAZAPI POST /chat/details {number, preview} retorna
-    // imagePreview quando a foto do contato é acessível — busca em lotes
-    // pequenos só p/ os participantes exibidos sem foto no banco
+    // Fotos: edge fn group-member-pics busca na UAZAPI (server-side, sem
+    // depender de apikey no front) as fotos dos participantes exibidos sem
+    // foto, PERSISTE em group_members e retorna o mapa telefone→url
     const displayedKey = displayed.map((p) => p.phone).join(",");
     useEffect(() => {
-        if (!open || !instance?.apikey) return;
+        if (!open || !groupId) return;
         const targets = displayed
             .filter((p) => p.phone && !p.profilePicUrl && !fetchedPicsRef.current.has(p.phone))
-            .slice(0, 40);
+            .slice(0, 60)
+            .map((p) => p.phone);
         if (!targets.length) return;
-        targets.forEach((p) => fetchedPicsRef.current.add(p.phone));
+        targets.forEach((ph) => fetchedPicsRef.current.add(ph));
         let cancelled = false;
         (async () => {
-            for (let i = 0; i < targets.length; i += 6) {
-                const batch = targets.slice(i, i + 6);
-                const results = await Promise.all(
-                    batch.map(async (p) => {
-                        try {
-                            const r = await fetch("https://clinvia.uazapi.com/chat/details", {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json", Accept: "application/json", token: instance.apikey },
-                                body: JSON.stringify({ number: p.phone, preview: true }),
-                            });
-                            const d = r.ok ? await r.json() : null;
-                            return [p.phone, d?.imagePreview || d?.image || ""] as const;
-                        } catch {
-                            return [p.phone, ""] as const;
-                        }
-                    })
-                );
-                if (cancelled) return;
-                const found = results.filter(([, url]) => url);
+            try {
+                const { data, error } = await supabase.functions.invoke("group-member-pics", {
+                    body: { group_id: groupId, phones: targets },
+                });
+                if (cancelled || error || !data?.pics) return;
+                const found = Object.entries(data.pics as Record<string, string>).filter(([, url]) => url);
                 if (found.length) setLivePics((prev) => ({ ...prev, ...Object.fromEntries(found) }));
+            } catch {
+                // silencioso — avatares ficam no fallback de inicial
             }
         })();
         return () => { cancelled = true; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open, instance?.apikey, displayedKey]);
+    }, [open, groupId, displayedKey]);
 
     const description = liveData?.description || "";
 
