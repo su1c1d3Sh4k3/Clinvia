@@ -79,6 +79,54 @@ export function useMyMetaSendStats() {
     });
 }
 
+export interface MyMetaSendMonthly {
+    year_month: string; // "YYYY-MM"
+    send_count: number;
+    cost_brl: number;
+}
+
+export interface MyMetaSendDaily {
+    usage_date: string; // "YYYY-MM-DD"
+    send_count: number;
+    cost_brl: number;
+}
+
+// Séries dos envios Meta p/ os gráficos (migration 20260822170000)
+export function useMyMetaSendMonthly(year: string) {
+    return useQuery({
+        queryKey: ["my-meta-send-monthly", year],
+        queryFn: async (): Promise<MyMetaSendMonthly[]> => {
+            const { data, error } = await (supabase.rpc as any)("get_my_meta_send_monthly", {
+                p_year: year,
+            });
+            if (error) throw error;
+            return (data || []).map((r: any) => ({
+                year_month: String(r.year_month),
+                send_count: Number(r.send_count) || 0,
+                cost_brl: Number(r.cost_brl) || 0,
+            }));
+        },
+        enabled: !!year,
+    });
+}
+
+export function useMyMetaSendDaily(days: number) {
+    return useQuery({
+        queryKey: ["my-meta-send-daily", days],
+        queryFn: async (): Promise<MyMetaSendDaily[]> => {
+            const { data, error } = await (supabase.rpc as any)("get_my_meta_send_daily", {
+                p_days: days,
+            });
+            if (error) throw error;
+            return (data || []).map((r: any) => ({
+                usage_date: String(r.usage_date),
+                send_count: Number(r.send_count) || 0,
+                cost_brl: Number(r.cost_brl) || 0,
+            }));
+        },
+    });
+}
+
 export function useMyTokenYears() {
     return useQuery({
         queryKey: ["my-token-years"],

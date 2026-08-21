@@ -226,7 +226,7 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
             element: '[data-tour="dash-minha-conta"]',
             title: "Minha Conta",
             description:
-                "Exclusiva do administrador: consumo de tokens da IA em reais, instâncias conectadas com qualidade, status da IA e um resumo dos colaboradores (atendentes e profissionais) com filtro de período.",
+                "Exclusiva do administrador: Relatório do Consumo (custo total da conta em reais — tokens da IA + envios Meta), instâncias conectadas com qualidade, status da IA e um resumo dos colaboradores (atendentes e profissionais) com filtro de período.",
         },
     ],
     "agenda-tour": [
