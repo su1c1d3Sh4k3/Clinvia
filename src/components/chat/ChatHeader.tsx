@@ -7,6 +7,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { FavoriteMessagesModal } from "./FavoriteMessagesModal";
 import { ConversationMediaModal } from "./ConversationMediaModal";
 import { RestrictGroupModal } from "./RestrictGroupModal";
+import { GroupInfoModal } from "./GroupInfoModal";
 import { CloseNegotiationModal } from "./CloseNegotiationModal";
 import { cn } from "@/lib/utils";
 import { CLIENT_STAGE_BADGE, CLIENT_STAGE_LABEL, normalizeClientStage } from "@/lib/clientStage";
@@ -67,6 +68,7 @@ export const ChatHeader = ({
     profilePic,
     contact,
     instanceName,
+    instance,
     isGroup,
     conversationId,
     conversation,
@@ -80,6 +82,7 @@ export const ChatHeader = ({
     const [isCloseNegotiationOpen, setIsCloseNegotiationOpen] = useState(false);
     const [isMediaModalOpen, setIsMediaModalOpen] = useState(false);
     const [isRestrictGroupOpen, setIsRestrictGroupOpen] = useState(false);
+    const [isGroupInfoOpen, setIsGroupInfoOpen] = useState(false);
     const { data: userRole } = useUserRole();
 
     if (isMobile) return null;
@@ -90,15 +93,22 @@ export const ChatHeader = ({
     return (
         <div className="px-3 py-2 border-b border-[#1E2229]/20 dark:border-border bg-white dark:bg-transparent flex items-center justify-between gap-2 min-w-0">
 
-            {/* Lado esquerdo — contato + instância */}
-            <div className="flex items-center gap-2.5 min-w-0 flex-shrink-0">
+            {/* Lado esquerdo — contato + instância (grupo: clique abre informações) */}
+            <div
+                className={cn(
+                    "flex items-center gap-2.5 min-w-0 flex-shrink-0",
+                    isGroup && conversation?.group_id && "cursor-pointer group/gname"
+                )}
+                onClick={isGroup && conversation?.group_id ? () => setIsGroupInfoOpen(true) : undefined}
+                title={isGroup && conversation?.group_id ? "Ver informações do grupo" : undefined}
+            >
                 <Avatar className="w-9 h-9 flex-shrink-0">
                     <AvatarImage src={profilePic || undefined} />
                     <AvatarFallback>{displayName[0]?.toUpperCase()}</AvatarFallback>
                 </Avatar>
                 <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
-                        <h3 className="font-semibold text-sm leading-tight truncate max-w-[120px] sm:max-w-[160px] xl:max-w-[240px]">
+                        <h3 className="font-semibold text-sm leading-tight truncate max-w-[120px] sm:max-w-[160px] xl:max-w-[240px] group-hover/gname:underline">
                             {displayName}
                         </h3>
                         {!isGroup && contact && (
@@ -189,6 +199,16 @@ export const ChatHeader = ({
                 onOpenChange={setIsFavoritesModalOpen}
                 conversationId={conversationId}
             />
+            {isGroup && conversation?.group_id && (
+                <GroupInfoModal
+                    open={isGroupInfoOpen}
+                    onOpenChange={setIsGroupInfoOpen}
+                    groupId={conversation.group_id}
+                    conversationId={conversationId}
+                    instance={instance}
+                    onJumpToMessage={onJumpToMessage}
+                />
+            )}
             {isGroup && conversation?.group_id && (
                 <RestrictGroupModal
                     open={isRestrictGroupOpen}

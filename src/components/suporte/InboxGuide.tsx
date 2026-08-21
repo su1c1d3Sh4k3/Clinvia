@@ -298,6 +298,10 @@ export function InboxGuide() {
                             a: "Não. Conversa de grupo nunca é atribuída a um atendente — ela fica visível para toda a equipe na aba Grupos, independente de escopo ou atribuição. Se alguém tentar atribuir, o sistema ignora e o grupo continua compartilhado. A exceção é o botão Restringir Grupo (abaixo).",
                         },
                         {
+                            q: "Como vejo os detalhes de um grupo (foto, descrição, participantes)?",
+                            a: "Clique no nome do grupo no topo do chat: abre um modal com a foto, o nome, a descrição, as mídias trocadas e a lista de participantes (foto, nome e número). Clicar em um participante abre o modal de nova mensagem já preenchido com o contato e a conexão do grupo pré-selecionada — você pode trocar a conexão; se escolher uma conexão da API oficial (Meta) sem janela de 24h aberta, será pedido um template aprovado, como em qualquer nova mensagem.",
+                        },
+                        {
                             q: "Posso esconder um grupo de alguns membros da equipe?",
                             a: "Sim. Abra o grupo e clique em Restringir Grupo no topo do chat: todos começam marcados (visível); desmarque quem não deve ver aquele grupo e salve — o grupo some do inbox da pessoa. Supervisores podem restringir apenas atendentes; o admin restringe atendentes e supervisores. Admins nunca podem ser restringidos.",
                         },

@@ -53,9 +53,11 @@ interface NewMessageModalProps {
     onOpenChange: (open: boolean) => void;
     prefilledPhone?: string;
     prefilledContact?: PrefilledContact | null;
+    /** Pré-seleciona a instância (por id) ao abrir — usuário pode trocar */
+    defaultInstanceId?: string;
 }
 
-export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledContact }: NewMessageModalProps) => {
+export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledContact, defaultInstanceId }: NewMessageModalProps) => {
     const [selectedInstance, setSelectedInstance] = useState("");
     const [number, setNumber] = useState(prefilledPhone || "55");
     const [message, setMessage] = useState("");
@@ -78,6 +80,8 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
             setSelectedContact(prefilledContact.id);
             const phone = prefilledContact.number?.split('@')[0] || prefilledContact.phone || "55";
             setNumber(phone);
+        } else if (open && prefilledPhone) {
+            setNumber(prefilledPhone);
         } else if (!open) {
             setSelectedContact(null);
             setNumber("55");
@@ -90,7 +94,7 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
             setTemplateSearch("");
             setTemplateKindTab("custom");
         }
-    }, [open, prefilledContact]);
+    }, [open, prefilledContact, prefilledPhone]);
 
     // Fetch contacts
 
@@ -108,6 +112,17 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
             return data;
         },
     });
+
+    // Pré-seleciona instância padrão (ex.: instância do grupo) quando as
+    // instâncias carregam — só se o usuário ainda não escolheu nenhuma
+    useEffect(() => {
+        if (!open || !defaultInstanceId || !instances?.length) return;
+        setSelectedInstance((current) => {
+            if (current) return current;
+            const match = instances.find((i: any) => i.id === defaultInstanceId);
+            return match?.name || current;
+        });
+    }, [open, defaultInstanceId, instances]);
 
     // Fetch queues for manual queue selection
     const { data: queues } = useQuery({
