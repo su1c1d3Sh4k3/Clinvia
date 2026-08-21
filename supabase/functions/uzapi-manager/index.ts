@@ -152,7 +152,8 @@ serve(async (req) => {
                         "connection",
                         "messages_update",
                         "ack",
-                        "history"
+                        "history",
+                        "groups"
                     ],
                     excludeMessages: ["wasSentByApi"]
                 })

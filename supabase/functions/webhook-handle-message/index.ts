@@ -36,6 +36,130 @@ function toSaoPaulo(iso: string | null | undefined): string | null {
 }
 
 /**
+ * Processa eventos "groups" da UAZAPI (modificações em grupos: entrada/saída
+ * de participantes). Insere mensagens de sistema na conversa do grupo
+ * ("👥 <nome> entrou no grupo" / "👥 <nome> saiu do grupo") — renderizadas
+ * como pill centralizada no chat (mesmo padrão das transferências) — e
+ * mantém group_members (upsert no join, delete no leave).
+ * Parsing defensivo: shape exato do payload varia (base whatsmeow GroupInfo).
+ */
+async function processGroupsEvent(supabase: any, instance: any, payload: any): Promise<void> {
+    try {
+        console.log('[webhook-handle-message] GROUPS event payload:', JSON.stringify(payload).slice(0, 4000));
+
+        // Candidatos ao objeto do evento (shape varia)
+        const ev = payload.group || payload.groupInfo || payload.data || payload.event || payload;
+
+        // Localiza o JID do grupo (@g.us)
+        const jidCandidates = [
+            ev?.JID, ev?.jid, ev?.Jid, ev?.groupjid, ev?.GroupJid, ev?.id, ev?.chatid,
+            payload?.chat?.wa_chatid, payload?.message?.chatid,
+        ];
+        const groupJid = jidCandidates.find((v: any) => typeof v === 'string' && v.endsWith('@g.us'));
+        if (!groupJid) {
+            console.log('[webhook-handle-message] GROUPS event: no @g.us jid found, skipping');
+            return;
+        }
+
+        // Extrai listas de JIDs de arrays possivelmente heterogêneos
+        const pickJids = (v: any): string[] => {
+            if (!Array.isArray(v)) return [];
+            return v
+                .map((x: any) => {
+                    if (typeof x === 'string') return x;
+                    return x?.JID || x?.jid || x?.PhoneNumber || x?.phoneNumber || x?.id || '';
+                })
+                .filter((s: string) => typeof s === 'string' && s.includes('@'));
+        };
+        const joined = [
+            ...pickJids(ev?.Join), ...pickJids(ev?.join), ...pickJids(ev?.joined),
+            ...pickJids(ev?.usersJoined), ...pickJids(ev?.participants_added),
+        ];
+        const left = [
+            ...pickJids(ev?.Leave), ...pickJids(ev?.leave), ...pickJids(ev?.left),
+            ...pickJids(ev?.usersLeft), ...pickJids(ev?.participants_removed),
+        ];
+        if (joined.length === 0 && left.length === 0) {
+            console.log('[webhook-handle-message] GROUPS event: no join/leave lists, skipping');
+            return;
+        }
+
+        // Resolve grupo e conversa
+        const { data: group } = await supabase
+            .from('groups')
+            .select('id, user_id, group_name')
+            .eq('remote_jid', groupJid)
+            .maybeSingle();
+        if (!group) {
+            console.log('[webhook-handle-message] GROUPS event: group not found in DB:', groupJid);
+            return;
+        }
+
+        const { data: conv } = await supabase
+            .from('conversations')
+            .select('id, user_id')
+            .eq('group_id', group.id)
+            .in('status', ['open', 'pending'])
+            .order('last_message_at', { ascending: false, nullsFirst: false })
+            .limit(1)
+            .maybeSingle();
+
+        // Membros conhecidos p/ resolver nome (por last8 do number ou lid)
+        const { data: members } = await supabase
+            .from('group_members')
+            .select('id, push_name, number, lid')
+            .eq('group_id', group.id);
+        const digits = (s: string) => (s || '').split('@')[0].replace(/\D/g, '');
+        const last8 = (s: string) => digits(s).slice(-8);
+
+        const resolveName = (jid: string): string => {
+            const isLid = jid.endsWith('@lid');
+            const d = digits(jid);
+            const l8 = d.slice(-8);
+            const m = (members || []).find((gm: any) =>
+                (isLid && gm.lid && digits(gm.lid) === d) ||
+                (!isLid && l8.length >= 8 && gm.number && last8(gm.number) === l8)
+            );
+            if (m?.push_name) return m.push_name;
+            if (!isLid && d.length >= 8) return `+${d}`;
+            return 'Participante';
+        };
+
+        const bodies: string[] = [];
+        for (const jid of joined) bodies.push(`👥 ${resolveName(jid)} entrou no grupo`);
+        for (const jid of left) bodies.push(`👥 ${resolveName(jid)} saiu do grupo`);
+
+        if (conv && bodies.length > 0) {
+            const rows = bodies.map((body) => ({
+                conversation_id: conv.id,
+                user_id: conv.user_id || group.user_id,
+                body,
+                message_type: 'text',
+                direction: 'outbound',
+            }));
+            const { error: insErr } = await supabase.from('messages').insert(rows);
+            if (insErr) console.error('[webhook-handle-message] GROUPS event: message insert error:', insErr);
+        }
+
+        // Manutenção de group_members: remove quem saiu (join upsert já ocorre
+        // quando o participante manda mensagem; aqui só garantimos limpeza)
+        for (const jid of left) {
+            const isLid = jid.endsWith('@lid');
+            const d = digits(jid);
+            const target = (members || []).find((gm: any) =>
+                (isLid && gm.lid && digits(gm.lid) === d) ||
+                (!isLid && d.length >= 8 && gm.number && last8(gm.number) === d.slice(-8))
+            );
+            if (target) {
+                await supabase.from('group_members').delete().eq('id', target.id);
+            }
+        }
+    } catch (err: any) {
+        console.error('[webhook-handle-message] GROUPS event error:', err?.message || err);
+    }
+}
+
+/**
  * webhook-handle-message
  *
  * Processa mensagens inbound (recebidas) e outbound (enviadas):
@@ -396,6 +520,16 @@ serve(async (req) => {
         console.log('[webhook-handle-message] Received:', instanceName, eventType);
 
         const supabase = createSupabaseClient();
+
+        // 0.5. Eventos de modificação de grupo (entrada/saída de participantes).
+        // Não dependem da instância — resolvem tudo pelo JID do grupo (@g.us).
+        if (eventType === 'groups' || eventType === 'group' || eventType === 'groups_update') {
+            await processGroupsEvent(supabase, null, payload);
+            return new Response(
+                JSON.stringify({ success: true, event: 'groups' }),
+                { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
 
         // 1. Fetch Instance
         const instance = await getInstanceByName(supabase, instanceName);

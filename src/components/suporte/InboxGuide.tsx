@@ -302,6 +302,10 @@ export function InboxGuide() {
                             a: "Clique no nome do grupo no topo do chat: abre um modal com a foto, o nome, a descrição, as mídias trocadas e a lista de participantes (foto, nome e número). Clicar em um participante abre o modal de nova mensagem já preenchido com o contato e a conexão do grupo pré-selecionada — você pode trocar a conexão; se escolher uma conexão da API oficial (Meta) sem janela de 24h aberta, será pedido um template aprovado, como em qualquer nova mensagem.",
                         },
                         {
+                            q: "Sou avisado quando alguém entra ou sai de um grupo?",
+                            a: "Sim. Quando um participante entra ou sai de um grupo (conexões não oficiais/UAZAPI), aparece uma notificação centralizada no chat — no mesmo estilo das notificações de transferência — informando quem entrou ou saiu e o horário. Essas notificações não contam como última mensagem da conversa.",
+                        },
+                        {
                             q: "Posso esconder um grupo de alguns membros da equipe?",
                             a: "Sim. Abra o grupo e clique em Restringir Grupo no topo do chat: todos começam marcados (visível); desmarque quem não deve ver aquele grupo e salve — o grupo some do inbox da pessoa. Supervisores podem restringir apenas atendentes; o admin restringe atendentes e supervisores. Admins nunca podem ser restringidos.",
                         },

@@ -111,6 +111,8 @@ export function useQueueConversations() {
                         .select('direction, body, created_at')
                         .eq('conversation_id', conv.id)
                         .not('body', 'like', '%transferida de%')  // Exclude transfer messages
+                        .not('body', 'like', '👥 %entrou no grupo')  // Exclude group join notices
+                        .not('body', 'like', '👥 %saiu do grupo')    // Exclude group leave notices
                         .order('created_at', { ascending: false })
                         .limit(1)
                         .single();

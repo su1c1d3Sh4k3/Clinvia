@@ -62,7 +62,7 @@ serve(async (req) => {
             body: JSON.stringify({
                 enabled: true,
                 url: SUPABASE_WEBHOOK_URL,
-                events: ["messages", "connection", "messages_update"],
+                events: ["messages", "connection", "messages_update", "groups"],
                 excludeMessages: ["wasSentByApi"]
             })
         });

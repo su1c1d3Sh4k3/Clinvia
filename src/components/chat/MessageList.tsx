@@ -2,7 +2,7 @@ import { useRef, useEffect, useState, useMemo, useLayoutEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Clock, AlertCircle, Check, CheckCheck, Download, ChevronDown, ArrowLeftRight } from "lucide-react";
+import { Clock, AlertCircle, Check, CheckCheck, Download, ChevronDown, ArrowLeftRight, UserPlus, UserMinus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MessageActionsMenu } from "@/components/MessageActionsMenu";
 import { ReplyQuoteBox, QuotedMessage } from "@/components/ReplyQuoteBox";
@@ -318,6 +318,23 @@ export const MessageList = ({
                     <div className="bg-[#1e253c] dark:bg-[#1a2235] text-[#93c5fd] text-xs font-medium px-4 py-2 rounded-full flex items-center gap-2.5 shadow-sm border border-[#2a3655]/50 select-none">
                         <ArrowLeftRight className="w-3.5 h-3.5 opacity-80" />
                         <span>{timeStr} {cleanTransferText}</span>
+                    </div>
+                </div>
+            );
+        }
+
+        // Mensagem de sistema de grupo ("👥 Fulano entrou no grupo" / "saiu do grupo") — pill igual às transferências
+        const isGroupSystemMsg = msg.body && msg.body.startsWith('👥 ') &&
+            (msg.body.includes(' entrou no grupo') || msg.body.includes(' saiu do grupo'));
+        if (isGroupSystemMsg) {
+            const isJoin = msg.body.includes(' entrou no grupo');
+            const cleanText = msg.body.replace(/^👥\s*/, '');
+            const timeStr = new Date(msg.created_at || "").toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+            return (
+                <div key={msg.id} id={`message-${msg.id}`} className={cn("flex justify-center my-6 px-4", isMatch && matchIndex === currentMatchIndex ? "bg-yellow-100/10 rounded-lg p-1 -m-1" : "")}>
+                    <div className="bg-[#1e253c] dark:bg-[#1a2235] text-[#93c5fd] text-xs font-medium px-4 py-2 rounded-full flex items-center gap-2.5 shadow-sm border border-[#2a3655]/50 select-none">
+                        {isJoin ? <UserPlus className="w-3.5 h-3.5 opacity-80" /> : <UserMinus className="w-3.5 h-3.5 opacity-80" />}
+                        <span>{timeStr} {cleanText}</span>
                     </div>
                 </div>
             );

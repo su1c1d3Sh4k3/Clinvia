@@ -8,7 +8,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { MessageSquare, X, Send, Paperclip, Smile, Sparkles, CheckCircle, Mic, StopCircle, Trash2, StickyNote, ArrowLeftRight, User, Inbox } from "lucide-react";
+import { MessageSquare, X, Send, Paperclip, Smile, Sparkles, CheckCircle, Mic, StopCircle, Trash2, StickyNote, ArrowLeftRight, User, Inbox, UserPlus, UserMinus } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
@@ -569,6 +569,22 @@ export function ConversationChatModal({
                                             <div className="bg-[#1e253c] dark:bg-[#1a2235] text-[#93c5fd] text-xs font-medium px-4 py-2 rounded-full flex items-center gap-2.5 shadow-sm border border-[#2a3655]/50 select-none">
                                                 <ArrowLeftRight className="w-3.5 h-3.5 opacity-80" />
                                                 <span>{timeStr} {cleanTransferText}</span>
+                                            </div>
+                                        </div>
+                                    );
+                                }
+                                // Mensagem de sistema de grupo (entrou/saiu) — mesmo pill do inbox
+                                const isGroupSystemMsg = !msg._note && msg.body && msg.body.startsWith('👥 ') &&
+                                    (msg.body.includes(' entrou no grupo') || msg.body.includes(' saiu do grupo'));
+                                if (isGroupSystemMsg) {
+                                    const isJoin = msg.body.includes(' entrou no grupo');
+                                    const cleanText = msg.body.replace(/^👥\s*/, '');
+                                    const timeStr = new Date(msg.created_at || "").toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+                                    return (
+                                        <div key={msg.id} className="flex justify-center my-6">
+                                            <div className="bg-[#1e253c] dark:bg-[#1a2235] text-[#93c5fd] text-xs font-medium px-4 py-2 rounded-full flex items-center gap-2.5 shadow-sm border border-[#2a3655]/50 select-none">
+                                                {isJoin ? <UserPlus className="w-3.5 h-3.5 opacity-80" /> : <UserMinus className="w-3.5 h-3.5 opacity-80" />}
+                                                <span>{timeStr} {cleanText}</span>
                                             </div>
                                         </div>
                                     );
