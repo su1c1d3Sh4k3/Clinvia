@@ -50,7 +50,7 @@ export function GroupInfoModal({ open, onOpenChange, groupId, conversationId, in
         queryFn: async () => {
             const [{ data: group, error: gErr }, { data: members, error: mErr }] = await Promise.all([
                 supabase.from("groups" as any).select("id, group_name, group_pic_url, remote_jid").eq("id", groupId).single(),
-                supabase.from("group_members" as any).select("push_name, profile_pic_url, remote_jid").eq("group_id", groupId),
+                supabase.from("group_members" as any).select("push_name, profile_pic_url, number, lid").eq("group_id", groupId),
             ]);
             if (gErr) throw gErr;
             if (mErr) throw mErr;
@@ -65,10 +65,15 @@ export function GroupInfoModal({ open, onOpenChange, groupId, conversationId, in
         queryKey: ["group-info-live", groupId, instance?.id],
         queryFn: async () => {
             const jid = dbData?.group?.remote_jid;
-            const resp = await fetch(
-                `https://clinvia.uazapi.com/group/info?groupjid=${encodeURIComponent(jid)}`,
-                { headers: { Accept: "application/json", token: instance?.apikey || "" } }
-            );
+            const resp = await fetch("https://clinvia.uazapi.com/group/info", {
+                method: "POST",
+                headers: {
+                    Accept: "application/json",
+                    "Content-Type": "application/json",
+                    token: instance?.apikey || "",
+                },
+                body: JSON.stringify({ groupjid: jid }),
+            });
             if (!resp.ok) throw new Error(`group/info HTTP ${resp.status}`);
             const raw = await resp.json();
             const g = raw?.group || raw?.data || raw || {};
@@ -82,9 +87,11 @@ export function GroupInfoModal({ open, onOpenChange, groupId, conversationId, in
             const participants = rawParticipants.map((p: any) => {
                 const pj = typeof p === "string" ? p : p.JID ?? p.jid ?? p.id ?? "";
                 const explicitPhone = typeof p === "object" ? (p.PhoneNumber ?? p.phoneNumber ?? p.phone ?? "") : "";
+                const explicitLid = typeof p === "object" ? (p.LID ?? p.lid ?? "") : "";
                 return {
                     jid: pj as string,
-                    phone: String(explicitPhone).replace(/\D/g, "") || phoneFromJid(pj),
+                    phone: phoneFromJid(String(explicitPhone)) || phoneFromJid(pj),
+                    lid: String(explicitLid || (String(pj).endsWith("@lid") ? pj : "")).split("@")[0].replace(/\D/g, ""),
                     name: (typeof p === "object" ? p.DisplayName ?? p.name ?? p.pushName : null) || null,
                 };
             });
@@ -97,27 +104,30 @@ export function GroupInfoModal({ open, onOpenChange, groupId, conversationId, in
 
     const group = dbData?.group;
     const members = dbData?.members || [];
-    // Mapa por últimos 8 dígitos p/ enriquecer participantes com nome/foto do banco
+    // Mapas p/ enriquecer participantes com nome/foto do banco (por telefone e por LID)
     const memberByLast8 = new Map<string, any>();
+    const memberByLid = new Map<string, any>();
     for (const m of members) {
-        const k = last8(m.remote_jid);
+        const k = last8(m.number);
         if (k) memberByLast8.set(k, m);
+        const l = (m.lid || "").split("@")[0].replace(/\D/g, "");
+        if (l) memberByLid.set(l, m);
     }
 
     // Lista final: UAZAPI (completa) enriquecida com DB; fallback = só group_members
     let participants: Participant[];
     if (liveData?.participants?.length) {
         participants = liveData.participants.map((p) => {
-            const m = memberByLast8.get(last8(p.phone || p.jid));
+            const m = (p.phone && memberByLast8.get(last8(p.phone))) || (p.lid && memberByLid.get(p.lid)) || null;
             return {
-                phone: p.phone,
+                phone: p.phone || phoneFromJid(m?.number) || "",
                 name: p.name || m?.push_name || null,
                 profilePicUrl: m?.profile_pic_url || null,
             };
         });
     } else {
         participants = members.map((m: any) => ({
-            phone: phoneFromJid(m.remote_jid) || last8(m.remote_jid),
+            phone: phoneFromJid(m.number) || last8(m.number),
             name: m.push_name || null,
             profilePicUrl: m.profile_pic_url || null,
         }));

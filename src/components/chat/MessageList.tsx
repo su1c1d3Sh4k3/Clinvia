@@ -270,6 +270,24 @@ export const MessageList = ({
         const isMatch = searchTerm && msg.body?.toLowerCase().includes(searchTerm.toLowerCase());
         const matchIndex = isMatch ? searchMatches.findIndex(m => m.id === msg.id) : -1;
         const isGroupMsg = !!conversation?.group_id;
+
+        // Telefone real do remetente em grupos: sender_jid pode ser @lid (não é
+        // telefone) — resolve via group_members (lid → number) antes de abrir o
+        // modal de nova mensagem
+        const resolveGroupSenderPhone = (): string | null => {
+            const jid = msg.sender_jid as string | undefined;
+            if (!jid) return null;
+            const raw = jid.split('@')[0].split(':')[0].replace(/\D/g, '');
+            if (!jid.endsWith('@lid')) return raw || null;
+            const m = groupMembers?.find(gm => gm.lid && gm.lid === raw);
+            const num = m?.cleanNumber?.replace(/\D/g, '');
+            return num && num.length >= 8 ? num : null;
+        };
+        const handleGroupSenderClick = () => {
+            if (!isGroupMsg) return;
+            const phone = resolveGroupSenderPhone();
+            if (phone) onOpenNewMessage?.(phone);
+        };
         let senderName = msg.sender_name;
 
         if (!senderName) {
@@ -312,7 +330,7 @@ export const MessageList = ({
                 className={cn("flex gap-2 transition-colors duration-300 items-end mb-4 px-4", msg.direction === "outbound" ? "justify-end" : "justify-start", isMatch && matchIndex === currentMatchIndex ? "bg-yellow-100/10 rounded-lg p-1 -m-1" : "")}
             >
                 {msg.direction === "inbound" && (
-                    <Avatar className={cn("w-8 h-8", isGroupMsg && "cursor-pointer hover:opacity-80")} onClick={() => { if (isGroupMsg && msg.sender_jid) onOpenNewMessage?.(msg.sender_jid.split('@')[0]); }}>
+                    <Avatar className={cn("w-8 h-8", isGroupMsg && "cursor-pointer hover:opacity-80")} onClick={handleGroupSenderClick}>
                         <AvatarImage src={senderPic || undefined} />
                         <AvatarFallback>{senderName?.[0]?.toUpperCase()}</AvatarFallback>
                     </Avatar>
@@ -330,7 +348,15 @@ export const MessageList = ({
                             msg.message_type === 'sticker' ? "" : "rounded-lg p-3 overflow-hidden min-w-0 break-words shadow-sm",
                             msg.message_type !== 'sticker' && (msg.direction === "outbound" ? "bg-[#DCF7C5] text-gray-800 dark:bg-[#044740] dark:text-white" : "bg-white dark:bg-[hsl(var(--chat-customer))] text-gray-800 dark:text-foreground")
                         )}>
-                            {isGroup && msg.direction === 'inbound' && <p className="text-xs font-bold mb-1 text-teal-700 dark:text-teal-300">{senderName}</p>}
+                            {isGroup && msg.direction === 'inbound' && (
+                                <p
+                                    className="text-xs font-bold mb-1 text-teal-700 dark:text-teal-300 cursor-pointer hover:underline"
+                                    title="Iniciar conversa com este contato"
+                                    onClick={handleGroupSenderClick}
+                                >
+                                    {senderName}
+                                </p>
+                            )}
                             {outboundSenderName && <p className="text-xs font-bold mb-1 text-emerald-700 dark:text-emerald-300">{outboundSenderName}</p>}
                             {(msg as any).quoted_body && <QuotedMessage quotedBody={(msg as any).quoted_body} quotedSender={(msg as any).quoted_sender} isOutbound={msg.direction === "outbound"} />}
 
