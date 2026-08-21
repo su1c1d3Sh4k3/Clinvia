@@ -65,6 +65,7 @@ export function DashboardGuide() {
                 subtitle="8 abas, cada uma responde uma pergunta">
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                     {[
+                        { icon: Wallet, t: "Minha Conta", d: "Visão geral da conta: tokens da IA em R$, conexões, IA e colaboradores (só admin)." },
                         { icon: Headphones, t: "Monitoramento", d: "O que está acontecendo AGORA nas conversas?" },
                         { icon: Users, t: "CRM", d: "Como está o funil de clientes hoje (e nos dias passados)?" },
                         { icon: ShoppingCart, t: "Vendas", d: "Quanto entrou, o que está pendente, quem vendeu?" },
@@ -72,7 +73,6 @@ export function DashboardGuide() {
                         { icon: Megaphone, t: "Campanhas", d: "Resultado dos disparos em massa, contato a contato." },
                         { icon: RefreshCcw, t: "Recorrência", d: "Abordagens de recompra mês a mês: fases, contatos e conversão." },
                         { icon: Smile, t: "Satisfação", d: "Notas NPS, avaliações recentes e tempo de atendimento." },
-                        { icon: Wallet, t: "Minha Conta", d: "Visão geral da conta: tokens da IA em R$, conexões, IA e colaboradores (só admin)." },
                     ].map((c) => (
                         <div key={c.t} className="rounded-xl border p-3.5">
                             <p className="flex items-center gap-1.5 text-sm font-semibold"><c.icon className="h-4 w-4 text-primary" />{c.t}</p>

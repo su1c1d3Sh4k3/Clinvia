@@ -46,6 +46,16 @@ const Dashboard = () => {
                         "grid w-full max-w-[89.6rem] mx-auto",
                         userRole === 'agent' ? "grid-cols-1" : userRole === 'admin' ? "grid-cols-8" : canViewSales ? "grid-cols-7" : "grid-cols-6"
                     )}>
+                        {userRole === 'admin' && (
+                            <TabsTrigger
+                                value="minha-conta"
+                                data-tour="dash-minha-conta"
+                                className="flex items-center gap-2"
+                            >
+                                <Wallet className="h-4 w-4 shrink-0 transition-transform duration-300 data-[state=active]:scale-110" />
+                                <span className="hidden sm:inline">Minha Conta</span>
+                            </TabsTrigger>
+                        )}
                         {userRole !== 'agent' && (
                             <TabsTrigger
                                 value="monitoramento"
@@ -105,16 +115,6 @@ const Dashboard = () => {
                             >
                                 <Smile className="h-4 w-4 shrink-0 transition-transform duration-300 data-[state=active]:scale-110" />
                                 <span className="hidden sm:inline">Satisfação</span>
-                            </TabsTrigger>
-                        )}
-                        {userRole === 'admin' && (
-                            <TabsTrigger
-                                value="minha-conta"
-                                data-tour="dash-minha-conta"
-                                className="flex items-center gap-2"
-                            >
-                                <Wallet className="h-4 w-4 shrink-0 transition-transform duration-300 data-[state=active]:scale-110" />
-                                <span className="hidden sm:inline">Minha Conta</span>
                             </TabsTrigger>
                         )}
                     </TabsList>

@@ -220,7 +220,7 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
             element: '[data-tour="dash-tabs"]',
             title: "As abas do Dashboard",
             description:
-                "Monitoramento (ao vivo), CRM (funil), Vendas (financeiro), Agendamentos (ocupação + mensagens automáticas), Campanhas, Recorrência (recompra), Satisfação (NPS) e Minha Conta (visão geral da conta, só admin). O que você vê depende do seu papel.",
+                "Minha Conta (visão geral da conta, só admin), Monitoramento (ao vivo), CRM (funil), Vendas (financeiro), Agendamentos (ocupação + mensagens automáticas), Campanhas, Recorrência (recompra) e Satisfação (NPS). O que você vê depende do seu papel.",
         },
         {
             element: '[data-tour="dash-minha-conta"]',
