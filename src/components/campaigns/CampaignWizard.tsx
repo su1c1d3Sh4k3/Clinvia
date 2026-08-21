@@ -128,8 +128,13 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
             // Reenvio: datas em branco para o cliente definir
             setScheduledAt(isResend ? "" : toLocalInputValue(baseCampaign.scheduled_at));
             setValidUntil(isResend ? "" : toLocalInputValue(baseCampaign.valid_until));
-            // Wizard nunca edita campanhas de recorrência (geradas automaticamente)
-            setSourceType(baseCampaign.source_type === "recurrence" ? "" : baseCampaign.source_type);
+            // Wizard nunca edita campanhas de recorrência nem de monitoramento
+            // (ambas geradas fora daqui)
+            setSourceType(
+                baseCampaign.source_type === "recurrence" || baseCampaign.source_type === "monitoring"
+                    ? ""
+                    : baseCampaign.source_type
+            );
             setAudience({ entries: [], invalidRows: [], config: baseCampaign.source_config || {} });
             setCampaignType(baseCampaign.campaign_type || "promotion");
             setSelectedServices(baseCampaign.services || []);

@@ -36,6 +36,7 @@ import { QuickMessageConfirmationModal } from "@/components/QuickMessageConfirma
 import { TemplatePickerModal } from "@/components/chat/TemplatePickerModal";
 import { AddNoteModal } from "@/components/chat/AddNoteModal";
 import { useConversationNotes, mergeNotesIntoMessages } from "@/hooks/useConversationNotes";
+import { useGroupMonitoringVisuals } from "@/hooks/useGroupMonitoring";
 import { LayoutTemplate, Clock, Paperclip } from "lucide-react";
 
 // Performance: Limit messages rendered at once
@@ -263,6 +264,17 @@ export const ChatArea = ({
     },
     enabled: !!conversationId,
   });
+
+  // Monitoramento de Grupo: bordas (foto do lead + mensagem-gatilho) e filtro
+  const { data: monitorVisuals } = useGroupMonitoringVisuals((conversation as any)?.group_id);
+  const [monitorFilterOn, setMonitorFilterOn] = useState(false);
+  const hasMonitorTriggers = !!monitorVisuals && Object.keys(monitorVisuals.triggerColorByMessageId).length > 0;
+  const showMonitorFilter = !!monitorVisuals?.monitoringActive || hasMonitorTriggers;
+  useEffect(() => { setMonitorFilterOn(false); }, [conversationId]);
+  const displayedMessages = useMemo(() => {
+    if (!monitorFilterOn || !monitorVisuals) return messagesWithNotes;
+    return messagesWithNotes.filter((m: any) => !!monitorVisuals.triggerColorByMessageId[m.id]);
+  }, [messagesWithNotes, monitorFilterOn, monitorVisuals]);
 
   const { data: instance } = useQuery({
     queryKey: ["instance", (conversation as any)?.instance_id],
@@ -914,10 +926,13 @@ export const ChatArea = ({
         resolveConversation={resolveConversation}
         handleResolve={() => resolveConversation.mutate(conversationId)}
         onJumpToMessage={setJumpToMessageId}
+        showMonitorFilter={showMonitorFilter}
+        monitorFilterActive={monitorFilterOn}
+        onToggleMonitorFilter={() => setMonitorFilterOn((v) => !v)}
       />
 
       <MessageList
-        messages={messagesWithNotes}
+        messages={displayedMessages}
         isLoading={isLoading}
         searchTerm={searchTerm}
         currentMatchIndex={currentMatchIndex}
@@ -940,6 +955,8 @@ export const ChatArea = ({
         conversation={conversation}
         hideEditDelete={isMetaInstance}
         onEditNote={(note) => setNoteModal({ open: true, editing: note })}
+        monitorTriggerColors={monitorVisuals?.triggerColorByMessageId}
+        monitorLeadColors={monitorVisuals?.colorByPhoneLast8}
       />
 
       {isWindowClosed ? (

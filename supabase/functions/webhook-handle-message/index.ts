@@ -453,6 +453,19 @@ async function ensureContactPhotoPersisted(
     }
 }
 
+// ── Monitoramento de Grupos: normalização do termo/mensagem ──────────────────
+// Regras do produto: ignora maiúsculas, acentos, pontuação e espaços duplos;
+// ordem das palavras importa (substring após normalizar).
+function normalizeMonitorText(text: string): string {
+    return String(text || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')   // acentos
+        .replace(/[^a-z0-9\s]/g, ' ')      // pontuação → espaço (não cola palavras)
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
 serve(async (req) => {
     // Handle CORS preflight
     if (req.method === 'OPTIONS') {
@@ -557,6 +570,7 @@ serve(async (req) => {
         let senderJid: string | null = null;
         let senderProfilePicUrl: string | null = null;
         let conversation: any = null; // Declare in outer scope for webhook forwarding
+        let monitorSavedMessageId: string | null = null; // id da msg de grupo salva (intercept de monitoramento)
 
         if (isGroup) {
             // ===== GROUP PROCESSING =====
@@ -1345,6 +1359,7 @@ serve(async (req) => {
                     );
                 } else {
                     console.log('[webhook-handle-message] Message saved:', savedMessage.id);
+                    if (isGroup) monitorSavedMessageId = savedMessage.id;
 
                     // ========================================
                     // NPS RESPONSE DETECTION WITH AI FEEDBACK
@@ -1607,6 +1622,85 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                 }
             }
         }
+
+        // ─── Monitoramento de Grupos: match de termo em mensagem de grupo ───
+        // Campanha source_type 'monitoring' ativa no grupo: se o membro fala o
+        // termo, registra o lead via RPC monitoring_register_match (takeover por
+        // contato + tag + conversa 1:1 imediata + entrada pending — o
+        // campaign-dispatch envia a abordagem). Só 1º match por contato.
+        if (isGroup && groupId && eventType === 'messages') {
+            const _mon_fromMe = payload.message?.fromMe === true || payload.fromMe === true;
+            const _mon_text = payload.message?.text || payload.message?.content?.text || payload.body?.message?.text || '';
+            if (!_mon_fromMe && _mon_text && senderJid) {
+                try {
+                    const { data: monCampaign } = await supabase
+                        .from('campaigns')
+                        .select('id, monitor_term, monitor_match_mode')
+                        .eq('user_id', userId)
+                        .eq('group_id', groupId)
+                        .eq('source_type', 'monitoring')
+                        .not('status', 'in', '("cancelled","expired","error")')
+                        .gt('valid_until', new Date().toISOString())
+                        .limit(1)
+                        .maybeSingle();
+
+                    if (monCampaign?.monitor_term) {
+                        const normMsg = normalizeMonitorText(_mon_text);
+                        const normTerm = normalizeMonitorText(monCampaign.monitor_term);
+                        const matched = monCampaign.monitor_match_mode === 'equals'
+                            ? normMsg === normTerm
+                            : normTerm.length > 0 && normMsg.includes(normTerm);
+
+                        if (matched) {
+                            // Contato por últimos 8 dígitos (regra do projeto); cria se não existe
+                            const digits = String(senderJid).split('@')[0].replace(/\D/g, '');
+                            const last8 = digits.slice(-8);
+                            let monContactId: string | null = null;
+                            if (last8.length === 8) {
+                                const { data: monContact } = await supabase
+                                    .from('contacts')
+                                    .select('id')
+                                    .eq('user_id', userId)
+                                    .like('number', `%${last8}%`)
+                                    .limit(1)
+                                    .maybeSingle();
+                                monContactId = monContact?.id || null;
+                                if (!monContactId) {
+                                    const { data: newMonContact } = await supabase
+                                        .from('contacts')
+                                        .insert({
+                                            number: `${digits}@s.whatsapp.net`,
+                                            push_name: senderName || digits,
+                                            profile_pic_url: senderProfilePicUrl,
+                                            is_group: false,
+                                            instance_id: instance.id,
+                                            user_id: userId,
+                                            edited: /[a-zA-Z]/.test(senderName || ''),
+                                        })
+                                        .select('id')
+                                        .single();
+                                    monContactId = newMonContact?.id || null;
+                                }
+                            }
+                            if (monContactId) {
+                                const { data: matchRes, error: matchErr } = await supabase.rpc('monitoring_register_match', {
+                                    p_campaign_id: monCampaign.id,
+                                    p_contact_id: monContactId,
+                                    p_message_id: monitorSavedMessageId,
+                                });
+                                if (matchErr) console.error('[monitoring] register_match error:', matchErr);
+                                else console.log('[monitoring] match result:', JSON.stringify(matchRes));
+                            } else {
+                                console.warn('[monitoring] matched but sender phone unresolvable:', senderJid);
+                            }
+                        }
+                    }
+                } catch (monErr) {
+                    console.error('[monitoring] intercept error:', monErr);
+                }
+            }
+        }
+        // ─── End Monitoramento de Grupos intercept ───
 
         // ─── Appointment Confirmation intercept — BLOCK N8N ONLY ───
         // DB trigger trg_appointment_confirmation_on_inbound handles response.

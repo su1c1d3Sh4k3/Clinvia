@@ -20,6 +20,11 @@ import { generateCampaignAiPrompt } from "../_shared/campaign-ai-prompt.ts";
  *   - regenerate_prompt: regenera apenas o ai_prompt
  *   - check_conflicts:   contatos já presentes em outra campanha ativa da MESMA instância
  *                        (aviso do wizard: serão encerrados da anterior em T-1h)
+ *   - create_monitoring: cria campanha de MONITORAMENTO DE GRUPO (source_type 'monitoring',
+ *                        UAZAPI only): termo + modo (contains/equals), status 'dispatching'
+ *                        imediato, tag "Monitoramento - <grupo> - <data>", audiência povoada
+ *                        pelo intercept do webhook-handle-message a cada match
+ *   - end_monitoring:    encerra monitoramento (rotina de expiry: congela entradas + exclui tag)
  */
 
 const corsHeaders = {
@@ -295,6 +300,149 @@ serve(async (req) => {
             );
         }
 
+        // ══ CREATE_MONITORING ═══════════════════════════════════════════════
+        // Monitoramento de Grupo: campanha sem disparo agendado — os leads
+        // entram um a um quando falam o termo no grupo (intercept no
+        // webhook-handle-message). UAZAPI only (grupos não existem na Meta).
+        if (action === "create_monitoring") {
+            const {
+                group_id,
+                monitor_term,
+                monitor_match_mode,
+                valid_until,
+                initial_message,
+                ia_enabled,
+                objective,
+                services,
+                discount_pct,
+            } = body;
+
+            if (!group_id) throw new Error("Missing field: group_id");
+            const term = String(monitor_term || "").trim();
+            if (!term) throw new Error("Informe o termo monitorado");
+            if (!["contains", "equals"].includes(monitor_match_mode)) {
+                throw new Error("Modo de correspondência inválido (contains/equals)");
+            }
+            if (!valid_until || isNaN(new Date(valid_until).getTime())) {
+                throw new Error("Data de expiração inválida");
+            }
+            if (new Date(valid_until).getTime() <= Date.now()) {
+                throw new Error("A data de expiração deve ser futura");
+            }
+            if (!initial_message || !String(initial_message).trim()) {
+                throw new Error("Escreva a mensagem de abordagem");
+            }
+            const iaOn = ia_enabled === true;
+            if (iaOn && !String(objective || "").trim()) {
+                throw new Error("Defina o objetivo para a IA abordar os clientes");
+            }
+
+            const { data: group } = await supabase
+                .from("groups")
+                .select("id, user_id, group_name, instance_id")
+                .eq("id", group_id)
+                .eq("user_id", ownerId)
+                .maybeSingle();
+            if (!group) throw new Error("Grupo não encontrado");
+            // Grupos antigos não têm instance_id — resolve pela conversa mais
+            // recente do grupo (e persiste no groups p/ próximas vezes)
+            let groupInstanceId: string | null = group.instance_id;
+            if (!groupInstanceId) {
+                const { data: conv } = await supabase
+                    .from("conversations")
+                    .select("instance_id")
+                    .eq("group_id", group_id)
+                    .not("instance_id", "is", null)
+                    .order("last_message_at", { ascending: false, nullsFirst: false })
+                    .limit(1)
+                    .maybeSingle();
+                groupInstanceId = conv?.instance_id ?? null;
+                if (groupInstanceId) {
+                    await supabase.from("groups")
+                        .update({ instance_id: groupInstanceId })
+                        .eq("id", group_id);
+                }
+            }
+            if (!groupInstanceId) throw new Error("Grupo sem instância vinculada");
+            const instance = await fetchInstance(supabase, groupInstanceId);
+            if (isMetaInstance(instance)) {
+                throw new Error("Monitoramento é exclusivo de grupos da API não oficial (UAZAPI)");
+            }
+
+            // 1 monitoramento ativo por grupo (índice único garante; checagem
+            // antecipada dá erro amigável)
+            const { data: active } = await supabase
+                .from("campaigns")
+                .select("id")
+                .eq("group_id", group_id)
+                .eq("source_type", "monitoring")
+                .not("status", "in", '("cancelled","expired","error")')
+                .limit(1);
+            if (active && active.length > 0) {
+                throw new Error("Este grupo já tem um monitoramento ativo — encerre-o antes de criar outro");
+            }
+
+            const dateBR = new Date().toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+            const tag = await createTag(
+                supabase, ownerId,
+                `Monitoramento - ${group.group_name || "Grupo"} - ${dateBR}`
+            );
+
+            const { data: campaign, error: campErr } = await supabase
+                .from("campaigns")
+                .insert({
+                    user_id: ownerId,
+                    instance_id: groupInstanceId,
+                    name: tag.name,
+                    source_type: "monitoring",
+                    source_config: { group_id, monitor_term: term, monitor_match_mode },
+                    scheduled_at: new Date().toISOString(),
+                    valid_until,
+                    services: services || [],
+                    discount_pct: discount_pct ?? null,
+                    initial_message,
+                    variable_map: [],
+                    objective: String(objective || "").trim(),
+                    ia_enabled: iaOn,
+                    tag_id: tag.id,
+                    template_version: 1,
+                    status: "dispatching",
+                    campaign_type: "promotion",
+                    template_mode: "none",
+                    group_id,
+                    monitor_term: term,
+                    monitor_match_mode,
+                })
+                .select()
+                .single();
+            if (campErr) {
+                await supabase.from("tags").delete().eq("id", tag.id);
+                throw new Error(`Falha ao criar monitoramento: ${campErr.message}`);
+            }
+
+            // ai_prompt (não bloqueante) — mesmo motor das campanhas/recorrência
+            if (iaOn) {
+                const aiPrompt = await generateCampaignAiPrompt(supabase, ownerId, {
+                    name: campaign.name,
+                    objective: campaign.objective,
+                    services: services || [],
+                    discount_pct: discount_pct ?? null,
+                    valid_until,
+                    initial_message,
+                    campaign_type: "promotion",
+                });
+                if (aiPrompt) {
+                    await supabase.from("campaigns").update({ ai_prompt: aiPrompt }).eq("id", campaign.id);
+                    campaign.ai_prompt = aiPrompt;
+                }
+            }
+
+            return new Response(
+                JSON.stringify({ success: true, campaign }),
+                { status: 201, headers: corsHeaders }
+            );
+        }
+
         // ══ CREATE ══════════════════════════════════════════════════════════
         if (action === "create") {
             const {
@@ -454,6 +602,30 @@ serve(async (req) => {
             .eq("user_id", ownerId)
             .single();
         if (campErr || !campaign) throw new Error("Campanha não encontrada");
+
+        // ══ END_MONITORING ══════════════════════════════════════════════════
+        // Encerra o monitoramento: mesma rotina do expiry (congela entradas
+        // respeitando conversas abertas + EXCLUI a tag — CASCADE limpa
+        // contact_tags e campaigns.tag_id vira NULL).
+        if (action === "end_monitoring") {
+            if (campaign.source_type !== "monitoring") {
+                throw new Error("Esta campanha não é um monitoramento de grupo");
+            }
+            if (!campaign.expired_processed) {
+                await supabase.rpc("campaign_close_entries", { p_campaign_id: campaign.id });
+                if (campaign.tag_id) {
+                    await supabase.from("tags").delete().eq("id", campaign.tag_id);
+                }
+            }
+            await supabase
+                .from("campaigns")
+                .update({ expired_processed: true, status: "cancelled" })
+                .eq("id", campaign.id);
+
+            return new Response(JSON.stringify({ success: true, ended: campaign.id }), {
+                headers: corsHeaders,
+            });
+        }
 
         // ══ UPDATE ══════════════════════════════════════════════════════════
         if (action === "update") {
@@ -685,7 +857,7 @@ serve(async (req) => {
         }
 
         throw new Error(
-            `Invalid action: "${action}". Valid: create, update, delete, regenerate_prompt, check_conflicts`
+            `Invalid action: "${action}". Valid: create, update, delete, regenerate_prompt, check_conflicts, create_monitoring, end_monitoring`
         );
     } catch (error: any) {
         console.error("[campaign-manage] Error:", error);

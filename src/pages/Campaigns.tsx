@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useUserRole } from "@/hooks/useUserRole";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useCampaigns, Campaign } from "@/hooks/useCampaigns";
-import { filterOutRecurrence } from "@/lib/recurrenceCampaigns";
+import { filterOutMonitoring, filterOutRecurrence } from "@/lib/recurrenceCampaigns";
 import { useCampaignDashboardStats } from "@/hooks/useCampaignDashboard";
 import { CampaignWizard } from "@/components/campaigns/CampaignWizard";
 import { CampaignCard } from "@/components/campaigns/CampaignCard";
@@ -17,8 +17,9 @@ export default function Campaigns() {
     const { data: userRole } = useUserRole();
     const { hasAnyAccess, canCreate, isReady } = usePermissions();
     const { data: allCampaigns, isLoading } = useCampaigns();
-    // Campanhas de recorrência ficam FORA desta página (aba Recorrência da dash)
-    const campaigns = filterOutRecurrence(allCampaigns || []);
+    // Recorrência e Monitoramento de Grupos ficam FORA desta página
+    // (abas Recorrência e Campanhas>Monitoramento da dash)
+    const campaigns = filterOutMonitoring(filterOutRecurrence(allCampaigns || []));
     const { data: stats } = useCampaignDashboardStats({ mode: "all" });
     const [wizardOpen, setWizardOpen] = useState(false);
     const [editing, setEditing] = useState<Campaign | null>(null);

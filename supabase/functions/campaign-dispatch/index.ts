@@ -75,6 +75,7 @@ function resolveVariable(key: string, campaign: any, contact: any, rawData: any)
     if (rd[key] != null && String(rd[key]).trim() !== "") return String(rd[key]).trim();
     switch (key) {
         case "nome":
+        case "nome_cliente":
             return contact?.push_name?.trim() || "Cliente";
         case "telefone":
             return String(contact?.number || "").replace(/@.*$/, "");
@@ -91,16 +92,16 @@ function resolveVariable(key: string, campaign: any, contact: any, rawData: any)
     }
 }
 
-/** Renderiza a mensagem inicial substituindo qualquer variável <chave>. */
+/** Renderiza a mensagem inicial substituindo variáveis <chave> e {{chave}}. */
 function renderMessage(campaign: any, contact: any, rawData: any): string {
-    return (campaign.initial_message || "").replace(
-        /<\s*([^<>\n]{1,60}?)\s*>/g,
-        (m: string, raw: string) => {
-            const key = slugVarKey(raw);
-            if (!key) return m;
-            return resolveVariable(key, campaign, contact, rawData);
-        }
-    );
+    const sub = (m: string, raw: string) => {
+        const key = slugVarKey(raw);
+        if (!key) return m;
+        return resolveVariable(key, campaign, contact, rawData);
+    };
+    return (campaign.initial_message || "")
+        .replace(/\{\{\s*([^{}\n]{1,60}?)\s*\}\}/g, sub)
+        .replace(/<\s*([^<>\n]{1,60}?)\s*>/g, sub);
 }
 
 // Marca a campanha como error e libera as entradas nunca enviadas (skipped):
@@ -425,26 +426,44 @@ async function dispatchBatch(supabase: any) {
                 continue;
             }
 
+            const isMonitoring = campaign.source_type === "monitoring";
+
             // Atendimento em aberto (conversa open) é intocável: não envia,
-            // entrada fica como 'open_ticket' (coluna Status "Atendimento Em Aberto")
-            const { data: openConv } = await supabase
-                .from("conversations")
-                .select("id")
-                .eq("contact_id", row.contact_id)
-                .eq("user_id", campaign.user_id)
-                .eq("status", "open")
-                .limit(1)
-                .maybeSingle();
-            if (openConv) {
-                await supabase
-                    .from("campaign_contacts")
-                    .update({ status: "open_ticket", error: null })
-                    .eq("id", row.id);
-                console.log(`[campaign-dispatch] Contact ${row.contact_id} has open ticket — skipped`);
-                continue;
+            // entrada fica como 'open_ticket'. EXCEÇÃO monitoring (user rule D2):
+            // o lead falou o termo AGORA — a abordagem sai na instância do grupo
+            // mesmo com conversa aberta em outra instância (a conversa da entrada
+            // já foi criada/reusada pelo monitoring_register_match).
+            if (!isMonitoring) {
+                const { data: openConv } = await supabase
+                    .from("conversations")
+                    .select("id")
+                    .eq("contact_id", row.contact_id)
+                    .eq("user_id", campaign.user_id)
+                    .eq("status", "open")
+                    .limit(1)
+                    .maybeSingle();
+                if (openConv) {
+                    await supabase
+                        .from("campaign_contacts")
+                        .update({ status: "open_ticket", error: null })
+                        .eq("id", row.id);
+                    console.log(`[campaign-dispatch] Contact ${row.contact_id} has open ticket — skipped`);
+                    continue;
+                }
             }
 
-            const conv = await findOrCreateConversation(supabase, campaign, row.contact_id);
+            // Monitoring: usa a conversa pré-criada no match (se ainda ativa)
+            let conv: { id: string; created: boolean } | null = null;
+            if (isMonitoring && row.conversation_id) {
+                const { data: preConv } = await supabase
+                    .from("conversations")
+                    .select("id")
+                    .eq("id", row.conversation_id)
+                    .in("status", ["pending", "open"])
+                    .maybeSingle();
+                if (preConv) conv = { id: preConv.id, created: false };
+            }
+            if (!conv) conv = await findOrCreateConversation(supabase, campaign, row.contact_id);
             const conversationId = conv.id;
             const rawData = row.raw_data || {};
 
@@ -534,11 +553,13 @@ async function dispatchBatch(supabase: any) {
 }
 
 // ── Fase 3: conclusão ────────────────────────────────────────────────────────
+// Monitoring fica em 'dispatching' até expirar/encerrar (leads entram um a um)
 async function finalizeCampaigns(supabase: any) {
     const { data: dispatching } = await supabase
         .from("campaigns")
         .select("id")
-        .eq("status", "dispatching");
+        .eq("status", "dispatching")
+        .neq("source_type", "monitoring");
 
     for (const camp of dispatching || []) {
         const { count } = await supabase

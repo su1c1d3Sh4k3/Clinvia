@@ -5,7 +5,7 @@ import { useOwnerId } from "@/hooks/useOwnerId";
 const SUPABASE_URL = "https://swfshqvvbohnahdyndch.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN3ZnNocXZ2Ym9obmFoZHluZGNoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1OTAyMzIsImV4cCI6MjA3OTE2NjIzMn0.rUja2PsYj9kWODdizhJNS6HjfA9Tg7DrJJylUH8RTnY";
 
-async function callCampaignApi(body: any): Promise<any> {
+export async function callCampaignApi(body: any): Promise<any> {
     let token = SUPABASE_ANON_KEY;
     try {
         const session = (await supabase.auth.getSession()).data.session;
@@ -65,7 +65,7 @@ export interface Campaign {
     user_id: string;
     instance_id: string | null;
     name: string;
-    source_type: "csv" | "xml" | "crm" | "tag" | "appointments" | "sales" | "recurrence";
+    source_type: "csv" | "xml" | "crm" | "tag" | "appointments" | "sales" | "recurrence" | "monitoring";
     source_config: any;
     scheduled_at: string;
     valid_until: string;
@@ -84,6 +84,10 @@ export interface Campaign {
     template_version: number;
     status: "scheduled" | "awaiting_template" | "dispatching" | "dispatched" | "error" | "cancelled" | "expired" | "blocked";
     error_message: string | null;
+    // Monitoramento de Grupos (source_type='monitoring')
+    group_id?: string | null;
+    monitor_term?: string | null;
+    monitor_match_mode?: "contains" | "equals" | null;
     // Recorrência (Fase 4/5 — campanhas geradas pelo recurrence-campaign-generator)
     recurrence_date?: string | null; // "yyyy-MM-dd"
     recurrence_service_client_id?: string | null;

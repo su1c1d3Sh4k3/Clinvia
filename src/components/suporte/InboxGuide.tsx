@@ -306,6 +306,14 @@ export function InboxGuide() {
                             a: "Sim. Quando um participante entra ou sai de um grupo (conexões não oficiais/UAZAPI), aparece uma notificação centralizada no chat — no mesmo estilo das notificações de transferência — informando quem entrou ou saiu e o horário. Essas notificações não contam como última mensagem da conversa.",
                         },
                         {
+                            q: "O que é o Monitoramento de Grupos?",
+                            a: "Uma captação automática de leads dentro de um grupo (conexões não oficiais/UAZAPI). Abra o grupo, menu lateral direito → Monitoramento: defina um termo (ex.: 'eu quero'), o modo (contém/igual), a mensagem de abordagem (aceita {{nome_cliente}}), a validade e, se quiser, ligue 'IA aborda' com objetivo, serviços e desconto. Quando um participante escrever o termo no grupo, ele ganha a tag 'Monitoramento - <grupo> - <data>', recebe a mensagem no privado (conversa 1:1 criada na hora) e cai na fila da IA ou do humano. Só a primeira mensagem com o termo dispara; mensagens suas são ignoradas. Criar/encerrar é para admin e supervisor; cada grupo tem no máximo 1 monitoramento ativo.",
+                        },
+                        {
+                            q: "O que significam as bordas coloridas nas fotos dentro do grupo monitorado?",
+                            a: "São os leads capturados pelo monitoramento: verde = conversa 1:1 aberta com a equipe; laranja = aguardando atendimento humano; lilás = aguardando a IA; azul-claro = conversa encerrada. A mensagem-gatilho (a que contém o termo) ganha borda na própria bolha. O botão Monitoramento (radar) no topo do chat filtra o grupo para mostrar só as mensagens-gatilho — todos da equipe podem usar o filtro. Ao encerrar ou expirar o monitoramento, bordas, filtro e tags somem; o histórico fica no Dashboard → Campanhas → Monitoramento.",
+                        },
+                        {
                             q: "Posso esconder um grupo de alguns membros da equipe?",
                             a: "Sim. Abra o grupo e clique em Restringir Grupo no topo do chat: todos começam marcados (visível); desmarque quem não deve ver aquele grupo e salve — o grupo some do inbox da pessoa. Supervisores podem restringir apenas atendentes; o admin restringe atendentes e supervisores. Admins nunca podem ser restringidos.",
                         },

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Send, Sparkles, TrendingUp, ChevronUp, Zap, Settings, RefreshCw, DollarSign, Calendar, MessageSquare, FileText, Bot, Pencil, Plus } from "lucide-react";
+import { Send, Sparkles, TrendingUp, ChevronUp, Zap, Settings, RefreshCw, DollarSign, Calendar, MessageSquare, FileText, Bot, Pencil, Plus, Radar } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -15,6 +15,7 @@ import { useGenerateSummary } from "@/hooks/useGenerateSummary";
 import { supabase } from "@/integrations/supabase/client";
 import { CopilotSettingsModal } from "./CopilotSettingsModal";
 import { NegotiationQuickModal } from "@/components/crm/NegotiationQuickModal";
+import { GroupMonitoringSection } from "@/components/chat/GroupMonitoringSection";
 import { SaleModal } from "@/components/sales/SaleModal";
 import { AppointmentModal } from "@/components/scheduling/AppointmentModal";
 import { format } from "date-fns";
@@ -199,11 +200,14 @@ export const AIIntelligenceSidebar = ({ conversationId }: AIIntelligenceSidebarP
     { id: "sale", icon: DollarSign, label: "Venda", hideGroup: true },
     { id: "schedule", icon: Calendar, label: "Agenda", hideGroup: true },
     { id: "satisfaction", icon: TrendingUp, label: "Satisfação", hideGroup: true },
+    { id: "monitoring", icon: Radar, label: "Monitoramento", hideGroup: false, groupOnly: true },
     { id: "summary", icon: FileText, label: "Resumo", hideGroup: false },
     { id: "copilot", icon: Bot, label: "Copilot", hideGroup: false },
   ];
 
-  const visibleItems = menuItems.filter(item => !item.hideGroup || !isGroup);
+  const visibleItems = menuItems.filter(item =>
+    (!item.hideGroup || !isGroup) && (!(item as any).groupOnly || isGroup)
+  );
 
   return (
     <>
@@ -482,6 +486,15 @@ export const AIIntelligenceSidebar = ({ conversationId }: AIIntelligenceSidebarP
                   </CollapsibleContent>
                 </Card>
               </Collapsible>
+            )}
+
+            {/* ── Monitoramento de Grupo Section ── */}
+            {isGroup && conversationData?.group_id && (
+              <GroupMonitoringSection
+                groupId={conversationData.group_id}
+                open={openSection === "monitoring"}
+                onToggle={() => toggleSection("monitoring")}
+              />
             )}
 
             {/* ── Summary Section ── */}

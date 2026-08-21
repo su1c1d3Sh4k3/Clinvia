@@ -12,6 +12,7 @@ import { useUsdBrlRate } from "@/hooks/useUsdBrlRate";
 import { useCampaigns, Campaign } from "@/hooks/useCampaigns";
 import {
     isRecurrenceCampaign,
+    isMonitoringCampaign,
     groupRecurrenceCampaignsByDate,
     RecurrenceDayGroup,
 } from "@/lib/recurrenceCampaigns";
@@ -243,9 +244,10 @@ export function useCampaignDashboard(period: CampanhasPeriod) {
         for (const s of stats || []) statsMap.set(s.campaign_id, s);
 
         // Campanhas no período (scheduled_at), mais recentes primeiro.
-        // Recorrência fica FORA da aba Campanhas (aba Recorrência da dash).
+        // Recorrência fica FORA da aba Campanhas (aba Recorrência da dash);
+        // Monitoramento de Grupos idem (sub-aba Monitoramento).
         const items: CampaignListItem[] = (campaigns || [])
-            .filter((c) => !isRecurrenceCampaign(c) && inRange(new Date(c.scheduled_at), range))
+            .filter((c) => !isRecurrenceCampaign(c) && !isMonitoringCampaign(c) && inRange(new Date(c.scheduled_at), range))
             .map((c) => ({
                 campaign: c,
                 stats: statsMap.get(c.id),
@@ -283,6 +285,32 @@ export function useCampaignDashboard(period: CampanhasPeriod) {
             isLoading: loadingCampaigns || loadingStats,
         };
     }, [campaigns, stats, rateData, range.from?.getTime(), range.to?.getTime(), loadingCampaigns, loadingStats]);
+}
+
+/**
+ * Sub-aba Monitoramento (dash Campanhas): campanhas source_type='monitoring'
+ * no período (created_at), mais recentes primeiro, com stats por campanha.
+ */
+export function useMonitoringDashboard(period: CampanhasPeriod) {
+    const { data: campaigns, isLoading: loadingCampaigns } = useCampaigns();
+    const { data: stats, isLoading: loadingStats } = useCampaignDashboardStats(period);
+    const range = periodToRange(period);
+
+    return useMemo(() => {
+        const statsMap = new Map<string, CampaignStatsRow>();
+        for (const s of stats || []) statsMap.set(s.campaign_id, s);
+
+        const items: CampaignListItem[] = (campaigns || [])
+            .filter((c) => isMonitoringCampaign(c) && inRange(new Date(c.created_at), range))
+            .map((c) => ({
+                campaign: c,
+                stats: statsMap.get(c.id),
+                sortDate: new Date(c.created_at),
+            }))
+            .sort((a, b) => b.sortDate.getTime() - a.sortDate.getTime());
+
+        return { items, isLoading: loadingCampaigns || loadingStats };
+    }, [campaigns, stats, range.from?.getTime(), range.to?.getTime(), loadingCampaigns, loadingStats]);
 }
 
 /**

@@ -1,6 +1,6 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, Star, Files, CircleCheck, ArrowRightLeft, EyeOff } from "lucide-react";
+import { CheckCircle, Star, Files, CircleCheck, ArrowRightLeft, EyeOff, Radar } from "lucide-react";
 import { TransferAtendimentoModal } from "@/components/queues/TransferAtendimentoModal";
 import { useState } from "react";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -26,6 +26,10 @@ interface ChatHeaderProps {
     resolveConversation: any;
     handleResolve: () => void;
     onJumpToMessage?: (messageId: string) => void;
+    /** Monitoramento de Grupo: mostra o botão de filtro das mensagens-gatilho */
+    showMonitorFilter?: boolean;
+    monitorFilterActive?: boolean;
+    onToggleMonitorFilter?: () => void;
 }
 
 /** Botão que expande ao hover para mostrar o label */
@@ -76,6 +80,9 @@ export const ChatHeader = ({
     resolveConversation,
     handleResolve,
     onJumpToMessage,
+    showMonitorFilter,
+    monitorFilterActive,
+    onToggleMonitorFilter,
 }: ChatHeaderProps) => {
     const [isFavoritesModalOpen, setIsFavoritesModalOpen] = useState(false);
     const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
@@ -161,6 +168,16 @@ export const ChatHeader = ({
                             className={isResolved ? "opacity-50 cursor-not-allowed" : ""}
                         />
                     </>
+                )}
+
+                {/* Monitoramento — filtra só as mensagens-gatilho dos leads (todos veem) */}
+                {isGroup && showMonitorFilter && onToggleMonitorFilter && (
+                    <ExpandButton
+                        icon={<Radar className={cn("w-4 h-4", monitorFilterActive && "text-violet-500")} />}
+                        label={monitorFilterActive ? "Ver todas as mensagens" : "Monitoramento"}
+                        onClick={onToggleMonitorFilter}
+                        className={monitorFilterActive ? "border-violet-400 bg-violet-50 dark:bg-violet-950/30" : ""}
+                    />
                 )}
 
                 {/* Restringir Grupo — admin restringe atendentes+supervisores,

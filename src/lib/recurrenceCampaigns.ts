@@ -23,6 +23,30 @@ export function filterOutRecurrence<T extends RecurrenceCampaignLike>(list: T[])
     return list.filter((c) => !isRecurrenceCampaign(c));
 }
 
+// ---------------------------------------------------------------------------
+// Monitoramento de Grupos — campanhas source_type='monitoring' ficam FORA de
+// /campanhas e da lista comum da dash (sub-aba própria em Campanhas).
+// ---------------------------------------------------------------------------
+
+export interface MonitoringCampaignLike {
+    source_type?: string;
+}
+
+/** Campanha de monitoramento de grupo (source_type='monitoring'). */
+export function isMonitoringCampaign(c: MonitoringCampaignLike | null | undefined): boolean {
+    return c?.source_type === "monitoring";
+}
+
+/** Remove campanhas de monitoramento — usada em /campanhas e na lista comum da dash. */
+export function filterOutMonitoring<T extends MonitoringCampaignLike>(list: T[]): T[] {
+    return list.filter((c) => !isMonitoringCampaign(c));
+}
+
+/** Só campanhas de monitoramento (sub-aba Monitoramento da dash). */
+export function filterMonitoringOnly<T extends MonitoringCampaignLike>(list: T[]): T[] {
+    return list.filter((c) => isMonitoringCampaign(c));
+}
+
 /** Só campanhas de recorrência (aba Recorrência da dash). */
 export function filterRecurrenceOnly<T extends RecurrenceCampaignLike>(list: T[]): T[] {
     return list.filter((c) => isRecurrenceCampaign(c));

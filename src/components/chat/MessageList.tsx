@@ -41,6 +41,10 @@ interface MessageListProps {
     hideEditDelete?: boolean;
     /** Abre o modal de edição de uma nota de conversa (itens _note na timeline) */
     onEditNote?: (note: any) => void;
+    /** Monitoramento de Grupo: messages.id da mensagem-gatilho → cor de status do lead */
+    monitorTriggerColors?: Record<string, string>;
+    /** Monitoramento de Grupo: últimos 8 dígitos do telefone do lead → cor (borda na foto) */
+    monitorLeadColors?: Record<string, string>;
 }
 
 export const MessageList = ({
@@ -66,7 +70,9 @@ export const MessageList = ({
     isGroup,
     conversation,
     hideEditDelete = false,
-    onEditNote
+    onEditNote,
+    monitorTriggerColors,
+    monitorLeadColors
 }: MessageListProps) => {
 
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -306,6 +312,15 @@ export const MessageList = ({
         const evolutionId = (msg as any).evolution_id as string | undefined;
         const reactionEmojis = evolutionId ? (reactionMap.get(evolutionId) ?? []) : [];
 
+        // Monitoramento de Grupo: borda na foto do lead (sempre) e na mensagem-gatilho
+        const monitorTriggerColor = monitorTriggerColors?.[msg.id];
+        let monitorAvatarColor: string | undefined = monitorTriggerColor;
+        if (!monitorAvatarColor && isGroupMsg && msg.direction === 'inbound' && monitorLeadColors) {
+            const phone = resolveGroupSenderPhone();
+            const last8 = phone && phone.length >= 8 ? phone.slice(-8) : null;
+            if (last8) monitorAvatarColor = monitorLeadColors[last8];
+        }
+
         // Identificar se é uma mensagem de sistema de transferência ("Conversa 123 transferida de X para Y")
         const isSystemTransfer = msg.body && (msg.body.includes('transferida de') || msg.body.includes('transferiu para'));
         if (isSystemTransfer) {
@@ -347,7 +362,11 @@ export const MessageList = ({
                 className={cn("flex gap-2 transition-colors duration-300 items-end mb-4 px-4", msg.direction === "outbound" ? "justify-end" : "justify-start", isMatch && matchIndex === currentMatchIndex ? "bg-yellow-100/10 rounded-lg p-1 -m-1" : "")}
             >
                 {msg.direction === "inbound" && (
-                    <Avatar className={cn("w-8 h-8", isGroupMsg && "cursor-pointer hover:opacity-80")} onClick={handleGroupSenderClick}>
+                    <Avatar
+                        className={cn("w-8 h-8", isGroupMsg && "cursor-pointer hover:opacity-80")}
+                        style={monitorAvatarColor ? { boxShadow: `0 0 0 2px ${monitorAvatarColor}` } : undefined}
+                        onClick={handleGroupSenderClick}
+                    >
                         <AvatarImage src={senderPic || undefined} />
                         <AvatarFallback>{senderName?.[0]?.toUpperCase()}</AvatarFallback>
                     </Avatar>
@@ -360,11 +379,14 @@ export const MessageList = ({
 
                     {/* Wrapper gives space for the badge below the bubble */}
                     <div className={cn("relative", reactionEmojis.length > 0 && "mb-3")}>
-                        <div className={cn(
-                            "flex flex-col gap-0",
-                            msg.message_type === 'sticker' ? "" : "rounded-lg p-3 overflow-hidden min-w-0 break-words shadow-sm",
-                            msg.message_type !== 'sticker' && (msg.direction === "outbound" ? "bg-[#DCF7C5] text-gray-800 dark:bg-[#044740] dark:text-white" : "bg-white dark:bg-[hsl(var(--chat-customer))] text-gray-800 dark:text-foreground")
-                        )}>
+                        <div
+                            className={cn(
+                                "flex flex-col gap-0",
+                                msg.message_type === 'sticker' ? "" : "rounded-lg p-3 overflow-hidden min-w-0 break-words shadow-sm",
+                                msg.message_type !== 'sticker' && (msg.direction === "outbound" ? "bg-[#DCF7C5] text-gray-800 dark:bg-[#044740] dark:text-white" : "bg-white dark:bg-[hsl(var(--chat-customer))] text-gray-800 dark:text-foreground")
+                            )}
+                            style={monitorTriggerColor ? { border: `2px solid ${monitorTriggerColor}` } : undefined}
+                        >
                             {isGroup && msg.direction === 'inbound' && (
                                 <p
                                     className="text-xs font-bold mb-1 text-teal-700 dark:text-teal-300 cursor-pointer hover:underline"

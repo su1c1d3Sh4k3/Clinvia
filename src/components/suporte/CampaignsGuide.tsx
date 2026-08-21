@@ -288,7 +288,7 @@ export function CampaignsGuide() {
                     Use os filtros no topo da tabela (Status, Respondida, Agendamento, Estágio, Atendente) para responder perguntas
                     como "quem recebeu e não respondeu?" — esse é o público perfeito para um reenvio.
                 </Callout>
-                <Callout type="info">
+                <Callout type="dica">
                     A tabela não atualiza sozinha em tempo real: os dados são recarregados sempre que você aplica um filtro ou
                     clica no nome de um cliente — e você pode forçar a atualização a qualquer momento pelo botão de{" "}
                     <strong className="text-foreground">atualizar (ícone de setas circulares)</strong> ao lado da busca.
@@ -391,8 +391,12 @@ export function CampaignsGuide() {
                             q: "Por que preciso agendar com 1 hora de antecedência?",
                             a: "É o tempo mínimo para o sistema preparar o disparo com segurança (validar público, template e avisos de conflito entre campanhas).",
                         },
-                    ].map((f, i) => (
-                        <AccordionItem key={i} value={`faq-${i}`} className={i === 7 ? "border-b-0" : ""}>
+                        {
+                            q: "O que é a sub-aba Monitoramento no Dashboard → Campanhas?",
+                            a: "É o histórico do Monitoramento de Grupos: quando você monitora um termo dentro de um grupo de WhatsApp (inbox → conversa do grupo → menu lateral → Monitoramento), cada participante que escreve o termo vira um lead — recebe a tag 'Monitoramento - <grupo> - <data>', a mensagem de abordagem no privado e entra na fila da IA ou do humano. A sub-aba mostra um container por grupo monitorado (com o nome da tag) com todos os leads capturados e seus desfechos, no mesmo formato da tabela de campanhas. Monitoramentos não aparecem na página /campanhas nem na lista comum de campanhas.",
+                        },
+                    ].map((f, i, arr) => (
+                        <AccordionItem key={i} value={`faq-${i}`} className={i === arr.length - 1 ? "border-b-0" : ""}>
                             <AccordionTrigger className="text-left text-sm font-semibold">{f.q}</AccordionTrigger>
                             <AccordionContent className="text-sm text-muted-foreground">{f.a}</AccordionContent>
                         </AccordionItem>
