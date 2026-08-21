@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import {
     LayoutDashboard, Headphones, Users, ShoppingCart, CalendarDays, Megaphone,
-    RefreshCcw, Smile, HelpCircle, ExternalLink, Bell,
+    RefreshCcw, Smile, HelpCircle, ExternalLink, Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,6 +23,7 @@ const TOPICS = [
     { id: "campanhas-dash", label: "Aba Campanhas" },
     { id: "recorrencia-dash", label: "Aba Recorrência" },
     { id: "satisfacao", label: "Aba Satisfação" },
+    { id: "minha-conta", label: "Minha Conta" },
     { id: "faq", label: "FAQ" },
 ];
 
@@ -40,7 +41,7 @@ export function DashboardGuide() {
                     <div>
                         <h1 className="text-xl font-bold">Manual do Dashboard</h1>
                         <p className="text-sm text-muted-foreground">
-                            A visão de comando da clínica: 7 abas de métricas para saber, em segundos, onde agir hoje.
+                            A visão de comando da clínica: 8 abas de métricas para saber, em segundos, onde agir hoje.
                         </p>
                     </div>
                 </div>
@@ -61,7 +62,7 @@ export function DashboardGuide() {
 
             {/* 1 */}
             <TopicSection id="o-que-e" index={1} icon={LayoutDashboard} title="O que é o Dashboard?"
-                subtitle="7 abas, cada uma responde uma pergunta">
+                subtitle="8 abas, cada uma responde uma pergunta">
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                     {[
                         { icon: Headphones, t: "Monitoramento", d: "O que está acontecendo AGORA nas conversas?" },
@@ -71,6 +72,7 @@ export function DashboardGuide() {
                         { icon: Megaphone, t: "Campanhas", d: "Resultado dos disparos em massa, contato a contato." },
                         { icon: RefreshCcw, t: "Recorrência", d: "Abordagens de recompra mês a mês: fases, contatos e conversão." },
                         { icon: Smile, t: "Satisfação", d: "Notas NPS, avaliações recentes e tempo de atendimento." },
+                        { icon: Wallet, t: "Minha Conta", d: "Visão geral da conta: tokens da IA em R$, conexões, IA e colaboradores (só admin)." },
                     ].map((c) => (
                         <div key={c.t} className="rounded-xl border p-3.5">
                             <p className="flex items-center gap-1.5 text-sm font-semibold"><c.icon className="h-4 w-4 text-primary" />{c.t}</p>
@@ -81,8 +83,7 @@ export function DashboardGuide() {
                 <Callout type="dica" title="Quem vê o quê">
                     Admins veem tudo. Supervisores veem tudo (Vendas depende da permissão financeira). Atendentes veem
                     apenas a aba CRM — e, se tiverem escopo de visão (conexões/filas liberadas na página Equipe), os números
-                    refletem só o que está no escopo deles. No topo, o <strong>quadro de avisos</strong>{" "}
-                    <Bell className="inline h-3.5 w-3.5" /> traz notificações do sistema para toda a equipe.
+                    refletem só o que está no escopo deles. A aba <strong>Minha Conta</strong> é exclusiva do administrador.
                 </Callout>
                 <div className="flex flex-wrap gap-2">
                     <Button size="sm" variant="outline" onClick={() => navigate("/dashboard?tour=dashboard-abas")}>
@@ -225,7 +226,32 @@ export function DashboardGuide() {
             </TopicSection>
 
             {/* 9 */}
-            <TopicSection id="faq" index={9} icon={HelpCircle} title="Perguntas frequentes">
+            <TopicSection id="minha-conta" index={9} icon={Wallet} title="Aba Minha Conta"
+                subtitle="A visão geral da conta — exclusiva do administrador">
+                <p className="text-sm text-muted-foreground">
+                    Quatro containers que respondem "como está a minha conta?": consumo da IA, conexões,
+                    status da IA e desempenho dos colaboradores.
+                </p>
+                <StepByStep steps={[
+                    { title: "Consumo de Tokens da IA", description: "Cards de Total, Consumo Mensal e Consumo Diário (quantidade de tokens x custo em R$, somando a IA das conversas e a do sistema; a conversão usa a cotação real do dólar). Abaixo, os gráficos de consumo mensal (com filtro de ano) e diário (7, 15 ou 30 dias)." },
+                    { title: "Conexões", description: "Cada instância conectada com o tipo (WhatsApp Oficial, Não Oficial ou Instagram), o status da conexão e, nos números oficiais, o selo de qualidade da Meta." },
+                    { title: "IA", description: "Nome do agente, empresa, se a IA está ligada ou desligada e em quais instâncias ela está ativa." },
+                    { title: "Colaboradores", description: "Quadro de Atendentes (abertos/pendentes/resolvidos + tempo de resposta, tempo de atendimento, sentimento e nº de atendimentos) e Ranking de Profissionais com o gauge circular de ocupação da agenda ao lado do nome. O filtro de período (Hoje, 7 dias, Mês, Ano, Total) vale para o container inteiro." },
+                ]} />
+                <Callout type="atencao" title="Ocupação no período Total">
+                    No filtro Total, o gauge de ocupação considera os últimos 12 meses (senão anos sem agenda zerariam a
+                    taxa); procedimentos e faturamento seguem o histórico completo.
+                </Callout>
+                <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" onClick={() => navigate("/dashboard?tab=minha-conta&tour=dashboard-abas")}>
+                        <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                        Me mostre na prática
+                    </Button>
+                </div>
+            </TopicSection>
+
+            {/* 10 */}
+            <TopicSection id="faq" index={10} icon={HelpCircle} title="Perguntas frequentes">
                 <Accordion type="single" collapsible className="rounded-xl border px-4">
                     {[
                         {

@@ -217,15 +217,16 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
     ],
     "dashboard-abas": [
         {
-            element: '[data-tour="dash-notifications"]',
-            title: "Quadro de avisos",
-            description: "Notificações do sistema para toda a equipe aparecem aqui, no topo do Dashboard.",
-        },
-        {
             element: '[data-tour="dash-tabs"]',
             title: "As abas do Dashboard",
             description:
-                "Monitoramento (ao vivo), CRM (funil), Vendas (financeiro), Agendamentos (ocupação + mensagens automáticas), Campanhas, Recorrência (recompra) e Satisfação (NPS). O que você vê depende do seu papel.",
+                "Monitoramento (ao vivo), CRM (funil), Vendas (financeiro), Agendamentos (ocupação + mensagens automáticas), Campanhas, Recorrência (recompra), Satisfação (NPS) e Minha Conta (visão geral da conta, só admin). O que você vê depende do seu papel.",
+        },
+        {
+            element: '[data-tour="dash-minha-conta"]',
+            title: "Minha Conta",
+            description:
+                "Exclusiva do administrador: consumo de tokens da IA em reais, instâncias conectadas com qualidade, status da IA e um resumo dos colaboradores (atendentes e profissionais) com filtro de período.",
         },
     ],
     "agenda-tour": [

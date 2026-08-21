@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useUrlTab } from "@/hooks/useUrlTab";
 import { MonitoramentoTab } from "@/components/dashboard/monitoramento/MonitoramentoTab";
-import { NotificationsBoard } from "@/components/dashboard/NotificationsBoard";
+import { MinhaContaTab } from "@/components/dashboard/minha-conta/MinhaContaTab";
 import { SalesDashboard } from "@/components/dashboard/SalesDashboard";
 import { CrmDashboard } from "@/components/dashboard/crm/CrmDashboard";
 import { AgendamentosDashboard } from "@/components/dashboard/agendamentos/AgendamentosDashboard";
@@ -9,13 +9,13 @@ import { CampanhasDashboard } from "@/components/dashboard/campanhas/CampanhasDa
 import { RecorrenciaDashboard } from "@/components/dashboard/recorrencia/RecorrenciaDashboard";
 import { SatisfacaoDashboard } from "@/components/dashboard/satisfacao/SatisfacaoDashboard";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Headphones, Users, ShoppingCart, CalendarDays, Megaphone, RefreshCcw, Smile } from "lucide-react";
+import { Headphones, Users, ShoppingCart, CalendarDays, Megaphone, RefreshCcw, Smile, Wallet } from "lucide-react";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useFinancialAccess } from "@/hooks/useFinancialAccess";
 import { cn } from "@/lib/utils";
 import { useSuporteTour } from "@/lib/suporteTours";
 
-type DashboardTab = "monitoramento" | "crm" | "vendas" | "agendamentos" | "campanhas" | "recorrencia" | "satisfacao";
+type DashboardTab = "monitoramento" | "crm" | "vendas" | "agendamentos" | "campanhas" | "recorrencia" | "satisfacao" | "minha-conta";
 
 const Dashboard = () => {
     const { data: userRole } = useUserRole();
@@ -40,15 +40,11 @@ const Dashboard = () => {
             </div>
 
             <div className="space-y-4 md:space-y-6">
-                <div data-tour="dash-notifications">
-                    <NotificationsBoard />
-                </div>
-
                 {/* Dashboard Tabs - Agentes só veem Painel de Negócios */}
                 <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as DashboardTab)} className="w-full">
                     <TabsList data-tour="dash-tabs" className={cn(
                         "grid w-full max-w-5xl mx-auto",
-                        userRole === 'agent' ? "grid-cols-1" : canViewSales ? "grid-cols-7" : "grid-cols-6"
+                        userRole === 'agent' ? "grid-cols-1" : userRole === 'admin' ? "grid-cols-8" : canViewSales ? "grid-cols-7" : "grid-cols-6"
                     )}>
                         {userRole !== 'agent' && (
                             <TabsTrigger
@@ -111,6 +107,16 @@ const Dashboard = () => {
                                 <span className="hidden sm:inline">Satisfação</span>
                             </TabsTrigger>
                         )}
+                        {userRole === 'admin' && (
+                            <TabsTrigger
+                                value="minha-conta"
+                                data-tour="dash-minha-conta"
+                                className="flex items-center gap-2"
+                            >
+                                <Wallet className="h-4 w-4 shrink-0 transition-transform duration-300 data-[state=active]:scale-110" />
+                                <span className="hidden sm:inline">Minha Conta</span>
+                            </TabsTrigger>
+                        )}
                     </TabsList>
                 </Tabs>
 
@@ -139,6 +145,10 @@ const Dashboard = () => {
 
                 {activeTab === "satisfacao" && userRole !== 'agent' && (
                     <SatisfacaoDashboard />
+                )}
+
+                {activeTab === "minha-conta" && userRole === 'admin' && (
+                    <MinhaContaTab />
                 )}
             </div>
         </div>
