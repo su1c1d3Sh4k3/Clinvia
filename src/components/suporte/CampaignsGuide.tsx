@@ -321,7 +321,7 @@ export function CampaignsGuide() {
                 subtitle="Repescar quem não respondeu, sem incomodar quem já resolveu">
                 <StepByStep steps={[
                     { title: "Clique em \"Reenviar campanha\"", description: "Disponível em campanhas Disparadas ou Encerradas, no menu do card." },
-                    { title: "Escolha quem entra", description: "O sistema sugere o público (ex.: só quem não respondeu) e abre o assistente já preenchido — você pode ajustar a mensagem e as datas." },
+                    { title: "Escolha quem entra", description: "O assistente abre já preenchido e a etapa Audiência reutiliza automaticamente os contatos da campanha original — você só define as novas datas. Quer outro público? Clique em \"Refazer seleção de audiência\" nessa etapa." },
                     { title: "A campanha antiga fecha", description: "Ao confirmar, a campanha original é encerrada e os resultados dela ficam congelados. A nova começa do zero, com relatório próprio." },
                 ]} />
                 <Callout type="atencao" title="Duas proteções automáticas">

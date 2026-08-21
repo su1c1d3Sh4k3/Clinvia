@@ -8,27 +8,37 @@ import { AudienceSelection, AudienceEntry } from "../audienceTypes";
 interface AudienceSalesProps {
     value: AudienceSelection;
     onChange: (sel: AudienceSelection) => void;
+    onLoadingChange?: (loading: boolean) => void;
 }
 
-export function AudienceSales({ value, onChange }: AudienceSalesProps) {
+export function AudienceSales({ value, onChange, onLoadingChange }: AudienceSalesProps) {
     const [from, setFrom] = useState<string>(value.config?.from || "");
     const [to, setTo] = useState<string>(value.config?.to || "");
 
     // 1 entrada POR CONTATO — se o contato tem várias vendas no período,
     // usa a mais recente para as variáveis
-    const { data: entries } = useQuery({
+    const { data: entries, isLoading } = useQuery({
         queryKey: ["audience-sales", from, to],
         queryFn: async (): Promise<AudienceEntry[]> => {
-            let query = supabase
-                .from("sales" as any)
-                .select("contact_id, sale_date, product_name, total_amount")
-                .not("contact_id", "is", null)
-                .order("sale_date", { ascending: true })
-                .limit(10000);
-            if (from) query = query.gte("sale_date", from);
-            if (to) query = query.lte("sale_date", to);
-            const { data, error } = await query;
-            if (error) throw error;
+            // Paginação: PostgREST corta em 1000 linhas por requisição
+            // (o .limit(10000) antigo não passava do cap do servidor)
+            const PAGE = 1000;
+            const data: any[] = [];
+            for (let off = 0; off < 20000; off += PAGE) {
+                let query = supabase
+                    .from("sales" as any)
+                    .select("id, contact_id, sale_date, product_name, total_amount")
+                    .not("contact_id", "is", null)
+                    .order("sale_date", { ascending: true })
+                    .order("id", { ascending: true })
+                    .range(off, off + PAGE - 1);
+                if (from) query = query.gte("sale_date", from);
+                if (to) query = query.lte("sale_date", to);
+                const { data: page, error } = await query;
+                if (error) throw error;
+                data.push(...(page || []));
+                if ((page || []).length < PAGE) break;
+            }
             // Dedupe por contato: ordenado por sale_date asc — a última ocorrência
             // (venda mais recente) sobrescreve as anteriores
             const byContact = new Map<string, any>();
@@ -44,8 +54,17 @@ export function AudienceSales({ value, onChange }: AudienceSalesProps) {
         },
     });
 
+    // Informa o wizard que a audiência está carregando (bloqueia o "Próximo")
     useEffect(() => {
-        const list = entries || [];
+        onLoadingChange?.(isLoading);
+        return () => onLoadingChange?.(false);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isLoading]);
+
+    useEffect(() => {
+        // undefined = query em andamento; não sobrescrever com lista vazia
+        if (entries === undefined) return;
+        const list = entries;
         const sig = (e: AudienceEntry[]) => e.map((x) => x.contactId + x.vars.data_venda + x.vars.valor_venda).join(",");
         if (sig(list) === sig(value.entries)) return;
         onChange({ entries: list, invalidRows: [], config: { from, to } });

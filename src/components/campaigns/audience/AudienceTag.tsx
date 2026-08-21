@@ -9,9 +9,10 @@ import { AudienceSelection, AudienceEntry } from "../audienceTypes";
 interface AudienceTagProps {
     value: AudienceSelection;
     onChange: (sel: AudienceSelection) => void;
+    onLoadingChange?: (loading: boolean) => void;
 }
 
-export function AudienceTag({ value, onChange }: AudienceTagProps) {
+export function AudienceTag({ value, onChange, onLoadingChange }: AudienceTagProps) {
     const [tagId, setTagId] = useState<string>(value.config?.tag_id || "");
 
     const { data: tags } = useQuery({
@@ -27,23 +28,40 @@ export function AudienceTag({ value, onChange }: AudienceTagProps) {
         },
     });
 
-    const { data: entries } = useQuery({
+    const { data: entries, isLoading } = useQuery({
         queryKey: ["audience-tag-contacts", tagId],
         queryFn: async (): Promise<AudienceEntry[]> => {
-            const { data, error } = await supabase
-                .from("contact_tags")
-                .select("contact_id")
-                .eq("tag_id", tagId);
-            if (error) throw error;
-            const ids = [...new Set((data || []).map((r) => r.contact_id).filter(Boolean))] as string[];
+            // Paginação: PostgREST corta em 1000 linhas por requisição
+            const PAGE = 1000;
+            const rows: { contact_id: string | null }[] = [];
+            for (let off = 0; off < 20000; off += PAGE) {
+                const { data, error } = await supabase
+                    .from("contact_tags")
+                    .select("contact_id")
+                    .eq("tag_id", tagId)
+                    .order("contact_id", { ascending: true })
+                    .range(off, off + PAGE - 1);
+                if (error) throw error;
+                rows.push(...(data || []));
+                if ((data || []).length < PAGE) break;
+            }
+            const ids = [...new Set(rows.map((r) => r.contact_id).filter(Boolean))] as string[];
             return ids.map((id) => ({ contactId: id, vars: {} }));
         },
         enabled: !!tagId,
     });
 
+    // Informa o wizard que a audiência está carregando (bloqueia o "Próximo")
     useEffect(() => {
-        if (!tagId) return;
-        const list = entries || [];
+        onLoadingChange?.(!!tagId && isLoading);
+        return () => onLoadingChange?.(false);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isLoading, tagId]);
+
+    useEffect(() => {
+        // undefined = query em andamento; não sobrescrever com lista vazia
+        if (!tagId || entries === undefined) return;
+        const list = entries;
         const sig = (e: AudienceEntry[]) => e.map((x) => x.contactId).join(",");
         if (sig(list) === sig(value.entries) && value.config?.tag_id === tagId) return;
         onChange({ entries: list, invalidRows: [], config: { tag_id: tagId } });

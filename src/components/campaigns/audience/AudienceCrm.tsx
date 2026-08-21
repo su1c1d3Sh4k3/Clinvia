@@ -11,6 +11,7 @@ import { AudienceSelection, AudienceEntry } from "../audienceTypes";
 interface AudienceCrmProps {
     value: AudienceSelection;
     onChange: (sel: AudienceSelection) => void;
+    onLoadingChange?: (loading: boolean) => void;
 }
 
 type ContactType = "contato" | "lead" | "cliente";
@@ -27,7 +28,7 @@ const DEFAULT_TYPES: Record<ContactType, boolean> = {
     cliente: true,
 };
 
-export function AudienceCrm({ value, onChange }: AudienceCrmProps) {
+export function AudienceCrm({ value, onChange, onLoadingChange }: AudienceCrmProps) {
     const [stages, setStages] = useState<string[]>(
         value.config?.stages || (value.config?.stage ? [value.config.stage] : [])
     );
@@ -40,17 +41,27 @@ export function AudienceCrm({ value, onChange }: AudienceCrmProps) {
     const toggleStage = (s: string) =>
         setStages((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
 
-    const { data: entries } = useQuery({
+    const { data: entries, isLoading } = useQuery({
         queryKey: ["audience-crm", stages, from, to, types],
         queryFn: async (): Promise<AudienceEntry[]> => {
-            let query = supabase
-                .from("crm_client" as any)
-                .select("contact_id, stage, is_active, contact:contacts(client_stage)")
-                .in("stage", stages);
-            if (from) query = query.gte("stage_changed_at", new Date(from).toISOString());
-            if (to) query = query.lte("stage_changed_at", new Date(to + "T23:59:59").toISOString());
-            const { data, error } = await query;
-            if (error) throw error;
+            // Paginação: o PostgREST corta silenciosamente em 1000 linhas por
+            // requisição — etapas grandes (ex.: 1600+ cards) perdiam contatos
+            const PAGE = 1000;
+            const data: any[] = [];
+            for (let off = 0; off < 20000; off += PAGE) {
+                let query = supabase
+                    .from("crm_client" as any)
+                    .select("id, contact_id, stage, is_active, contact:contacts(client_stage)")
+                    .in("stage", stages)
+                    .order("id", { ascending: true })
+                    .range(off, off + PAGE - 1);
+                if (from) query = query.gte("stage_changed_at", new Date(from).toISOString());
+                if (to) query = query.lte("stage_changed_at", new Date(to + "T23:59:59").toISOString());
+                const { data: page, error } = await query;
+                if (error) throw error;
+                data.push(...(page || []));
+                if ((page || []).length < PAGE) break;
+            }
             const seen = new Set<string>();
             const list: AudienceEntry[] = [];
             for (const r of (data || []) as any[]) {
@@ -67,9 +78,19 @@ export function AudienceCrm({ value, onChange }: AudienceCrmProps) {
         enabled: stages.length > 0,
     });
 
+    // Informa o wizard que a audiência está carregando (bloqueia o "Próximo")
     useEffect(() => {
-        if (stages.length === 0) return;
-        const list = entries || [];
+        onLoadingChange?.(stages.length > 0 && isLoading);
+        return () => onLoadingChange?.(false);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isLoading, stages.length]);
+
+    useEffect(() => {
+        // entries === undefined → query em andamento; não sobrescrever a
+        // audiência do wizard com lista vazia (corrige "audiência precisa de
+        // pelo menos um contato" ao avançar com a query ainda carregando)
+        if (stages.length === 0 || entries === undefined) return;
+        const list = entries;
         const sig = (e: AudienceEntry[]) => e.map((x) => x.contactId).join(",");
         const cfg = { stages, from, to, types };
         if (sig(list) === sig(value.entries) && JSON.stringify(value.config) === JSON.stringify(cfg)) return;

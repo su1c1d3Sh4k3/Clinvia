@@ -92,6 +92,10 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
     const [validUntil, setValidUntil] = useState("");
     const [sourceType, setSourceType] = useState<SourceType | "">("");
     const [audience, setAudience] = useState<AudienceSelection>(EMPTY_AUDIENCE);
+    // Query do builder de audiência em andamento (bloqueia o "Próximo")
+    const [audienceLoading, setAudienceLoading] = useState(false);
+    // Reenvio: reutiliza a audiência original até o usuário pedir para refazer
+    const [keepResendAudience, setKeepResendAudience] = useState(false);
     const [campaignType, setCampaignType] = useState<"promotion" | "notification">("promotion");
     const [selectedServices, setSelectedServices] = useState<CampaignService[]>([]);
     const [discountPct, setDiscountPct] = useState<string>("");
@@ -135,6 +139,7 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
             setMessage(baseCampaign.template_mode === "none" ? baseCampaign.initial_message : "");
             setObjective(baseCampaign.objective);
             setIaEnabled(baseCampaign.ia_enabled);
+            setKeepResendAudience(isResend);
         } else {
             setName("");
             setInstanceId("");
@@ -150,7 +155,9 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
             setMessage("");
             setObjective("");
             setIaEnabled(true);
+            setKeepResendAudience(false);
         }
+        setAudienceLoading(false);
         setStep(0);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, campaign?.id, resendFrom?.id]);
@@ -171,7 +178,7 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
 
     // Reenvio: carrega a audiência original com as vars do snapshot (raw_data)
     // como entries de CRIAÇÃO — o cliente pode substituir na etapa Audiência
-    const { data: resendEntries } = useQuery({
+    const { data: resendEntries, isLoading: resendLoading } = useQuery({
         queryKey: ["campaign-resend-entries", resendFrom?.id],
         queryFn: async (): Promise<AudienceSelection["entries"]> => {
             const { data } = await supabase
@@ -188,10 +195,10 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
     });
 
     useEffect(() => {
-        if (!open || !isResend || !resendEntries || resendEntries.length === 0) return;
+        if (!open || !isResend || !keepResendAudience || !resendEntries || resendEntries.length === 0) return;
         setAudience((a) => (a.entries.length > 0 ? a : { ...a, entries: resendEntries }));
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open, isResend, resendEntries]);
+    }, [open, isResend, keepResendAudience, resendEntries]);
 
     const { data: services } = useQuery({
         queryKey: ["campaign-services"],
@@ -407,7 +414,13 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
             if (new Date(validUntil) <= new Date(scheduledAt)) return "A validade precisa ser depois do disparo";
         }
         if (step === 1) {
+            if (isResend && keepResendAudience) {
+                if (resendLoading) return "Aguarde — carregando a audiência da campanha original";
+                if (contactCount === 0) return "A campanha original não tem contatos para reutilizar — refaça a seleção da audiência";
+                return null;
+            }
             if (!sourceType) return "Selecione a origem dos dados";
+            if (audienceLoading) return "Aguarde — carregando a audiência selecionada";
             if (contactCount === 0 && audience.invalidRows.length === 0) return "A audiência precisa de pelo menos um contato";
         }
         if (step === 3) {
@@ -707,7 +720,35 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
                 )}
 
                 {/* Step 1 — Audiência */}
-                {step === 1 && (
+                {step === 1 && isResend && keepResendAudience && (
+                    <div className="space-y-3">
+                        <div className="border border-primary/30 bg-primary/5 rounded-xl p-4 space-y-2">
+                            <p className="text-sm font-medium">
+                                Reutilizando a audiência da campanha original
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                                {resendLoading
+                                    ? "Carregando os contatos da campanha original..."
+                                    : `${contactCount.toLocaleString("pt-BR")} contatos serão incluídos neste reenvio.`}
+                            </p>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                    setKeepResendAudience(false);
+                                    setAudience(EMPTY_AUDIENCE);
+                                    setSourceType("");
+                                }}
+                            >
+                                Refazer seleção de audiência
+                            </Button>
+                        </div>
+                        {sendBlockedWarning}
+                        {overTierWarning}
+                    </div>
+                )}
+                {step === 1 && !(isResend && keepResendAudience) && (
                     <div className="space-y-3">
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                             {SOURCE_OPTIONS.map((opt) => (
@@ -735,10 +776,10 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
 
                         {sourceType === "csv" && <AudienceFileUpload fileType="csv" value={audience} onChange={setAudience} />}
                         {sourceType === "xml" && <AudienceFileUpload fileType="xml" value={audience} onChange={setAudience} />}
-                        {sourceType === "crm" && <AudienceCrm value={audience} onChange={setAudience} />}
-                        {sourceType === "tag" && <AudienceTag value={audience} onChange={setAudience} />}
-                        {sourceType === "appointments" && <AudienceAppointments value={audience} onChange={setAudience} />}
-                        {sourceType === "sales" && <AudienceSales value={audience} onChange={setAudience} />}
+                        {sourceType === "crm" && <AudienceCrm value={audience} onChange={setAudience} onLoadingChange={setAudienceLoading} />}
+                        {sourceType === "tag" && <AudienceTag value={audience} onChange={setAudience} onLoadingChange={setAudienceLoading} />}
+                        {sourceType === "appointments" && <AudienceAppointments value={audience} onChange={setAudience} onLoadingChange={setAudienceLoading} />}
+                        {sourceType === "sales" && <AudienceSales value={audience} onChange={setAudience} onLoadingChange={setAudienceLoading} />}
 
                         {isEdit && audience.entries.length === 0 && (existingContactIds?.length || 0) > 0 && (
                             <p className="text-xs text-muted-foreground">

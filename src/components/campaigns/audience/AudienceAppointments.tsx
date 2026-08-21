@@ -24,9 +24,10 @@ const STATUS_LABELS: Record<string, string> = Object.fromEntries(
 interface AudienceAppointmentsProps {
     value: AudienceSelection;
     onChange: (sel: AudienceSelection) => void;
+    onLoadingChange?: (loading: boolean) => void;
 }
 
-export function AudienceAppointments({ value, onChange }: AudienceAppointmentsProps) {
+export function AudienceAppointments({ value, onChange, onLoadingChange }: AudienceAppointmentsProps) {
     const [professionalId, setProfessionalId] = useState<string>(value.config?.professional_id || "all");
     const [status, setStatus] = useState<string>(value.config?.status || "all");
     const [from, setFrom] = useState<string>(value.config?.from || "");
@@ -46,22 +47,34 @@ export function AudienceAppointments({ value, onChange }: AudienceAppointmentsPr
 
     // 1 entrada POR CONTATO — se o contato tem vários agendamentos no período,
     // usa o próximo futuro (senão o mais recente) para as variáveis
-    const { data: entries } = useQuery({
+    const { data: entries, isLoading } = useQuery({
         queryKey: ["audience-appointments", professionalId, status, from, to],
         queryFn: async (): Promise<AudienceEntry[]> => {
-            let query = supabase
-                .from("appointments" as any)
-                .select("contact_id, start_time, status, professionals(name), products_services(name)")
-                .eq("type", "appointment")
-                .not("contact_id", "is", null)
-                .order("start_time", { ascending: true })
-                .limit(10000);
-            if (professionalId !== "all") query = query.eq("professional_id", professionalId);
-            if (status !== "all") query = query.eq("status", status);
-            if (from) query = query.gte("start_time", new Date(from).toISOString());
-            if (to) query = query.lte("start_time", new Date(to + "T23:59:59").toISOString());
-            const { data, error } = await query;
-            if (error) throw error;
+            // Paginação: PostgREST corta em 1000 linhas por requisição
+            // (o .limit(10000) antigo não passava do cap do servidor)
+            const PAGE = 1000;
+            const data: any[] = [];
+            for (let off = 0; off < 20000; off += PAGE) {
+                let query = supabase
+                    .from("appointments" as any)
+                    // FK real: appointments.service_id → services_client (o embed
+                    // antigo products_services(name) não existe e derrubava a
+                    // query inteira com 400 — fonte Agendamentos sempre zerada)
+                    .select("id, contact_id, start_time, status, professionals(name), service:services_client(name)")
+                    .eq("type", "appointment")
+                    .not("contact_id", "is", null)
+                    .order("start_time", { ascending: true })
+                    .order("id", { ascending: true })
+                    .range(off, off + PAGE - 1);
+                if (professionalId !== "all") query = query.eq("professional_id", professionalId);
+                if (status !== "all") query = query.eq("status", status);
+                if (from) query = query.gte("start_time", new Date(from).toISOString());
+                if (to) query = query.lte("start_time", new Date(to + "T23:59:59").toISOString());
+                const { data: page, error } = await query;
+                if (error) throw error;
+                data.push(...(page || []));
+                if ((page || []).length < PAGE) break;
+            }
             // Dedupe por contato: linhas vêm ordenadas por start_time asc —
             // primeiro agendamento futuro vence; sem futuro, fica o último passado
             const now = Date.now();
@@ -91,7 +104,7 @@ export function AudienceAppointments({ value, onChange }: AudienceAppointmentsPr
                             ? start.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
                             : "",
                         profissional: r.professionals?.name || "",
-                        servico_agendado: r.products_services?.name || "",
+                        servico_agendado: r.service?.name || "",
                         status_agendamento: STATUS_LABELS[r.status] || r.status || "",
                     },
                 };
@@ -99,8 +112,17 @@ export function AudienceAppointments({ value, onChange }: AudienceAppointmentsPr
         },
     });
 
+    // Informa o wizard que a audiência está carregando (bloqueia o "Próximo")
     useEffect(() => {
-        const list = entries || [];
+        onLoadingChange?.(isLoading);
+        return () => onLoadingChange?.(false);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isLoading]);
+
+    useEffect(() => {
+        // undefined = query em andamento; não sobrescrever com lista vazia
+        if (entries === undefined) return;
+        const list = entries;
         const sig = (e: AudienceEntry[]) => e.map((x) => x.contactId + x.vars.data_agendamento + x.vars.hora_agendamento).join(",");
         if (sig(list) === sig(value.entries)) return;
         onChange({
