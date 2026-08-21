@@ -53,10 +53,10 @@ export function TokensSection() {
         return y;
     })();
 
-    // Gráfico mensal: tokens (IA) + custo Meta por mês
-    const monthlyTokensMap = new Map<number, number>();
+    // Gráficos comparam CUSTO em R$ nas duas séries (custo IA × custo Meta)
+    const monthlyIaMap = new Map<number, number>();
     (monthly || []).forEach((d) => {
-        monthlyTokensMap.set(parseInt(d.year_month.split("-")[1]) - 1, d.total_tokens);
+        monthlyIaMap.set(parseInt(d.year_month.split("-")[1]) - 1, d.total_cost_brl);
     });
     const monthlyMetaMap = new Map<number, number>();
     (metaMonthly || []).forEach((d) => {
@@ -64,17 +64,17 @@ export function TokensSection() {
     });
     const monthlyChart = MONTH_NAMES.map((name, i) => ({
         month: name,
-        tokens: monthlyTokensMap.get(i) || 0,
+        iaCost: monthlyIaMap.get(i) || 0,
         metaCost: monthlyMetaMap.get(i) || 0,
     }));
 
     // Gráfico diário: união das datas das duas séries
-    const dailyMap = new Map<string, { tokens: number; metaCost: number }>();
+    const dailyMap = new Map<string, { iaCost: number; metaCost: number }>();
     (daily || []).forEach((d) => {
-        dailyMap.set(d.usage_date, { tokens: d.total_tokens, metaCost: 0 });
+        dailyMap.set(d.usage_date, { iaCost: d.total_cost_brl, metaCost: 0 });
     });
     (metaDaily || []).forEach((d) => {
-        const e = dailyMap.get(d.usage_date) || { tokens: 0, metaCost: 0 };
+        const e = dailyMap.get(d.usage_date) || { iaCost: 0, metaCost: 0 };
         e.metaCost = d.cost_brl;
         dailyMap.set(d.usage_date, e);
     });
@@ -82,7 +82,7 @@ export function TokensSection() {
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([date, v]) => ({
             date: new Date(date + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
-            tokens: v.tokens,
+            iaCost: v.iaCost,
             metaCost: v.metaCost,
         }));
 
@@ -238,22 +238,19 @@ export function TokensSection() {
                                 </SelectContent>
                             </Select>
                         </div>
-                        {monthlyChart.some((d) => d.tokens > 0 || d.metaCost > 0) ? (
+                        {monthlyChart.some((d) => d.iaCost > 0 || d.metaCost > 0) ? (
                             <ResponsiveContainer width="100%" height={220}>
                                 <BarChart data={monthlyChart}>
                                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                                     <XAxis dataKey="month" fontSize={12} stroke="hsl(var(--muted-foreground))" />
-                                    <YAxis yAxisId="tokens" fontSize={12} tickFormatter={formatNumber} stroke="hsl(var(--muted-foreground))" />
-                                    <YAxis yAxisId="meta" orientation="right" fontSize={11} tickFormatter={(v: number) => `R$${formatNumber(v)}`} stroke="#f59e0b" />
+                                    <YAxis fontSize={12} tickFormatter={(v: number) => `R$${formatNumber(v)}`} stroke="hsl(var(--muted-foreground))" />
                                     <Tooltip
                                         contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }}
-                                        formatter={(value: number, name: string) =>
-                                            name === "Custo Meta" ? [brl(value), name] : [formatNumber(value), name]
-                                        }
+                                        formatter={(value: number, name: string) => [brl(value), name]}
                                     />
                                     <Legend wrapperStyle={{ fontSize: 12 }} />
-                                    <Bar yAxisId="tokens" dataKey="tokens" name="Tokens" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-                                    <Bar yAxisId="meta" dataKey="metaCost" name="Custo Meta" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                                    <Bar dataKey="iaCost" name="Custo IA" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                                    <Bar dataKey="metaCost" name="Custo Meta" fill="#f59e0b" radius={[4, 4, 0, 0]} />
                                 </BarChart>
                             </ResponsiveContainer>
                         ) : (
@@ -286,17 +283,14 @@ export function TokensSection() {
                                 <LineChart data={dailyChart}>
                                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                                     <XAxis dataKey="date" fontSize={10} stroke="hsl(var(--muted-foreground))" />
-                                    <YAxis yAxisId="tokens" fontSize={12} tickFormatter={formatNumber} stroke="hsl(var(--muted-foreground))" />
-                                    <YAxis yAxisId="meta" orientation="right" fontSize={11} tickFormatter={(v: number) => `R$${formatNumber(v)}`} stroke="#f59e0b" />
+                                    <YAxis fontSize={12} tickFormatter={(v: number) => `R$${formatNumber(v)}`} stroke="hsl(var(--muted-foreground))" />
                                     <Tooltip
                                         contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }}
-                                        formatter={(value: number, name: string) =>
-                                            name === "Custo Meta" ? [brl(value), name] : [formatNumber(value), name]
-                                        }
+                                        formatter={(value: number, name: string) => [brl(value), name]}
                                     />
                                     <Legend wrapperStyle={{ fontSize: 12 }} />
-                                    <Line yAxisId="tokens" type="monotone" dataKey="tokens" name="Tokens" stroke="#3b82f6" strokeWidth={2} dot={false} />
-                                    <Line yAxisId="meta" type="monotone" dataKey="metaCost" name="Custo Meta" stroke="#f59e0b" strokeWidth={2} dot={false} />
+                                    <Line type="monotone" dataKey="iaCost" name="Custo IA" stroke="#3b82f6" strokeWidth={2} dot={false} />
+                                    <Line type="monotone" dataKey="metaCost" name="Custo Meta" stroke="#f59e0b" strokeWidth={2} dot={false} />
                                 </LineChart>
                             </ResponsiveContainer>
                         ) : (
