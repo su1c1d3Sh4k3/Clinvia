@@ -104,10 +104,12 @@ export function MessageBubble({
             )}
             style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
         >
-            {/* Sender Name for Group Chats */}
-            {isGroup && msg.direction === 'inbound' && msg.sender_name && (
-                <p className="text-xs font-bold mb-1 text-primary-foreground/80">
-                    {msg.sender_name}
+            {/* Sender Name for Group Chats — cor visível nos 2 temas (era
+                primary-foreground: branco sobre balão branco no tema claro);
+                fallback p/ número quando a msg não guardou o nome */}
+            {isGroup && msg.direction === 'inbound' && (
+                <p className="text-xs font-bold mb-1 text-teal-700 dark:text-teal-300">
+                    {msg.sender_name || ((msg as any).sender_jid ? `+${(msg as any).sender_jid.split('@')[0]}` : "Membro")}
                 </p>
             )}
 

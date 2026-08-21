@@ -330,7 +330,7 @@ export const MessageList = ({
                             msg.message_type === 'sticker' ? "" : "rounded-lg p-3 overflow-hidden min-w-0 break-words shadow-sm",
                             msg.message_type !== 'sticker' && (msg.direction === "outbound" ? "bg-[#DCF7C5] text-gray-800 dark:bg-[#044740] dark:text-white" : "bg-white dark:bg-[hsl(var(--chat-customer))] text-gray-800 dark:text-foreground")
                         )}>
-                            {isGroup && msg.direction === 'inbound' && <p className="text-xs font-bold mb-1 text-primary-foreground/80">{senderName}</p>}
+                            {isGroup && msg.direction === 'inbound' && <p className="text-xs font-bold mb-1 text-teal-700 dark:text-teal-300">{senderName}</p>}
                             {outboundSenderName && <p className="text-xs font-bold mb-1 text-emerald-700 dark:text-emerald-300">{outboundSenderName}</p>}
                             {(msg as any).quoted_body && <QuotedMessage quotedBody={(msg as any).quoted_body} quotedSender={(msg as any).quoted_sender} isOutbound={msg.direction === "outbound"} />}
 
