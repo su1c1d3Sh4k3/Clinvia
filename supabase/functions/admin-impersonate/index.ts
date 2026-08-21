@@ -61,33 +61,81 @@ Deno.serve(async (req) => {
             );
         }
 
-        // Get target user ID from request body
-        const { target_user_id } = await req.json();
+        // Get target from request body: tenant owner (target_user_id) OR a
+        // specific team member of a tenant (target_team_member_id — used by the
+        // "view as user" select in the impersonation banner)
+        const { target_user_id, target_team_member_id } = await req.json();
 
-        if (!target_user_id) {
+        if (!target_user_id && !target_team_member_id) {
             return new Response(
-                JSON.stringify({ success: false, error: 'target_user_id is required' }),
+                JSON.stringify({ success: false, error: 'target_user_id or target_team_member_id is required' }),
                 { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
         }
 
-        console.log('[admin-impersonate] Impersonating user:', target_user_id);
+        let targetEmail: string | null = null;
+        let targetAuthUserId: string | null = null;
+        let targetFullName: string | null = null;
+        let targetCompanyName: string | null = null;
 
-        // Get target user info from profiles
-        const { data: targetProfile } = await supabaseAdmin
-            .from('profiles')
-            .select('full_name, company_name, email')
-            .eq('id', target_user_id)
-            .single();
+        if (target_team_member_id) {
+            console.log('[admin-impersonate] Impersonating team member:', target_team_member_id);
+            const { data: member } = await supabaseAdmin
+                .from('team_members')
+                .select('id, name, user_id, auth_user_id')
+                .eq('id', target_team_member_id)
+                .single();
 
-        if (!targetProfile?.email) {
-            return new Response(
-                JSON.stringify({ success: false, error: 'Target user not found or has no email' }),
-                { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
+            if (!member?.auth_user_id) {
+                return new Response(
+                    JSON.stringify({ success: false, error: 'Membro não encontrado ou sem login vinculado' }),
+                    { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                );
+            }
+
+            // Email confiável = do auth user (team_members.email pode divergir)
+            const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(member.auth_user_id);
+            if (!authUser?.user?.email) {
+                return new Response(
+                    JSON.stringify({ success: false, error: 'Auth user do membro não encontrado' }),
+                    { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                );
+            }
+
+            const { data: ownerProfile } = await supabaseAdmin
+                .from('profiles')
+                .select('company_name')
+                .eq('id', member.user_id)
+                .single();
+
+            targetEmail = authUser.user.email;
+            targetAuthUserId = member.auth_user_id;
+            targetFullName = member.name;
+            targetCompanyName = ownerProfile?.company_name || null;
+        } else {
+            console.log('[admin-impersonate] Impersonating user:', target_user_id);
+
+            // Get target user info from profiles
+            const { data: targetProfile } = await supabaseAdmin
+                .from('profiles')
+                .select('full_name, company_name, email')
+                .eq('id', target_user_id)
+                .single();
+
+            if (!targetProfile?.email) {
+                return new Response(
+                    JSON.stringify({ success: false, error: 'Target user not found or has no email' }),
+                    { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                );
+            }
+
+            targetEmail = targetProfile.email;
+            targetAuthUserId = target_user_id;
+            targetFullName = targetProfile.full_name;
+            targetCompanyName = targetProfile.company_name;
         }
 
-        console.log('[admin-impersonate] Target email:', targetProfile.email);
+        console.log('[admin-impersonate] Target email:', targetEmail);
 
         // Generate a magic link for the target user
         // The redirectTo should point to the app's callback handler
@@ -95,7 +143,7 @@ Deno.serve(async (req) => {
 
         const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
             type: 'magiclink',
-            email: targetProfile.email,
+            email: targetEmail,
             options: {
                 redirectTo: `${appUrl}/dashboard?impersonate=true`
             }
@@ -130,10 +178,10 @@ Deno.serve(async (req) => {
                 data: {
                     magic_link: actionLink,
                     target_user: {
-                        id: target_user_id,
-                        full_name: targetProfile.full_name,
-                        company_name: targetProfile.company_name,
-                        email: targetProfile.email
+                        id: targetAuthUserId,
+                        full_name: targetFullName,
+                        company_name: targetCompanyName,
+                        email: targetEmail
                     }
                 }
             }),

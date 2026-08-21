@@ -13,6 +13,10 @@ interface ImpersonationData {
     targetCompanyName: string | null;
     targetEmail: string;
     startedAt: string;
+    /** Dono do tenant impersonado — preservado ao alternar a visão entre
+     * membros da equipe (select do banner). Sessões antigas não têm o campo:
+     * fallback targetUserId. */
+    ownerUserId?: string;
 }
 
 interface AdminSession {
@@ -104,7 +108,8 @@ export function useAdminImpersonate() {
                 targetUserName: target_user.full_name || 'Cliente',
                 targetCompanyName: target_user.company_name,
                 targetEmail: target_user.email,
-                startedAt: new Date().toISOString()
+                startedAt: new Date().toISOString(),
+                ownerUserId: target_user.id
             };
             localStorage.setItem(IMPERSONATION_KEY, JSON.stringify(impersonation));
 
@@ -118,6 +123,82 @@ export function useAdminImpersonate() {
         } catch (error: any) {
             toast.error('Erro: ' + error.message);
             localStorage.removeItem(ADMIN_SESSION_KEY);
+            return false;
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
+    /**
+     * Alterna a visão para outro membro da equipe do MESMO tenant (select do
+     * banner). Usa o token do super-admin salvo (com refresh — a sessão atual
+     * é a do tenant e não autoriza o admin-impersonate); mantém ADMIN_SESSION
+     * para o "Voltar ao Admin" continuar funcionando.
+     */
+    const switchTeamMember = useCallback(async (teamMemberId: string) => {
+        setIsLoading(true);
+        try {
+            const adminSessionStr = localStorage.getItem(ADMIN_SESSION_KEY);
+            const currentDataStr = localStorage.getItem(IMPERSONATION_KEY);
+            if (!adminSessionStr || !currentDataStr) {
+                toast.error('Sessão de admin não encontrada. Volte ao admin e acesse novamente.');
+                return false;
+            }
+            const adminSession: AdminSession = JSON.parse(adminSessionStr);
+            const currentData = JSON.parse(currentDataStr) as ImpersonationData;
+
+            // Refresh do token do admin sem tocar na sessão atual (o access_token
+            // salvo expira em ~1h). Rotaciona o refresh_token salvo.
+            const SUPABASE_URL = 'https://swfshqvvbohnahdyndch.supabase.co';
+            const ANON_KEY = (supabase as any).supabaseKey ||
+                (supabase as any).rest?.headers?.apikey;
+            let adminToken = adminSession.access_token;
+            try {
+                const refreshRes = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', apikey: ANON_KEY },
+                    body: JSON.stringify({ refresh_token: adminSession.refresh_token }),
+                });
+                if (refreshRes.ok) {
+                    const fresh = await refreshRes.json();
+                    if (fresh.access_token && fresh.refresh_token) {
+                        adminToken = fresh.access_token;
+                        localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify({
+                            access_token: fresh.access_token,
+                            refresh_token: fresh.refresh_token,
+                        }));
+                    }
+                }
+            } catch {
+                // segue com o token salvo — se expirado, o invoke abaixo falha com erro claro
+            }
+
+            const { data, error } = await supabase.functions.invoke('admin-impersonate', {
+                body: { target_team_member_id: teamMemberId },
+                headers: { Authorization: `Bearer ${adminToken}` },
+            });
+
+            if (error || !data?.success) {
+                toast.error(data?.error || 'Erro ao alternar usuário. Se persistir, volte ao admin e acesse novamente.');
+                return false;
+            }
+
+            const { magic_link, target_user } = data.data;
+            const impersonation: ImpersonationData = {
+                targetUserId: target_user.id,
+                targetUserName: target_user.full_name || 'Usuário',
+                targetCompanyName: target_user.company_name ?? currentData.targetCompanyName,
+                targetEmail: target_user.email,
+                startedAt: currentData.startedAt,
+                ownerUserId: currentData.ownerUserId || currentData.targetUserId,
+            };
+            localStorage.setItem(IMPERSONATION_KEY, JSON.stringify(impersonation));
+
+            toast.success(`Alternando para ${impersonation.targetUserName}...`);
+            window.location.href = magic_link;
+            return true;
+        } catch (error: any) {
+            toast.error('Erro: ' + error.message);
             return false;
         } finally {
             setIsLoading(false);
@@ -192,6 +273,7 @@ export function useAdminImpersonate() {
         impersonationData,
         isLoading,
         impersonate,
+        switchTeamMember,
         exitImpersonation
     };
 }
