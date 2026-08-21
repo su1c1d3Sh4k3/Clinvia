@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Coins, Calendar, TrendingUp } from "lucide-react";
+import { Coins, Calendar, TrendingUp, Send } from "lucide-react";
 import {
     BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
-import { useMyTokenStats, useMyTokenYears, useMyTokenMonthly, useMyTokenDaily } from "@/hooks/useMyTokenUsage";
+import { useMyTokenStats, useMyTokenYears, useMyTokenMonthly, useMyTokenDaily, useMyMetaSendStats } from "@/hooks/useMyTokenUsage";
 
 const MONTH_NAMES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
@@ -25,6 +25,7 @@ export function TokensSection() {
     const [dailyDays, setDailyDays] = useState("7");
 
     const { data: stats } = useMyTokenStats();
+    const { data: metaStats } = useMyMetaSendStats();
     const { data: years } = useMyTokenYears();
     const { data: monthly, isLoading: loadingMonthly } = useMyTokenMonthly(selectedYear);
     const { data: daily, isLoading: loadingDaily } = useMyTokenDaily(parseInt(dailyDays));
@@ -46,7 +47,17 @@ export function TokensSection() {
         tokens: d.total_tokens,
     }));
 
-    const cards = [
+    const cards: {
+        label: string;
+        icon: JSX.Element;
+        tokens: number;
+        cost: number;
+        gradient: string;
+        iconBg: string;
+        bar: string;
+        unit?: string;
+        extra?: string;
+    }[] = [
         {
             label: "Total de Tokens",
             icon: <Coins className="w-4 h-4 text-purple-500" />,
@@ -74,6 +85,17 @@ export function TokensSection() {
             iconBg: "bg-emerald-500/15",
             bar: "bg-emerald-500",
         },
+        {
+            label: "Envios Meta",
+            icon: <Send className="w-4 h-4 text-amber-500" />,
+            unit: "mensagens",
+            tokens: metaStats?.total_count || 0,
+            cost: metaStats?.total_cost_brl || 0,
+            extra: `Mês: ${brl(metaStats?.month_cost_brl || 0)} · Hoje: ${brl(metaStats?.today_cost_brl || 0)}`,
+            gradient: "from-amber-500/10 via-amber-500/[0.03] to-transparent",
+            iconBg: "bg-amber-500/15",
+            bar: "bg-amber-500",
+        },
     ];
 
     return (
@@ -85,7 +107,7 @@ export function TokensSection() {
                 </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                     {cards.map((c) => (
                         <div
                             key={c.label}
@@ -100,8 +122,11 @@ export function TokensSection() {
                             </div>
                             <p className="text-2xl font-bold tracking-tight tabular-nums">{brl(c.cost)}</p>
                             <p className="text-xs text-muted-foreground mt-1.5">
-                                <span className="font-semibold text-foreground/80 tabular-nums">{formatNumber(c.tokens)}</span> tokens
+                                <span className="font-semibold text-foreground/80 tabular-nums">{formatNumber(c.tokens)}</span> {c.unit ?? "tokens"}
                             </p>
+                            {c.extra && (
+                                <p className="text-[11px] text-muted-foreground/80 mt-0.5 tabular-nums">{c.extra}</p>
+                            )}
                         </div>
                     ))}
                 </div>

@@ -48,6 +48,37 @@ export function useMyTokenStats() {
     });
 }
 
+export interface MyMetaSendStats {
+    total_count: number;
+    total_cost_brl: number;
+    month_count: number;
+    month_cost_brl: number;
+    today_count: number;
+    today_cost_brl: number;
+}
+
+// Consumo estimado com envio de templates Meta (template_sends × preço por
+// categoria do template × cotação USD-BRL) — RPC migration 20260822150000
+export function useMyMetaSendStats() {
+    return useQuery({
+        queryKey: ["my-meta-send-stats"],
+        queryFn: async (): Promise<MyMetaSendStats | null> => {
+            const { data, error } = await (supabase.rpc as any)("get_my_meta_send_stats");
+            if (error) throw error;
+            const row = Array.isArray(data) ? data[0] : data;
+            if (!row) return null;
+            return {
+                total_count: Number(row.total_count) || 0,
+                total_cost_brl: Number(row.total_cost_brl) || 0,
+                month_count: Number(row.month_count) || 0,
+                month_cost_brl: Number(row.month_cost_brl) || 0,
+                today_count: Number(row.today_count) || 0,
+                today_cost_brl: Number(row.today_cost_brl) || 0,
+            };
+        },
+    });
+}
+
 export function useMyTokenYears() {
     return useQuery({
         queryKey: ["my-token-years"],
