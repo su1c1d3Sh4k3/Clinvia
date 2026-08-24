@@ -137,6 +137,12 @@ export function InboxGuide() {
                     tudo. Conversas <strong>sem atribuição</strong> ficam visíveis para todos os atendentes com acesso à fila e
                     à conexão, até alguém assumir.
                 </Callout>
+                <Callout type="atencao" title="Quem pode transferir para quem?">
+                    <strong>Admins e supervisores</strong> transferem qualquer atendimento. <strong>Atendentes</strong>{" "}
+                    transferem normalmente os atendimentos <strong>atribuídos a eles</strong> — inclusive para outro colega.
+                    O que o atendente não pode é transferir um atendimento que pertence a outra pessoa; e um atendimento{" "}
+                    <strong>sem responsável</strong> ele só pode assumir para si ou mover de fila sem atribuir.
+                </Callout>
                 <Callout type="atencao" title="Por que nem todo colega aparece na lista?">
                     Atendentes podem ter <strong>escopo de visão</strong> (definido em Equipe): conexões liberadas e filas
                     atribuídas. Se a fila escolhida ou a conexão da conversa estiver fora do escopo do colega, ele não aparece —

@@ -109,10 +109,13 @@ export function TransferAtendimentoModal({
 
     const transferMutation = useMutation({
         mutationFn: async ({ queueId, agentId }: { queueId: string; agentId: string | null }) => {
-            const { error } = await supabase
-                .from("conversations")
-                .update({ queue_id: queueId, assigned_agent_id: agentId } as any)
-                .eq("id", conversationId);
+            // RPC SECURITY DEFINER: update direto falhava p/ agent→agent (policy
+            // conversations_agent_assignment vs RETURNING do PostgREST)
+            const { error } = await (supabase as any).rpc("transfer_conversation", {
+                p_conversation_id: conversationId,
+                p_queue_id: queueId,
+                p_agent_id: agentId,
+            });
             if (error) throw error;
         },
         onSuccess: (_d, vars) => {

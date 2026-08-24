@@ -19,13 +19,13 @@ export function useConversationActions() {
             newQueueId: string;
             assignedAgentId?: string | null;
         }) => {
-            const { error } = await supabase
-                .from('conversations')
-                .update({
-                    queue_id: newQueueId,
-                    assigned_agent_id: assignedAgentId
-                })
-                .eq('id', conversationId);
+            // RPC SECURITY DEFINER: update direto falhava p/ agent→agent (policy
+            // conversations_agent_assignment vs RETURNING do PostgREST)
+            const { error } = await (supabase as any).rpc('transfer_conversation', {
+                p_conversation_id: conversationId,
+                p_queue_id: newQueueId,
+                p_agent_id: assignedAgentId
+            });
 
             if (error) throw error;
         },
