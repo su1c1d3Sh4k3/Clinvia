@@ -238,8 +238,13 @@ export const ConversationsList = ({
   }, [instances]);
 
   // Fetch last inbound message timestamps for Meta conversations
+  // PERF: sort() estabiliza a queryKey — sem ele, cada reordenação da lista
+  // (qualquer mensagem nova) mudava a key e refetchava a RPC da janela 24h
   const metaConvIds = useMemo(() => {
-    return conversations.filter(c => metaInstanceIds.has((c as any).instance_id)).map(c => c.id);
+    return conversations
+      .filter(c => metaInstanceIds.has((c as any).instance_id))
+      .map(c => c.id)
+      .sort();
   }, [conversations, metaInstanceIds]);
 
   const { data: lastInboundMap } = useQuery({
