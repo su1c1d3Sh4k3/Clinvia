@@ -3,6 +3,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { callCampaignApi, type CampaignService } from "@/hooks/useCampaigns";
 
+/** Serviço vinculado ao monitoramento (payload achatado — compat CampaignService). */
+export interface MonitoringService extends CampaignService {
+    /** Nome do serviço-pai (service_name) da aplicação */
+    service_name?: string | null;
+    service_name_id?: string | null;
+    /** true = cliente escolheu o serviço INTEIRO (todas as aplicações) */
+    full_service?: boolean;
+}
+
 export interface GroupMonitoring {
     id: string;
     name: string;
@@ -12,8 +21,10 @@ export interface GroupMonitoring {
     initial_message: string;
     objective: string;
     ia_enabled: boolean;
-    services: CampaignService[];
+    ia_function: "agendamento" | "qualificacao" | null;
+    services: MonitoringService[];
     discount_pct: number | null;
+    reply_buttons: string[] | null;
     valid_until: string;
     tag_id: string | null;
     status: string;
@@ -27,7 +38,7 @@ export function useActiveGroupMonitoring(groupId?: string | null) {
         queryFn: async (): Promise<GroupMonitoring | null> => {
             const { data, error } = await supabase
                 .from("campaigns" as any)
-                .select("id, name, group_id, monitor_term, monitor_match_mode, initial_message, objective, ia_enabled, services, discount_pct, valid_until, tag_id, status, created_at")
+                .select("id, name, group_id, monitor_term, monitor_match_mode, initial_message, objective, ia_enabled, ia_function, services, discount_pct, reply_buttons, valid_until, tag_id, status, created_at")
                 .eq("group_id", groupId)
                 .eq("source_type", "monitoring")
                 .not("status", "in", '("cancelled","expired","error")')
@@ -162,9 +173,11 @@ export interface CreateMonitoringPayload {
     valid_until: string; // ISO
     initial_message: string;
     ia_enabled: boolean;
+    ia_function?: "agendamento" | "qualificacao";
     objective?: string;
-    services?: CampaignService[];
+    services?: MonitoringService[];
     discount_pct?: number | null;
+    reply_buttons?: string[];
 }
 
 export function useGroupMonitoringMutations(groupId?: string | null) {

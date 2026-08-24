@@ -2082,7 +2082,7 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                         try {
                             const { data: campSent } = await supabase
                                 .from('campaign_contacts')
-                                .select('sent_at, raw_data, campaigns!inner(id, name, objective, services, discount_pct, initial_message, ai_prompt, ia_enabled, scheduled_at, valid_until, status, instance_id, source_type, recurrence_service_client_id, recurrence_msg_number)')
+                                .select('sent_at, raw_data, campaigns!inner(id, name, objective, services, discount_pct, initial_message, ai_prompt, ia_enabled, ia_function, scheduled_at, valid_until, status, instance_id, source_type, recurrence_service_client_id, recurrence_msg_number)')
                                 .eq('contact_id', contactId)
                                 .eq('status', 'sent')
                                 .eq('campaigns.instance_id', instance.id)
@@ -2127,6 +2127,7 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                                     scheduled_at: toSaoPaulo(camp.scheduled_at),
                                     valid_until: toSaoPaulo(camp.valid_until),
                                     ia_enabled: !!camp.ia_enabled,
+                                    ia_function: camp.ia_function ?? null,
                                     campaign_prompt: aiPromptText,
                                     service_description: null as string | null,
                                 };

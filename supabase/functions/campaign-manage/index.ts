@@ -315,6 +315,8 @@ serve(async (req) => {
                 objective,
                 services,
                 discount_pct,
+                reply_buttons,
+                ia_function,
             } = body;
 
             if (!group_id) throw new Error("Missing field: group_id");
@@ -335,6 +337,21 @@ serve(async (req) => {
             const iaOn = ia_enabled === true;
             if (iaOn && !String(objective || "").trim()) {
                 throw new Error("Defina o objetivo para a IA abordar os clientes");
+            }
+
+            // Botões de escolha (UAZAPI /send/menu): máx 3, strings não vazias
+            const replyButtons = (Array.isArray(reply_buttons) ? reply_buttons : [])
+                .map((b: unknown) => String(b ?? "").trim())
+                .filter(Boolean)
+                .slice(0, 3);
+
+            // Função da IA: agendamento | qualificacao (só relevante com IA ligada)
+            let iaFunction: string | null = null;
+            if (iaOn) {
+                iaFunction = String(ia_function || "agendamento").trim().toLowerCase();
+                if (!["agendamento", "qualificacao"].includes(iaFunction)) {
+                    throw new Error("Função da IA inválida (agendamento/qualificacao)");
+                }
             }
 
             const { data: group } = await supabase
@@ -412,6 +429,8 @@ serve(async (req) => {
                     group_id,
                     monitor_term: term,
                     monitor_match_mode,
+                    reply_buttons: replyButtons.length > 0 ? replyButtons : null,
+                    ia_function: iaFunction,
                 })
                 .select()
                 .single();

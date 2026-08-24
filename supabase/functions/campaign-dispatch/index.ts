@@ -473,10 +473,18 @@ async function dispatchBatch(supabase: any) {
             if (isUazapi) {
                 // API não oficial: texto livre renderizado (sem template)
                 const renderedBody = renderMessage(campaign, contact, rawData);
+                const replyButtons: string[] = (Array.isArray(campaign.reply_buttons)
+                    ? campaign.reply_buttons
+                    : []
+                )
+                    .map((b: unknown) => String(b ?? "").trim())
+                    .filter(Boolean)
+                    .slice(0, 3);
                 ({ ok, result } = await callFunction("evolution-send-message", {
                     conversationId,
                     body: renderedBody,
-                    messageType: "text",
+                    messageType: replyButtons.length > 0 ? "buttons" : "text",
+                    ...(replyButtons.length > 0 ? { choices: replyButtons } : {}),
                     message: { wasSentByApi: true },
                 }));
             } else {

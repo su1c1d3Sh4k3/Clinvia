@@ -182,7 +182,7 @@ serve(async (req) => {
     );
 
     const reqData = await req.json();
-    let { conversationId, body, messageType = 'text', mediaUrl, caption, replyId, quotedBody, quotedSender, contactId, groupId, mentions, forward, contactData } = reqData;
+    let { conversationId, body, messageType = 'text', mediaUrl, caption, replyId, quotedBody, quotedSender, contactId, groupId, mentions, forward, contactData, choices } = reqData;
     console.log('[evolution-send-message] Start conversationId:', conversationId);
 
     // ✅ CONVERSATION CREATION LOGIC (Agent-initiated conversations)
@@ -477,7 +477,16 @@ serve(async (req) => {
         email: contactData.email || '',
         url: contactData.url || ''
       };
-    } else if (messageType === 'text') {
+    } else if (messageType === 'buttons' && Array.isArray(choices) && choices.length > 0) {
+      // Menu de botões de escolha (UAZAPI /send/menu type button)
+      sendUrl = `https://clinvia.uazapi.com/send/menu`;
+      payload = {
+        number: targetNumber,
+        type: 'button',
+        text: finalBody,
+        choices: choices.map((c) => String(c ?? '').trim()).filter(Boolean).slice(0, 3),
+      };
+    } else if (messageType === 'text' || messageType === 'buttons') {
       sendUrl = `https://clinvia.uazapi.com/send/text`;
       payload = {
         number: targetNumber,
@@ -657,6 +666,15 @@ serve(async (req) => {
       } else if (messageType === 'text') {
         insertBody = finalBody;
         insertCaption = null;
+      } else if (messageType === 'buttons') {
+        // Botões de escolha: renderiza texto + opções no histórico
+        const choiceLines = (Array.isArray(choices) ? choices : [])
+          .map((c) => String(c ?? '').trim())
+          .filter(Boolean)
+          .map((c) => `▪ ${c}`)
+          .join('\n');
+        insertBody = choiceLines ? `${finalBody}\n\n${choiceLines}` : finalBody;
+        insertCaption = null;
       } else {
         insertBody = finalBody || `[${messageType}]`;
         insertCaption = caption || null;
@@ -669,7 +687,8 @@ serve(async (req) => {
           conversation_id: conversationId,
           body: insertBody,
           direction: 'outbound',
-          message_type: messageType,
+          // enum message_type não tem 'buttons' — grava como 'text' (pitfall 'template')
+          message_type: messageType === 'buttons' ? 'text' : messageType,
           media_url: mediaUrl,
           evolution_id: sendData.messageid || sendData.id || null,
           user_id: userId,
