@@ -383,7 +383,11 @@ async function ensureContactPhotoPersisted(
     payloadPhotoUrl: string | null,
     instance: { server_url?: string | null; apikey?: string | null },
     instanceName: string,
-    contactNumber: string
+    contactNumber: string,
+    // USER RULE (2026-08-24): interação via API oficial (Meta) NUNCA altera a
+    // foto negativamente — não busca na UAZAPI (token não serve) e não limpa a
+    // URL atual em caso de falha. Foto obtida via UAZAPI é mantida.
+    isMetaProvider = false
 ): Promise<string | null> {
     const currentPic = contact.profile_pic_url || null;
 
@@ -413,7 +417,8 @@ async function ensureContactPhotoPersisted(
         }
 
         // Tentativa 3: buscar URL fresca via UZAPI / Evolution API e persistir
-        if (instance.server_url && instance.apikey) {
+        // (só em instância NÃO oficial — o token Meta não serve pra UAZAPI)
+        if (!isMetaProvider && instance.server_url && instance.apikey) {
             const freshUrl = await fetchFreshProfilePicUrl(
                 instance.server_url,
                 instanceName,
@@ -433,7 +438,9 @@ async function ensureContactPhotoPersisted(
         // Se a URL atual é temporária E todas as tentativas falharam, MELHOR
         // limpar (NULL) que deixar URL expirada quebrando o avatar. Frontend
         // exibe o fallback de iniciais via Radix Avatar.
-        if (currentPic && isTemporaryPhotoUrl(currentPic)) {
+        // EXCEÇÃO (user rule): interação via Meta NUNCA limpa — a foto veio da
+        // UAZAPI e deve ser mantida; a próxima interação UAZAPI re-persiste.
+        if (!isMetaProvider && currentPic && isTemporaryPhotoUrl(currentPic)) {
             const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
             const isStorageUrl = supabaseUrl && currentPic.includes(supabaseUrl);
             if (!isStorageUrl) {
@@ -799,6 +806,18 @@ serve(async (req) => {
             // Extrai a foto de TODOS os campos possíveis do payload (não só imagePreview)
             const profilePicUrl = extractProfilePicFromPayload(payload);
 
+            // USER RULE (2026-08-24): interação via UAZAPI busca/atualiza a foto
+            // (mesmo sem foto no payload — fetch fresco via /chat/details); a
+            // instances não tem server_url — base vem do payload ou do default.
+            const isMetaProvider = (instance as any).provider === 'meta'
+                || String(instanceName || '').startsWith('meta-');
+            const photoInstance = {
+                server_url: isMetaProvider
+                    ? null
+                    : (payload.BaseUrl || payload.baseUrl || 'https://clinvia.uazapi.com'),
+                apikey: (instance as any).apikey || payload.token || null,
+            };
+
             if (!waNumber) {
                 console.error('[webhook-handle-message] No waNumber found in payload');
                 return new Response(
@@ -833,9 +852,10 @@ serve(async (req) => {
                         supabase,
                         contactRef,
                         profilePicUrl,
-                        instance,
+                        photoInstance,
                         instanceName,
-                        waNumber
+                        waNumber,
+                        isMetaProvider
                     ).catch(e => console.warn('[webhook-handle-message] bg photo error:', e))
                 );
 
@@ -891,9 +911,10 @@ serve(async (req) => {
                                     supabase,
                                     contactRef,
                                     profilePicUrl,
-                                    instance,
+                                    photoInstance,
                                     instanceName,
-                                    waNumber
+                                    waNumber,
+                                    isMetaProvider
                                 ).catch(e => console.warn('[webhook-handle-message] bg photo error (dup):', e))
                             );
                         }
@@ -910,9 +931,10 @@ serve(async (req) => {
                             supabase,
                             contactRef,
                             profilePicUrl,
-                            instance,
+                            photoInstance,
                             instanceName,
-                            waNumber
+                            waNumber,
+                            isMetaProvider
                         ).catch(e => console.warn('[webhook-handle-message] bg photo error (new):', e))
                     );
                 }

@@ -314,6 +314,10 @@ export function InboxGuide() {
                             a: "Clique no nome do grupo no topo do chat: abre um modal com a foto, o nome, a descrição, as mídias trocadas e a lista de participantes (foto, nome e número). Clicar em um participante abre o modal de nova mensagem já preenchido com o contato e a conexão do grupo pré-selecionada — você pode trocar a conexão; se escolher uma conexão da API oficial (Meta) sem janela de 24h aberta, será pedido um template aprovado, como em qualquer nova mensagem.",
                         },
                         {
+                            q: "De onde vem a foto de perfil do contato?",
+                            a: "Das conexões não oficiais (UAZAPI): a cada interação do cliente, o sistema pega a foto do próprio WhatsApp e a guarda de forma permanente — inclusive quando o contato ainda está sem foto. A API oficial (Meta) não fornece foto de perfil, então interações por ela nunca alteram nem apagam a foto já obtida: quem tem as duas conexões mantém a foto capturada pela não oficial mesmo que o cliente passe a conversar pelo número oficial.",
+                        },
+                        {
                             q: "Sou avisado quando alguém entra ou sai de um grupo?",
                             a: "Sim. Quando um participante entra ou sai de um grupo (conexões não oficiais/UAZAPI), aparece uma notificação centralizada no chat — no mesmo estilo das notificações de transferência — informando quem entrou ou saiu e o horário. Essas notificações não contam como última mensagem da conversa.",
                         },
