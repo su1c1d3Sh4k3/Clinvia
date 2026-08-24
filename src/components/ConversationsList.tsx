@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { Search, Filter, Plus, MessageSquare, Send, Tag as TagIcon, Eye, Check, CheckCheck, Clock, FileText, Mic, Image as ImageIcon, Video, StickyNote, MailCheck } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -130,11 +130,40 @@ export const ConversationsList = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [tab, setTab] = useState<"open" | "pending" | "resolved">("open");
   // Filtros Avançados multi-seleção: vazio = todos; dentro da categoria é OR,
-  // entre categorias é AND (user rule).
-  const [selectedQueueFilter, setSelectedQueueFilter] = useState<string[]>([]);
-  const [selectedTagFilter, setSelectedTagFilter] = useState<string[]>([]);
-  const [selectedInstanceFilter, setSelectedInstanceFilter] = useState<string[]>([]);
-  const [selectedAgentFilter, setSelectedAgentFilter] = useState<string[]>([]);
+  // entre categorias é AND (user rule). Persistidos em localStorage (user rule:
+  // filtro definido sobrevive a refresh E a sair da página).
+  const ADV_FILTERS_STORAGE_KEY = "inbox.advancedFilters";
+  const loadSavedFilters = () => {
+    if (typeof window === "undefined") return {};
+    try {
+      return JSON.parse(localStorage.getItem(ADV_FILTERS_STORAGE_KEY) || "{}") as {
+        queues?: string[]; tags?: string[]; instances?: string[]; agents?: string[];
+      };
+    } catch {
+      return {};
+    }
+  };
+  const savedFiltersRef = useRef(loadSavedFilters());
+  const [selectedQueueFilter, setSelectedQueueFilter] = useState<string[]>(savedFiltersRef.current.queues || []);
+  const [selectedTagFilter, setSelectedTagFilter] = useState<string[]>(savedFiltersRef.current.tags || []);
+  const [selectedInstanceFilter, setSelectedInstanceFilter] = useState<string[]>(savedFiltersRef.current.instances || []);
+  const [selectedAgentFilter, setSelectedAgentFilter] = useState<string[]>(savedFiltersRef.current.agents || []);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const hasAny =
+      selectedQueueFilter.length || selectedTagFilter.length ||
+      selectedInstanceFilter.length || selectedAgentFilter.length;
+    if (hasAny) {
+      localStorage.setItem(ADV_FILTERS_STORAGE_KEY, JSON.stringify({
+        queues: selectedQueueFilter,
+        tags: selectedTagFilter,
+        instances: selectedInstanceFilter,
+        agents: selectedAgentFilter,
+      }));
+    } else {
+      localStorage.removeItem(ADV_FILTERS_STORAGE_KEY);
+    }
+  }, [selectedQueueFilter, selectedTagFilter, selectedInstanceFilter, selectedAgentFilter]);
   const toggleFilterValue = (setter: React.Dispatch<React.SetStateAction<string[]>>, value: string) =>
     setter((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]));
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -406,6 +435,22 @@ export const ConversationsList = ({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-56 max-w-[90vw] max-h-[70vh] overflow-y-auto p-2 space-y-2">
+                {(selectedQueueFilter.length > 0 || selectedTagFilter.length > 0 || selectedInstanceFilter.length > 0 || selectedAgentFilter.length > 0) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full text-xs h-7"
+                    onClick={() => {
+                      setSelectedQueueFilter([]);
+                      setSelectedTagFilter([]);
+                      setSelectedInstanceFilter([]);
+                      setSelectedAgentFilter([]);
+                    }}
+                  >
+                    Limpar Filtros
+                  </Button>
+                )}
+
                 <div className="space-y-1">
                   <span className="text-xs font-medium text-muted-foreground ml-2">
                     Filas{selectedQueueFilter.length > 0 && ` (${selectedQueueFilter.length})`}
@@ -491,21 +536,6 @@ export const ConversationsList = ({
                   </div>
                 </div>
 
-                {(selectedQueueFilter.length > 0 || selectedTagFilter.length > 0 || selectedInstanceFilter.length > 0 || selectedAgentFilter.length > 0) && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="w-full text-xs h-7"
-                    onClick={() => {
-                      setSelectedQueueFilter([]);
-                      setSelectedTagFilter([]);
-                      setSelectedInstanceFilter([]);
-                      setSelectedAgentFilter([]);
-                    }}
-                  >
-                    Limpar Filtros
-                  </Button>
-                )}
               </DropdownMenuContent>
             </DropdownMenu>
 

@@ -72,7 +72,9 @@ export function InboxGuide() {
                 <Callout type="dica" title="Filtros Avançados (o funil no topo da lista)">
                     Filtre a lista por <strong>Filas, Tags, Conexões e Usuários</strong> (incluindo "sem atribuição") com
                     múltiplas seleções: dentro da mesma categoria vale OU (qualquer uma das marcadas), entre categorias
-                    vale E (todas juntas). Os balões de não lidas se adaptam ao filtro ativo.
+                    vale E (todas juntas). Os balões de não lidas se adaptam ao filtro ativo. O filtro fica{" "}
+                    <strong>salvo no navegador</strong> — permanece ativo mesmo ao atualizar a página ou sair e voltar;
+                    para removê-lo, use o botão <strong>Limpar Filtros</strong> no topo da janela de filtros.
                 </Callout>
                 <div className="flex flex-wrap gap-2">
                     <Button size="sm" variant="outline" onClick={() => navigate("/?tour=inbox-atender")}>
