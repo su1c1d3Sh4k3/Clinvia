@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 export interface UnreadConvRow {
     group_id: string | null;
@@ -44,7 +44,22 @@ export const useUnreadCounts = (userId?: string) => {
         staleTime: 30_000,
     });
 
+    // PERF: throttle leading-edge (5s) — em tenants de alto volume conversations
+    // muda ~5x/min; invalidar em toda mudança gerava refetch contínuo. O 1º
+    // evento invalida na hora (feedback imediato do balão), os seguintes na
+    // mesma janela agrupam num único refetch no fim dela.
+    const throttleRef = useRef<{ last: number; trailing: ReturnType<typeof setTimeout> | null }>({
+        last: 0,
+        trailing: null,
+    });
+
     useEffect(() => {
+        const THROTTLE_MS = 5_000;
+        const invalidate = () => {
+            throttleRef.current.last = Date.now();
+            queryClient.invalidateQueries({ queryKey: ["unread-counts"] });
+        };
+
         const channel = supabase
             .channel("unread-counts-changes")
             .on(
@@ -55,12 +70,25 @@ export const useUnreadCounts = (userId?: string) => {
                     table: "conversations",
                 },
                 () => {
-                    queryClient.invalidateQueries({ queryKey: ["unread-counts"] });
+                    const t = throttleRef.current;
+                    const elapsed = Date.now() - t.last;
+                    if (elapsed >= THROTTLE_MS) {
+                        invalidate();
+                    } else if (!t.trailing) {
+                        t.trailing = setTimeout(() => {
+                            throttleRef.current.trailing = null;
+                            invalidate();
+                        }, THROTTLE_MS - elapsed);
+                    }
                 }
             )
             .subscribe();
 
         return () => {
+            if (throttleRef.current.trailing) {
+                clearTimeout(throttleRef.current.trailing);
+                throttleRef.current.trailing = null;
+            }
             supabase.removeChannel(channel);
         };
     }, [queryClient]);

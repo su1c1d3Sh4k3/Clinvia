@@ -20,6 +20,7 @@ type Message = Tables<"messages">;
 export const useMessages = (conversationId?: string) => {
   const queryClient = useQueryClient();
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const reconcileTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data: messages, isLoading } = useQuery({
     queryKey: ["messages", conversationId],
@@ -50,13 +51,26 @@ export const useMessages = (conversationId?: string) => {
         });
       };
 
-      // 1. Fetch conversation status first to decide source
-      const { data: conversation, error: convError } = await supabase
-        .from("conversations")
-        .select("status, messages_history, contact_id, created_at")
-        .eq("id", conversationId)
-        .single();
+      // 1. Fetch conversation + messages EM PARALELO (antes eram 3 round-trips
+      // seriais — a demora perceptível ao abrir o chat). Se a conversa estiver
+      // resolvida, o resultado de messages é descartado (0 linhas, custo nulo).
+      // PERF: limit 200 (p95 = 21 msgs/conversa; o histórico completo além
+      // disso vem das conversas resolvidas arquivadas).
+      const [convRes, msgsRes] = await Promise.all([
+        supabase
+          .from("conversations")
+          .select("status, messages_history, contact_id, created_at")
+          .eq("id", conversationId)
+          .single(),
+        supabase
+          .from("messages")
+          .select("*")
+          .eq("conversation_id", conversationId)
+          .order("created_at", { ascending: false })
+          .limit(200),
+      ]);
 
+      const { data: conversation, error: convError } = convRes;
       if (convError) throw convError;
 
       // 2. History from PREVIOUS resolved conversations of the same contact
@@ -84,21 +98,17 @@ export const useMessages = (conversationId?: string) => {
         return [...previousHistory, ...mapHistory(conversation.messages_history, conversationId)];
       }
 
-      // 4. If active, fetch from messages table.
-      // IMPORTANT: fetch in descending order (newest first) with explicit limit to avoid
-      // Supabase's default 1000-row cap silently cutting off the newest messages in
-      // conversations with >1000 messages. We then reverse so the array is chronological.
-      const { data, error } = await supabase
-        .from("messages")
-        .select("*")
-        .eq("conversation_id", conversationId)
-        .order("created_at", { ascending: false })
-        .limit(1000);
-
+      // 4. If active, use the messages fetched in parallel above.
+      // Fetched in descending order (newest first) so the limit never cuts off
+      // the newest messages; reversed here so the array is chronological.
+      const { data, error } = msgsRes;
       if (error) throw error;
       return [...previousHistory, ...(data as Message[]).reverse()];
     },
     enabled: !!conversationId,
+    // PERF: reabrir a mesma conversa em <30s usa o cache direto (o realtime
+    // invalida imediatamente quando chega mensagem nova — sem risco de stale)
+    staleTime: 30_000,
   });
 
   // Set up realtime subscriptions for new messages.
@@ -116,6 +126,18 @@ export const useMessages = (conversationId?: string) => {
   useEffect(() => {
     if (!conversationId) return;
 
+    // PERF (fase B): em vez de invalidar (refetch completo ~200 linhas) a cada
+    // evento, aplicamos o payload direto no cache (feedback <100ms) e agendamos
+    // um invalidate DEBOUNCED como reconciliação (cobre payloads truncados,
+    // eventos perdidos e o fallback de conversations.last_message_at).
+    const scheduleReconcile = (delay = 10_000) => {
+      if (reconcileTimerRef.current) clearTimeout(reconcileTimerRef.current);
+      reconcileTimerRef.current = setTimeout(() => {
+        reconcileTimerRef.current = null;
+        queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
+      }, delay);
+    };
+
     const channel = supabase
       .channel(`messages-rt-${conversationId}`)
       // 1) Insert/update/delete em messages — filtro client-side por conversation_id
@@ -128,13 +150,45 @@ export const useMessages = (conversationId?: string) => {
         },
         (payload: any) => {
           const row = payload.new ?? payload.old;
-          if (row?.conversation_id === conversationId) {
-            queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
+          if (row?.conversation_id !== conversationId) return;
+
+          const key = ["messages", conversationId];
+
+          if (payload.eventType === "INSERT" && payload.new) {
+            queryClient.setQueryData<Message[]>(key, (old) => {
+              if (!old) return old; // sem cache = fetch inicial em voo, não tocar
+              if (old.some((m) => m.id === payload.new.id)) return old;
+              // Race com envio otimista: substitui a entrada _optimistic de
+              // mesmo body outbound (useSendMessage troca pelo row real no
+              // onSuccess, mas o realtime pode chegar antes)
+              const optIdx = old.findIndex(
+                (m: any) =>
+                  m._optimistic &&
+                  m.direction === "outbound" &&
+                  m.body === payload.new.body
+              );
+              if (optIdx >= 0) {
+                const next = [...old];
+                next[optIdx] = payload.new as Message;
+                return next;
+              }
+              return [...old, payload.new as Message];
+            });
+          } else if (payload.eventType === "UPDATE" && payload.new) {
+            queryClient.setQueryData<Message[]>(key, (old) =>
+              old?.map((m) => (m.id === payload.new.id ? { ...m, ...payload.new } : m))
+            );
+          } else if (payload.eventType === "DELETE" && payload.old?.id) {
+            queryClient.setQueryData<Message[]>(key, (old) =>
+              old?.filter((m) => m.id !== payload.old.id)
+            );
           }
+          scheduleReconcile();
         }
       )
       // 2) Fallback redundante: update na conversa atual (webhook sempre toca
-      //    last_message_at, então isso fire toda vez que chega/sai mensagem)
+      //    last_message_at) — agora só agenda a reconciliação debounced, o
+      //    feedback imediato vem do patch acima
       .on(
         "postgres_changes",
         {
@@ -144,7 +198,7 @@ export const useMessages = (conversationId?: string) => {
         },
         (payload: any) => {
           if (payload.new?.id === conversationId) {
-            queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
+            scheduleReconcile();
           }
         }
       )
@@ -157,6 +211,10 @@ export const useMessages = (conversationId?: string) => {
     channelRef.current = channel;
 
     return () => {
+      if (reconcileTimerRef.current) {
+        clearTimeout(reconcileTimerRef.current);
+        reconcileTimerRef.current = null;
+      }
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
