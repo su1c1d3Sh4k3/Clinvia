@@ -108,6 +108,12 @@ export const MessageList = ({
     const isAtBottomRef = useRef(true);
     // Track last message ID to prevent unnecessary scrolls
     const lastMessageIdRef = useRef<string | null>(null);
+    // Mirror of showScrollButton to avoid state churn during scroll
+    const showScrollButtonRef = useRef(false);
+    // Lock to prevent burst load-more triggers while a prepend is in flight
+    const loadingMoreRef = useRef(false);
+    // Scroll position at the moment load-more fired (for restoration)
+    const prevScrollTopRef = useRef(0);
 
     // Handle Infinite Scroll (Load previous messages)
     useEffect(() => {
@@ -115,16 +121,26 @@ export const MessageList = ({
         if (!container || searchTerm) return;
 
         const handleScroll = () => {
-            // Show scroll button if not at bottom
             const { scrollTop, scrollHeight, clientHeight } = container;
-            const isAtBottom = Math.abs(scrollHeight - clientHeight - scrollTop) < 50;
-
-            setShowScrollButton(!isAtBottom);
+            const distanceFromBottom = scrollHeight - clientHeight - scrollTop;
+            const isAtBottom = distanceFromBottom < 50;
             isAtBottomRef.current = isAtBottom;
 
-            // Infinite Load Trigger (at top)
-            if (scrollTop === 0 && visibleMessagesCount < messages.length) {
-                // Save current scroll height to prevent jumping
+            // Show scroll button with hysteresis (show > 200px, hide < 60px) —
+            // evita flip-flop de estado (re-render da lista inteira) perto do limiar
+            const shouldShow = showScrollButtonRef.current
+                ? distanceFromBottom > 60
+                : distanceFromBottom > 200;
+            if (shouldShow !== showScrollButtonRef.current) {
+                showScrollButtonRef.current = shouldShow;
+                setShowScrollButton(shouldShow);
+            }
+
+            // Infinite Load Trigger (near top, with in-flight lock)
+            if (scrollTop < 50 && !loadingMoreRef.current && visibleMessagesCount < messages.length) {
+                loadingMoreRef.current = true;
+                // Save current scroll position to prevent jumping
+                prevScrollTopRef.current = scrollTop;
                 setPrevScrollHeight(container.scrollHeight);
                 // Load more messages
                 setVisibleMessagesCount(prev => Math.min(prev + MESSAGES_PER_PAGE, messages.length));
@@ -145,9 +161,10 @@ export const MessageList = ({
 
             // Adjust scroll position to keep the user's view stable
             if (scrollDiff > 0) {
-                container.scrollTop = scrollDiff;
+                container.scrollTop = prevScrollTopRef.current + scrollDiff;
             }
             setPrevScrollHeight(0);
+            loadingMoreRef.current = false;
         }
     }, [messagesToDisplay.length, prevScrollHeight]);
 
@@ -172,13 +189,15 @@ export const MessageList = ({
 
             // Always scroll to bottom on new outbound messages
             if (isOwnMessage) {
-                setTimeout(() => scrollToBottom(), 100); // Small timeout to ensure render
+                setTimeout(() => scrollToBottom('auto'), 100); // Small timeout to ensure render
                 return;
             }
 
-            // For incoming messages, only scroll if user was already at bottom
+            // For incoming messages, only scroll if user was already at bottom.
+            // 'auto' (instantâneo): smooth encadeado em rajadas de realtime
+            // brigava com o gesto do usuário → tela "tremendo"
             if (isAtBottomRef.current) {
-                setTimeout(() => scrollToBottom(), 100);
+                setTimeout(() => scrollToBottom('auto'), 100);
             }
         }
 
@@ -635,7 +654,13 @@ export const MessageList = ({
             ) : (
                 <div
                     ref={scrollContainerRef}
-                    className={cn("h-full overflow-y-auto px-2 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-700")}
+                    className={cn(
+                        "h-full overflow-y-auto px-2 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-700",
+                        // scroll anchoring nativo compensava o prepend do infinite scroll
+                        // junto com a restauração manual de scrollTop → compensação dupla
+                        // = pulos/tremida ao rolar para o topo
+                        "[overflow-anchor:none]"
+                    )}
                 >
                     {/* Top Sentinel for Infinite Scroll (if needed more space) */}
                     {!searchTerm && visibleMessagesCount < messages.length && (
