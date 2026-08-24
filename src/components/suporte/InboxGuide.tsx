@@ -199,6 +199,12 @@ export function InboxGuide() {
                         </div>
                     ))}
                 </div>
+                <Callout type="dica" title="O painel se fixa enquanto você trabalha">
+                    Se você <strong>abrir qualquer seção</strong> (CRM, Venda, Copilot...) ou <strong>digitar algo</strong>,
+                    o painel se fixa e não fecha mais ao tirar o mouse — nada do que você escreveu se perde. Para recolher,
+                    clique na <strong>setinha na borda esquerda</strong> do painel (no meio da altura). Sem interação, ele
+                    volta ao comportamento padrão: expande no hover e recolhe ao sair.
+                </Callout>
             </TopicSection>
 
             {/* 7 */}

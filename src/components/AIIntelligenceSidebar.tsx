@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Send, Sparkles, TrendingUp, ChevronUp, Zap, Settings, RefreshCw, DollarSign, Calendar, MessageSquare, FileText, Bot, Pencil, Plus, Radar } from "lucide-react";
+import { Send, Sparkles, TrendingUp, ChevronUp, ChevronRight, Zap, Settings, RefreshCw, DollarSign, Calendar, MessageSquare, FileText, Bot, Pencil, Plus, Radar } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -50,6 +50,9 @@ export const AIIntelligenceSidebar = ({ conversationId }: AIIntelligenceSidebarP
   const { data: ownerId } = useOwnerId();
   const [session, setSession] = useState<Session | null>(null);
   const [isHovered, setIsHovered] = useState(false);
+  // Pin: uma vez que o usuário abriu um submenu ou digitou algo, o painel se
+  // fixa e só recolhe pelo botão de seta na borda esquerda (user rule)
+  const [isPinned, setIsPinned] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
@@ -143,7 +146,11 @@ export const AIIntelligenceSidebar = ({ conversationId }: AIIntelligenceSidebarP
     else localStorage.removeItem("ai-sidebar-open-section");
   }, [openSection]);
 
-  const toggleSection = (id: string) => setOpenSection(prev => prev === id ? null : id);
+  const toggleSection = (id: string) => setOpenSection(prev => {
+    const next = prev === id ? null : id;
+    if (next) setIsPinned(true); // abriu um submenu → painel se fixa
+    return next;
+  });
 
   const handleUpdateSatisfaction = async () => {
     if (!conversationId) return;
@@ -209,6 +216,8 @@ export const AIIntelligenceSidebar = ({ conversationId }: AIIntelligenceSidebarP
     (!item.hideGroup || !isGroup) && (!(item as any).groupOnly || isGroup)
   );
 
+  const isExpanded = isHovered || isPinned;
+
   return (
     <>
       <CopilotSettingsModal open={isSettingsOpen} onOpenChange={setIsSettingsOpen} />
@@ -233,40 +242,52 @@ export const AIIntelligenceSidebar = ({ conversationId }: AIIntelligenceSidebarP
       <div
         data-tour="inbox-sidebar"
         className={cn(
-          "h-full border-l border-[#1E2229]/20 dark:border-border bg-white dark:bg-background/50 backdrop-blur-sm flex flex-col transition-all duration-300 ease-in-out overflow-hidden",
-          isHovered ? "w-[min(320px,calc(100vw-60px))]" : "w-[60px]"
+          "relative h-full border-l border-[#1E2229]/20 dark:border-border bg-white dark:bg-background/50 backdrop-blur-sm flex flex-col transition-all duration-300 ease-in-out overflow-hidden",
+          isExpanded ? "w-[min(320px,calc(100vw-60px))]" : "w-[60px]"
         )}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
-        {/* Collapsed: icon-only */}
-        {!isHovered && (
-          <div className="flex flex-col items-center gap-1 pt-4">
-            {visibleItems.map(item => (
-              <button
-                key={item.id}
-                className={cn(
-                  "w-10 h-10 rounded-lg flex items-center justify-center transition-colors",
-                  openSection === item.id
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                )}
-                title={item.label}
-                onClick={() => { setIsHovered(true); toggleSection(item.id); }}
-              >
-                <item.icon className="w-4 h-4" />
-              </button>
-            ))}
-          </div>
+        {/* Aba de recolher (só quando fixado) — borda esquerda, meio do painel */}
+        {isPinned && isExpanded && (
+          <button
+            className="absolute left-0 top-1/2 -translate-y-1/2 z-10 h-14 w-5 rounded-r-lg border border-l-0 border-[#1E2229]/20 dark:border-border bg-muted/80 hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground"
+            onClick={() => { setIsPinned(false); setIsHovered(false); }}
+            aria-label="Recolher painel"
+            title="Recolher painel"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
         )}
 
-        {/* Expanded: full content */}
-        {isHovered && (
-          <div className="flex flex-col gap-3 pt-2 px-3 pb-20 overflow-y-auto flex-1">
+        {/* Collapsed: icon-only (escondido via CSS p/ não desmontar o conteúdo) */}
+        <div className={cn("flex flex-col items-center gap-1 pt-4", isExpanded && "hidden")}>
+          {visibleItems.map(item => (
+            <button
+              key={item.id}
+              className={cn(
+                "w-10 h-10 rounded-lg flex items-center justify-center transition-colors",
+                openSection === item.id
+                  ? "bg-primary/10 text-primary"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
+              title={item.label}
+              onClick={() => { setIsHovered(true); if (openSection !== item.id) toggleSection(item.id); }}
+            >
+              <item.icon className="w-4 h-4" />
+            </button>
+          ))}
+        </div>
+
+        {/* Expanded: full content — sempre montado (hidden qdo recolhido) p/ preservar o que foi digitado */}
+        <div
+          className={cn("flex flex-col gap-3 pt-2 px-3 pb-20 overflow-y-auto flex-1", !isExpanded && "hidden")}
+          onKeyDownCapture={() => setIsPinned(true)}
+        >
             {/* Fechar no touch (mouseLeave não existe) — invisível em dispositivos com hover */}
             <button
               className="self-end w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted [@media(hover:hover)]:hidden"
-              onClick={() => setIsHovered(false)}
+              onClick={() => { setIsPinned(false); setIsHovered(false); }}
               aria-label="Recolher painel"
             >
               <ChevronUp className="w-4 h-4 rotate-90" />
@@ -579,8 +600,7 @@ export const AIIntelligenceSidebar = ({ conversationId }: AIIntelligenceSidebarP
               </Card>
             </Collapsible>
 
-          </div>
-        )}
+        </div>
       </div>
     </>
   );
