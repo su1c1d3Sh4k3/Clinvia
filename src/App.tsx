@@ -8,6 +8,7 @@ import { ChangePasswordModal } from "@/components/auth/ChangePasswordModal";
 import { Layout } from "./components/Layout";
 import { NotificationManager } from "./components/NotificationManager";
 import { AutoFollowUpProcessor } from "./components/AutoFollowUpProcessor";
+import { TransferNoticeListener } from "@/components/queues/TransferNoticeListener";
 import { MobileMenuProvider } from "./contexts/MobileMenuContext";
 import { TypingProvider } from "./contexts/TypingContext";
 import { ImpersonationBanner } from "./components/ImpersonationBanner";
@@ -146,6 +147,7 @@ const App = () => (
             <ChangePasswordModal />
             <NotificationManager />
             <AutoFollowUpProcessor />
+            <TransferNoticeListener />
             <Suspense fallback={<PageLoader />}>
               <Routes>
                 <Route path="/auth" element={<Auth />} />

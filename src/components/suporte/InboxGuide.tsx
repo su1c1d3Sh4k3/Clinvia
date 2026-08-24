@@ -145,6 +145,13 @@ export function InboxGuide() {
                     O que o atendente não pode é transferir um atendimento que pertence a outra pessoa; e um atendimento{" "}
                     <strong>sem responsável</strong> ele só pode assumir para si ou mover de fila sem atribuir.
                 </Callout>
+                <Callout type="dica" title="Aviso na hora, para quem está online">
+                    Quando um <strong>Admin ou Supervisor</strong> transfere um cliente de um atendente para outro, os dois
+                    lados são avisados na hora com um <strong>popup no centro da tela</strong>: quem perdeu o cliente vê
+                    "O cliente X foi transferido para o atendente Y pelo Supervisor Z", e quem recebeu vê "O Supervisor Z
+                    acabou de transferir para você o cliente X que estava com outro usuário". O aviso só aparece para quem
+                    está <strong>com o sistema aberto naquele momento</strong> — não fica pendente para depois.
+                </Callout>
                 <Callout type="atencao" title="Por que nem todo colega aparece na lista?">
                     Atendentes podem ter <strong>escopo de visão</strong> (definido em Equipe): conexões liberadas e filas
                     atribuídas. Se a fila escolhida ou a conexão da conversa estiver fora do escopo do colega, ele não aparece —

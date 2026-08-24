@@ -12,6 +12,10 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useOwnerId } from "@/hooks/useOwnerId";
+import { useAuth } from "@/hooks/useAuth";
+import { useUserRole } from "@/hooks/useUserRole";
+import { useCurrentTeamMember } from "@/hooks/useStaff";
+import { sendTransferNotice } from "@/components/queues/TransferNoticeListener";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { ArrowLeft, Check, ListOrdered, Loader2, Users } from "lucide-react";
@@ -56,6 +60,9 @@ export function TransferAtendimentoModal({
     const { toast } = useToast();
     const queryClient = useQueryClient();
     const { data: ownerId } = useOwnerId();
+    const { user } = useAuth();
+    const { data: userRole } = useUserRole();
+    const { data: currentTeamMember } = useCurrentTeamMember();
 
     const [selectedQueue, setSelectedQueue] = useState<{ id: string; name: string } | null>(null);
     const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null); // null = não atribuir
@@ -124,6 +131,30 @@ export function TransferAtendimentoModal({
             const agentName = vars.agentId
                 ? members?.find((m) => m.id === vars.agentId)?.name
                 : null;
+
+            // Aviso em tempo real (só quem está online recebe): admin/supervisor
+            // transferiu um cliente ENTRE atendentes — notifica quem perdeu e quem recebeu.
+            const prevAgentId: string | null = (conversation as any)?.assigned_agent_id ?? null;
+            if (
+                ownerId &&
+                user?.id &&
+                (userRole === "admin" || userRole === "supervisor") &&
+                prevAgentId &&
+                vars.agentId &&
+                prevAgentId !== vars.agentId
+            ) {
+                const contactRow = (conversation as any)?.contacts;
+                sendTransferNotice(ownerId, {
+                    actor_auth_id: user.id,
+                    actor_name: (currentTeamMember as any)?.name || "—",
+                    actor_role: userRole,
+                    client_name:
+                        contactRow?.push_name || contactRow?.name || contactRow?.number || "Cliente",
+                    to_agent_name: agentName || "—",
+                    from_tm_id: prevAgentId,
+                    to_tm_id: vars.agentId,
+                });
+            }
             toast({
                 title: "Atendimento transferido",
                 description: agentName
