@@ -60,7 +60,7 @@ export const useMessages = (conversationId?: string) => {
       const [convRes, msgsRes] = await Promise.all([
         supabase
           .from("conversations")
-          .select("status, messages_history, contact_id, created_at, contact:contacts(push_name, name)")
+          .select("status, messages_history, contact_id, created_at, contact:contacts(push_name)")
           .eq("id", conversationId)
           .single(),
         supabase
@@ -78,8 +78,7 @@ export const useMessages = (conversationId?: string) => {
       // client-side no início de cada conversa quando há histórico de
       // conversas resolvidas anteriores — marca a divisão entre tickets.
       // Nunca gravada em messages (mesmo padrão das Notas de Conversa _note).
-      const contactName =
-        (conversation as any).contact?.push_name || (conversation as any).contact?.name || null;
+      const contactName = (conversation as any).contact?.push_name || null;
       const makeConvStart = (sourceId: string, createdAt: string | null, firstMsg?: Message): Message => {
         const dateStr = createdAt
           ? new Date(createdAt).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })
