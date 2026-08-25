@@ -28,6 +28,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { Loader2 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -67,6 +68,7 @@ export const AddServiceModal = ({
   const [savingNew, setSavingNew] = useState(false);
   const [selectedAppIds, setSelectedAppIds] = useState<Set<string>>(new Set());
   const [recurrence, setRecurrence] = useState<RecurrenceData>(defaultRecurrence);
+  const [recurrenceOn, setRecurrenceOn] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -77,6 +79,7 @@ export const AddServiceModal = ({
       setNewDescription("");
       setSelectedAppIds(new Set());
       setRecurrence(defaultRecurrence);
+      setRecurrenceOn(false);
     }
   }, [open]);
 
@@ -118,16 +121,35 @@ export const AddServiceModal = ({
     }
   }, [templateApps]);
 
+  const seedRecurrenceFromService = (svc: ServiceName | undefined) => {
+    setRecurrenceOn(svc?.recurrence ?? false);
+    setRecurrence(
+      svc
+        ? {
+            msg_recurrence_1: svc.msg_recurrence_1 || "",
+            msg_recurrence_2: svc.msg_recurrence_2 || "",
+            msg_recurrence_3: svc.msg_recurrence_3 || "",
+            time_recurrence_1: svc.time_recurrence_1 ?? null,
+            time_recurrence_2: svc.time_recurrence_2 ?? null,
+            time_recurrence_3: svc.time_recurrence_3 ?? null,
+            recurrence_discount_pct_1: svc.recurrence_discount_pct_1 ?? null,
+            recurrence_discount_pct_2: svc.recurrence_discount_pct_2 ?? null,
+            recurrence_discount_pct_3: svc.recurrence_discount_pct_3 ?? null,
+          }
+        : defaultRecurrence,
+    );
+  };
+
   const handleServiceChange = (value: string) => {
     if (value === CREATE_NEW_VALUE) {
       setIsCreatingNew(true);
       setSelectedServiceId("");
       setSelectedAppIds(new Set());
-      setRecurrence(defaultRecurrence);
+      seedRecurrenceFromService(undefined);
     } else {
       setIsCreatingNew(false);
       setSelectedServiceId(value);
-      setRecurrence(defaultRecurrence);
+      seedRecurrenceFromService((allServiceNames || []).find((s) => s.id === value));
     }
   };
 
@@ -193,13 +215,6 @@ export const AddServiceModal = ({
       selectedAppIds.has(a.id)
     );
 
-    if (appsToInsert.length === 0) {
-      queryClient.invalidateQueries({ queryKey: ["services-client"] });
-      toast.success("Serviço adicionado. Use o botão Adicionar para criar aplicações.");
-      onOpenChange(false);
-      return;
-    }
-
     if (hasInvalidRecurrenceVariables(recurrence)) {
       toast.error("Mensagem de recorrência com variável desconhecida — use os botões de variáveis");
       return;
@@ -207,47 +222,68 @@ export const AddServiceModal = ({
 
     setSaving(true);
     try {
-      const rows = appsToInsert.map((app) => ({
-        user_id: ownerId,
-        category_id: categoryId,
-        service_name_id: selectedServiceId,
-        template_app_id: app.id,
-        name: app.name,
-        description: app.description,
-        price: app.default_price,
-        min_price: app.default_min_price,
-        status: true,
-        expiry_months: app.default_expiry_months,
-        recurrence: app.default_recurrence,
-        session_interval: app.default_session_interval,
-        duration_minutes: app.default_duration_minutes,
-        professionals: [],
-        commission_pct: 0,
-        msg_recurrence_1: recurrence.msg_recurrence_1 || null,
-        msg_recurrence_2: recurrence.msg_recurrence_2 || null,
-        msg_recurrence_3: recurrence.msg_recurrence_3 || null,
-        time_recurrence_1: recurrence.time_recurrence_1,
-        time_recurrence_2: recurrence.time_recurrence_2 ?? app.default_expiry_months * 30,
-        time_recurrence_3: recurrence.time_recurrence_3,
-        recurrence_discount_pct_1: recurrence.recurrence_discount_pct_1,
-        recurrence_discount_pct_2: recurrence.recurrence_discount_pct_2,
-        recurrence_discount_pct_3: recurrence.recurrence_discount_pct_3,
-      }));
+      // Config de recorrência vive no SERVIÇO (service_name)
+      const hasCustomMsgs = [
+        recurrence.msg_recurrence_1,
+        recurrence.msg_recurrence_2,
+        recurrence.msg_recurrence_3,
+      ].some((m) => m.trim() !== "");
+      const { error: svcError } = await supabase
+        .from("service_name" as any)
+        .update({
+          recurrence: recurrenceOn,
+          msg_recurrence_1: recurrence.msg_recurrence_1.trim() || null,
+          msg_recurrence_2: recurrence.msg_recurrence_2.trim() || null,
+          msg_recurrence_3: recurrence.msg_recurrence_3.trim() || null,
+          time_recurrence_1: recurrence.time_recurrence_1,
+          time_recurrence_2: recurrence.time_recurrence_2,
+          time_recurrence_3: recurrence.time_recurrence_3,
+          recurrence_discount_pct_1: recurrence.recurrence_discount_pct_1,
+          recurrence_discount_pct_2: recurrence.recurrence_discount_pct_2,
+          recurrence_discount_pct_3: recurrence.recurrence_discount_pct_3,
+        })
+        .eq("id", selectedServiceId)
+        .eq("user_id", ownerId);
+      if (svcError) throw svcError;
 
-      const { data: inserted, error } = await supabase
-        .from("services_client" as any)
-        .insert(rows)
-        .select("id");
+      // Template personalizado → submete à Meta (fire-and-forget; no-op sem Meta)
+      if (hasCustomMsgs) {
+        syncRecurrenceTemplates({ serviceNameIds: [selectedServiceId] });
+      }
 
-      if (error) throw error;
+      if (appsToInsert.length > 0) {
+        const rows = appsToInsert.map((app) => ({
+          user_id: ownerId,
+          category_id: categoryId,
+          service_name_id: selectedServiceId,
+          template_app_id: app.id,
+          name: app.name,
+          description: app.description,
+          price: app.default_price,
+          min_price: app.default_min_price,
+          status: true,
+          expiry_months: app.default_expiry_months,
+          session_interval: app.default_session_interval,
+          duration_minutes: app.default_duration_minutes,
+          professionals: [],
+          commission_pct: 0,
+        }));
 
-      // Templates Meta de recorrência (fire-and-forget; no-op sem instância Meta)
-      syncRecurrenceTemplates(((inserted as any[]) || []).map((r) => r.id));
+        const { error } = await supabase
+          .from("services_client" as any)
+          .insert(rows)
+          .select("id");
+        if (error) throw error;
+      }
 
       queryClient.invalidateQueries({ queryKey: ["services-client"] });
       queryClient.invalidateQueries({ queryKey: ["service-names-all"] });
       queryClient.invalidateQueries({ queryKey: ["recurrence-template-badges"] });
-      toast.success(`${rows.length} aplicações adicionadas`);
+      toast.success(
+        appsToInsert.length > 0
+          ? `${appsToInsert.length} aplicações adicionadas`
+          : "Serviço adicionado. Use o botão Adicionar para criar aplicações.",
+      );
       onOpenChange(false);
     } catch (err: any) {
       toast.error("Erro ao salvar: " + err.message);
@@ -414,7 +450,16 @@ export const AddServiceModal = ({
                 </div>
               </TabsContent>
 
-              <TabsContent value="recurrence" className="mt-4">
+              <TabsContent value="recurrence" className="mt-4 space-y-4">
+                <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                  <div>
+                    <Label>Recorrência ativa</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Vale para todas as aplicações deste serviço
+                    </p>
+                  </div>
+                  <Switch checked={recurrenceOn} onCheckedChange={setRecurrenceOn} />
+                </div>
                 <RecurrenceTab data={recurrence} onChange={setRecurrence} />
               </TabsContent>
             </Tabs>

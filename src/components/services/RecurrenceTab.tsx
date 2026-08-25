@@ -167,9 +167,10 @@ export const RecurrenceTab = ({ data, onChange }: RecurrenceTabProps) => {
   return (
     <div className="space-y-6">
       <p className="text-sm text-muted-foreground">
-        Configure as mensagens automáticas de recorrência para este serviço. Elas serão
-        enviadas nos intervalos definidos. Use as variáveis para personalizar — quem usa
-        API oficial (Meta) terá essas mensagens enviadas como template aprovado.
+        Configure os tempos de abordagem e, se quiser, mensagens personalizadas para este
+        serviço. <span className="font-medium">Mensagem em branco = usa o template padrão
+        da conta.</span> Use as variáveis para personalizar — quem usa API oficial (Meta)
+        terá mensagens personalizadas enviadas para aprovação como template.
       </p>
 
       <RecurrenceBlock

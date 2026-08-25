@@ -1,11 +1,14 @@
 import { useState } from "react";
-import { ChevronDown, Plus } from "lucide-react";
+import { ChevronDown, Pencil, Plus } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ServiceClient, ServiceName } from "@/types/services";
 import { ServiceApplicationsTable } from "./ServiceApplicationsTable";
 import { AddServiceModal } from "./AddServiceModal";
+import { EditServiceModal } from "./EditServiceModal";
+import { RecurrenceTemplateBadge } from "./RecurrenceTemplateBadge";
+import { useRecurrenceTemplateBadges } from "@/hooks/useRecurrenceTemplateBadges";
 
 interface ServiceCategoryCardProps {
   categoryId: string;
@@ -22,6 +25,8 @@ export const ServiceCategoryCard = ({
 }: ServiceCategoryCardProps) => {
   const [expanded, setExpanded] = useState(false);
   const [showAddService, setShowAddService] = useState(false);
+  const [editService, setEditService] = useState<ServiceName | null>(null);
+  const { data: templateBadges } = useRecurrenceTemplateBadges();
 
   // Get unique services that have applications
   const serviceIds = [...new Set(applications.map((a) => a.service_name_id))];
@@ -60,8 +65,32 @@ export const ServiceCategoryCard = ({
             <div className="flex items-center gap-2 mb-4">
               <TabsList>
                 {services.map((svc) => (
-                  <TabsTrigger key={svc.id} value={svc.id} className="text-sm">
+                  <TabsTrigger key={svc.id} value={svc.id} className="text-sm gap-1.5">
                     {svc.name}
+                    {templateBadges?.hasMeta && svc.recurrence && (
+                      <RecurrenceTemplateBadge
+                        status={templateBadges.badges[svc.id] ?? templateBadges.defaultBadge ?? undefined}
+                      />
+                    )}
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      className="p-0.5 rounded hover:bg-accent"
+                      title="Editar serviço"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditService(svc);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setEditService(svc);
+                        }
+                      }}
+                    >
+                      <Pencil className="w-3 h-3 text-muted-foreground" />
+                    </span>
                   </TabsTrigger>
                 ))}
               </TabsList>
@@ -96,6 +125,12 @@ export const ServiceCategoryCard = ({
         onOpenChange={setShowAddService}
         categoryId={categoryId}
         existingServiceIds={serviceIds}
+      />
+
+      <EditServiceModal
+        open={!!editService}
+        onOpenChange={(open) => !open && setEditService(null)}
+        service={editService}
       />
     </div>
   );

@@ -65,8 +65,11 @@ export function RecorrenciaGuide() {
                     menu lateral lista todos os clientes nesse ciclo, mês a mês, com o status de cada abordagem.
                 </p>
                 <Callout type="dica" title="Tudo começa em Serviços">
-                    O prazo de recorrência, as datas das 3 abordagens, as mensagens e o desconto são configurados
-                    em cada aplicação, na página <strong>Serviços</strong> (aba Recorrência da aplicação).
+                    O prazo de recorrência, as datas das 3 abordagens, os descontos e as mensagens são configurados
+                    no <strong>serviço</strong>: na página <strong>Serviços</strong>, clique no lápis ao lado do
+                    nome do serviço e abra a aba Recorrência. A configuração vale para todas as aplicações daquele
+                    serviço. Mensagens em branco usam o <strong>template padrão da conta</strong> (3 textos prontos,
+                    editáveis em Conexões &gt; Templates &gt; aba Recorrência).
                 </Callout>
             </TopicSection>
 
@@ -74,7 +77,7 @@ export function RecorrenciaGuide() {
             <TopicSection id="abordagens" index={2} icon={CalendarClock} title="As 3 abordagens"
                 subtitle="Prévia, vencimento e pós — cada uma com sua data e mensagem">
                 <StepByStep steps={[
-                    { title: "Datas por aplicação", description: "Em Serviços você define quantos dias antes/depois do vencimento cada mensagem sai (ex.: 15 dias antes, no dia, 15 dias depois). Cada abordagem tem mensagem e desconto próprios." },
+                    { title: "Datas por serviço", description: "No lápis do serviço (página Serviços, aba Recorrência) você define quantos dias antes/depois do vencimento cada mensagem sai (ex.: 15 dias antes, no dia, 15 dias depois). Os campos são sempre manuais — abordagem sem valor não é agendada. Cada abordagem tem desconto próprio." },
                     { title: "Status na página Recorrência", description: "Cada abordagem mostra pendente, enviada, entregue, respondida, agendou ou falhou — atualizado automaticamente conforme a campanha do dia roda." },
                     { title: "Cliente agendou = ciclo encerrado", description: "Quando o cliente marca um novo agendamento, a linha é marcada como agendado e as abordagens seguintes não são mais enviadas." },
                 ]} />
@@ -86,10 +89,13 @@ export function RecorrenciaGuide() {
 
             {/* 3 */}
             <TopicSection id="mensagens" index={3} icon={MessageSquareText} title="Mensagens e variáveis"
-                subtitle="Textos personalizados por serviço, com dados do cliente">
+                subtitle="Template padrão da conta + textos personalizados por serviço">
                 <p className="text-sm text-muted-foreground">
-                    As mensagens são escritas na aba Recorrência de cada aplicação (página Serviços) e aceitam
-                    variáveis que o sistema preenche na hora do envio:
+                    Toda conta tem um <strong className="text-foreground">template padrão</strong> com as 3 mensagens
+                    (Prévia, Vencimento e Pós-vencimento), editável em Conexões &gt; Templates &gt; aba Recorrência.
+                    Serviços com as mensagens em branco usam esse padrão; para personalizar um serviço, escreva as
+                    mensagens na aba Recorrência do serviço (lápis ao lado do nome). Todas aceitam variáveis que o
+                    sistema preenche na hora do envio:
                 </p>
                 <div className="grid gap-1.5 text-sm sm:grid-cols-2">
                     {[
@@ -99,6 +105,10 @@ export function RecorrenciaGuide() {
                         ["{{aplicacao}}", "aplicação (ex.: Botox Full Face)"],
                         ["{{preco}}", "preço cadastrado do serviço"],
                         ["{{profissional}}", "profissional do atendimento original"],
+                        ["{{desconto}}", "% de desconto da abordagem (ex.: 10%)"],
+                        ["{{meses}}", "meses desde o procedimento (ex.: 3)"],
+                        ["{{data_procedimento}}", "data do procedimento (dd/mm/aaaa)"],
+                        ["{{dias_do_procedimento}}", "dias desde o procedimento (ex.: 30 dias)"],
                     ].map(([v, d]) => (
                         <div key={v} className="rounded-lg border p-2">
                             <code className="text-xs font-semibold">{v}</code>
@@ -117,10 +127,14 @@ export function RecorrenciaGuide() {
                 subtitle="Clínicas com WhatsApp oficial precisam do aval da Meta">
                 <p className="text-sm text-muted-foreground">
                     No WhatsApp oficial (Meta), mensagens de marketing só saem por{" "}
-                    <strong className="text-foreground">template aprovado</strong>. Ao salvar uma mensagem de
-                    recorrência, o sistema cria e envia o template para análise automaticamente — o selo ao lado do
-                    nome da aplicação em Serviços mostra <em>aprovado</em> (verde), <em>pendente</em> (âmbar) ou{" "}
-                    <em>negado</em> (vermelho). Editou a mensagem? Uma nova versão é submetida sozinha.
+                    <strong className="text-foreground">template aprovado</strong>. O template padrão da conta
+                    (rec_default) é enviado para análise automaticamente ao conectar a primeira instância Meta.
+                    Ao salvar mensagens personalizadas em um serviço, o sistema cria e submete o template daquele
+                    serviço — o selo ao lado do nome do <strong className="text-foreground">serviço</strong> em
+                    Serviços mostra <em>aprovado</em> (verde), <em>pendente</em> (âmbar) ou <em>negado</em>{" "}
+                    (vermelho). Editou uma mensagem (do serviço ou do padrão)? O sistema avisa antes: o template
+                    antigo é removido da Meta e uma nova versão é submetida — os disparos ficam pausados até a
+                    aprovação.
                 </p>
                 <Callout type="atencao" title="Template não aprovado bloqueia o disparo">
                     A campanha do dia é criada, mas fica <strong>bloqueada</strong> com o alerta

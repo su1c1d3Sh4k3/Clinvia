@@ -41,7 +41,6 @@ export const AddApplicationModal = ({
     min_price: 0,
     status: true,
     expiry_months: 6,
-    recurrence: true,
     session_interval: null as number | null,
     duration_minutes: null as number | null,
     professionals: [] as string[],
@@ -70,7 +69,6 @@ export const AddApplicationModal = ({
           min_price: form.min_price,
           status: form.status,
           expiry_months: form.expiry_months,
-          recurrence: form.recurrence,
           session_interval: form.session_interval,
           duration_minutes: form.duration_minutes,
           professionals: form.professionals,
@@ -164,18 +162,6 @@ export const AddApplicationModal = ({
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <div className="flex items-center justify-between rounded-md border px-3 py-2">
-              <Label>Recorrência</Label>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">
-                  {form.recurrence ? "Ativo" : "Inativo"}
-                </span>
-                <Switch
-                  checked={form.recurrence}
-                  onCheckedChange={(v) => setField("recurrence", v)}
-                />
-              </div>
-            </div>
             <div className="space-y-1.5">
               <Label>Intervalo entre Sessões (dias)</Label>
               <Input

@@ -13,6 +13,10 @@ export const RECURRENCE_META_VAR_KEYS = [
     "aplicacao",
     "preco",
     "profissional",
+    "desconto",
+    "meses",
+    "data_procedimento",
+    "dias_do_procedimento",
 ] as const;
 
 export type RecurrenceMetaVarKey = (typeof RECURRENCE_META_VAR_KEYS)[number];
@@ -25,6 +29,10 @@ export const RECURRENCE_META_EXAMPLES: Record<string, string> = {
     aplicacao: "Botox Full Face",
     preco: "R$ 1.200,00",
     profissional: "Dra. Ana",
+    desconto: "10%",
+    meses: "6",
+    data_procedimento: "10/01/2026",
+    dias_do_procedimento: "180 dias",
 };
 
 const VAR_REGEX = /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g;
@@ -56,19 +64,27 @@ export function convertRecurrenceMessageToMeta(text: string): MetaTemplateBody {
     };
 }
 
-/** Nome Meta determinístico: rec_<8 primeiros hex do service_client_id>_msg<N>_v<K>. */
+/** Nome Meta determinístico: rec_<8 primeiros hex do service_name_id>_msg<N>_v<K>. */
 export function buildRecurrenceTemplateName(
-    serviceClientId: string,
+    serviceNameId: string,
     msgNumber: number,
     version: number,
 ): string {
-    const id8 = serviceClientId.replace(/-/g, "").slice(0, 8).toLowerCase();
+    const id8 = serviceNameId.replace(/-/g, "").slice(0, 8).toLowerCase();
     return `rec_${id8}_msg${msgNumber}_v${version}`;
+}
+
+/** Nome Meta do template PADRÃO da conta: rec_default_msg<N>_v<K>. */
+export function buildDefaultRecurrenceTemplateName(
+    msgNumber: number,
+    version: number,
+): string {
+    return `rec_default_msg${msgNumber}_v${version}`;
 }
 
 /** Extrai a versão K de um nome rec_*_msg*_v<K>; null se o nome não segue o padrão. */
 export function parseRecurrenceTemplateVersion(name: string): number | null {
-    const m = /^rec_[0-9a-f]{8}_msg[1-3]_v(\d+)$/.exec(name || "");
+    const m = /^rec_(?:default|[0-9a-f]{8})_msg[1-3]_v(\d+)$/.exec(name || "");
     return m ? parseInt(m[1], 10) : null;
 }
 

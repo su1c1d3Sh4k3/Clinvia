@@ -36,6 +36,8 @@ export interface DueApproach {
     contactId: string;
     appointmentId: string | null;
     serviceClientId: string;
+    /** Serviço-pai (service_name.id) — preenchido pelo generator via services_client. */
+    serviceNameId?: string | null;
     msgNumber: 1 | 2 | 3;
     contactName: string;
     serviceName: string;
@@ -90,11 +92,15 @@ export function collectDueApproaches(
     return dues;
 }
 
-/** Agrupa abordagens por campanha do dia: chave `${serviceClientId}|${msgNumber}`. */
+/**
+ * Agrupa abordagens por campanha do dia: chave `${serviceNameId}|${msgNumber}`
+ * (recorrência a nível de SERVIÇO desde 2026-08-25; fallback serviceClientId
+ * se o generator não enriqueceu o due).
+ */
 export function groupDueApproaches(dues: DueApproach[]): Map<string, DueApproach[]> {
     const groups = new Map<string, DueApproach[]>();
     for (const due of dues) {
-        const key = `${due.serviceClientId}|${due.msgNumber}`;
+        const key = `${due.serviceNameId || due.serviceClientId}|${due.msgNumber}`;
         const list = groups.get(key) || [];
         list.push(due);
         groups.set(key, list);
@@ -112,6 +118,8 @@ export function formatPriceBRL(price: number | null | undefined): string {
 export interface RecurrenceVarsContext {
     clinicName: string;
     price: number | null;
+    /** % de desconto da abordagem (service_name.recurrence_discount_pct_N). */
+    discountPct?: number | null;
     /** appointment_id → nome do profissional do agendamento ORIGINAL (R5). */
     professionalByAppointment: Record<string, string>;
     /** Dia da geração (ISO yyyy-MM-dd, BRT) — base de dias_do_procedimento. */
@@ -137,6 +145,28 @@ export function daysSinceProcedure(
     return `${days} ${days === 1 ? "dia" : "dias"}`;
 }
 
+/** Meses (calendário, piso, mínimo 1) entre procedure_date e hoje — "" se inválido. */
+export function monthsSinceProcedure(
+    procedureISO: string | null | undefined,
+    todayISO: string,
+): string {
+    const from = /^(\d{4})-(\d{2})-(\d{2})/.exec(procedureISO || "");
+    const to = /^(\d{4})-(\d{2})-(\d{2})/.exec(todayISO || "");
+    if (!from || !to) return "";
+    let months = (+to[1] - +from[1]) * 12 + (+to[2] - +from[2]);
+    if (+to[3] < +from[3]) months -= 1; // dia do mês ainda não completou
+    if (months < 1) months = 1;
+    return String(months);
+}
+
+/** "10%" a partir do % configurado (vazio se ausente/zero/negativo). */
+export function formatDiscountPct(pct: number | null | undefined): string {
+    const n = Number(pct);
+    if (!isFinite(n) || n <= 0) return "";
+    const s = Number.isInteger(n) ? String(n) : String(n).replace(".", ",");
+    return `${s}%`;
+}
+
 /**
  * Snapshot de vars por entry (campaign_contacts.raw_data) — 6 variáveis do
  * editor + dados do procedimento original (data_procedimento e
@@ -155,6 +185,8 @@ export function buildRecurrenceVars(
         profissional:
             (due.appointmentId && ctx.professionalByAppointment[due.appointmentId]) ||
             "nossa equipe",
+        desconto: formatDiscountPct(ctx.discountPct),
+        meses: monthsSinceProcedure(due.procedureDate, ctx.todayISO),
         data_procedimento: formatDateBR(due.procedureDate),
         dias_do_procedimento: daysSinceProcedure(due.procedureDate, ctx.todayISO),
     };

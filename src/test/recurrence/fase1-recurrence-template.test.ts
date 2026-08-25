@@ -9,7 +9,7 @@ import {
 } from "@/lib/recurrenceTemplate";
 
 describe("Fase 1 — catálogo de variáveis", () => {
-    it("contém as 6 variáveis definidas pelo usuário (R4 + R17)", () => {
+    it("contém as variáveis definidas pelo usuário (R4 + R17 + desconto/meses 2026-08-25)", () => {
         expect(RECURRENCE_VARIABLE_KEYS).toEqual([
             "nome_cliente",
             "nome_clinica",
@@ -17,6 +17,10 @@ describe("Fase 1 — catálogo de variáveis", () => {
             "aplicacao",
             "preco",
             "profissional",
+            "desconto",
+            "meses",
+            "data_procedimento",
+            "dias_do_procedimento",
         ]);
     });
 

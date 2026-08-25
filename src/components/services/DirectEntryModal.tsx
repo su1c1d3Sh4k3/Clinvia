@@ -49,7 +49,6 @@ export const DirectEntryModal = ({
     price: 0,
     min_price: 0,
     status: true,
-    recurrence: true,
     expiry_months: 6,
     duration_minutes: null as number | null,
     professionals: [] as string[],
@@ -67,7 +66,6 @@ export const DirectEntryModal = ({
           price: editItem.price,
           min_price: editItem.min_price,
           status: editItem.status,
-          recurrence: editItem.recurrence,
           expiry_months: editItem.expiry_months,
           duration_minutes: editItem.duration_minutes,
           professionals: editItem.professionals || [],
@@ -89,7 +87,6 @@ export const DirectEntryModal = ({
         price: form.price,
         min_price: form.price === 0 ? 0 : form.min_price,
         status: form.status,
-        recurrence: form.recurrence,
         expiry_months: form.expiry_months,
         duration_minutes: form.duration_minutes,
         professionals: form.professionals,
@@ -200,18 +197,6 @@ export const DirectEntryModal = ({
                 <Switch
                   checked={form.status}
                   onCheckedChange={(v) => setField("status", v)}
-                />
-              </div>
-            </div>
-            <div className="flex items-center justify-between rounded-md border px-3 py-2">
-              <Label>Recorrência</Label>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">
-                  {form.recurrence ? "Ativo" : "Inativo"}
-                </span>
-                <Switch
-                  checked={form.recurrence}
-                  onCheckedChange={(v) => setField("recurrence", v)}
                 />
               </div>
             </div>

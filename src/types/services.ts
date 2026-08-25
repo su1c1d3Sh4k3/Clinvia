@@ -14,6 +14,17 @@ export interface ServiceName {
   description: string | null;
   user_id: string | null;
   created_at: string;
+  // Recorrência a nível de serviço (migration 20260825120000)
+  recurrence: boolean;
+  time_recurrence_1: number | null;
+  time_recurrence_2: number | null;
+  time_recurrence_3: number | null;
+  recurrence_discount_pct_1: number | null;
+  recurrence_discount_pct_2: number | null;
+  recurrence_discount_pct_3: number | null;
+  msg_recurrence_1: string | null;
+  msg_recurrence_2: string | null;
+  msg_recurrence_3: string | null;
 }
 
 export interface ServiceApplication {

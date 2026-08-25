@@ -18,6 +18,10 @@ export const RECURRENCE_VARIABLES: RecurrenceVariable[] = [
     { key: "aplicacao", label: "Aplicação", example: "Botox Full Face" },
     { key: "preco", label: "Preço", example: "R$ 1.200,00" },
     { key: "profissional", label: "Profissional", example: "Dra. Ana" },
+    { key: "desconto", label: "Desconto", example: "10%" },
+    { key: "meses", label: "Meses do procedimento", example: "6" },
+    { key: "data_procedimento", label: "Data do procedimento", example: "10/01/2026" },
+    { key: "dias_do_procedimento", label: "Dias do procedimento", example: "180 dias" },
 ];
 
 export const RECURRENCE_VARIABLE_KEYS = RECURRENCE_VARIABLES.map((v) => v.key);

@@ -22,6 +22,31 @@ const corsHeaders = {
 const GRAPH_API = "https://graph.facebook.com/v22.0";
 const FRONTEND_URL = "https://app.clinbia.ai";
 
+/**
+ * Submete os 3 templates padrão de recorrência à Meta (user rules 2026-08-25):
+ * disparado quando uma instância Meta conecta. Chamada interna via x-api-key,
+ * best-effort (não bloqueia o signup).
+ */
+async function submitRecurrenceDefaults(ownerId: string) {
+    try {
+        const resp = await fetch(
+            `${Deno.env.get("SUPABASE_URL")}/functions/v1/recurrence-template-sync`,
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "x-api-key": Deno.env.get("SCHEDULING_API_KEY") ?? "",
+                },
+                body: JSON.stringify({ default: true, user_id: ownerId }),
+            },
+        );
+        const result = await resp.json().catch(() => null);
+        console.log("[meta-embedded-signup] recurrence defaults sync:", JSON.stringify(result));
+    } catch (err) {
+        console.error("[meta-embedded-signup] recurrence defaults sync failed:", err);
+    }
+}
+
 async function processSignup(
     supabase: any,
     code: string,
@@ -227,6 +252,7 @@ async function processSignup(
         } catch (err) {
             console.error("[meta-embedded-signup] ensureSystemTemplates failed:", err);
         }
+        await submitRecurrenceDefaults(existing.user_id);
 
         return {
             success: true,
@@ -318,6 +344,7 @@ async function processSignup(
     } catch (err) {
         console.error("[meta-embedded-signup] ensureSystemTemplates failed:", err);
     }
+    await submitRecurrenceDefaults(userId);
 
     return {
         success: true,

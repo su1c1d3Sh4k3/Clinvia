@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getTemplateKind, TEMPLATE_KINDS, TEMPLATE_KIND_LABELS, type TemplateKind } from "@/lib/templateKind";
+import { RecurrenceDefaultTemplateCard } from "@/components/templates/RecurrenceDefaultTemplateCard";
 
 const SUPABASE_URL = "https://swfshqvvbohnahdyndch.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN3ZnNocXZ2Ym9obmFoZHluZGNoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1OTAyMzIsImV4cCI6MjA3OTE2NjIzMn0.rUja2PsYj9kWODdizhJNS6HjfA9Tg7DrJJylUH8RTnY";
@@ -740,6 +741,9 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
                     </div>
                 </div>
 
+                {/* Template padrão da conta (recorrência) — acima da lista na aba Recorrência */}
+                {kindTab === "recurrence" && <RecurrenceDefaultTemplateCard />}
+
                 <Card>
                     <CardHeader className="p-4 md:p-6 space-y-3">
                         <CardTitle className="text-base md:text-lg">
@@ -892,7 +896,7 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
                                         ? 'Clique em "Sincronizar" para buscar templates existentes ou crie um novo.'
                                         : kindTab === "system"
                                             ? "Os templates de confirmação/lembrete/pesquisa são criados automaticamente pelo sistema."
-                                            : "Os templates de recorrência são criados automaticamente ao salvar as mensagens de recorrência dos serviços."}
+                                            : "O template padrão (rec_default) é enviado à Meta ao conectar a instância; templates por serviço são criados ao salvar mensagens personalizadas no serviço."}
                                 </p>
                             </div>
                         )}

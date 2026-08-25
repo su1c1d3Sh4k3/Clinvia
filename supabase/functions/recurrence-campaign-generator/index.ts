@@ -22,6 +22,7 @@ import {
     type RecurrenceTrackingRow,
     type DueApproach,
 } from "../_shared/recurrence-campaign.ts";
+import { resolveRecurrenceMessage } from "../_shared/recurrence-default-messages.ts";
 
 /**
  * recurrence-campaign-generator (pg_cron diário 05:00 BRT)
@@ -31,7 +32,8 @@ import {
  * mesmo payload n8n):
  *  1. Writeback R12: approach_N_status ← desfecho em campaign_contacts.
  *  2. Coleta abordagens vencendo hoje (recurrence_tracking, excluindo
- *     scheduled=true e já vinculadas), agrupa por (serviço, msg N).
+ *     scheduled=true e já vinculadas), agrupa por (SERVIÇO-pai service_name,
+ *     msg N) — mensagem = custom do serviço > padrão da conta > embutida.
  *  3. Cria campanhas "Recorrência - <serviço> - Msg<N> - <dd/MM/yyyy>":
  *     instância R14 (is_recurrence_primary → Meta → mais antiga), scheduled_at
  *     aleatório na janela [X:00, X+1:00) BRT (R18), desconto da mensagem,
@@ -202,7 +204,7 @@ async function processOwner(
 
     const { data: profile } = await supabase
         .from("profiles")
-        .select("recurrence_dispatch_hour, recurrence_campaign_duration_days")
+        .select("recurrence_dispatch_hour, recurrence_campaign_duration_days, recurrence_default_msg_1, recurrence_default_msg_2, recurrence_default_msg_3")
         .eq("id", ownerId)
         .maybeSingle();
     const hour = clampDispatchHour(profile?.recurrence_dispatch_hour);
@@ -213,34 +215,63 @@ async function processOwner(
         [...new Set(dues.map((d) => d.appointmentId).filter(Boolean))] as string[],
     );
 
-    const groups = groupDueApproaches(dues);
+    // Aplicação (services_client) → serviço-pai (service_name) — recorrência é
+    // configurada no serviço desde 2026-08-25
+    const scIds = [...new Set(dues.map((d) => d.serviceClientId))];
+    const scById = new Map<string, any>();
+    for (let i = 0; i < scIds.length; i += 100) {
+        const { data: scs } = await supabase
+            .from("services_client")
+            .select("id, name, price, service_name_id")
+            .in("id", scIds.slice(i, i + 100));
+        for (const sc of scs || []) scById.set(sc.id, sc);
+    }
+    const snIds = [...new Set([...scById.values()].map((sc) => sc.service_name_id).filter(Boolean))];
+    const snById = new Map<string, any>();
+    for (let i = 0; i < snIds.length; i += 100) {
+        const { data: sns } = await supabase
+            .from("service_name")
+            .select("id, name, recurrence, msg_recurrence_1, msg_recurrence_2, msg_recurrence_3, recurrence_discount_pct_1, recurrence_discount_pct_2, recurrence_discount_pct_3")
+            .in("id", snIds.slice(i, i + 100));
+        for (const sn of sns || []) snById.set(sn.id, sn);
+    }
+    for (const due of dues) {
+        due.serviceNameId = scById.get(due.serviceClientId)?.service_name_id || null;
+    }
+
+    const groups = groupDueApproaches(dues.filter((d) => d.serviceNameId && snById.has(d.serviceNameId!)));
 
     for (const [key, groupDues] of groups) {
-        const [serviceClientId, msgStr] = key.split("|");
+        const [serviceNameId, msgStr] = key.split("|");
         const msgNumber = Number(msgStr) as 1 | 2 | 3;
         try {
-            const { data: sc } = await supabase
-                .from("services_client")
-                .select("id, name, price, msg_recurrence_1, msg_recurrence_2, msg_recurrence_3, recurrence_discount_pct_1, recurrence_discount_pct_2, recurrence_discount_pct_3")
-                .eq("id", serviceClientId)
-                .maybeSingle();
-            const messageText = sc?.[`msg_recurrence_${msgNumber}`]?.trim();
-            if (!sc || !messageText) {
+            const sn = snById.get(serviceNameId);
+            if (!sn) {
                 result.skippedGroups++;
                 continue;
             }
+            const customText = (sn[`msg_recurrence_${msgNumber}`] || "").trim();
+            // Custom do serviço > padrão da conta (profiles) > texto embutido
+            const messageText = resolveRecurrenceMessage(
+                msgNumber,
+                customText,
+                profile?.[`recurrence_default_msg_${msgNumber}`],
+            );
 
-            // Gate R9: Meta exige template APPROVED vinculado (Fase 2)
+            // Gate R9: Meta exige template APPROVED (do serviço se custom; senão o padrão)
             let template: any = null;
             let blocked = false;
             if (isMeta) {
-                const { data: tpl } = await supabase
+                let tplQuery = supabase
                     .from("message_templates")
                     .select("id, name, status, variable_map")
-                    .eq("service_client_id", serviceClientId)
+                    .eq("user_id", ownerId)
                     .eq("recurrence_msg_number", msgNumber)
-                    .eq("instance_id", instance.id)
-                    .maybeSingle();
+                    .eq("instance_id", instance.id);
+                tplQuery = customText
+                    ? tplQuery.eq("service_name_id", serviceNameId)
+                    : tplQuery.is("service_name_id", null);
+                const { data: tpl } = await tplQuery.maybeSingle();
                 template = tpl;
                 blocked = !tpl || tpl.status !== "APPROVED";
             }
@@ -251,7 +282,7 @@ async function processOwner(
                     .from("campaigns")
                     .select("id")
                     .eq("user_id", ownerId)
-                    .eq("recurrence_service_client_id", serviceClientId)
+                    .eq("recurrence_service_name_id", serviceNameId)
                     .eq("recurrence_msg_number", msgNumber)
                     .eq("status", "blocked")
                     .limit(1)
@@ -262,18 +293,23 @@ async function processOwner(
                 }
             }
 
-            const serviceName = groupDues[0].serviceName;
+            const serviceName = sn.name || groupDues[0].serviceName;
             const name = buildRecurrenceCampaignName(serviceName, msgNumber, today);
             const scheduledAt = randomDispatchTimeUtc(today, hour);
             const validUntil = new Date(
                 new Date(scheduledAt).getTime() + durationDays * 24 * 60 * 60 * 1000,
             ).toISOString();
-            const discountPct = sc[`recurrence_discount_pct_${msgNumber}`] ?? null;
+            const discountPct = sn[`recurrence_discount_pct_${msgNumber}`] ?? null;
             const initialMessage = toDispatchMessage(messageText);
             // Objetivo fixo por etapa (Prévia/Vencimento/Pós) — placeholders <var>
             // interpolados por contato no payload do n8n via raw_data da entry
             const objective = buildRecurrenceObjective(msgNumber);
-            const services = [{ id: sc.id, name: `${serviceName} — ${sc.name}`, price: sc.price }];
+            // Aplicações distintas do grupo (preço/descrição por aplicação)
+            const groupScIds = [...new Set(groupDues.map((d: DueApproach) => d.serviceClientId))];
+            const services = groupScIds
+                .map((id) => scById.get(id))
+                .filter(Boolean)
+                .map((sc: any) => ({ id: sc.id, name: `${serviceName} — ${sc.name}`, price: sc.price }));
 
             const tagId = await findOrCreateTag(supabase, ownerId, name);
 
@@ -303,7 +339,7 @@ async function processOwner(
                     template_id: !blocked ? template?.id ?? null : null,
                     template_name: !blocked ? template?.name ?? null : null,
                     recurrence_date: today,
-                    recurrence_service_client_id: serviceClientId,
+                    recurrence_service_name_id: serviceNameId,
                     recurrence_msg_number: msgNumber,
                 })
                 .select("id")
@@ -317,7 +353,8 @@ async function processOwner(
                 contact_id: due.contactId,
                 raw_data: buildRecurrenceVars(due, {
                     clinicName,
-                    price: sc.price,
+                    price: scById.get(due.serviceClientId)?.price ?? null,
+                    discountPct,
                     professionalByAppointment,
                     todayISO: today,
                 }),

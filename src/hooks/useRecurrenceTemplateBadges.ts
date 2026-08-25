@@ -9,8 +9,10 @@ import {
 interface RecurrenceTemplateBadges {
     /** false = tenant sem instância Meta conectada (badge não se aplica, R10). */
     hasMeta: boolean;
-    /** service_client_id → pior status entre os templates de recorrência 1-3. */
+    /** service_name_id → pior status entre os templates de recorrência 1-3. */
     badges: Record<string, RecurrenceBadgeStatus>;
+    /** Status do template padrão da conta (service_name_id null); null = não submetido. */
+    defaultBadge: RecurrenceBadgeStatus | null;
 }
 
 /** Status de aprovação dos templates Meta de recorrência por serviço (R6). */
@@ -28,24 +30,32 @@ export function useRecurrenceTemplateBadges() {
                 .eq("status", "connected")
                 .limit(1);
             if (!metaInstances || metaInstances.length === 0) {
-                return { hasMeta: false, badges: {} };
+                return { hasMeta: false, badges: {}, defaultBadge: null };
             }
 
             const { data, error } = await supabase
                 .from("message_templates" as any)
-                .select("service_client_id, status")
-                .not("service_client_id", "is", null);
+                .select("service_name_id, status")
+                .not("recurrence_msg_number", "is", null);
             if (error) throw error;
 
             const byService: Record<string, string[]> = {};
+            const defaultStatuses: string[] = [];
             for (const row of (data as any[]) || []) {
-                (byService[row.service_client_id] ||= []).push(row.status);
+                if (row.service_name_id) {
+                    (byService[row.service_name_id] ||= []).push(row.status);
+                } else {
+                    defaultStatuses.push(row.status);
+                }
             }
             const badges: Record<string, RecurrenceBadgeStatus> = {};
             for (const [serviceId, statuses] of Object.entries(byService)) {
                 badges[serviceId] = deriveRecurrenceBadge(statuses);
             }
-            return { hasMeta: true, badges };
+            const defaultBadge = defaultStatuses.length > 0
+                ? deriveRecurrenceBadge(defaultStatuses)
+                : null;
+            return { hasMeta: true, badges, defaultBadge };
         },
     });
 }

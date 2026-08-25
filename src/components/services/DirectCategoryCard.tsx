@@ -55,18 +55,6 @@ export const DirectCategoryCard = ({
     queryClient.invalidateQueries({ queryKey: ["services-client"] });
   };
 
-  const toggleRecurrence = async (item: ServiceClient) => {
-    const { error } = await supabase
-      .from("services_client" as any)
-      .update({ recurrence: !item.recurrence })
-      .eq("id", item.id);
-    if (error) {
-      toast.error("Erro ao alterar recorrência");
-      return;
-    }
-    queryClient.invalidateQueries({ queryKey: ["services-client"] });
-  };
-
   const handleDelete = async (item: ServiceClient) => {
     if (!confirm(`Deseja excluir "${item.name}"?`)) return;
     const { error } = await supabase
@@ -127,7 +115,6 @@ export const DirectCategoryCard = ({
                     <TableHead className="min-w-[120px]">Preço Mín.</TableHead>
                     <TableHead className="w-[80px] text-center">Status</TableHead>
                     <TableHead className="w-[100px] text-center">Retorno</TableHead>
-                    <TableHead className="w-[100px] text-center">Recorrência</TableHead>
                     <TableHead className="w-[100px] text-center">Tempo</TableHead>
                     <TableHead className="w-[100px] text-center">Comissão</TableHead>
                     <TableHead className="w-[110px]">
@@ -176,12 +163,6 @@ export const DirectCategoryCard = ({
                       </TableCell>
                       <TableCell className="text-center text-sm">
                         {item.expiry_months}m
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Switch
-                          checked={item.recurrence}
-                          onCheckedChange={() => toggleRecurrence(item)}
-                        />
                       </TableCell>
                       <TableCell className="text-center text-sm">
                         {item.duration_minutes ? `${item.duration_minutes}min` : "—"}

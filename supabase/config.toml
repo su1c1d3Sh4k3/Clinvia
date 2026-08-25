@@ -223,6 +223,10 @@ verify_jwt = false
 [functions.scheduler-notifications]
 verify_jwt = false
 
+# Recorrência: chamadas internas (backfill/connect Meta) usam x-api-key
+[functions.recurrence-template-sync]
+verify_jwt = false
+
 # Appointment Confirmation
 [functions.appointment-confirmation-cron]
 verify_jwt = false

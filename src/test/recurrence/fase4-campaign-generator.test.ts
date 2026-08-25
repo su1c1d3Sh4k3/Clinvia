@@ -122,6 +122,19 @@ describe("groupDueApproaches", () => {
         expect(groups.get("svc2|1")).toHaveLength(1);
         expect(groups.get("svc1|2")).toHaveLength(1);
     });
+
+    it("serviceNameId (serviço-pai) tem prioridade sobre serviceClientId na chave", () => {
+        const dues = collectDueApproaches(
+            [
+                row({ id: "t1", contact_id: "c1", approach_1_date: TODAY }),
+                row({ id: "t2", contact_id: "c2", service_client_id: "svc2", approach_1_date: TODAY }),
+            ],
+            TODAY,
+        ).map((d) => ({ ...d, serviceNameId: "sn1" }));
+        const groups = groupDueApproaches(dues);
+        expect(groups.size).toBe(1);
+        expect(groups.get("sn1|1")).toHaveLength(2);
+    });
 });
 
 // ── vars snapshot ────────────────────────────────────────────────────────────
@@ -129,10 +142,11 @@ describe("groupDueApproaches", () => {
 describe("buildRecurrenceVars", () => {
     const due = collectDueApproaches([row({ approach_1_date: TODAY })], TODAY)[0];
 
-    it("monta as 6 variáveis do editor + dados do procedimento", () => {
+    it("monta as variáveis do editor + dados do procedimento (incl. desconto/meses)", () => {
         const vars = buildRecurrenceVars(due, {
             clinicName: "Clínica Exemplo",
             price: 1200,
+            discountPct: 10,
             professionalByAppointment: { a1: "Dra. Ana" },
             todayISO: TODAY,
         });
@@ -143,13 +157,15 @@ describe("buildRecurrenceVars", () => {
             aplicacao: "Botox Full Face",
             preco: formatPriceBRL(1200),
             profissional: "Dra. Ana",
+            desconto: "10%",
+            meses: "1", // 21/07 → 20/08: mês-calendário incompleto, piso com mínimo 1
             data_procedimento: "21/07/2026",
             dias_do_procedimento: "30 dias",
         });
         expect(vars.preco).toMatch(/1\.200,00/);
     });
 
-    it("fallbacks: sem clínica/preço/profissional/procedure_date", () => {
+    it("fallbacks: sem clínica/preço/desconto/profissional/procedure_date", () => {
         const dueNoProc = collectDueApproaches(
             [row({ approach_1_date: TODAY, procedure_date: null })],
             TODAY,
@@ -163,6 +179,8 @@ describe("buildRecurrenceVars", () => {
         expect(vars.nome_clinica).toBe("nossa clínica");
         expect(vars.preco).toBe("");
         expect(vars.profissional).toBe("nossa equipe");
+        expect(vars.desconto).toBe("");
+        expect(vars.meses).toBe("");
         expect(vars.data_procedimento).toBe("");
         expect(vars.dias_do_procedimento).toBe("");
     });

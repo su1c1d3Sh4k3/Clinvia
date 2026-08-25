@@ -152,34 +152,34 @@ export function ServicosGuide() {
 
             {/* 7 */}
             <TopicSection id="recorrencia" index={7} icon={Repeat} title="Mensagens de recorrência"
-                subtitle="Templates com variáveis + desconto por abordagem">
+                subtitle="Configuração por serviço + template padrão da conta">
                 <p className="text-sm text-muted-foreground">
-                    Cada aplicação tem uma aba <strong className="text-foreground">Recorrência</strong> (ao criar ou ao{" "}
-                    <strong className="text-foreground">Editar Aplicação</strong>) com até 3 mensagens automáticas de
-                    retorno. As mensagens são escritas em <strong className="text-foreground">formato template</strong>:
-                    clique nos botões de variáveis para inserir{" "}
-                    <strong className="text-foreground">
-                        {"{{nome_cliente}}, {{nome_clinica}}, {{servico}}, {{aplicacao}}, {{preco}} e {{profissional}}"}
-                    </strong>{" "}
-                    — na hora do envio elas viram os dados reais do cliente (o preço é sempre o valor cadastrado da
-                    aplicação, e o profissional é o do atendimento original).
+                    A recorrência é configurada <strong className="text-foreground">no serviço</strong> (não em cada
+                    aplicação): clique no <strong className="text-foreground">lápis ao lado do nome do serviço</strong>{" "}
+                    para abrir a edição com a aba <strong className="text-foreground">Recorrência</strong> — toggle de
+                    ativação, tempos (dias), descontos e mensagens das 3 abordagens. Por padrão, todos os serviços com
+                    recorrência ativa usam o <strong className="text-foreground">template padrão da conta</strong> (3
+                    mensagens prontas: Prévia / Vencimento / Pós-vencimento, editáveis em Conexões → Templates → aba
+                    Recorrência). Escrever mensagens aqui cria um{" "}
+                    <strong className="text-foreground">template personalizado só deste serviço</strong>.
                 </p>
                 <StepByStep steps={[
-                    { title: "Escreva a mensagem", description: "Use os botões de variáveis acima do campo — digitar variável à mão fora do catálogo bloqueia o salvamento (aviso vermelho indica qual corrigir)." },
-                    { title: "Defina o tempo (dias)", description: "Quantos dias após o procedimento cada abordagem 1/2/3 deve ser enviada." },
-                    { title: "Defina o desconto (%)", description: "Cada mensagem 1/2/3 tem seu próprio desconto opcional — ele vira o desconto da campanha daquela abordagem (não é uma variável do texto)." },
+                    { title: "Ative a recorrência do serviço", description: "Lápis ao lado do nome do serviço → aba Recorrência → toggle 'Recorrência ativa'. A configuração vale para todas as aplicações daquele serviço." },
+                    { title: "Defina os tempos (dias)", description: "Quantos dias após o procedimento cada abordagem 1/2/3 deve ser enviada. Os campos são sempre manuais — sem valor, a abordagem não é agendada." },
+                    { title: "Defina o desconto (%)", description: "Cada abordagem tem desconto opcional — ele vira o desconto da campanha e a variável {{desconto}} do texto." },
+                    { title: "(Opcional) personalize as mensagens", description: "Mensagem em branco = usa o template padrão da conta. Escreveu texto próprio? Use os chips de variáveis ({{nome_cliente}}, {{servico}}, {{preco}}, {{desconto}}, {{meses}}, {{data_procedimento}}...) — variável fora do catálogo bloqueia o salvamento." },
                 ]} />
                 <Callout type="dica" title="Prévia em tempo real">
                     Abaixo do campo aparece uma prévia com dados de exemplo (Maria, Botox Full Face...) — confira como o
                     cliente vai receber antes de salvar.
                 </Callout>
                 <Callout type="atencao" title="API oficial (Meta)">
-                    Para quem usa a API oficial, ao salvar o serviço os templates são{" "}
-                    <strong>enviados automaticamente para aprovação da Meta</strong> — um selo ao lado do nome da
-                    aplicação mostra o status: <strong>template aprovado</strong> (verde),{" "}
-                    <strong>aprovação pendente</strong> (âmbar) ou <strong>aprovação negada</strong> (vermelho). Editou a
-                    mensagem? Uma nova versão é submetida e o selo volta a pendente. Quem usa API não oficial recebe o
-                    texto livre com as variáveis já substituídas (sem aprovação).
+                    O template padrão da conta é enviado para aprovação da Meta automaticamente ao conectar a instância.
+                    Se você personalizar as mensagens de um serviço, um alerta avisa que{" "}
+                    <strong>o template será encaminhado para aprovação da Meta</strong> ao salvar — o selo ao lado do
+                    nome do serviço mostra o status: <strong>aprovado</strong> (verde), <strong>pendente</strong> (âmbar)
+                    ou <strong>negado</strong> (vermelho). Editou de novo? Nova versão é submetida e o selo volta a
+                    pendente. Quem usa API não oficial recebe o texto livre com as variáveis substituídas (sem aprovação).
                 </Callout>
             </TopicSection>
 

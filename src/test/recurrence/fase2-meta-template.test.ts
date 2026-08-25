@@ -4,6 +4,7 @@ import {
     RECURRENCE_META_EXAMPLES,
     convertRecurrenceMessageToMeta,
     buildRecurrenceTemplateName,
+    buildDefaultRecurrenceTemplateName,
     parseRecurrenceTemplateVersion,
     deriveRecurrenceBadge,
 } from "../../../supabase/functions/_shared/recurrence-meta-template";
@@ -12,7 +13,7 @@ import { RECURRENCE_VARIABLES } from "@/lib/recurrenceTemplate";
 const UUID = "a1b2c3d4-e5f6-7890-abcd-ef0123456789";
 
 describe("Fase 2 — catálogo espelhado", () => {
-    it("mantém as mesmas 6 variáveis do editor (src/lib/recurrenceTemplate)", () => {
+    it("mantém as mesmas variáveis do editor (src/lib/recurrenceTemplate)", () => {
         expect([...RECURRENCE_META_VAR_KEYS]).toEqual(RECURRENCE_VARIABLES.map((v) => v.key));
     });
 
@@ -88,6 +89,11 @@ describe("Fase 2 — buildRecurrenceTemplateName / parseRecurrenceTemplateVersio
     it("parse extrai a versão e faz roundtrip com build", () => {
         const name = buildRecurrenceTemplateName(UUID, 3, 7);
         expect(parseRecurrenceTemplateVersion(name)).toBe(7);
+    });
+
+    it("template padrão da conta: rec_default_msg<N>_v<K>", () => {
+        expect(buildDefaultRecurrenceTemplateName(2, 3)).toBe("rec_default_msg2_v3");
+        expect(parseRecurrenceTemplateVersion("rec_default_msg2_v3")).toBe(3);
     });
 
     it("parse retorna null para nomes fora do padrão", () => {

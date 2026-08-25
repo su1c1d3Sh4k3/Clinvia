@@ -16,8 +16,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { EditApplicationModal } from "./EditApplicationModal";
 import { AddApplicationModal } from "./AddApplicationModal";
-import { RecurrenceTemplateBadge } from "./RecurrenceTemplateBadge";
-import { useRecurrenceTemplateBadges } from "@/hooks/useRecurrenceTemplateBadges";
 import { cn } from "@/lib/utils";
 
 interface ServiceApplicationsTableProps {
@@ -34,7 +32,6 @@ export const ServiceApplicationsTable = ({
   const queryClient = useQueryClient();
   const [editApp, setEditApp] = useState<ServiceClient | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
-  const { data: templateBadges } = useRecurrenceTemplateBadges();
 
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat("pt-BR", {
@@ -50,19 +47,6 @@ export const ServiceApplicationsTable = ({
 
     if (error) {
       toast.error("Erro ao alterar status");
-      return;
-    }
-    queryClient.invalidateQueries({ queryKey: ["services-client"] });
-  };
-
-  const toggleRecurrence = async (app: ServiceClient) => {
-    const { error } = await supabase
-      .from("services_client" as any)
-      .update({ recurrence: !app.recurrence })
-      .eq("id", app.id);
-
-    if (error) {
-      toast.error("Erro ao alterar recorrência");
       return;
     }
     queryClient.invalidateQueries({ queryKey: ["services-client"] });
@@ -120,7 +104,6 @@ export const ServiceApplicationsTable = ({
               <TableHead className="min-w-[120px]">Preço Mín.</TableHead>
               <TableHead className="w-[80px] text-center">Status</TableHead>
               <TableHead className="w-[100px] text-center">Vencimento</TableHead>
-              <TableHead className="w-[100px] text-center">Recorrência</TableHead>
               <TableHead className="w-[100px] text-center">Intervalo</TableHead>
               <TableHead className="w-[100px] text-center">Comissão</TableHead>
               <TableHead className="w-[90px] text-center">Tempo</TableHead>
@@ -147,9 +130,6 @@ export const ServiceApplicationsTable = ({
                   <div>
                     <div className="flex items-center gap-1.5">
                       <span className="font-medium text-sm">{app.name}</span>
-                      {templateBadges?.hasMeta && (
-                        <RecurrenceTemplateBadge status={templateBadges.badges[app.id]} />
-                      )}
                     </div>
                     {app.description && (
                       <p className="text-xs text-muted-foreground truncate max-w-[250px]">
@@ -172,12 +152,6 @@ export const ServiceApplicationsTable = ({
                 </TableCell>
                 <TableCell className="text-center text-sm">
                   {app.expiry_months}m
-                </TableCell>
-                <TableCell className="text-center">
-                  <Switch
-                    checked={app.recurrence}
-                    onCheckedChange={() => toggleRecurrence(app)}
-                  />
                 </TableCell>
                 <TableCell className="text-center text-sm text-muted-foreground">
                   {app.session_interval ? `${app.session_interval}d` : "—"}

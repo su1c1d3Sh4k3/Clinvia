@@ -11,12 +11,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProfessionalSelector } from "./ProfessionalSelector";
-import { RecurrenceTab, RecurrenceData, defaultRecurrenceData, hasInvalidRecurrenceVariables } from "./RecurrenceTab";
 import { ServiceClient } from "@/types/services";
 import { supabase } from "@/integrations/supabase/client";
-import { syncRecurrenceTemplates } from "@/lib/recurrenceTemplateSync";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -42,13 +39,11 @@ export const EditApplicationModal = ({
     min_price: 0,
     status: true,
     expiry_months: 6,
-    recurrence: true,
     session_interval: null as number | null,
     duration_minutes: null as number | null,
     professionals: [] as string[],
     commission_pct: 0,
   });
-  const [recurrenceData, setRecurrenceData] = useState<RecurrenceData>(defaultRecurrenceData);
 
   useEffect(() => {
     if (application) {
@@ -59,22 +54,10 @@ export const EditApplicationModal = ({
         min_price: application.min_price,
         status: application.status,
         expiry_months: application.expiry_months,
-        recurrence: application.recurrence,
         session_interval: application.session_interval,
         duration_minutes: application.duration_minutes,
         professionals: application.professionals || [],
         commission_pct: application.commission_pct,
-      });
-      setRecurrenceData({
-        msg_recurrence_1: application.msg_recurrence_1 || "",
-        msg_recurrence_2: application.msg_recurrence_2 || "",
-        msg_recurrence_3: application.msg_recurrence_3 || "",
-        time_recurrence_1: application.time_recurrence_1,
-        time_recurrence_2: application.time_recurrence_2,
-        time_recurrence_3: application.time_recurrence_3,
-        recurrence_discount_pct_1: application.recurrence_discount_pct_1 ?? null,
-        recurrence_discount_pct_2: application.recurrence_discount_pct_2 ?? null,
-        recurrence_discount_pct_3: application.recurrence_discount_pct_3 ?? null,
       });
       setApplyProfToAll(false);
     }
@@ -82,10 +65,6 @@ export const EditApplicationModal = ({
 
   const handleSave = async () => {
     if (!application) return;
-    if (hasInvalidRecurrenceVariables(recurrenceData)) {
-      toast.error("Mensagem de recorrência com variável desconhecida — use os botões de variáveis");
-      return;
-    }
     setSaving(true);
     try {
       const updateData: any = {
@@ -95,20 +74,10 @@ export const EditApplicationModal = ({
         min_price: form.min_price,
         status: form.status,
         expiry_months: form.expiry_months,
-        recurrence: form.recurrence,
         session_interval: form.session_interval,
         duration_minutes: form.duration_minutes,
         professionals: form.professionals,
         commission_pct: form.commission_pct,
-        msg_recurrence_1: recurrenceData.msg_recurrence_1 || null,
-        msg_recurrence_2: recurrenceData.msg_recurrence_2 || null,
-        msg_recurrence_3: recurrenceData.msg_recurrence_3 || null,
-        time_recurrence_1: recurrenceData.time_recurrence_1,
-        time_recurrence_2: recurrenceData.time_recurrence_2,
-        time_recurrence_3: recurrenceData.time_recurrence_3,
-        recurrence_discount_pct_1: recurrenceData.recurrence_discount_pct_1,
-        recurrence_discount_pct_2: recurrenceData.recurrence_discount_pct_2,
-        recurrence_discount_pct_3: recurrenceData.recurrence_discount_pct_3,
       };
 
       const { error } = await supabase
@@ -136,11 +105,7 @@ export const EditApplicationModal = ({
           .eq("service_name_id", application.service_name_id);
       }
 
-      // Templates Meta de recorrência (fire-and-forget; no-op sem instância Meta)
-      syncRecurrenceTemplates([application.id]);
-
       queryClient.invalidateQueries({ queryKey: ["services-client"] });
-      queryClient.invalidateQueries({ queryKey: ["recurrence-template-badges"] });
       toast.success("Aplicação atualizada com sucesso");
       onOpenChange(false);
     } catch (err: any) {
@@ -160,13 +125,6 @@ export const EditApplicationModal = ({
           <DialogTitle>Editar Aplicação</DialogTitle>
         </DialogHeader>
 
-        <Tabs defaultValue="dados">
-          <TabsList>
-            <TabsTrigger value="dados">Dados</TabsTrigger>
-            <TabsTrigger value="recurrence">Recorrência</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="dados">
         <div className="grid gap-4 py-4">
           {/* Row 1: Name */}
           <div className="space-y-1.5">
@@ -233,20 +191,8 @@ export const EditApplicationModal = ({
             </div>
           </div>
 
-          {/* Row 5: Recurrence / Session Interval */}
+          {/* Row 5: Session Interval */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="flex items-center justify-between rounded-md border px-3 py-2">
-              <Label>Recorrência</Label>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">
-                  {form.recurrence ? "Ativo" : "Inativo"}
-                </span>
-                <Switch
-                  checked={form.recurrence}
-                  onCheckedChange={(v) => setField("recurrence", v)}
-                />
-              </div>
-            </div>
             <div className="space-y-1.5">
               <Label>Intervalo entre Sessões (dias)</Label>
               <Input
@@ -306,12 +252,6 @@ export const EditApplicationModal = ({
           </div>
 
         </div>
-          </TabsContent>
-
-          <TabsContent value="recurrence" className="py-4">
-            <RecurrenceTab data={recurrenceData} onChange={setRecurrenceData} />
-          </TabsContent>
-        </Tabs>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
