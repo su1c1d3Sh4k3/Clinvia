@@ -137,16 +137,27 @@ Deno.serve(async (req) => {
                 continue;
             }
 
-            // Resolve tenant pelo workflow_id (cache por chamada)
+            // Resolve tenant pelo código do workflow (cache por chamada):
+            // instances.workflow_code (gravado pelo n8n) -> instances.workflow_id
+            // (legado) -> ia_config.workflow_id (legado)
             let ownerId = ownerCache.get(workflowId);
             if (ownerId === undefined) {
-                const { data: inst } = await supabase
+                const { data: instByCode } = await supabase
                     .from('instances')
                     .select('user_id')
-                    .eq('workflow_id', workflowId)
+                    .eq('workflow_code', workflowId)
                     .limit(1)
                     .maybeSingle();
-                ownerId = inst?.user_id ?? null;
+                ownerId = instByCode?.user_id ?? null;
+                if (!ownerId) {
+                    const { data: inst } = await supabase
+                        .from('instances')
+                        .select('user_id')
+                        .eq('workflow_id', workflowId)
+                        .limit(1)
+                        .maybeSingle();
+                    ownerId = inst?.user_id ?? null;
+                }
                 if (!ownerId) {
                     const { data: cfg } = await supabase
                         .from('ia_config')

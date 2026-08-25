@@ -1829,10 +1829,12 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
         // - conversation.status must be 'pending'
         // - contacts.ia_on must be TRUE
         // - ia_config.ia_on must be TRUE
-        // workflow_id (n8n) tem prioridade sobre webhook_url legado por instância —
-        // permite trocar de instância/provider mantendo o mesmo fluxo n8n
-        const n8nForwardUrl = instance.workflow_id
-            ? `https://webhooks.clinvia.com.br/webhook/${instance.workflow_id}`
+        // Destino n8n por instância: workflow_code (gravado pelo próprio n8n) tem
+        // prioridade sobre workflow_id (legado, digitado no front) e este sobre o
+        // webhook_url legado — permite trocar de instância/provider mantendo o fluxo
+        const n8nWorkflowCode = instance.workflow_code || instance.workflow_id;
+        const n8nForwardUrl = n8nWorkflowCode
+            ? `https://webhooks.clinvia.com.br/webhook/${n8nWorkflowCode}`
             : instance.webhook_url;
 
         if (n8nForwardUrl && eventType === 'messages' && !isGroup) {

@@ -126,7 +126,7 @@ export function IaGuide() {
             </TopicSection>
 
             {/* 5 */}
-            <TopicSection id="ajustes" index={5} icon={Timer} title="Delay, voz e Workflow ID"
+            <TopicSection id="ajustes" index={5} icon={Timer} title="Delay, voz e conexão com o cérebro da IA"
                 subtitle="Aba Config — o comportamento da assistente">
                 <div className="grid gap-3 sm:grid-cols-3">
                     <div className="rounded-xl border p-3.5">
@@ -144,10 +144,10 @@ export function IaGuide() {
                         </p>
                     </div>
                     <div className="rounded-xl border p-3.5">
-                        <p className="flex items-center gap-1.5 text-sm font-semibold"><Workflow className="h-4 w-4 text-primary" />Workflow ID</p>
+                        <p className="flex items-center gap-1.5 text-sm font-semibold"><Workflow className="h-4 w-4 text-primary" />Cérebro da IA</p>
                         <p className="mt-0.5 text-sm text-muted-foreground">
-                            Campo técnico: o endereço do cérebro da IA. É preenchido pelo suporte Clinvia na implantação —
-                            não altere sem orientação.
+                            O endereço do cérebro da assistente é configurado automaticamente quando você liga a IA — não há
+                            mais nada para preencher aqui.
                         </p>
                     </div>
                 </div>
