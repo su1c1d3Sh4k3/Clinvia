@@ -4,19 +4,23 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 /**
  * ia-create-workflow
  *
- * Disparado quando o usuário LIGA a IA em /ia-config?tab=settings.
+ * Disparado quando o usuário LIGA ou DESLIGA a IA em /ia-config?tab=settings.
  * Envia server-side (token da instância nunca passa pelo browser) um payload
- * para o n8n criar/preparar o workflow da conta:
- *   POST https://webhooks.clinvia.com.br/webhook/criar_workflow
+ * para o n8n criar/remover o workflow da conta:
+ *   POST https://webhooks.clinvia.com.br/webhook/criar_workflow   (action create)
+ *   POST https://webhooks.clinvia.com.br/webhook/deleta_workflow  (action delete)
  *   { user_id, instance_name: <nome da empresa>, phone, token }
  *
- * Regras (user, 2026-08-25): dispara SEMPRE que ligar a IA (mesmo já havendo
+ * Regras (user, 2026-08-25): dispara SEMPRE que o switch muda (mesmo já havendo
  * workflow); fire-and-forget (resposta do n8n ignorada); instance_name leva o
- * NOME DA EMPRESA (ia_config.name), phone/token vêm da instância conectada
- * (preferência: com apikey/UAZAPI, senão a primeira conectada).
+ * NOME DA EMPRESA (ia_config.name) nos dois casos, phone/token vêm da instância
+ * conectada (preferência: com apikey/UAZAPI, senão a primeira conectada).
  */
 
-const WEBHOOK_URL = "https://webhooks.clinvia.com.br/webhook/criar_workflow";
+const WEBHOOK_URLS = {
+    create: "https://webhooks.clinvia.com.br/webhook/criar_workflow",
+    delete: "https://webhooks.clinvia.com.br/webhook/deleta_workflow",
+} as const;
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -38,6 +42,9 @@ serve(async (req) => {
     }
 
     try {
+        const body = await req.json().catch(() => ({}));
+        const action: "create" | "delete" = body?.action === "delete" ? "delete" : "create";
+
         const supabase = createClient(
             Deno.env.get("SUPABASE_URL") ?? "",
             Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
@@ -84,16 +91,16 @@ serve(async (req) => {
         };
 
         // Fire-and-forget: resposta do n8n é ignorada (regra do user); falha de
-        // rede não bloqueia o ligar da IA, mas fica logada.
+        // rede não bloqueia o toggle da IA, mas fica logada.
         try {
-            const resp = await fetch(WEBHOOK_URL, {
+            const resp = await fetch(WEBHOOK_URLS[action], {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
             });
-            console.log(`[ia-create-workflow] sent for ${ownerId}: status=${resp.status}`);
+            console.log(`[ia-create-workflow] ${action} sent for ${ownerId}: status=${resp.status}`);
         } catch (err) {
-            console.error(`[ia-create-workflow] webhook send failed for ${ownerId}:`, err);
+            console.error(`[ia-create-workflow] ${action} webhook send failed for ${ownerId}:`, err);
         }
 
         return json({ success: true });

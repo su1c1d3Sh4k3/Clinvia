@@ -628,13 +628,14 @@ export default function IAConfig() {
 
         toast.success(checked ? "IA ativada! Agora ative as instâncias desejadas." : "IA desativada com sucesso!");
 
-        // Ligar a IA notifica o n8n p/ criar o workflow da conta (server-side,
-        // fire-and-forget — user rule 2026-08-25: dispara SEMPRE que ligar)
-        if (checked) {
-            supabase.functions.invoke("ia-create-workflow", { body: {} }).catch((err) => {
+        // Notifica o n8n p/ criar (ligar) ou remover (desligar) o workflow da
+        // conta — server-side, fire-and-forget (user rule 2026-08-25: dispara
+        // SEMPRE que o switch muda)
+        supabase.functions
+            .invoke("ia-create-workflow", { body: { action: checked ? "create" : "delete" } })
+            .catch((err) => {
                 console.error("ia-create-workflow:", err);
             });
-        }
     };
 
     // Verificar se pode desligar a IA (nenhuma instância ativa)
