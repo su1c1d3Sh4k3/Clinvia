@@ -104,6 +104,8 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
     const [message, setMessage] = useState("");
     const [objective, setObjective] = useState("");
     const [iaEnabled, setIaEnabled] = useState(true);
+    // Função da IA (mesmo padrão do Monitoramento de Grupos): agendamento | qualificacao
+    const [iaFunction, setIaFunction] = useState<"agendamento" | "qualificacao">("agendamento");
     const messageRef = useRef<HTMLTextAreaElement>(null);
 
     const selectedInstance = (instances || []).find((i: any) => i.id === instanceId);
@@ -144,6 +146,7 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
             setMessage(baseCampaign.template_mode === "none" ? baseCampaign.initial_message : "");
             setObjective(baseCampaign.objective);
             setIaEnabled(baseCampaign.ia_enabled);
+            setIaFunction((baseCampaign as any).ia_function === "qualificacao" ? "qualificacao" : "agendamento");
             setKeepResendAudience(isResend);
         } else {
             setName("");
@@ -160,6 +163,7 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
             setMessage("");
             setObjective("");
             setIaEnabled(true);
+            setIaFunction("agendamento");
             setKeepResendAudience(false);
         }
         setAudienceLoading(false);
@@ -593,6 +597,7 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
             initial_message: effectiveMessage.trim(),
             objective: objective.trim(),
             ia_enabled: iaEnabled,
+            ia_function: iaEnabled ? iaFunction : undefined,
             template_mode: !isMeta ? "none" : "existing",
         };
         if (useExistingTemplate && selectedTemplate) {
@@ -1000,6 +1005,38 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
                             </div>
                             <Switch checked={iaEnabled} onCheckedChange={setIaEnabled} />
                         </div>
+                        {iaEnabled && (
+                            <div className="border rounded-xl p-3 space-y-2">
+                                <div>
+                                    <p className="text-sm font-medium">Função da IA</p>
+                                    <p className="text-xs text-muted-foreground">
+                                        {iaFunction === "agendamento"
+                                            ? "A IA conduz o contato até marcar um horário"
+                                            : "A IA qualifica o interesse do contato para a equipe fechar"}
+                                    </p>
+                                </div>
+                                <div className="grid grid-cols-2 gap-1 border rounded-lg p-1">
+                                    {([
+                                        ["agendamento", "Agendamento"],
+                                        ["qualificacao", "Qualificação"],
+                                    ] as const).map(([value, label]) => (
+                                        <button
+                                            key={value}
+                                            type="button"
+                                            onClick={() => setIaFunction(value)}
+                                            className={cn(
+                                                "text-xs py-1.5 rounded transition-colors",
+                                                iaFunction === value
+                                                    ? "bg-primary text-primary-foreground font-medium"
+                                                    : "hover:bg-muted text-muted-foreground"
+                                            )}
+                                        >
+                                            {label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -1047,7 +1084,10 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
                             {useExistingTemplate && selectedTemplate && (
                                 <p><span className="text-muted-foreground">Template:</span> {selectedTemplate.name} (já aprovado)</p>
                             )}
-                            <p><span className="text-muted-foreground">IA atende:</span> {iaEnabled ? "Sim" : "Não"}</p>
+                            <p>
+                                <span className="text-muted-foreground">IA atende:</span>{" "}
+                                {iaEnabled ? `Sim — ${iaFunction === "qualificacao" ? "Qualificação" : "Agendamento"}` : "Não"}
+                            </p>
                             {audience.invalidRows.length > 0 && (
                                 <p className="text-amber-600 text-xs">
                                     {audience.invalidRows.length} linhas com número inválido serão registradas como falha.

@@ -78,6 +78,7 @@ export interface Campaign {
     objective: string;
     ai_prompt: string | null;
     ia_enabled: boolean;
+    ia_function?: "agendamento" | "qualificacao" | null;
     tag_id: string | null;
     template_id: string | null;
     template_name: string | null;

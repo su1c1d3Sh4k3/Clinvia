@@ -476,6 +476,7 @@ serve(async (req) => {
                 initial_message,
                 objective,
                 ia_enabled,
+                ia_function,
                 invalid_rows,
                 campaign_type,
                 existing_template,
@@ -513,6 +514,16 @@ serve(async (req) => {
                 existingTpl = await resolveExistingTemplate(supabase, ownerId, instance_id, existing_template);
             }
 
+            // Função da IA: agendamento | qualificacao (mesmo padrão do
+            // monitoramento; só relevante com IA ligada — vai no bd_data.campaign)
+            let iaFn: string | null = null;
+            if (ia_enabled !== false) {
+                iaFn = String(ia_function || "agendamento").trim().toLowerCase();
+                if (!["agendamento", "qualificacao"].includes(iaFn)) {
+                    throw new Error("Função da IA inválida (agendamento/qualificacao)");
+                }
+            }
+
             // Tag automática com nome da campanha
             const tag = await createTag(supabase, ownerId, name);
 
@@ -537,6 +548,7 @@ serve(async (req) => {
                     variable_map: variableMap,
                     objective,
                     ia_enabled: ia_enabled !== false,
+                    ia_function: iaFn,
                     tag_id: tag.id,
                     template_version: 1,
                     status: "scheduled",
@@ -660,6 +672,20 @@ serve(async (req) => {
             ];
             for (const f of fields) {
                 if (body[f] !== undefined) updates[f] = body[f];
+            }
+
+            // Função da IA (agendamento | qualificacao): null quando IA desligada
+            if (body.ia_function !== undefined || body.ia_enabled !== undefined) {
+                const iaOnNew = (updates.ia_enabled ?? campaign.ia_enabled) !== false;
+                if (!iaOnNew) {
+                    updates.ia_function = null;
+                } else if (body.ia_function !== undefined) {
+                    const fn = String(body.ia_function || "agendamento").trim().toLowerCase();
+                    if (!["agendamento", "qualificacao"].includes(fn)) {
+                        throw new Error("Função da IA inválida (agendamento/qualificacao)");
+                    }
+                    updates.ia_function = fn;
+                }
             }
 
             const newInstanceId = (updates.instance_id as string) || campaign.instance_id;

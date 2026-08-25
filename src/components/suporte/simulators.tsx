@@ -371,7 +371,7 @@ const WIZARD_STEPS = [
     {
         title: "Objetivo + IA",
         icon: Target,
-        fields: ["Descreva o objetivo da campanha", "IA atende as respostas? (sim/não)"],
+        fields: ["Descreva o objetivo da campanha", "IA atende as respostas? (sim/não)", "Função da IA: Agendamento ou Qualificação"],
         tip: "O objetivo vira instrução automática para a IA. Com IA ligada, as respostas caem na fila 'Atendimento IA'; desligada, vão para sua equipe.",
     },
     {
