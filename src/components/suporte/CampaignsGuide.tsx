@@ -239,6 +239,10 @@ export function CampaignsGuide() {
                         description: "As mensagens não saem todas de uma vez: há um intervalo de ~30 segundos entre cada envio. Isso protege seu número de ser marcado como spam. Uma campanha de 100 contatos leva perto de 1 hora.",
                     },
                     {
+                        title: "Prioridade de envio",
+                        description: <>Quando o mesmo número também envia as <strong>mensagens automáticas</strong> (confirmação de agendamento, lembrete e pesquisa de satisfação), elas sempre passam na frente: a campanha pausa, as automáticas saem primeiro e a campanha retoma sozinha em seguida. A ordem é: <strong>Mensagens automáticas &gt; Monitoramento de Grupos &gt; Campanhas</strong>.</>,
+                    },
+                    {
                         title: "Quem está em atendimento não recebe",
                         description: <>Se o contato está com uma <strong>conversa aberta</strong> com um atendente naquele momento, a campanha NÃO interrompe: ele fica marcado como "Atendimento Em Aberto" e não recebe o disparo.</>,
                     },

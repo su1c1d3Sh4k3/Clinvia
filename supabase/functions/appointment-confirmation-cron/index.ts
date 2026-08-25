@@ -152,16 +152,31 @@ serve(async (req) => {
                     now,
                 };
 
-                // Meta: planner materializa a fila (Agendadas do painel + retry 3x)
-                if (isMeta) await planQueue(ctx);
+                // Prioridade de envio: mensagens automáticas > monitoramento > campanhas.
+                // Hold pausa o campaign-dispatch nesta instância enquanto os fluxos
+                // rodam (expira em 5min sozinho — crash safety); limpo no finally.
+                await supabase
+                    .from("instances")
+                    .update({ automation_hold_until: new Date(now.getTime() + 5 * 60_000).toISOString() })
+                    .eq("id", instance.id);
 
-                const r1 = await processConfirm24h(ctx);
-                const r2 = await processReminder2h(ctx);
-                const r3 = await processFeedback24h(ctx);
-                await processFeedbackTimeout(ctx);
+                try {
+                    // Meta: planner materializa a fila (Agendadas do painel + retry 3x)
+                    if (isMeta) await planQueue(ctx);
 
-                totalSent += r1.sent + r2.sent + r3.sent;
-                totalErrors += r1.errors + r2.errors + r3.errors;
+                    const r1 = await processConfirm24h(ctx);
+                    const r2 = await processReminder2h(ctx);
+                    const r3 = await processFeedback24h(ctx);
+                    await processFeedbackTimeout(ctx);
+
+                    totalSent += r1.sent + r2.sent + r3.sent;
+                    totalErrors += r1.errors + r2.errors + r3.errors;
+                } finally {
+                    await supabase
+                        .from("instances")
+                        .update({ automation_hold_until: null })
+                        .eq("id", instance.id);
+                }
             } catch (err) {
                 console.error(`[ac-cron] error for user ${cronUserId}:`, err);
                 totalErrors++;
