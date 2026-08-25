@@ -113,6 +113,7 @@ export function useQueueConversations() {
                         .not('body', 'like', '%transferida de%')  // Exclude transfer messages
                         .not('body', 'like', '👥 %entrou no grupo')  // Exclude group join notices
                         .not('body', 'like', '👥 %saiu do grupo')    // Exclude group leave notices
+                        .not('body', 'like', '%visualizou essa conversa%') // Exclude view alerts
                         .order('created_at', { ascending: false })
                         .limit(1)
                         .single();

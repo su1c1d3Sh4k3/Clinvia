@@ -8,7 +8,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { MessageSquare, X, Send, Paperclip, Smile, Sparkles, CheckCircle, Mic, StopCircle, Trash2, StickyNote, ArrowLeftRight, User, Inbox, UserPlus, UserMinus, TicketPlus, CalendarDays } from "lucide-react";
+import { MessageSquare, X, Send, Paperclip, Smile, Sparkles, CheckCircle, Mic, StopCircle, Trash2, StickyNote, ArrowLeftRight, User, Inbox, UserPlus, UserMinus, TicketPlus, CalendarDays, Eye } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useNavigate } from "react-router-dom";
 import { MessageBubble } from "@/components/MessageBubble";
@@ -616,6 +616,21 @@ export function ConversationChatModal({
                                             <div className="bg-[#1e253c] dark:bg-[#1a2235] text-[#93c5fd] text-xs font-medium px-4 py-2 rounded-full flex items-center gap-2.5 shadow-sm border border-[#2a3655]/50 select-none">
                                                 {isJoin ? <UserPlus className="w-3.5 h-3.5 opacity-80" /> : <UserMinus className="w-3.5 h-3.5 opacity-80" />}
                                                 <span>{timeStr} {cleanText}</span>
+                                            </div>
+                                        </div>
+                                        </Fragment>
+                                    );
+                                }
+                                // Alerta de visualização — mesmo pill do inbox (data já embutida no body)
+                                const isViewAlert = !msg._note && msg.body && msg.body.includes('visualizou essa conversa');
+                                if (isViewAlert) {
+                                    return (
+                                        <Fragment key={msg.id}>
+                                        {daySeparator}
+                                        <div className="flex justify-center my-6">
+                                            <div className="bg-[#1e253c] dark:bg-[#1a2235] text-[#93c5fd] text-xs font-medium px-4 py-2 rounded-full flex items-center gap-2.5 shadow-sm border border-[#2a3655]/50 select-none">
+                                                <Eye className="w-3.5 h-3.5 opacity-80" />
+                                                <span>{msg.body}</span>
                                             </div>
                                         </div>
                                         </Fragment>

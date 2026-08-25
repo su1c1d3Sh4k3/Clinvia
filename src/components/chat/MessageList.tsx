@@ -2,7 +2,7 @@ import { memo, useRef, useEffect, useState, useMemo, useLayoutEffect, Fragment }
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Clock, AlertCircle, Check, CheckCheck, Download, ChevronDown, ArrowLeftRight, UserPlus, UserMinus, TicketPlus, CalendarDays } from "lucide-react";
+import { Clock, AlertCircle, Check, CheckCheck, Download, ChevronDown, ArrowLeftRight, UserPlus, UserMinus, TicketPlus, CalendarDays, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MessageActionsMenu } from "@/components/MessageActionsMenu";
 import { ReplyQuoteBox, QuotedMessage } from "@/components/ReplyQuoteBox";
@@ -386,6 +386,19 @@ export const MessageList = memo(({
                     <div className="bg-[#1e253c] dark:bg-[#1a2235] text-[#93c5fd] text-xs font-medium px-4 py-2 rounded-full flex items-center gap-2.5 shadow-sm border border-[#2a3655]/50 select-none">
                         {isJoin ? <UserPlus className="w-3.5 h-3.5 opacity-80" /> : <UserMinus className="w-3.5 h-3.5 opacity-80" />}
                         <span>{timeStr} {cleanText}</span>
+                    </div>
+                </div>
+            );
+        }
+
+        // Alerta de visualização ("O colaborador X visualizou essa conversa - dd/mm/yyyy hh:mm") — pill igual às transferências
+        const isViewAlert = msg.body && msg.body.includes('visualizou essa conversa');
+        if (isViewAlert) {
+            return (
+                <div key={msg.id} id={`message-${msg.id}`} className={cn("flex justify-center my-6 px-4", isMatch && matchIndex === currentMatchIndex ? "bg-yellow-100/10 rounded-lg p-1 -m-1" : "")}>
+                    <div className="bg-[#1e253c] dark:bg-[#1a2235] text-[#93c5fd] text-xs font-medium px-4 py-2 rounded-full flex items-center gap-2.5 shadow-sm border border-[#2a3655]/50 select-none">
+                        <Eye className="w-3.5 h-3.5 opacity-80" />
+                        <span>{msg.body}</span>
                     </div>
                 </div>
             );

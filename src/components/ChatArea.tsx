@@ -183,6 +183,19 @@ export const ChatArea = ({
   const { data: currentTeamMember } = useCurrentTeamMember();
   const { data: ownerId } = useOwnerId();
 
+  // Alerta de visualização (user rule): AGENTE abre conversa pelo inbox →
+  // pill "O colaborador <nome> visualizou essa conversa - <data_hora>".
+  // Só a 1ª vez por agente (dedup server-side); supervisor/admin nunca disparam.
+  useEffect(() => {
+    if (!conversationId) return;
+    if ((currentTeamMember as any)?.role !== "agent") return;
+    supabase
+      .rpc("register_conversation_view" as any, { p_conversation_id: conversationId })
+      .then(({ error }) => {
+        if (error) console.error("register_conversation_view:", error);
+      });
+  }, [conversationId, currentTeamMember]);
+
   // Profile & Team Data
   const { data: profile } = useQuery({
     queryKey: ["profile", user?.id],
