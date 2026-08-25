@@ -591,7 +591,7 @@ export default function IAConfig() {
         return phone;
     };
 
-    // Handler do switch "Ligar IA" - apenas abre a lista de instâncias (não dispara webhook)
+    // Handler do switch "Ligar IA"
     const handleIAToggle = async (checked: boolean) => {
         // Verificar se pode desligar (nenhuma instância deve estar ligada)
         if (!checked) {
@@ -604,9 +604,16 @@ export default function IAConfig() {
             }
         }
 
-        // Apenas atualiza o estado local (não dispara webhook, não ativa instâncias)
         setConfig({ ...config, ia_on: checked });
         toast.success(checked ? "IA ativada! Agora ative as instâncias desejadas." : "IA desativada com sucesso!");
+
+        // Ligar a IA notifica o n8n p/ criar o workflow da conta (server-side,
+        // fire-and-forget — user rule 2026-08-25: dispara SEMPRE que ligar)
+        if (checked) {
+            supabase.functions.invoke("ia-create-workflow", { body: {} }).catch((err) => {
+                console.error("ia-create-workflow:", err);
+            });
+        }
     };
 
     // Verificar se pode desligar a IA (nenhuma instância ativa)
