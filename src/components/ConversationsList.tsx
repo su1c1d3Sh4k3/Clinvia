@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
-import { Search, Filter, Plus, MessageSquare, Send, Tag as TagIcon, Eye, Check, CheckCheck, Clock, FileText, Mic, Image as ImageIcon, Video, StickyNote, MailCheck } from "lucide-react";
+import { Search, Filter, Plus, MessageSquare, Send, Tag as TagIcon, Eye, Check, CheckCheck, Clock, FileText, Mic, Image as ImageIcon, Video, StickyNote, MessageCircleReply } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { FaWhatsapp, FaInstagram } from "react-icons/fa";
@@ -172,7 +172,9 @@ export const ConversationsList = ({
   const [selectedContactForDetails, setSelectedContactForDetails] = useState<any>(null);
   const [editingContact, setEditingContact] = useState<any>(null);
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<"people" | "groups">("people");
-  const [unreadOnly, setUnreadOnly] = useState(false);
+  // Filtro "Não respondidas": só conversas cuja última mensagem é do cliente
+  // (bolinha laranja ao lado do nome — resposta do colaborador pendente)
+  const [unansweredOnly, setUnansweredOnly] = useState(false);
 
   // Aba do Inbox (WhatsApp/Instagram) persistida em sessionStorage:
   // - F5 / refresh mantém a aba (sessionStorage sobrevive ao reload)
@@ -381,10 +383,14 @@ export const ConversationsList = ({
     // Filter by People vs Groups
     const matchesType = selectedTypeFilter === "groups" ? isGroup : !isGroup;
 
-    // Filter by unread only
-    const matchesUnread = unreadOnly ? (conv.unread_count || 0) > 0 : true;
+    // Filtro "Não respondidas": espelha a bolinha laranja do card — última
+    // mensagem existe e não é outbound nem de sistema (cliente aguardando resposta)
+    const lastMsgObj = (conv as any).last_message_obj;
+    const matchesUnanswered = unansweredOnly
+      ? !!lastMsgObj && lastMsgObj.direction !== "outbound" && lastMsgObj.direction !== "system"
+      : true;
 
-    return matchesSearch && matchesQueue && matchesTag && matchesInstance && matchesAgent && matchesType && matchesUnread;
+    return matchesSearch && matchesQueue && matchesTag && matchesInstance && matchesAgent && matchesType && matchesUnanswered;
   });
 
   const selectedConversation = conversations.find(c => c.id === selectedId);
@@ -663,17 +669,17 @@ export const ConversationsList = ({
             />
           </div>
           <button
-            onClick={() => setUnreadOnly(!unreadOnly)}
+            onClick={() => setUnansweredOnly(!unansweredOnly)}
             className={cn(
               "flex flex-col items-center gap-0.5 px-2 py-1 rounded-md border transition-colors flex-shrink-0",
-              unreadOnly
+              unansweredOnly
                 ? "bg-primary text-primary-foreground border-primary"
                 : "bg-background text-muted-foreground border-input hover:bg-muted"
             )}
-            title="Filtrar não lidas"
+            title="Filtrar não respondidas (aguardando resposta do atendente)"
           >
-            <MailCheck className="h-4 w-4" />
-            <span className="text-[9px] font-medium leading-none">Não lidas</span>
+            <MessageCircleReply className="h-4 w-4" />
+            <span className="text-[9px] font-medium leading-none">Não respondidas</span>
           </button>
         </div>
       </div>

@@ -312,7 +312,11 @@ export function InboxGuide() {
                         },
                         {
                             q: "O que significa a bolinha/contador na conversa?",
-                            a: "Mensagens não lidas. Ao abrir a conversa, o contador zera. Os balões vermelhos nas abas Abertos/Pendentes/Grupos somam as não lidas e respeitam os Filtros Avançados: com um filtro de fila, tag, conexão ou usuário aplicado, o balão mostra só as não lidas daquele recorte — se os clientes do filtro não têm nada não lido, o balão some.",
+                            a: "O contador azul são mensagens não lidas — ao abrir a conversa, ele zera. A bolinha ao lado do nome mostra quem falou por último: laranja = a última mensagem é do cliente (resposta do atendente pendente); verde = a última mensagem foi da equipe. Os balões vermelhos nas abas Abertos/Pendentes/Grupos somam as não lidas e respeitam os Filtros Avançados: com um filtro de fila, tag, conexão ou usuário aplicado, o balão mostra só as não lidas daquele recorte — se os clientes do filtro não têm nada não lido, o balão some.",
+                        },
+                        {
+                            q: "Como vejo só as conversas que aguardam resposta?",
+                            a: "Use o botão Não respondidas ao lado da busca: a lista passa a mostrar apenas as conversas cuja última mensagem é do cliente (bolinha laranja ao lado do nome). Clique de novo para voltar à lista completa.",
                         },
                         {
                             q: "Grupos de WhatsApp têm atendente responsável?",
