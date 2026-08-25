@@ -195,7 +195,10 @@ async function promoteCampaigns(supabase: any) {
     }
 }
 
-// ── CRM: mover/criar card + ia_on + fila ─────────────────────────────────────
+// ── CRM: mover/criar card + fila ─────────────────────────────────────────────
+// REGRA DO USUÁRIO: nada no sistema desliga contacts.ia_on (default true, só o
+// switch manual em Clientes muda). Campanha Humano bloqueia a IA pela FILA
+// ('Atendimento Humano' reprova o gate de encaminhamento), nunca pelo contato.
 const queueCache = new Map<string, string | null>();
 
 async function getQueueId(supabase: any, userId: string, queueName: string): Promise<string | null> {
@@ -227,14 +230,14 @@ async function moveCrm(supabase: any, campaign: any, contactId: string, conversa
 
         if (activeCard) {
             if (activeCard.stage !== targetStage) {
-                // Trigger AFTER UPDATE cuida de ia_on (+ fila no caso Humano)
+                // Trigger AFTER UPDATE cuida da fila no caso Humano
                 await supabase
                     .from("crm_client")
                     .update({ stage: targetStage })
                     .eq("id", activeCard.id);
             }
         } else {
-            // Trigger NÃO dispara em INSERT → setar ia_on/fila manualmente abaixo
+            // Trigger NÃO dispara em INSERT → setar a fila manualmente abaixo
             await supabase.from("crm_client").insert({
                 user_id: campaign.user_id,
                 contact_id: contactId,
@@ -243,12 +246,7 @@ async function moveCrm(supabase: any, campaign: any, contactId: string, conversa
             });
         }
 
-        // Garantias explícitas (cobrem INSERT e o caso IA, que o trigger não enfileira)
-        await supabase
-            .from("contacts")
-            .update({ ia_on: iaEnabled, updated_at: new Date().toISOString() })
-            .eq("id", contactId);
-
+        // Garantia explícita da fila (cobre INSERT e o caso IA, que o trigger não enfileira)
         const queueId = await getQueueId(supabase, campaign.user_id, targetQueueName);
         if (queueId && conversationId) {
             await supabase

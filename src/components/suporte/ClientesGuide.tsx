@@ -201,6 +201,10 @@ export function ClientesGuide() {
                             a: "Confira se você desligou no contato certo (o número que está conversando). O interruptor vale por contato — se o cliente escreve de outro número, é outro contato.",
                         },
                         {
+                            q: "A IA de um contato apareceu desligada sozinha. Isso pode acontecer?",
+                            a: "Não. O interruptor nasce ligado e SÓ este botão em Clientes pode desligá-lo — nenhuma campanha, automação ou rotina do sistema mexe nele. Se um atendimento específico precisa ficar sem IA, quem decide é a fila da conversa (Atendimento Humano), sem tocar no contato.",
+                        },
+                        {
                             q: "Importei a planilha e alguns contatos não entraram.",
                             a: "Linhas sem telefone válido são ignoradas. Verifique também se o número tem DDD — o casamento é pelos últimos 8 dígitos, mas o cadastro precisa de um número completo.",
                         },
