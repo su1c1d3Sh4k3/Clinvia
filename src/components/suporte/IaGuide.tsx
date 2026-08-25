@@ -175,6 +175,10 @@ export function IaGuide() {
                     { title: "Por conexão (chave do quarto)", description: <>Em <strong>IA &gt; Config</strong>, desligue a IA de um número específico — ex.: o número comercial fica com IA, o pessoal não.</>, },
                     { title: "Geral (disjuntor)", description: <>O interruptor <strong>Ligar IA</strong> desliga tudo de uma vez. Para religar, primeiro ative o geral, depois as conexões.</>, },
                 ]} />
+                <Callout type="dica" title="O interruptor geral salva na hora">
+                    Ligar ou desligar o <strong>Ligar IA</strong> vale imediatamente — não precisa clicar em "Salvar". O botão
+                    Salvar continua sendo para os textos da empresa, F.A.Q e demais ajustes da página.
+                </Callout>
                 <div className="flex flex-wrap gap-2">
                     <Button size="sm" variant="outline" onClick={() => navigate("/ia-config?tab=settings&tour=ia-config")}>
                         <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
