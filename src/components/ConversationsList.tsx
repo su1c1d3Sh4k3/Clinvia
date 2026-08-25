@@ -788,7 +788,10 @@ export const ConversationsList = ({
                     <div className="flex flex-col min-w-0 flex-1 gap-0.5">
                       {/* Name + tags */}
                       <div className="flex items-center gap-1.5">
-                        <span className="font-semibold text-sm truncate text-foreground/90" title={displayName}>
+                        {/* text-xs (12px) + tags shrink-0: nome trunca antes p/ sempre
+                            sobrar espaço de até 3 etiquetas (antes as tags eram
+                            espremidas pelo nome longo e mal aparecia uma) */}
+                        <span className="font-semibold text-xs truncate text-foreground/90" title={displayName}>
                           {displayName}
                         </span>
                         {lastMsg && !isSystem && (
@@ -799,7 +802,7 @@ export const ConversationsList = ({
                           )} />
                         )}
                         {contact?.contact_tags?.length > 0 && (
-                          <div className="flex items-center gap-0.5 overflow-hidden max-w-[60px]">
+                          <div className="flex items-center gap-0.5 flex-shrink-0">
                             {contact.contact_tags.slice(0, 3).map((ct: any) => (
                               ct.tags && (
                                 <TagIcon key={ct.tags.id} className="w-3 h-3 flex-shrink-0" style={{ color: ct.tags.color }} title={ct.tags.name} />
