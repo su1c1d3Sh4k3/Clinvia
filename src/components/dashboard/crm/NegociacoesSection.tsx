@@ -2,6 +2,7 @@ import { StageStatusCards } from "./StageStatusCards";
 
 const NEGOTIATION_STAGES = [
     "Qualificado",
+    "Aguardando Pagamento",
     "Agendado",
     "Follow Up",
     "Sem Contato",

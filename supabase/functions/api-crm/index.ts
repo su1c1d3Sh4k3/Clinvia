@@ -8,7 +8,7 @@ const corsHeaders = {
 };
 
 const CRM_STAGES = [
-    'Em Atendimento Humano', 'Em Atendimento IA', 'Qualificado', 'Agendado',
+    'Em Atendimento Humano', 'Em Atendimento IA', 'Qualificado', 'Aguardando Pagamento', 'Agendado',
     'Pesquisa de Satisfação', 'Suporte', 'Financeiro', 'Pós-Venda', 'Recorrencia', 'Follow Up',
     'Ganho', 'Perdido', 'Sem Contato', 'Sem Interesse', 'Finalizado',
 ];

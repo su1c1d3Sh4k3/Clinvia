@@ -17,7 +17,7 @@ import { StageSyncSimulator } from "./simulators-crm";
 
 const TOPICS = [
     { id: "o-que-e", label: "O que é" },
-    { id: "estagios", label: "As 15 etapas" },
+    { id: "estagios", label: "As 16 etapas" },
     { id: "sync-fila", label: "Etapa ↔ fila" },
     { id: "terminais", label: "Etapas terminais" },
     { id: "um-card-ativo", label: "1 card por cliente" },
@@ -27,7 +27,7 @@ const TOPICS = [
 ];
 
 const IA_GROUP = ["Em Atendimento IA", "Qualificado", "Agendado", "Pesquisa de Satisfação", "Recorrência", "Follow Up"];
-const HUMAN_GROUP = ["Em Atendimento Humano", "Suporte", "Financeiro", "Pós-Venda"];
+const HUMAN_GROUP = ["Em Atendimento Humano", "Aguardando Pagamento", "Suporte", "Financeiro", "Pós-Venda"];
 const TERMINAL_GROUP = ["Ganho", "Perdido", "Sem Contato", "Sem Interesse", "Finalizado"];
 
 export function CrmGuide() {
@@ -53,7 +53,7 @@ export function CrmGuide() {
                         O que você vai aprender
                     </p>
                     <div className="flex flex-wrap gap-2">
-                        <LearnChip topicId="estagios">Conhecer as 15 etapas</LearnChip>
+                        <LearnChip topicId="estagios">Conhecer as 16 etapas</LearnChip>
                         <LearnChip topicId="sync-fila">Como etapa e fila andam juntas</LearnChip>
                         <LearnChip topicId="terminais">O que as etapas terminais fazem</LearnChip>
                         <LearnChip topicId="negociacoes">Registrar negociações com valores</LearnChip>
@@ -85,7 +85,7 @@ export function CrmGuide() {
             </TopicSection>
 
             {/* 2 */}
-            <TopicSection id="estagios" index={2} icon={Columns3} title="As 15 etapas"
+            <TopicSection id="estagios" index={2} icon={Columns3} title="As 16 etapas"
                 subtitle="Três grupos: IA, humano e terminais">
                 <div className="space-y-3">
                     <div className="rounded-xl border p-3.5">
@@ -108,6 +108,7 @@ export function CrmGuide() {
                         </div>
                         <p className="mt-2 text-xs text-muted-foreground">
                             Mover o card para cá envia a conversa para a fila do setor (Atendimento Humano, Suporte, Financeiro, Pós-Venda) — e a IA para.
+                            "Aguardando Pagamento" (entre Qualificado e Agendado no quadro) também manda a conversa para a fila Atendimento Humano: um colaborador assume para conduzir o pagamento.
                         </p>
                     </div>
                     <div className="rounded-xl border p-3.5">
@@ -236,7 +237,7 @@ export function CrmGuide() {
                         },
                         {
                             q: "Posso mudar as etapas do funil?",
-                            a: "As 15 etapas são fixas — elas sustentam as automações (filas, IA, confirmações, campanhas). Para organizar times, use as filas de atendimento e as etiquetas.",
+                            a: "As 16 etapas são fixas — elas sustentam as automações (filas, IA, confirmações, campanhas). Para organizar times, use as filas de atendimento e as etiquetas.",
                         },
                     ].map((f, i, arr) => (
                         <AccordionItem key={i} value={`faq-${i}`} className={i === arr.length - 1 ? "border-b-0" : ""}>

@@ -2,6 +2,7 @@ export const CRM_STAGES = [
   'Em Atendimento Humano',
   'Em Atendimento IA',
   'Qualificado',
+  'Aguardando Pagamento',
   'Agendado',
   'Pesquisa de Satisfação',
   'Suporte',
@@ -23,6 +24,7 @@ export const TERMINAL_STAGES: CrmStage[] = ['Ganho', 'Perdido', 'Sem Contato', '
 /** Stages that auto-route to a specific queue */
 export const STAGE_QUEUE_MAP: Partial<Record<CrmStage, string>> = {
   'Em Atendimento Humano': 'Atendimento Humano',
+  'Aguardando Pagamento': 'Atendimento Humano',
   'Em Atendimento IA': 'Atendimento IA',
   'Suporte': 'Suporte',
   'Financeiro': 'Financeiro',
@@ -33,6 +35,7 @@ export const STAGE_COLORS: Record<CrmStage, string> = {
   'Em Atendimento Humano': '#3b82f6',
   'Em Atendimento IA': '#8b5cf6',
   'Qualificado': '#06b6d4',
+  'Aguardando Pagamento': '#eab308',
   'Agendado': '#f59e0b',
   'Pesquisa de Satisfação': '#d946ef',
   'Suporte': '#ec4899',
