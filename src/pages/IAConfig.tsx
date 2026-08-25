@@ -604,7 +604,28 @@ export default function IAConfig() {
             }
         }
 
+        if (!ownerId) {
+            toast.error("Aguarde o carregamento da conta e tente novamente.");
+            return;
+        }
+
         setConfig({ ...config, ia_on: checked });
+
+        // Persiste ia_on IMEDIATAMENTE no banco: o gate de roteamento da IA lê
+        // ia_config.ia_on — não pode depender do botão "Salvar" desta tela.
+        // Upsert enxuto (só user_id + ia_on) para não sobrescrever o que o
+        // usuário estiver editando nas outras abas.
+        const { error: iaOnError } = await supabase
+            .from("ia_config" as any)
+            .upsert({ user_id: ownerId, ia_on: checked }, { onConflict: "user_id" });
+
+        if (iaOnError) {
+            console.error("[IAConfig] Error persisting ia_on:", iaOnError);
+            setConfig({ ...config, ia_on: !checked });
+            toast.error("Erro ao atualizar o status da IA. Tente novamente.");
+            return;
+        }
+
         toast.success(checked ? "IA ativada! Agora ative as instâncias desejadas." : "IA desativada com sucesso!");
 
         // Ligar a IA notifica o n8n p/ criar o workflow da conta (server-side,
