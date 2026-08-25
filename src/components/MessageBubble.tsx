@@ -1,5 +1,4 @@
 import React from "react";
-import { format } from "date-fns";
 import { Download, Clock, AlertCircle, Check, CheckCheck, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LazyMedia } from "@/components/LazyMedia";
@@ -7,6 +6,7 @@ import { CustomAudioPlayer } from "@/components/chat/CustomAudioPlayer";
 import { FormattedText, parseTemplateBody } from "@/components/chat/FormattedText";
 import { toast } from "sonner";
 import { resolveOutboundSenderName } from "@/lib/messageSender";
+import { chatDateTime } from "@/lib/chatDates";
 
 interface MessageBubbleProps {
     message: any;
@@ -225,7 +225,7 @@ export function MessageBubble({
                 msg.direction === "outbound" ? "text-gray-800/70 dark:text-white/70" : "text-muted-foreground"
             )}>
                 <span className="text-[10px]">
-                    {format(new Date(msg.created_at), "HH:mm")}
+                    {chatDateTime(msg.created_at)}
                 </span>
 
                 {(msg as any).status === 'sending' && <Clock className="w-3 h-3 animate-pulse" />}

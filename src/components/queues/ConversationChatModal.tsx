@@ -8,12 +8,12 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { MessageSquare, X, Send, Paperclip, Smile, Sparkles, CheckCircle, Mic, StopCircle, Trash2, StickyNote, ArrowLeftRight, User, Inbox, UserPlus, UserMinus, TicketPlus } from "lucide-react";
+import { MessageSquare, X, Send, Paperclip, Smile, Sparkles, CheckCircle, Mic, StopCircle, Trash2, StickyNote, ArrowLeftRight, User, Inbox, UserPlus, UserMinus, TicketPlus, CalendarDays } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useNavigate } from "react-router-dom";
-import { format } from "date-fns";
 import { MessageBubble } from "@/components/MessageBubble";
-import { useState, useRef, useEffect, useMemo } from "react";
+import { Fragment, useState, useRef, useEffect, useMemo } from "react";
+import { chatDayLabel, isSameChatDay } from "@/lib/chatDates";
 import { Textarea } from "@/components/ui/textarea";
 import { useSendMessage } from "@/hooks/useSendMessage";
 import { useMessages } from "@/hooks/useMessages";
@@ -557,16 +557,31 @@ export function ConversationChatModal({
                         <div className="flex justify-center p-4">Carregando mensagens...</div>
                     ) : messagesWithNotes && messagesWithNotes.length > 0 ? (
                         <div className="space-y-4">
-                            {messagesWithNotes.map((msg: any) => {
+                            {messagesWithNotes.map((msg: any, index: number) => {
+                                // Separador de dia — mesma pill do inbox (MessageList), linha do tempo por blocos de dia
+                                const prevMsg = index > 0 ? messagesWithNotes[index - 1] : null;
+                                const showDaySeparator = !!msg.created_at &&
+                                    (!prevMsg?.created_at || !isSameChatDay(prevMsg.created_at, msg.created_at));
+                                const daySeparator = showDaySeparator ? (
+                                    <div className="flex justify-center my-6">
+                                        <div className="bg-[#1e253c] dark:bg-[#1a2235] text-[#93c5fd] text-xs font-medium px-4 py-2 rounded-full flex items-center gap-2.5 shadow-sm border border-[#2a3655]/50 select-none">
+                                            <CalendarDays className="w-3.5 h-3.5 opacity-80" />
+                                            <span>{chatDayLabel(msg.created_at)}</span>
+                                        </div>
+                                    </div>
+                                ) : null;
                                 // Pill "Conversa iniciada dia ..." — divisão de tickets (useMessages)
                                 if (msg._conv_start) {
                                     return (
-                                        <div key={msg.id} className="flex justify-center my-6">
+                                        <Fragment key={msg.id}>
+                                        {daySeparator}
+                                        <div className="flex justify-center my-6">
                                             <div className="bg-[#1e253c] dark:bg-[#1a2235] text-[#93c5fd] text-xs font-medium px-4 py-2 rounded-full flex items-center gap-2.5 shadow-sm border border-[#2a3655]/50 select-none">
                                                 <TicketPlus className="w-3.5 h-3.5 opacity-80" />
                                                 <span>{msg.body}</span>
                                             </div>
                                         </div>
+                                        </Fragment>
                                     );
                                 }
                                 // Mensagem de sistema de transferência — mesmo pill do inbox (MessageList)
@@ -576,12 +591,15 @@ export function ConversationChatModal({
                                     const cleanTransferText = msg.body.replace(/^Conversa \d+\s+/i, '');
                                     const timeStr = new Date(msg.created_at || "").toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
                                     return (
-                                        <div key={msg.id} className="flex justify-center my-6">
+                                        <Fragment key={msg.id}>
+                                        {daySeparator}
+                                        <div className="flex justify-center my-6">
                                             <div className="bg-[#1e253c] dark:bg-[#1a2235] text-[#93c5fd] text-xs font-medium px-4 py-2 rounded-full flex items-center gap-2.5 shadow-sm border border-[#2a3655]/50 select-none">
                                                 <ArrowLeftRight className="w-3.5 h-3.5 opacity-80" />
                                                 <span>{timeStr} {cleanTransferText}</span>
                                             </div>
                                         </div>
+                                        </Fragment>
                                     );
                                 }
                                 // Mensagem de sistema de grupo (entrou/saiu) — mesmo pill do inbox
@@ -592,17 +610,21 @@ export function ConversationChatModal({
                                     const cleanText = msg.body.replace(/^👥\s*/, '');
                                     const timeStr = new Date(msg.created_at || "").toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
                                     return (
-                                        <div key={msg.id} className="flex justify-center my-6">
+                                        <Fragment key={msg.id}>
+                                        {daySeparator}
+                                        <div className="flex justify-center my-6">
                                             <div className="bg-[#1e253c] dark:bg-[#1a2235] text-[#93c5fd] text-xs font-medium px-4 py-2 rounded-full flex items-center gap-2.5 shadow-sm border border-[#2a3655]/50 select-none">
                                                 {isJoin ? <UserPlus className="w-3.5 h-3.5 opacity-80" /> : <UserMinus className="w-3.5 h-3.5 opacity-80" />}
                                                 <span>{timeStr} {cleanText}</span>
                                             </div>
                                         </div>
+                                        </Fragment>
                                     );
                                 }
                                 return (
+                                    <Fragment key={msg.id}>
+                                    {daySeparator}
                                     <div
-                                        key={msg.id}
                                         className={`flex max-w-[80%] ${msg.direction === 'outbound'
                                             ? 'ml-auto justify-end'
                                             : 'mr-auto justify-start'
@@ -620,6 +642,7 @@ export function ConversationChatModal({
                                             />
                                         )}
                                     </div>
+                                    </Fragment>
                                 );
                             })}
                         </div>

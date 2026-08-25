@@ -1,8 +1,8 @@
-import { memo, useRef, useEffect, useState, useMemo, useLayoutEffect } from "react";
+import { memo, useRef, useEffect, useState, useMemo, useLayoutEffect, Fragment } from "react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Clock, AlertCircle, Check, CheckCheck, Download, ChevronDown, ArrowLeftRight, UserPlus, UserMinus, TicketPlus } from "lucide-react";
+import { Clock, AlertCircle, Check, CheckCheck, Download, ChevronDown, ArrowLeftRight, UserPlus, UserMinus, TicketPlus, CalendarDays } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MessageActionsMenu } from "@/components/MessageActionsMenu";
 import { ReplyQuoteBox, QuotedMessage } from "@/components/ReplyQuoteBox";
@@ -14,6 +14,7 @@ import { CustomAudioPlayer } from "@/components/chat/CustomAudioPlayer";
 import { FormattedText, parseTemplateBody } from "@/components/chat/FormattedText";
 import { NoteBubble } from "@/components/chat/NoteBubble";
 import { resolveOutboundSenderName } from "@/lib/messageSender";
+import { chatDateTime, chatDayLabel, isSameChatDay } from "@/lib/chatDates";
 
 interface MessageListProps {
     messages: any[];
@@ -624,7 +625,7 @@ export const MessageList = memo(({
                             })()}
 
                             <span className={cn("text-xs mt-1 flex items-center gap-1", msg.direction === "outbound" ? "text-gray-800/70 dark:text-white/70" : "text-muted-foreground", "justify-end")}>
-                                {new Date(msg.created_at || "").toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                                {chatDateTime(msg.created_at)}
                                 {msg.direction === "outbound" && ((msg as any).status === 'read' ? <CheckCheck className="w-4 h-4 text-green-400" /> : <Check className="w-4 h-4 text-gray-400" />)}
                             </span>
                         </div>
@@ -685,7 +686,27 @@ export const MessageList = memo(({
                         </div>
                     )}
 
-                    {messagesToDisplay.map((msg, index) => renderMessage(msg))}
+                    {messagesToDisplay.map((msg, index) => {
+                        // Separador de dia: primeira mensagem enviada/recebida de cada
+                        // dia ganha um pill de data (mesmo estilo da transferência) —
+                        // linha do tempo por blocos de dia
+                        const prev = index > 0 ? messagesToDisplay[index - 1] : null;
+                        const showDaySeparator = !!msg.created_at &&
+                            (!prev?.created_at || !isSameChatDay(prev.created_at, msg.created_at));
+                        return (
+                            <Fragment key={msg.id}>
+                                {showDaySeparator && (
+                                    <div className="flex justify-center my-6 px-4">
+                                        <div className="bg-[#1e253c] dark:bg-[#1a2235] text-[#93c5fd] text-xs font-medium px-4 py-2 rounded-full flex items-center gap-2.5 shadow-sm border border-[#2a3655]/50 select-none">
+                                            <CalendarDays className="w-3.5 h-3.5 opacity-80" />
+                                            <span>{chatDayLabel(msg.created_at)}</span>
+                                        </div>
+                                    </div>
+                                )}
+                                {renderMessage(msg)}
+                            </Fragment>
+                        );
+                    })}
 
                     {/* Bottom Anchor */}
                     <div ref={messagesEndRef} className="h-4" />

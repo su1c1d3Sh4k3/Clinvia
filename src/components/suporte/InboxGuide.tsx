@@ -363,6 +363,10 @@ export function InboxGuide() {
                             a: "Quando um cliente volta a conversar depois de um atendimento encerrado, o chat carrega o histórico das conversas anteriores e insere uma pílula centralizada (mesmo estilo das notificações de transferência) no início de cada ticket: 'Conversa iniciada dia <data> pelo atendente <nome>' — ou 'pelo cliente <nome>' quando foi o cliente quem mandou a primeira mensagem, e 'pela IA' quando a primeira mensagem foi da assistente. Assim fica claro onde cada novo ticket começou.",
                         },
                         {
+                            q: "Como vejo a data de cada mensagem na conversa?",
+                            a: "De duas formas: toda mensagem exibe data e hora juntas no cantinho do balão (ex.: '25/08/2026 14:32'); e a primeira mensagem de cada dia ganha um separador de data centralizado — 'Hoje', 'Ontem' ou 'Segunda-feira, 25/08/2026' — no mesmo estilo das notificações de transferência. Assim a conversa vira uma linha do tempo por blocos de dia, tanto no inbox quanto no modal de conversa.",
+                        },
+                        {
                             q: "O modal de conversa (janelinha) mostra tudo que o inbox mostra?",
                             a: "Sim — mesma timeline: mensagens, notas roxas, transferências (pílula azul) e o remetente de cada envio. Abaixo do nome do contato ele mostra o atendente responsável e a fila da conversa, atualizados em tempo real quando há transferência.",
                         },
