@@ -344,6 +344,17 @@ async function resolveConversation(
 
     // No open/pending → create new with status='open'. Resolved conversations
     // (if any) remain untouched in history.
+    // Fila obrigatória (user rule: conversa sempre em fila): conversa open é
+    // sempre atendimento humano (trigger conv_open_moves_to_humano) — cria já
+    // na fila 'Atendimento Humano' em vez de sem fila (ficava invisível nos
+    // agrupamentos por fila do inbox).
+    const { data: humanQueue } = await supabase
+        .from("queues")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("name", "Atendimento Humano")
+        .limit(1)
+        .maybeSingle();
     const { data: newConv, error: convErr } = await supabase
         .from("conversations")
         .insert({
@@ -351,6 +362,7 @@ async function resolveConversation(
             user_id: userId,
             instance_id: instanceId,
             status: "open",
+            queue_id: humanQueue?.id ?? null,
             unread_count: 0,
             last_message_at: new Date().toISOString(),
         })

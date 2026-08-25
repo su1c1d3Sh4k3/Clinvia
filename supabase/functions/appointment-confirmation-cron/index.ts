@@ -1167,6 +1167,38 @@ function groupByContactAndDay(appointments: any[]): Map<string, any[]> {
 // Conversation resolution (adapted from delivery-automation-worker)
 // ---------------------------------------------------------------------------
 
+// Fila da conversa nova (regra padrão 9ca9233, igual campaign-dispatch):
+// ia_config.ia_on && instances.ia_on_wpp !== false → 'Atendimento IA',
+// senão 'Atendimento Humano'. Conversa SEM fila é proibida (user rule) —
+// ficava invisível nos agrupamentos por fila do inbox.
+const defaultQueueCache = new Map<string, string | null>();
+
+async function resolveDefaultQueueId(
+    supabase: any,
+    userId: string,
+    instanceId: string,
+): Promise<string | null> {
+    const cacheKey = `${userId}:${instanceId}`;
+    if (defaultQueueCache.has(cacheKey)) return defaultQueueCache.get(cacheKey) ?? null;
+
+    const [iaCfgRes, instRes] = await Promise.all([
+        supabase.from("ia_config").select("ia_on").eq("user_id", userId).maybeSingle(),
+        supabase.from("instances").select("ia_on_wpp").eq("id", instanceId).maybeSingle(),
+    ]);
+    const iaOn = iaCfgRes.data?.ia_on === true && instRes.data?.ia_on_wpp !== false;
+    const queueName = iaOn ? "Atendimento IA" : "Atendimento Humano";
+
+    const { data: queue } = await supabase
+        .from("queues")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("name", queueName)
+        .limit(1)
+        .maybeSingle();
+    defaultQueueCache.set(cacheKey, queue?.id ?? null);
+    return queue?.id ?? null;
+}
+
 async function resolveConversation(
     supabase: any,
     userId: string,
@@ -1193,6 +1225,7 @@ async function resolveConversation(
     }
 
     // Create new conversation (never reopen resolved)
+    const queueId = await resolveDefaultQueueId(supabase, userId, instanceId);
     const { data: newConv, error: convErr } = await supabase
         .from("conversations")
         .insert({
@@ -1200,6 +1233,7 @@ async function resolveConversation(
             user_id: userId,
             instance_id: instanceId,
             status: "pending",
+            queue_id: queueId,
             unread_count: 0,
             last_message_at: new Date().toISOString(),
         })
