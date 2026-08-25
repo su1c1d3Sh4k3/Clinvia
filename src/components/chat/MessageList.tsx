@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useMemo, useLayoutEffect } from "react";
+import { memo, useRef, useEffect, useState, useMemo, useLayoutEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -47,7 +47,10 @@ interface MessageListProps {
     monitorLeadColors?: Record<string, string>;
 }
 
-export const MessageList = ({
+// memo: o input do ChatArea é controlado (state `message`) — cada tecla
+// re-renderiza o ChatArea; sem memo a lista inteira de balões re-renderizava
+// junto (FormattedText + menus por msg) → flicker/scroll instável ao digitar
+export const MessageList = memo(({
     messages,
     isLoading,
     searchTerm,
@@ -701,4 +704,5 @@ export const MessageList = ({
             )}
         </div>
     );
-};
+});
+MessageList.displayName = "MessageList";

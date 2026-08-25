@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useRef, useDeferredValue, useMemo } from "react";
+import { useState, useEffect, useRef, useDeferredValue, useMemo, useCallback } from "react";
 import { useTypingContext } from "@/contexts/TypingContext";
 import { useMessages } from "@/hooks/useMessages";
 import { useSendMessage } from "@/hooks/useSendMessage";
@@ -458,8 +458,10 @@ export const ChatArea = ({
   };
 
 
-  // Actions handlers
-  const handleReply = (msg: any) => {
+  // Actions handlers — useCallback: identidade estável para o React.memo do
+  // MessageList (digitar no input re-renderiza o ChatArea a cada tecla; sem
+  // memo, a lista inteira re-renderizava junto → flicker/queda de frames)
+  const handleReply = useCallback((msg: any) => {
     setReplyingTo({
       id: msg.id,
       evolution_id: msg.evolution_id,
@@ -467,20 +469,20 @@ export const ChatArea = ({
       sender_name: msg.direction === "outbound" ? "Você" : (msg.sender_name || displayName),
       direction: msg.direction
     });
-  };
-  const handleEdit = (msg: any) => {
+  }, [displayName]);
+  const handleEdit = useCallback((msg: any) => {
     setEditingMessage({ id: msg.id, evolution_id: msg.evolution_id, body: msg.body });
     setIsEditModalOpen(true);
-  };
-  const handleDelete = (msg: any) => {
+  }, []);
+  const handleDelete = useCallback((msg: any) => {
     setDeletingMessage({ id: msg.id, evolution_id: msg.evolution_id });
     setIsDeleteModalOpen(true);
-  };
-  const handleReact = (msg: any) => {
+  }, []);
+  const handleReact = useCallback((msg: any) => {
     setReactingToMessage({ id: msg.id, evolution_id: msg.evolution_id, clientNumber: contact?.number || null });
     setShowEmojiPicker(true);
-  };
-  const handleCopy = async (msg: any) => {
+  }, [contact?.number]);
+  const handleCopy = useCallback(async (msg: any) => {
     if (!msg.body) return;
     try {
       await navigator.clipboard.writeText(msg.body);
@@ -489,9 +491,9 @@ export const ChatArea = ({
       toast.error("Falha ao copiar mensagem");
       console.error("Copy failed", err);
     }
-  };
+  }, []);
 
-  const handleToggleFavorite = async (msg: any) => {
+  const handleToggleFavorite = useCallback(async (msg: any) => {
     try {
       const { error } = await supabase
         .from("messages")
@@ -506,12 +508,16 @@ export const ChatArea = ({
       console.error(e);
       toast.error("Erro ao favoritar mensagem");
     }
-  };
+  }, [conversationId, queryClient]);
 
-  const handleForward = (msg: any) => {
+  const handleForward = useCallback((msg: any) => {
     setMessageToForward(msg);
     setIsForwardModalOpen(true);
-  };
+  }, []);
+
+  const handleEditNote = useCallback((note: any) => {
+    setNoteModal({ open: true, editing: note });
+  }, []);
 
   const executeEdit = async (newText: string) => {
     if (!editingMessage?.evolution_id || !instance?.apikey) return;
@@ -954,7 +960,7 @@ export const ChatArea = ({
         isGroup={isGroup}
         conversation={conversation}
         hideEditDelete={isMetaInstance}
-        onEditNote={(note) => setNoteModal({ open: true, editing: note })}
+        onEditNote={handleEditNote}
         monitorTriggerColors={monitorVisuals?.triggerColorByMessageId}
         monitorLeadColors={monitorVisuals?.colorByPhoneLast8}
       />
