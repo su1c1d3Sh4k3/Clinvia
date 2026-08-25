@@ -2,7 +2,7 @@ import { useRef, useEffect, useState, useMemo, useLayoutEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Clock, AlertCircle, Check, CheckCheck, Download, ChevronDown, ArrowLeftRight, UserPlus, UserMinus } from "lucide-react";
+import { Clock, AlertCircle, Check, CheckCheck, Download, ChevronDown, ArrowLeftRight, UserPlus, UserMinus, TicketPlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MessageActionsMenu } from "@/components/MessageActionsMenu";
 import { ReplyQuoteBox, QuotedMessage } from "@/components/ReplyQuoteBox";
@@ -288,6 +288,19 @@ export const MessageList = ({
             return (
                 <div key={msg.id} id={`message-${msg.id}`} className="flex gap-2 items-end mb-4 px-4 justify-end">
                     <NoteBubble note={msg} isMobile={isMobile} onEdit={onEditNote ? () => onEditNote(msg) : undefined} />
+                </div>
+            );
+        }
+
+        // Pill "Conversa iniciada dia ..." — pseudo-mensagem client-side (useMessages)
+        // marcando onde cada novo ticket começa quando há histórico anterior
+        if (msg._conv_start) {
+            return (
+                <div key={msg.id} id={`message-${msg.id}`} className="flex justify-center my-6 px-4">
+                    <div className="bg-[#1e253c] dark:bg-[#1a2235] text-[#93c5fd] text-xs font-medium px-4 py-2 rounded-full flex items-center gap-2.5 shadow-sm border border-[#2a3655]/50 select-none">
+                        <TicketPlus className="w-3.5 h-3.5 opacity-80" />
+                        <span>{msg.body}</span>
+                    </div>
                 </div>
             );
         }

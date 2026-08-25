@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect, useRef } from "react";
 import type { Tables } from "@/integrations/supabase/types";
+import { resolveOutboundSenderName } from "@/lib/messageSender";
 
 type Message = Tables<"messages">;
 
@@ -59,7 +60,7 @@ export const useMessages = (conversationId?: string) => {
       const [convRes, msgsRes] = await Promise.all([
         supabase
           .from("conversations")
-          .select("status, messages_history, contact_id, created_at")
+          .select("status, messages_history, contact_id, created_at, contact:contacts(push_name, name)")
           .eq("id", conversationId)
           .single(),
         supabase
@@ -73,10 +74,45 @@ export const useMessages = (conversationId?: string) => {
       const { data: conversation, error: convError } = convRes;
       if (convError) throw convError;
 
+      // Pill "Conversa iniciada dia ..." (user rule): pseudo-mensagem
+      // client-side no início de cada conversa quando há histórico de
+      // conversas resolvidas anteriores — marca a divisão entre tickets.
+      // Nunca gravada em messages (mesmo padrão das Notas de Conversa _note).
+      const contactName =
+        (conversation as any).contact?.push_name || (conversation as any).contact?.name || null;
+      const makeConvStart = (sourceId: string, createdAt: string | null, firstMsg?: Message): Message => {
+        const dateStr = createdAt
+          ? new Date(createdAt).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })
+          : "";
+        let by = "";
+        if (firstMsg) {
+          if (firstMsg.direction === "inbound") {
+            by = contactName ? ` pelo cliente ${contactName}` : "";
+          } else {
+            const name = resolveOutboundSenderName(firstMsg);
+            if (name === "IA") by = " pela IA";
+            else if (name === "Enviada de fonte externa") by = " por fonte externa";
+            else if (name) by = ` pelo atendente ${name}`;
+          }
+        }
+        return {
+          id: `conv-start-${sourceId}`,
+          conversation_id: conversationId,
+          body: `Conversa iniciada dia ${dateStr}${by}`,
+          direction: "outbound",
+          message_type: "text",
+          created_at: createdAt || firstMsg?.created_at || null,
+          status: "read",
+          evolution_id: null,
+          _conv_start: true,
+        } as unknown as Message;
+      };
+
       // 2. History from PREVIOUS resolved conversations of the same contact
       //    (archived in conversations.messages_history JSON) — shown before the
       //    current conversation so the inbox keeps full context per contact.
       let previousHistory: Message[] = [];
+      let hasPrevHistory = false;
       if (conversation.contact_id) {
         const { data: prevConvs } = await supabase
           .from("conversations")
@@ -88,14 +124,21 @@ export const useMessages = (conversationId?: string) => {
           .order("created_at", { ascending: false })
           .limit(10); // bound payload: last 10 resolved conversations
 
-        previousHistory = (prevConvs || [])
-          .reverse() // chronological (oldest first)
-          .flatMap((c) => mapHistory(c.messages_history, c.id));
+        const ordered = (prevConvs || []).reverse(); // chronological (oldest first)
+        hasPrevHistory = ordered.length > 0;
+        previousHistory = ordered.flatMap((c) => {
+          const msgs = mapHistory(c.messages_history, c.id);
+          // Divider "Conversa iniciada..." antes de cada conversa arquivada
+          return [makeConvStart(c.id, c.created_at, msgs[0]), ...msgs];
+        });
       }
 
       // 3. If resolved, parse this conversation's JSON history
       if (conversation.status === "resolved") {
-        return [...previousHistory, ...mapHistory(conversation.messages_history, conversationId)];
+        const own = mapHistory(conversation.messages_history, conversationId);
+        return hasPrevHistory
+          ? [...previousHistory, makeConvStart(conversationId, conversation.created_at, own[0]), ...own]
+          : own;
       }
 
       // 4. If active, use the messages fetched in parallel above.
@@ -103,7 +146,10 @@ export const useMessages = (conversationId?: string) => {
       // the newest messages; reversed here so the array is chronological.
       const { data, error } = msgsRes;
       if (error) throw error;
-      return [...previousHistory, ...(data as Message[]).reverse()];
+      const own = (data as Message[]).reverse();
+      return hasPrevHistory
+        ? [...previousHistory, makeConvStart(conversationId, conversation.created_at, own[0]), ...own]
+        : own;
     },
     enabled: !!conversationId,
     // PERF: reabrir a mesma conversa em <30s usa o cache direto (o realtime

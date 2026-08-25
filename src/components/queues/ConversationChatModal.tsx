@@ -8,7 +8,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { MessageSquare, X, Send, Paperclip, Smile, Sparkles, CheckCircle, Mic, StopCircle, Trash2, StickyNote, ArrowLeftRight, User, Inbox, UserPlus, UserMinus } from "lucide-react";
+import { MessageSquare, X, Send, Paperclip, Smile, Sparkles, CheckCircle, Mic, StopCircle, Trash2, StickyNote, ArrowLeftRight, User, Inbox, UserPlus, UserMinus, TicketPlus } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
@@ -558,6 +558,17 @@ export function ConversationChatModal({
                     ) : messagesWithNotes && messagesWithNotes.length > 0 ? (
                         <div className="space-y-4">
                             {messagesWithNotes.map((msg: any) => {
+                                // Pill "Conversa iniciada dia ..." — divisão de tickets (useMessages)
+                                if (msg._conv_start) {
+                                    return (
+                                        <div key={msg.id} className="flex justify-center my-6">
+                                            <div className="bg-[#1e253c] dark:bg-[#1a2235] text-[#93c5fd] text-xs font-medium px-4 py-2 rounded-full flex items-center gap-2.5 shadow-sm border border-[#2a3655]/50 select-none">
+                                                <TicketPlus className="w-3.5 h-3.5 opacity-80" />
+                                                <span>{msg.body}</span>
+                                            </div>
+                                        </div>
+                                    );
+                                }
                                 // Mensagem de sistema de transferência — mesmo pill do inbox (MessageList)
                                 const isSystemTransfer = !msg._note && msg.body &&
                                     (msg.body.includes('transferida de') || msg.body.includes('transferiu para'));

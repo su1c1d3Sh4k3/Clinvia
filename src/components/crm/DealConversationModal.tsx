@@ -203,7 +203,13 @@ export function DealConversationModal({ contactId, contactName, trigger }: DealC
                         <div className="flex justify-center p-4">Carregando mensagens...</div>
                     ) : messages && messages.length > 0 ? (
                         <div className="space-y-4">
-                            {messages.map((msg) => (
+                            {messages.map((msg) => (msg as any)._conv_start ? (
+                                <div key={msg.id} className="flex justify-center my-6">
+                                    <div className="bg-[#1e253c] dark:bg-[#1a2235] text-[#93c5fd] text-xs font-medium px-4 py-2 rounded-full shadow-sm border border-[#2a3655]/50 select-none">
+                                        {msg.body}
+                                    </div>
+                                </div>
+                            ) : (
                                 <div
                                     key={msg.id}
                                     className={`flex flex-col max-w-[80%] ${msg.direction === 'outbound'

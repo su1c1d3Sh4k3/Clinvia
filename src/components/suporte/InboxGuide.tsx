@@ -355,6 +355,10 @@ export function InboxGuide() {
                             a: "Toda mensagem enviada mostra o nome de quem a enviou acima do balão verde (ou 'IA' quando foi a assistente/automação). Isso independe da opção 'Assinar mensagens' das Configurações: ela controla apenas se o nome vai junto no texto que o CLIENTE recebe no WhatsApp — no painel, o remetente aparece sempre. Respostas enviadas FORA do Clinvia (ex.: pelo app do WhatsApp Business no celular) aparecem como 'Enviada de fonte externa' — assim dá para monitorar o uso fora do painel. Mensagens antigas enviadas com a assinatura desligada não guardaram o remetente: nessas, o rótulo fica em branco (nunca 'IA' por engano).",
                         },
                         {
+                            q: "Como sei onde termina o atendimento antigo e começa o novo?",
+                            a: "Quando um cliente volta a conversar depois de um atendimento encerrado, o chat carrega o histórico das conversas anteriores e insere uma pílula centralizada (mesmo estilo das notificações de transferência) no início de cada ticket: 'Conversa iniciada dia <data> pelo atendente <nome>' — ou 'pelo cliente <nome>' quando foi o cliente quem mandou a primeira mensagem, e 'pela IA' quando a primeira mensagem foi da assistente. Assim fica claro onde cada novo ticket começou.",
+                        },
+                        {
                             q: "O modal de conversa (janelinha) mostra tudo que o inbox mostra?",
                             a: "Sim — mesma timeline: mensagens, notas roxas, transferências (pílula azul) e o remetente de cada envio. Abaixo do nome do contato ele mostra o atendente responsável e a fila da conversa, atualizados em tempo real quando há transferência.",
                         },
