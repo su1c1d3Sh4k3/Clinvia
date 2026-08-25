@@ -35,6 +35,7 @@ interface ScopedMember {
     avatar_url: string | null;
     allowed_instance_ids: string[] | null;
     assigned_queue_ids: string[] | null;
+    allowed_tag_ids: string[] | null;
 }
 
 const ROLE_LABEL: Record<string, string> = {
@@ -90,7 +91,7 @@ export function TransferAtendimentoModal({
         queryFn: async () => {
             const { data, error } = await supabase
                 .from("team_members" as any)
-                .select("id, name, role, avatar_url, allowed_instance_ids, assigned_queue_ids")
+                .select("id, name, role, avatar_url, allowed_instance_ids, assigned_queue_ids, allowed_tag_ids")
                 .eq("user_id", ownerId)
                 .order("name");
             if (error) throw error;
@@ -99,7 +100,27 @@ export function TransferAtendimentoModal({
         enabled: open && !!ownerId,
     });
 
-    // Atendentes disponíveis para a fila escolhida + instância da conversa
+    // Tags do contato + tags existentes do owner (p/ escopo de tags dos atendentes:
+    // tags excluídas do banco são ignoradas — sobrando nenhuma, o atendente vê tudo)
+    const conversationContactId: string | null = (conversation as any)?.contact_id ?? null;
+    const { data: tagScopeData } = useQuery({
+        queryKey: ["transfer-tag-scope", ownerId, conversationContactId],
+        queryFn: async () => {
+            const [ct, allTags] = await Promise.all([
+                conversationContactId
+                    ? supabase.from("contact_tags").select("tag_id").eq("contact_id", conversationContactId)
+                    : Promise.resolve({ data: [] as any[] }),
+                supabase.from("tags").select("id").eq("user_id", ownerId),
+            ]);
+            return {
+                contactTagIds: ((ct.data as any[]) || []).map((r) => r.tag_id as string),
+                existingTagIds: new Set(((allTags.data as any[]) || []).map((r) => r.id as string)),
+            };
+        },
+        enabled: open && !!ownerId,
+    });
+
+    // Atendentes disponíveis para a fila escolhida + instância da conversa + tags do contato
     const availableMembers = useMemo(() => {
         if (!members || !selectedQueue) return [];
         return members.filter((m) => {
@@ -110,9 +131,17 @@ export function TransferAtendimentoModal({
                 !m.allowed_instance_ids ||
                 !conversationInstanceId ||
                 m.allowed_instance_ids.includes(conversationInstanceId);
-            return queueOk && instanceOk;
+            const effectiveTags = (m.allowed_tag_ids || []).filter((id) =>
+                tagScopeData ? tagScopeData.existingTagIds.has(id) : true
+            );
+            const tagOk =
+                !m.allowed_tag_ids ||
+                effectiveTags.length === 0 || // todas as tags do escopo foram excluídas = vê tudo
+                !!(conversation as any)?.group_id || // grupos sempre visíveis
+                (tagScopeData?.contactTagIds || []).some((id) => effectiveTags.includes(id));
+            return queueOk && instanceOk && tagOk;
         });
-    }, [members, selectedQueue, conversationInstanceId]);
+    }, [members, selectedQueue, conversationInstanceId, tagScopeData, conversation]);
 
     const transferMutation = useMutation({
         mutationFn: async ({ queueId, agentId }: { queueId: string; agentId: string | null }) => {

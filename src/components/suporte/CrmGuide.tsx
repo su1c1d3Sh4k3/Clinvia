@@ -135,8 +135,8 @@ export function CrmGuide() {
                     dois lugares.
                 </Callout>
                 <Callout type="atencao" title="Atendentes com escopo veem menos cards">
-                    Se um agente tem escopo de visão (conexões/filas liberadas na página Equipe), o quadro dele mostra apenas os
-                    cards das conversas dentro do escopo. Admin vê o quadro completo — não é card sumido, é filtro.
+                    Se um agente tem escopo de visão (conexões, filas e tags liberadas na página Equipe), o quadro dele mostra
+                    apenas os cards das conversas dentro do escopo. Admin vê o quadro completo — não é card sumido, é filtro.
                 </Callout>
             </TopicSection>
 

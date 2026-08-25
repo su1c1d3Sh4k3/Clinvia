@@ -153,9 +153,9 @@ export function InboxGuide() {
                     está <strong>com o sistema aberto naquele momento</strong> — não fica pendente para depois.
                 </Callout>
                 <Callout type="atencao" title="Por que nem todo colega aparece na lista?">
-                    Atendentes podem ter <strong>escopo de visão</strong> (definido em Equipe): conexões liberadas e filas
-                    atribuídas. Se a fila escolhida ou a conexão da conversa estiver fora do escopo do colega, ele não aparece —
-                    de nada adiantaria transferir para quem não enxerga a conversa.
+                    Atendentes podem ter <strong>escopo de visão</strong> (definido em Equipe): conexões liberadas, filas
+                    atribuídas e tags visíveis. Se a fila escolhida, a conexão da conversa ou as tags do contato estiverem fora
+                    do escopo do colega, ele não aparece — de nada adiantaria transferir para quem não enxerga a conversa.
                 </Callout>
                 <p className="text-sm text-muted-foreground">
                     Agora experimente você: no simulador abaixo, troque a fila de destino e veja a lista de responsáveis mudar

@@ -82,7 +82,7 @@ export function DashboardGuide() {
                 </div>
                 <Callout type="dica" title="Quem vê o quê">
                     Admins veem tudo. Supervisores veem tudo (Vendas depende da permissão financeira). Atendentes veem
-                    apenas a aba CRM — e, se tiverem escopo de visão (conexões/filas liberadas na página Equipe), os números
+                    apenas a aba CRM — e, se tiverem escopo de visão (conexões/filas/tags liberadas na página Equipe), os números
                     refletem só o que está no escopo deles. A aba <strong>Minha Conta</strong> é exclusiva do administrador.
                 </Callout>
                 <div className="flex flex-wrap gap-2">

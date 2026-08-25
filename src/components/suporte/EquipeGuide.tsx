@@ -90,7 +90,7 @@ export function EquipeGuide() {
                 <StepByStep steps={[
                     { title: "Adicionar membro", description: "Na aba Equipes, informe nome, e-mail e papel. A pessoa recebe as credenciais e já entra na conta da clínica." },
                     { title: "Escolha o papel com calma", description: "O papel define o alcance (veja o tópico anterior). Supervisor com acesso financeiro vê a aba Vendas; sem, não." },
-                    { title: "Se for Agente, defina o escopo", description: <>Aparecem dois campos extras: <strong>Instâncias liberadas</strong> e <strong>Filas atribuídas</strong>. Marque o que ele pode ver — ou deixe "Todas" para não restringir (próximo tópico).</>, },
+                    { title: "Se for Agente, defina o escopo", description: <>Aparecem três campos extras: <strong>Instâncias liberadas</strong>, <strong>Filas atribuídas</strong> e <strong>Tags visíveis</strong>. Marque o que ele pode ver — ou deixe "Todas" para não restringir (próximo tópico).</>, },
                     { title: "Desativar quando sair", description: "Funcionário saiu? Remova/desative o membro — o histórico de atendimentos dele permanece registrado." },
                 ]} />
                 <Callout type="atencao" title="Nunca compartilhe um login">
@@ -101,12 +101,12 @@ export function EquipeGuide() {
 
             {/* 4 */}
             <TopicSection id="escopo" index={4} icon={ScanEye} title="Escopo de visão do Atendente"
-                subtitle="Quais conexões e quais filas cada agente enxerga">
+                subtitle="Quais conexões, filas e tags cada agente enxerga">
                 <p className="text-sm text-muted-foreground">
-                    Agentes podem ter a visão <strong className="text-foreground">limitada por dois filtros</strong>, definidos
+                    Agentes podem ter a visão <strong className="text-foreground">limitada por três filtros</strong>, definidos
                     ao criar ou editar o membro (e visíveis nas colunas da tabela de membros):
                 </p>
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-3">
                     <div className="rounded-xl border p-3.5">
                         <p className="text-sm font-semibold">Instâncias liberadas</p>
                         <p className="mt-0.5 text-sm text-muted-foreground">
@@ -119,14 +119,26 @@ export function EquipeGuide() {
                             Quais filas (setores) o agente pode ver. "Todas" = sem restrição.
                         </p>
                     </div>
+                    <div className="rounded-xl border p-3.5">
+                        <p className="text-sm font-semibold">Tags visíveis</p>
+                        <p className="mt-0.5 text-sm text-muted-foreground">
+                            Quais tags o agente pode ver: ele só enxerga conversas de contatos que tenham ao menos uma das tags
+                            marcadas — contatos <strong>sem tag nenhuma ficam ocultos</strong>. "Todas" = sem restrição.
+                        </p>
+                    </div>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                    Os dois filtros funcionam <strong className="text-foreground">juntos (E, não OU)</strong>: o agente só
-                    enxerga a conversa se a conexão dela estiver liberada <strong className="text-foreground">e</strong> a fila
-                    dela estiver atribuída. O escopo vale para o <strong className="text-foreground">Inbox, o CRM
-                    (kanban e monitoramento) e os números do Dashboard</strong> — a página Clientes continua mostrando todos os
-                    contatos da conta.
+                    Os três filtros funcionam <strong className="text-foreground">juntos (E, não OU)</strong>: o agente só
+                    enxerga a conversa se a conexão dela estiver liberada, a fila dela estiver atribuída{" "}
+                    <strong className="text-foreground">e</strong> o contato tiver uma tag visível. O escopo vale para o{" "}
+                    <strong className="text-foreground">Inbox, o CRM (kanban e monitoramento) e os números do Dashboard</strong>{" "}
+                    — a página Clientes continua mostrando todos os contatos da conta.
                 </p>
+                <Callout type="dica" title="Tag de campanha excluída? A restrição se desfaz sozinha">
+                    Quando uma campanha encerra, a tag dela é excluída do sistema. Tags excluídas são ignoradas no escopo — se
+                    <strong> nenhuma</strong> das tags marcadas para o agente existir mais, ele volta automaticamente a ver
+                    todas as conversas, sem precisar editar o membro.
+                </Callout>
                 <Callout type="pratica" title="Exemplo: clínica com 2 números">
                     A recepcionista da unidade A recebe só a instância "Número Unidade A" e as filas Atendimento Humano e
                     Suporte. Pronto: ela não vê (nem é notificada sobre) conversas da unidade B ou do Financeiro — menos ruído,
@@ -134,8 +146,8 @@ export function EquipeGuide() {
                 </Callout>
                 <Callout type="atencao" title="O escopo também controla as transferências">
                     No inbox, o botão <strong>Transferir Atendimento</strong> só lista atendentes cujo escopo cobre a fila
-                    escolhida e a conexão da conversa. Se um agente "sumiu" da lista de transferência, confira o escopo dele
-                    aqui. Admins e supervisores nunca são filtrados.
+                    escolhida, a conexão da conversa e as tags do contato. Se um agente "sumiu" da lista de transferência,
+                    confira o escopo dele aqui. Admins e supervisores nunca são filtrados.
                 </Callout>
             </TopicSection>
 
@@ -187,7 +199,7 @@ export function EquipeGuide() {
                         },
                         {
                             q: "Como restrinjo um atendente a um único número ou setor?",
-                            a: "Edite o membro na aba Equipes e marque, em Instâncias liberadas e Filas atribuídas, apenas o que ele deve ver. A restrição só existe para Agentes — supervisores e admins sempre veem tudo.",
+                            a: "Edite o membro na aba Equipes e marque, em Instâncias liberadas, Filas atribuídas e Tags visíveis, apenas o que ele deve ver. A restrição só existe para Agentes — supervisores e admins sempre veem tudo.",
                         },
                         {
                             q: "Supervisor pode editar membros da equipe?",

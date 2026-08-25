@@ -17,7 +17,7 @@ serve(async (req) => {
             Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
         );
 
-        const { name, email, password, role, phone, owner_id, commission, allowed_instance_ids, assigned_queue_ids } = await req.json();
+        const { name, email, password, role, phone, owner_id, commission, allowed_instance_ids, assigned_queue_ids, allowed_tag_ids } = await req.json();
 
         // Validate owner_id
         if (!owner_id) {
@@ -106,6 +106,7 @@ serve(async (req) => {
                 // Escopo de visibilidade (só agent; NULL = todas)
                 allowed_instance_ids: role === "agent" ? (allowed_instance_ids ?? null) : null,
                 assigned_queue_ids: role === "agent" ? (assigned_queue_ids ?? null) : null,
+                allowed_tag_ids: role === "agent" ? (allowed_tag_ids ?? null) : null,
             });
 
         if (dbError) {

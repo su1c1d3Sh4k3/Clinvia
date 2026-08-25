@@ -109,6 +109,7 @@ export const TeamSettings = () => {
     // Escopo de visibilidade (só para Atendente): null = todas
     const [allowedInstanceIds, setAllowedInstanceIds] = useState<string[] | null>(null);
     const [assignedQueueIds, setAssignedQueueIds] = useState<string[] | null>(null);
+    const [allowedTagIds, setAllowedTagIds] = useState<string[] | null>(null);
 
     const { data: teamMembers, isLoading } = useQuery({
         queryKey: ["team-members", ownerId],
@@ -156,6 +157,20 @@ export const TeamSettings = () => {
         },
     });
 
+    const { data: tagOptions } = useQuery({
+        queryKey: ["team-scope-tags", ownerId],
+        enabled: !!ownerId,
+        queryFn: async (): Promise<ScopeOption[]> => {
+            const { data, error } = await supabase
+                .from("tags")
+                .select("id, name")
+                .eq("user_id", ownerId)
+                .order("name");
+            if (error) throw error;
+            return (data || []).map((t: any) => ({ id: t.id, label: t.name }));
+        },
+    });
+
     const scopeLabel = (ids: string[] | null | undefined, options: ScopeOption[] | undefined, role: string) => {
         if (role !== "agent" || !ids) return "Todas";
         if (ids.length === 0) return "-";
@@ -163,6 +178,13 @@ export const TeamSettings = () => {
             .map((id) => options?.find((o) => o.id === id)?.label)
             .filter(Boolean)
             .join(", ") || "-";
+    };
+
+    // Tags excluídas (campanha encerrada) são ignoradas — sobrando nenhuma, volta a "Todas"
+    const tagScopeLabel = (ids: string[] | null | undefined, role: string) => {
+        if (role !== "agent" || !ids) return "Todas";
+        const labels = ids.map((id) => tagOptions?.find((o) => o.id === id)?.label).filter(Boolean);
+        return labels.length ? labels.join(", ") : "Todas";
     };
 
     const { data: services } = useQuery({
@@ -232,6 +254,7 @@ export const TeamSettings = () => {
             setFormData({ name: "", email: "", phone: "", role: "agent", password: "", commission: 0 });
             setAllowedInstanceIds(null);
             setAssignedQueueIds(null);
+            setAllowedTagIds(null);
             toast({ title: "Membro adicionado com sucesso!" });
         },
         onError: (error: any) => {
@@ -250,6 +273,7 @@ export const TeamSettings = () => {
                     commission: member.commission || 0,
                     allowed_instance_ids: member.role === "agent" ? member.allowed_instance_ids : null,
                     assigned_queue_ids: member.role === "agent" ? member.assigned_queue_ids : null,
+                    allowed_tag_ids: member.role === "agent" ? member.allowed_tag_ids : null,
                 } as any)
                 .eq("id", member.id);
             if (error) throw error;
@@ -298,6 +322,10 @@ export const TeamSettings = () => {
             toast({ title: "Selecione ao menos uma fila atribuída (ou marque Todas)", variant: "destructive" });
             return false;
         }
+        if (allowedTagIds !== null && allowedTagIds.length === 0) {
+            toast({ title: "Selecione ao menos uma tag visível (ou marque Todas)", variant: "destructive" });
+            return false;
+        }
         return true;
     };
 
@@ -308,6 +336,7 @@ export const TeamSettings = () => {
             ...formData,
             allowed_instance_ids: formData.role === "agent" ? allowedInstanceIds : null,
             assigned_queue_ids: formData.role === "agent" ? assignedQueueIds : null,
+            allowed_tag_ids: formData.role === "agent" ? allowedTagIds : null,
         });
     };
 
@@ -320,6 +349,7 @@ export const TeamSettings = () => {
             id: selectedMember.id,
             allowed_instance_ids: allowedInstanceIds,
             assigned_queue_ids: assignedQueueIds,
+            allowed_tag_ids: allowedTagIds,
         });
     };
 
@@ -342,6 +372,7 @@ export const TeamSettings = () => {
                         // Reset do escopo ao abrir (pode ter sobrado estado da edição)
                         setAllowedInstanceIds(null);
                         setAssignedQueueIds(null);
+                        setAllowedTagIds(null);
                     }
                 }}>
                     {canCreate('team_members') && (
@@ -403,6 +434,12 @@ export const TeamSettings = () => {
                                         value={assignedQueueIds}
                                         onChange={setAssignedQueueIds}
                                     />
+                                    <ScopeSelector
+                                        label="Tags visíveis"
+                                        options={tagOptions || []}
+                                        value={allowedTagIds}
+                                        onChange={setAllowedTagIds}
+                                    />
                                 </div>
                             )}
                             <Button type="submit" className="w-full" disabled={createMemberMutation.isPending}>
@@ -423,12 +460,13 @@ export const TeamSettings = () => {
                         <TableHead className="hidden sm:table-cell">Telefone</TableHead>
                         <TableHead className="hidden md:table-cell">Instâncias liberadas</TableHead>
                         <TableHead className="hidden md:table-cell">Filas atribuídas</TableHead>
+                        <TableHead className="hidden lg:table-cell">Tags visíveis</TableHead>
                         <TableHead className="text-right">Ações</TableHead>
                     </TableHeader>
                     <TableBody>
                         {isLoading ? (
                             <TableRow>
-                                <TableCell colSpan={7} className="text-center py-8">
+                                <TableCell colSpan={8} className="text-center py-8">
                                     <Loader2 className="h-6 w-6 animate-spin mx-auto" />
                                 </TableCell>
                             </TableRow>
@@ -453,6 +491,11 @@ export const TeamSettings = () => {
                                             {scopeLabel(member.assigned_queue_ids, queueOptions, member.role)}
                                         </span>
                                     </TableCell>
+                                    <TableCell className="hidden lg:table-cell max-w-[180px] py-2 md:py-4">
+                                        <span className="text-xs text-muted-foreground truncate block" title={tagScopeLabel(member.allowed_tag_ids, member.role)}>
+                                            {tagScopeLabel(member.allowed_tag_ids, member.role)}
+                                        </span>
+                                    </TableCell>
                                     <TableCell className="text-right py-2 md:py-4">
                                         <div className="flex justify-end gap-1">
                                             {canEdit('team_members') && (userRole === "admin" || member.role !== "admin") && (
@@ -461,6 +504,7 @@ export const TeamSettings = () => {
                                                     setFormData({ name: member.name, email: member.email, phone: member.phone || "", role: member.role, password: "", commission: member.commission || 0 });
                                                     setAllowedInstanceIds(member.allowed_instance_ids ?? null);
                                                     setAssignedQueueIds(member.assigned_queue_ids ?? null);
+                                                    setAllowedTagIds(member.allowed_tag_ids ?? null);
                                                     setIsEditOpen(true);
                                                 }}>
                                                     <Pencil className="h-3.5 w-3.5 md:h-4 md:w-4" />
@@ -525,6 +569,12 @@ export const TeamSettings = () => {
                                     options={queueOptions || []}
                                     value={assignedQueueIds}
                                     onChange={setAssignedQueueIds}
+                                />
+                                <ScopeSelector
+                                    label="Tags visíveis"
+                                    options={tagOptions || []}
+                                    value={allowedTagIds}
+                                    onChange={setAllowedTagIds}
                                 />
                             </div>
                         )}
