@@ -74,18 +74,17 @@ async function sendConversationText(conversationId: string, text: string): Promi
     }
 }
 
-/** Encerra: card ativo → 'Sem Contato' (terminal resolve as convs) + resolve defensivo. */
+/** Encerra: card ativo → 'Sem Contato' (terminal resolve a conv) + resolve defensivo. */
 async function closeConversation(supabase: ReturnType<typeof getSupabase>, cand: Candidate) {
     if (cand.contact_ref) {
-        const { error: crmError } = await supabase
-            .from("crm_client")
-            .update({
-                stage: "Sem Contato",
-                stage_changed_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-            })
-            .eq("contact_id", cand.contact_ref)
-            .eq("is_active", true);
+        // RPC com escopo: encerra SÓ esta conversa — o contato pode ter ticket
+        // aberto em outra instância e ele não pode ser encerrado junto.
+        const { error: crmError } = await supabase.rpc("crm_close_conversation_negotiation", {
+            p_conversation_id: cand.conv_id,
+            p_stage: "Sem Contato",
+            p_loss_reason: null,
+            p_loss_reason_other: null,
+        });
         if (crmError) console.error(`[auto-close] crm move error conv=${cand.conv_id}:`, crmError);
     }
     // Defensivo: sem card ativo o trigger terminal não roda — resolve direto

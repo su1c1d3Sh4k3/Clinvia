@@ -145,7 +145,8 @@ export function CrmGuide() {
                 subtitle="Ganho, Perdido, Sem Contato, Sem Interesse, Finalizado">
                 <StepByStep steps={[
                     { title: "O card vira histórico", description: "Ele some do quadro (as colunas terminais mostram só os recentes) e fica registrado no perfil do cliente, com data e motivo." },
-                    { title: "Os atendimentos abertos são ENCERRADOS", description: "Mover para terminal fecha os tickets abertos/pendentes do cliente automaticamente — jornada concluída, conversa concluída." },
+                    { title: "Os atendimentos abertos são ENCERRADOS", description: "Arrastar o card para uma etapa terminal no quadro fecha os tickets abertos/pendentes do cliente automaticamente — jornada concluída, conversa concluída." },
+                    { title: "Encerrando pelo chat, só aquela conversa fecha", description: "Quando você usa Resolver no inbox e escolhe a etapa final, o sistema encerra apenas aquele atendimento. Se o cliente tiver conversa aberta em outra instância/número, ela continua ativa e ganha um novo card no funil." },
                     { title: "Sem Interesse pede o motivo", description: "Uma janela pergunta o porquê (preço, tempo, concorrente...). Esses motivos viram relatório para você entender as perdas." },
                     { title: "Se o cliente voltar, tudo recomeça", description: "Nova mensagem = nova conversa + novo card, começando a jornada do zero. O histórico antigo continua no perfil." },
                 ]} />

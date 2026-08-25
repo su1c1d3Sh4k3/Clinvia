@@ -244,7 +244,7 @@ export const ChatHeader = ({
                 <CloseNegotiationModal
                     open={isCloseNegotiationOpen}
                     onOpenChange={setIsCloseNegotiationOpen}
-                    contactId={contact.id}
+                    conversationId={conversationId}
                     onConfirm={handleResolve}
                 />
             )}

@@ -37,14 +37,14 @@ const LOSS_REASONS = [
 interface CloseNegotiationModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  contactId: string;
+  conversationId: string;
   onConfirm: () => void; // Called after CRM is handled, triggers resolve-ticket
 }
 
 export const CloseNegotiationModal = ({
   open,
   onOpenChange,
-  contactId,
+  conversationId,
   onConfirm,
 }: CloseNegotiationModalProps) => {
   const queryClient = useQueryClient();
@@ -57,30 +57,17 @@ export const CloseNegotiationModal = ({
     if (!stage) return;
     setSaving(true);
     try {
-      // Find active crm_client for this contact
-      const { data: deal } = await supabase
-        .from("crm_client" as any)
-        .select("id")
-        .eq("contact_id", contactId)
-        .eq("is_active", true)
-        .maybeSingle();
-
-      if (deal) {
-        const updateData: any = {
-          stage,
-          is_active: false,
-        };
-
-        if (stage === "Perdido" || stage === "Sem Interesse") {
-          updateData.loss_reason = lossReason || null;
-          updateData.loss_reason_other = lossReasonOther || null;
-        }
-
-        await supabase
-          .from("crm_client" as any)
-          .update(updateData)
-          .eq("id", (deal as any).id);
-      }
+      // RPC (não update direto): ela move o card ativo do contato p/ a etapa
+      // final resolvendo APENAS esta conversa — o trigger terminal encerraria
+      // também os tickets do mesmo contato em outras instâncias.
+      const isLoss = stage === "Perdido" || stage === "Sem Interesse";
+      const { error } = await supabase.rpc("crm_close_conversation_negotiation" as any, {
+        p_conversation_id: conversationId,
+        p_stage: stage,
+        p_loss_reason: isLoss ? lossReason || null : null,
+        p_loss_reason_other: isLoss ? lossReasonOther || null : null,
+      });
+      if (error) throw error;
 
       queryClient.invalidateQueries({ queryKey: ["crm-clients"] });
       queryClient.invalidateQueries({ queryKey: ["crm-client-active"] });
