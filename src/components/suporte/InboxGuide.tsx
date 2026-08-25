@@ -352,7 +352,7 @@ export function InboxGuide() {
                         },
                         {
                             q: "Quem enviou cada mensagem? E se a assinatura estiver desligada?",
-                            a: "Toda mensagem enviada mostra o nome de quem a enviou acima do balão verde (ou 'IA' quando foi a assistente/automação). Isso independe da opção 'Assinar mensagens' das Configurações: ela controla apenas se o nome vai junto no texto que o CLIENTE recebe no WhatsApp — no painel, o remetente aparece sempre. Mensagens antigas enviadas com a assinatura desligada não guardaram o remetente: nessas, o rótulo fica em branco (nunca 'IA' por engano).",
+                            a: "Toda mensagem enviada mostra o nome de quem a enviou acima do balão verde (ou 'IA' quando foi a assistente/automação). Isso independe da opção 'Assinar mensagens' das Configurações: ela controla apenas se o nome vai junto no texto que o CLIENTE recebe no WhatsApp — no painel, o remetente aparece sempre. Respostas enviadas FORA do Clinvia (ex.: pelo app do WhatsApp Business no celular) aparecem como 'Enviada de fonte externa' — assim dá para monitorar o uso fora do painel. Mensagens antigas enviadas com a assinatura desligada não guardaram o remetente: nessas, o rótulo fica em branco (nunca 'IA' por engano).",
                         },
                         {
                             q: "O modal de conversa (janelinha) mostra tudo que o inbox mostra?",

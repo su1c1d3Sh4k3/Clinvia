@@ -943,7 +943,14 @@ serve(async (req) => {
             contactId = contact?.id;
 
             if (contact) {
-                senderName = contact.push_name;
+                // fromMe que chega ao webhook e sobrevive ao dedupe por evolution_id
+                // NÃO foi enviada pelo Clinvia (send fns já salvam a linha antes do eco):
+                // é envio externo — app WhatsApp Business no celular (echo Meta
+                // coexistência) ou API de terceiros. User rule: assinar
+                // 'Enviada de fonte externa' p/ monitorar uso fora do sistema
+                // (antes gravava o push_name do CONTATO — caso Juliana/PELE 25/08).
+                const isFromMeMsg = payload.message?.fromMe === true || payload.fromMe === true;
+                senderName = isFromMeMsg ? 'Enviada de fonte externa' : contact.push_name;
                 senderJid = contact.number;
                 senderProfilePicUrl = contact.profile_pic_url;
             }
