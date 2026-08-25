@@ -1,6 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Zap, Repeat } from "lucide-react";
 import { InstancePrimarySelector } from "./InstancePrimarySelector";
+import { AutoCloseSettings } from "./AutoCloseSettings";
 
 export function AutomationSettings() {
     return (
@@ -48,6 +49,8 @@ export function AutomationSettings() {
                     />
                 </CardContent>
             </Card>
+
+            <AutoCloseSettings />
         </div>
     );
 }

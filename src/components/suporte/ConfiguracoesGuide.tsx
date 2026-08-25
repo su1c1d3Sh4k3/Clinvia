@@ -151,6 +151,23 @@ export function ConfiguracoesGuide() {
                     automáticos em volume por número não oficial aumentam a chance de banimento pelo WhatsApp. O número
                     oficial usa templates aprovados e é o caminho seguro.
                 </Callout>
+                <p className="text-sm text-muted-foreground">
+                    A aba também traz o cartão <strong className="text-foreground">Encerramento Automático de
+                    Mensagens</strong> (ligado por padrão): quando o cliente para de responder, o sistema envia uma
+                    mensagem de aviso e, se seguir sem retorno, envia a mensagem de encerramento, resolve o ticket e
+                    move o card do CRM para a etapa <strong className="text-foreground">Sem Contato</strong>. As duas
+                    mensagens são editáveis. O tempo conta sempre a partir da <strong className="text-foreground">última
+                    mensagem do cliente</strong> — mensagens da equipe não reiniciam o relógio, e qualquer resposta do
+                    cliente cancela o ciclo e abre uma nova janela.
+                </p>
+                <Callout type="dica" title="Tempos: Meta fixo, não oficial configurável">
+                    Na API Oficial (Meta) o aviso sai às <strong>22h30</strong> e o encerramento às{" "}
+                    <strong>23h30</strong> após a última mensagem do cliente — fixos, para nunca estourar a janela de
+                    24h. Nas conexões não oficiais (QR code) os dois tempos podem ser aumentados ou diminuídos. A
+                    chavinha <strong>Fechar conversas sem interação</strong> (também ligada por padrão) encerra, sem
+                    enviar mensagem, conversas em que o cliente nunca respondeu — após 48h, tempo configurável. Grupos
+                    e Instagram ficam de fora do encerramento automático.
+                </Callout>
             </TopicSection>
 
             {/* 7 */}
