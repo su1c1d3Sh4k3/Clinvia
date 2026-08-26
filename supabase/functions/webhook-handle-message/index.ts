@@ -1937,6 +1937,20 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                     let enrichedAppointments: any = {};
                     let enrichedLastSummary = null;
                     let enrichedUnscheduledPurchases: any = 'Nenhuma compra realizada no momento';
+                    let enrichedHistory = '';
+
+                    // 0. Últimas 10 mensagens desta CONEXÃO em TOON (C|IA|A|DD/MM HH:MI|texto).
+                    // Inclui conversas já resolvidas do mesmo contato na mesma instância
+                    // (a RPC lê messages + conversations.messages_history).
+                    if (conversation?.id) {
+                        const { data: toon, error: toonErr } = await supabase
+                            .rpc('get_conversation_messages_toon', {
+                                p_conversation_id: conversation.id,
+                                p_limit: 10,
+                            });
+                        if (toonErr) console.error('[webhook-handle-message] TOON history error:', toonErr);
+                        enrichedHistory = toon || '';
+                    }
 
                     if (contactId) {
                         // 1. Contact data
@@ -2230,6 +2244,7 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                             group_id: groupId || null,
                             instance_id: instance.id,
                             ia_funnel_id: iaFunnelId,
+                            conversation_history: enrichedHistory,
                             contact: enrichedContact,
                             crm: enrichedCrm,
                             services_catalog: enrichedServicesCatalog,
