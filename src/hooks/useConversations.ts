@@ -161,13 +161,28 @@ export const useConversations = (options: UseConversationsOptions = {}) => {
         query = query.or("channel.eq.whatsapp,channel.is.null");
       }
 
+      // Aba Grupos: filtro server-side (grupos têm last_message_at antigo e
+      // caíam fora do cap de 1000 linhas do PostgREST em tenants com volume)
+      if (onlyGroups) {
+        query = query.not("group_id", "is", null);
+      }
+
+      // Status da aba. USER RULE: vale TAMBÉM na busca — ela varre o banco
+      // inteiro, mas dentro da aba selecionada (Abertos/Pendentes/Resolvidos).
+      if (tab === "open") {
+        query = query.eq("status", "open");
+      } else if (tab === "pending") {
+        query = query.eq("status", "pending");
+      } else if (tab === "resolved") {
+        query = query.eq("status", "resolved");
+      }
+      // if tab === "all", no status filter is applied
+
       if (isSearch) {
         // BUSCA GLOBAL (user rule): "a busca tem que retornar TODAS as
         // conversas". Filtrar client-side o que já foi carregado escondia
         // tickets reais — o PostgREST corta a lista em 1000 linhas e em tenants
         // grandes a conversa procurada simplesmente nunca chegava ao browser.
-        // A busca ignora a aba de status e Pessoas/Grupos: o ticket pode estar
-        // resolvido ou ser um grupo.
         const conds = await buildSearchConditions(term);
         if (conds.length === 0) {
           setHasMore(false);
@@ -175,22 +190,6 @@ export const useConversations = (options: UseConversationsOptions = {}) => {
         }
         query = query.or(conds.join(",")).limit(SEARCH_LIMIT);
       } else {
-        // Aba Grupos: filtro server-side (grupos têm last_message_at antigo e
-        // caíam fora do cap de 1000 linhas do PostgREST em tenants com volume)
-        if (onlyGroups) {
-          query = query.not("group_id", "is", null);
-        }
-
-        // Apply filters based on tab
-        if (tab === "open") {
-          query = query.eq("status", "open");
-        } else if (tab === "pending") {
-          query = query.eq("status", "pending");
-        } else if (tab === "resolved") {
-          query = query.eq("status", "resolved");
-        }
-        // if tab === "all", no status filter is applied
-
         query = query.range(0, limit - 1);
       }
 

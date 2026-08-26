@@ -379,11 +379,8 @@ export const ConversationsList = ({
         (!!(conv as any).assigned_agent_id && selectedAgentFilter.includes((conv as any).assigned_agent_id))
       : true;
 
-    // Filter by People vs Groups — durante a busca não se aplica: a busca é
-    // global (todas as abas, pessoas e grupos, aberto/pendente/resolvido)
-    const matchesType = isSearching
-      ? true
-      : selectedTypeFilter === "groups" ? isGroup : !isGroup;
+    // Filter by People vs Groups
+    const matchesType = selectedTypeFilter === "groups" ? isGroup : !isGroup;
 
     // Filtro "Não respondidas": espelha a bolinha laranja do card — última
     // mensagem existe e não é outbound nem de sistema (cliente aguardando resposta)
@@ -394,6 +391,14 @@ export const ConversationsList = ({
 
     return matchesQueue && matchesTag && matchesInstance && matchesAgent && matchesType && matchesUnanswered;
   });
+
+  // A busca varre o banco inteiro, mas dentro da aba/filtro atual.
+  const searchScopeLabel = selectedTypeFilter === "groups"
+    ? "de grupos"
+    : tab === "open" ? "abertos"
+    : tab === "pending" ? "pendentes"
+    : tab === "resolved" ? "resolvidos"
+    : "";
 
   const selectedConversation = conversations.find(c => c.id === selectedId);
 
@@ -689,8 +694,8 @@ export const ConversationsList = ({
       {isSearching && (
         <div className="px-3 py-1.5 text-[11px] text-muted-foreground bg-muted/40 border-b border-border">
           {isFetching && filteredConversations.length === 0
-            ? "Buscando em todos os tickets..."
-            : `${filteredConversations.length} resultado${filteredConversations.length === 1 ? "" : "s"} em todos os tickets (abertos, pendentes e resolvidos)`}
+            ? `Buscando em todos os tickets ${searchScopeLabel}...`
+            : `${filteredConversations.length} resultado${filteredConversations.length === 1 ? "" : "s"} em todos os tickets ${searchScopeLabel}`}
         </div>
       )}
 

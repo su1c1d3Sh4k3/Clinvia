@@ -79,9 +79,9 @@ export function InboxGuide() {
                 <Callout type="dica" title="Busca: procura em TODOS os tickets">
                     O campo <strong>Buscar em todos os tickets</strong> não filtra só o que está na tela — ele consulta o
                     banco inteiro. Digite o nome, o telefone (ou só os últimos dígitos), o nome do grupo ou o número do
-                    ticket e a busca traz <strong>todas as conversas daquele cliente</strong>, sem importar a aba:
-                    pendentes, em atendimento, resolvidas, pessoas e grupos aparecem juntos no resultado. Apague a busca
-                    para voltar à lista normal.
+                    ticket e a busca traz <strong>todas as conversas daquele cliente</strong>, mesmo as que estão lá no
+                    fim da lista. Ela respeita a <strong>aba aberta</strong>: buscar em Abertos traz só tickets abertos.
+                    Não achou? Troque para Pendentes ou Resolvidos e busque de novo. Apague a busca para voltar à lista.
                 </Callout>
                 <Callout type="atencao" title="A lista carrega 100 por vez">
                     Para abrir rápido mesmo em clínicas com milhares de conversas, a lista mostra as{" "}
@@ -335,7 +335,7 @@ export function InboxGuide() {
                         },
                         {
                             q: "Não acho a conversa de um cliente na lista. Sumiu?",
-                            a: "Não. A lista mostra as 100 conversas mais recentes (use Carregar mais no fim para trazer as próximas) — se o cliente falou há mais tempo, ele está mais para baixo. Em vez de rolar, digite o nome ou o telefone no campo de busca: a busca consulta o banco inteiro e traz TODAS as conversas daquele cliente, pendentes, em atendimento e resolvidas, de pessoas e de grupos, independente da aba aberta.",
+                            a: "Não. A lista mostra as 100 conversas mais recentes (use Carregar mais no fim para trazer as próximas) — se o cliente falou há mais tempo, ele está mais para baixo. Em vez de rolar, digite o nome ou o telefone no campo de busca: ela consulta o banco inteiro e traz TODAS as conversas daquele cliente na aba em que você está. Se não aparecer, o ticket provavelmente está em outra aba — repita a busca em Pendentes ou Resolvidos.",
                         },
                         {
                             q: "Como vejo só as conversas que aguardam resposta?",
