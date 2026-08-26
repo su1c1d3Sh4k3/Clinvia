@@ -1,11 +1,23 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { resolveConversationsForContacts } from "../_shared/resolve-conversation.ts";
+import {
+    apiError,
+    dbErrorResponse,
+    describeDbError,
+    missingFields,
+    readJsonBody,
+    requireApiKey,
+    unexpectedErrorResponse,
+    unknownAction,
+} from "../_shared/api-errors.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-api-key",
 };
+
+const VALID_ACTIONS = ["list", "mark_contacted"];
 
 /**
  * api-sale-scheduling-due (n8n tool)
@@ -33,19 +45,18 @@ serve(async (req) => {
         });
 
     try {
-        const apiKey = req.headers.get("x-api-key");
-        const envApiKey = Deno.env.get("SCHEDULING_API_KEY");
-        if (!envApiKey || apiKey !== envApiKey) {
-            return json({ error: "Unauthorized" }, 401);
-        }
+        const authFail = requireApiKey(req, corsHeaders);
+        if (authFail) return authFail;
 
-        const body = await req.json();
-        const userId = body.user_id;
-        const action = body.action || "list";
+        const { body, response: bodyFail } = await readJsonBody(req, corsHeaders);
+        if (bodyFail) return bodyFail;
 
-        if (!userId) {
-            return json({ success: false, error: "user_id is required" }, 400);
-        }
+        const userId = body!.user_id;
+        const action = body!.action || "list";
+
+        const missing = missingFields(corsHeaders, body!, ["user_id"],
+            "Envie o id da conta (bd_data.user_id no prompt da IA).");
+        if (missing) return missing;
 
         const supabase = createClient(
             Deno.env.get("SUPABASE_URL") ?? "",
@@ -53,10 +64,11 @@ serve(async (req) => {
         );
 
         if (action === "mark_contacted") {
-            const saleId = body.sale_id;
-            if (!saleId) {
-                return json({ success: false, error: "sale_id is required" }, 400);
-            }
+            const saleId = body!.sale_id;
+            const missingSale = missingFields(corsHeaders, body!, ["sale_id"],
+                "Envie o sale_id devolvido pela ação list (campo sale_id de cada item).");
+            if (missingSale) return missingSale;
+
             const { data, error } = await supabase
                 .from("sales")
                 .update({ ia_scheduling_status: "contato_realizado" })
@@ -65,19 +77,36 @@ serve(async (req) => {
                 .eq("ia_scheduling", true)
                 .select("id, ia_scheduling_status")
                 .maybeSingle();
-            if (error) return json({ success: false, error: error.message }, 500);
-            if (!data) return json({ success: false, error: "sale not found" }, 404);
+            if (error) {
+                return dbErrorResponse(corsHeaders, "sale_mark_contacted_failed",
+                    `marcar a venda ${saleId} como "contato_realizado"`, error);
+            }
+            if (!data) {
+                return apiError(corsHeaders, {
+                    status: 404,
+                    code: "sale_not_found",
+                    message: `Nenhuma venda com id ${saleId} foi encontrada na conta ${userId} com Agendamento IA ativo. Confira se o sale_id veio da ação list — vendas de outra conta ou sem ia_scheduling não podem ser marcadas.`,
+                });
+            }
             return json({ success: true, sale: data });
         }
 
         if (action !== "list") {
-            return json({ success: false, error: "invalid action" }, 400);
+            return unknownAction(corsHeaders, action, VALID_ACTIONS);
         }
 
-        // Atualiza pendente → vencido (sale_date + ia_contact_days <= hoje)
+        // Atualiza pendente → vencido (sale_date + ia_contact_days <= hoje).
+        // Falha aqui NÃO derruba a lista: as vendas já marcadas como vencidas
+        // continuam válidas — só as que venceriam agora ficam de fora, e o motivo
+        // volta em `overdue_update_warning` em vez de sumir no log.
+        let overdueWarning: string | null = null;
         const { error: overdueErr } = await supabase.rpc("update_overdue_ia_scheduling");
         if (overdueErr) {
-            console.error("[api-sale-scheduling-due] update_overdue error:", overdueErr);
+            overdueWarning = describeDbError(
+                "atualizar as vendas de pendente para vencido (RPC update_overdue_ia_scheduling) — a lista abaixo pode estar incompleta",
+                overdueErr,
+            );
+            console.warn("[api-sale-scheduling-due]", overdueWarning);
         }
 
         const { data: sales, error } = await supabase
@@ -92,11 +121,14 @@ serve(async (req) => {
             .order("sale_date", { ascending: true });
 
         if (error) {
-            console.error("[api-sale-scheduling-due] query error:", error);
-            return json({ success: false, error: error.message }, 500);
+            return dbErrorResponse(corsHeaders, "sales_due_query_failed",
+                `listar as vendas com Agendamento IA vencido da conta ${userId}`, error);
         }
 
         // As demais APIs (agendamento, CRM, envio) trabalham por conversation_id
+        // — sem conversation_id o n8n não consegue encadear nada, então uma falha
+        // aqui derruba a resposta (ConversationResolutionError já é descritiva e
+        // cai no catch externo com status/código próprios).
         const convByContact = await resolveConversationsForContacts(
             supabase,
             userId,
@@ -123,9 +155,14 @@ serve(async (req) => {
         });
 
         console.log(`[api-sale-scheduling-due] user=${userId} due=${rows.length}`);
-        return json({ success: true, count: rows.length, sales: rows });
-    } catch (err: any) {
-        console.error("[api-sale-scheduling-due] Error:", err);
-        return json({ success: false, error: err.message }, 500);
+        return json({
+            success: true,
+            count: rows.length,
+            sales: rows,
+            ...(overdueWarning ? { overdue_update_warning: overdueWarning } : {}),
+        });
+    } catch (err) {
+        return unexpectedErrorResponse(corsHeaders,
+            "Falha inesperada na API de vendas com Agendamento IA vencido (api-sale-scheduling-due)", err);
     }
 });

@@ -2,6 +2,16 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { getWorkHoursForDay } from "../_shared/professional-schedule.ts";
 import { getBlockedProfessionalIds } from "../_shared/day-blocks.ts";
+import {
+    ApiError,
+    apiError,
+    dbErrorResponse,
+    describeDbError,
+    missingFields,
+    readJsonBody,
+    requireApiKey,
+    unexpectedErrorResponse,
+} from "../_shared/api-errors.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -45,6 +55,8 @@ function spNow(): Date {
 
 const DAY_NAMES = ["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"];
 
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 interface Slot { time: string; professional: string; minuteOfDay: number; }
 
 /** Get all free slots for a given date across all professionals */
@@ -67,13 +79,25 @@ async function getSlotsForDate(
         const breakStart = parseWorkTime(wh.break_start);
         const breakEnd = parseWorkTime(wh.break_end);
 
-        const { data: appointments } = await supabase
+        const { data: appointments, error: apptError } = await supabase
             .from("appointments")
             .select("start_time, end_time")
             .eq("professional_id", prof.id)
             .neq("status", "canceled")
             .gte("start_time", `${dateStr}T00:00:00-03:00`)
             .lte("start_time", `${dateStr}T23:59:59-03:00`);
+
+        // Fatal de propósito: sem a agenda ocupada do profissional a função
+        // ofereceria horários já preenchidos (overbooking silencioso).
+        if (apptError) {
+            throw new ApiError({
+                status: 500,
+                code: "appointments_read_failed",
+                message: describeDbError(
+                    `ler os agendamentos de ${prof.name} em ${dateStr} para calcular os horários livres`, apptError),
+                details: String((apptError as any)?.message ?? apptError),
+            });
+        }
 
         const busy = (appointments || []).map((a: any) => ({
             start: spMinuteOfDay(a.start_time),
@@ -98,19 +122,26 @@ serve(async (req) => {
     }
 
     try {
-        const apiKey = req.headers.get("x-api-key");
-        const envApiKey = Deno.env.get("SCHEDULING_API_KEY");
-        if (!envApiKey || apiKey !== envApiKey) {
-            return new Response(JSON.stringify({ error: "Unauthorized" }),
-                { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        }
+        const authFail = requireApiKey(req, corsHeaders);
+        if (authFail) return authFail;
 
-        const body = await req.json();
-        const { user_id, service_name, date, period } = body;
+        const { body, response: bodyFail } = await readJsonBody(req, corsHeaders);
+        if (bodyFail) return bodyFail;
 
-        if (!user_id || !service_name) {
-            return new Response(JSON.stringify({ error: "Missing user_id or service_name" }),
-                { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        const { user_id, service_name, date, period } = body!;
+
+        const missingRequired = missingFields(corsHeaders, body!, ["user_id", "service_name"],
+            "Envie o id da conta (bd_data.user_id no prompt da IA) e o nome exato da aplicação a consultar.");
+        if (missingRequired) return missingRequired;
+
+        // `date` é opcional, mas se vier quebrado a busca varre 30 dias inválidos
+        // e devolve "sem disponibilidade" sem que ninguém saiba o porquê.
+        if (date && !DATE_RE.test(String(date))) {
+            return apiError(corsHeaders, {
+                status: 400,
+                code: "invalid_date_format",
+                message: `Campo date com formato inválido: "${date}". Use AAAA-MM-DD (ex.: 2026-08-30).`,
+            });
         }
 
         const supabase = createClient(
@@ -119,7 +150,7 @@ serve(async (req) => {
         );
 
         // Find the service
-        const { data: sc } = await supabase
+        const { data: sc, error: scError } = await supabase
             .from("services_client")
             .select("id, name, duration_minutes, professionals")
             .eq("user_id", user_id)
@@ -128,23 +159,57 @@ serve(async (req) => {
             .limit(1)
             .maybeSingle();
 
+        if (scError) {
+            return dbErrorResponse(corsHeaders, "service_lookup_failed",
+                `buscar a aplicação "${service_name}" no catálogo desta conta`, scError);
+        }
+
         if (!sc) {
-            return new Response(JSON.stringify({ error: `Aplicação "${service_name}" não encontrada` }),
-                { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+            // Listar as aplicações válidas é barato e evita o n8n ficar tentando nomes no escuro
+            const { data: options, error: optionsError } = await supabase
+                .from("services_client")
+                .select("name")
+                .eq("user_id", user_id)
+                .eq("status", true)
+                .order("name")
+                .limit(50);
+            if (optionsError) {
+                console.warn("[api-availability]", describeDbError(
+                    "listar as aplicações ativas da conta para sugerir opções", optionsError));
+            }
+            const names = (options || []).map((o: any) => o.name).join(", ");
+            return apiError(corsHeaders, {
+                status: 404,
+                code: "service_not_found",
+                message: `Aplicação "${service_name}" não encontrada no catálogo ativo desta conta. Confira o nome exato em Serviços — aplicações desativadas não aparecem aqui. Aplicações disponíveis: ${names || "(nenhuma aplicação ativa cadastrada nesta conta)"}.`,
+            });
         }
 
         const duration = sc.duration_minutes || 30;
         const profIds: string[] = sc.professionals || [];
         if (profIds.length === 0) {
-            return new Response(JSON.stringify({ error: "Nenhum profissional atrelado a este serviço" }),
-                { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+            return apiError(corsHeaders, {
+                status: 409,
+                code: "service_without_professionals",
+                message: `A aplicação "${sc.name}" não tem nenhum profissional vinculado, então não existe agenda para consultar. Vincule ao menos um profissional a ela em Serviços.`,
+            });
         }
 
-        const { data: professionals } = await supabase
+        const { data: professionals, error: profError } = await supabase
             .from("professionals").select("id, name, work_hours, work_days, use_daily_schedule, work_hours_daily").in("id", profIds);
+        if (profError) {
+            return dbErrorResponse(corsHeaders, "professionals_read_failed",
+                `buscar os profissionais vinculados à aplicação "${sc.name}"`, profError);
+        }
         if (!professionals || professionals.length === 0) {
-            return new Response(JSON.stringify({ error: "Profissionais não encontrados" }),
-                { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+            // Não é 404 do pedido do chamador: o pedido está certo, o cadastro é que
+            // aponta para profissionais que já foram excluídos.
+            return apiError(corsHeaders, {
+                status: 409,
+                code: "professional_not_found",
+                message: `A aplicação "${sc.name}" aponta para ${profIds.length} profissional(is) que não existem mais no cadastro. Revise os profissionais vinculados a ela em Serviços.`,
+                details: `ids vinculados: ${profIds.join(", ")}`,
+            });
         }
 
         const MAX_SEARCH = 30;
@@ -153,6 +218,14 @@ serve(async (req) => {
         // MODE 2: date + period → all slots in period
         // ════════════════════════════════════════════
         if (date && period) {
+            // sem isto um period não-texto estoura em .toLowerCase() e vira erro sem contexto
+            if (typeof period !== "string") {
+                return apiError(corsHeaders, {
+                    status: 400,
+                    code: "invalid_period",
+                    message: `Campo period precisa ser texto: use "manha" ou "tarde". Recebido: ${Array.isArray(period) ? "array" : typeof period}.`,
+                });
+            }
             const periodLower = period.toLowerCase();
             const cutoff = 12 * 60; // manha < 12h, tarde >= 12h
             const filterFn = periodLower === "manha"
@@ -255,7 +328,6 @@ serve(async (req) => {
         }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     } catch (error) {
-        return new Response(JSON.stringify({ error: error.message }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de disponibilidade (api-availability)", error);
     }
 });

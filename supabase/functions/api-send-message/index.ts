@@ -1,5 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import {
+    apiError,
+    dbErrorResponse,
+    missingFields,
+    readJsonBody,
+    requireApiKey,
+    unexpectedErrorResponse,
+} from "../_shared/api-errors.ts";
 
 /**
  * api-send-message
@@ -39,25 +47,30 @@ serve(async (req) => {
     }
 
     try {
-        const apiKey = req.headers.get("x-api-key");
-        const envApiKey = Deno.env.get("SCHEDULING_API_KEY");
-        if (!envApiKey || apiKey !== envApiKey) {
-            return json({ success: false, error: "unauthorized", message: "Unauthorized" }, 401);
-        }
+        const authFail = requireApiKey(req, corsHeaders);
+        if (authFail) return authFail;
 
-        const body = await req.json();
-        const userId: string | undefined = body.user_id;
-        const text: string | undefined = body.text;
-        const audioBase64: string | undefined = body.audio_base64 || body.audio;
-        const mimeType: string = body.mime_type || "audio/mpeg";
-        const conversationId: string | undefined = body.conversation_id;
+        const { body, response: bodyFail } = await readJsonBody(req, corsHeaders);
+        if (bodyFail) return bodyFail;
 
-        if (!userId || !conversationId || (!text && !audioBase64)) {
-            return json({
-                success: false,
-                error: "missing_params",
-                message: "Campos obrigatórios: user_id, conversation_id e text ou audio_base64",
-            }, 400);
+        const userId: string | undefined = body!.user_id;
+        const text: string | undefined = body!.text;
+        const audioBase64: string | undefined = body!.audio_base64 || body!.audio;
+        const mimeType: string = body!.mime_type || "audio/mpeg";
+        const conversationId: string | undefined = body!.conversation_id;
+
+        const missing = missingFields(corsHeaders, body!, ["user_id", "conversation_id"],
+            "user_id é bd_data.user_id e conversation_id é bd_data.conversation_id no prompt da IA.");
+        if (missing) return missing;
+
+        // conteúdo é alternativa (text OU audio_base64), fora do alcance de missingFields
+        if (!text && !audioBase64) {
+            return apiError(corsHeaders, {
+                status: 400,
+                code: "missing_content",
+                message: "Nenhum conteúdo para enviar: informe `text` (mensagem de texto) ou `audio_base64` (áudio em base64). Os dois chegaram vazios.",
+                details: `Campos recebidos: ${Object.keys(body!).join(", ") || "(nenhum)"}`,
+            });
         }
 
         const supabase = createClient(
@@ -66,42 +79,50 @@ serve(async (req) => {
         );
 
         // ── A conversa carrega o destinatário e a conexão ──
-        const { data: conv } = await supabase
+        const { data: conv, error: convError } = await supabase
             .from("conversations")
             .select("id, user_id, instance_id, instagram_instance_id")
             .eq("id", conversationId)
             .eq("user_id", userId)
             .maybeSingle();
 
+        if (convError) {
+            return dbErrorResponse(corsHeaders, "conversation_lookup_failed",
+                `buscar a conversa ${conversationId} de destino do envio`, convError);
+        }
         if (!conv) {
-            return json({
-                success: false,
-                error: "conversation_not_found",
-                message: "Conversa não encontrada para este user_id",
-            }, 404);
+            return apiError(corsHeaders, {
+                status: 404,
+                code: "conversation_not_found",
+                message: `Conversa não encontrada: nenhuma conversa com o id ${conversationId} pertence ao user_id ${userId}. Confira se o conversation_id veio de bd_data.conversation_id e se o user_id é o da mesma conta.`,
+            });
         }
 
         // Instagram tem função própria (instagram-send-message)
         if (!conv.instance_id) {
-            return json({
-                success: false,
-                error: "unsupported_channel",
-                message: "Conversa sem instância WhatsApp — canal não suportado por esta API",
-            }, 400);
+            return apiError(corsHeaders, {
+                status: 400,
+                code: "unsupported_channel",
+                message: `A conversa ${conversationId} não está vinculada a uma conexão de WhatsApp${conv.instagram_instance_id ? " — é uma conversa do Instagram" : ""}. Esta API só envia por WhatsApp; para Instagram use a função instagram-send-message.`,
+            });
         }
 
-        const { data: instance } = await supabase
+        const { data: instance, error: instanceError } = await supabase
             .from("instances")
             .select("id, user_id, provider, status")
             .eq("id", conv.instance_id)
             .maybeSingle();
 
+        if (instanceError) {
+            return dbErrorResponse(corsHeaders, "instance_lookup_failed",
+                `buscar a conexão ${conv.instance_id} vinculada à conversa ${conversationId}`, instanceError);
+        }
         if (!instance) {
-            return json({
-                success: false,
-                error: "instance_not_found",
-                message: "Instância da conversa não encontrada",
-            }, 404);
+            return apiError(corsHeaders, {
+                status: 404,
+                code: "instance_not_found",
+                message: `A conexão ${conv.instance_id}, vinculada à conversa ${conversationId}, não existe mais no banco (foi removida). Reconecte a instância em Conexões ou envie por outra conversa.`,
+            });
         }
 
         // ── Áudio em base64: upload no bucket público 'media' → URL ──
@@ -127,18 +148,23 @@ serve(async (req) => {
             let fileBytes: Uint8Array;
             try {
                 fileBytes = Uint8Array.from(atob(rawBase64), (c) => c.charCodeAt(0));
-            } catch {
-                return json({ success: false, error: "invalid_base64", message: "audio_base64 não é um base64 válido" }, 400);
+            } catch (decodeErr) {
+                return apiError(corsHeaders, {
+                    status: 400,
+                    code: "invalid_base64",
+                    message: "audio_base64 não é um base64 válido — a decodificação falhou. Envie o conteúdo do arquivo em base64 puro ou como data URI ('data:audio/ogg;base64,...').",
+                    details: String((decodeErr as Error)?.message ?? decodeErr),
+                });
             }
 
             // Rejeita payloads truncados/inválidos (ex.: expressão n8n não resolvida).
             // A Meta aceita o envio e falha async (131053) — melhor falhar aqui, síncrono.
             if (fileBytes.length < 1024) {
-                return json({
-                    success: false,
-                    error: "invalid_audio",
+                return apiError(corsHeaders, {
+                    status: 400,
+                    code: "invalid_audio",
                     message: `audio_base64 decodificado tem apenas ${fileBytes.length} bytes — payload truncado ou inválido. Envie o base64 completo do arquivo de áudio.`,
-                }, 400);
+                });
             }
 
             const ext = extByMime[effectiveMime.toLowerCase()] || "mp3";
@@ -149,8 +175,8 @@ serve(async (req) => {
                 .upload(fileName, fileBytes, { contentType: effectiveMime, cacheControl: "3600", upsert: true });
 
             if (uploadError) {
-                console.error("[api-send-message] audio upload error:", uploadError);
-                return json({ success: false, error: "upload_failed", message: "Falha ao processar o áudio" }, 500);
+                return dbErrorResponse(corsHeaders, "audio_upload_failed",
+                    `subir o áudio (${fileBytes.length} bytes, ${effectiveMime}) para o bucket 'media' em ${fileName}`, uploadError);
             }
 
             mediaUrl = supabase.storage.from("media").getPublicUrl(fileName).data.publicUrl;
@@ -162,34 +188,63 @@ serve(async (req) => {
         const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
         const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
-        const sendResp = await fetch(`${supabaseUrl}/functions/v1/evolution-send-message`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${serviceKey}`,
-            },
-            body: JSON.stringify({
-                conversationId,
-                body: text,
-                messageType: mediaUrl ? "audio" : "text",
-                mediaUrl,
-                message: { wasSentByApi: true },
-            }),
-        });
+        const provider = instance.provider === "meta" ? "meta" : "uazapi";
 
-        const sendBody = await sendResp.json().catch(() => ({}));
+        let sendResp: Response;
+        try {
+            sendResp = await fetch(`${supabaseUrl}/functions/v1/evolution-send-message`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${serviceKey}`,
+                },
+                body: JSON.stringify({
+                    conversationId,
+                    body: text,
+                    messageType: mediaUrl ? "audio" : "text",
+                    mediaUrl,
+                    message: { wasSentByApi: true },
+                }),
+            });
+        } catch (fetchErr) {
+            return apiError(corsHeaders, {
+                status: 502,
+                code: "send_dispatch_failed",
+                message: `Não foi possível chamar a função de envio (evolution-send-message) para a conversa ${conversationId} — a mensagem NÃO foi enviada. Tente novamente; se persistir, verifique se a edge function evolution-send-message está publicada.`,
+                details: String((fetchErr as Error)?.message ?? fetchErr),
+                extra: { provider, conversation_id: conversationId },
+            });
+        }
+
+        // lê como texto primeiro: erro do evolution-send-message pode não ser JSON
+        // (ex.: 546/boot error), e engolir isso deixava a resposta sem motivo nenhum
+        const rawSend = await sendResp.text();
+        let sendBody: Record<string, unknown> = {};
+        try {
+            sendBody = rawSend ? JSON.parse(rawSend) : {};
+        } catch {
+            sendBody = {};
+        }
+
+        if (!sendResp.ok) {
+            const detail = String(
+                (sendBody as any)?.message || (sendBody as any)?.error || rawSend || ""
+            ).slice(0, 500);
+            return apiError(corsHeaders, {
+                status: sendResp.status,
+                code: "send_failed",
+                message: `Falha ao enviar a mensagem pela conexão ${provider} da conversa ${conversationId}: evolution-send-message respondeu HTTP ${sendResp.status}${detail ? ` — ${detail}` : " sem detalhar o motivo"}.`,
+                details: detail || undefined,
+                extra: { provider, conversation_id: conversationId },
+            });
+        }
 
         return json({
             ...sendBody,
-            provider: instance.provider === "meta" ? "meta" : "uazapi",
+            provider,
             conversation_id: conversationId,
         }, sendResp.status);
-    } catch (error: any) {
-        console.error("[api-send-message] Error:", error?.message, error?.stack);
-        return json({
-            success: false,
-            error: "internal_error",
-            message: error?.message || "Erro desconhecido",
-        }, 500);
+    } catch (error) {
+        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de envio de mensagem (api-send-message)", error);
     }
 });

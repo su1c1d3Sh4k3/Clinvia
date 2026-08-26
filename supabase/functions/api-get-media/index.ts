@@ -1,6 +1,15 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
+import {
+    apiError,
+    dbErrorResponse,
+    describeDbError,
+    missingFields,
+    readJsonBody,
+    requireApiKey,
+    unexpectedErrorResponse,
+} from "../_shared/api-errors.ts";
 
 /**
  * api-get-media
@@ -44,24 +53,29 @@ serve(async (req) => {
     }
 
     try {
-        const apiKey = req.headers.get("x-api-key");
-        const envApiKey = Deno.env.get("SCHEDULING_API_KEY");
-        if (!envApiKey || apiKey !== envApiKey) {
-            return json({ success: false, error: "unauthorized", message: "Unauthorized" }, 401);
-        }
+        const authFail = requireApiKey(req, corsHeaders);
+        if (authFail) return authFail;
 
-        const body = await req.json();
-        const userId: string | undefined = body.user_id;
-        const messageId: string | undefined = body.message_id;
-        const conversationId: string | undefined = body.conversation_id;
-        let mediaUrl: string | undefined = body.media_url;
+        const { body, response: bodyFail } = await readJsonBody(req, corsHeaders);
+        if (bodyFail) return bodyFail;
 
-        if (!userId || (!messageId && !conversationId && !mediaUrl)) {
-            return json({
-                success: false,
-                error: "missing_params",
-                message: "Campos obrigatórios: user_id e message_id, conversation_id ou media_url",
-            }, 400);
+        const userId: string | undefined = body!.user_id;
+        const messageId: string | undefined = body!.message_id;
+        const conversationId: string | undefined = body!.conversation_id;
+        let mediaUrl: string | undefined = body!.media_url;
+
+        const missing = missingFields(corsHeaders, body!, ["user_id"],
+            "Envie o id da conta (bd_data.user_id no prompt da IA).");
+        if (missing) return missing;
+
+        // localizador é alternativa (um dos três), fora do alcance de missingFields
+        if (!messageId && !conversationId && !mediaUrl) {
+            return apiError(corsHeaders, {
+                status: 400,
+                code: "missing_media_locator",
+                message: "Nenhum localizador de mídia informado: envie `message_id` (id do provider — messageid da UAZAPI ou wamid da Meta), `conversation_id` (pega a última mídia recebida na conversa) ou `media_url` (URL direta no bucket 'media').",
+                details: `Campos recebidos: ${Object.keys(body!).join(", ") || "(nenhum)"}`,
+            });
         }
 
         const supabase = createClient(
@@ -90,14 +104,24 @@ serve(async (req) => {
                 query = query.eq("conversation_id", conversationId).eq("direction", "inbound");
             }
 
-            const { data: msg } = await query.maybeSingle();
+            const { data: msg, error: msgError } = await query.maybeSingle();
+
+            if (msgError) {
+                return dbErrorResponse(corsHeaders, "message_lookup_failed",
+                    messageId
+                        ? `buscar a mensagem de id do provider "${messageId}" na conta ${userId}`
+                        : `buscar a última mensagem recebida com mídia da conversa ${conversationId}`,
+                    msgError);
+            }
 
             if (!msg?.media_url) {
-                return json({
-                    success: false,
-                    error: "media_not_found",
-                    message: "Mensagem com mídia não encontrada (a mídia pode ter falhado no download original)",
-                }, 404);
+                return apiError(corsHeaders, {
+                    status: 404,
+                    code: "media_not_found",
+                    message: messageId
+                        ? `Nenhuma mensagem com mídia salva foi encontrada para message_id "${messageId}" nesta conta. Confira se o id é o do provider (messageid da UAZAPI / wamid da Meta) e se o download original da mídia não falhou.`
+                        : `A conversa ${conversationId} não tem nenhuma mensagem recebida com mídia salva. Confira o conversation_id ou envie o message_id da mídia desejada.`,
+                });
             }
 
             mediaUrl = msg.media_url;
@@ -105,29 +129,59 @@ serve(async (req) => {
             mimeType = msg.media_mimetype;
             fileName = msg.media_filename;
 
-            // Provider da instância (informativo)
-            const { data: conv } = await supabase
+            // Provider da instância (informativo) — falha aqui NÃO derruba a resposta:
+            // a mídia já foi localizada. Mas também não se inventa "uazapi" quando o
+            // vínculo não pôde ser lido: `provider` fica null e o motivo vai pro log.
+            const { data: conv, error: convError } = await supabase
                 .from("conversations")
                 .select("instance_id, instances(provider)")
                 .eq("id", msg.conversation_id)
                 .maybeSingle();
-            provider = (conv as any)?.instances?.provider === "meta" ? "meta" : "uazapi";
+
+            if (convError) {
+                console.warn("[api-get-media]", describeDbError(
+                    `identificar o provider da conversa ${msg.conversation_id} (campo informativo)`, convError));
+            } else if (!conv) {
+                console.warn(`[api-get-media] conversa ${msg.conversation_id} da mensagem ${msg.id} não existe mais — provider não identificado`);
+            } else if ((conv as any).instance_id && !(conv as any).instances) {
+                console.warn(`[api-get-media] conexão ${(conv as any).instance_id} da conversa ${msg.conversation_id} não existe mais — provider não identificado`);
+            } else {
+                provider = (conv as any).instances?.provider === "meta" ? "meta" : "uazapi";
+            }
         }
 
         // ── Baixa a mídia e converte para base64 ──
-        const fileResp = await fetch(mediaUrl!, { signal: AbortSignal.timeout(30_000) });
+        let fileResp: Response;
+        try {
+            fileResp = await fetch(mediaUrl!, { signal: AbortSignal.timeout(30_000) });
+        } catch (fetchErr) {
+            const isTimeout = (fetchErr as Error)?.name === "TimeoutError" || (fetchErr as Error)?.name === "AbortError";
+            return apiError(corsHeaders, {
+                status: 504,
+                code: isTimeout ? "media_fetch_timeout" : "media_fetch_unreachable",
+                message: isTimeout
+                    ? `O download da mídia passou de 30s e foi cancelado (URL: ${mediaUrl}). Tente novamente; se persistir, o arquivo pode estar indisponível no storage.`
+                    : `Não foi possível acessar a URL da mídia (${mediaUrl}). Confira se a URL é válida e pública.`,
+                details: String((fetchErr as Error)?.message ?? fetchErr),
+            });
+        }
+
         if (!fileResp.ok) {
-            console.error("[api-get-media] media fetch failed:", fileResp.status, mediaUrl);
-            return json({
-                success: false,
-                error: "media_fetch_failed",
-                message: `Falha ao baixar a mídia (HTTP ${fileResp.status})`,
-            }, 502);
+            return apiError(corsHeaders, {
+                status: 502,
+                code: "media_fetch_failed",
+                message: `Falha ao baixar a mídia (HTTP ${fileResp.status}) em ${mediaUrl}. O arquivo pode ter sido removido do bucket 'media' ou a URL expirou.`,
+                details: `HTTP ${fileResp.status} ${fileResp.statusText}`,
+            });
         }
 
         const bytes = new Uint8Array(await fileResp.arrayBuffer());
         if (bytes.length === 0) {
-            return json({ success: false, error: "empty_media", message: "Arquivo de mídia vazio" }, 502);
+            return apiError(corsHeaders, {
+                status: 502,
+                code: "empty_media",
+                message: `O arquivo de mídia baixado está vazio (0 bytes) em ${mediaUrl} — o upload original provavelmente falhou. Peça o reenvio da mídia ao cliente.`,
+            });
         }
 
         const effectiveMime = mimeType || fileResp.headers.get("content-type") || "application/octet-stream";
@@ -142,12 +196,7 @@ serve(async (req) => {
             provider,
             size_bytes: bytes.length,
         });
-    } catch (error: any) {
-        console.error("[api-get-media] Error:", error?.message, error?.stack);
-        return json({
-            success: false,
-            error: "internal_error",
-            message: error?.message || "Erro desconhecido",
-        }, 500);
+    } catch (error) {
+        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de download de mídia (api-get-media)", error);
     }
 });

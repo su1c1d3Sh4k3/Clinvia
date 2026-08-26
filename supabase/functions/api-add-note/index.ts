@@ -1,5 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import {
+    apiError,
+    dbErrorResponse,
+    missingFields,
+    readJsonBody,
+    requireApiKey,
+    unexpectedErrorResponse,
+} from "../_shared/api-errors.ts";
 
 /**
  * api-add-note
@@ -46,24 +54,29 @@ serve(async (req) => {
     }
 
     try {
-        const apiKey = req.headers.get("x-api-key");
-        const envApiKey = Deno.env.get("SCHEDULING_API_KEY");
-        if (!envApiKey || apiKey !== envApiKey) {
-            return json({ success: false, error: "unauthorized", message: "Unauthorized" }, 401);
-        }
+        const authFail = requireApiKey(req, corsHeaders);
+        if (authFail) return authFail;
 
-        const body = await req.json();
-        const userId: string | undefined = body.user_id;
-        const text: string | undefined = typeof body.text === "string" ? body.text.trim() : undefined;
-        const conversationId: string | undefined = body.conversation_id;
-        const authorName: string = (typeof body.author_name === "string" && body.author_name.trim()) || "IA";
+        const { body, response: bodyFail } = await readJsonBody(req, corsHeaders);
+        if (bodyFail) return bodyFail;
 
-        if (!userId || !text || !conversationId) {
-            return json({
-                success: false,
-                error: "missing_params",
-                message: "Campos obrigatórios: user_id, text, conversation_id",
-            }, 400);
+        const userId: string | undefined = body!.user_id;
+        const text: string | undefined = typeof body!.text === "string" ? body!.text.trim() : undefined;
+        const conversationId: string | undefined = body!.conversation_id;
+        const authorName: string = (typeof body!.author_name === "string" && body!.author_name.trim()) || "IA";
+
+        const missing = missingFields(corsHeaders, body!, ["user_id", "text", "conversation_id"],
+            "user_id é bd_data.user_id, conversation_id é bd_data.conversation_id e text é o conteúdo da nota interna.");
+        if (missing) return missing;
+
+        // `text` pode chegar preenchido só com espaços — missingFields já corta string vazia,
+        // mas o trim acima é o valor que vai ao banco
+        if (!text) {
+            return apiError(corsHeaders, {
+                status: 400,
+                code: "empty_note_text",
+                message: "O campo `text` da nota está vazio depois de remover os espaços. Envie o texto da nota que deve ficar registrado na conversa.",
+            });
         }
 
         const supabase = createClient(
@@ -71,18 +84,30 @@ serve(async (req) => {
             Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
         );
 
-        const { data: conv } = await supabase
+        const { data: conv, error: convError } = await supabase
             .from("conversations")
             .select("id, user_id, contact_id")
             .eq("id", conversationId)
             .eq("user_id", userId)
             .maybeSingle();
+        if (convError) {
+            return dbErrorResponse(corsHeaders, "conversation_lookup_failed",
+                `buscar a conversa ${conversationId} onde a nota seria anexada`, convError);
+        }
         if (!conv) {
-            return json({ success: false, error: "conversation_not_found", message: "Conversa não encontrada para este user_id" }, 404);
+            return apiError(corsHeaders, {
+                status: 404,
+                code: "conversation_not_found",
+                message: `Conversa não encontrada: nenhuma conversa com o id ${conversationId} pertence ao user_id ${userId}. Confira se o conversation_id veio de bd_data.conversation_id e se o user_id é o da mesma conta.`,
+            });
         }
         const contactId: string | null = conv.contact_id;
         if (!contactId) {
-            return json({ success: false, error: "no_contact", message: "Conversa sem contato vinculado — nota não pode ser catalogada" }, 400);
+            return apiError(corsHeaders, {
+                status: 400,
+                code: "conversation_without_contact",
+                message: `A conversa ${conversationId} não tem contato vinculado (é uma conversa de grupo) e a nota é catalogada no histórico do cliente. Anexe a nota em uma conversa individual.`,
+            });
         }
 
         const title = `Nota de Conversa - ${authorName} - ${saoPauloTimestamp()}`;
@@ -103,8 +128,8 @@ serve(async (req) => {
             .single();
 
         if (error) {
-            console.error("[api-add-note] insert error:", error);
-            return json({ success: false, error: "insert_failed", message: error.message }, 500);
+            return dbErrorResponse(corsHeaders, "note_insert_failed",
+                `gravar a nota "${title}" no histórico do contato ${contactId} (client_documents, categoria 'notas')`, error);
         }
 
         return json({
@@ -115,7 +140,6 @@ serve(async (req) => {
             contact_id: contactId,
         });
     } catch (err) {
-        console.error("[api-add-note] error:", err);
-        return json({ success: false, error: "internal_error", message: String(err) }, 500);
+        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de notas de conversa (api-add-note)", err);
     }
 });

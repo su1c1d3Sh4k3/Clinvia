@@ -1,6 +1,14 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { resolveConversationsForContacts } from "../_shared/resolve-conversation.ts";
+import {
+    apiError,
+    dbErrorResponse,
+    missingFields,
+    readJsonBody,
+    requireApiKey,
+    unexpectedErrorResponse,
+} from "../_shared/api-errors.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -23,23 +31,25 @@ serve(async (req) => {
     }
 
     try {
-        const apiKey = req.headers.get("x-api-key");
-        const envApiKey = Deno.env.get("SCHEDULING_API_KEY");
+        const authFail = requireApiKey(req, corsHeaders);
+        if (authFail) return authFail;
 
-        if (!envApiKey || apiKey !== envApiKey) {
-            return json({ success: false, error: "Unauthorized: Invalid or missing API Key" }, 401);
-        }
+        const { body, response: bodyFail } = await readJsonBody(req, corsHeaders);
+        if (bodyFail) return bodyFail;
 
-        const body = await req.json();
-        const userId = body.user_id;
-        const date = body.date;
+        const userId = body!.user_id;
+        const date = body!.date;
 
-        if (!userId) {
-            return json({ success: false, error: "user_id is required" }, 400);
-        }
+        const missing = missingFields(corsHeaders, body!, ["user_id", "date"],
+            "Envie o id da conta (bd_data.user_id no prompt da IA) e a data das abordagens no formato YYYY-MM-DD.");
+        if (missing) return missing;
 
-        if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-            return json({ success: false, error: "date is required (YYYY-MM-DD)" }, 400);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date))) {
+            return apiError(corsHeaders, {
+                status: 400,
+                code: "invalid_date",
+                message: `Campo date inválido: "${date}" não está no formato YYYY-MM-DD (ex.: 2026-08-26). Envie a data do dia cujas abordagens de recorrência devem ser listadas.`,
+            });
         }
 
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -72,9 +82,15 @@ serve(async (req) => {
             .eq("scheduled", false)
             .or(`approach_1_date.eq.${date},approach_2_date.eq.${date},approach_3_date.eq.${date}`);
 
-        if (error) throw error;
+        if (error) {
+            return dbErrorResponse(corsHeaders, "recurrence_query_failed",
+                `listar as recorrências com abordagem pendente em ${date} para a conta ${userId}`, error);
+        }
 
         // As demais APIs (agendamento, CRM, envio) trabalham por conversation_id
+        // — sem conversation_id o n8n não consegue encadear nada, então uma falha
+        // aqui derruba a resposta (ConversationResolutionError já é descritiva e
+        // cai no catch externo com status/código próprios).
         const convByContact = await resolveConversationsForContacts(
             supabase,
             userId,
@@ -113,9 +129,9 @@ serve(async (req) => {
         }
 
         return json({ success: true, count: results.length, data: results });
-    } catch (err: any) {
-        console.error("[api-recurrence-due] error:", err);
-        return json({ success: false, error: String(err?.message || err) }, 500);
+    } catch (err) {
+        return unexpectedErrorResponse(corsHeaders,
+            "Falha inesperada na API de recorrências pendentes (api-recurrence-due)", err);
     }
 });
 

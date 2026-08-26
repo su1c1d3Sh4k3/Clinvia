@@ -6,6 +6,10 @@
  * (contato, conexão) — sem a conexão não dá pra saber em qual funil mexer.
  */
 
+import { describeDbError } from "./api-errors.ts";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export interface ResolvedConversation {
     conversationId: string;
     contactId: string;
@@ -20,9 +24,14 @@ export interface ResolvedConversation {
 
 export class ConversationResolutionError extends Error {
     status: number;
-    constructor(message: string, status = 400) {
+    /** código estável para o n8n ramificar sem parsear texto */
+    code: string;
+    details?: string;
+    constructor(message: string, status = 400, code = "conversation_invalid", details?: string) {
         super(message);
         this.status = status;
+        this.code = code;
+        this.details = details;
     }
 }
 
@@ -38,7 +47,16 @@ export async function resolveConversation(
 ): Promise<ResolvedConversation> {
     if (!conversationId) {
         throw new ConversationResolutionError(
-            "Missing required field: conversation_id",
+            "Campo obrigatório ausente: conversation_id. Envie o id da conversa (ele chega no prompt da IA como bd_data.conversation_id).",
+            400,
+            "conversation_id_missing",
+        );
+    }
+    if (!UUID_RE.test(String(conversationId))) {
+        throw new ConversationResolutionError(
+            `conversation_id inválido: "${conversationId}" não é um UUID. Use o valor de bd_data.conversation_id sem alterações.`,
+            400,
+            "conversation_id_malformed",
         );
     }
 
@@ -48,22 +66,33 @@ export async function resolveConversation(
         .eq("id", conversationId)
         .maybeSingle();
 
-    if (error) throw error;
+    if (error) {
+        throw new ConversationResolutionError(
+            describeDbError("buscar a conversa informada em conversation_id", error),
+            500,
+            "conversation_lookup_failed",
+            String((error as Record<string, unknown>)?.message ?? error ?? ""),
+        );
+    }
     if (!data) {
         throw new ConversationResolutionError(
-            `Conversa não encontrada: ${conversationId}`,
+            `Conversa não encontrada: nenhuma conversa com o id ${conversationId} existe neste banco. Confira se o conversation_id veio de bd_data.conversation_id e não de outro campo.`,
             404,
+            "conversation_not_found",
         );
     }
     if (data.user_id !== userId) {
         throw new ConversationResolutionError(
-            "Conversa não pertence a este user_id",
+            `A conversa ${conversationId} pertence a outra conta e não ao user_id ${userId} enviado na requisição. Envie o user_id do mesmo tenant da conversa.`,
             403,
+            "conversation_wrong_tenant",
         );
     }
     if (!data.contact_id) {
         throw new ConversationResolutionError(
-            "Conversa sem contato vinculado (grupo?) — ação não suportada",
+            `A conversa ${conversationId} não tem contato vinculado (é uma conversa de grupo). Esta ação só funciona em conversas individuais.`,
+            400,
+            "conversation_without_contact",
         );
     }
 
@@ -109,7 +138,14 @@ export async function resolveConversationsForContacts(
             .in("contact_id", chunk)
             .order("last_message_at", { ascending: false, nullsFirst: false });
 
-        if (error) throw error;
+        if (error) {
+            throw new ConversationResolutionError(
+                describeDbError("buscar as conversas dos contatos da lista", error),
+                500,
+                "conversations_lookup_failed",
+                String((error as Record<string, unknown>)?.message ?? error ?? ""),
+            );
+        }
 
         for (const row of (data || []) as any[]) {
             const current = result.get(row.contact_id);
@@ -152,7 +188,14 @@ export async function findActiveCardForChannel(
         .eq("contact_id", conv.contactId)
         .eq("is_active", true);
 
-    if (error) throw error;
+    if (error) {
+        throw new ConversationResolutionError(
+            describeDbError("buscar a negociação ativa do contato no funil desta conexão", error),
+            500,
+            "crm_card_lookup_failed",
+            String((error as Record<string, unknown>)?.message ?? error ?? ""),
+        );
+    }
     const rows = (data || []) as any[];
 
     return (

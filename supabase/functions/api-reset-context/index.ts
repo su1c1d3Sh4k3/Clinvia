@@ -1,5 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import {
+    apiError,
+    dbErrorResponse,
+    missingFields,
+    readJsonBody,
+    requireApiKey,
+    unexpectedErrorResponse,
+} from "../_shared/api-errors.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -33,19 +41,18 @@ serve(async (req) => {
         });
 
     try {
-        const apiKey = req.headers.get("x-api-key");
-        const envApiKey = Deno.env.get("SCHEDULING_API_KEY");
-        if (!envApiKey || apiKey !== envApiKey) {
-            return json({ success: false, error: "Unauthorized: Invalid or missing API Key" }, 401);
-        }
+        const authFail = requireApiKey(req, corsHeaders);
+        if (authFail) return authFail;
 
-        const body = await req.json();
-        const contactId = body.contact_id;
-        const restore = body.restore === true;
+        const { body, response: bodyFail } = await readJsonBody(req, corsHeaders);
+        if (bodyFail) return bodyFail;
 
-        if (!contactId) {
-            return json({ success: false, error: "contact_id is required" }, 400);
-        }
+        const contactId = body!.contact_id;
+        const restore = body!.restore === true;
+
+        const missing = missingFields(corsHeaders, body!, ["contact_id"],
+            "Envie o id do contato cujo contexto da IA deve ser zerado (contacts.id).");
+        if (missing) return missing;
 
         const supabase = createClient(
             Deno.env.get("SUPABASE_URL") ?? "",
@@ -62,11 +69,18 @@ serve(async (req) => {
             .maybeSingle();
 
         if (error) {
-            console.error("[api-reset-context] update error:", error);
-            return json({ success: false, error: error.message }, 500);
+            return dbErrorResponse(corsHeaders, "context_reset_failed",
+                restore
+                    ? `devolver o histórico completo do contato ${contactId} (contacts.ia_context_reset_at = NULL)`
+                    : `zerar o contexto da IA do contato ${contactId} (contacts.ia_context_reset_at = ${resetAt})`,
+                error);
         }
         if (!data) {
-            return json({ success: false, error: "Contato não encontrado" }, 404);
+            return apiError(corsHeaders, {
+                status: 404,
+                code: "contact_not_found",
+                message: `Contato não encontrado: nenhum contato com o id ${contactId} existe neste banco. Envie o UUID de contacts.id (não o telefone).`,
+            });
         }
 
         return json({
@@ -79,8 +93,7 @@ serve(async (req) => {
                 ? "Histórico completo devolvido para a IA."
                 : "Contexto limpo: a IA passa a ver este contato como um cliente novo.",
         });
-    } catch (err: any) {
-        console.error("[api-reset-context] Error:", err);
-        return json({ success: false, error: err.message }, 500);
+    } catch (err) {
+        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de reset de contexto da IA (api-reset-context)", err);
     }
 });

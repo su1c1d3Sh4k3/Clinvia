@@ -5,10 +5,20 @@ import { isProfessionalDayBlocked } from "../_shared/day-blocks.ts";
 import { TERMINAL_STAGES } from "../_shared/crm-stages.ts";
 import { applyCampaignDiscount, type CampaignDiscountInfo } from "../_shared/campaign-discount.ts";
 import {
-    ConversationResolutionError,
     findActiveCardForChannel,
     resolveConversation,
 } from "../_shared/resolve-conversation.ts";
+import {
+    ApiError,
+    apiError,
+    dbErrorResponse,
+    describeDbError,
+    missingFields,
+    readJsonBody,
+    requireApiKey,
+    unexpectedErrorResponse,
+    unknownAction,
+} from "../_shared/api-errors.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -37,6 +47,44 @@ function parseWorkTime(t: any): number | null {
 }
 
 const DAY_NAMES = ["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"];
+
+const VALID_ACTIONS = [
+    "fetch_appointments", "create_appointment", "reschedule_appointment", "cancel_appointment",
+];
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_RE = /^\d{2}:\d{2}$/;
+
+/** 400 dizendo exatamente qual formato veio errado, em vez de deixar virar "Invalid Date". */
+function checkDateTimeFormat(
+    date: unknown,
+    time: unknown,
+    dateField: string,
+    timeField: string,
+): Response | null {
+    if (!DATE_RE.test(String(date))) {
+        return apiError(corsHeaders, {
+            status: 400,
+            code: "invalid_date_format",
+            message: `Campo ${dateField} com formato inválido: "${date}". Use AAAA-MM-DD (ex.: 2026-08-30).`,
+        });
+    }
+    if (!TIME_RE.test(String(time))) {
+        return apiError(corsHeaders, {
+            status: 400,
+            code: "invalid_time_format",
+            message: `Campo ${timeField} com formato inválido: "${time}". Use HH:MM em 24 horas, horário de Brasília (ex.: 14:30).`,
+        });
+    }
+    if (isNaN(new Date(`${date}T${time}:00-03:00`).getTime())) {
+        return apiError(corsHeaders, {
+            status: 400,
+            code: "invalid_datetime",
+            message: `A data/hora "${date} ${time}" não existe no calendário. Confira dia, mês e hora.`,
+        });
+    }
+    return null;
+}
 
 /**
  * Validates the professional's work schedule (work_days, work_hours, break) for a
@@ -77,20 +125,20 @@ serve(async (req) => {
     }
 
     try {
-        const apiKey = req.headers.get("x-api-key");
-        const envApiKey = Deno.env.get("SCHEDULING_API_KEY");
-        if (!envApiKey || apiKey !== envApiKey) {
-            return new Response(JSON.stringify({ error: "Unauthorized" }),
-                { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        }
+        const authFail = requireApiKey(req, corsHeaders);
+        if (authFail) return authFail;
 
-        const body = await req.json();
+        const { body: parsedBody, response: bodyFail } = await readJsonBody(req, corsHeaders);
+        if (bodyFail) return bodyFail;
+        const body = parsedBody!;
+
         const { action, user_id } = body;
 
-        if (!user_id) {
-            return new Response(JSON.stringify({ error: "Missing user_id" }),
-                { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        }
+        const missingUser = missingFields(corsHeaders, body, ["user_id"],
+            "Envie o id da conta (bd_data.user_id no prompt da IA).");
+        if (missingUser) return missingUser;
+
+        if (!action) return unknownAction(corsHeaders, action, VALID_ACTIONS);
 
         const supabase = createClient(
             Deno.env.get("SUPABASE_URL") ?? "",
@@ -106,34 +154,70 @@ serve(async (req) => {
 
         // Helper: resolve service_client by application name
         const resolveService = async (serviceName: string) => {
-            const { data } = await supabase.from("services_client")
+            const { data, error } = await supabase.from("services_client")
                 .select("id, name, price, min_price, duration_minutes, category_id, service_name_id, professionals")
                 .eq("user_id", user_id).ilike("name", serviceName).eq("status", true)
                 .limit(1).maybeSingle();
-            if (!data) throw new Error(`Aplicação "${serviceName}" não encontrada`);
+            if (error) {
+                throw new ApiError({
+                    status: 500, code: "service_lookup_failed",
+                    message: describeDbError(`buscar a aplicação "${serviceName}" no catálogo desta conta`, error),
+                    details: String((error as any)?.message ?? error),
+                });
+            }
+            if (!data) {
+                throw new ApiError({
+                    status: 404, code: "service_not_found",
+                    message: `Aplicação "${serviceName}" não encontrada no catálogo ativo desta conta. Confira o nome exato em Serviços — aplicações desativadas não podem ser agendadas.`,
+                });
+            }
             return data;
         };
 
         // Helper: find a professional for the service
         const resolveProfessional = async (sc: any, preferredName?: string) => {
             const profIds: string[] = sc.professionals || [];
-            if (profIds.length === 0) throw new Error(`Nenhum profissional atrelado ao serviço "${sc.name}"`);
+            if (profIds.length === 0) {
+                throw new ApiError({
+                    status: 409, code: "service_without_professional",
+                    message: `A aplicação "${sc.name}" não tem nenhum profissional vinculado, então não é possível agendar. Vincule um profissional a ela em Serviços antes de tentar de novo.`,
+                });
+            }
 
-            const { data: profs } = await supabase.from("professionals")
+            const { data: profs, error } = await supabase.from("professionals")
                 .select("id, name, work_hours, work_days, use_daily_schedule, work_hours_daily")
                 .in("id", profIds);
-            if (!profs || profs.length === 0) throw new Error(`Nenhum profissional encontrado para o serviço "${sc.name}"`);
+            if (error) {
+                throw new ApiError({
+                    status: 500, code: "professional_lookup_failed",
+                    message: describeDbError(`buscar os profissionais vinculados à aplicação "${sc.name}"`, error),
+                    details: String((error as any)?.message ?? error),
+                });
+            }
+            if (!profs || profs.length === 0) {
+                throw new ApiError({
+                    status: 409, code: "professional_not_found",
+                    message: `A aplicação "${sc.name}" aponta para ${profIds.length} profissional(is) que não existem mais no cadastro. Revise os profissionais vinculados a ela em Serviços.`,
+                    details: `ids vinculados: ${profIds.join(", ")}`,
+                });
+            }
 
             const names = profs.map((p: any) => p.name).join(", ");
 
             if (preferredName) {
                 const match = profs.find((p: any) => p.name.toLowerCase().includes(preferredName.toLowerCase()));
                 if (match) return match;
-                throw new Error(`Profissional "${preferredName}" não atende o serviço "${sc.name}". Disponíveis: ${names}`);
+                throw new ApiError({
+                    status: 404, code: "professional_does_not_serve",
+                    message: `O profissional "${preferredName}" não atende a aplicação "${sc.name}". Profissionais disponíveis para ela: ${names}.`,
+                });
             }
 
             if (profs.length === 1) return profs[0];
-            throw new Error(`Serviço "${sc.name}" tem mais de um profissional — informe professional_name. Disponíveis: ${names}`);
+            throw new ApiError({
+                status: 400, code: "professional_name_required",
+                message: `A aplicação "${sc.name}" é atendida por mais de um profissional — informe o campo professional_name. Profissionais disponíveis: ${names}.`,
+            });
         };
 
         // Helper: campanha ativa da instância onde o contato recebeu envio.
@@ -142,13 +226,20 @@ serve(async (req) => {
         const resolveCampaignForContact = async (cid: string, instanceId?: string | null): Promise<CampaignDiscountInfo | null> => {
             if (!instanceId) return null;
             try {
-                const { data: camps } = await supabase.from("campaigns")
+                const { data: camps, error: campErr } = await supabase.from("campaigns")
                     .select("id, discount_pct, services")
                     .eq("user_id", user_id)
                     .eq("instance_id", instanceId)
                     .in("status", ["dispatching", "dispatched"])
                     .gt("valid_until", new Date().toISOString())
                     .order("scheduled_at", { ascending: false });
+
+                // Desconto de campanha é um bônus: se a busca falhar, o agendamento
+                // continua com o preço cheio — mas o motivo real fica no log.
+                if (campErr) {
+                    console.warn("[api-scheduling]", describeDbError("buscar as campanhas ativas da instância para aplicar desconto", campErr));
+                    return null;
+                }
 
                 for (const c of camps || []) {
                     const { data: cc } = await supabase.from("campaign_contacts")
@@ -185,7 +276,10 @@ serve(async (req) => {
 
             const { data, error } = await query.order("start_time", { ascending: false });
 
-            if (error) throw error;
+            if (error) {
+                return dbErrorResponse(corsHeaders, "appointments_read_failed",
+                    `listar os agendamentos do contato ${contactId}`, error);
+            }
 
             return new Response(JSON.stringify({
                 conversation_id: conv!.conversationId,
@@ -208,7 +302,12 @@ serve(async (req) => {
         // ══════════════════════════════════════════════
         if (action === "create_appointment") {
             const { service_name, date, time, professional_name, description } = body;
-            if (!service_name || !date || !time) throw new Error("Missing service_name, date or time");
+            const missingCreate = missingFields(corsHeaders, body, ["service_name", "date", "time"],
+                "Formatos esperados: date no formato AAAA-MM-DD e time no formato HH:MM (horário de Brasília).");
+            if (missingCreate) return missingCreate;
+
+            const formatFail = checkDateTimeFormat(date, time, "date", "time");
+            if (formatFail) return formatFail;
 
             const cid = conv!.contactId;
             const campaign = await resolveCampaignForContact(cid, conv!.instanceId);
@@ -226,33 +325,49 @@ serve(async (req) => {
 
             // Validate not in the past
             if (startDate < new Date()) {
-                return new Response(JSON.stringify({ error: "Não é possível agendar no passado" }),
-                    { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+                return apiError(corsHeaders, {
+                    status: 400,
+                    code: "date_in_the_past",
+                    message: `Não é possível agendar no passado: ${date} às ${time} já passou (agora são ${toSaoPaulo(new Date().toISOString())} em Brasília). Escolha uma data/hora futura.`,
+                });
             }
 
             // Agenda fechada nesse dia (cadeado da agenda)
             if (await isProfessionalDayBlocked(supabase, prof.id, date)) {
-                return new Response(JSON.stringify({ error: `A agenda de ${prof.name} está fechada em ${date}. Consulte a disponibilidade (api-availability) para outra data.` }),
-                    { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+                return apiError(corsHeaders, {
+                    status: 409,
+                    code: "agenda_closed",
+                    message: `A agenda de ${prof.name} está fechada em ${date} (o dia inteiro foi bloqueado na agenda). Consulte a disponibilidade (api-availability) para outra data.`,
+                });
             }
 
             // Validate professional work schedule (work_days/work_hours/break)
             const scheduleError = validateWorkSchedule(prof, date, time, duration);
             if (scheduleError) {
-                return new Response(JSON.stringify({ error: `${scheduleError}. Consulte a disponibilidade (api-availability) para horários válidos.` }),
-                    { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+                return apiError(corsHeaders, {
+                    status: 409,
+                    code: "outside_work_schedule",
+                    message: `${scheduleError}. Consulte a disponibilidade (api-availability) para horários válidos.`,
+                });
             }
 
             // Check overlap
-            const { data: overlap } = await supabase.rpc("check_appointment_overlap", {
+            const { data: overlap, error: overlapError } = await supabase.rpc("check_appointment_overlap", {
                 p_professional_id: prof.id,
                 p_start_time: startDate.toISOString(),
                 p_end_time: endDate.toISOString(),
                 p_exclude_id: null,
             });
+            if (overlapError) {
+                return dbErrorResponse(corsHeaders, "overlap_check_failed",
+                    `verificar se ${prof.name} já tem outro agendamento em ${date} às ${time} (RPC check_appointment_overlap)`, overlapError);
+            }
             if (overlap) {
-                return new Response(JSON.stringify({ error: "Horário indisponível (conflito com outro agendamento)" }),
-                    { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+                return apiError(corsHeaders, {
+                    status: 409,
+                    code: "slot_taken",
+                    message: `${prof.name} já tem outro agendamento que conflita com ${date} às ${time} (${duration} min). Consulte a disponibilidade (api-availability) e escolha outro horário.`,
+                });
             }
 
             const payload = {
@@ -273,7 +388,10 @@ serve(async (req) => {
             };
 
             const { data: created, error } = await supabase.from("appointments").insert(payload).select().single();
-            if (error) throw error;
+            if (error) {
+                return dbErrorResponse(corsHeaders, "appointment_insert_failed",
+                    `gravar o agendamento de "${sc.name}" com ${prof.name} em ${date} às ${time}`, error);
+            }
 
             // Google Calendar sync (fire-and-forget)
             try {
@@ -287,7 +405,15 @@ serve(async (req) => {
             } catch (_) {}
 
             // CRM sync: move/create card to Agendado + add service — o card é do
-            // funil da conexão desta conversa
+            // funil da conexão desta conversa.
+            // O agendamento já foi gravado: uma falha aqui NÃO derruba a resposta,
+            // mas volta descrita em `crm_warning` em vez de sumir no log.
+            let crmWarning: string | null = null;
+            const crmFail = (operation: string, err: unknown) => {
+                crmWarning = describeDbError(operation, err);
+                console.warn("[api-scheduling]", crmWarning);
+            };
+
             try {
                 const activeCard = await findActiveCardForChannel(supabase, conv!);
 
@@ -295,60 +421,76 @@ serve(async (req) => {
                     const terminals = TERMINAL_STAGES;
                     if (terminals.includes(activeCard.stage)) {
                         // Terminal → create new card
-                        const { data: newCard } = await supabase.from("crm_client").insert({
+                        const { data: newCard, error: newCardErr } = await supabase.from("crm_client").insert({
                             user_id, contact_id: cid, stage: "Agendado",
                             instance_id: conv!.instanceId,
                             instagram_instance_id: conv!.instagramInstanceId,
                             stage_changed_at: new Date().toISOString(), value: 0,
                             professional_id: prof.id, priority: "medium", is_active: true,
                         }).select().single();
-                        if (newCard) {
-                            await supabase.from("crm_client_services").insert({
+                        if (newCardErr) {
+                            crmFail(`criar a negociação "Agendado" do contato ${cid} (a negociação anterior estava em etapa final)`, newCardErr);
+                        } else if (newCard) {
+                            const { error: svcErr } = await supabase.from("crm_client_services").insert({
                                 crm_client_id: newCard.id, service_client_id: sc.id,
                                 service_name: sc.name, quantity: 1, unit_price: finalPrice, min_price: sc.min_price || 0,
                             });
-                            await supabase.from("crm_client").update({ value: finalPrice }).eq("id", newCard.id);
+                            if (svcErr) crmFail(`adicionar "${sc.name}" à negociação ${newCard.id}`, svcErr);
+                            const { error: valErr } = await supabase.from("crm_client").update({ value: finalPrice }).eq("id", newCard.id);
+                            if (valErr) crmFail(`gravar o valor da negociação ${newCard.id}`, valErr);
                         }
                     } else {
                         // Move to Agendado
                         if (activeCard.stage !== "Agendado") {
-                            await supabase.from("crm_client").update({
+                            const { error: moveErr } = await supabase.from("crm_client").update({
                                 stage: "Agendado", stage_changed_at: new Date().toISOString(),
                             }).eq("id", activeCard.id);
+                            if (moveErr) crmFail(`mover a negociação ${activeCard.id} para "Agendado"`, moveErr);
                         }
                         // Add service if not duplicate
-                        const { data: existingSvc } = await supabase.from("crm_client_services")
+                        const { data: existingSvc, error: existingSvcErr } = await supabase.from("crm_client_services")
                             .select("id").eq("crm_client_id", activeCard.id).eq("service_client_id", sc.id).maybeSingle();
-                        if (!existingSvc) {
-                            await supabase.from("crm_client_services").insert({
+                        if (existingSvcErr) {
+                            crmFail(`verificar se "${sc.name}" já estava na negociação ${activeCard.id}`, existingSvcErr);
+                        } else if (!existingSvc) {
+                            const { error: svcErr } = await supabase.from("crm_client_services").insert({
                                 crm_client_id: activeCard.id, service_client_id: sc.id,
                                 service_name: sc.name, quantity: 1, unit_price: finalPrice, min_price: sc.min_price || 0,
                             });
+                            if (svcErr) crmFail(`adicionar "${sc.name}" à negociação ${activeCard.id}`, svcErr);
                             // Recalc value
-                            const { data: allSvcs } = await supabase.from("crm_client_services")
+                            const { data: allSvcs, error: allSvcsErr } = await supabase.from("crm_client_services")
                                 .select("unit_price, quantity").eq("crm_client_id", activeCard.id);
-                            const total = (allSvcs || []).reduce((s: number, r: any) => s + r.unit_price * r.quantity, 0);
-                            await supabase.from("crm_client").update({ value: total }).eq("id", activeCard.id);
+                            if (allSvcsErr) {
+                                crmFail(`recalcular o valor da negociação ${activeCard.id}`, allSvcsErr);
+                            } else {
+                                const total = (allSvcs || []).reduce((s: number, r: any) => s + r.unit_price * r.quantity, 0);
+                                const { error: valErr } = await supabase.from("crm_client").update({ value: total }).eq("id", activeCard.id);
+                                if (valErr) crmFail(`gravar o novo valor da negociação ${activeCard.id}`, valErr);
+                            }
                         }
                     }
                 } else {
                     // No card → create
-                    const { data: newCard } = await supabase.from("crm_client").insert({
+                    const { data: newCard, error: newCardErr } = await supabase.from("crm_client").insert({
                         user_id, contact_id: cid, stage: "Agendado",
                         instance_id: conv!.instanceId,
                         instagram_instance_id: conv!.instagramInstanceId,
                         stage_changed_at: new Date().toISOString(), value: finalPrice,
                         professional_id: prof.id, priority: "medium", is_active: true,
                     }).select().single();
-                    if (newCard) {
-                        await supabase.from("crm_client_services").insert({
+                    if (newCardErr) {
+                        crmFail(`criar a negociação "Agendado" do contato ${cid}`, newCardErr);
+                    } else if (newCard) {
+                        const { error: svcErr } = await supabase.from("crm_client_services").insert({
                             crm_client_id: newCard.id, service_client_id: sc.id,
                             service_name: sc.name, quantity: 1, unit_price: finalPrice, min_price: sc.min_price || 0,
                         });
+                        if (svcErr) crmFail(`adicionar "${sc.name}" à negociação ${newCard.id}`, svcErr);
                     }
                 }
             } catch (crmErr) {
-                console.warn("[api-scheduling] CRM sync error:", crmErr);
+                crmFail("sincronizar o funil do CRM após o agendamento", crmErr);
             }
 
             return new Response(JSON.stringify({
@@ -363,6 +505,8 @@ serve(async (req) => {
                     price: created.price,
                     status: created.status,
                 },
+                // presente só quando o agendamento foi criado mas o funil não acompanhou
+                ...(crmWarning ? { crm_warning: crmWarning } : {}),
             }), { status: 201, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
@@ -371,13 +515,42 @@ serve(async (req) => {
         // ══════════════════════════════════════════════
         if (action === "reschedule_appointment") {
             const { appointment_id, new_date, new_time } = body;
-            if (!appointment_id || !new_date || !new_time) throw new Error("Missing appointment_id, new_date or new_time");
+            const missingResched = missingFields(corsHeaders, body, ["appointment_id", "new_date", "new_time"],
+                "Use fetch_appointments para obter o appointment_id. Formatos: new_date AAAA-MM-DD e new_time HH:MM (horário de Brasília).");
+            if (missingResched) return missingResched;
+
+            const formatFail = checkDateTimeFormat(new_date, new_time, "new_date", "new_time");
+            if (formatFail) return formatFail;
 
             // Fetch existing to get duration
-            const { data: existing } = await supabase.from("appointments")
-                .select("start_time, end_time, professional_id")
-                .eq("id", appointment_id).single();
-            if (!existing) throw new Error("Agendamento não encontrado");
+            const { data: existing, error: existingErr } = await supabase.from("appointments")
+                .select("start_time, end_time, professional_id, user_id, status")
+                .eq("id", appointment_id).maybeSingle();
+            if (existingErr) {
+                return dbErrorResponse(corsHeaders, "appointment_read_failed",
+                    `buscar o agendamento ${appointment_id} para reagendar`, existingErr);
+            }
+            if (!existing) {
+                return apiError(corsHeaders, {
+                    status: 404,
+                    code: "appointment_not_found",
+                    message: `Agendamento não encontrado: nenhum agendamento com o id ${appointment_id} existe. Use a ação fetch_appointments para obter os ids válidos deste contato.`,
+                });
+            }
+            if (existing.user_id !== user_id) {
+                return apiError(corsHeaders, {
+                    status: 403,
+                    code: "appointment_wrong_tenant",
+                    message: `O agendamento ${appointment_id} pertence a outra conta e não ao user_id ${user_id} enviado na requisição.`,
+                });
+            }
+            if (existing.status === "canceled") {
+                return apiError(corsHeaders, {
+                    status: 409,
+                    code: "appointment_canceled",
+                    message: `O agendamento ${appointment_id} está cancelado e não pode ser reagendado. Crie um novo agendamento com create_appointment.`,
+                });
+            }
 
             const durationMs = new Date(existing.end_time).getTime() - new Date(existing.start_time).getTime();
             const durationMin = durationMs / 60000;
@@ -387,38 +560,58 @@ serve(async (req) => {
             const endDate = new Date(startDate.getTime() + durationMin * 60000);
 
             if (startDate < new Date()) {
-                return new Response(JSON.stringify({ error: "Não é possível reagendar para o passado" }),
-                    { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+                return apiError(corsHeaders, {
+                    status: 400,
+                    code: "date_in_the_past",
+                    message: `Não é possível reagendar para o passado: ${new_date} às ${new_time} já passou (agora são ${toSaoPaulo(new Date().toISOString())} em Brasília). Escolha uma data/hora futura.`,
+                });
             }
 
             // Validate professional work schedule at the new date/time
             if (existing.professional_id) {
-                const { data: profRec } = await supabase.from("professionals")
+                const { data: profRec, error: profErr } = await supabase.from("professionals")
                     .select("id, name, work_hours, work_days, use_daily_schedule, work_hours_daily")
                     .eq("id", existing.professional_id).maybeSingle();
+                if (profErr) {
+                    return dbErrorResponse(corsHeaders, "professional_lookup_failed",
+                        `buscar o profissional ${existing.professional_id} do agendamento ${appointment_id}`, profErr);
+                }
                 if (profRec) {
                     if (await isProfessionalDayBlocked(supabase, profRec.id, new_date)) {
-                        return new Response(JSON.stringify({ error: `A agenda de ${profRec.name} está fechada em ${new_date}. Consulte a disponibilidade (api-availability) para outra data.` }),
-                            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+                        return apiError(corsHeaders, {
+                            status: 409,
+                            code: "agenda_closed",
+                            message: `A agenda de ${profRec.name} está fechada em ${new_date} (o dia inteiro foi bloqueado na agenda). Consulte a disponibilidade (api-availability) para outra data.`,
+                        });
                     }
                     const scheduleError = validateWorkSchedule(profRec, new_date, new_time, durationMin);
                     if (scheduleError) {
-                        return new Response(JSON.stringify({ error: `${scheduleError}. Consulte a disponibilidade (api-availability) para horários válidos.` }),
-                            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+                        return apiError(corsHeaders, {
+                            status: 409,
+                            code: "outside_work_schedule",
+                            message: `${scheduleError}. Consulte a disponibilidade (api-availability) para horários válidos.`,
+                        });
                     }
                 }
             }
 
             // Check overlap
-            const { data: overlap } = await supabase.rpc("check_appointment_overlap", {
+            const { data: overlap, error: overlapError } = await supabase.rpc("check_appointment_overlap", {
                 p_professional_id: existing.professional_id,
                 p_start_time: startDate.toISOString(),
                 p_end_time: endDate.toISOString(),
                 p_exclude_id: appointment_id,
             });
+            if (overlapError) {
+                return dbErrorResponse(corsHeaders, "overlap_check_failed",
+                    `verificar conflitos de agenda em ${new_date} às ${new_time} (RPC check_appointment_overlap)`, overlapError);
+            }
             if (overlap) {
-                return new Response(JSON.stringify({ error: "Novo horário indisponível (conflito)" }),
-                    { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+                return apiError(corsHeaders, {
+                    status: 409,
+                    code: "slot_taken",
+                    message: `Já existe outro agendamento deste profissional que conflita com ${new_date} às ${new_time} (${durationMin} min). Consulte a disponibilidade (api-availability) e escolha outro horário.`,
+                });
             }
 
             const { data: updated, error } = await supabase.from("appointments").update({
@@ -426,7 +619,10 @@ serve(async (req) => {
                 end_time: endDate.toISOString(),
                 status: "rescheduled",
             }).eq("id", appointment_id).select().single();
-            if (error) throw error;
+            if (error) {
+                return dbErrorResponse(corsHeaders, "appointment_update_failed",
+                    `reagendar o agendamento ${appointment_id} para ${new_date} às ${new_time}`, error);
+            }
 
             // Google Calendar sync
             try {
@@ -439,7 +635,9 @@ serve(async (req) => {
                 }).catch(() => {});
             } catch (_) {}
 
-            // CRM: move card to Agendado — funil da conexão do agendamento
+            // CRM: move card to Agendado — funil da conexão do agendamento.
+            // O reagendamento já foi gravado: falha aqui vira aviso, não erro.
+            let crmWarning: string | null = null;
             if (updated.contact_id) {
                 try {
                     const activeCard = await findActiveCardForChannel(supabase, {
@@ -448,13 +646,17 @@ serve(async (req) => {
                         instagramInstanceId: null,
                     });
                     if (activeCard && activeCard.stage !== "Agendado") {
-                        await supabase.from("crm_client").update({
+                        const { error: moveErr } = await supabase.from("crm_client").update({
                             stage: "Agendado", stage_changed_at: new Date().toISOString(),
                         }).eq("id", activeCard.id);
+                        if (moveErr) {
+                            crmWarning = describeDbError(`mover a negociação ${activeCard.id} para "Agendado"`, moveErr);
+                        }
                     }
                 } catch (crmErr) {
-                    console.warn("[api-scheduling] CRM reschedule sync error:", crmErr);
+                    crmWarning = describeDbError("sincronizar o funil do CRM após o reagendamento", crmErr);
                 }
+                if (crmWarning) console.warn("[api-scheduling]", crmWarning);
             }
 
             return new Response(JSON.stringify({
@@ -468,6 +670,7 @@ serve(async (req) => {
                     end_time: toSaoPaulo(updated.end_time),
                     status: updated.status,
                 },
+                ...(crmWarning ? { crm_warning: crmWarning } : {}),
             }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
@@ -476,11 +679,37 @@ serve(async (req) => {
         // ══════════════════════════════════════════════
         if (action === "cancel_appointment") {
             const { appointment_id } = body;
-            if (!appointment_id) throw new Error("Missing appointment_id");
+            const missingCancel = missingFields(corsHeaders, body, ["appointment_id"],
+                "Use fetch_appointments para obter o appointment_id.");
+            if (missingCancel) return missingCancel;
+
+            const { data: current, error: currentErr } = await supabase.from("appointments")
+                .select("id, user_id, status").eq("id", appointment_id).maybeSingle();
+            if (currentErr) {
+                return dbErrorResponse(corsHeaders, "appointment_read_failed",
+                    `buscar o agendamento ${appointment_id} para cancelar`, currentErr);
+            }
+            if (!current) {
+                return apiError(corsHeaders, {
+                    status: 404,
+                    code: "appointment_not_found",
+                    message: `Agendamento não encontrado: nenhum agendamento com o id ${appointment_id} existe. Use a ação fetch_appointments para obter os ids válidos deste contato.`,
+                });
+            }
+            if (current.user_id !== user_id) {
+                return apiError(corsHeaders, {
+                    status: 403,
+                    code: "appointment_wrong_tenant",
+                    message: `O agendamento ${appointment_id} pertence a outra conta e não ao user_id ${user_id} enviado na requisição.`,
+                });
+            }
 
             const { data: updated, error } = await supabase.from("appointments")
                 .update({ status: "canceled" }).eq("id", appointment_id).select().single();
-            if (error) throw error;
+            if (error) {
+                return dbErrorResponse(corsHeaders, "appointment_cancel_failed",
+                    `cancelar o agendamento ${appointment_id}`, error);
+            }
 
             // Google Calendar: delete event
             try {
@@ -493,16 +722,21 @@ serve(async (req) => {
                 }).catch(() => {});
             } catch (_) {}
 
-            // CRM: create Perdido card for the canceled service
+            // CRM: create Perdido card for the canceled service.
+            // O cancelamento já foi gravado: falha aqui vira aviso, não erro.
+            let crmWarning: string | null = null;
             if (updated.contact_id && updated.service_id) {
                 try {
-                    await supabase.from("crm_client").insert({
+                    const { error: lostErr } = await supabase.from("crm_client").insert({
                         user_id, contact_id: updated.contact_id, stage: "Perdido",
                         instance_id: updated.instance_id ?? null,
                         stage_changed_at: new Date().toISOString(), value: updated.price || 0,
                         loss_reason: "canceled", loss_reason_other: "Cliente cancelou o agendamento",
                         is_active: false,
                     });
+                    if (lostErr) {
+                        crmWarning = describeDbError(`registrar a negociação "Perdido" do contato ${updated.contact_id}`, lostErr);
+                    }
                     // Remove service from active deal — funil da conexão do agendamento
                     const activeCard = await findActiveCardForChannel(supabase, {
                         contactId: updated.contact_id,
@@ -510,33 +744,40 @@ serve(async (req) => {
                         instagramInstanceId: null,
                     });
                     if (activeCard) {
-                        await supabase.from("crm_client_services").delete()
+                        const { error: delErr } = await supabase.from("crm_client_services").delete()
                             .eq("crm_client_id", activeCard.id).eq("service_client_id", updated.service_id);
-                        const { data: remaining } = await supabase.from("crm_client_services")
+                        if (delErr) {
+                            crmWarning = describeDbError(`remover o serviço cancelado da negociação ${activeCard.id}`, delErr);
+                        }
+                        const { data: remaining, error: remErr } = await supabase.from("crm_client_services")
                             .select("unit_price, quantity").eq("crm_client_id", activeCard.id);
-                        if (remaining && remaining.length > 0) {
+                        if (remErr) {
+                            crmWarning = describeDbError(`recalcular o valor da negociação ${activeCard.id}`, remErr);
+                        } else if (remaining && remaining.length > 0) {
                             const total = remaining.reduce((s: number, r: any) => s + r.unit_price * r.quantity, 0);
-                            await supabase.from("crm_client").update({ value: total }).eq("id", activeCard.id);
+                            const { error: valErr } = await supabase.from("crm_client").update({ value: total }).eq("id", activeCard.id);
+                            if (valErr) crmWarning = describeDbError(`gravar o novo valor da negociação ${activeCard.id}`, valErr);
                         } else {
-                            await supabase.from("crm_client").update({ is_active: false }).eq("id", activeCard.id);
+                            const { error: offErr } = await supabase.from("crm_client").update({ is_active: false }).eq("id", activeCard.id);
+                            if (offErr) crmWarning = describeDbError(`encerrar a negociação ${activeCard.id}, que ficou sem serviços`, offErr);
                         }
                     }
                 } catch (crmErr) {
-                    console.warn("[api-scheduling] CRM cancel sync error:", crmErr);
+                    crmWarning = describeDbError("sincronizar o funil do CRM após o cancelamento", crmErr);
                 }
+                if (crmWarning) console.warn("[api-scheduling]", crmWarning);
             }
 
             return new Response(JSON.stringify({
                 success: true,
                 appointment: { id: updated.id, status: "canceled" },
+                ...(crmWarning ? { crm_warning: crmWarning } : {}),
             }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
-        throw new Error(`Invalid action: "${action}". Valid: fetch_appointments, create_appointment, reschedule_appointment, cancel_appointment`);
+        return unknownAction(corsHeaders, action, VALID_ACTIONS);
 
     } catch (error) {
-        const status = error instanceof ConversationResolutionError ? error.status : 400;
-        return new Response(JSON.stringify({ error: error.message }),
-            { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de agendamento (api-scheduling)", error);
     }
 });
