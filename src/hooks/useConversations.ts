@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Tables } from "@/integrations/supabase/types";
 import { useIsTyping } from "@/contexts/TypingContext";
 
@@ -16,6 +16,59 @@ type Conversation = Tables<"conversations"> & {
 
 type TabFilter = "open" | "pending" | "resolved" | "all";
 
+/** Tamanho da página do scroll da lista (botão "Carregar mais" soma outra). */
+export const CONVERSATIONS_PAGE_SIZE = 100;
+/** Teto de resultados da busca. Fica abaixo do cap de 1000 do PostgREST. */
+const SEARCH_LIMIT = 500;
+/** Teto de ids injetados no filtro `.or(...)` — a query vai na URL (GET). */
+const SEARCH_ID_CAP = 300;
+
+/** Termo seguro para o mini-DSL do PostgREST (vírgula/parênteses são sintaxe). */
+const sanitizeForOr = (term: string) => term.replace(/[,()%*\\]/g, " ").trim();
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * BUSCA GLOBAL (user rule): a busca do inbox procura em TODO o banco, nunca
+ * apenas nas conversas já carregadas na tela. Resolve contatos e grupos que
+ * casam com o termo e devolve as condições `.or(...)` para a query de
+ * conversations. Lista vazia = nada casou (não renderiza nada).
+ */
+const buildSearchConditions = async (term: string): Promise<string[]> => {
+  const safe = sanitizeForOr(term);
+  const digits = term.replace(/\D/g, "");
+  const conds: string[] = [];
+
+  const contactOr: string[] = [];
+  if (safe) contactOr.push(`push_name.ilike.%${safe}%`);
+  // Telefone: sempre por trecho do número (últimos dígitos), padrão do projeto
+  if (digits.length >= 4) {
+    contactOr.push(`number.ilike.%${digits}%`, `phone.ilike.%${digits}%`);
+  }
+
+  const [contactRes, groupRes] = await Promise.all([
+    contactOr.length > 0
+      ? supabase.from("contacts").select("id").or(contactOr.join(",")).limit(SEARCH_ID_CAP)
+      : Promise.resolve({ data: [] as { id: string }[], error: null }),
+    safe
+      ? supabase.from("groups" as any).select("id").ilike("group_name", `%${safe}%`).limit(SEARCH_ID_CAP)
+      : Promise.resolve({ data: [] as { id: string }[], error: null }),
+  ]);
+
+  if (contactRes.error) console.error("[useConversations] busca em contacts:", contactRes.error);
+  if (groupRes.error) console.error("[useConversations] busca em groups:", groupRes.error);
+
+  const contactIds = (contactRes.data ?? []).map((c: any) => c.id);
+  const groupIds = (groupRes.data ?? []).map((g: any) => g.id);
+
+  if (contactIds.length > 0) conds.push(`contact_id.in.(${contactIds.join(",")})`);
+  if (groupIds.length > 0) conds.push(`group_id.in.(${groupIds.join(",")})`);
+  if (/^\d+$/.test(term) && term.length <= 9) conds.push(`ticket_id.eq.${term}`);
+  if (UUID_RE.test(term)) conds.push(`id.eq.${term}`);
+
+  return conds;
+};
+
 interface UseConversationsOptions {
   tab?: TabFilter;
   userId?: string;
@@ -26,21 +79,45 @@ interface UseConversationsOptions {
    * alto volume estouram o cap de 1000 linhas do PostgREST e os grupos, com
    * last_message_at mais antigo, ficam fora do corte). */
   onlyGroups?: boolean;
+  /** Termo de busca. Com 2+ caracteres a query passa a ser uma BUSCA GLOBAL:
+   * varre o banco inteiro ignorando aba de status e Pessoas/Grupos. */
+  search?: string;
+  /** Quantas conversas carregar no scroll (sem busca). Default = 1 página. */
+  limit?: number;
 }
 
 export const useConversations = (options: UseConversationsOptions = {}) => {
-  const { tab = "open", userId, role, teamMemberId, channel, onlyGroups } = options;
+  const {
+    tab = "open",
+    userId,
+    role,
+    teamMemberId,
+    channel,
+    onlyGroups,
+    search,
+    limit = CONVERSATIONS_PAGE_SIZE,
+  } = options;
   const queryClient = useQueryClient();
   const isTyping = useIsTyping();
   const isTypingRef = useRef(isTyping);
+  // Há mais conversas além das carregadas? (habilita o botão "Carregar mais")
+  const [hasMore, setHasMore] = useState(false);
 
   // Keep ref updated so subscription callbacks have latest value
   useEffect(() => {
     isTypingRef.current = isTyping;
   }, [isTyping]);
 
-  const { data: conversations, isLoading } = useQuery({
-    queryKey: ["conversations", tab, userId, role, teamMemberId, channel, onlyGroups ?? false],
+  const term = (search ?? "").trim();
+  const isSearch = term.length >= 2;
+
+  const { data: conversations, isLoading, isFetching } = useQuery({
+    // ATENÇÃO: rowMatchesKey/patchLists leem esta chave por POSIÇÃO — chaves
+    // novas só podem ser acrescentadas NO FIM.
+    queryKey: [
+      "conversations", tab, userId, role, teamMemberId, channel, onlyGroups ?? false,
+      isSearch ? term : "", isSearch ? 0 : limit,
+    ],
     queryFn: async () => {
       // PERF: select explícito SEM messages_history (72% do payload do tenant
       // de maior volume — ~9MB de JSON arquivado baixado só pra montar a lista).
@@ -69,37 +146,66 @@ export const useConversations = (options: UseConversationsOptions = {}) => {
             name
           )
         `)
-        .order("last_message_at", { ascending: false });
+        // nullsFirst: false é obrigatório com paginação — no DESC o Postgres
+        // põe NULL primeiro e as conversas sem mensagem ocupariam a 1ª página.
+        .order("last_message_at", { ascending: false, nullsFirst: false });
 
       // PERF: filtro de canal server-side (antes baixava tudo e descartava
       // client-side). Conversas antigas têm channel NULL = whatsapp.
+      // Na busca o `.or(...)` é usado pelas condições do termo — WhatsApp
+      // (channel whatsapp OU null) volta a ser filtrado client-side ali, para
+      // não empilhar dois `or=` na mesma query.
       if (channel === "instagram") {
         query = query.eq("channel", "instagram");
-      } else if (channel === "whatsapp") {
+      } else if (channel === "whatsapp" && !isSearch) {
         query = query.or("channel.eq.whatsapp,channel.is.null");
       }
 
-      // Aba Grupos: filtro server-side (grupos têm last_message_at antigo e
-      // caíam fora do cap de 1000 linhas do PostgREST em tenants com volume)
-      if (onlyGroups) {
-        query = query.not("group_id", "is", null);
+      if (isSearch) {
+        // BUSCA GLOBAL (user rule): "a busca tem que retornar TODAS as
+        // conversas". Filtrar client-side o que já foi carregado escondia
+        // tickets reais — o PostgREST corta a lista em 1000 linhas e em tenants
+        // grandes a conversa procurada simplesmente nunca chegava ao browser.
+        // A busca ignora a aba de status e Pessoas/Grupos: o ticket pode estar
+        // resolvido ou ser um grupo.
+        const conds = await buildSearchConditions(term);
+        if (conds.length === 0) {
+          setHasMore(false);
+          return [];
+        }
+        query = query.or(conds.join(",")).limit(SEARCH_LIMIT);
+      } else {
+        // Aba Grupos: filtro server-side (grupos têm last_message_at antigo e
+        // caíam fora do cap de 1000 linhas do PostgREST em tenants com volume)
+        if (onlyGroups) {
+          query = query.not("group_id", "is", null);
+        }
+
+        // Apply filters based on tab
+        if (tab === "open") {
+          query = query.eq("status", "open");
+        } else if (tab === "pending") {
+          query = query.eq("status", "pending");
+        } else if (tab === "resolved") {
+          query = query.eq("status", "resolved");
+        }
+        // if tab === "all", no status filter is applied
+
+        query = query.range(0, limit - 1);
       }
 
-      // Apply filters based on tab
-      if (tab === "open") {
-        query = query.eq("status", "open");
-      } else if (tab === "pending") {
-        query = query.eq("status", "pending");
-      } else if (tab === "resolved") {
-        query = query.eq("status", "resolved");
-      }
-      // if tab === "all", no status filter is applied
-
-      const { data, error } = await query.limit(5000);
+      const { data, error } = await query;
 
       if (error) throw error;
 
+      setHasMore(!isSearch && (data?.length ?? 0) >= limit);
+
       let filteredData = data as Conversation[];
+
+      // Canal na busca (ver comentário acima): WhatsApp = channel whatsapp/null
+      if (isSearch && channel === "whatsapp") {
+        filteredData = filteredData.filter((c) => (c.channel || "whatsapp") !== "instagram");
+      }
 
       // Para agentes, filtrar apenas conversas atribuídas a eles (quando abertas)
       // Agentes podem ver: conversas atribuídas a eles OU conversas pendentes
@@ -182,6 +288,9 @@ export const useConversations = (options: UseConversationsOptions = {}) => {
       return conversationsWithLastMessage as (Conversation & { last_message_obj: any })[];
     },
     enabled: !!userId,
+    // "Carregar mais" e digitar na busca trocam a queryKey — sem isto a lista
+    // pisca "Carregando..." a cada tecla/clique.
+    placeholderData: (prev: any) => prev,
     refetchInterval: 300000, // Polling every 5 minutes for follow up badges
   });
 
@@ -229,6 +338,10 @@ export const useConversations = (options: UseConversationsOptions = {}) => {
         if (next) queryClient.setQueryData(key, next);
       }
     };
+
+    // Lista de resultados de busca: não recebe linhas novas por realtime (o
+    // critério vive no servidor). Só atualiza o que já está nela.
+    const isSearchKey = (key: readonly unknown[]) => !!(key as any[])[7];
 
     // Espelha os filtros da queryFn: a linha pertence à lista dessa queryKey?
     const rowMatchesKey = (row: any, key: readonly unknown[]) => {
@@ -302,6 +415,12 @@ export const useConversations = (options: UseConversationsOptions = {}) => {
           let needsReconcile = false;
           patchLists((list, key) => {
             const idx = list.findIndex((c) => c.id === raw.id);
+            if (isSearchKey(key)) {
+              if (idx < 0) return null;
+              const next = [...list];
+              next[idx] = { ...next[idx], ...scalar };
+              return sortByLastMessage(next);
+            }
             const matches = rowMatchesKey(scalar, key);
             if (idx >= 0) {
               if (!matches) return list.filter((c) => c.id !== raw.id);
@@ -397,6 +516,9 @@ export const useConversations = (options: UseConversationsOptions = {}) => {
   return {
     conversations: conversations || [],
     isLoading,
+    isFetching,
+    isSearching: isSearch,
+    hasMore,
   };
 };
 

@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useConversations } from "@/hooks/useConversations";
+import { useConversations, CONVERSATIONS_PAGE_SIZE } from "@/hooks/useConversations";
 import { useUnreadCounts } from "@/hooks/useUnreadCounts";
 import { useAuth } from "@/hooks/useAuth";
 import { useCurrentTeamMember, useStaff } from "@/hooks/useStaff";
@@ -202,14 +202,30 @@ export const ConversationsList = ({
     };
   }, []);
 
+  // Busca: o termo digitado só vai pro banco após 350ms de pausa (a busca é
+  // global — varre TODAS as conversas do banco, não só as carregadas)
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchQuery.trim()), 350);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
+  // Scroll paginado: começa com 1 página; "Carregar mais" soma outra
+  const [visibleCount, setVisibleCount] = useState(CONVERSATIONS_PAGE_SIZE);
+  useEffect(() => {
+    setVisibleCount(CONVERSATIONS_PAGE_SIZE);
+  }, [tab, selectedChannelFilter, selectedTypeFilter]);
+
   // Passar role e teamMemberId para filtrar por agente
-  const { conversations, isLoading } = useConversations({
+  const { conversations, isLoading, isFetching, isSearching, hasMore } = useConversations({
     tab: selectedTypeFilter === "groups" ? "all" : tab,
     userId: user?.id,
     role: userRole,
     teamMemberId: currentTeamMember?.id,
     channel: selectedChannelFilter,
-    onlyGroups: selectedTypeFilter === "groups"
+    onlyGroups: selectedTypeFilter === "groups",
+    search: debouncedSearch,
+    limit: visibleCount,
   });
 
   // Buscar lista de membros da equipe para exibir nome do atendente atribuído
@@ -344,24 +360,7 @@ export const ConversationsList = ({
 
   const filteredConversations = conversations.filter((conv) => {
     const contact = conv.contacts;
-    const group = (conv as any).groups;
     const isGroup = !!(conv as any).group_id;
-
-    // Get display name safely
-    let displayName = "";
-    if (isGroup && group) {
-      displayName = group.group_name || "Grupo sem Nome";
-    } else if (contact) {
-      displayName = contact.push_name || contact.phone || contact.number || "";
-    }
-
-    const matchesSearch =
-      displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (contact?.number?.includes(searchQuery)) ||
-      (contact?.phone?.includes(searchQuery)) ||
-      (group?.remote_jid?.includes(searchQuery)) ||
-      (conv as any).ticket_id?.toString().includes(searchQuery) ||
-      conv.id.includes(searchQuery);
 
     const matchesQueue = selectedQueueFilter.length > 0
       ? selectedQueueFilter.includes((conv as any).queue_id || "")
@@ -380,8 +379,11 @@ export const ConversationsList = ({
         (!!(conv as any).assigned_agent_id && selectedAgentFilter.includes((conv as any).assigned_agent_id))
       : true;
 
-    // Filter by People vs Groups
-    const matchesType = selectedTypeFilter === "groups" ? isGroup : !isGroup;
+    // Filter by People vs Groups — durante a busca não se aplica: a busca é
+    // global (todas as abas, pessoas e grupos, aberto/pendente/resolvido)
+    const matchesType = isSearching
+      ? true
+      : selectedTypeFilter === "groups" ? isGroup : !isGroup;
 
     // Filtro "Não respondidas": espelha a bolinha laranja do card — última
     // mensagem existe e não é outbound nem de sistema (cliente aguardando resposta)
@@ -390,7 +392,7 @@ export const ConversationsList = ({
       ? !!lastMsgObj && lastMsgObj.direction !== "outbound" && lastMsgObj.direction !== "system"
       : true;
 
-    return matchesSearch && matchesQueue && matchesTag && matchesInstance && matchesAgent && matchesType && matchesUnanswered;
+    return matchesQueue && matchesTag && matchesInstance && matchesAgent && matchesType && matchesUnanswered;
   });
 
   const selectedConversation = conversations.find(c => c.id === selectedId);
@@ -662,7 +664,7 @@ export const ConversationsList = ({
           <div className="relative flex-1">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-black dark:text-white" />
             <Input
-              placeholder="Buscar contatos..."
+              placeholder="Buscar em todos os tickets..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-8 border-secondary"
@@ -684,11 +686,21 @@ export const ConversationsList = ({
         </div>
       </div>
 
+      {isSearching && (
+        <div className="px-3 py-1.5 text-[11px] text-muted-foreground bg-muted/40 border-b border-border">
+          {isFetching && filteredConversations.length === 0
+            ? "Buscando em todos os tickets..."
+            : `${filteredConversations.length} resultado${filteredConversations.length === 1 ? "" : "s"} em todos os tickets (abertos, pendentes e resolvidos)`}
+        </div>
+      )}
+
       <ScrollArea className="flex-1">
         {isLoading ? (
           <div className="p-4 text-center text-muted-foreground">Carregando...</div>
         ) : filteredConversations.length === 0 ? (
-          <div className="p-4 text-center text-muted-foreground">Nenhuma conversa encontrada</div>
+          <div className="p-4 text-center text-muted-foreground">
+            {isSearching && isFetching ? "Buscando..." : "Nenhuma conversa encontrada"}
+          </div>
         ) : (
           <div className="p-2 space-y-1">
             {filteredConversations.map((conversation, index) => {
@@ -908,6 +920,17 @@ export const ConversationsList = ({
                 </button>
               );
             })}
+
+            {!isSearching && hasMore && (
+              <Button
+                variant="outline"
+                className="w-full mt-2"
+                disabled={isFetching}
+                onClick={() => setVisibleCount((c) => c + CONVERSATIONS_PAGE_SIZE)}
+              >
+                {isFetching ? "Carregando..." : "Carregar mais"}
+              </Button>
+            )}
           </div>
         )}
       </ScrollArea>

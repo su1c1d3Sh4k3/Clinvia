@@ -76,6 +76,19 @@ export function InboxGuide() {
                     <strong>salvo no navegador</strong> — permanece ativo mesmo ao atualizar a página ou sair e voltar;
                     para removê-lo, use o botão <strong>Limpar Filtros</strong> no topo da janela de filtros.
                 </Callout>
+                <Callout type="dica" title="Busca: procura em TODOS os tickets">
+                    O campo <strong>Buscar em todos os tickets</strong> não filtra só o que está na tela — ele consulta o
+                    banco inteiro. Digite o nome, o telefone (ou só os últimos dígitos), o nome do grupo ou o número do
+                    ticket e a busca traz <strong>todas as conversas daquele cliente</strong>, sem importar a aba:
+                    pendentes, em atendimento, resolvidas, pessoas e grupos aparecem juntos no resultado. Apague a busca
+                    para voltar à lista normal.
+                </Callout>
+                <Callout type="atencao" title="A lista carrega 100 por vez">
+                    Para abrir rápido mesmo em clínicas com milhares de conversas, a lista mostra as{" "}
+                    <strong>100 conversas mais recentes</strong>. Ao chegar no fim, use o botão{" "}
+                    <strong>Carregar mais</strong> para trazer as próximas 100. Se estiver procurando um cliente
+                    específico, não precisa rolar: use a busca, que já olha o banco inteiro.
+                </Callout>
                 <div className="flex flex-wrap gap-2">
                     <Button size="sm" variant="outline" onClick={() => navigate("/?tour=inbox-atender")}>
                         <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
@@ -319,6 +332,10 @@ export function InboxGuide() {
                         {
                             q: "O que significa a bolinha/contador na conversa?",
                             a: "O contador azul são mensagens não lidas — ao abrir a conversa, ele zera. A bolinha ao lado do nome mostra quem falou por último: laranja = a última mensagem é do cliente (resposta do atendente pendente); verde = a última mensagem foi da equipe. Os balões vermelhos nas abas Abertos/Pendentes/Grupos somam as não lidas e respeitam os Filtros Avançados: com um filtro de fila, tag, conexão ou usuário aplicado, o balão mostra só as não lidas daquele recorte — se os clientes do filtro não têm nada não lido, o balão some.",
+                        },
+                        {
+                            q: "Não acho a conversa de um cliente na lista. Sumiu?",
+                            a: "Não. A lista mostra as 100 conversas mais recentes (use Carregar mais no fim para trazer as próximas) — se o cliente falou há mais tempo, ele está mais para baixo. Em vez de rolar, digite o nome ou o telefone no campo de busca: a busca consulta o banco inteiro e traz TODAS as conversas daquele cliente, pendentes, em atendimento e resolvidas, de pessoas e de grupos, independente da aba aberta.",
                         },
                         {
                             q: "Como vejo só as conversas que aguardam resposta?",
