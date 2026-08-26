@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Trophy, XCircle, CheckCircle2 } from "lucide-react";
 import { DayPicker } from "./DayPicker";
+import { ChannelPicker } from "./ChannelPicker";
 import { useCrmResults } from "@/hooks/useCrmDashboard";
 import { formatCurrency } from "@/hooks/useAppointmentsDashboard";
 
@@ -31,13 +32,17 @@ const CARDS = [
 
 export function ResultadosSection() {
     const [date, setDate] = useState(new Date());
-    const { data, isLoading } = useCrmResults(date);
+    const [channelId, setChannelId] = useState<string | null>(null);
+    const { data, isLoading } = useCrmResults(date, channelId);
 
     return (
         <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <h3 className="text-base font-semibold">Resultados</h3>
-                <DayPicker date={date} onDateChange={setDate} />
+                <div className="flex flex-wrap items-center gap-2">
+                    <ChannelPicker value={channelId} onChange={setChannelId} />
+                    <DayPicker date={date} onDateChange={setDate} />
+                </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

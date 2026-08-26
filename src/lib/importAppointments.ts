@@ -237,6 +237,10 @@ export async function importAppointments(opts: {
         }
     }
 
+    // Conexão do lote: o card do CRM é por (contato, conexão), então a importação
+    // precisa escolher um funil. v1 usa a conexão primária de disparos do tenant.
+    const importInstanceId = await resolvePrimaryInstanceId(ownerId);
+
     // 2. Carrega os serviços vinculados
     const svcIdByKey = new Map<string, string>(serviceLinks.map((l) => [l.key, l.target]));
     const svcIds = [...new Set(serviceLinks.map((l) => l.target))];
@@ -373,6 +377,7 @@ export async function importAppointments(opts: {
                 type: "appointment",
                 status,
                 created_via: "import",
+                instance_id: importInstanceId,
             },
             contactId, professionalId, svc, price, status, start,
         });
@@ -400,7 +405,7 @@ export async function importAppointments(opts: {
     const cardCache = new Map<string, { id: string; svcIds: Set<string>; total: number } | null>();
     for (const p of prepared) {
         try {
-            await syncCrmForImported(ownerId, p, cardCache, result);
+            await syncCrmForImported(ownerId, p, cardCache, result, importInstanceId);
         } catch (err: any) {
             result.errors.push(`CRM (${p.svc.name}): ${err.message}`);
         }
@@ -412,36 +417,63 @@ export async function importAppointments(opts: {
 
 const TERMINAL = ["Ganho", "Perdido", "Finalizado"];
 
+/**
+ * Conexão primária de disparos do tenant — espelha pickAutomationInstance
+ * (primária marcada → Meta → mais antiga, sempre conectada).
+ */
+async function resolvePrimaryInstanceId(ownerId: string): Promise<string | null> {
+    const { data } = await supabase
+        .from("instances")
+        .select("id, provider, instance_name, is_automation_primary, created_at")
+        .eq("user_id", ownerId)
+        .eq("status", "connected");
+    const rows = (data || []) as any[];
+    if (rows.length === 0) return null;
+    const isMeta = (i: any) => i.provider === "meta" || (i.instance_name || "").startsWith("meta-");
+    rows.sort((a, b) => {
+        if (!!a.is_automation_primary !== !!b.is_automation_primary) return a.is_automation_primary ? -1 : 1;
+        if (isMeta(a) !== isMeta(b)) return isMeta(a) ? -1 : 1;
+        return (a.created_at || "").localeCompare(b.created_at || "");
+    });
+    return rows[0].id;
+}
+
 async function syncCrmForImported(
     ownerId: string,
     p: { contactId: string; professionalId: string; svc: any; price: number; status: string; start: Date },
     cardCache: Map<string, { id: string; svcIds: Set<string>; total: number } | null>,
-    result: AppointmentImportResult
+    result: AppointmentImportResult,
+    instanceId: string | null
 ) {
     const nowIso = new Date().toISOString();
 
     // Finalizado → card Ganho (a venda já foi criada pelo trigger do banco)
     if (p.status === "completed") {
-        await createInactiveCard(ownerId, p, "Ganho", null, result);
+        await createInactiveCard(ownerId, p, "Ganho", null, result, instanceId);
         return;
     }
 
     // Cancelado / faltou → card Perdido
     if (p.status === "canceled" || p.status === "no-show") {
         const lossType = p.status === "no-show" ? "no_show" : "canceled";
-        await createInactiveCard(ownerId, p, "Perdido", lossType, result);
+        await createInactiveCard(ownerId, p, "Perdido", lossType, result, instanceId);
         return;
     }
 
     // Pendente / confirmado / remarcado / em espera → card ativo em Agendado
+    // no funil da conexão do lote (fallback: card legado, sem conexão).
     let cached = cardCache.get(p.contactId);
     if (cached === undefined) {
-        const { data: card } = await supabase
+        const { data: cards } = await supabase
             .from("crm_client" as any)
             .select("*")
             .eq("contact_id", p.contactId)
-            .eq("is_active", true)
-            .maybeSingle();
+            .eq("is_active", true);
+        const rows = (cards || []) as any[];
+        const card =
+            (instanceId && rows.find((r) => r.instance_id === instanceId)) ||
+            rows.find((r) => !r.instance_id && !r.instagram_instance_id) ||
+            null;
         if (card && !TERMINAL.includes((card as any).stage)) {
             const services = await supabase
                 .from("crm_client_services" as any)
@@ -471,6 +503,7 @@ async function syncCrmForImported(
             .insert({
                 user_id: ownerId,
                 contact_id: p.contactId,
+                instance_id: instanceId,
                 stage: "Agendado",
                 stage_changed_at: nowIso,
                 value: 0,
@@ -511,12 +544,14 @@ async function createInactiveCard(
     p: { contactId: string; professionalId: string; svc: any; price: number },
     stage: "Ganho" | "Perdido",
     lossType: "canceled" | "no_show" | null,
-    result: AppointmentImportResult
+    result: AppointmentImportResult,
+    instanceId: string | null
 ) {
     const nowIso = new Date().toISOString();
     const payload: any = {
         user_id: ownerId,
         contact_id: p.contactId,
+        instance_id: instanceId,
         stage,
         stage_changed_at: nowIso,
         value: p.price,

@@ -50,10 +50,24 @@ export const STAGE_COLORS: Record<CrmStage, string> = {
   'Finalizado': '#6b7280',
 };
 
+/** channel_key dos cards sem conexão (legado/manual). Espelha o DEFAULT da coluna gerada. */
+export const CHANNEL_SENTINEL = '00000000-0000-0000-0000-000000000000';
+
+/** Canal de um card/conversa: instância WhatsApp, conta Instagram, ou sentinela. */
+export function channelKeyOf(row: {
+  instance_id?: string | null;
+  instagram_instance_id?: string | null;
+}): string {
+  return row?.instance_id || row?.instagram_instance_id || CHANNEL_SENTINEL;
+}
+
 export interface CrmClient {
   id: string;
   user_id: string;
   contact_id: string;
+  instance_id: string | null;
+  instagram_instance_id: string | null;
+  channel_key: string;
   stage: CrmStage;
   stage_changed_at: string;
   value: number;

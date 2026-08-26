@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { CRM_STAGES, TERMINAL_STAGES } from "@/types/crm-client";
+import { CRM_STAGES, TERMINAL_STAGES, CHANNEL_SENTINEL, channelKeyOf } from "@/types/crm-client";
 
 export const MONITOR_STAGES = CRM_STAGES.filter(
     (s) => !TERMINAL_STAGES.includes(s as (typeof TERMINAL_STAGES)[number])
@@ -59,7 +59,7 @@ export function useMonitorConversations(range: MonitorRange) {
             const [dealsRes, convsRes, terminalRes, resolvedRes] = await Promise.all([
                 supabase
                     .from("crm_client" as any)
-                    .select("contact_id, stage, contacts(id, push_name, phone, number, profile_pic_url)")
+                    .select("contact_id, stage, instance_id, instagram_instance_id, contacts(id, push_name, phone, number, profile_pic_url)")
                     .eq("is_active", true)
                     .in("stage", MONITOR_STAGES),
                 supabase
@@ -74,7 +74,7 @@ export function useMonitorConversations(range: MonitorRange) {
                 supabase
                     .from("crm_client" as any)
                     .select(
-                        "id, contact_id, stage, stage_changed_at, contacts(id, push_name, phone, number, profile_pic_url)"
+                        "id, contact_id, stage, stage_changed_at, instance_id, instagram_instance_id, contacts(id, push_name, phone, number, profile_pic_url)"
                     )
                     .in("stage", TERMINAL_STAGES)
                     .gte("stage_changed_at", startIso)
@@ -96,12 +96,21 @@ export function useMonitorConversations(range: MonitorRange) {
             if (terminalRes.error) throw terminalRes.error;
             if (resolvedRes.error) throw resolvedRes.error;
 
-            const dealByContact = new Map<string, { stage: string; contact: MonitorContact }>();
+            // O card é por (contato, conexão) — a conversa só casa com o card do
+            // funil dela; card sem conexão (legado) vale como fallback.
+            const dealKey = (contactId: string, channel: string) => `${contactId}|${channel}`;
+            const dealByContactChannel = new Map<string, { stage: string; contact: MonitorContact }>();
             (dealsRes.data || []).forEach((d: any) => {
                 if (d.contact_id && d.contacts) {
-                    dealByContact.set(d.contact_id, { stage: d.stage, contact: d.contacts });
+                    dealByContactChannel.set(dealKey(d.contact_id, channelKeyOf(d)), {
+                        stage: d.stage,
+                        contact: d.contacts,
+                    });
                 }
             });
+            const findDeal = (conv: any) =>
+                dealByContactChannel.get(dealKey(conv.contact_id, channelKeyOf(conv))) ||
+                dealByContactChannel.get(dealKey(conv.contact_id, CHANNEL_SENTINEL));
 
             const cards: MonitorCard[] = [];
             const agentCounts = new Map<string, AgentTicketCounts>();
@@ -116,7 +125,7 @@ export function useMonitorConversations(range: MonitorRange) {
             (convsRes.data || []).forEach((c: any) => {
                 bumpAgent(c.assigned_agent_id, c.status === "open" ? "open" : "pending");
 
-                const deal = dealByContact.get(c.contact_id);
+                const deal = findDeal(c);
                 if (!deal) return;
 
                 const channel: "whatsapp" | "instagram" = c.channel === "instagram" ? "instagram" : "whatsapp";
@@ -146,6 +155,7 @@ export function useMonitorConversations(range: MonitorRange) {
             // encerrados por um usuário — resoluções automáticas (campanha/cron,
             // sem assigned_agent_id) ficam de fora.
             const resolvedByContact = new Map<string, any>();
+            const resolvedByChannel = new Map<string, any>();
             (resolvedRes.data || []).forEach((c: any) => {
                 bumpAgent(c.assigned_agent_id, "resolved");
                 if (!c.assigned_agent_id) return;
@@ -153,19 +163,31 @@ export function useMonitorConversations(range: MonitorRange) {
                 if (!prev || (c.resolved_at || "") > (prev.resolved_at || "")) {
                     resolvedByContact.set(c.contact_id, c);
                 }
+                const k = dealKey(c.contact_id, channelKeyOf(c));
+                const prevCh = resolvedByChannel.get(k);
+                if (!prevCh || (c.resolved_at || "") > (prevCh.resolved_at || "")) {
+                    resolvedByChannel.set(k, c);
+                }
             });
 
             const finalizados: MonitorCard[] = [];
             const seenContacts = new Set<string>();
             // terminalRes vem ordenado por stage_changed_at desc → 1 card (o mais
-            // recente) por contato, evitando key duplicada quando o contato tem
-            // mais de um desfecho no período
+            // recente) por contato+conexão, evitando key duplicada quando o contato
+            // tem mais de um desfecho no período
             (terminalRes.data || []).forEach((d: any) => {
                 if (!d.contact_id || !d.contacts) return;
-                if (seenContacts.has(d.contact_id)) return;
-                const conv = resolvedByContact.get(d.contact_id);
+                const cardChannel = channelKeyOf(d);
+                const seenKey = dealKey(d.contact_id, cardChannel);
+                if (seenContacts.has(seenKey)) return;
+                // Card com conexão só casa com a conversa resolvida daquela conexão;
+                // card legado (sem conexão) aceita qualquer uma do contato.
+                const conv =
+                    cardChannel === CHANNEL_SENTINEL
+                        ? resolvedByContact.get(d.contact_id)
+                        : resolvedByChannel.get(seenKey);
                 if (!conv) return; // finalizado sem usuário que encerrou → não aparece
-                seenContacts.add(d.contact_id);
+                seenContacts.add(seenKey);
                 const channel: "whatsapp" | "instagram" =
                     conv.channel === "instagram" ? "instagram" : "whatsapp";
                 finalizados.push({

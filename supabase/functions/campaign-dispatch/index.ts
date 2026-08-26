@@ -242,12 +242,16 @@ async function moveCrm(supabase: any, campaign: any, contactId: string, conversa
     const targetQueueName = iaEnabled ? "Atendimento IA" : "Atendimento Humano";
 
     try {
-        const { data: activeCard } = await supabase
+        // O card é por (contato, conexão) — a campanha só mexe no funil da instância dela
+        const { data: activeCards } = await supabase
             .from("crm_client")
-            .select("id, stage")
+            .select("id, stage, instance_id, instagram_instance_id")
             .eq("contact_id", contactId)
-            .eq("is_active", true)
-            .maybeSingle();
+            .eq("is_active", true);
+        const activeCard =
+            (activeCards || []).find((c: any) => c.instance_id === campaign.instance_id) ||
+            (activeCards || []).find((c: any) => !c.instance_id && !c.instagram_instance_id) ||
+            null;
 
         if (activeCard) {
             if (activeCard.stage !== targetStage) {
@@ -264,6 +268,7 @@ async function moveCrm(supabase: any, campaign: any, contactId: string, conversa
                 contact_id: contactId,
                 stage: targetStage,
                 is_active: true,
+                instance_id: campaign.instance_id || null,
             });
         }
 

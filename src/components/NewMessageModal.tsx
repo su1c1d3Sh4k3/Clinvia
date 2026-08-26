@@ -438,13 +438,19 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
                         await supabase.from("conversations").update({ queue_id: queueId }).eq("id", conversation.id);
                     }
 
-                    // Create or update crm_client
-                    const { data: existingDeal } = await supabase
+                    // Create or update crm_client — o card é por (contato, conexão),
+                    // então mexe só no funil da instância desta conversa
+                    const convInstanceId = (conversation as any).instance_id || instance.id;
+                    const { data: activeDeals } = await supabase
                         .from("crm_client" as any)
-                        .select("id")
+                        .select("id, instance_id, instagram_instance_id")
                         .eq("contact_id", contact.id)
-                        .eq("is_active", true)
-                        .maybeSingle();
+                        .eq("is_active", true);
+                    const rows = (activeDeals || []) as any[];
+                    const existingDeal =
+                        rows.find((r) => r.instance_id === convInstanceId) ||
+                        rows.find((r) => !r.instance_id && !r.instagram_instance_id) ||
+                        null;
 
                     if (existingDeal) {
                         await supabase.from("crm_client" as any)
@@ -454,6 +460,7 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
                         await supabase.from("crm_client" as any).insert({
                             user_id: ownerId,
                             contact_id: contact.id,
+                            instance_id: convInstanceId,
                             stage: selectedCrmStage,
                         });
                     }

@@ -20,15 +20,20 @@ export function useCrmAppointmentSync() {
     queryClient.invalidateQueries({ queryKey: ["contact-crm-client"] });
   };
 
-  /** Find the active CRM card for a contact */
-  async function findActiveCard(contactId: string) {
+  /**
+   * Card ativo do contato no funil da conexão informada. Sem conexão (ou sem card
+   * naquela conexão) cai no card legado, que não tem conexão nenhuma.
+   */
+  async function findActiveCard(contactId: string, instanceId?: string | null) {
     const { data } = await supabase
       .from("crm_client" as any)
       .select("*")
       .eq("contact_id", contactId)
-      .eq("is_active", true)
-      .maybeSingle();
-    return data as any;
+      .eq("is_active", true);
+    const rows = (data || []) as any[];
+    const sentinel = rows.find((r) => !r.instance_id && !r.instagram_instance_id) || null;
+    if (!instanceId) return sentinel;
+    return rows.find((r) => r.instance_id === instanceId) || sentinel;
   }
 
   /** Find services in a CRM card */
@@ -61,10 +66,12 @@ export function useCrmAppointmentSync() {
     servicePrice?: number;
     serviceMinPrice?: number;
     professionalId?: string;
+    /** Conexão do agendamento — define em qual funil o card entra */
+    instanceId?: string | null;
   }) {
-    const { contactId, ownerId, serviceClientId, serviceName, servicePrice = 0, serviceMinPrice = 0, professionalId } = params;
+    const { contactId, ownerId, serviceClientId, serviceName, servicePrice = 0, serviceMinPrice = 0, professionalId, instanceId } = params;
 
-    let card = await findActiveCard(contactId);
+    let card = await findActiveCard(contactId, instanceId);
 
     if (card) {
       // Card exists — if in terminal stage, create a new one
@@ -86,6 +93,7 @@ export function useCrmAppointmentSync() {
         .insert({
           user_id: ownerId,
           contact_id: contactId,
+          instance_id: instanceId || null,
           stage: "Agendado",
           stage_changed_at: new Date().toISOString(),
           value: 0,
@@ -135,8 +143,10 @@ export function useCrmAppointmentSync() {
     serviceName?: string;
     servicePrice?: number;
     professionalId?: string;
+    /** Conexão do agendamento — define em qual funil o card entra */
+    instanceId?: string | null;
   }) {
-    const { contactId, ownerId, serviceClientId, serviceName, servicePrice = 0, professionalId } = params;
+    const { contactId, ownerId, serviceClientId, serviceName, servicePrice = 0, professionalId, instanceId } = params;
 
     // NOTA: a venda NÃO é mais criada aqui — ela é criada automaticamente
     // pelo trigger do banco quando o agendamento é criado (link_or_create_sale_on_appointment).
@@ -148,6 +158,7 @@ export function useCrmAppointmentSync() {
         .insert({
           user_id: ownerId,
           contact_id: contactId,
+          instance_id: instanceId || null,
           stage: "Ganho",
           stage_changed_at: new Date().toISOString(),
           value: servicePrice,
@@ -172,7 +183,7 @@ export function useCrmAppointmentSync() {
     }
 
     // 2. Remove the completed service from the active deal
-    const card = await findActiveCard(contactId);
+    const card = await findActiveCard(contactId, instanceId);
     if (!card) {
       invalidateCrm();
       return;
@@ -212,8 +223,10 @@ export function useCrmAppointmentSync() {
     serviceName?: string;
     servicePrice?: number;
     lossType: "canceled" | "no_show";
+    /** Conexão do agendamento — define em qual funil o card entra */
+    instanceId?: string | null;
   }) {
-    const { contactId, ownerId, serviceClientId, serviceName, servicePrice = 0, lossType } = params;
+    const { contactId, ownerId, serviceClientId, serviceName, servicePrice = 0, lossType, instanceId } = params;
 
     const lossReasonOther = lossType === "no_show"
       ? "Cliente não compareceu"
@@ -225,6 +238,7 @@ export function useCrmAppointmentSync() {
       .insert({
         user_id: ownerId,
         contact_id: contactId,
+        instance_id: instanceId || null,
         stage: "Perdido",
         stage_changed_at: new Date().toISOString(),
         value: servicePrice,
@@ -249,7 +263,7 @@ export function useCrmAppointmentSync() {
     }
 
     // 2. Remove the service from the active deal
-    const activeCard = await findActiveCard(contactId);
+    const activeCard = await findActiveCard(contactId, instanceId);
     if (activeCard && serviceClientId) {
       await supabase
         .from("crm_client_services" as any)

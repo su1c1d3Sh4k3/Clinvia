@@ -98,6 +98,7 @@ export function AgendaGuide() {
                 <StepByStep steps={[
                     { title: "Abra o modal", description: "Clique direto num horário vago da coluna do profissional (já preenche data/hora/profissional) ou use o botão Criar Agendamento no topo." },
                     { title: "Escolha o cliente", description: "Todo agendamento PRECISA de um cliente vinculado — é ele que recebe as confirmações e movimenta o CRM." },
+                    { title: "Escolha a conexão", description: "Campo obrigatório: é a conexão que diz em qual funil do CRM o agendamento entra (cada número tem o seu). Com uma conexão só, ela já vem selecionada." },
                     { title: "Serviço e profissional", description: "Selecione o serviço do catálogo; só aparecem profissionais vinculados àquele serviço, e o preço vem do cadastro." },
                     { title: "Pagamento (opcional)", description: "Já pode registrar a forma de pagamento (à vista, parcelado, misto). Se deixar pendente, acerta depois na aba Vendas do cliente." },
                 ]} />

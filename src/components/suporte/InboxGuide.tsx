@@ -197,8 +197,8 @@ export function InboxGuide() {
                 </p>
                 <div className="grid gap-3 sm:grid-cols-2">
                     {[
-                        { t: "Dados e etapa do CRM", d: "Nome, telefone, etiquetas, categoria (contato/lead/cliente) e a etapa atual no funil." },
-                        { t: "Negociação rápida", d: "Crie ou edite a negociação (serviços + valores) sem abrir o CRM — o card do funil nasce dali." },
+                        { t: "Dados e etapa do CRM", d: "Nome, telefone, etiquetas, categoria (contato/lead/cliente) e a etapa atual no funil desta conexão." },
+                        { t: "Negociação rápida", d: "Crie ou edite a negociação (serviços + valores) sem abrir o CRM — o card nasce no funil da conexão desta conversa." },
                         { t: "Resumo e sentimento", d: "Resumo da conversa gerado pela IA e o termômetro do humor do cliente." },
                         { t: "Atalhos", d: "Registrar venda, criar agendamento e abrir o perfil completo em um clique." },
                     ].map((x) => (
@@ -208,6 +208,12 @@ export function InboxGuide() {
                         </div>
                     ))}
                 </div>
+                <Callout type="atencao" title="Encerrar negociação mexe só nesta conexão">
+                    Cada número (e cada conta do Instagram) tem o seu próprio funil no CRM. Ao usar
+                    <strong> Encerrar negociação</strong>, só o card <strong>desta conversa</strong> vai para a etapa final —
+                    se o mesmo cliente também fala com você em outro número, a negociação de lá continua exatamente
+                    onde estava.
+                </Callout>
                 <Callout type="dica" title="O painel se fixa enquanto você trabalha">
                     Se você <strong>abrir qualquer seção</strong> (CRM, Venda, Copilot...) ou <strong>digitar algo</strong>,
                     o painel se fixa e não fecha mais ao tirar o mouse — nada do que você escreveu se perde. Para recolher,

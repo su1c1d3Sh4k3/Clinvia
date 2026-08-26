@@ -64,7 +64,7 @@ export const AIIntelligenceSidebar = ({ conversationId }: AIIntelligenceSidebarP
       if (!conversationId) return null;
       const { data, error } = await supabase
         .from("conversations" as any)
-        .select("summary, contact_id, group_id, instance_id, contacts(push_name, number, phone)")
+        .select("summary, contact_id, group_id, instance_id, instagram_instance_id, contacts(push_name, number, phone)")
         .eq("id", conversationId)
         .single();
       if (error) throw error;
@@ -75,18 +75,30 @@ export const AIIntelligenceSidebar = ({ conversationId }: AIIntelligenceSidebarP
   });
 
   // ── CRM (crm_client) ──
+  // O card é por (contato, conexão): esta conversa só enxerga o funil da conexão
+  // dela. Card sem conexão (legado) continua valendo como fallback.
   const contactId = conversationData?.contact_id;
+  const convInstanceId = (conversationData as any)?.instance_id as string | null | undefined;
+  const convIgInstanceId = (conversationData as any)?.instagram_instance_id as string | null | undefined;
 
   const { data: crmClient, refetch: refetchCrm } = useQuery({
-    queryKey: ["crm-client-sidebar", contactId],
+    queryKey: ["crm-client-sidebar", contactId, convInstanceId, convIgInstanceId],
     queryFn: async () => {
       const { data } = await supabase
         .from("crm_client" as any)
         .select("*, crm_client_services(*)")
         .eq("contact_id", contactId)
-        .eq("is_active", true)
-        .maybeSingle();
-      return data;
+        .eq("is_active", true);
+      const rows = (data || []) as any[];
+      return (
+        rows.find(
+          (r) =>
+            (r.instance_id ?? null) === (convInstanceId ?? null) &&
+            (r.instagram_instance_id ?? null) === (convIgInstanceId ?? null)
+        ) ||
+        rows.find((r) => !r.instance_id && !r.instagram_instance_id) ||
+        null
+      );
     },
     enabled: !!contactId,
   });
@@ -227,6 +239,8 @@ export const AIIntelligenceSidebar = ({ conversationId }: AIIntelligenceSidebarP
           onOpenChange={setShowNegotiationModal}
           contactId={contactId}
           deal={crmClient}
+          instanceId={convInstanceId}
+          instagramInstanceId={convIgInstanceId}
         />
       )}
       <SaleModal open={showSaleModal} onOpenChange={setShowSaleModal} fixedContactId={!isGroup ? contactId : undefined} />

@@ -15,6 +15,7 @@ import { useStaff, useCurrentTeamMember } from "@/hooks/useStaff";
 import { ContactPicker } from "@/components/ui/contact-picker";
 import { toast } from "sonner";
 import { CRM_STAGES, TERMINAL_STAGES } from "@/types/crm-client";
+import { useCrmChannels } from "@/hooks/useCrmChannels";
 import { ServiceCategory, ServiceName } from "@/types/services";
 
 interface ServiceLine {
@@ -26,14 +27,21 @@ interface ServiceLine {
   maxPrice: number;
 }
 
-export const NewCreateDealModal = () => {
+interface NewCreateDealModalProps {
+  /** Conexão da aba atual do CRM — pré-seleciona o funil */
+  defaultChannelId?: string;
+}
+
+export const NewCreateDealModal = ({ defaultChannelId }: NewCreateDealModalProps) => {
   const { data: ownerId } = useOwnerId();
   const { data: staffMembers } = useStaff();
   const { data: currentTeamMember } = useCurrentTeamMember();
+  const { data: channels } = useCrmChannels();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  const [channelId, setChannelId] = useState("");
   const [contactId, setContactId] = useState("");
   const [stage, setStage] = useState<string>("Qualificado");
   const [priority, setPriority] = useState("medium");
@@ -52,8 +60,9 @@ export const NewCreateDealModal = () => {
       setSelCategoryId(""); setSelServiceNameId(""); setSelApplicationId("");
     } else {
       setResponsibleId(currentTeamMember?.id || "");
+      setChannelId(defaultChannelId || (channels?.length === 1 ? channels[0].id : ""));
     }
-  }, [open, currentTeamMember]);
+  }, [open, currentTeamMember, defaultChannelId, channels]);
 
   const { data: categories } = useQuery({
     queryKey: ["services-categories"],
@@ -131,12 +140,22 @@ export const NewCreateDealModal = () => {
   const totalValue = services.reduce((sum, s) => sum + s.unitPrice * s.quantity, 0);
   const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
+  const selectedChannel = channels?.find((c) => c.id === channelId);
+
   const handleSave = async () => {
     if (!ownerId || !contactId) { toast.error("Selecione um contato"); return; }
-    const { data: existing } = await supabase
+    if (!selectedChannel) { toast.error("Selecione a conexão do funil"); return; }
+
+    // Card é por (contato, conexão): o mesmo contato pode ter negociação ativa
+    // em cada número/conta, mas nunca duas na mesma conexão.
+    let dup = supabase
       .from("crm_client" as any).select("id")
-      .eq("contact_id", contactId).eq("is_active", true).maybeSingle();
-    if (existing) { toast.error("Este contato já possui uma negociação ativa"); return; }
+      .eq("contact_id", contactId).eq("is_active", true);
+    dup = selectedChannel.kind === "wpp"
+      ? dup.eq("instance_id", channelId)
+      : dup.eq("instagram_instance_id", channelId);
+    const { data: existing } = await dup.maybeSingle();
+    if (existing) { toast.error("Este contato já possui uma negociação ativa nesta conexão"); return; }
 
     setSaving(true);
     try {
@@ -146,6 +165,8 @@ export const NewCreateDealModal = () => {
           user_id: ownerId, contact_id: contactId, stage, value: totalValue,
           priority, responsible_id: responsibleId || currentTeamMember?.id || null,
           notes: description || null,
+          instance_id: selectedChannel.kind === "wpp" ? channelId : null,
+          instagram_instance_id: selectedChannel.kind === "ig" ? channelId : null,
         }).select("id").single();
       if (error) throw error;
 
@@ -186,6 +207,22 @@ export const NewCreateDealModal = () => {
           <div className="space-y-1.5">
             <Label>Contato *</Label>
             <ContactPicker value={contactId} onChange={(val) => setContactId(val || "")} placeholder="Buscar contato..." />
+          </div>
+
+          {/* Conexão — define em qual funil o card entra */}
+          <div className="space-y-1.5">
+            <Label>Conexão *</Label>
+            <Select value={channelId} onValueChange={setChannelId}>
+              <SelectTrigger><SelectValue placeholder="Selecione a conexão" /></SelectTrigger>
+              <SelectContent>
+                {(channels || []).map((c) => (
+                  <SelectItem key={c.id} value={c.id}>{c.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground">
+              Cada conexão tem seu próprio funil — o card fica só no CRM dessa conexão.
+            </p>
           </div>
 
           {/* Serviços — native selects to avoid Radix duplication bug */}
@@ -326,7 +363,7 @@ export const NewCreateDealModal = () => {
 
         <div className="shrink-0 px-5 py-3 border-t flex justify-end gap-2">
           <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-          <Button onClick={handleSave} disabled={saving || !contactId}>
+          <Button onClick={handleSave} disabled={saving || !contactId || !channelId}>
             {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
             Criar Negociação
           </Button>

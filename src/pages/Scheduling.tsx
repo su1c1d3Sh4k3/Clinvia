@@ -324,6 +324,7 @@ export default function Scheduling() {
                     serviceName: event.service_name || "Serviço",
                     servicePrice: event.price || 0,
                     professionalId: event.professional_id || undefined,
+                    instanceId: event.instance_id || null,
                 };
 
                 if (newStatus === 'completed') {

@@ -1006,13 +1006,17 @@ async function processFeedback24h(ctx: CronContext): Promise<{ sent: number; err
             // Card CRM em "Pesquisa de Satisfação" enquanto aguarda a resposta.
             // Se ainda houver card ativo (ex.: sem auto_complete), move-o; senão cria.
             try {
-                const { data: activeCard } = await supabase
+                // Card por (contato, conexão): mexe só no funil da instância que enviou
+                const { data: activeCards } = await supabase
                     .from("crm_client")
-                    .select("id, stage")
+                    .select("id, stage, instance_id, instagram_instance_id")
                     .eq("contact_id", contactId)
                     .eq("user_id", userId)
-                    .eq("is_active", true)
-                    .maybeSingle();
+                    .eq("is_active", true);
+                const activeCard =
+                    (activeCards || []).find((c: any) => c.instance_id === ctx.instance.id) ||
+                    (activeCards || []).find((c: any) => !c.instance_id && !c.instagram_instance_id) ||
+                    null;
 
                 if (activeCard) {
                     if (activeCard.stage !== "Pesquisa de Satisfação") {
@@ -1034,6 +1038,7 @@ async function processFeedback24h(ctx: CronContext): Promise<{ sent: number; err
                         value: 0,
                         priority: "medium",
                         is_active: true,
+                        instance_id: ctx.instance.id,
                     });
                 }
             } catch (crmErr) {
@@ -1071,7 +1076,7 @@ async function processFeedbackTimeout(ctx: CronContext): Promise<void> {
 
     const { data: staleSessions } = await supabase
         .from("appointment_confirmation_sessions")
-        .select("id, contact_id, conversation_id")
+        .select("id, contact_id, conversation_id, instance_id")
         .eq("user_id", userId)
         .eq("flow_type", "feedback_24h")
         .in("state", ["awaiting_feedback_rating", "awaiting_feedback_detail"])
@@ -1085,14 +1090,18 @@ async function processFeedbackTimeout(ctx: CronContext): Promise<void> {
                 .eq("id", session.id);
 
             // Finaliza o card de Pesquisa de Satisfação sem resposta
-            const { data: card } = await supabase
+            const { data: cards } = await supabase
                 .from("crm_client")
-                .select("id, stage")
+                .select("id, stage, instance_id, instagram_instance_id")
                 .eq("contact_id", session.contact_id)
                 .eq("user_id", userId)
                 .eq("is_active", true)
-                .eq("stage", "Pesquisa de Satisfação")
-                .maybeSingle();
+                .eq("stage", "Pesquisa de Satisfação");
+            // Só o card do funil da conexão que fez a pesquisa
+            const card =
+                (cards || []).find((c: any) => c.instance_id === session.instance_id) ||
+                (cards || []).find((c: any) => !c.instance_id && !c.instagram_instance_id) ||
+                null;
 
             if (card) {
                 // Resolve a conversa antes (trigger de fila só afeta pending/open)

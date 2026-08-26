@@ -20,7 +20,7 @@ const TOPICS = [
     { id: "estagios", label: "As 16 etapas" },
     { id: "sync-fila", label: "Etapa ↔ fila" },
     { id: "terminais", label: "Etapas terminais" },
-    { id: "um-card-ativo", label: "1 card por cliente" },
+    { id: "funil-por-conexao", label: "Um funil por conexão" },
     { id: "negociacoes", label: "Negociações" },
     { id: "client-stage", label: "Contato, lead, cliente" },
     { id: "faq", label: "FAQ" },
@@ -55,6 +55,7 @@ export function CrmGuide() {
                     <div className="flex flex-wrap gap-2">
                         <LearnChip topicId="estagios">Conhecer as 16 etapas</LearnChip>
                         <LearnChip topicId="sync-fila">Como etapa e fila andam juntas</LearnChip>
+                        <LearnChip topicId="funil-por-conexao">Um funil para cada conexão</LearnChip>
                         <LearnChip topicId="terminais">O que as etapas terminais fazem</LearnChip>
                         <LearnChip topicId="negociacoes">Registrar negociações com valores</LearnChip>
                     </div>
@@ -158,16 +159,33 @@ export function CrmGuide() {
             </TopicSection>
 
             {/* 5 */}
-            <TopicSection id="um-card-ativo" index={5} icon={IdCard} title="Um card ativo por cliente"
-                subtitle="Nada de cliente duplicado no funil">
+            <TopicSection id="funil-por-conexao" index={5} icon={IdCard} title="Um funil por conexão"
+                subtitle="Cada número (e cada Instagram) tem o seu próprio quadro">
                 <p className="text-sm text-muted-foreground">
-                    Cada cliente tem <strong className="text-foreground">no máximo 1 card ativo</strong> no quadro. Se ele já
-                    está no funil e algo novo acontece (nova conversa, novo agendamento), o sistema{" "}
-                    <strong className="text-foreground">reaproveita o card existente</strong> em vez de criar outro.
+                    Se a clínica tem mais de uma conexão, o topo do CRM mostra{" "}
+                    <strong className="text-foreground">uma aba por número e uma por conta do Instagram</strong>, além da aba{" "}
+                    <strong className="text-foreground">Todos</strong>. Cada aba é um funil independente: o card daquele cliente
+                    naquele número. A aba escolhida fica guardada no endereço da página, então dá para deixar salvo nos favoritos.
                 </p>
+                <p className="text-sm text-muted-foreground">
+                    Dentro de uma conexão vale a regra de sempre:{" "}
+                    <strong className="text-foreground">1 card ativo por cliente</strong> — nova conversa ou novo agendamento
+                    reaproveitam o card em vez de criar outro. O que mudou é que o mesmo cliente{" "}
+                    <strong className="text-foreground">pode estar em etapas diferentes em cada conexão</strong>: em
+                    "Em Atendimento IA" no número que tem IA e em "Em Atendimento Humano" no número da recepção, por exemplo.
+                </p>
+                <Callout type="atencao" title="O mesmo nome pode aparecer duas vezes em Todos">
+                    Não é duplicidade. Na aba Todos os cards de todas as conexões aparecem juntos, e cada card ganha uma
+                    etiqueta com o nome da conexão. Por isso os totais do quadro podem ter subido — cada funil conta o seu.
+                </Callout>
+                <Callout type="dica" title="Mexer em uma conexão não mexe na outra">
+                    Arrastar o card na aba de um número muda a fila só da conversa daquele número. "Encerrar negociação" no
+                    inbox encerra só o atendimento daquela conversa — o card da outra conexão continua vivo.
+                </Callout>
                 <Callout type="dica" title='"Sumiu o card do fulano!"'>
-                    Provavelmente ele chegou a uma etapa terminal (virou histórico). Abra o perfil do cliente na página Clientes
-                    e veja a aba Negociações — toda a trajetória está lá.
+                    Confira se você não está na aba de outra conexão. Se não estiver lá, ele chegou a uma etapa terminal (virou
+                    histórico): abra o perfil do cliente na página Clientes, aba Negociações — a trajetória de cada conexão está lá,
+                    com a etiqueta do número.
                 </Callout>
             </TopicSection>
 
@@ -230,7 +248,15 @@ export function CrmGuide() {
                         },
                         {
                             q: "Por que não consigo criar dois cards para a mesma pessoa?",
-                            a: "Regra de 1 card ativo por cliente: evita duplicidade e números inflados no funil. Termine a jornada atual (terminal) e um novo card poderá nascer.",
+                            a: "Dentro da mesma conexão vale 1 card ativo por cliente: evita duplicidade e números inflados no funil. Termine a jornada atual (terminal) e um novo card poderá nascer. Em outra conexão, sim: cada número/Instagram tem o seu próprio card.",
+                        },
+                        {
+                            q: "O mesmo cliente apareceu duas vezes na aba Todos. É duplicidade?",
+                            a: "Não. Ele tem conversa em duas conexões, e cada conexão tem o seu funil — repare na etiqueta com o nome do número em cada card. Se quiser ver um funil de cada vez, use as abas do topo.",
+                        },
+                        {
+                            q: "Movi o card em um número e o outro não mudou. Está certo?",
+                            a: "Sim. Cada conexão é independente: mover o card muda a fila só das conversas daquela conexão. É isso que permite o cliente estar com a IA num número e com a equipe no outro.",
                         },
                         {
                             q: "O agendamento moveu o card sozinho para Agendado. Como?",

@@ -1122,12 +1122,16 @@ serve(async (req) => {
                 // Ensure CRM card exists for contact (also for existing conversations)
                 if (contactId && !groupId && !fromMe) {
                     try {
-                        const { data: existingCrm } = await supabase
+                        // O card é por (contato, conexão) — só conta o card do funil
+                        // desta conversa (ou o legado, sem conexão)
+                        const { data: activeCrm } = await supabase
                             .from('crm_client')
-                            .select('id')
+                            .select('id, instance_id, instagram_instance_id')
                             .eq('contact_id', contactId)
-                            .eq('is_active', true)
-                            .maybeSingle();
+                            .eq('is_active', true);
+                        const existingCrm = (activeCrm || []).find((c: any) =>
+                            c.instance_id === instance.id ||
+                            (!c.instance_id && !c.instagram_instance_id));
 
                         if (!existingCrm) {
                             let crmStage = 'Em Atendimento Humano';
@@ -1141,6 +1145,7 @@ serve(async (req) => {
                                 contact_id: contactId,
                                 stage: crmStage,
                                 is_active: true,
+                                instance_id: instance.id,
                             });
                             console.log('[webhook-handle-message] crm_client auto-created (existing conv):', crmStage);
                         }
@@ -1250,12 +1255,15 @@ serve(async (req) => {
                     // Auto-create crm_client if contact has no active deal
                     if (contactId && !groupId) {
                         try {
-                            const { data: existingDeal } = await supabase
+                            // Card por (contato, conexão): card de outro número não conta
+                            const { data: activeDeals } = await supabase
                                 .from('crm_client')
-                                .select('id')
+                                .select('id, instance_id, instagram_instance_id')
                                 .eq('contact_id', contactId)
-                                .eq('is_active', true)
-                                .maybeSingle();
+                                .eq('is_active', true);
+                            const existingDeal = (activeDeals || []).find((c: any) =>
+                                c.instance_id === instance.id ||
+                                (!c.instance_id && !c.instagram_instance_id));
 
                             if (!existingDeal) {
                                 // CRM stage segue a fila efetiva da conversa
@@ -1265,6 +1273,7 @@ serve(async (req) => {
                                     user_id: userId,
                                     contact_id: contactId,
                                     stage: crmStage,
+                                    instance_id: instance.id,
                                 });
                                 console.log('[webhook-handle-message] crm_client created:', crmStage);
                             }
@@ -1938,13 +1947,15 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                             .single();
                         enrichedContact = cData ? { ...cData, created_at: toSaoPaulo(cData.created_at) } : null;
 
-                        // 2. Active CRM deal + services
-                        const { data: crmCard } = await supabase
+                        // 2. Active CRM deal + services — o card do funil desta conexão
+                        const { data: crmCards } = await supabase
                             .from('crm_client')
-                            .select('id, stage, value, priority, is_active')
+                            .select('id, stage, value, priority, is_active, instance_id, instagram_instance_id')
                             .eq('contact_id', contactId)
-                            .eq('is_active', true)
-                            .maybeSingle();
+                            .eq('is_active', true);
+                        const crmCard = (crmCards || []).find((c: any) => c.instance_id === instance.id)
+                            || (crmCards || []).find((c: any) => !c.instance_id && !c.instagram_instance_id)
+                            || null;
 
                         if (crmCard) {
                             const { data: crmSvcs } = await supabase

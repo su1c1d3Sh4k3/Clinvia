@@ -3,6 +3,7 @@ import { isToday } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
 import { STAGE_COLORS } from "@/types/crm-client";
 import { DayPicker } from "./DayPicker";
+import { ChannelPicker } from "./ChannelPicker";
 import { useCrmStageCounts } from "@/hooks/useCrmDashboard";
 
 interface StageStatusCardsProps {
@@ -17,16 +18,28 @@ interface StageStatusCardsProps {
  */
 export function StageStatusCards({ title, stages }: StageStatusCardsProps) {
     const [date, setDate] = useState(new Date());
-    const { data, isLoading } = useCrmStageCounts(date);
+    const [channelId, setChannelId] = useState<string | null>(null);
+    const live = isToday(date);
+    // Snapshot histórico é agregado por conta — só hoje dá para separar por conexão
+    const { data, isLoading } = useCrmStageCounts(date, live ? channelId : null);
 
-    const isEmpty = !isLoading && (!data || data.length === 0) && !isToday(date);
+    const isEmpty = !isLoading && (!data || data.length === 0) && !live;
 
     return (
         <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <h3 className="text-base font-semibold">{title}</h3>
-                <DayPicker date={date} onDateChange={setDate} />
+                <div className="flex flex-wrap items-center gap-2">
+                    <ChannelPicker value={channelId} onChange={setChannelId} disabled={!live} />
+                    <DayPicker date={date} onDateChange={setDate} />
+                </div>
             </div>
+
+            {!live && channelId && (
+                <p className="text-xs text-muted-foreground">
+                    O histórico de dias anteriores é somado entre todas as conexões.
+                </p>
+            )}
 
             {isEmpty ? (
                 <Card className="rounded-2xl border border-border/50 shadow-sm">

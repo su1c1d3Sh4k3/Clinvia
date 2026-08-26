@@ -257,6 +257,7 @@ serve(async (req) => {
                     value: apt.price || 0,
                     professional_id: apt.professional_id || null,
                     is_active: false,
+                    instance_id: apt.instance_id || null,
                 })
                 .select("id")
                 .single();
@@ -272,14 +273,17 @@ serve(async (req) => {
                 });
             }
 
-            // 2. Remove o serviço concluído do card ativo
-            const { data: activeCard } = await supabase
+            // 2. Remove o serviço concluído do card ativo (funil da conexão do agendamento)
+            const { data: activeCards } = await supabase
                 .from("crm_client")
-                .select("id")
+                .select("id, instance_id, instagram_instance_id")
                 .eq("contact_id", apt.contact_id)
                 .eq("user_id", apt.user_id)
-                .eq("is_active", true)
-                .maybeSingle();
+                .eq("is_active", true);
+            const activeCard =
+                (activeCards || []).find((c: any) => c.instance_id === apt.instance_id) ||
+                (activeCards || []).find((c: any) => !c.instance_id && !c.instagram_instance_id) ||
+                null;
             if (!activeCard) return;
 
             if (apt.service_name) {

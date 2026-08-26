@@ -401,6 +401,25 @@ async function handleAwaitingFeedbackDetail(
 // CRM Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Card ativo do contato no funil da conexão da sessão. Card legado (sem conexão)
+ * serve de fallback.
+ */
+async function findActiveCard(ctx: SessionContext) {
+    const { data } = await ctx.supabase
+        .from("crm_client")
+        .select("id, stage, instance_id, instagram_instance_id")
+        .eq("contact_id", ctx.session.contact_id)
+        .eq("user_id", ctx.session.user_id)
+        .eq("is_active", true);
+    const rows = (data || []) as any[];
+    return (
+        rows.find((c) => c.instance_id === ctx.session.instance_id) ||
+        rows.find((c) => !c.instance_id && !c.instagram_instance_id) ||
+        null
+    );
+}
+
 async function moveCrmToStage(ctx: SessionContext, stage: string, lossReason?: string) {
     const patch: Record<string, unknown> = {
         stage,
@@ -409,12 +428,10 @@ async function moveCrmToStage(ctx: SessionContext, stage: string, lossReason?: s
     };
     if (lossReason) patch.loss_reason = lossReason;
 
-    await ctx.supabase
-        .from("crm_client")
-        .update(patch)
-        .eq("contact_id", ctx.session.contact_id)
-        .eq("user_id", ctx.session.user_id)
-        .eq("is_active", true);
+    const card = await findActiveCard(ctx);
+    if (card) {
+        await ctx.supabase.from("crm_client").update(patch).eq("id", card.id);
+    }
 
     // Re-force queue to Pós-Venda after CRM change (trigger may reset it)
     await forceQueuePosVenda(ctx);
@@ -422,13 +439,7 @@ async function moveCrmToStage(ctx: SessionContext, stage: string, lossReason?: s
 
 /** Pesquisa respondida → finaliza o card ativo na etapa Finalizado (vira histórico). */
 async function finalizeCrmCard(ctx: SessionContext) {
-    const { data: crmCard } = await ctx.supabase
-        .from("crm_client")
-        .select("id, stage")
-        .eq("contact_id", ctx.session.contact_id)
-        .eq("user_id", ctx.session.user_id)
-        .eq("is_active", true)
-        .maybeSingle();
+    const crmCard = await findActiveCard(ctx);
 
     if (!crmCard) return;
 

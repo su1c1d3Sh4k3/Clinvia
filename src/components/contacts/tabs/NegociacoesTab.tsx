@@ -14,7 +14,8 @@ import {
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
-import { STAGE_COLORS, TERMINAL_STAGES, CrmStage, CRM_STAGES } from "@/types/crm-client";
+import { STAGE_COLORS, TERMINAL_STAGES, CrmStage, CRM_STAGES, channelKeyOf } from "@/types/crm-client";
+import { useCrmChannels } from "@/hooks/useCrmChannels";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { useStaff } from "@/hooks/useStaff";
 import { ServiceCategory, ServiceName } from "@/types/services";
@@ -26,6 +27,7 @@ interface NegociacoesTabProps {
 export const NegociacoesTab = ({ contactId }: NegociacoesTabProps) => {
   const { data: ownerId } = useOwnerId();
   const { data: staffMembers } = useStaff();
+  const { data: channels } = useCrmChannels();
   const queryClient = useQueryClient();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [newNote, setNewNote] = useState("");
@@ -217,15 +219,30 @@ export const NegociacoesTab = ({ contactId }: NegociacoesTabProps) => {
     );
   }
 
+  // Só rotula quando há mais de uma conexão — senão o badge é ruído
+  const channelLabel = (deal: any) => {
+    if (!channels || channels.length <= 1) return null;
+    const id = deal.instance_id || deal.instagram_instance_id;
+    return channels.find((c) => c.id === id)?.label || null;
+  };
+
+  // Card mais recente de cada conexão (deals já vem por created_at desc)
+  const latestByChannel = new Map<string, string>();
+  deals.forEach((d: any) => {
+    const k = channelKeyOf(d);
+    if (!latestByChannel.has(k)) latestByChannel.set(k, d.id);
+  });
+
   return (
     <div className="space-y-3">
       <input ref={fileInputRef} type="file" className="hidden" onChange={(e) => expandedId && handleFileUpload(e, expandedId)} />
 
-      {deals.map((deal: any, index: number) => {
+      {deals.map((deal: any) => {
         const isExpanded = expandedId === deal.id;
         const isTerminal = TERMINAL_STAGES.includes(deal.stage);
-        const isMostRecent = index === 0;
-        // Apenas a mais recente e não-terminal pode ser editada
+        // Cada conexão tem seu próprio funil: a negociação mais recente de CADA
+        // conexão é a viva (deals vem ordenado por created_at desc)
+        const isMostRecent = latestByChannel.get(channelKeyOf(deal)) === deal.id;
         const isReadOnly = !isMostRecent || isTerminal;
         const stageColor = STAGE_COLORS[deal.stage as CrmStage] || "#6b7280";
         const responsibleName = deal.responsible_id ? teamMap?.get(deal.responsible_id) : null;
@@ -242,6 +259,11 @@ export const NegociacoesTab = ({ contactId }: NegociacoesTabProps) => {
                     {deal.value > 0 && <span className="text-sm font-semibold">{fmt(deal.value)}</span>}
                     {!isMostRecent && (
                       <Badge variant="outline" className="text-[9px] border-gray-300 bg-gray-50 text-gray-500">Negociação Finalizada</Badge>
+                    )}
+                    {channelLabel(deal) && (
+                      <Badge variant="outline" className="text-[9px] border-primary/30 bg-primary/5 text-primary">
+                        {channelLabel(deal)}
+                      </Badge>
                     )}
                     {deal.priority && (
                       <div className="w-2 h-2 rounded-full" style={{

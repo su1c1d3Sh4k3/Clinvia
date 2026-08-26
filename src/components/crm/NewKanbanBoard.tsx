@@ -32,6 +32,7 @@ import { format, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useState } from "react";
 import { useOwnerId } from "@/hooks/useOwnerId";
+import { CrmChannel, useCrmChannels } from "@/hooks/useCrmChannels";
 
 const PRIORITY_BORDER: Record<string, string> = {
   low: "#22c55e",
@@ -55,7 +56,13 @@ const APT_STATUS_COLORS: Record<string, string> = {
 
 interface NewKanbanBoardProps {
   onCardClick?: (client: CrmClient) => void;
+  /** Funil da conexão selecionada; null = aba "Todos" */
+  channel?: CrmChannel | null;
+  /** Mostra o nome da conexão no card (aba "Todos" com 2+ conexões) */
+  showChannelBadge?: boolean;
 }
+
+const PAGE_SIZE = 1000;
 
 type DatePreset = "all" | "today" | "7d" | "30d" | "custom";
 type ContactTypeFilter = "all" | "contato" | "lead" | "cliente";
@@ -82,9 +89,10 @@ interface ColumnFilter {
 
 const EMPTY_COL_FILTER: ColumnFilter = { search: "", type: "all" };
 
-export const NewKanbanBoard = ({ onCardClick }: NewKanbanBoardProps) => {
+export const NewKanbanBoard = ({ onCardClick, channel, showChannelBadge }: NewKanbanBoardProps) => {
   const queryClient = useQueryClient();
   const { data: ownerId } = useOwnerId();
+  const { data: channels } = useCrmChannels();
   const [dragging, setDragging] = useState<string | null>(null);
 
   // Filters
@@ -100,16 +108,38 @@ export const NewKanbanBoard = ({ onCardClick }: NewKanbanBoardProps) => {
   const [pendingDrop, setPendingDrop] = useState<{ client: CrmClient; targetStage: CrmStage } | null>(null);
 
   const { data: clients, isLoading } = useQuery({
-    queryKey: ["crm-clients"],
+    queryKey: ["crm-clients", channel?.id ?? "todos"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("crm_client" as any)
-        .select("*, contact:contacts(id, push_name, phone, number, profile_pic_url, client_stage)")
-        .order("stage_changed_at", { ascending: false });
-      if (error) throw error;
-      return data as CrmClient[];
+      // Só o que o board renderiza: card ativo OU card em etapa final. Sem isso
+      // o cap de 1000 linhas do PostgREST corta cards vivos (o tenant já passa
+      // de 8k linhas na tabela).
+      const terminalList = TERMINAL_STAGES.map((s) => `"${s}"`).join(",");
+      const rows: CrmClient[] = [];
+      for (let page = 0; ; page++) {
+        let q = supabase
+          .from("crm_client" as any)
+          .select("*, contact:contacts(id, push_name, phone, number, profile_pic_url, client_stage)")
+          .or(`is_active.eq.true,stage.in.(${terminalList})`)
+          .order("stage_changed_at", { ascending: false })
+          .order("id", { ascending: false })
+          .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
+        if (channel?.kind === "wpp") q = q.eq("instance_id", channel.id);
+        if (channel?.kind === "ig") q = q.eq("instagram_instance_id", channel.id);
+
+        const { data, error } = await q;
+        if (error) throw error;
+        rows.push(...((data || []) as unknown as CrmClient[]));
+        if (!data || data.length < PAGE_SIZE || page >= 19) break;
+      }
+      return rows;
     },
   });
+
+  const channelLabel = (c: CrmClient) => {
+    const id = c.instance_id || c.instagram_instance_id;
+    if (!id) return null;
+    return channels?.find((ch) => ch.id === id)?.label || null;
+  };
 
   // Fetch services for all deals
   const { data: allServices } = useQuery({
@@ -625,6 +655,15 @@ export const NewKanbanBoard = ({ onCardClick }: NewKanbanBoardProps) => {
                                 </div>
                               )}
                             </div>
+                            {/* Conexão do funil — na aba "Todos" o mesmo contato pode
+                                aparecer 2x (um card por conexão) */}
+                            {showChannelBadge && channelLabel(client) && (
+                              <div className="ml-5 mb-1">
+                                <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-sm bg-primary/10 text-primary max-w-full truncate">
+                                  {channelLabel(client)}
+                                </span>
+                              </div>
+                            )}
                             {/* Upcoming appointments */}
                             {upcoming.length > 0 && (
                               <div className="ml-5 mb-1 space-y-0.5">

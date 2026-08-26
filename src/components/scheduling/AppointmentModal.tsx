@@ -35,6 +35,7 @@ const formSchema = z.object({
     contact_id: z.string().optional(),
     contact_name: z.string().optional(),
     contact_phone: z.string().optional(),
+    instance_id: z.string().optional(),
     category_id: z.string().optional(),
     service_name_id: z.string().optional(),
     service_id: z.string().optional(),
@@ -57,6 +58,14 @@ const formSchema = z.object({
                 code: z.ZodIssueCode.custom,
                 message: "Duração mínima é 10 minutos",
                 path: ["duration"],
+            });
+        }
+        // Conexão define em qual funil de CRM o agendamento mexe
+        if (!data.instance_id || data.instance_id.length < 1) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "Conexão é obrigatória",
+                path: ["instance_id"],
             });
         }
     }
@@ -82,12 +91,14 @@ interface AppointmentModalProps {
     defaultContactId?: string;
     defaultContactName?: string;
     defaultContactPhone?: string;
+    /** Conexão da conversa que abriu o modal (inbox) — pré-seleciona o funil */
+    defaultInstanceId?: string;
     hideTypeTabs?: boolean; // Hide appointment/absence tabs
     onAppointmentCreated?: () => void;
     lockHour?: boolean; // Travar o campo de hora (apenas quando aberto via clique em slot específico do calendário)
 }
 
-export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfessionalId, defaultServiceId, appointmentToEdit, defaultContactId, defaultContactName, defaultContactPhone, hideTypeTabs, onAppointmentCreated, lockHour }: AppointmentModalProps) {
+export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfessionalId, defaultServiceId, appointmentToEdit, defaultContactId, defaultContactName, defaultContactPhone, defaultInstanceId, hideTypeTabs, onAppointmentCreated, lockHour }: AppointmentModalProps) {
     const { toast } = useToast();
     const queryClient = useQueryClient();
     const [activeTab, setActiveTab] = useState<"appointment" | "absence">("appointment");
@@ -108,6 +119,22 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
 
     // Detectar modo "hora travada" — ativo APENAS quando prop lockHour=true (clique em slot específico)
     const isHourLocked = !appointmentToEdit && !!lockHour;
+
+    // Conexões WhatsApp do tenant — o agendamento grava a conexão para saber em
+    // qual funil de CRM mexer (card é por contato + conexão).
+    const { data: wppInstances } = useQuery({
+        queryKey: ["appointment-instances", ownerId],
+        enabled: !!ownerId && open,
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from("instances")
+                .select("id, name")
+                .eq("user_id", ownerId)
+                .order("name");
+            if (error) throw error;
+            return data as any[];
+        },
+    });
 
     const { data: professionals } = useQuery({
         queryKey: ["professionals-list"],
@@ -501,6 +528,7 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                     contact_id: appointmentToEdit.contact_id,
                     contact_name: appointmentToEdit.contacts?.push_name || "",
                     contact_phone: appointmentToEdit.contacts?.number || "",
+                    instance_id: appointmentToEdit.instance_id || "",
                     professional_id: appointmentToEdit.professional_id,
                     category_id: appointmentToEdit.category_id || "",
                     service_name_id: appointmentToEdit.service_name_id || "",
@@ -518,6 +546,7 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                     contact_id: defaultContactId || "",
                     contact_name: defaultContactName || "",
                     contact_phone: defaultContactPhone || "",
+                    instance_id: defaultInstanceId || "",
                     professional_id: defaultProfessionalId || "",
                     category_id: "",
                     service_name_id: "",
@@ -541,7 +570,16 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
             setCashAmount(0);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open, defaultDate, defaultProfessionalId, defaultServiceId, appointmentToEdit, form, defaultContactId, defaultContactName, defaultContactPhone]);
+    }, [open, defaultDate, defaultProfessionalId, defaultServiceId, appointmentToEdit, form, defaultContactId, defaultContactName, defaultContactPhone, defaultInstanceId]);
+
+    // Conta com uma conexão só: seleciona sozinha (campo continua obrigatório)
+    useEffect(() => {
+        if (!open || appointmentToEdit) return;
+        if (wppInstances?.length === 1 && !form.getValues("instance_id")) {
+            form.setValue("instance_id", wppInstances[0].id);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open, wppInstances, appointmentToEdit]);
 
     // Quando o profissional muda, limpar serviço e duração (serviço pode ser inválido para o novo profissional)
     useEffect(() => {
@@ -712,6 +750,7 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                 user_id: ownerId,
                 professional_id: values.professional_id,
                 contact_id: values.contact_id || null,
+                instance_id: values.type === "appointment" ? (values.instance_id || null) : null,
                 service_id: values.type === "appointment" ? (values.service_id || null) : null,
                 category_id: values.type === "appointment" ? (values.category_id || null) : null,
                 service_name_id: values.type === "appointment" ? (values.service_name_id || null) : null,
@@ -797,6 +836,7 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                         servicePrice: svc?.price ?? values.price ?? 0,
                         serviceMinPrice: svc?.min_price || 0,
                         professionalId: values.professional_id,
+                        instanceId: values.instance_id || null,
                     }).catch(() => {}); // fire-and-forget
                 }
             }
@@ -893,6 +933,32 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                                                     }}
                                                     disabled={isPast || !!defaultContactId}
                                                 />
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+
+                                    <FormField
+                                        control={form.control}
+                                        name="instance_id"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Conexão <span className="text-destructive">*</span></FormLabel>
+                                                <Select value={field.value || ""} onValueChange={field.onChange} disabled={isPast}>
+                                                    <FormControl>
+                                                        <SelectTrigger>
+                                                            <SelectValue placeholder="Selecione a conexão" />
+                                                        </SelectTrigger>
+                                                    </FormControl>
+                                                    <SelectContent>
+                                                        {(wppInstances || []).map((i: any) => (
+                                                            <SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                                <p className="text-xs text-muted-foreground">
+                                                    Define em qual funil do CRM este agendamento entra.
+                                                </p>
                                                 <FormMessage />
                                             </FormItem>
                                         )}

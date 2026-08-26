@@ -12,6 +12,7 @@ import {
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { STAGE_COLORS, CrmStage } from "@/types/crm-client";
+import { useCrmChannels } from "@/hooks/useCrmChannels";
 import { npsAverage } from "@/lib/nps";
 import { toast } from "sonner";
 import { LinkInstagramContactDialog } from "./LinkInstagramContactDialog";
@@ -50,20 +51,38 @@ export const ClientSidebar = ({ contact, sourceContact, contactIds }: ClientSide
       setUnlinking(false);
     }
   };
-  // Active CRM deal
-  const { data: crmClient } = useQuery({
+  // Negociações ativas — uma por conexão (o mesmo contato pode estar em etapas
+  // diferentes em cada número/conta)
+  const { data: crmDeals } = useQuery({
     queryKey: ["crm-client-active", contact.id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("crm_client" as any)
-        .select("stage")
+        .select("stage, instance_id, instagram_instance_id")
         .eq("contact_id", contact.id)
-        .eq("is_active", true)
-        .maybeSingle();
+        .eq("is_active", true);
       if (error) throw error;
-      return data as { stage: CrmStage } | null;
+      return (data || []) as unknown as {
+        stage: CrmStage;
+        instance_id: string | null;
+        instagram_instance_id: string | null;
+      }[];
     },
   });
+
+  const { data: channels } = useCrmChannels();
+  // Com mais de uma conexão, a etapa vem rotulada: "Agendado (Recepção)"
+  const crmStageLabel = !crmDeals?.length
+    ? "Nenhuma negociação atribuída"
+    : crmDeals
+        .map((d) => {
+          if (!channels || channels.length <= 1) return d.stage;
+          const label = channels.find(
+            (c) => c.id === (d.instance_id || d.instagram_instance_id)
+          )?.label;
+          return label ? `${d.stage} (${label})` : d.stage;
+        })
+        .join(" · ");
 
   // Last open conversation (ticket info + queue + responsible)
   const { data: lastConversation } = useQuery({
@@ -280,8 +299,8 @@ export const ClientSidebar = ({ contact, sourceContact, contactIds }: ClientSide
         <InfoRow
           icon={ListFilter}
           label="Etapa CRM"
-          value={crmClient?.stage || "Nenhuma negociação atribuída"}
-          className={crmClient ? "font-medium" : "text-muted-foreground italic"}
+          value={crmStageLabel}
+          className={crmDeals?.length ? "font-medium" : "text-muted-foreground italic"}
         />
 
         <InfoRow

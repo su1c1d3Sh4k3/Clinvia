@@ -103,9 +103,15 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
             description: "Cada coluna é uma etapa da jornada; cada card é um cliente com sua negociação.",
         },
         {
+            element: '[data-tour="crm-tabs"]',
+            title: "Um funil por conexão",
+            description:
+                "Cada número (e cada conta do Instagram) tem o seu próprio funil. Em 'Todos' os cards de todas as conexões aparecem juntos, com uma etiqueta do número — por isso o mesmo cliente pode aparecer duas vezes.",
+        },
+        {
             element: '[data-tour="crm-new-deal"]',
             title: "Nova negociação",
-            description: "Crie um card manualmente — escolha o cliente, os serviços de interesse e o valor.",
+            description: "Crie um card manualmente — escolha o cliente, a conexão do funil, os serviços de interesse e o valor.",
         },
         {
             element: '[data-tour="crm-board"]',

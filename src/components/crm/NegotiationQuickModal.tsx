@@ -35,9 +35,12 @@ interface NegotiationQuickModalProps {
   contactId: string;
   /** Negociação ativa (crm_client + crm_client_services) — se ausente, modo criação */
   deal?: any | null;
+  /** Conexão da conversa — o card criado entra no funil dela */
+  instanceId?: string | null;
+  instagramInstanceId?: string | null;
 }
 
-export const NegotiationQuickModal = ({ open, onOpenChange, contactId, deal }: NegotiationQuickModalProps) => {
+export const NegotiationQuickModal = ({ open, onOpenChange, contactId, deal, instanceId, instagramInstanceId }: NegotiationQuickModalProps) => {
   const { data: ownerId } = useOwnerId();
   const { data: staffMembers } = useStaff();
   const { data: currentTeamMember } = useCurrentTeamMember();
@@ -159,11 +162,19 @@ export const NegotiationQuickModal = ({ open, onOpenChange, contactId, deal }: N
         }
         toast.success("Negociação atualizada!");
       } else {
-        const { data: existing } = await supabase
+        // Card é por (contato, conexão) — a duplicata só existe dentro da conexão
+        // desta conversa.
+        let dup = supabase
           .from("crm_client" as any).select("id")
-          .eq("contact_id", contactId).eq("is_active", true).maybeSingle();
+          .eq("contact_id", contactId).eq("is_active", true);
+        dup = instanceId
+          ? dup.eq("instance_id", instanceId)
+          : instagramInstanceId
+            ? dup.eq("instagram_instance_id", instagramInstanceId)
+            : dup.is("instance_id", null).is("instagram_instance_id", null);
+        const { data: existing } = await dup.maybeSingle();
         if (existing) {
-          toast.error("Este contato já possui uma negociação ativa");
+          toast.error("Este contato já possui uma negociação ativa nesta conexão");
           setSaving(false);
           return;
         }
@@ -173,6 +184,8 @@ export const NegotiationQuickModal = ({ open, onOpenChange, contactId, deal }: N
             user_id: ownerId, contact_id: contactId, stage, value: totalValue,
             priority, responsible_id: responsibleId || currentTeamMember?.id || null,
             notes: description || null,
+            instance_id: instanceId || null,
+            instagram_instance_id: instanceId ? null : instagramInstanceId || null,
           }).select("id").single();
         if (error) throw error;
 

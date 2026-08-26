@@ -132,10 +132,16 @@ export function DashboardGuide() {
                     { title: "Hoje = ao vivo", description: "Com a data de hoje selecionada, os contadores por etapa refletem o quadro do CRM em tempo real." },
                     { title: "Passado = fotografia", description: "Todo dia às 23:59 o sistema tira uma 'foto' do funil. Ao navegar para datas passadas, você vê exatamente como o funil estava naquele dia." },
                     { title: "Compare períodos", description: "Use a navegação de datas para responder: quantos clientes estavam em 'Agendado' na semana passada vs. hoje? O funil está enchendo ou esvaziando?" },
+                    { title: "Filtre por conexão", description: "Com mais de um número (ou conta do Instagram), aparece o seletor de conexão: cada uma tem o seu próprio funil. 'Todas as conexões' soma tudo." },
                 ]} />
                 <Callout type="atencao" title="Números de hoje mudam o dia todo">
                     É normal os contadores de hoje oscilarem — cards entram e saem das etapas em tempo real. A comparação
                     justa é sempre entre fotografias de fim de dia.
+                </Callout>
+                <Callout type="atencao" title="O histórico não separa por conexão">
+                    A fotografia de fim de dia é tirada com a conta inteira somada. Por isso, ao escolher uma data passada,
+                    o seletor de conexão fica desativado e os números aparecem de todas as conexões juntas. Para ver um
+                    número específico, use a data de hoje.
                 </Callout>
             </TopicSection>
 

@@ -64,7 +64,7 @@ const STAGE_OPTIONS: StageOption[] = [
         queue: "—",
         iaAtende: false,
         terminal: true,
-        explain: "Etapa TERMINAL: o sistema pede o motivo da perda, o card vira histórico (sai do quadro) e os atendimentos abertos do cliente são ENCERRADOS automaticamente.",
+        explain: "Etapa TERMINAL: o sistema pede o motivo da perda, o card vira histórico (sai do quadro) e os atendimentos abertos do cliente NESTA CONEXÃO são ENCERRADOS automaticamente.",
     },
 ];
 
@@ -151,7 +151,8 @@ export function StageSyncSimulator() {
             </div>
             <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <KanbanSquare className="h-3.5 w-3.5" />
-                Regra central: etapa do funil e fila do inbox andam sempre juntas — mover um move o outro.
+                Regra central: etapa do funil e fila do inbox andam sempre juntas — mover um move o outro, sempre dentro
+                da conexão daquele card.
             </p>
         </div>
     );

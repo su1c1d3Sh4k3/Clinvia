@@ -14,16 +14,20 @@ export interface CrmStageCount {
 /**
  * Counts per CRM stage for a given date.
  * Today: live data via RPC. Past dates: daily snapshot table (captured at 23:59 BRT).
+ * `channelId` filtra pelo funil de uma conexão (só vale para hoje — o snapshot
+ * histórico é agregado por conta).
  */
-export function useCrmStageCounts(date: Date) {
+export function useCrmStageCounts(date: Date, channelId?: string | null) {
     const dateKey = format(date, "yyyy-MM-dd");
     const live = isToday(date);
 
     return useQuery({
-        queryKey: ["crm-stage-counts", dateKey, live],
+        queryKey: ["crm-stage-counts", dateKey, live, channelId ?? "todos"],
         queryFn: async (): Promise<CrmStageCount[]> => {
             if (live) {
-                const { data, error } = await supabase.rpc("get_crm_stage_counts" as any);
+                const { data, error } = await supabase.rpc("get_crm_stage_counts" as any, {
+                    p_channel: channelId || null,
+                });
                 if (error) throw error;
                 return (data || []) as CrmStageCount[];
             }
@@ -47,18 +51,20 @@ export interface CrmResults {
 /**
  * Deals that ENTERED a terminal stage (Ganho/Perdido/Finalizado) on the given date.
  */
-export function useCrmResults(date: Date) {
+export function useCrmResults(date: Date, channelId?: string | null) {
     const dateKey = format(date, "yyyy-MM-dd");
 
     return useQuery({
-        queryKey: ["crm-results", dateKey],
+        queryKey: ["crm-results", dateKey, channelId ?? "todos"],
         queryFn: async (): Promise<CrmResults> => {
-            const { data, error } = await supabase
+            let q = supabase
                 .from("crm_client" as any)
                 .select("stage, value")
                 .in("stage", TERMINAL_STAGES)
                 .gte("stage_changed_at", startOfDay(date).toISOString())
                 .lte("stage_changed_at", endOfDay(date).toISOString());
+            if (channelId) q = q.eq("channel_key", channelId);
+            const { data, error } = await q;
             if (error) throw error;
 
             const results: CrmResults = {
