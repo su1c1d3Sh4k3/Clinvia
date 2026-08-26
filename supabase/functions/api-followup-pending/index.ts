@@ -9,13 +9,19 @@ const corsHeaders = {
 /**
  * api-followup-pending
  *
- * Retorna contatos pendentes de follow-up da IA.
- * Filtros: ia_on = true, last_message = 'enviada',
- * last_message_time mais antiga que X minutos.
+ * Retorna CONVERSAS pendentes de follow-up da IA (uma linha por conversa).
+ * Filtros: conversa pending na fila 'Atendimento IA', instância da conversa com
+ * a IA ligada (ia_on_wpp), contato com ia_on = true, última mensagem da conversa
+ * enviada por nós e mais antiga que X minutos.
  *
- * ENTREGA ÚNICA POR ETAPA: a RPC reserva o contato (contacts.followup_claimed_number)
- * de forma atômica, então chamadas simultâneas (ex.: várias instâncias no mesmo
- * workflow do n8n) recebem o contato UMA vez só em cada follow_number.
+ * Contato com conversa em 2 instâncias, ambas com IA ligada => 2 linhas, cada uma
+ * com seu conversation_id, sua instance_id e seu próprio last_message_time.
+ * Só uma instância com IA => só a conversa dela.
+ *
+ * ENTREGA ÚNICA POR ETAPA: a RPC reserva a conversa
+ * (conversations.followup_claimed_number) de forma atômica, então chamadas
+ * simultâneas (ex.: várias instâncias no mesmo workflow do n8n) recebem cada
+ * conversa UMA vez só em cada follow_number.
  *
  * Body (JSON):
  *   - user_id (obrigatório): ID do usuário dono dos contatos
