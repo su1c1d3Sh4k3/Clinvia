@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import {
     Calendar, MousePointerClick, UserCog, Wallet, BellRing, Upload, Link2,
-    KanbanSquare, HelpCircle, ExternalLink,
+    KanbanSquare, HelpCircle, ExternalLink, Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +19,7 @@ const TOPICS = [
     { id: "calendario", label: "O calendário" },
     { id: "criando", label: "Criando agendamento" },
     { id: "horarios", label: "Horários do profissional" },
+    { id: "fechar-dia", label: "Fechar a agenda no dia" },
     { id: "venda-automatica", label: "Venda automática" },
     { id: "confirmacoes", label: "Mensagens automáticas" },
     { id: "importacao", label: "Importação" },
@@ -120,7 +121,34 @@ export function AgendaGuide() {
             </TopicSection>
 
             {/* 5 */}
-            <TopicSection id="venda-automatica" index={5} icon={Wallet} title="Todo agendamento vira venda"
+            <TopicSection id="fechar-dia" index={5} icon={Lock} title="Fechar a agenda no dia"
+                subtitle="O cadeado ao lado do nome do profissional">
+                <p className="text-sm text-muted-foreground">
+                    Feriado, folga, congresso, atestado: quando o profissional não vai atender em um dia específico,
+                    clique no <strong className="text-foreground">cadeado ao lado do nome dele</strong>, no cabeçalho da
+                    coluna. O dia inteiro vira intervalo e{" "}
+                    <strong className="text-foreground">nenhum horário é oferecido em lugar nenhum</strong> — nem na
+                    grade, nem no modal de criar agendamento, nem para a IA, nem no link público.
+                </p>
+                <StepByStep steps={[
+                    { title: "Encontre o cadeado", description: "Ele fica ao lado do nome do profissional, no cabeçalho da coluna do dia que está aberto na tela. Passe o mouse e aparece 'Fechar agenda no neste dia'." },
+                    { title: "Clique para fechar", description: "O cadeado fica vermelho e a coluna inteira é preenchida como intervalo. É por dia e por profissional: os outros profissionais e os outros dias continuam normais." },
+                    { title: "Clique de novo para liberar", description: "O sistema pergunta 'Deseja liberar o dia desse profissional para receber agendamentos'. Responda Sim e a agenda volta ao horário normal na hora." },
+                ]} />
+                <Callout type="atencao" title="O cadeado só aparece se o dia estiver vazio">
+                    Se o profissional já tem <strong className="text-foreground">qualquer agendamento ativo</strong>{" "}
+                    naquele dia, o cadeado não aparece — o sistema não deixa fechar por cima de cliente marcado. Cancele
+                    ou reagende os atendimentos primeiro e o cadeado volta a aparecer.
+                </Callout>
+                <Callout type="dica" title="Diferente de tirar o dia do horário de trabalho">
+                    O cadeado é pontual: fecha <strong className="text-foreground">só aquela data</strong> e não mexe no
+                    cadastro. Se a folga é toda semana (ex.: nunca atende às quartas), o certo é desmarcar o dia nos dias
+                    de trabalho do profissional.
+                </Callout>
+            </TopicSection>
+
+            {/* 6 */}
+            <TopicSection id="venda-automatica" index={6} icon={Wallet} title="Todo agendamento vira venda"
                 subtitle="A regra financeira mais importante da Agenda">
                 <StepByStep steps={[
                     { title: "Agendou → venda pendente", description: "Ao criar o agendamento, o sistema cria (ou vincula) automaticamente uma venda com pagamento pendente para aquele serviço." },
@@ -133,8 +161,8 @@ export function AgendaGuide() {
                 </Callout>
             </TopicSection>
 
-            {/* 6 */}
-            <TopicSection id="confirmacoes" index={6} icon={BellRing} title="Mensagens automáticas"
+            {/* 7 */}
+            <TopicSection id="confirmacoes" index={7} icon={BellRing} title="Mensagens automáticas"
                 subtitle="Confirmação, lembrete e pesquisa — sem mexer um dedo">
                 <p className="text-sm text-muted-foreground">
                     Todo agendamento ativa três mensagens automáticas no WhatsApp do cliente. Clique em cada etapa:
@@ -146,8 +174,8 @@ export function AgendaGuide() {
                 </Callout>
             </TopicSection>
 
-            {/* 7 */}
-            <TopicSection id="importacao" index={7} icon={Upload} title="Importando agendamentos"
+            {/* 8 */}
+            <TopicSection id="importacao" index={8} icon={Upload} title="Importando agendamentos"
                 subtitle="Migre de outro sistema por planilha">
                 <StepByStep steps={[
                     { title: "Suba a planilha", description: "Barra lateral > Importar Agendamentos. Aceita Excel/CSV com cliente, telefone, serviço, profissional, data e hora." },
@@ -156,8 +184,8 @@ export function AgendaGuide() {
                 ]} />
             </TopicSection>
 
-            {/* 8 */}
-            <TopicSection id="link-publico" index={8} icon={Link2} title="Link público de agendamento"
+            {/* 9 */}
+            <TopicSection id="link-publico" index={9} icon={Link2} title="Link público de agendamento"
                 subtitle="O cliente marca sozinho, sem falar com ninguém">
                 <p className="text-sm text-muted-foreground">
                     O sistema gera um <strong className="text-foreground">link exclusivo por cliente</strong> onde ele mesmo
@@ -177,8 +205,8 @@ export function AgendaGuide() {
                 </Callout>
             </TopicSection>
 
-            {/* 9 */}
-            <TopicSection id="status-e-crm" index={9} icon={KanbanSquare} title="Status do agendamento e CRM"
+            {/* 10 */}
+            <TopicSection id="status-e-crm" index={10} icon={KanbanSquare} title="Status do agendamento e CRM"
                 subtitle="Cada status dispara uma reação em cadeia">
                 <div className="overflow-x-auto rounded-xl border">
                     <table className="w-full min-w-[560px] text-sm">
@@ -204,8 +232,8 @@ export function AgendaGuide() {
                 </Callout>
             </TopicSection>
 
-            {/* 10 */}
-            <TopicSection id="faq" index={10} icon={HelpCircle} title="Perguntas frequentes">
+            {/* 11 */}
+            <TopicSection id="faq" index={11} icon={HelpCircle} title="Perguntas frequentes">
                 <Accordion type="single" collapsible className="rounded-xl border px-4">
                     {[
                         {
@@ -214,7 +242,11 @@ export function AgendaGuide() {
                         },
                         {
                             q: "A IA ofereceu um horário que eu não queria abrir. Como restringir?",
-                            a: "A IA só oferece horários dentro do horário de trabalho do profissional. Ajuste o horário (ou use o horário individual por dia) no cadastro dele — a IA, o link público e a grade obedecem na hora.",
+                            a: "A IA só oferece horários dentro do horário de trabalho do profissional. Ajuste o horário (ou use o horário individual por dia) no cadastro dele — a IA, o link público e a grade obedecem na hora. Se for só um dia específico (folga, feriado), use o cadeado no cabeçalho da coluna daquele dia.",
+                        },
+                        {
+                            q: "O cadeado de fechar a agenda sumiu. Por quê?",
+                            a: "Ele só aparece quando o profissional não tem nenhum agendamento ativo naquele dia — o sistema não deixa fechar o dia por cima de cliente marcado. Cancele ou reagende os atendimentos e o cadeado reaparece.",
                         },
                         {
                             q: "Cancelei um agendamento. A cobrança some?",

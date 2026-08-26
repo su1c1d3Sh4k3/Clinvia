@@ -21,6 +21,7 @@ import { generateDailyReport } from "@/utils/generateDailyReport";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useCrmAppointmentSync } from "@/hooks/useCrmAppointmentSync";
+import { useProfessionalDayBlocks } from "@/hooks/useProfessionalDayBlocks";
 import { useSuporteTour } from "@/lib/suporteTours";
 
 export default function Scheduling() {
@@ -176,6 +177,43 @@ export default function Scheduling() {
         },
         enabled: !!date,
     });
+
+    // Agenda fechada por profissional neste dia (cadeado no cabeçalho da agenda)
+    const { blockedIds: blockedProfessionalIds, toggleBlock } = useProfessionalDayBlocks(date);
+
+    const handleToggleDayBlock = async (professionalId: string, block: boolean) => {
+        try {
+            if (block && date) {
+                // Guarda server-side: só fecha o dia se realmente não houver agendamento
+                const start = new Date(date); start.setHours(0, 0, 0, 0);
+                const end = new Date(date); end.setHours(23, 59, 59, 999);
+                const { count } = await supabase
+                    .from("appointments")
+                    .select("id", { count: "exact", head: true })
+                    .eq("professional_id", professionalId)
+                    .not("status", "in", "(canceled,no-show)")
+                    .gte("start_time", start.toISOString())
+                    .lte("start_time", end.toISOString());
+                if ((count ?? 0) > 0) {
+                    toast({
+                        title: "Não é possível fechar a agenda",
+                        description: "Este profissional já tem agendamento neste dia.",
+                        variant: "destructive",
+                    });
+                    return;
+                }
+            }
+            await toggleBlock({ professionalId, block });
+            toast({
+                title: block ? "Agenda fechada" : "Agenda liberada",
+                description: block
+                    ? "Nenhum horário será oferecido para este profissional nesta data."
+                    : "O profissional voltou a receber agendamentos nesta data.",
+            });
+        } catch (error: any) {
+            toast({ title: "Erro", description: error.message, variant: "destructive" });
+        }
+    };
 
     const { data: settings } = useQuery({
         queryKey: ["scheduling_settings"],
@@ -651,6 +689,8 @@ export default function Scheduling() {
                         canCreateAppointment={canCreate('appointments')}
                         canEditAppointment={canEdit('appointments')}
                         canEditProfessional={canEdit('professionals')}
+                        blockedProfessionalIds={blockedProfessionalIds}
+                        onToggleDayBlock={canCreate('appointments') ? handleToggleDayBlock : undefined}
                     />
                 )}
             </div>

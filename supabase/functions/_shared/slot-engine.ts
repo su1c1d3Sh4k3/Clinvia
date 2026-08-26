@@ -18,6 +18,7 @@ import {
     utcToBrasiliaParts,
 } from "./timezone.ts";
 import { getWorkHoursForDay } from "./professional-schedule.ts";
+import { isProfessionalDayBlocked } from "./day-blocks.ts";
 
 export interface Slot {
     time: string;       // 'HH:MM' in Brasília wall clock
@@ -108,6 +109,9 @@ export async function computeAvailableSlots(
     const anchorUtc = brasiliaDateTimeToUTC(targetDateYmd, "12:00");
     const { weekday } = utcToBrasiliaParts(anchorUtc);
     if (!workDays.includes(weekday)) return [];
+
+    // Agenda fechada nesse dia (cadeado da agenda)
+    if (await isProfessionalDayBlocked(supabase, professionalId, targetDateYmd)) return [];
 
     // 4. Parse work_hours (flexible: "HH:MM" or decimal number) — per-day schedule aware
     const wh = getWorkHoursForDay(professional, weekday);

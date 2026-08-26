@@ -2,8 +2,18 @@ import { useMemo, useRef, useEffect, useState } from "react";
 import { format, addMinutes, startOfDay, differenceInMinutes, parseISO, isSameDay } from "date-fns";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
-import { ThumbsUp, Clock, X, Check, Pen, ChevronLeft, ChevronRight, UserX, ArrowRight, Star } from "lucide-react";
+import { ThumbsUp, Clock, X, Check, Pen, ChevronLeft, ChevronRight, UserX, ArrowRight, Star, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { useProfessionalNps } from "@/hooks/useAppointmentsDashboard";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -21,6 +31,9 @@ interface SchedulingCalendarProps {
     canCreateAppointment?: boolean;
     canEditAppointment?: boolean;
     canEditProfessional?: boolean;
+    /** Profissionais com a agenda fechada nesta data (professional_day_blocks) */
+    blockedProfessionalIds?: string[];
+    onToggleDayBlock?: (professionalId: string, block: boolean) => void;
 }
 
 const START_HOUR = 8;
@@ -29,7 +42,7 @@ const END_HOUR = 22;
 const HOUR_HEIGHT_DESKTOP = 120;
 const HOUR_HEIGHT_MOBILE = 80;
 
-export function SchedulingCalendar({ date, professionals, appointments, settings, onSlotClick, onEventClick, onStatusChange, onEditProfessional, canCreateAppointment = true, canEditAppointment = true, canEditProfessional = true }: SchedulingCalendarProps) {
+export function SchedulingCalendar({ date, professionals, appointments, settings, onSlotClick, onEventClick, onStatusChange, onEditProfessional, canCreateAppointment = true, canEditAppointment = true, canEditProfessional = true, blockedProfessionalIds = [], onToggleDayBlock }: SchedulingCalendarProps) {
     const startHour = settings?.start_hour ?? 8;
     const endHour = settings?.end_hour ?? 22;
     const workDays = settings?.work_days ?? [0, 1, 2, 3, 4, 5, 6];
@@ -43,6 +56,25 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
     const { data: ownerId } = useOwnerId();
     const { data: profNps } = useProfessionalNps(ownerId);
     const npsOf = (professionalId: string) => (profNps || []).find((n) => n.professional_id === professionalId);
+
+    // Agenda fechada no dia: o cadeado só aparece se o profissional não tiver
+    // NENHUM agendamento na data (cancelados/no-show não contam) — ou se o dia
+    // já estiver fechado, para poder ser reaberto.
+    const isDayClosed = (professionalId: string) => blockedProfessionalIds.includes(professionalId);
+    const hasAppointmentsToday = (professionalId: string) =>
+        appointments.some((a) =>
+            a.professional_id === professionalId &&
+            isSameDay(new Date(a.start_time), date) &&
+            !["canceled", "no-show"].includes(a.status));
+    const [unlockTarget, setUnlockTarget] = useState<any | null>(null);
+
+    const handleLockClick = (professional: any) => {
+        if (isDayClosed(professional.id)) {
+            setUnlockTarget(professional);
+        } else {
+            onToggleDayBlock?.(professional.id, true);
+        }
+    };
 
     // Solo view: clique no nome do profissional exibe apenas a agenda dele
     const [soloId, setSoloId] = useState<string | null>(null);
@@ -190,7 +222,26 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                             <AvatarFallback className="text-xs md:text-base">{professional.name[0]}</AvatarFallback>
                         </Avatar>
                         <div className="flex flex-col items-start">
-                            <span className="font-medium text-xs md:text-sm truncate max-w-[80px] sm:max-w-[120px] md:max-w-none">{professional.name}</span>
+                            <div className="flex items-center gap-1">
+                                <span className="font-medium text-xs md:text-sm truncate max-w-[80px] sm:max-w-[120px] md:max-w-none">{professional.name}</span>
+                                {onToggleDayBlock && (isDayClosed(professional.id) || !hasAppointmentsToday(professional.id)) && (
+                                    <button
+                                        type="button"
+                                        title={isDayClosed(professional.id)
+                                            ? "Agenda fechada neste dia — clique para liberar"
+                                            : "Fechar agenda no neste dia"}
+                                        className={cn(
+                                            "shrink-0 rounded p-0.5 transition-colors",
+                                            isDayClosed(professional.id)
+                                                ? "text-red-500 hover:text-red-600"
+                                                : "text-muted-foreground hover:text-foreground"
+                                        )}
+                                        onClick={(e) => { e.stopPropagation(); handleLockClick(professional); }}
+                                    >
+                                        <Lock className="h-3.5 w-3.5" />
+                                    </button>
+                                )}
+                            </div>
                             <span className="text-[10px] md:text-xs text-muted-foreground hidden sm:block">{professional.role}</span>
                             {professional.commission > 0 && (
                                 <span className="text-[10px] md:text-xs text-orange-500 font-medium hidden md:block">
@@ -311,7 +362,8 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                 const isDayOff = !workDays.includes(date.getDay());
                                 const isBeforeStart = hour < startH;
                                 const isAfterEnd = hour >= endH;
-                                const isBreak = hour >= breakStartH && hour < breakEndH;
+                                // Agenda fechada no dia: a coluna inteira vira intervalo
+                                const isBreak = isDayClosed(professional.id) || (hour >= breakStartH && hour < breakEndH);
 
                                 const isBlocked = isDayOff || isBeforeStart || isAfterEnd || isBreak;
                                 const isPast = slotDate < new Date();
@@ -579,6 +631,29 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                     </Button>
                 </div>
             )}
+
+            <AlertDialog open={!!unlockTarget} onOpenChange={(open) => { if (!open) setUnlockTarget(null); }}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Liberar agenda</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Deseja liberar o dia desse profissional para receber agendamentos
+                            {unlockTarget ? ` (${unlockTarget.name}, ${format(date, "dd/MM/yyyy")})` : ""}?
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Não</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={() => {
+                                if (unlockTarget) onToggleDayBlock?.(unlockTarget.id, false);
+                                setUnlockTarget(null);
+                            }}
+                        >
+                            Sim
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

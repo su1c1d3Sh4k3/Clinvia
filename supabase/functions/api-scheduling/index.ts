@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { getWorkHoursForDay } from "../_shared/professional-schedule.ts";
+import { isProfessionalDayBlocked } from "../_shared/day-blocks.ts";
 import { TERMINAL_STAGES } from "../_shared/crm-stages.ts";
 import { applyCampaignDiscount, type CampaignDiscountInfo } from "../_shared/campaign-discount.ts";
 import {
@@ -229,6 +230,12 @@ serve(async (req) => {
                     { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
             }
 
+            // Agenda fechada nesse dia (cadeado da agenda)
+            if (await isProfessionalDayBlocked(supabase, prof.id, date)) {
+                return new Response(JSON.stringify({ error: `A agenda de ${prof.name} está fechada em ${date}. Consulte a disponibilidade (api-availability) para outra data.` }),
+                    { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+            }
+
             // Validate professional work schedule (work_days/work_hours/break)
             const scheduleError = validateWorkSchedule(prof, date, time, duration);
             if (scheduleError) {
@@ -390,6 +397,10 @@ serve(async (req) => {
                     .select("id, name, work_hours, work_days, use_daily_schedule, work_hours_daily")
                     .eq("id", existing.professional_id).maybeSingle();
                 if (profRec) {
+                    if (await isProfessionalDayBlocked(supabase, profRec.id, new_date)) {
+                        return new Response(JSON.stringify({ error: `A agenda de ${profRec.name} está fechada em ${new_date}. Consulte a disponibilidade (api-availability) para outra data.` }),
+                            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+                    }
                     const scheduleError = validateWorkSchedule(profRec, new_date, new_time, durationMin);
                     if (scheduleError) {
                         return new Response(JSON.stringify({ error: `${scheduleError}. Consulte a disponibilidade (api-availability) para horários válidos.` }),

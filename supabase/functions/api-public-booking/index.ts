@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { getWorkHoursForDay } from "../_shared/professional-schedule.ts";
+import { isProfessionalDayBlocked } from "../_shared/day-blocks.ts";
 import { TERMINAL_STAGES } from "../_shared/crm-stages.ts";
 import { applyCampaignDiscount, type CampaignDiscountInfo } from "../_shared/campaign-discount.ts";
 import { findActiveCardForChannel } from "../_shared/resolve-conversation.ts";
@@ -141,6 +142,12 @@ serve(async (req) => {
             const { data: prof } = await supabase.from("professionals")
                 .select("work_hours, work_days, use_daily_schedule, work_hours_daily").eq("id", professional_id).single();
 
+            // Agenda fechada nesse dia (cadeado da agenda)
+            if (await isProfessionalDayBlocked(supabase, professional_id, date)) {
+                return new Response(JSON.stringify({ slots: [] }),
+                    { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+            }
+
             const workDays: number[] = prof?.work_days || [1, 2, 3, 4, 5];
             const reqDate = new Date(date + "T12:00:00");
             const wh = getWorkHoursForDay(prof || {}, reqDate.getDay());
@@ -202,6 +209,12 @@ serve(async (req) => {
 
             if (startDate < new Date()) {
                 return new Response(JSON.stringify({ error: "Não é possível agendar no passado" }),
+                    { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+            }
+
+            // Agenda fechada nesse dia (cadeado da agenda)
+            if (await isProfessionalDayBlocked(supabase, professional_id, date)) {
+                return new Response(JSON.stringify({ error: "Agenda indisponível nesta data" }),
                     { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
             }
 
@@ -383,6 +396,12 @@ serve(async (req) => {
 
             if (startDate < new Date()) {
                 return new Response(JSON.stringify({ error: "Não é possível reagendar para o passado" }),
+                    { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+            }
+
+            // Agenda fechada nesse dia (cadeado da agenda)
+            if (await isProfessionalDayBlocked(supabase, existing.professional_id, date)) {
+                return new Response(JSON.stringify({ error: "Agenda indisponível nesta data" }),
                     { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
             }
 

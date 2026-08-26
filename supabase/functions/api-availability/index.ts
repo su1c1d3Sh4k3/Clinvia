@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { getWorkHoursForDay } from "../_shared/professional-schedule.ts";
+import { getBlockedProfessionalIds } from "../_shared/day-blocks.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -52,7 +53,11 @@ async function getSlotsForDate(
 ): Promise<Slot[]> {
     const slots: Slot[] = [];
 
+    // Agenda fechada no dia (cadeado da agenda) → profissional fora da busca
+    const blocked = await getBlockedProfessionalIds(supabase, professionals.map((p: any) => p.id), dateStr);
+
     for (const prof of professionals) {
+        if (blocked.has(prof.id)) continue;
         const workDays: number[] = prof.work_days || [0, 1, 2, 3, 4, 5, 6];
         if (!workDays.includes(dayOfWeek)) continue;
 

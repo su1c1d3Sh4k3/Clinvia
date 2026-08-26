@@ -344,8 +344,26 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
         enabled: !!watchProfessionalId && !!watchDate,
     });
 
+    // Agenda fechada nesse dia (cadeado da agenda) → nenhum horário disponível
+    const { data: isDayClosed } = useQuery({
+        queryKey: ["professional-day-block", watchProfessionalId, watchDate],
+        queryFn: async () => {
+            if (!watchProfessionalId || !watchDate) return false;
+            const { data, error } = await supabase
+                .from("professional_day_blocks" as any)
+                .select("id")
+                .eq("professional_id", watchProfessionalId)
+                .eq("block_date", watchDate)
+                .maybeSingle();
+            if (error) throw error;
+            return !!data;
+        },
+        enabled: !!watchProfessionalId && !!watchDate,
+    });
+
     // Generate available time slots with fixed 5-min intervals
     const availableTimeSlots = useMemo(() => {
+        if (isDayClosed) return [];
         const slots: { value: string; hour: number; minute: number; label: string; disabled: boolean }[] = [];
         const now = new Date();
         const isToday = watchDate === format(now, "yyyy-MM-dd");
@@ -428,7 +446,7 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
         }
 
         return slots;
-    }, [watchDate, watchDuration, existingAppointments, appointmentToEdit, selectedProfessional]);
+    }, [watchDate, watchDuration, existingAppointments, appointmentToEdit, selectedProfessional, isDayClosed]);
 
     // Slots sem conflito
     const validSlots = useMemo(
@@ -456,7 +474,7 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
     // bloqueando APENAS por conflito real de agendamento ou break — sem verificar fim do expediente.
     // Isso permite, ex: iniciar às 14:50 mesmo que o serviço termine às 15:20.
     const minutesForLockedHour = useMemo(() => {
-        if (!isHourLocked || !currentHour) return [];
+        if (!isHourLocked || !currentHour || isDayClosed) return [];
 
         const now = new Date();
         const isToday = watchDate === format(now, "yyyy-MM-dd");
@@ -518,7 +536,7 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
 
         return result;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isHourLocked, currentHour, watchDate, watchDuration, existingAppointments, selectedProfessional]);
+    }, [isHourLocked, currentHour, watchDate, watchDuration, existingAppointments, selectedProfessional, isDayClosed]);
 
     useEffect(() => {
         if (open) {
@@ -1173,6 +1191,12 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                                                     </SelectContent>
                                                 </Select>
                                             </div>
+                                            )}
+                                            {isDayClosed && (
+                                                <p className="text-xs text-red-500">
+                                                    Agenda fechada nesta data. Libere o dia pelo cadeado na agenda para
+                                                    voltar a agendar.
+                                                </p>
                                             )}
                                             <FormMessage />
                                         </FormItem>
