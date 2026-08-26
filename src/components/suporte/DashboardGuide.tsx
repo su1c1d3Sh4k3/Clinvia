@@ -161,15 +161,41 @@ export function DashboardGuide() {
 
             {/* 5 */}
             <TopicSection id="agendamentos" index={5} icon={CalendarDays} title="Aba Agendamentos"
-                subtitle="Ocupação, rankings e as mensagens automáticas">
+                subtitle="Ocupação, rankings, mensagens automáticas e quem agendou">
                 <StepByStep steps={[
                     { title: "Ocupação por profissional", description: "Percentual da agenda preenchida — enxergue quem está lotado e quem tem horário sobrando antes de aceitar mais encaixes." },
                     { title: "Média NPS por profissional", description: "A nota da pesquisa de satisfação pertence ao PROFISSIONAL do atendimento — o gráfico compara as médias." },
                     { title: "Mensagens Automáticas", description: "Painel com Agendadas/Enviadas/Entregues/Rejeitadas por dia para confirmação, lembrete e pesquisa (número oficial). Divergência num dia fechado ganha alerta." },
+                    { title: "Agendamentos por colaborador", description: "Logo abaixo das mensagens automáticas: uma aba por pessoa (mais a aba IA) listando cliente, telefone, serviço, profissional, status e valor de cada agendamento que ela marcou." },
                 ]} />
                 <Callout type="dica" title='"O cliente recebeu a confirmação?"'>
                     É aqui que você confere. Se um dia mostra Rejeitadas, verifique o template em Conexões e a qualidade do
                     número no painel Meta (aba Campanhas).
+                </Callout>
+
+                <p className="text-sm font-semibold">De quem é o agendamento?</p>
+                <div className="grid gap-2 sm:grid-cols-3">
+                    {[
+                        { t: "Marcado na Agenda", d: "Fica com o colaborador que estava logado ao criar o agendamento." },
+                        { t: "Importado por planilha", d: "Fica com quem subiu o arquivo — a planilha é fonte externa, então a autoria é de quem importou." },
+                        { t: "API ou link público", d: "Vai para a aba IA. Tudo que o cliente ou o robô marcam sozinhos conta como IA, nunca para um atendente." },
+                    ].map((r) => (
+                        <div key={r.t} className="rounded-lg border bg-muted/30 p-3">
+                            <p className="text-sm font-medium">{r.t}</p>
+                            <p className="mt-1 text-xs text-muted-foreground">{r.d}</p>
+                        </div>
+                    ))}
+                </div>
+                <Callout type="atencao" title="O filtro conta pela data em que o agendamento foi FEITO">
+                    Hoje / 7 dias / 30 dias / personalizado olham o momento em que a marcação foi registrada, não a data
+                    da consulta. Um atendimento de outubro marcado hoje aparece no filtro "Hoje".
+                    <br /><br />
+                    Agendamentos criados antes deste painel existir não têm registro de autoria e por isso{" "}
+                    <strong className="text-foreground">não aparecem aqui</strong> — a contagem vale de agora em diante.
+                </Callout>
+                <Callout type="dica" title="Exportar para Excel">
+                    O botão <strong>Exportar</strong> gera uma planilha .xlsx do período filtrado com{" "}
+                    <strong>uma aba para cada colaborador</strong> (mais a aba IA), na mesma ordem das abas da tela.
                 </Callout>
             </TopicSection>
 

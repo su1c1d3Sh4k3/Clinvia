@@ -241,6 +241,10 @@ export async function importAppointments(opts: {
     // precisa escolher um funil. v1 usa a conexão primária de disparos do tenant.
     const importInstanceId = await resolvePrimaryInstanceId(ownerId);
 
+    // Autoria do lote: planilha é fonte externa, então o agendamento fica no nome
+    // de quem subiu o arquivo (regra do usuário, alimenta "Agendamentos por colaborador").
+    const importedBy = await resolveCurrentTeamMemberId();
+
     // 2. Carrega os serviços vinculados
     const svcIdByKey = new Map<string, string>(serviceLinks.map((l) => [l.key, l.target]));
     const svcIds = [...new Set(serviceLinks.map((l) => l.target))];
@@ -377,6 +381,7 @@ export async function importAppointments(opts: {
                 type: "appointment",
                 status,
                 created_via: "import",
+                created_by: importedBy,
                 instance_id: importInstanceId,
             },
             contactId, professionalId, svc, price, status, start,
@@ -436,6 +441,31 @@ async function resolvePrimaryInstanceId(ownerId: string): Promise<string | null>
         return (a.created_at || "").localeCompare(b.created_at || "");
     });
     return rows[0].id;
+}
+
+/**
+ * team_members.id do usuário logado — mesma resolução do AppointmentModal
+ * (membro por auth_user_id; admin da conta por user_id).
+ */
+async function resolveCurrentTeamMemberId(): Promise<string | null> {
+    const { data: userData } = await supabase.auth.getUser();
+    const authId = userData?.user?.id;
+    if (!authId) return null;
+
+    const { data: member } = await supabase
+        .from("team_members" as any)
+        .select("id")
+        .eq("auth_user_id", authId)
+        .maybeSingle();
+    if (member) return (member as any).id;
+
+    const { data: admin } = await supabase
+        .from("team_members" as any)
+        .select("id")
+        .eq("user_id", authId)
+        .eq("role", "admin")
+        .maybeSingle();
+    return (admin as any)?.id ?? null;
 }
 
 async function syncCrmForImported(
