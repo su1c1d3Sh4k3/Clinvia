@@ -30,7 +30,7 @@ import { cn } from "@/lib/utils";
 import { CLIENT_STAGE_BADGE, CLIENT_STAGE_LABEL, normalizeClientStage } from "@/lib/clientStage";
 import { format, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { CrmChannel, useCrmChannels } from "@/hooks/useCrmChannels";
 
@@ -62,7 +62,8 @@ interface NewKanbanBoardProps {
   showChannelBadge?: boolean;
 }
 
-const PAGE_SIZE = 1000;
+/** Cards renderizados por coluna antes do "Ver mais" (o funil tem milhares de finalizados) */
+const COLUMN_PAGE = 30;
 
 type DatePreset = "all" | "today" | "7d" | "30d" | "custom";
 type ContactTypeFilter = "all" | "contato" | "lead" | "cliente";
@@ -102,6 +103,7 @@ export const NewKanbanBoard = ({ onCardClick, channel, showChannelBadge }: NewKa
   const [typeFilter, setTypeFilter] = useState<ContactTypeFilter>("all");
   const [colFilters, setColFilters] = useState<Record<string, ColumnFilter>>({});
   const [colSort, setColSort] = useState<Record<string, "desc" | "asc">>({});
+  const [colLimits, setColLimits] = useState<Record<string, number>>({});
 
   // Modal states
   const [lossModalOpen, setLossModalOpen] = useState(false);
@@ -109,30 +111,18 @@ export const NewKanbanBoard = ({ onCardClick, channel, showChannelBadge }: NewKa
 
   const { data: clients, isLoading } = useQuery({
     queryKey: ["crm-clients", channel?.id ?? "todos"],
+    // Uma chamada só: a RPC devolve jsonb (o cap de 1000 linhas do PostgREST não se
+    // aplica) com card ativo OU em etapa final. Antes eram até 9 páginas sequenciais
+    // e cada uma re-escaneava as ~8k linhas do funil.
     queryFn: async () => {
-      // Só o que o board renderiza: card ativo OU card em etapa final. Sem isso
-      // o cap de 1000 linhas do PostgREST corta cards vivos (o tenant já passa
-      // de 8k linhas na tabela).
-      const terminalList = TERMINAL_STAGES.map((s) => `"${s}"`).join(",");
-      const rows: CrmClient[] = [];
-      for (let page = 0; ; page++) {
-        let q = supabase
-          .from("crm_client" as any)
-          .select("*, contact:contacts(id, push_name, phone, number, profile_pic_url, client_stage)")
-          .or(`is_active.eq.true,stage.in.(${terminalList})`)
-          .order("stage_changed_at", { ascending: false })
-          .order("id", { ascending: false })
-          .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
-        if (channel?.kind === "wpp") q = q.eq("instance_id", channel.id);
-        if (channel?.kind === "ig") q = q.eq("instagram_instance_id", channel.id);
-
-        const { data, error } = await q;
-        if (error) throw error;
-        rows.push(...((data || []) as unknown as CrmClient[]));
-        if (!data || data.length < PAGE_SIZE || page >= 19) break;
-      }
-      return rows;
+      const { data, error } = await supabase.rpc("get_crm_board_cards" as any, {
+        p_instance_id: channel?.kind === "wpp" ? channel.id : null,
+        p_instagram_instance_id: channel?.kind === "ig" ? channel.id : null,
+      });
+      if (error) throw error;
+      return (data || []) as unknown as CrmClient[];
     },
+    staleTime: 30_000,
   });
 
   const channelLabel = (c: CrmClient) => {
@@ -167,11 +157,13 @@ export const NewKanbanBoard = ({ onCardClick, channel, showChannelBadge }: NewKa
 
   // Contacts with waiting appointments
   const { data: waitingContacts } = useQuery({
-    queryKey: ["waiting-appointment-contacts"],
+    queryKey: ["waiting-appointment-contacts", ownerId],
+    enabled: !!ownerId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("appointments")
         .select("contact_id")
+        .eq("user_id", ownerId!)
         .eq("status", "waiting")
         .not("contact_id", "is", null);
       if (error) throw error;
@@ -182,11 +174,13 @@ export const NewKanbanBoard = ({ onCardClick, channel, showChannelBadge }: NewKa
 
   // Upcoming appointments (future) per contact — shown on the card
   const { data: upcomingByContact } = useQuery({
-    queryKey: ["crm-upcoming-appointments"],
+    queryKey: ["crm-upcoming-appointments", ownerId],
+    enabled: !!ownerId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("appointments")
         .select("contact_id, start_time, status")
+        .eq("user_id", ownerId!)
         .not("contact_id", "is", null)
         .gte("start_time", new Date().toISOString())
         .not("status", "in", "(completed,canceled,no_show)")
@@ -203,7 +197,7 @@ export const NewKanbanBoard = ({ onCardClick, channel, showChannelBadge }: NewKa
   });
 
   // Build card → service names map
-  const cardServiceNames = (() => {
+  const cardServiceNames = useMemo(() => {
     const map: Record<string, string[]> = {};
     if (!allServices) return map;
     const scMap: Record<string, string> = {};
@@ -220,7 +214,7 @@ export const NewKanbanBoard = ({ onCardClick, channel, showChannelBadge }: NewKa
       }
     }
     return map;
-  })();
+  }, [allServices, serviceClientsForNames]);
 
   const moveStage = useMutation({
     mutationFn: async ({ id, stage, lossReason, lossReasonOther }: { id: string; stage: CrmStage; lossReason?: string; lossReasonOther?: string }) => {
@@ -307,6 +301,67 @@ export const NewKanbanBoard = ({ onCardClick, channel, showChannelBadge }: NewKa
     setPendingDrop(null);
   };
 
+  // Non-terminal columns show only active cards; terminal columns (Ganho/Perdido/
+  // Finalizado) show closed cards (is_active=false). Cards deactivated in place
+  // (e.g. appointment completion deactivates the Agendado card without changing
+  // stage) must NOT reappear in their old column.
+  // Memoizado: são milhares de cards e o board re-renderiza a cada drag/tecla.
+  const grouped = useMemo(() => {
+    // Global date filter (card creation date)
+    const dateRange = (() => {
+      if (dateFilter === "all") return null;
+      const now = new Date();
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      if (dateFilter === "today") return { start: startOfToday.getTime(), end: Infinity };
+      if (dateFilter === "7d") return { start: startOfToday.getTime() - 7 * 86400000, end: Infinity };
+      if (dateFilter === "30d") return { start: startOfToday.getTime() - 30 * 86400000, end: Infinity };
+      // custom
+      const start = customStart ? new Date(`${customStart}T00:00:00`).getTime() : -Infinity;
+      const end = customEnd ? new Date(`${customEnd}T23:59:59.999`).getTime() : Infinity;
+      return { start, end };
+    })();
+
+    const matchesType = (c: CrmClient, type: ContactTypeFilter) =>
+      type === "all" || normalizeClientStage((c.contact as any)?.client_stage) === type;
+
+    const matchesGlobal = (c: CrmClient) => {
+      if (dateRange) {
+        const t = new Date(c.created_at).getTime();
+        if (t < dateRange.start || t > dateRange.end) return false;
+      }
+      return matchesType(c, typeFilter);
+    };
+
+    const acc: Record<string, CrmClient[]> = {};
+    for (const stage of CRM_STAGES) acc[stage] = [];
+
+    for (const c of clients || []) {
+      const stage = c.stage as string;
+      if (!acc[stage]) continue;
+      if (!TERMINAL_STAGES.includes(stage as CrmStage) && !c.is_active) continue;
+      if (!matchesGlobal(c)) continue;
+
+      const colFilter = colFilters[stage] || EMPTY_COL_FILTER;
+      if (!matchesType(c, colFilter.type)) continue;
+      const search = colFilter.search.trim().toLowerCase();
+      if (search) {
+        const name = (c.contact?.push_name || "").toLowerCase();
+        const phone = c.contact?.phone || c.contact?.number || "";
+        if (!name.includes(search) && !phone.includes(search)) continue;
+      }
+      acc[stage].push(c);
+    }
+
+    for (const stage of CRM_STAGES) {
+      const sortDir = colSort[stage] || "desc";
+      acc[stage].sort((a, b) => {
+        const diff = new Date(a.stage_changed_at).getTime() - new Date(b.stage_changed_at).getTime();
+        return sortDir === "desc" ? -diff : diff;
+      });
+    }
+    return acc;
+  }, [clients, dateFilter, customStart, customEnd, typeFilter, colFilters, colSort]);
+
   if (isLoading) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -314,59 +369,6 @@ export const NewKanbanBoard = ({ onCardClick, channel, showChannelBadge }: NewKa
       </div>
     );
   }
-
-  // Non-terminal columns show only active cards; terminal columns (Ganho/Perdido/
-  // Finalizado) show closed cards (is_active=false). Cards deactivated in place
-  // (e.g. appointment completion deactivates the Agendado card without changing
-  // stage) must NOT reappear in their old column.
-  // Global date filter (card creation date)
-  const dateRange = (() => {
-    if (dateFilter === "all") return null;
-    const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    if (dateFilter === "today") return { start: startOfToday.getTime(), end: Infinity };
-    if (dateFilter === "7d") return { start: startOfToday.getTime() - 7 * 86400000, end: Infinity };
-    if (dateFilter === "30d") return { start: startOfToday.getTime() - 30 * 86400000, end: Infinity };
-    // custom
-    const start = customStart ? new Date(`${customStart}T00:00:00`).getTime() : -Infinity;
-    const end = customEnd ? new Date(`${customEnd}T23:59:59.999`).getTime() : Infinity;
-    return { start, end };
-  })();
-
-  const matchesType = (c: CrmClient, type: ContactTypeFilter) =>
-    type === "all" || normalizeClientStage((c.contact as any)?.client_stage) === type;
-
-  const matchesGlobal = (c: CrmClient) => {
-    if (dateRange) {
-      const t = new Date(c.created_at).getTime();
-      if (t < dateRange.start || t > dateRange.end) return false;
-    }
-    return matchesType(c, typeFilter);
-  };
-
-  const grouped = CRM_STAGES.reduce<Record<string, CrmClient[]>>((acc, stage) => {
-    const colFilter = colFilters[stage] || EMPTY_COL_FILTER;
-    const search = colFilter.search.trim().toLowerCase();
-    const sortDir = colSort[stage] || "desc";
-
-    acc[stage] = (clients || [])
-      .filter(
-        (c) => c.stage === stage && (TERMINAL_STAGES.includes(stage) || c.is_active)
-      )
-      .filter(matchesGlobal)
-      .filter((c) => matchesType(c, colFilter.type))
-      .filter((c) => {
-        if (!search) return true;
-        const name = (c.contact?.push_name || "").toLowerCase();
-        const phone = c.contact?.phone || c.contact?.number || "";
-        return name.includes(search) || phone.includes(search);
-      })
-      .sort((a, b) => {
-        const diff = new Date(a.stage_changed_at).getTime() - new Date(b.stage_changed_at).getTime();
-        return sortDir === "desc" ? -diff : diff;
-      });
-    return acc;
-  }, {} as Record<string, CrmClient[]>);
 
   const hasColFilter = (stage: string) => {
     const f = colFilters[stage];
@@ -443,6 +445,10 @@ export const NewKanbanBoard = ({ onCardClick, channel, showChannelBadge }: NewKa
             const cards = grouped[stage] || [];
             const isTerminal = TERMINAL_STAGES.includes(stage);
             const stageTotal = cards.reduce((sum, c) => sum + (c.value || 0), 0);
+            // As colunas finais acumulam milhares de cards — montar tudo de uma vez
+            // trava o navegador. Contador e total continuam sobre a lista completa.
+            const visibleLimit = colLimits[stage] || COLUMN_PAGE;
+            const visibleCards = cards.length > visibleLimit ? cards.slice(0, visibleLimit) : cards;
 
             return (
               <div
@@ -555,7 +561,7 @@ export const NewKanbanBoard = ({ onCardClick, channel, showChannelBadge }: NewKa
                     expande além dos 240px da coluna com nomes longos e quebra o truncate */}
                 <ScrollArea className="flex-1 px-2 py-2 [&_[data-radix-scroll-area-viewport]>div]:!block">
                   <div className="space-y-2">
-                    {cards.map((client) => {
+                    {visibleCards.map((client) => {
                       const borderColor = client.priority ? PRIORITY_BORDER[client.priority] : "transparent";
                       const services = cardServiceNames[client.id] || [];
                       const hasWaiting = isTerminal && stage === "Ganho" && waitingContacts?.has(client.contact_id);
@@ -709,6 +715,19 @@ export const NewKanbanBoard = ({ onCardClick, channel, showChannelBadge }: NewKa
                         </div>
                       );
                     })}
+                    {cards.length > visibleCards.length && (
+                      <button
+                        className="w-full text-[10px] text-muted-foreground hover:text-foreground transition-colors py-2 rounded-md border border-dashed"
+                        onClick={() =>
+                          setColLimits((prev) => ({
+                            ...prev,
+                            [stage]: (prev[stage] || COLUMN_PAGE) + COLUMN_PAGE,
+                          }))
+                        }
+                      >
+                        Ver mais ({cards.length - visibleCards.length})
+                      </button>
+                    )}
                     {cards.length === 0 && (
                       <p className="text-[10px] text-muted-foreground text-center py-4">
                         Vazio

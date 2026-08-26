@@ -156,6 +156,13 @@ export function CrmGuide() {
                     mova o card só quando o papo terminar. E quem move leva a atribuição: a conversa encerrada passa a contar
                     como atendimento de quem arrastou o card (aparece no Monitoramento em seu nome).
                 </Callout>
+                <Callout type="dica" title='O botão "Ver mais" no fim da coluna'>
+                    As colunas terminais acumulam milhares de cards com o tempo. Para o quadro abrir rápido, cada coluna
+                    mostra os 30 primeiros e o botão <strong className="text-foreground">Ver mais</strong> carrega o
+                    próximo lote. O número no topo da coluna e o valor total continuam contando{" "}
+                    <strong className="text-foreground">todos</strong> os cards, não só os que estão à vista — e o filtro
+                    da coluna (lupa) procura na lista inteira.
+                </Callout>
             </TopicSection>
 
             {/* 5 */}
