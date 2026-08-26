@@ -75,6 +75,13 @@ export function IaGuide() {
                     Pense na IA como o primeiro atendimento: ela segura o cliente na hora do interesse (madrugada, fim de
                     semana, pico de movimento) e a equipe entra nos casos que precisam de gente de verdade.
                 </Callout>
+                <Callout type="dica" title="Ela lembra do que já foi conversado">
+                    A cada mensagem, a IA recebe as <strong>10 últimas mensagens trocadas com aquele cliente naquela
+                    conexão</strong> — tanto as que a IA mandou quanto as que a equipe respondeu à mão, incluindo
+                    atendimentos já encerrados. Por isso ela não repete perguntas nem "esquece" o assunto quando o
+                    cliente volta dias depois. O histórico é <strong>separado por conexão</strong>: se o cliente falou
+                    com dois números seus, cada um mantém sua própria conversa.
+                </Callout>
             </TopicSection>
 
             {/* 2 */}
