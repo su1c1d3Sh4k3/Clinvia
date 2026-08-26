@@ -13,6 +13,10 @@ const corsHeaders = {
  * Filtros: ia_on = true, last_message = 'enviada',
  * last_message_time mais antiga que X minutos.
  *
+ * ENTREGA ÚNICA POR ETAPA: a RPC reserva o contato (contacts.followup_claimed_number)
+ * de forma atômica, então chamadas simultâneas (ex.: várias instâncias no mesmo
+ * workflow do n8n) recebem o contato UMA vez só em cada follow_number.
+ *
  * Body (JSON):
  *   - user_id (obrigatório): ID do usuário dono dos contatos
  *   - min (obrigatório): tempo mínimo em minutos desde a última mensagem
