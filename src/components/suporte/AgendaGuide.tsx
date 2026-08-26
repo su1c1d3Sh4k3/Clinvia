@@ -169,6 +169,12 @@ export function AgendaGuide() {
                     A IA envia esse link quando o cliente prefere escolher com calma, e ele também aparece nas mensagens de
                     reagendamento. Agendou pelo link? Cai na Agenda e no CRM igual a qualquer outro.
                 </Callout>
+                <Callout type="evite" title="Link antigo não abre mais">
+                    Cada link carrega a <strong className="text-foreground">conexão</strong> pela qual ele foi enviado — é ela
+                    que diz em qual funil do CRM o agendamento entra. Links gerados antes do funil por conexão não têm essa
+                    informação e mostram o aviso "peça um link novo à clínica": basta a IA (ou a equipe) enviar o link de novo
+                    pela conversa.
+                </Callout>
             </TopicSection>
 
             {/* 9 */}

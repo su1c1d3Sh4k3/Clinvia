@@ -13,15 +13,12 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
  *
  * Body:
  *   user_id         (obrigatório) — dono da conta (bd_data.user_id)
- *   number          (obrigatório*) — número do cliente (qualquer formato)
- *   text            (obrigatório**) — texto da mensagem
- *   audio_base64    (obrigatório**) — áudio em base64 (aceita data URI); enviado como PTT/voz
+ *   conversation_id (obrigatório) — conversa de destino (bd_data.conversation_id);
+ *                                   contato e instância são derivados dela
+ *   text            (obrigatório*) — texto da mensagem
+ *   audio_base64    (obrigatório*) — áudio em base64 (aceita data URI); enviado como PTT/voz
  *   mime_type       (opcional)   — mime do áudio (default audio/mpeg)
- *   instance_id     (obrigatório) — instância que recebeu a mensagem (bd_data.instance_id)
- *   conversation_id (opcional)   — se enviado, pula a resolução por número
- *   contact_id      (opcional)   — se enviado, pula a busca de contato por número
- *   (* dispensável quando conversation_id ou contact_id são enviados)
- *   (** enviar text OU audio_base64)
+ *   (* enviar text OU audio_base64)
  */
 
 const corsHeaders = {
@@ -50,26 +47,16 @@ serve(async (req) => {
 
         const body = await req.json();
         const userId: string | undefined = body.user_id;
-        const number: string | undefined = body.number || body.phone_number;
         const text: string | undefined = body.text;
         const audioBase64: string | undefined = body.audio_base64 || body.audio;
         const mimeType: string = body.mime_type || "audio/mpeg";
-        const instanceId: string | undefined = body.instance_id;
-        let conversationId: string | undefined = body.conversation_id;
-        let contactId: string | undefined = body.contact_id;
+        const conversationId: string | undefined = body.conversation_id;
 
-        if (!userId || !instanceId || (!text && !audioBase64)) {
+        if (!userId || !conversationId || (!text && !audioBase64)) {
             return json({
                 success: false,
                 error: "missing_params",
-                message: "Campos obrigatórios: user_id, instance_id e text ou audio_base64 (+ number, conversation_id ou contact_id)",
-            }, 400);
-        }
-        if (!conversationId && !contactId && !number) {
-            return json({
-                success: false,
-                error: "missing_recipient",
-                message: "Informe number, contact_id ou conversation_id para identificar o destinatário",
+                message: "Campos obrigatórios: user_id, conversation_id e text ou audio_base64",
             }, 400);
         }
 
@@ -78,66 +65,43 @@ serve(async (req) => {
             Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
         );
 
-        // ── Valida instância e ownership ──
+        // ── A conversa carrega o destinatário e a conexão ──
+        const { data: conv } = await supabase
+            .from("conversations")
+            .select("id, user_id, instance_id, instagram_instance_id")
+            .eq("id", conversationId)
+            .eq("user_id", userId)
+            .maybeSingle();
+
+        if (!conv) {
+            return json({
+                success: false,
+                error: "conversation_not_found",
+                message: "Conversa não encontrada para este user_id",
+            }, 404);
+        }
+
+        // Instagram tem função própria (instagram-send-message)
+        if (!conv.instance_id) {
+            return json({
+                success: false,
+                error: "unsupported_channel",
+                message: "Conversa sem instância WhatsApp — canal não suportado por esta API",
+            }, 400);
+        }
+
         const { data: instance } = await supabase
             .from("instances")
             .select("id, user_id, provider, status")
-            .eq("id", instanceId)
-            .eq("user_id", userId)
+            .eq("id", conv.instance_id)
             .maybeSingle();
 
         if (!instance) {
             return json({
                 success: false,
                 error: "instance_not_found",
-                message: "Instância não encontrada para este user_id",
+                message: "Instância da conversa não encontrada",
             }, 404);
-        }
-
-        // ── Resolve conversa ──
-        if (!conversationId) {
-            // 1. Resolve contato pelo número, se necessário
-            if (!contactId) {
-                const cleaned = (number || "").replace(/\D/g, "");
-                if (!cleaned) {
-                    return json({ success: false, error: "invalid_number", message: "Número inválido" }, 400);
-                }
-                const { data: contact } = await supabase
-                    .from("contacts")
-                    .select("id")
-                    .eq("user_id", userId)
-                    .ilike("number", `${cleaned}%`)
-                    .limit(1)
-                    .maybeSingle();
-                if (!contact) {
-                    return json({
-                        success: false,
-                        error: "contact_not_found",
-                        message: `Contato não encontrado para o número ${number}`,
-                    }, 404);
-                }
-                contactId = contact.id;
-            }
-
-            // 2. Conversa aberta/pendente mais recente (prioriza a da instância informada)
-            const { data: convs } = await supabase
-                .from("conversations")
-                .select("id, instance_id")
-                .eq("user_id", userId)
-                .eq("contact_id", contactId)
-                .in("status", ["pending", "open"])
-                .order("created_at", { ascending: false })
-                .limit(5);
-
-            const match = (convs || []).find((c) => c.instance_id === instanceId) || (convs || [])[0];
-            if (!match) {
-                return json({
-                    success: false,
-                    error: "conversation_not_found",
-                    message: "Nenhuma conversa aberta ou pendente encontrada para este contato",
-                }, 404);
-            }
-            conversationId = match.id;
         }
 
         // ── Áudio em base64: upload no bucket público 'media' → URL ──

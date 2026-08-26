@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { getWorkHoursForDay } from "../_shared/professional-schedule.ts";
 import { TERMINAL_STAGES } from "../_shared/crm-stages.ts";
 import { applyCampaignDiscount, type CampaignDiscountInfo } from "../_shared/campaign-discount.ts";
+import { findActiveCardForChannel } from "../_shared/resolve-conversation.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -29,8 +30,14 @@ serve(async (req) => {
             Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
         );
 
-        // Campanha ativa da instância do link (payload `d` com instance_id) onde o
-        // contato recebeu envio — links legados sem instance_id: comportamento atual.
+        // O token do link (payload `d`) carrega a conexão: sem ela não dá pra saber
+        // em qual funil do CRM o agendamento entra.
+        if (action === "create_booking" && !instance_id) {
+            return new Response(JSON.stringify({ error: "Link de agendamento sem conexão (instance_id) — peça um link novo à clínica" }),
+                { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+
+        // Campanha ativa da instância do link onde o contato recebeu envio.
         const resolveActiveCampaign = async (): Promise<CampaignDiscountInfo | null> => {
             if (!instance_id || !contact_id) return null;
             try {
@@ -229,22 +236,26 @@ serve(async (req) => {
                 price: finalPrice,
                 type: "appointment",
                 campaign_id: campaign?.id ?? null,
+                instance_id,
                 created_via: "public_link",
             }).select().single();
 
             if (insertErr) throw insertErr;
 
-            // CRM sync: create/move card to Agendado + add service
+            // CRM sync: create/move card to Agendado + add service — funil da conexão do link
             try {
                 const terminals = TERMINAL_STAGES;
-                const { data: activeCard } = await supabase.from("crm_client")
-                    .select("id, stage").eq("contact_id", contact_id).eq("is_active", true).maybeSingle();
+                const activeCard = await findActiveCardForChannel(supabase, {
+                    contactId: contact_id,
+                    instanceId: instance_id,
+                    instagramInstanceId: null,
+                });
 
                 if (activeCard) {
                     if (terminals.includes(activeCard.stage)) {
                         // Terminal → create new card
                         const { data: newCard } = await supabase.from("crm_client").insert({
-                            user_id, contact_id, stage: "Agendado",
+                            user_id, contact_id, stage: "Agendado", instance_id,
                             stage_changed_at: new Date().toISOString(), value: 0,
                             professional_id, priority: "medium", is_active: true,
                         }).select().single();
@@ -279,7 +290,7 @@ serve(async (req) => {
                 } else {
                     // No card → create
                     const { data: newCard } = await supabase.from("crm_client").insert({
-                        user_id, contact_id, stage: "Agendado",
+                        user_id, contact_id, stage: "Agendado", instance_id,
                         stage_changed_at: new Date().toISOString(), value: finalPrice,
                         professional_id, priority: "medium", is_active: true,
                     }).select().single();
@@ -326,12 +337,16 @@ serve(async (req) => {
                 try {
                     await supabase.from("crm_client").insert({
                         user_id, contact_id: updated.contact_id, stage: "Perdido",
+                        instance_id: updated.instance_id ?? null,
                         stage_changed_at: new Date().toISOString(), value: updated.price || 0,
                         loss_reason: "canceled", loss_reason_other: "Cliente cancelou o agendamento via link",
                         is_active: false,
                     });
-                    const { data: activeCard } = await supabase.from("crm_client")
-                        .select("id").eq("contact_id", updated.contact_id).eq("is_active", true).maybeSingle();
+                    const activeCard = await findActiveCardForChannel(supabase, {
+                        contactId: updated.contact_id,
+                        instanceId: updated.instance_id ?? null,
+                        instagramInstanceId: null,
+                    });
                     if (activeCard) {
                         await supabase.from("crm_client_services").delete()
                             .eq("crm_client_id", activeCard.id).eq("service_client_id", updated.service_id);
@@ -392,8 +407,11 @@ serve(async (req) => {
             // CRM: move card to Agendado
             if (rescheduled.contact_id) {
                 try {
-                    const { data: activeCard } = await supabase.from("crm_client")
-                        .select("id, stage").eq("contact_id", rescheduled.contact_id).eq("is_active", true).maybeSingle();
+                    const activeCard = await findActiveCardForChannel(supabase, {
+                        contactId: rescheduled.contact_id,
+                        instanceId: rescheduled.instance_id ?? null,
+                        instagramInstanceId: null,
+                    });
                     if (activeCard && activeCard.stage !== "Agendado") {
                         await supabase.from("crm_client").update({
                             stage: "Agendado", stage_changed_at: new Date().toISOString(),

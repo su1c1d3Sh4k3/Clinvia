@@ -14,7 +14,7 @@ const corsHeaders = {
  * Roles: C = Cliente, IA = IA, A = Agente humano
  *
  * Body (JSON):
- *   - contact_id (obrigatorio): ID do contato
+ *   - conversation_id (obrigatorio): ID da conversa (bd_data.conversation_id)
  */
 serve(async (req) => {
     if (req.method === 'OPTIONS') {
@@ -23,11 +23,11 @@ serve(async (req) => {
 
     try {
         const body = await req.json();
-        const contactId = body.contact_id;
+        const conversationId = body.conversation_id;
 
-        if (!contactId) {
+        if (!conversationId) {
             return new Response(
-                JSON.stringify({ success: false, error: 'contact_id is required' }),
+                JSON.stringify({ success: false, error: 'conversation_id is required' }),
                 { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
         }
@@ -36,6 +36,20 @@ serve(async (req) => {
             Deno.env.get('SUPABASE_URL') ?? '',
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
         );
+
+        const { data: conv } = await supabase
+            .from('conversations')
+            .select('id, contact_id')
+            .eq('id', conversationId)
+            .maybeSingle();
+
+        if (!conv?.contact_id) {
+            return new Response(
+                JSON.stringify({ success: false, error: 'Conversa não encontrada ou sem contato vinculado' }),
+                { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
+        const contactId = conv.contact_id;
 
         const { data, error } = await supabase.rpc('get_contact_messages_toon', {
             p_contact_id: contactId,
@@ -52,6 +66,7 @@ serve(async (req) => {
         return new Response(
             JSON.stringify({
                 success: true,
+                conversation_id: conversationId,
                 contact_id: contactId,
                 messages: data || '',
             }),

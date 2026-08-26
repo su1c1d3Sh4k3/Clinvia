@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { resolveConversationsForContacts } from "../_shared/resolve-conversation.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -95,19 +96,31 @@ serve(async (req) => {
             return json({ success: false, error: error.message }, 500);
         }
 
-        const rows = (sales || []).map((s: any) => ({
-            sale_id: s.id,
-            service_name: s.product_name,
-            service_client_id: s.service_client_id,
-            sale_date: s.sale_date,
-            ia_contact_days: s.ia_contact_days,
-            status: s.ia_scheduling_status,
-            total_amount: s.total_amount,
-            professional_id: s.professional_id,
-            contact_id: s.contact?.id ?? null,
-            contact_name: s.contact?.push_name ?? null,
-            contact_number: s.contact?.number ? String(s.contact.number).split("@")[0] : null,
-        }));
+        // As demais APIs (agendamento, CRM, envio) trabalham por conversation_id
+        const convByContact = await resolveConversationsForContacts(
+            supabase,
+            userId,
+            (sales || []).map((s: any) => s.contact?.id).filter(Boolean),
+        );
+
+        const rows = (sales || []).map((s: any) => {
+            const conv = s.contact?.id ? convByContact.get(s.contact.id) : undefined;
+            return {
+                sale_id: s.id,
+                service_name: s.product_name,
+                service_client_id: s.service_client_id,
+                sale_date: s.sale_date,
+                ia_contact_days: s.ia_contact_days,
+                status: s.ia_scheduling_status,
+                total_amount: s.total_amount,
+                professional_id: s.professional_id,
+                contact_id: s.contact?.id ?? null,
+                contact_name: s.contact?.push_name ?? null,
+                contact_number: s.contact?.number ? String(s.contact.number).split("@")[0] : null,
+                conversation_id: conv?.conversationId ?? null,
+                instance_id: conv?.instanceId ?? null,
+            };
+        });
 
         console.log(`[api-sale-scheduling-due] user=${userId} due=${rows.length}`);
         return json({ success: true, count: rows.length, sales: rows });

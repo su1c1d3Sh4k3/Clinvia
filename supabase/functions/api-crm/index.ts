@@ -1,6 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { TERMINAL_STAGES } from "../_shared/crm-stages.ts";
+import {
+    ConversationResolutionError,
+    findActiveCardForChannel,
+    resolveConversation,
+} from "../_shared/resolve-conversation.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -39,7 +44,7 @@ serve(async (req) => {
         }
 
         const body = await req.json();
-        const { action, user_id, contact_id, phone_number, stage, services, priority, notes, loss_reason, loss_reason_other } = body;
+        const { action, user_id, conversation_id, stage, services, priority, notes, loss_reason, loss_reason_other } = body;
 
         if (!user_id) {
             return new Response(
@@ -53,37 +58,19 @@ serve(async (req) => {
             Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
         );
 
-        // Helper: resolve contact_id from phone_number if not provided
-        const resolveContactId = async (): Promise<string> => {
-            if (contact_id) return contact_id;
-            if (!phone_number) throw new Error("Missing contact_id or phone_number");
-            const cleaned = phone_number.replace(/\D/g, "");
-            const { data, error } = await supabase
-                .from("contacts")
-                .select("id")
-                .eq("user_id", user_id)
-                .ilike("number", `${cleaned}%`)
-                .limit(1)
-                .single();
-            if (error || !data) throw new Error(`Contact not found for phone: ${phone_number}`);
-            return data.id;
-        };
+        // `list_stages` é o único action sem conversa (catálogo estático)
+        const conv = action === "list_stages"
+            ? null
+            : await resolveConversation(supabase, conversation_id, user_id);
 
         // ── ACTION: get_deal ──
-        // Returns the active CRM card + its services
+        // Returns the active CRM card of this conversation's channel + its services
         if (action === "get_deal") {
-            const cid = await resolveContactId();
-
-            const { data: card } = await supabase
-                .from("crm_client")
-                .select("id, stage, value, priority, is_active, notes, created_at")
-                .eq("contact_id", cid)
-                .eq("is_active", true)
-                .maybeSingle();
+            const card = await findActiveCardForChannel(supabase, conv!, "value, priority, is_active, notes, created_at");
 
             if (!card) {
                 return new Response(
-                    JSON.stringify({ deal: null, message: "Nenhuma negociação ativa para este contato" }),
+                    JSON.stringify({ deal: null, message: "Nenhuma negociação ativa nesta conexão" }),
                     { headers: { ...corsHeaders, "Content-Type": "application/json" } }
                 );
             }
@@ -113,16 +100,9 @@ serve(async (req) => {
                 );
             }
 
-            const cid = await resolveContactId();
+            const card = await findActiveCardForChannel(supabase, conv!);
 
-            const { data: card } = await supabase
-                .from("crm_client")
-                .select("id, stage")
-                .eq("contact_id", cid)
-                .eq("is_active", true)
-                .maybeSingle();
-
-            if (!card) throw new Error("Nenhuma negociação ativa para este contato");
+            if (!card) throw new Error("Nenhuma negociação ativa nesta conexão");
 
             if (TERMINAL_STAGES.includes(card.stage)) {
                 throw new Error(`Negociação está em "${card.stage}" (terminal) — não pode ser movida`);
@@ -161,24 +141,17 @@ serve(async (req) => {
         // ── ACTION: create_deal ──
         // Creates a new deal for a contact with optional services
         if (action === "create_deal") {
-            const cid = await resolveContactId();
-
             // Validate stage
             const targetStage = stage
                 ? CRM_STAGES.find(s => s.toLowerCase() === stage.toLowerCase()) || 'Qualificado'
                 : 'Qualificado';
 
-            // Check if contact already has active deal
-            const { data: existing } = await supabase
-                .from("crm_client")
-                .select("id, stage")
-                .eq("contact_id", cid)
-                .eq("is_active", true)
-                .maybeSingle();
+            // Já existe card ativo no funil desta conexão?
+            const existing = await findActiveCardForChannel(supabase, conv!);
 
             if (existing) {
                 return new Response(
-                    JSON.stringify({ error: `Contato já possui negociação ativa na etapa "${existing.stage}"`, deal_id: existing.id }),
+                    JSON.stringify({ error: `Contato já possui negociação ativa nesta conexão, na etapa "${existing.stage}"`, deal_id: existing.id }),
                     { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
                 );
             }
@@ -221,7 +194,9 @@ serve(async (req) => {
                 .from("crm_client")
                 .insert({
                     user_id,
-                    contact_id: cid,
+                    contact_id: conv!.contactId,
+                    instance_id: conv!.instanceId,
+                    instagram_instance_id: conv!.instagramInstanceId,
                     stage: targetStage,
                     stage_changed_at: new Date().toISOString(),
                     value: totalValue,
@@ -249,16 +224,9 @@ serve(async (req) => {
         // ── ACTION: add_service ──
         // Adds a service to the active deal by name
         if (action === "add_service") {
-            const cid = await resolveContactId();
+            const card = await findActiveCardForChannel(supabase, conv!);
 
-            const { data: card } = await supabase
-                .from("crm_client")
-                .select("id, stage")
-                .eq("contact_id", cid)
-                .eq("is_active", true)
-                .maybeSingle();
-
-            if (!card) throw new Error("Nenhuma negociação ativa para este contato");
+            if (!card) throw new Error("Nenhuma negociação ativa nesta conexão");
             if (TERMINAL_STAGES.includes(card.stage)) throw new Error(`Negociação em "${card.stage}" — não pode ser editada`);
 
             const serviceName = body.service_name || body.name;
@@ -319,8 +287,9 @@ serve(async (req) => {
         }
 
         // ── ACTION: close_ticket ──
-        // Encerra o ticket do contato: resolve conversas open/pending e move o
-        // card ativo (se houver) para a etapa terminal escolhida.
+        // Encerra APENAS esta conversa: move o card do funil desta conexão para a
+        // etapa terminal escolhida e resolve o ticket. Conversas do mesmo contato
+        // em outras conexões continuam intactas.
         if (action === "close_ticket") {
             if (!stage) throw new Error("Missing field: stage");
 
@@ -332,59 +301,35 @@ serve(async (req) => {
                 );
             }
 
-            const cid = await resolveContactId();
+            // A RPC seta o GUC clinvia.resolve_conversation_id: o trigger
+            // crm_terminal_resolve_tickets resolve só esta conversa.
+            const { error: rpcError } = await supabase.rpc("crm_close_conversation_negotiation", {
+                p_conversation_id: conv!.conversationId,
+                p_stage: matched,
+                p_loss_reason: (matched === 'Perdido' || matched === 'Sem Interesse') ? (loss_reason || 'other') : null,
+                p_loss_reason_other: (matched === 'Perdido' || matched === 'Sem Interesse') ? (loss_reason_other || null) : null,
+            });
+            if (rpcError) throw rpcError;
 
-            // Card ativo → mover para a etapa terminal.
-            // Triggers do banco (crm_terminal_enforce_inactive + crm_terminal_resolve_tickets)
-            // desativam o card e resolvem as conversas open/pending do contato.
-            const { data: card } = await supabase
-                .from("crm_client")
-                .select("id, stage")
-                .eq("contact_id", cid)
-                .eq("is_active", true)
-                .maybeSingle();
-
-            let deal: any = null;
-            if (card) {
-                const updateData: any = {
-                    stage: matched,
-                    stage_changed_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString(),
-                    is_active: false,
-                };
-                if (matched === 'Perdido' || matched === 'Sem Interesse') {
-                    updateData.loss_reason = loss_reason || 'other';
-                    updateData.loss_reason_other = loss_reason_other || null;
-                }
-                const { data: updated, error } = await supabase
-                    .from("crm_client")
-                    .update(updateData)
-                    .eq("id", card.id)
-                    .select("id, stage, is_active, value")
-                    .single();
-                if (error) throw error;
-                deal = updated;
-            }
-
-            // Sem card ativo (ou garantia extra): resolve as conversas diretamente
-            const { data: resolved, error: convError } = await supabase
+            // Garantia extra: sem card ativo a RPC não faz nada, o ticket precisa fechar mesmo assim
+            const { error: convError } = await supabase
                 .from("conversations")
                 .update({ status: "resolved" })
-                .eq("contact_id", cid)
-                .eq("user_id", user_id)
-                .in("status", ["open", "pending"])
-                .select("id");
+                .eq("id", conv!.conversationId)
+                .in("status", ["open", "pending"]);
             if (convError) throw convError;
+
+            const deal = await findActiveCardForChannel(supabase, conv!);
 
             return new Response(
                 JSON.stringify({
                     success: true,
                     stage: matched,
-                    deal,
-                    conversations_resolved: (resolved || []).length,
-                    message: deal
-                        ? `Negociação movida para "${matched}" e ticket encerrado`
-                        : `Ticket encerrado (contato sem negociação ativa)`,
+                    conversation_id: conv!.conversationId,
+                    conversation_resolved: true,
+                    // após o encerramento não deve sobrar card ativo neste canal
+                    remaining_active_deal: deal?.id ?? null,
+                    message: `Negociação desta conexão movida para "${matched}" e ticket encerrado`,
                 }),
                 { headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
@@ -402,9 +347,10 @@ serve(async (req) => {
         throw new Error(`Invalid action: "${action}". Valid: get_deal, move_stage, create_deal, add_service, close_ticket, list_stages`);
 
     } catch (error) {
+        const status = error instanceof ConversationResolutionError ? error.status : 400;
         return new Response(
             JSON.stringify({ error: error.message }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            { status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
     }
 });

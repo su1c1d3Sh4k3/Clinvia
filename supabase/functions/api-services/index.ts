@@ -23,7 +23,7 @@ serve(async (req) => {
         }
 
         const body = await req.json();
-        const { user_id, service_name, contact_id, phone_number } = body;
+        const { user_id, service_name, conversation_id } = body;
 
         if (!user_id) {
             return new Response(
@@ -37,22 +37,23 @@ serve(async (req) => {
             Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
         );
 
-        // Helper: generate booking link for contact
+        // Link público de agendamento — o token carrega a conexão da conversa
+        // (a agenda e o CRM precisam saber em qual funil/instância gravar).
         const generateBookingLink = async () => {
-            if (!contact_id && !phone_number) return null;
-            let cid = contact_id;
-            let contactName = "";
-            if (!cid && phone_number) {
-                const cleaned = phone_number.replace(/\D/g, "");
-                const { data } = await supabase.from("contacts").select("id, push_name")
-                    .eq("user_id", user_id).ilike("number", `${cleaned}%`).limit(1).maybeSingle();
-                if (data) { cid = data.id; contactName = data.push_name || ""; }
-            } else if (cid) {
-                const { data } = await supabase.from("contacts").select("push_name").eq("id", cid).single();
-                contactName = data?.push_name || "";
-            }
-            if (!cid) return null;
-            const token = btoa(JSON.stringify({ user_id, contact_id: cid, contact_name: contactName }));
+            if (!conversation_id) return null;
+            const { data: conv } = await supabase
+                .from("conversations")
+                .select("contact_id, instance_id, contacts(push_name)")
+                .eq("id", conversation_id)
+                .eq("user_id", user_id)
+                .maybeSingle();
+            if (!conv?.contact_id || !conv.instance_id) return null;
+            const token = btoa(JSON.stringify({
+                user_id,
+                contact_id: conv.contact_id,
+                contact_name: (conv as any).contacts?.push_name || "",
+                instance_id: conv.instance_id,
+            }));
             return `https://app.clinbia.ai/agendar?d=${token}`;
         };
 

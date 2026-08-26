@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { resolveConversationsForContacts } from "../_shared/resolve-conversation.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -73,9 +74,17 @@ serve(async (req) => {
 
         if (error) throw error;
 
+        // As demais APIs (agendamento, CRM, envio) trabalham por conversation_id
+        const convByContact = await resolveConversationsForContacts(
+            supabase,
+            userId,
+            (data || []).map((e: any) => e.contact_id).filter(Boolean),
+        );
+
         // Build clean response: one entry per matching approach
         const results: any[] = [];
         for (const entry of data || []) {
+            const conv = entry.contact_id ? convByContact.get(entry.contact_id) : undefined;
             const approaches = [
                 { field: "approach_1_date", date: entry.approach_1_date, status: entry.approach_1_status },
                 { field: "approach_2_date", date: entry.approach_2_date, status: entry.approach_2_status },
@@ -96,6 +105,8 @@ serve(async (req) => {
                         recurrence_date: entry.recurrence_date,
                         approach: match.field,
                         approach_status: match.status,
+                        conversation_id: conv?.conversationId ?? null,
+                        instance_id: conv?.instanceId ?? null,
                     });
                 }
             }

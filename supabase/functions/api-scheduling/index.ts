@@ -3,6 +3,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { getWorkHoursForDay } from "../_shared/professional-schedule.ts";
 import { TERMINAL_STAGES } from "../_shared/crm-stages.ts";
 import { applyCampaignDiscount, type CampaignDiscountInfo } from "../_shared/campaign-discount.ts";
+import {
+    ConversationResolutionError,
+    findActiveCardForChannel,
+    resolveConversation,
+} from "../_shared/resolve-conversation.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -91,16 +96,12 @@ serve(async (req) => {
             Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
         );
 
-        // Helper: resolve contact by phone
-        const resolveContact = async (contactId?: string, phoneNumber?: string) => {
-            if (contactId) return contactId;
-            if (!phoneNumber) throw new Error("Missing contact_id or phone_number");
-            const cleaned = phoneNumber.replace(/\D/g, "");
-            const { data } = await supabase.from("contacts").select("id")
-                .eq("user_id", user_id).ilike("number", `${cleaned}%`).limit(1).single();
-            if (!data) throw new Error(`Contato não encontrado: ${phoneNumber}`);
-            return data.id;
-        };
+        // A conversa carrega contato + conexão. `fetch_appointments` e
+        // `create_appointment` exigem conversation_id; reschedule/cancel derivam
+        // a conexão do próprio agendamento (appointments.instance_id).
+        const conv = (action === "fetch_appointments" || action === "create_appointment")
+            ? await resolveConversation(supabase, body.conversation_id, user_id)
+            : null;
 
         // Helper: resolve service_client by application name
         const resolveService = async (serviceName: string) => {
@@ -135,23 +136,15 @@ serve(async (req) => {
         };
 
         // Helper: campanha ativa da instância onde o contato recebeu envio.
-        // Usado no create_appointment (campo opcional `instance`: id ou nome) para
-        // vincular o agendamento à campanha → congela a entrada como 'Agendado' e,
-        // se o serviço agendado estiver na campanha, aplica discount_pct no preço.
-        const resolveCampaignForContact = async (cid: string, instanceRef?: string): Promise<CampaignDiscountInfo | null> => {
-            if (!instanceRef) return null;
+        // A instância vem da conversa → vincula o agendamento à campanha (congela
+        // a entrada como 'Agendado') e aplica discount_pct se o serviço estiver nela.
+        const resolveCampaignForContact = async (cid: string, instanceId?: string | null): Promise<CampaignDiscountInfo | null> => {
+            if (!instanceId) return null;
             try {
-                const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(instanceRef);
-                const instQ = supabase.from("instances").select("id").eq("user_id", user_id);
-                const { data: inst } = isUuid
-                    ? await instQ.eq("id", instanceRef).maybeSingle()
-                    : await instQ.ilike("instance_name", instanceRef).limit(1).maybeSingle();
-                if (!inst) return null;
-
                 const { data: camps } = await supabase.from("campaigns")
                     .select("id, discount_pct, services")
                     .eq("user_id", user_id)
-                    .eq("instance_id", inst.id)
+                    .eq("instance_id", instanceId)
                     .in("status", ["dispatching", "dispatched"])
                     .gt("valid_until", new Date().toISOString())
                     .order("scheduled_at", { ascending: false });
@@ -176,7 +169,7 @@ serve(async (req) => {
         // ACTION: fetch_appointments
         // ══════════════════════════════════════════════
         if (action === "fetch_appointments") {
-            const contactId = await resolveContact(body.contact_id, body.phone_number);
+            const contactId = conv!.contactId;
 
             let query = supabase.from("appointments")
                 .select("id, service_name, professional_name, start_time, end_time, status, price, type, category_id, service_name_id, service_id")
@@ -194,6 +187,7 @@ serve(async (req) => {
             if (error) throw error;
 
             return new Response(JSON.stringify({
+                conversation_id: conv!.conversationId,
                 contact_id: contactId,
                 appointments: (data || []).map((a: any) => ({
                     id: a.id,
@@ -212,11 +206,11 @@ serve(async (req) => {
         // ACTION: create_appointment
         // ══════════════════════════════════════════════
         if (action === "create_appointment") {
-            const { service_name, date, time, professional_name, phone_number, contact_id, description, instance } = body;
+            const { service_name, date, time, professional_name, description } = body;
             if (!service_name || !date || !time) throw new Error("Missing service_name, date or time");
 
-            const cid = await resolveContact(contact_id, phone_number);
-            const campaign = await resolveCampaignForContact(cid, instance);
+            const cid = conv!.contactId;
+            const campaign = await resolveCampaignForContact(cid, conv!.instanceId);
             const sc = await resolveService(service_name);
             const prof = await resolveProfessional(sc, professional_name);
             const duration = sc.duration_minutes || 30;
@@ -267,6 +261,7 @@ serve(async (req) => {
                 description: description || null,
                 type: "appointment",
                 campaign_id: campaign?.id ?? null,
+                instance_id: conv!.instanceId,
                 created_via: "ia",
             };
 
@@ -284,10 +279,10 @@ serve(async (req) => {
                 }).catch(() => {});
             } catch (_) {}
 
-            // CRM sync: move/create card to Agendado + add service
+            // CRM sync: move/create card to Agendado + add service — o card é do
+            // funil da conexão desta conversa
             try {
-                const { data: activeCard } = await supabase.from("crm_client")
-                    .select("id, stage").eq("contact_id", cid).eq("is_active", true).maybeSingle();
+                const activeCard = await findActiveCardForChannel(supabase, conv!);
 
                 if (activeCard) {
                     const terminals = TERMINAL_STAGES;
@@ -295,6 +290,8 @@ serve(async (req) => {
                         // Terminal → create new card
                         const { data: newCard } = await supabase.from("crm_client").insert({
                             user_id, contact_id: cid, stage: "Agendado",
+                            instance_id: conv!.instanceId,
+                            instagram_instance_id: conv!.instagramInstanceId,
                             stage_changed_at: new Date().toISOString(), value: 0,
                             professional_id: prof.id, priority: "medium", is_active: true,
                         }).select().single();
@@ -331,6 +328,8 @@ serve(async (req) => {
                     // No card → create
                     const { data: newCard } = await supabase.from("crm_client").insert({
                         user_id, contact_id: cid, stage: "Agendado",
+                        instance_id: conv!.instanceId,
+                        instagram_instance_id: conv!.instagramInstanceId,
                         stage_changed_at: new Date().toISOString(), value: finalPrice,
                         professional_id: prof.id, priority: "medium", is_active: true,
                     }).select().single();
@@ -429,11 +428,14 @@ serve(async (req) => {
                 }).catch(() => {});
             } catch (_) {}
 
-            // CRM: move card to Agendado
+            // CRM: move card to Agendado — funil da conexão do agendamento
             if (updated.contact_id) {
                 try {
-                    const { data: activeCard } = await supabase.from("crm_client")
-                        .select("id, stage").eq("contact_id", updated.contact_id).eq("is_active", true).maybeSingle();
+                    const activeCard = await findActiveCardForChannel(supabase, {
+                        contactId: updated.contact_id,
+                        instanceId: updated.instance_id ?? null,
+                        instagramInstanceId: null,
+                    });
                     if (activeCard && activeCard.stage !== "Agendado") {
                         await supabase.from("crm_client").update({
                             stage: "Agendado", stage_changed_at: new Date().toISOString(),
@@ -485,13 +487,17 @@ serve(async (req) => {
                 try {
                     await supabase.from("crm_client").insert({
                         user_id, contact_id: updated.contact_id, stage: "Perdido",
+                        instance_id: updated.instance_id ?? null,
                         stage_changed_at: new Date().toISOString(), value: updated.price || 0,
                         loss_reason: "canceled", loss_reason_other: "Cliente cancelou o agendamento",
                         is_active: false,
                     });
-                    // Remove service from active deal
-                    const { data: activeCard } = await supabase.from("crm_client")
-                        .select("id").eq("contact_id", updated.contact_id).eq("is_active", true).maybeSingle();
+                    // Remove service from active deal — funil da conexão do agendamento
+                    const activeCard = await findActiveCardForChannel(supabase, {
+                        contactId: updated.contact_id,
+                        instanceId: updated.instance_id ?? null,
+                        instagramInstanceId: null,
+                    });
                     if (activeCard) {
                         await supabase.from("crm_client_services").delete()
                             .eq("crm_client_id", activeCard.id).eq("service_client_id", updated.service_id);
@@ -518,7 +524,8 @@ serve(async (req) => {
         throw new Error(`Invalid action: "${action}". Valid: fetch_appointments, create_appointment, reschedule_appointment, cancel_appointment`);
 
     } catch (error) {
+        const status = error instanceof ConversationResolutionError ? error.status : 400;
         return new Response(JSON.stringify({ error: error.message }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+            { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 });

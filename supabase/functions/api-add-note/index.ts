@@ -12,14 +12,10 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
  * Auth: header `x-api-key` = SCHEDULING_API_KEY (mesmo das demais api-*).
  *
  * Body:
- *   user_id         (obrigatório)  — dono da conta (bd_data.user_id)
- *   text            (obrigatório)  — texto da nota
- *   conversation_id (obrigatório*) — conversa à qual anexar a nota
- *   contact_id      (obrigatório*) — alternativa: resolve a conversa ativa
- *                                    (open/pending) mais recente do contato,
- *                                    senão a mais recente de todas
- *   author_name     (opcional)     — autor exibido no título (default "IA")
- *   (* enviar conversation_id OU contact_id)
+ *   user_id         (obrigatório) — dono da conta (bd_data.user_id)
+ *   text            (obrigatório) — texto da nota
+ *   conversation_id (obrigatório) — conversa à qual anexar a nota (bd_data.conversation_id)
+ *   author_name     (opcional)    — autor exibido no título (default "IA")
  *
  * Título gerado: "Nota de Conversa - <autor> - dd/MM/yyyy HH:mm" (horário de São Paulo)
  */
@@ -59,15 +55,14 @@ serve(async (req) => {
         const body = await req.json();
         const userId: string | undefined = body.user_id;
         const text: string | undefined = typeof body.text === "string" ? body.text.trim() : undefined;
-        let conversationId: string | undefined = body.conversation_id;
-        let contactId: string | undefined = body.contact_id;
+        const conversationId: string | undefined = body.conversation_id;
         const authorName: string = (typeof body.author_name === "string" && body.author_name.trim()) || "IA";
 
-        if (!userId || !text || (!conversationId && !contactId)) {
+        if (!userId || !text || !conversationId) {
             return json({
                 success: false,
                 error: "missing_params",
-                message: "Campos obrigatórios: user_id, text e conversation_id ou contact_id",
+                message: "Campos obrigatórios: user_id, text, conversation_id",
             }, 400);
         }
 
@@ -76,56 +71,16 @@ serve(async (req) => {
             Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
         );
 
-        // ── Resolve conversa/contato (sempre validando ownership) ──
-        if (conversationId) {
-            const { data: conv } = await supabase
-                .from("conversations")
-                .select("id, user_id, contact_id")
-                .eq("id", conversationId)
-                .eq("user_id", userId)
-                .maybeSingle();
-            if (!conv) {
-                return json({ success: false, error: "conversation_not_found", message: "Conversa não encontrada para este user_id" }, 404);
-            }
-            contactId = conv.contact_id ?? contactId;
-        } else if (contactId) {
-            const { data: contact } = await supabase
-                .from("contacts")
-                .select("id")
-                .eq("id", contactId)
-                .eq("user_id", userId)
-                .maybeSingle();
-            if (!contact) {
-                return json({ success: false, error: "contact_not_found", message: "Contato não encontrado para este user_id" }, 404);
-            }
-            // Conversa ativa mais recente; fallback: mais recente de todas
-            const { data: active } = await supabase
-                .from("conversations")
-                .select("id")
-                .eq("contact_id", contactId)
-                .eq("user_id", userId)
-                .in("status", ["open", "pending"])
-                .order("last_message_at", { ascending: false, nullsFirst: false })
-                .order("created_at", { ascending: false })
-                .limit(1);
-            if (active && active.length > 0) {
-                conversationId = active[0].id;
-            } else {
-                const { data: last } = await supabase
-                    .from("conversations")
-                    .select("id")
-                    .eq("contact_id", contactId)
-                    .eq("user_id", userId)
-                    .order("last_message_at", { ascending: false, nullsFirst: false })
-                    .order("created_at", { ascending: false })
-                    .limit(1);
-                if (!last || last.length === 0) {
-                    return json({ success: false, error: "no_conversation", message: "Contato não possui conversas" }, 404);
-                }
-                conversationId = last[0].id;
-            }
+        const { data: conv } = await supabase
+            .from("conversations")
+            .select("id, user_id, contact_id")
+            .eq("id", conversationId)
+            .eq("user_id", userId)
+            .maybeSingle();
+        if (!conv) {
+            return json({ success: false, error: "conversation_not_found", message: "Conversa não encontrada para este user_id" }, 404);
         }
-
+        const contactId: string | null = conv.contact_id;
         if (!contactId) {
             return json({ success: false, error: "no_contact", message: "Conversa sem contato vinculado — nota não pode ser catalogada" }, 400);
         }
