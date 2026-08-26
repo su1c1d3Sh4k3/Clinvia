@@ -1162,7 +1162,9 @@ serve(async (req) => {
                             .eq('user_id', userId)
                             .maybeSingle();
 
-                        const iaEffective = iaCfg?.ia_on === true && instance.ia_on_wpp !== false;
+                        // ia_on_wpp É POR INSTÂNCIA: com 2+ instâncias e só uma
+                        // com IA, apenas a ligada entra na fila 'Atendimento IA'
+                        const iaEffective = iaCfg?.ia_on === true && instance.ia_on_wpp === true;
                         const targetQueueName = iaEffective ? 'Atendimento IA' : 'Atendimento Humano';
                         const { data: targetQueue } = await supabase
                             .from('queues')
@@ -1881,7 +1883,7 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                 }
             }
 
-            const instanceIaOn = instance.ia_on_wpp !== false;
+            const instanceIaOn = instance.ia_on_wpp === true;
 
             let queueIsIa = false;
             if (conversation?.queue_id) {

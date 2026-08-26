@@ -215,8 +215,29 @@ async function getQueueId(supabase: any, userId: string, queueName: string): Pro
     return data?.id ?? null;
 }
 
+// IA efetiva da campanha = campanha com IA ligada E IA ligada na conta E na
+// INSTÂNCIA de disparo. Com 2+ instâncias e só uma com IA, a campanha da
+// instância sem IA não pode jogar a conversa na fila da IA (ninguém responde).
+const campaignIaCache = new Map<string, boolean>();
+
+async function campaignIaEffective(supabase: any, campaign: any): Promise<boolean> {
+    if (campaign.ia_enabled === false) return false;
+    const cached = campaignIaCache.get(campaign.id);
+    if (cached !== undefined) return cached;
+
+    const [cfgRes, instRes] = await Promise.all([
+        supabase.from("ia_config").select("ia_on").eq("user_id", campaign.user_id).maybeSingle(),
+        campaign.instance_id
+            ? supabase.from("instances").select("ia_on_wpp").eq("id", campaign.instance_id).maybeSingle()
+            : Promise.resolve({ data: null }),
+    ]);
+    const effective = cfgRes.data?.ia_on === true && instRes.data?.ia_on_wpp === true;
+    campaignIaCache.set(campaign.id, effective);
+    return effective;
+}
+
 async function moveCrm(supabase: any, campaign: any, contactId: string, conversationId: string | null) {
-    const iaEnabled = campaign.ia_enabled !== false;
+    const iaEnabled = await campaignIaEffective(supabase, campaign);
     const targetStage = iaEnabled ? "Em Atendimento IA" : "Em Atendimento Humano";
     const targetQueueName = iaEnabled ? "Atendimento IA" : "Atendimento Humano";
 
@@ -331,7 +352,7 @@ async function findOrCreateConversation(
         .maybeSingle();
     if (existing) return { id: existing.id, created: false };
 
-    const iaEnabled = campaign.ia_enabled !== false;
+    const iaEnabled = await campaignIaEffective(supabase, campaign);
     const queueName = iaEnabled ? "Atendimento IA" : "Atendimento Humano";
     const queueId = await getQueueId(supabase, campaign.user_id, queueName);
 

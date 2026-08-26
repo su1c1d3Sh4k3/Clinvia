@@ -349,7 +349,7 @@ export function CampaignsGuide() {
                     exatamente do que a pessoa está falando quando responde "tenho interesse".
                 </p>
                 <StepByStep steps={[
-                    { title: "IA ligada", description: "Quem responde entra na fila Atendimento IA: a assistente conversa, tira dúvidas e pode agendar sozinha. O agendamento aparece na campanha com atendente \"IA\"." },
+                    { title: "IA ligada", description: "Quem responde entra na fila Atendimento IA: a assistente conversa, tira dúvidas e pode agendar sozinha. O agendamento aparece na campanha com atendente \"IA\". Vale só se a conexão usada no disparo estiver com a IA ligada — disparando por um número sem IA, as respostas vão para a equipe." },
                     { title: "Função da IA", description: "Com a IA ligada, escolha entre Agendamento (a IA conduz o contato até marcar um horário) e Qualificação (a IA sonda o interesse e prepara o contato para a equipe fechar)." },
                     { title: "IA desligada", description: "Quem responde entra na fila Atendimento Humano, como uma conversa pendente normal para a equipe atender. A campanha nunca desliga o interruptor de IA do contato: o bloqueio vale só para aquele atendimento, pela fila." },
                     { title: "Enquanto a campanha vale", description: "As instruções da campanha valem até a data de validade. Depois disso a IA volta ao comportamento padrão da clínica." },

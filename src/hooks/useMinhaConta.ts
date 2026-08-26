@@ -58,7 +58,7 @@ export interface MyIAStatus {
     agentName: string | null;
     companyName: string | null;
     iaOn: boolean;
-    /** instâncias WhatsApp onde a IA está efetivamente ligada (ia_on && ia_on_wpp !== false) */
+    /** instâncias WhatsApp onde a IA está efetivamente ligada (ia_on && ia_on_wpp) */
     activeInstances: { id: string; name: string }[];
 }
 
@@ -81,7 +81,7 @@ export function useMyIAStatus() {
             const iaOn = cfg?.ia_on === true;
             const activeInstances = iaOn
                 ? (instRes.data || [])
-                    .filter((i: any) => i.ia_on_wpp !== false)
+                    .filter((i: any) => i.ia_on_wpp === true)
                     .map((i: any) => ({ id: i.id, name: i.instance_name || i.name || "Instância" }))
                 : [];
 

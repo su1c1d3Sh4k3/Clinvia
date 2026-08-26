@@ -1183,7 +1183,7 @@ function groupByContactAndDay(appointments: any[]): Map<string, any[]> {
 // ---------------------------------------------------------------------------
 
 // Fila da conversa nova (regra padrão 9ca9233, igual campaign-dispatch):
-// ia_config.ia_on && instances.ia_on_wpp !== false → 'Atendimento IA',
+// ia_config.ia_on && instances.ia_on_wpp → 'Atendimento IA',
 // senão 'Atendimento Humano'. Conversa SEM fila é proibida (user rule) —
 // ficava invisível nos agrupamentos por fila do inbox.
 const defaultQueueCache = new Map<string, string | null>();
@@ -1200,7 +1200,7 @@ async function resolveDefaultQueueId(
         supabase.from("ia_config").select("ia_on").eq("user_id", userId).maybeSingle(),
         supabase.from("instances").select("ia_on_wpp").eq("id", instanceId).maybeSingle(),
     ]);
-    const iaOn = iaCfgRes.data?.ia_on === true && instRes.data?.ia_on_wpp !== false;
+    const iaOn = iaCfgRes.data?.ia_on === true && instRes.data?.ia_on_wpp === true;
     const queueName = iaOn ? "Atendimento IA" : "Atendimento Humano";
 
     const { data: queue } = await supabase

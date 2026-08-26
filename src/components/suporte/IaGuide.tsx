@@ -172,7 +172,7 @@ export function IaGuide() {
                 subtitle="Do bisturi ao disjuntor: 3 níveis de controle">
                 <StepByStep steps={[
                     { title: "Por cliente (bisturi)", description: <>Na página <strong>Clientes</strong>, cada contato tem um botão de IA. Perfeito para aquele paciente que só quer falar com a Dra.</>, },
-                    { title: "Por conexão (chave do quarto)", description: <>Em <strong>IA &gt; Config</strong>, desligue a IA de um número específico — ex.: o número comercial fica com IA, o pessoal não.</>, },
+                    { title: "Por conexão (chave do quarto)", description: <>Em <strong>IA &gt; Config</strong>, desligue a IA de um número específico — ex.: o número comercial fica com IA, o pessoal não. Só as conversas do número <strong>com IA ligada</strong> entram na fila Atendimento IA; as dos outros números nascem em Atendimento Humano, mesmo vindas de campanha com IA.</>, },
                     { title: "Geral (disjuntor)", description: <>O interruptor <strong>Ligar IA</strong> desliga tudo de uma vez. Para religar, primeiro ative o geral, depois as conexões.</>, },
                 ]} />
                 <Callout type="dica" title="O interruptor geral salva na hora">
@@ -194,6 +194,10 @@ export function IaGuide() {
                         {
                             q: "A IA parou de responder um cliente. Por quê?",
                             a: "Confira os 5 portões (tópico 2), nesta ordem: 1) alguém assumiu a conversa? 2) a IA do contato está ligada (página Clientes)? 3) a IA geral está ligada? 4) a IA da conexão está ligada? 5) a conversa está na fila Atendimento IA? Basta um item falhar para ela silenciar.",
+                        },
+                        {
+                            q: "Tenho dois números e só um com IA. As conversas do outro caem na fila da IA?",
+                            a: "Não. A fila Atendimento IA é exclusiva das conexões com a IA ligada — conversa do número sem IA sempre nasce em Atendimento Humano, venha de onde vier (cliente novo, campanha, confirmação de agendamento). E se você desligar a IA de uma conexão, os atendimentos abertos dela são devolvidos para Atendimento Humano na hora, para ninguém ficar esperando resposta de uma IA que não vai responder.",
                         },
                         {
                             q: "Atendi um cliente e agora quero devolver para a IA. Como?",
