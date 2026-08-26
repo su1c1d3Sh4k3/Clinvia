@@ -40,6 +40,9 @@ verify_jwt = false
 [functions.api-add-note]
 verify_jwt = false
 
+[functions.api-reset-context]
+verify_jwt = false
+
 [functions.api-token-usage]
 verify_jwt = false
 
