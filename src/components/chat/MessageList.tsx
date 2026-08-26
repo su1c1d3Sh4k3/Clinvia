@@ -2,7 +2,7 @@ import { memo, useRef, useEffect, useState, useMemo, useLayoutEffect, Fragment }
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Clock, AlertCircle, Check, CheckCheck, Download, ChevronDown, ArrowLeftRight, UserPlus, UserMinus, TicketPlus, CalendarDays, Eye } from "lucide-react";
+import { Clock, AlertCircle, Check, CheckCheck, Download, ChevronDown, ArrowLeftRight, UserPlus, UserMinus, TicketPlus, CalendarDays, Eye, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MessageActionsMenu } from "@/components/MessageActionsMenu";
 import { ReplyQuoteBox, QuotedMessage } from "@/components/ReplyQuoteBox";
@@ -398,6 +398,19 @@ export const MessageList = memo(({
                 <div key={msg.id} id={`message-${msg.id}`} className={cn("flex justify-center my-6 px-4", isMatch && matchIndex === currentMatchIndex ? "bg-yellow-100/10 rounded-lg p-1 -m-1" : "")}>
                     <div className="bg-[#1e253c] dark:bg-[#1a2235] text-[#93c5fd] text-xs font-medium px-4 py-2 rounded-full flex items-center gap-2.5 shadow-sm border border-[#2a3655]/50 select-none">
                         <Eye className="w-3.5 h-3.5 opacity-80" />
+                        <span>{msg.body}</span>
+                    </div>
+                </div>
+            );
+        }
+
+        // Encerramento ("dd/mm/aaaa hh:mm - O colaborador X finalizou essa conversa com a etapa Y")
+        const isCloseNotice = msg.body && msg.body.includes('finalizou essa conversa com a etapa');
+        if (isCloseNotice) {
+            return (
+                <div key={msg.id} id={`message-${msg.id}`} className={cn("flex justify-center my-6 px-4", isMatch && matchIndex === currentMatchIndex ? "bg-yellow-100/10 rounded-lg p-1 -m-1" : "")}>
+                    <div className="bg-[#1e253c] dark:bg-[#1a2235] text-[#93c5fd] text-xs font-medium px-4 py-2 rounded-full flex items-center gap-2.5 shadow-sm border border-[#2a3655]/50 select-none">
+                        <CheckCircle2 className="w-3.5 h-3.5 opacity-80" />
                         <span>{msg.body}</span>
                     </div>
                 </div>

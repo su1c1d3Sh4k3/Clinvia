@@ -132,9 +132,13 @@ export const useMessages = (conversationId?: string) => {
         });
       }
 
-      // 3. If resolved, parse this conversation's JSON history
+      // 3. If resolved, parse this conversation's JSON history.
+      //    Avisos gravados DEPOIS do arquivamento (a pill "finalizou essa
+      //    conversa com a etapa X", inserida pelo trigger em statement
+      //    separado) continuam vivos em `messages` — concatenados aqui.
       if (conversation.status === "resolved") {
-        const own = mapHistory(conversation.messages_history, conversationId);
+        const live = ((msgsRes.data as Message[] | null) || []).slice().reverse();
+        const own = [...mapHistory(conversation.messages_history, conversationId), ...live];
         return hasPrevHistory
           ? [...previousHistory, makeConvStart(conversationId, conversation.created_at, own[0]), ...own]
           : own;

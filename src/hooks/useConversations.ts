@@ -459,6 +459,11 @@ export const useConversations = (options: UseConversationsOptions = {}) => {
             (row.body.includes(" entrou no grupo") || row.body.includes(" saiu do grupo"))
           )
             return;
+          if (
+            typeof row.body === "string" &&
+            row.body.includes("finalizou essa conversa com a etapa")
+          )
+            return;
 
           patchLists((list) => {
             const idx = list.findIndex((c) => c.id === row.conversation_id);

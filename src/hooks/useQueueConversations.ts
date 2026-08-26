@@ -114,6 +114,7 @@ export function useQueueConversations() {
                         .not('body', 'like', '👥 %entrou no grupo')  // Exclude group join notices
                         .not('body', 'like', '👥 %saiu do grupo')    // Exclude group leave notices
                         .not('body', 'like', '%visualizou essa conversa%') // Exclude view alerts
+                        .not('body', 'like', '%finalizou essa conversa com a etapa%') // Exclude close notices
                         .order('created_at', { ascending: false })
                         .limit(1)
                         .single();
