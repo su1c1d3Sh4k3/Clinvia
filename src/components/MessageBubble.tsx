@@ -3,7 +3,7 @@ import { Download, Clock, AlertCircle, Check, CheckCheck, FileText } from "lucid
 import { cn } from "@/lib/utils";
 import { LazyMedia } from "@/components/LazyMedia";
 import { CustomAudioPlayer } from "@/components/chat/CustomAudioPlayer";
-import { FormattedText, parseTemplateBody } from "@/components/chat/FormattedText";
+import { FormattedText, parseTemplateBody, stripSenderSignature } from "@/components/chat/FormattedText";
 import { toast } from "sonner";
 import { resolveOutboundSenderName } from "@/lib/messageSender";
 import { chatDateTime } from "@/lib/chatDates";
@@ -87,7 +87,7 @@ export function MessageBubble({
 
     // Mesma regra do inbox (MessageList): o prefixo de assinatura "*Nome:*\n"
     // sai do corpo e o remetente vira label acima da bolha
-    const cleanMessageBody = (body: string) => body ? body.replace(/^\*[^*]+:\*\n/, "") : "";
+    const cleanMessageBody = (body: string) => stripSenderSignature(body, msg.sender_name);
 
     // Remetente de mensagens outbound: SEMPRE exibido (user rule) — lógica
     // compartilhada em lib/messageSender (fallback "IA" só quando é seguro)

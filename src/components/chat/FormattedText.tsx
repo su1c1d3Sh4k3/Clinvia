@@ -10,6 +10,25 @@ import React from "react";
 export const parseTemplateBody = (body: string): RegExpMatchArray | null =>
     body.match(/^\*Template enviado: ([^*]+)\*\n([\s\S]*)$/);
 
+/**
+ * Tira do corpo o prefixo de assinatura "*Nome:*\n" que o envio adiciona quando
+ * o atendente assina (o nome vira label acima da bolha).
+ *
+ * SÓ remove quando o negrito é mesmo o remetente da mensagem: antes qualquer
+ * "*Palavra:*" no começo era tratada como assinatura, então uma mensagem que o
+ * atendente iniciava com um título ("*Convênio:*\nAtendemos...") perdia a
+ * primeira linha inteira na tela — o texto ia certo para o cliente, mas sumia
+ * do inbox.
+ */
+export const stripSenderSignature = (body: string, senderName?: string | null): string => {
+    if (!body) return "";
+    const match = body.match(/^\*([^*]+):\*\n/);
+    if (!match) return body;
+    const signer = (senderName ?? "").trim().toLowerCase();
+    if (!signer || signer !== match[1].trim().toLowerCase()) return body;
+    return body.slice(match[0].length);
+};
+
 interface FormattedTextProps {
     text: string;
     /** Termo de busca a destacar (amarelo) */

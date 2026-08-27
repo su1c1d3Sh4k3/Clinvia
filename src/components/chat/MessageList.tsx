@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import { useGroupMembers } from "@/hooks/useGroupMembers";
 import { ContactCard } from "@/components/chat/ContactCard";
 import { CustomAudioPlayer } from "@/components/chat/CustomAudioPlayer";
-import { FormattedText, parseTemplateBody } from "@/components/chat/FormattedText";
+import { FormattedText, parseTemplateBody, stripSenderSignature } from "@/components/chat/FormattedText";
 import { NoteBubble } from "@/components/chat/NoteBubble";
 import { resolveOutboundSenderName } from "@/lib/messageSender";
 import { chatDateTime, chatDayLabel, isSameChatDay } from "@/lib/chatDates";
@@ -269,7 +269,7 @@ export const MessageList = memo(({
         />
     );
 
-    const cleanMessageBody = (body: string) => body ? body.replace(/^\*[^*]+:\*\n/, "") : "";
+    const cleanMessageBody = (body: string, senderName?: string | null) => stripSenderSignature(body, senderName);
 
     const handleDownloadFile = async (url: string, filename: string) => {
         try {
@@ -464,7 +464,7 @@ export const MessageList = memo(({
                             {msg.message_type === 'image' && msg.media_url && <LazyMedia type="image" src={msg.media_url} alt="Imagem" />}
                             {msg.message_type === 'image' && !!((msg as any).caption || msg.body) && (
                                 <p className="text-sm break-words [overflow-wrap:anywhere] whitespace-pre-wrap mt-1 px-1">
-                                    <HighlightText text={cleanMessageBody((msg as any).caption || msg.body || '')} highlight={searchTerm} />
+                                    <HighlightText text={cleanMessageBody((msg as any).caption || msg.body || '', msg.sender_name)} highlight={searchTerm} />
                                 </p>
                             )}
                             {msg.message_type === 'audio' && msg.media_url && (
@@ -480,7 +480,7 @@ export const MessageList = memo(({
                             {msg.message_type === 'video' && msg.media_url && <LazyMedia type="video" src={msg.media_url} />}
                             {msg.message_type === 'video' && !!((msg as any).caption || msg.body) && (
                                 <p className="text-sm break-words [overflow-wrap:anywhere] whitespace-pre-wrap mt-1 px-1">
-                                    <HighlightText text={cleanMessageBody((msg as any).caption || msg.body || '')} highlight={searchTerm} />
+                                    <HighlightText text={cleanMessageBody((msg as any).caption || msg.body || '', msg.sender_name)} highlight={searchTerm} />
                                 </p>
                             )}
                             {/* Sticker Rendering - no background */}
@@ -645,7 +645,7 @@ export const MessageList = memo(({
 
                                 return (
                                     <p className="text-sm break-words [overflow-wrap:anywhere] whitespace-pre-wrap">
-                                        <HighlightText text={cleanMessageBody(body)} highlight={searchTerm} />
+                                        <HighlightText text={cleanMessageBody(body, msg.sender_name)} highlight={searchTerm} />
                                     </p>
                                 );
                             })()}

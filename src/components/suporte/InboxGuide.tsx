@@ -390,6 +390,10 @@ export function InboxGuide() {
                             a: "Toda mensagem enviada mostra o nome de quem a enviou acima do balão verde (ou 'IA' quando foi a assistente/automação). Isso independe da opção 'Assinar mensagens' das Configurações: ela controla apenas se o nome vai junto no texto que o CLIENTE recebe no WhatsApp — no painel, o remetente aparece sempre. Respostas enviadas FORA do Clinvia (ex.: pelo app do WhatsApp Business no celular) aparecem como 'Enviada de fonte externa' — assim dá para monitorar o uso fora do painel. Mensagens antigas enviadas com a assinatura desligada não guardaram o remetente: nessas, o rótulo fica em branco (nunca 'IA' por engano).",
                         },
                         {
+                            q: "Comecei a mensagem com um título em negrito (ex.: *Convênio:*) e ele sumiu do painel. O cliente recebeu?",
+                            a: "O cliente sempre recebeu o texto completo — o que falhava era só a exibição no painel. O sistema tira do balão o nome do atendente que vai junto na assinatura, e antes ele confundia qualquer palavra em negrito seguida de dois-pontos na primeira linha com essa assinatura, apagando a linha inteira. Agora a linha só é removida quando o negrito é mesmo o nome de quem enviou. Se você viu isso em mensagens antigas, elas voltam a aparecer inteiras.",
+                        },
+                        {
                             q: "Como sei onde termina o atendimento antigo e começa o novo?",
                             a: "Quando um cliente volta a conversar depois de um atendimento encerrado, o chat carrega o histórico das conversas anteriores e insere uma pílula centralizada (mesmo estilo das notificações de transferência) no início de cada ticket: 'Conversa iniciada dia <data> pelo atendente <nome>' — ou 'pelo cliente <nome>' quando foi o cliente quem mandou a primeira mensagem, e 'pela IA' quando a primeira mensagem foi da assistente. Assim fica claro onde cada novo ticket começou.",
                         },

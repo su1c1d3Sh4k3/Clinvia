@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useRef, useDeferredValue, useMemo, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useTypingContext } from "@/contexts/TypingContext";
 import { useMessages } from "@/hooks/useMessages";
 import { useSendMessage } from "@/hooks/useSendMessage";
@@ -86,7 +86,6 @@ export const ChatArea = ({
 }) => {
   const [message, setMessage] = useState("");
   const { setTyping } = useTypingContext();
-  const deferredMessage = useDeferredValue(message);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const matchRefs = useRef<(HTMLDivElement | null)[]>([]);
