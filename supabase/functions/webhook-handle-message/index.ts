@@ -2140,7 +2140,7 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                         try {
                             const { data: campSent } = await supabase
                                 .from('campaign_contacts')
-                                .select('sent_at, raw_data, campaigns!inner(id, name, objective, services, discount_pct, initial_message, ai_prompt, ia_enabled, ia_function, scheduled_at, valid_until, status, instance_id, source_type, recurrence_service_client_id, recurrence_msg_number)')
+                                .select('sent_at, raw_data, campaigns!inner(id, name, objective, services, professionals, discount_pct, initial_message, ai_prompt, ia_enabled, ia_function, scheduled_at, valid_until, status, instance_id, source_type, recurrence_service_client_id, recurrence_msg_number)')
                                 .eq('contact_id', contactId)
                                 .eq('status', 'sent')
                                 .eq('campaigns.instance_id', instance.id)
@@ -2174,12 +2174,27 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                                         return v != null && String(v).trim() !== '' ? String(v).trim() : match;
                                     });
                                 }
+                                // Profissionais habilitados na campanha — só contexto
+                                // para a IA (restringe com quem ela pode agendar).
+                                // Vai em STRING pronta; lista vazia = todos.
+                                const profNames = (Array.isArray(camp.professionals) ? camp.professionals : [])
+                                    .map((p: any) => String(p?.name ?? '').trim())
+                                    .filter(Boolean);
+                                const professionalsText = profNames.length === 0
+                                    ? 'Campanha habilitada a todos os profissionais'
+                                    : `Campanha habilitada para os profissionais: ${
+                                        profNames.length === 1
+                                            ? profNames[0]
+                                            : `${profNames.slice(0, -1).join(', ')} e ${profNames[profNames.length - 1]}`
+                                    }`;
+
                                 campaignBlock = {
                                     campaign_tag: camp.name,
                                     campaign_id: camp.id,
                                     name: camp.name,
                                     objective: objectiveText,
                                     services: camp.services || [],
+                                    professionals: professionalsText,
                                     discount_pct: camp.discount_pct ?? null,
                                     initial_message: camp.initial_message || null,
                                     scheduled_at: toSaoPaulo(camp.scheduled_at),

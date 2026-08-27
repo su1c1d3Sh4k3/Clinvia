@@ -201,6 +201,26 @@ function normalizeEntries(body: any): EntryPayload[] | undefined {
     return undefined;
 }
 
+/**
+ * Profissionais habilitados na campanha (etapa Tipo > Promoção). Snapshot
+ * { id, name } igual ao de `services` — vira string para a IA no bd_data.
+ * Lista vazia = campanha aberta a todos os profissionais.
+ */
+function normalizeProfessionals(input: unknown): { id: string; name: string }[] {
+    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const seen = new Set<string>();
+    return (Array.isArray(input) ? input : [])
+        .map((p: any) => ({
+            id: String(p?.id ?? "").trim(),
+            name: String(p?.name ?? "").trim(),
+        }))
+        .filter((p) => {
+            if (!uuidRe.test(p.id) || !p.name || seen.has(p.id)) return false;
+            seen.add(p.id);
+            return true;
+        });
+}
+
 async function insertCampaignContacts(
     supabase: any,
     campaignId: string,
@@ -544,6 +564,9 @@ serve(async (req) => {
                     valid_until,
                     services: campaignType === "promotion" ? services || [] : [],
                     discount_pct: campaignType === "promotion" ? discount_pct ?? null : null,
+                    professionals: campaignType === "promotion"
+                        ? normalizeProfessionals(body.professionals)
+                        : [],
                     initial_message,
                     variable_map: variableMap,
                     objective,
@@ -673,6 +696,9 @@ serve(async (req) => {
             for (const f of fields) {
                 if (body[f] !== undefined) updates[f] = body[f];
             }
+            if (body.professionals !== undefined) {
+                updates.professionals = normalizeProfessionals(body.professionals);
+            }
 
             // Função da IA (agendamento | qualificacao): null quando IA desligada
             if (body.ia_function !== undefined || body.ia_enabled !== undefined) {
@@ -711,6 +737,7 @@ serve(async (req) => {
             if (newCampaignType === "notification") {
                 updates.services = [];
                 updates.discount_pct = null;
+                updates.professionals = [];
             }
 
             const newScheduledAt = (updates.scheduled_at as string) || campaign.scheduled_at;

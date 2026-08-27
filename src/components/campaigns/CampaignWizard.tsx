@@ -20,7 +20,7 @@ import {
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { cn, formatCurrency } from "@/lib/utils";
-import { useCampaignInstances, isMetaInstance, useCampaignMutations, checkCampaignConflicts, Campaign, CampaignService } from "@/hooks/useCampaigns";
+import { useCampaignInstances, isMetaInstance, useCampaignMutations, checkCampaignConflicts, Campaign, CampaignService, CampaignProfessional } from "@/hooks/useCampaigns";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { useMetaQuality } from "@/hooks/useMetaQuality";
 import { useUsdBrlRate } from "@/hooks/useUsdBrlRate";
@@ -98,6 +98,9 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
     const [keepResendAudience, setKeepResendAudience] = useState(false);
     const [campaignType, setCampaignType] = useState<"promotion" | "notification">("promotion");
     const [selectedServices, setSelectedServices] = useState<CampaignService[]>([]);
+    // Profissionais habilitados: só contexto para a IA (limita com quem ela
+    // pode agendar). Vazio = campanha aberta a todos.
+    const [selectedProfessionals, setSelectedProfessionals] = useState<CampaignProfessional[]>([]);
     const [discountPct, setDiscountPct] = useState<string>("");
     const [existingTemplateId, setExistingTemplateId] = useState("");
     const [varMapping, setVarMapping] = useState<Record<number, string>>({});
@@ -140,6 +143,7 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
             setAudience({ entries: [], invalidRows: [], config: baseCampaign.source_config || {} });
             setCampaignType(baseCampaign.campaign_type || "promotion");
             setSelectedServices(baseCampaign.services || []);
+            setSelectedProfessionals(baseCampaign.professionals || []);
             setDiscountPct(baseCampaign.discount_pct != null ? String(baseCampaign.discount_pct) : "");
             setExistingTemplateId(baseCampaign.template_mode === "existing" ? baseCampaign.template_id || "" : "");
             setVarMapping({});
@@ -157,6 +161,7 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
             setAudience(EMPTY_AUDIENCE);
             setCampaignType("promotion");
             setSelectedServices([]);
+            setSelectedProfessionals([]);
             setDiscountPct("");
             setExistingTemplateId("");
             setVarMapping({});
@@ -219,6 +224,19 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
                 .order("name");
             if (error) throw error;
             return (data || []) as any[];
+        },
+        enabled: open,
+    });
+
+    const { data: professionals } = useQuery({
+        queryKey: ["campaign-professionals"],
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from("professionals")
+                .select("id, name")
+                .order("name");
+            if (error) throw error;
+            return (data || []) as { id: string; name: string }[];
         },
         enabled: open,
     });
@@ -377,6 +395,14 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
             const exists = prev.some((s) => s.id === svc.id);
             if (exists) return prev.filter((s) => s.id !== svc.id);
             return [...prev, { id: svc.id, name: svc.name, price: svc.price ?? null }];
+        });
+    };
+
+    const toggleProfessional = (prof: { id: string; name: string }) => {
+        setSelectedProfessionals((prev) => {
+            const exists = prev.some((p) => p.id === prof.id);
+            if (exists) return prev.filter((p) => p.id !== prof.id);
+            return [...prev, { id: prof.id, name: prof.name }];
         });
     };
 
@@ -593,6 +619,7 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
             valid_until: new Date(validUntil).toISOString(),
             campaign_type: campaignType,
             services: campaignType === "promotion" ? selectedServices : [],
+            professionals: campaignType === "promotion" ? selectedProfessionals : [],
             discount_pct: campaignType === "promotion" && discountPct ? parseFloat(discountPct) : null,
             initial_message: effectiveMessage.trim(),
             objective: objective.trim(),
@@ -854,6 +881,44 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
                                     </div>
                                 </div>
                                 <div>
+                                    <div className="flex items-center justify-between mb-2">
+                                        <p className="text-xs text-muted-foreground">
+                                            Profissionais habilitados — opcional
+                                        </p>
+                                        {selectedProfessionals.length > 0 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setSelectedProfessionals([])}
+                                                className="text-[10px] text-muted-foreground hover:text-foreground underline"
+                                            >
+                                                Limpar (liberar todos)
+                                            </button>
+                                        )}
+                                    </div>
+                                    <div className="max-h-40 overflow-y-auto border rounded-xl divide-y">
+                                        {(professionals || []).length === 0 && (
+                                            <p className="text-sm text-muted-foreground p-3">Nenhum profissional cadastrado.</p>
+                                        )}
+                                        {(professionals || []).map((prof) => (
+                                            <label
+                                                key={prof.id}
+                                                className="flex items-center gap-3 p-2.5 cursor-pointer hover:bg-muted/40"
+                                            >
+                                                <Checkbox
+                                                    checked={selectedProfessionals.some((p) => p.id === prof.id)}
+                                                    onCheckedChange={() => toggleProfessional(prof)}
+                                                />
+                                                <span className="text-sm flex-1">{prof.name}</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                    <p className="text-[10px] text-muted-foreground mt-1">
+                                        {selectedProfessionals.length === 0
+                                            ? "Nenhum marcado: a IA poderá agendar com qualquer profissional."
+                                            : "A IA só oferecerá agendamento com os profissionais marcados."}
+                                    </p>
+                                </div>
+                                <div>
                                     <p className="text-xs text-muted-foreground mb-1">Desconto da campanha (%) — opcional</p>
                                     <Input
                                         type="number"
@@ -1079,6 +1144,14 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
                                     <span className="text-muted-foreground">Serviços:</span>{" "}
                                     {selectedServices.length > 0 ? selectedServices.map((s) => s.name).join(", ") : "nenhum"}
                                     {discountPct && <Badge variant="secondary" className="ml-2">{discountPct}% off</Badge>}
+                                </p>
+                            )}
+                            {campaignType === "promotion" && (
+                                <p>
+                                    <span className="text-muted-foreground">Profissionais:</span>{" "}
+                                    {selectedProfessionals.length > 0
+                                        ? selectedProfessionals.map((p) => p.name).join(", ")
+                                        : "todos"}
                                 </p>
                             )}
                             {useExistingTemplate && selectedTemplate && (

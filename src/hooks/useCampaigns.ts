@@ -60,6 +60,12 @@ export interface CampaignService {
     price: number | null;
 }
 
+/** Profissionais habilitados na campanha — só contexto para a IA */
+export interface CampaignProfessional {
+    id: string;
+    name: string;
+}
+
 export interface Campaign {
     id: string;
     user_id: string;
@@ -70,6 +76,7 @@ export interface Campaign {
     scheduled_at: string;
     valid_until: string;
     services: CampaignService[];
+    professionals: CampaignProfessional[];
     campaign_type: "promotion" | "notification";
     template_mode: "create" | "existing" | "none";
     discount_pct: number | null;

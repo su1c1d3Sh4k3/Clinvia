@@ -155,11 +155,15 @@ export function CampaignsGuide() {
                     </AccordionItem>
                     <AccordionItem value="tipo" className="border-b">
                         <AccordionTrigger className="text-sm font-semibold">
-                            <span className="flex items-center gap-2"><Tag className="h-4 w-4 text-primary" />Etapa 3 — Tipo de mensagem</span>
+                            <span className="flex items-center gap-2"><Tag className="h-4 w-4 text-primary" />Etapa 3 — Tipo de campanha</span>
                         </AccordionTrigger>
                         <AccordionContent className="text-sm text-muted-foreground">
-                            WhatsApp Oficial: escolha um <strong className="text-foreground">template aprovado</strong> na lista.
-                            WhatsApp não oficial: siga direto para escrever texto livre.
+                            <strong className="text-foreground">Promoção</strong> (divulga serviços com condição especial) ou{" "}
+                            <strong className="text-foreground">Notificação</strong> (aviso sem oferta comercial). Na Promoção você
+                            marca os serviços da campanha, o desconto e — opcional — os{" "}
+                            <strong className="text-foreground">profissionais habilitados</strong>: marcando alguém, a IA só oferece
+                            agendamento com quem está na lista; sem ninguém marcado, ela pode agendar com qualquer profissional.
+                            Esse campo não bloqueia nada na agenda — é só uma orientação para a assistente.
                         </AccordionContent>
                     </AccordionItem>
                     <AccordionItem value="mensagem" className="border-b">
