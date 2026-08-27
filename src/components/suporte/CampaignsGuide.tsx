@@ -309,7 +309,7 @@ export function CampaignsGuide() {
                         <LegendRow badge="Respondida: Sim" cls="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300" text="A pessoa mandou pelo menos uma mensagem depois do disparo." />
                         <LegendRow badge="Sem Resposta" cls="bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300" text="A pessoa saiu da campanha (entrou em outra ou a campanha encerrou) sem nunca ter respondido." />
                         <LegendRow badge="Agendado" cls="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300" text="Marcou um horário durante a campanha — o melhor resultado possível." />
-                        <LegendRow badge="Atendente (nome ou IA)" cls="bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-300" text="Quem cuidou do contato: a IA ou o membro da equipe que atendeu/agendou." />
+                        <LegendRow badge="Atendente (nome ou IA)" cls="bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-300" text="Quem cuidou do contato: a IA ou o membro da equipe que atendeu/agendou. Só existe para quem respondeu ao disparo." />
                     </div>
                 </div>
                 <div className="space-y-2">
@@ -319,7 +319,17 @@ export function CampaignsGuide() {
                         <LegendRow badge="Aberto" cls="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300" text="Um atendente assumiu — a conversa está na aba Abertos do Inbox." />
                         <LegendRow badge="Resolvido" cls="bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300" text="O atendimento foi encerrado. Se a pessoa voltar a falar, ela sai daqui e volta para as pendências." />
                         <LegendRow badge="Removido" cls="bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300" text="Saiu da campanha (entrou em outra ou a campanha encerrou) — o resultado dela ficou congelado nesse momento." />
+                        <LegendRow badge="— (traço)" cls="bg-muted text-muted-foreground" text="Quem não respondeu ao disparo não tem estágio nem atendente: ela está em Sem Resposta, não em atendimento." />
                     </div>
+                    <p className="text-xs text-muted-foreground">
+                        As colunas <strong className="text-foreground">Estágio</strong> e{" "}
+                        <strong className="text-foreground">Atendente</strong> existem apenas para quem{" "}
+                        <strong className="text-foreground">respondeu</strong> à campanha — é a mesma base do quadro de
+                        resultados. Por isso, filtrar a tabela por "Resolvido" devolve exatamente o número de{" "}
+                        <strong className="text-foreground">Resolvidos</strong> do quadro, e Pendente + Aberto + Resolvido +
+                        Removido somam as <strong className="text-foreground">Respondidas</strong>. Quem ainda está na fila,
+                        não recebeu ou não respondeu aparece com um traço, mesmo que tenha uma conversa antiga naquele número.
+                    </p>
                 </div>
                 <Callout type="dica">
                     Use os filtros no topo da tabela (Status, Respondida, Agendamento, Estágio, Atendente) para responder
