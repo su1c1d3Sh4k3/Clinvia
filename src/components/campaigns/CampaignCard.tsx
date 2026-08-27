@@ -84,11 +84,17 @@ export function CampaignStatsGrid({ stats }: { stats: CampaignStatsRow }) {
         { value: stats.responded_count, label: "respondidas", className: "text-violet-600" },
         { value: stats.no_response_count ?? 0, label: "sem resposta", className: "text-red-600" },
         { value: stats.scheduled_count ?? 0, label: "agendados", className: "text-emerald-600" },
-        { value: stats.resolved_count ?? 0, label: "resolvidos", className: "text-orange-600" },
-        { value: stats.in_progress_count ?? 0, label: "em atendimento", className: "text-sky-600" },
+        { value: stats.open_count ?? 0, label: "em aberto", className: "text-emerald-600" },
+        {
+            value: stats.awaiting_count ?? 0,
+            label: "aguardando resposta",
+            className: "text-amber-600",
+        },
+        { value: stats.resolved_count ?? 0, label: "resolvidos", className: "text-sky-600" },
+        { value: stats.removed_count ?? 0, label: "removidos", className: "text-muted-foreground" },
     ];
     return (
-        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-2 text-sm">
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2 text-sm">
             {cells.map((c) => (
                 <div key={c.label} className="border rounded-xl p-2.5">
                     <p className={cn("font-semibold", c.className)}>{c.value}</p>

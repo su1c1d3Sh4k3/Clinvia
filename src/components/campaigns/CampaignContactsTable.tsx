@@ -24,13 +24,24 @@ const SLATE = "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400
 const ORANGE = "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300";
 const PURPLE = "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300";
 const SKY = "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300";
+const AMBER = "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300";
 
-// Cores + rótulo por motivo de congelamento (resultado fixado no 1º desfecho)
+// Cores + rótulo por motivo de congelamento (só na perda da etiqueta; 'scheduled'
+// e 'resolved' são de campanhas antigas, quando o resultado ainda travava)
 const FROZEN_META: Record<string, { className: string; title: string }> = {
     scheduled: { className: GREEN, title: "Congelado: agendou" },
     resolved: { className: SKY, title: "Congelado: ticket encerrado" },
-    moved: { className: ORANGE, title: "Congelado: movido no CRM" },
-    expired: { className: SLATE, title: "Congelado: campanha expirada" },
+    moved: { className: ORANGE, title: "Removido: movido para outra campanha" },
+    expired: { className: SLATE, title: "Removido: campanha encerrada" },
+};
+
+// Estado ATUAL do ticket (espelha as abas do inbox); 'removed' = perdeu a etiqueta
+const CONV_META: Record<string, { label: string; className: string }> = {
+    open: { label: "Em Aberto", className: GREEN },
+    awaiting: { label: "Aguardando Resposta", className: AMBER },
+    pending: { label: "Pendente", className: SLATE },
+    resolved: { label: "Resolvido", className: SKY },
+    removed: { label: "Removido", className: ORANGE },
 };
 
 /** Status efetivo: refina 'sent' com o status real da mensagem (Meta reporta async).
@@ -78,6 +89,7 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
     const [statusFilter, setStatusFilter] = useState<string>("all");
     const [respondedFilter, setRespondedFilter] = useState<string>("all");
     const [scheduledFilter, setScheduledFilter] = useState<string>("all");
+    const [convFilter, setConvFilter] = useState<string>("all");
     const [stageFilter, setStageFilter] = useState<string>("all");
     const [agentFilter, setAgentFilter] = useState<string>("all");
     const [search, setSearch] = useState("");
@@ -165,6 +177,15 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
         return counts;
     }, [rows, report]);
 
+    const convCounts = useMemo(() => {
+        const counts = new Map<string, number>();
+        for (const r of rows || []) {
+            const cs = report?.get(r.id)?.conv_status;
+            if (cs) counts.set(cs, (counts.get(cs) || 0) + 1);
+        }
+        return counts;
+    }, [rows, report]);
+
     const agentCounts = useMemo(() => {
         const counts = new Map<string, number>();
         for (const r of rows || []) {
@@ -180,12 +201,13 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
             if (statusFilter !== "all" && effectiveStatus(r) !== statusFilter) return false;
             if (respondedFilter !== "all" && respondedState(r) !== respondedFilter) return false;
             if (scheduledFilter !== "all" && scheduledState(r) !== scheduledFilter) return false;
+            if (convFilter !== "all" && report?.get(r.id)?.conv_status !== convFilter) return false;
             if (stageFilter !== "all" && report?.get(r.id)?.stage !== stageFilter) return false;
             if (agentFilter !== "all" && report?.get(r.id)?.agent !== agentFilter) return false;
             if (q && !normalizeTxt(rowName(r)).includes(q)) return false;
             return true;
         });
-    }, [rows, statusFilter, respondedFilter, scheduledFilter, stageFilter, agentFilter, search, report, respondedState, scheduledState]);
+    }, [rows, statusFilter, respondedFilter, scheduledFilter, convFilter, stageFilter, agentFilter, search, report, respondedState, scheduledState]);
 
     if (isLoading) {
         return (
@@ -241,6 +263,24 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
                         <SelectItem value="pending">Pendente ({scheduledCounts.pending})</SelectItem>
                     </SelectContent>
                 </Select>
+
+                {convCounts.size > 0 && (
+                    <Select value={convFilter} onValueChange={(v) => { setConvFilter(v); refresh(); }}>
+                        <SelectTrigger className="h-8 w-[180px] text-xs bg-background">
+                            <SelectValue placeholder="Conversa" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">Conversa: todas</SelectItem>
+                            {Object.entries(CONV_META)
+                                .filter(([key]) => convCounts.get(key))
+                                .map(([key, meta]) => (
+                                    <SelectItem key={key} value={key}>
+                                        {meta.label} ({convCounts.get(key)})
+                                    </SelectItem>
+                                ))}
+                        </SelectContent>
+                    </Select>
+                )}
 
                 {stageCounts.size > 0 && (
                     <Select value={stageFilter} onValueChange={(v) => { setStageFilter(v); refresh(); }}>
@@ -303,7 +343,7 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
             </div>
 
             <div className="overflow-y-auto overflow-x-auto" style={{ maxHeight: tableHeight }}>
-                <table className="w-full min-w-[880px] text-sm">
+                <table className="w-full min-w-[1000px] text-sm">
                     <thead className="bg-muted/50 sticky top-0">
                         <tr className="text-left text-xs text-muted-foreground">
                             <th className="px-3 py-2 font-medium">Contato</th>
@@ -311,6 +351,7 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
                             <th className="px-3 py-2 font-medium">Status</th>
                             <th className="px-3 py-2 font-medium">Respondida</th>
                             <th className="px-3 py-2 font-medium">Agendamento</th>
+                            <th className="px-3 py-2 font-medium">Conversa</th>
                             <th className="px-3 py-2 font-medium">Estágio</th>
                             <th className="px-3 py-2 font-medium">Atendente</th>
                             <th className="px-3 py-2 font-medium">Enviado em</th>
@@ -319,7 +360,7 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
                     <tbody className="divide-y">
                         {filteredRows.length === 0 && (
                             <tr>
-                                <td colSpan={8} className="px-3 py-4 text-center text-xs text-muted-foreground">
+                                <td colSpan={9} className="px-3 py-4 text-center text-xs text-muted-foreground">
                                     Nenhum contato com os filtros selecionados.
                                 </td>
                             </tr>
@@ -381,6 +422,19 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
                                                 className={`${schedState === "yes" ? GREEN : schedState === "no" ? RED : SLATE} whitespace-nowrap`}
                                             >
                                                 {schedState === "yes" ? "Agendado" : schedState === "no" ? "Não Agendou" : "Pendente"}
+                                            </Badge>
+                                        ) : (
+                                            <span className="text-xs text-muted-foreground">—</span>
+                                        )}
+                                    </td>
+                                    <td className="px-3 py-1.5">
+                                        {rep?.conv_status && CONV_META[rep.conv_status] ? (
+                                            <Badge
+                                                variant="secondary"
+                                                className={`${CONV_META[rep.conv_status].className} whitespace-nowrap`}
+                                                title={rep.frozen ? FROZEN_META[rep.frozen_reason || ""]?.title : undefined}
+                                            >
+                                                {CONV_META[rep.conv_status].label}
                                             </Badge>
                                         ) : (
                                             <span className="text-xs text-muted-foreground">—</span>

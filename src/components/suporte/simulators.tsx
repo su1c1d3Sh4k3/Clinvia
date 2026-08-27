@@ -174,6 +174,7 @@ interface Scenario {
     statusBadge: { label: string; cls: string };
     respondida?: { label: string; cls: string };
     agendamento?: { label: string; cls: string };
+    conversa?: { label: string; cls: string };
     atendente?: { label: string; cls: string };
     explain: string;
 }
@@ -196,9 +197,10 @@ const SCENARIOS: Scenario[] = [
         statusBadge: { label: "Entregue", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300" },
         respondida: { label: "Sim", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300" },
         agendamento: { label: "Pendente", cls: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300" },
+        conversa: { label: "Aguardando Resposta", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300" },
         atendente: { label: "IA", cls: "bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-300" },
         explain:
-            "O cliente respondeu! A conversa entra na fila de atendimento (IA ou humano, conforme você escolheu na campanha) e ele conta no card 'respondidas'.",
+            "O cliente respondeu! A conversa entra na fila de atendimento (IA ou humano, conforme você escolheu na campanha) e ele conta no card 'respondidas'. Enquanto ninguém responder, ele fica em 'Aguardando Resposta' — igualzinho ao Inbox.",
     },
     {
         key: "scheduled",
@@ -207,9 +209,10 @@ const SCENARIOS: Scenario[] = [
         statusBadge: { label: "Entregue", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300" },
         respondida: { label: "Sim", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300" },
         agendamento: { label: "Agendado", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300" },
-        atendente: { label: "Dra. Ana (congelado)", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300" },
+        conversa: { label: "Em Aberto", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300" },
+        atendente: { label: "Dra. Ana", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300" },
         explain:
-            "Melhor resultado possível: o agendamento foi criado e o resultado do contato é CONGELADO como 'Agendado'. Mesmo que a campanha expire depois, esse contato fica registrado para sempre como convertido — o resultado nunca regride.",
+            "Melhor resultado possível: o agendamento é CONGELADO como 'Agendado' e fica registrado para sempre, mesmo que o horário seja cancelado depois. Repare que a conversa segue ao vivo: ela pode estar Em Aberto, Aguardando Resposta ou Resolvida — agendamento e status são colunas diferentes e não se anulam.",
     },
     {
         key: "resolved",
@@ -217,10 +220,11 @@ const SCENARIOS: Scenario[] = [
         icon: Archive,
         statusBadge: { label: "Entregue", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300" },
         respondida: { label: "Sim", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300" },
-        agendamento: { label: "Não Agendou", cls: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300" },
-        atendente: { label: "Finalizado", cls: "bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300" },
+        agendamento: { label: "Pendente", cls: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300" },
+        conversa: { label: "Resolvido", cls: "bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300" },
+        atendente: { label: "Dra. Ana", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300" },
         explain:
-            "A conversa foi encerrada sem agendamento. O contato congela como 'Finalizado' e conta no card 'resolvidos'. Se o cliente voltar depois, será um atendimento novo, fora da campanha.",
+            "A conversa foi encerrada sem agendamento e o contato entra no card 'resolvidos'. Isso NÃO fecha o resultado dele: enquanto tiver a etiqueta da campanha, se voltar a falar ele sai de 'Resolvido' e volta para 'Aguardando Resposta' automaticamente.",
     },
     {
         key: "no_response",
@@ -229,9 +233,10 @@ const SCENARIOS: Scenario[] = [
         statusBadge: { label: "Entregue", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300" },
         respondida: { label: "Sem Resposta", cls: "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300" },
         agendamento: { label: "Não Agendou", cls: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300" },
+        conversa: { label: "Removido", cls: "bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300" },
         atendente: { label: "Campanha Encerrada", cls: "bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300" },
         explain:
-            "A validade da campanha chegou e o cliente nunca respondeu. Ele congela como 'Sem Resposta' — esse número ajuda a medir se a mensagem e o público foram bem escolhidos.",
+            "A validade da campanha chegou e o cliente nunca respondeu. A etiqueta sai, ele entra no card 'removidos' e congela como 'Sem Resposta' — esse número ajuda a medir se a mensagem e o público foram bem escolhidos.",
     },
     {
         key: "open_ticket",
@@ -246,6 +251,7 @@ const SCENARIOS: Scenario[] = [
         label: "Entrou em outra campanha",
         icon: MoveRight,
         statusBadge: { label: "Entregue", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300" },
+        conversa: { label: "Removido", cls: "bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300" },
         atendente: { label: "Movido Para Outra Campanha", cls: "bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300" },
         explain:
             "Você disparou uma campanha nova para esse mesmo contato (mesmo número). Cada contato só participa de UMA campanha ativa por vez — a antiga congela como 'Movido' e a nova assume.",
@@ -279,13 +285,14 @@ export function ContactStatusSimulator() {
 
             <div ref={panelRef} className="space-y-3">
                 <div key={selected.key} className="overflow-x-auto rounded-xl border">
-                    <table className="w-full min-w-[560px] text-xs">
+                    <table className="w-full min-w-[680px] text-xs">
                         <thead className="bg-muted/60 text-muted-foreground">
                             <tr>
                                 <th className="px-3 py-2 text-left font-medium">Contato</th>
                                 <th className="px-3 py-2 text-left font-medium">Status</th>
                                 <th className="px-3 py-2 text-left font-medium">Respondida</th>
                                 <th className="px-3 py-2 text-left font-medium">Agendamento</th>
+                                <th className="px-3 py-2 text-left font-medium">Conversa</th>
                                 <th className="px-3 py-2 text-left font-medium">Atendente</th>
                             </tr>
                         </thead>
@@ -310,6 +317,15 @@ export function ContactStatusSimulator() {
                                     {selected.agendamento ? (
                                         <Badge variant="outline" className={cn("border-0", selected.agendamento.cls)}>
                                             {selected.agendamento.label}
+                                        </Badge>
+                                    ) : (
+                                        <span className="text-muted-foreground">—</span>
+                                    )}
+                                </td>
+                                <td className="px-3 py-2.5">
+                                    {selected.conversa ? (
+                                        <Badge variant="outline" className={cn("border-0", selected.conversa.cls)}>
+                                            {selected.conversa.label}
                                         </Badge>
                                     ) : (
                                         <span className="text-muted-foreground">—</span>

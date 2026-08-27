@@ -23,7 +23,7 @@ const TOPICS = [
     { id: "publicos", label: "Públicos e variáveis" },
     { id: "disparo", label: "O disparo" },
     { id: "resultados", label: "Resultados" },
-    { id: "congelamento", label: "A foto do resultado" },
+    { id: "congelamento", label: "Ao vivo x congelado" },
     { id: "reenvio", label: "Reenvio" },
     { id: "ia", label: "IA" },
     { id: "faq", label: "FAQ" },
@@ -66,7 +66,7 @@ export function CampaignsGuide() {
                         <LearnChip topicId="criando">Criar uma campanha do zero</LearnChip>
                         <LearnChip topicId="publicos">Escolher para quem enviar</LearnChip>
                         <LearnChip topicId="resultados">Ler os resultados</LearnChip>
-                        <LearnChip topicId="congelamento">Entender a "foto do resultado"</LearnChip>
+                        <LearnChip topicId="congelamento">Saber o que é ao vivo e o que congela</LearnChip>
                         <LearnChip topicId="reenvio">Reenviar para quem não respondeu</LearnChip>
                     </div>
                 </div>
@@ -270,11 +270,17 @@ export function CampaignsGuide() {
             <TopicSection id="resultados" index={6} icon={BarChart3} title="Acompanhando resultados"
                 subtitle="Cards de resumo + tabela contato a contato">
                 <p className="text-sm text-muted-foreground">
-                    Ao expandir uma campanha você vê <strong className="text-foreground">8 cards</strong> (Enviadas, Entregues,
-                    Rejeitadas, Respondidas, Sem Resposta, Agendados, Resolvidos, Em Atendimento) e a{" "}
+                    Ao expandir uma campanha você vê <strong className="text-foreground">10 cards</strong> (Enviadas, Entregues,
+                    Rejeitadas, Respondidas, Sem Resposta, Agendados, Em Aberto, Aguardando Resposta, Resolvidos, Removidos) e a{" "}
                     <strong className="text-foreground">tabela de contatos</strong> com o detalhe de cada pessoa. Clique no nome
                     para abrir a conversa.
                 </p>
+                <Callout type="dica" title="Os cards espelham as abas do Inbox">
+                    <strong>Em Aberto</strong>, <strong>Aguardando Resposta</strong> e <strong>Resolvidos</strong> mostram o
+                    estado <em>de agora</em> da conversa de cada pessoa — os mesmos números que você vê nas abas do Inbox se
+                    filtrar pela etiqueta da campanha. <strong>Removidos</strong> são as pessoas que saíram da campanha (entraram
+                    em outra ou a campanha encerrou) e por isso não são mais acompanhadas.
+                </Callout>
                 <ContactStatusSimulator />
                 <div className="space-y-2">
                     <p className="text-sm font-semibold">Legenda — coluna Status (a entrega da mensagem)</p>
@@ -292,14 +298,23 @@ export function CampaignsGuide() {
                     <p className="text-sm font-semibold">Legenda — colunas Respondida, Agendamento e Atendente</p>
                     <div className="grid gap-2 lg:grid-cols-2">
                         <LegendRow badge="Respondida: Sim" cls="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300" text="A pessoa mandou pelo menos uma mensagem depois do disparo." />
-                        <LegendRow badge="Sem Resposta" cls="bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300" text="O desfecho fechou (campanha encerrou/atendimento finalizou) e a pessoa nunca respondeu." />
+                        <LegendRow badge="Sem Resposta" cls="bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300" text="A pessoa saiu da campanha (entrou em outra ou a campanha encerrou) sem nunca ter respondido." />
                         <LegendRow badge="Agendado" cls="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300" text="Marcou um horário durante a campanha — o melhor resultado possível." />
                         <LegendRow badge="Atendente (nome ou IA)" cls="bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-300" text="Quem cuidou do contato: a IA ou o membro da equipe que atendeu/agendou." />
                     </div>
                 </div>
+                <div className="space-y-2">
+                    <p className="text-sm font-semibold">Legenda — coluna Conversa (o estado de agora, igual ao Inbox)</p>
+                    <div className="grid gap-2 lg:grid-cols-2">
+                        <LegendRow badge="Em Aberto" cls="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300" text="Alguém da equipe (ou a IA) está com o atendimento em andamento." />
+                        <LegendRow badge="Aguardando Resposta" cls="bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300" text="A pessoa falou e ninguém respondeu ainda — é a fila de pendências do Inbox." />
+                        <LegendRow badge="Resolvido" cls="bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300" text="O atendimento foi encerrado. Se a pessoa voltar a falar, ela sai daqui e volta para as pendências." />
+                        <LegendRow badge="Removido" cls="bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300" text="Saiu da campanha (entrou em outra ou a campanha encerrou) — o resultado dela ficou congelado nesse momento." />
+                    </div>
+                </div>
                 <Callout type="dica">
-                    Use os filtros no topo da tabela (Status, Respondida, Agendamento, Estágio, Atendente) para responder perguntas
-                    como "quem recebeu e não respondeu?" — esse é o público perfeito para um reenvio.
+                    Use os filtros no topo da tabela (Status, Respondida, Agendamento, Conversa, Estágio, Atendente) para responder
+                    perguntas como "quem recebeu e não respondeu?" — esse é o público perfeito para um reenvio.
                 </Callout>
                 <Callout type="dica">
                     A tabela não atualiza sozinha em tempo real: os dados são recarregados sempre que você aplica um filtro ou
@@ -309,23 +324,28 @@ export function CampaignsGuide() {
             </TopicSection>
 
             {/* 7. Congelamento */}
-            <TopicSection id="congelamento" index={7} icon={Snowflake} title='A "foto do resultado"'
-                subtitle="Por que o resultado de um contato não muda depois do desfecho">
+            <TopicSection id="congelamento" index={7} icon={Snowflake} title="Ao vivo até sair da campanha"
+                subtitle="O que muda em tempo real e o que fica congelado para sempre">
                 <p className="text-sm text-muted-foreground">
-                    Quando um contato chega a um <strong className="text-foreground">desfecho</strong>, o sistema tira uma{" "}
-                    <strong className="text-foreground">foto</strong> daquele momento e guarda para sempre na campanha. Mesmo que a
-                    pessoa mude de etapa no CRM ou converse de novo semanas depois, o relatório da campanha continua mostrando o
-                    que ela fez <em>durante</em> a campanha. É assim que os números ficam confiáveis.
+                    <strong className="text-foreground">Enquanto a pessoa está na campanha</strong> (ou seja: com a etiqueta da
+                    campanha), o relatório é <strong className="text-foreground">ao vivo</strong> — ele mostra exatamente o que
+                    está acontecendo agora, igual ao Inbox. Ela só para de ser acompanhada quando{" "}
+                    <strong className="text-foreground">perde a etiqueta</strong>: aí o sistema tira uma{" "}
+                    <strong className="text-foreground">foto</strong> daquele momento e guarda para sempre.
                 </p>
+                <div className="grid gap-2 lg:grid-cols-2">
+                    <LegendRow badge="Ao vivo" cls="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300" text="Conversa (Em Aberto / Aguardando Resposta / Resolvido), etapa do CRM e atendente: acompanham a realidade minuto a minuto. Encerrou o atendimento e a pessoa voltou a falar? Ela sai de Resolvidos e volta para as pendências." />
+                    <LegendRow badge="Congelado" cls="bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300" text="Agendamento e Respondida: uma vez que aconteceram durante a campanha, ficam marcados para sempre. Cancelar o horário depois não apaga o agendamento da campanha." />
+                </div>
                 <StepByStep steps={[
-                    { title: "Agendou → foto \"Agendado\"", description: "Marcou horário durante a campanha? Fica registrado como Agendado, com o nome de quem agendou (IA ou atendente). Esse resultado nunca é perdido." },
-                    { title: "Atendimento finalizado → foto \"Finalizado\"", description: "A conversa gerada pela campanha foi encerrada sem agendamento? A foto guarda a etapa e o atendente daquele momento." },
-                    { title: "Nova campanha → foto \"Movido Para Outra Campanha\"", description: "Se você dispara outra campanha para a mesma pessoa (pelo mesmo número), a anterior fecha o registro dela — cada pessoa participa de 1 campanha ativa por vez." },
-                    { title: "Validade venceu → foto \"Campanha Encerrada\"", description: "A campanha expirou e a pessoa não teve desfecho. Exceção: quem está com atendimento em andamento continua sendo acompanhado até o final da conversa." },
+                    { title: "Agendamento e status são coisas diferentes", description: "A mesma pessoa pode aparecer como \"Agendado\" e, ao mesmo tempo, com a conversa Em Aberto, Aguardando Resposta ou Resolvida. Um card conta a conversão, o outro conta o atendimento — eles não se anulam." },
+                    { title: "Encerrar o atendimento não fecha o resultado", description: "Resolver a conversa move a pessoa para o card Resolvidos, mas ela continua na campanha: se voltar a falar, o relatório acompanha de novo." },
+                    { title: "Nova campanha → foto \"Movido Para Outra Campanha\"", description: "Se você dispara outra campanha para a mesma pessoa (pelo mesmo número), a anterior fecha o registro dela e ela entra no card Removidos — cada pessoa participa de 1 campanha ativa por vez." },
+                    { title: "Validade venceu → foto \"Campanha Encerrada\"", description: "A campanha expirou: a etiqueta sai de todo mundo e os resultados param de se mexer. Exceção: quem está com atendimento em andamento continua sendo acompanhado até o final da conversa." },
                 ]} />
                 <Callout type="pratica" title="Regra de ouro">
-                    <strong>A primeira foto vence.</strong> Se a pessoa agendou, o resultado é "Agendado" para sempre — mesmo que
-                    depois cancele a conversa, mude de funil ou a campanha expire. O resultado nunca regride.
+                    <strong>A etiqueta manda.</strong> Com etiqueta, o número é o de agora. Sem etiqueta, o número é a foto do
+                    momento em que ela saiu — e nunca mais muda.
                 </Callout>
             </TopicSection>
 
@@ -384,6 +404,18 @@ export function CampaignsGuide() {
                         {
                             q: "Filtrei pela etiqueta da campanha e vieram menos pessoas do que a audiência. Por quê?",
                             a: "A etiqueta fica só com quem realmente recebeu a mensagem. Todo mundo é etiquetado 1 hora antes do disparo, mas quem acabou como \"Atendimento Em Aberto\", \"Rejeitada\", \"Inválido\" ou \"Ignorado\" perde a etiqueta automaticamente — inclusive quando o WhatsApp aceita o envio e recusa depois. Para ver a audiência completa, use a tabela de contatos da campanha, não o filtro de etiqueta.",
+                        },
+                        {
+                            q: "Qual a diferença entre os cards \"Resolvidos\" e \"Removidos\"?",
+                            a: "Resolvidos = pessoas que ainda estão na campanha e cujo atendimento foi encerrado (se voltarem a falar, saem desse card sozinhas). Removidos = pessoas que saíram da campanha, porque entraram em outra campanha do mesmo número ou porque a campanha encerrou — o resultado delas ficou congelado e não muda mais.",
+                        },
+                        {
+                            q: "Encerrei a conversa e o cliente respondeu depois. A campanha atualiza?",
+                            a: "Sim. Enquanto a pessoa tem a etiqueta da campanha, o relatório é ao vivo: ela sai de Resolvidos e volta para Aguardando Resposta, exatamente como no Inbox. O que já está marcado como \"Agendado\" ou \"Respondida\" nunca é perdido.",
+                        },
+                        {
+                            q: "A soma dos cards Em Aberto + Aguardando Resposta + Resolvidos não bate com Enviadas. Por quê?",
+                            a: "Esses três cards contam apenas quem ainda está na campanha e tem uma conversa naquela conexão. Quem foi para Removidos sai da conta, e quem recebeu a mensagem mas nunca teve conversa aberta também não aparece em nenhum dos três.",
                         },
                         {
                             q: "O que significa \"Movido Para Outra Campanha\"?",

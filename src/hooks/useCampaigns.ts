@@ -225,6 +225,9 @@ export interface CampaignContactReport {
     agent: string | null;
     frozen: boolean;
     frozen_reason: "scheduled" | "resolved" | "moved" | "expired" | null;
+    /** Estado ATUAL do ticket do cliente nessa conexão (espelha as abas do inbox).
+     *  'removed' = perdeu a etiqueta da campanha (movido/expirado). */
+    conv_status: "open" | "awaiting" | "pending" | "resolved" | "removed" | null;
 }
 
 /** Map campaign_contact_id -> relatório congelado/vivo (RPC frozen-aware get_campaign_contact_report). */
@@ -245,6 +248,7 @@ export function useCampaignContactReport(campaignId: string | null) {
                     agent: r.agent,
                     frozen: !!r.frozen,
                     frozen_reason: r.frozen_reason as CampaignContactReport["frozen_reason"],
+                    conv_status: r.conv_status as CampaignContactReport["conv_status"],
                 });
             }
             return map;
