@@ -128,7 +128,7 @@ serve(async (req) => {
         const { body, response: bodyFail } = await readJsonBody(req, corsHeaders);
         if (bodyFail) return bodyFail;
 
-        const { user_id, service_name, date, period } = body!;
+        const { user_id, service_name, date, period, conversation_id } = body!;
 
         const missingRequired = missingFields(corsHeaders, body!, ["user_id", "service_name"],
             "Envie o id da conta (bd_data.user_id no prompt da IA) e o nome exato da aplicação a consultar.");
@@ -186,13 +186,88 @@ serve(async (req) => {
         }
 
         const duration = sc.duration_minutes || 30;
-        const profIds: string[] = sc.professionals || [];
+        let profIds: string[] = sc.professionals || [];
         if (profIds.length === 0) {
             return apiError(corsHeaders, {
                 status: 409,
                 code: "service_without_professionals",
                 message: `A aplicação "${sc.name}" não tem nenhum profissional vinculado, então não existe agenda para consultar. Vincule ao menos um profissional a ela em Serviços.`,
             });
+        }
+
+        // ── Campanha do cliente pode limitar os profissionais (etapa Tipo > Promoção) ──
+        // Só dá para saber de quem é a conversa se o n8n mandar conversation_id
+        // (bd_data.conversation_id). Sem ele, a agenda continua aberta a todos.
+        let campaignFilter: { name: string; names: string[] } | null = null;
+        if (conversation_id) {
+            const { data: conv, error: convError } = await supabase
+                .from("conversations")
+                .select("id, user_id, contact_id, instance_id")
+                .eq("id", String(conversation_id))
+                .maybeSingle();
+
+            if (convError) {
+                return dbErrorResponse(corsHeaders, "conversation_lookup_failed",
+                    `buscar a conversa ${conversation_id} para checar se a campanha do cliente limita os profissionais`, convError);
+            }
+            if (!conv) {
+                return apiError(corsHeaders, {
+                    status: 404,
+                    code: "conversation_not_found",
+                    message: `Conversa "${conversation_id}" não encontrada. Envie o valor de bd_data.conversation_id que chegou no prompt, ou omita o campo para consultar a agenda sem filtro de campanha.`,
+                });
+            }
+            if (conv.user_id !== user_id) {
+                return apiError(corsHeaders, {
+                    status: 403,
+                    code: "conversation_other_account",
+                    message: `A conversa "${conversation_id}" pertence a outra conta, diferente do user_id informado. Use o conversation_id e o user_id do mesmo bd_data.`,
+                });
+            }
+
+            if (conv.contact_id && conv.instance_id) {
+                // Mesma regra do prompt: 1 campanha ativa por contato por instância
+                const { data: campSent, error: campError } = await supabase
+                    .from("campaign_contacts")
+                    .select("sent_at, campaigns!inner(name, professionals, instance_id, valid_until, status)")
+                    .eq("contact_id", conv.contact_id)
+                    .eq("status", "sent")
+                    .eq("campaigns.instance_id", conv.instance_id)
+                    .gte("campaigns.valid_until", new Date().toISOString())
+                    .in("campaigns.status", ["dispatching", "dispatched"])
+                    .order("sent_at", { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+
+                // Fatal de propósito: engolir este erro ofereceria horários de
+                // profissionais que a campanha não liberou.
+                if (campError) {
+                    return dbErrorResponse(corsHeaders, "campaign_lookup_failed",
+                        `buscar a campanha ativa do cliente para saber quais profissionais estão liberados`, campError);
+                }
+
+                const camp = (campSent as any)?.campaigns;
+                const list: any[] = Array.isArray(camp?.professionals) ? camp.professionals : [];
+                if (list.length > 0) {
+                    const allowed = new Set(list.map((p: any) => String(p?.id ?? "")).filter(Boolean));
+                    const names = list.map((p: any) => String(p?.name ?? "").trim()).filter(Boolean);
+                    const restricted = profIds.filter((id) => allowed.has(id));
+
+                    if (restricted.length === 0) {
+                        // Sem isto a resposta seria "sem horários" e a IA diria que a
+                        // agenda está cheia — quando na verdade é a campanha que não
+                        // libera ninguém que atenda esta aplicação.
+                        return apiError(corsHeaders, {
+                            status: 409,
+                            code: "campaign_professionals_unavailable",
+                            message: `A campanha "${camp.name}" está liberada apenas para ${names.join(", ") || "profissionais que não constam mais no cadastro"}, e nenhum deles atende a aplicação "${sc.name}". Ofereça outra aplicação da campanha ou revise os profissionais habilitados nela.`,
+                        });
+                    }
+
+                    profIds = restricted;
+                    campaignFilter = { name: camp.name, names };
+                }
+            }
         }
 
         const { data: professionals, error: profError } = await supabase
@@ -213,6 +288,18 @@ serve(async (req) => {
         }
 
         const MAX_SEARCH = 30;
+
+        // Vai junto em toda resposta de sucesso: deixa explícito para a IA que a
+        // lista já saiu restringida pela campanha (e por quem).
+        const campaignInfo = campaignFilter
+            ? {
+                campaign_filter: {
+                    campaign: campaignFilter.name,
+                    professionals: campaignFilter.names,
+                    note: `Horários limitados aos profissionais habilitados na campanha "${campaignFilter.name}".`,
+                },
+            }
+            : {};
 
         // ════════════════════════════════════════════
         // MODE 2: date + period → all slots in period
@@ -247,6 +334,7 @@ serve(async (req) => {
                     day_label: DAY_NAMES[reqDate.getDay()],
                     period: periodLabel,
                     slots: filtered.map(s => ({ time: s.time, professional: s.professional })),
+                    ...campaignInfo,
                 }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
             }
 
@@ -269,6 +357,7 @@ serve(async (req) => {
                         day_label: DAY_NAMES[search.getDay()],
                         period: periodLabel,
                         slots: sFiltered.map(s => ({ time: s.time, professional: s.professional })),
+                        ...campaignInfo,
                     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
                 }
 
@@ -279,6 +368,7 @@ serve(async (req) => {
                 service: sc.name,
                 message: `Nenhum horário disponível no período da ${periodLabel} nos próximos 30 dias`,
                 slots: [],
+                ...campaignInfo,
             }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
@@ -325,6 +415,7 @@ serve(async (req) => {
             service: sc.name,
             duration_minutes: duration,
             availability,
+            ...campaignInfo,
         }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     } catch (error) {

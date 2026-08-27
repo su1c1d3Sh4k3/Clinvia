@@ -161,9 +161,10 @@ export function CampaignsGuide() {
                             <strong className="text-foreground">Promoção</strong> (divulga serviços com condição especial) ou{" "}
                             <strong className="text-foreground">Notificação</strong> (aviso sem oferta comercial). Na Promoção você
                             marca os serviços da campanha, o desconto e — opcional — os{" "}
-                            <strong className="text-foreground">profissionais habilitados</strong>: marcando alguém, a IA só oferece
-                            agendamento com quem está na lista; sem ninguém marcado, ela pode agendar com qualquer profissional.
-                            Esse campo não bloqueia nada na agenda — é só uma orientação para a assistente.
+                            <strong className="text-foreground">profissionais habilitados</strong>: marcando alguém, a IA passa a
+                            consultar a agenda só de quem está na lista — os horários dos demais nem chegam a ser oferecidos ao
+                            cliente enquanto a campanha estiver ativa. Sem ninguém marcado, vale a agenda de todos. A restrição
+                            não tranca nada para a equipe: pelo sistema você continua agendando com qualquer profissional.
                         </AccordionContent>
                     </AccordionItem>
                     <AccordionItem value="mensagem" className="border-b">
