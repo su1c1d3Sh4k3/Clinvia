@@ -66,12 +66,14 @@ export interface CampaignStatsRow {
     responded_count: number;
     converted_count: number;
     scheduled_count: number;
-    resolved_count: number;
     no_response_count: number;
-    in_progress_count: number;
+    /** Estado da conversa SÓ de quem respondeu — os 4 somam responded_count */
     open_count: number;
-    awaiting_count: number;
+    pending_count: number;
+    resolved_count: number;
     removed_count: number;
+    /** Respondeu, ticket vivo e a última mensagem é nossa (humano ou IA) */
+    in_progress_count: number;
 }
 
 export function useCampaignDashboardStats(period: CampanhasPeriod) {

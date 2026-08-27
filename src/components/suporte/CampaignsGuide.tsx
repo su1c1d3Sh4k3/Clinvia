@@ -270,16 +270,25 @@ export function CampaignsGuide() {
             <TopicSection id="resultados" index={6} icon={BarChart3} title="Acompanhando resultados"
                 subtitle="Cards de resumo + tabela contato a contato">
                 <p className="text-sm text-muted-foreground">
-                    Ao expandir uma campanha você vê <strong className="text-foreground">10 cards</strong> (Enviadas, Entregues,
-                    Rejeitadas, Respondidas, Sem Resposta, Agendados, Em Aberto, Aguardando Resposta, Resolvidos, Removidos) e a{" "}
+                    Ao expandir uma campanha você vê o <strong className="text-foreground">quadro de resultados</strong> e a{" "}
                     <strong className="text-foreground">tabela de contatos</strong> com o detalhe de cada pessoa. Clique no nome
                     para abrir a conversa.
                 </p>
-                <Callout type="dica" title="Os cards espelham as abas do Inbox">
-                    <strong>Em Aberto</strong>, <strong>Aguardando Resposta</strong> e <strong>Resolvidos</strong> mostram o
-                    estado <em>de agora</em> da conversa de cada pessoa — os mesmos números que você vê nas abas do Inbox se
-                    filtrar pela etiqueta da campanha. <strong>Removidos</strong> são as pessoas que saíram da campanha (entraram
-                    em outra ou a campanha encerrou) e por isso não são mais acompanhadas.
+                <div className="space-y-2">
+                    <p className="text-sm font-semibold">Como ler o quadro</p>
+                    <div className="grid gap-2 lg:grid-cols-2">
+                        <LegendRow badge="Respondidas" cls="bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-300" text="O card grande. Quantas pessoas responderam ao disparo — e, logo abaixo, onde cada uma delas está agora: Pendente, Aberto, Resolvido e Removido. Esses 4 números sempre somam o total de respondidas." />
+                        <LegendRow badge="Enviadas / Entregues / Rejeitadas" cls="bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300" text="A linha de cima é a entrega da mensagem: quantas saíram, quantas chegaram no celular e quantas o WhatsApp recusou." />
+                        <LegendRow badge="Agendados" cls="bg-teal-100 text-teal-700 dark:bg-teal-900/50 dark:text-teal-300" text="Quantas pessoas marcaram horário dentro da validade da campanha. É a conversão — não depende do estado da conversa." />
+                        <LegendRow badge="Sem Resposta" cls="bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-300" text="Recebeu e nunca respondeu. Respondidas + Sem Resposta = Enviadas." />
+                        <LegendRow badge="Em Atendimento" cls="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300" text="A pessoa respondeu e já foi respondida de volta — por um atendente (conversa Aberta) ou pela IA (conversa Pendente). Quem respondeu e ainda não foi atendido NÃO entra aqui." />
+                    </div>
+                </div>
+                <Callout type="dica" title="Só quem respondeu aparece no detalhamento">
+                    Os 4 números embaixo de <strong>Respondidas</strong> (Pendente, Aberto, Resolvido, Removido) contam{" "}
+                    <em>apenas</em> quem respondeu ao disparo. Quem recebeu e ficou em silêncio está no card{" "}
+                    <strong>Sem Resposta</strong> e não aparece nesse detalhamento — mesmo que tenha uma conversa pendente no
+                    Inbox.
                 </Callout>
                 <ContactStatusSimulator />
                 <div className="space-y-2">
@@ -304,16 +313,16 @@ export function CampaignsGuide() {
                     </div>
                 </div>
                 <div className="space-y-2">
-                    <p className="text-sm font-semibold">Legenda — coluna Conversa (o estado de agora, igual ao Inbox)</p>
+                    <p className="text-sm font-semibold">Legenda — coluna Estágio (o estado de agora, igual ao Inbox)</p>
                     <div className="grid gap-2 lg:grid-cols-2">
-                        <LegendRow badge="Em Aberto" cls="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300" text="Alguém da equipe (ou a IA) está com o atendimento em andamento." />
-                        <LegendRow badge="Aguardando Resposta" cls="bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300" text="A pessoa falou e ninguém respondeu ainda — é a fila de pendências do Inbox." />
+                        <LegendRow badge="Pendente" cls="bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300" text="A conversa está na aba Pendentes do Inbox: ninguém assumiu o atendimento (ou quem está conduzindo é a IA)." />
+                        <LegendRow badge="Aberto" cls="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300" text="Um atendente assumiu — a conversa está na aba Abertos do Inbox." />
                         <LegendRow badge="Resolvido" cls="bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300" text="O atendimento foi encerrado. Se a pessoa voltar a falar, ela sai daqui e volta para as pendências." />
                         <LegendRow badge="Removido" cls="bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300" text="Saiu da campanha (entrou em outra ou a campanha encerrou) — o resultado dela ficou congelado nesse momento." />
                     </div>
                 </div>
                 <Callout type="dica">
-                    Use os filtros no topo da tabela (Status, Respondida, Agendamento, Conversa, Estágio, Atendente) para responder
+                    Use os filtros no topo da tabela (Status, Respondida, Agendamento, Estágio, Atendente) para responder
                     perguntas como "quem recebeu e não respondeu?" — esse é o público perfeito para um reenvio.
                 </Callout>
                 <Callout type="dica">
@@ -334,12 +343,12 @@ export function CampaignsGuide() {
                     <strong className="text-foreground">foto</strong> daquele momento e guarda para sempre.
                 </p>
                 <div className="grid gap-2 lg:grid-cols-2">
-                    <LegendRow badge="Ao vivo" cls="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300" text="Conversa (Em Aberto / Aguardando Resposta / Resolvido), etapa do CRM e atendente: acompanham a realidade minuto a minuto. Encerrou o atendimento e a pessoa voltou a falar? Ela sai de Resolvidos e volta para as pendências." />
+                    <LegendRow badge="Ao vivo" cls="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300" text="Estágio (Pendente / Aberto / Resolvido), atendente e Em Atendimento: acompanham a realidade minuto a minuto. Encerrou o atendimento e a pessoa voltou a falar? Ela sai de Resolvido e volta para Pendente." />
                     <LegendRow badge="Congelado" cls="bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300" text="Agendamento e Respondida: uma vez que aconteceram durante a campanha, ficam marcados para sempre. Cancelar o horário depois não apaga o agendamento da campanha." />
                 </div>
                 <StepByStep steps={[
-                    { title: "Agendamento e status são coisas diferentes", description: "A mesma pessoa pode aparecer como \"Agendado\" e, ao mesmo tempo, com a conversa Em Aberto, Aguardando Resposta ou Resolvida. Um card conta a conversão, o outro conta o atendimento — eles não se anulam." },
-                    { title: "Encerrar o atendimento não fecha o resultado", description: "Resolver a conversa move a pessoa para o card Resolvidos, mas ela continua na campanha: se voltar a falar, o relatório acompanha de novo." },
+                    { title: "Agendamento e estágio são coisas diferentes", description: "A mesma pessoa pode aparecer como \"Agendado\" e, ao mesmo tempo, com a conversa Pendente, Aberta ou Resolvida. Um card conta a conversão, o outro conta o atendimento — eles não se anulam." },
+                    { title: "Encerrar o atendimento não fecha o resultado", description: "Resolver a conversa move a pessoa para Resolvido, mas ela continua na campanha: se voltar a falar, o relatório acompanha de novo." },
                     { title: "Nova campanha → foto \"Movido Para Outra Campanha\"", description: "Se você dispara outra campanha para a mesma pessoa (pelo mesmo número), a anterior fecha o registro dela e ela entra no card Removidos — cada pessoa participa de 1 campanha ativa por vez." },
                     { title: "Validade venceu → foto \"Campanha Encerrada\"", description: "A campanha expirou: a etiqueta sai de todo mundo e os resultados param de se mexer. Exceção: quem está com atendimento em andamento continua sendo acompanhado até o final da conversa." },
                 ]} />
@@ -406,16 +415,20 @@ export function CampaignsGuide() {
                             a: "A etiqueta fica só com quem realmente recebeu a mensagem. Todo mundo é etiquetado 1 hora antes do disparo, mas quem acabou como \"Atendimento Em Aberto\", \"Rejeitada\", \"Inválido\" ou \"Ignorado\" perde a etiqueta automaticamente — inclusive quando o WhatsApp aceita o envio e recusa depois. Para ver a audiência completa, use a tabela de contatos da campanha, não o filtro de etiqueta.",
                         },
                         {
-                            q: "Qual a diferença entre os cards \"Resolvidos\" e \"Removidos\"?",
-                            a: "Resolvidos = pessoas que ainda estão na campanha e cujo atendimento foi encerrado (se voltarem a falar, saem desse card sozinhas). Removidos = pessoas que saíram da campanha, porque entraram em outra campanha do mesmo número ou porque a campanha encerrou — o resultado delas ficou congelado e não muda mais.",
+                            q: "Qual a diferença entre \"Resolvido\" e \"Removido\"?",
+                            a: "Resolvido = a pessoa ainda está na campanha e o atendimento dela foi encerrado (se voltar a falar, sai desse número sozinha). Removido = ela saiu da campanha, porque entrou em outra campanha do mesmo número ou porque a campanha encerrou — o resultado dela ficou congelado e não muda mais.",
                         },
                         {
                             q: "Encerrei a conversa e o cliente respondeu depois. A campanha atualiza?",
-                            a: "Sim. Enquanto a pessoa tem a etiqueta da campanha, o relatório é ao vivo: ela sai de Resolvidos e volta para Aguardando Resposta, exatamente como no Inbox. O que já está marcado como \"Agendado\" ou \"Respondida\" nunca é perdido.",
+                            a: "Sim. Enquanto a pessoa tem a etiqueta da campanha, o relatório é ao vivo: ela sai de Resolvido e volta para Pendente, exatamente como no Inbox. O que já está marcado como \"Agendado\" ou \"Respondida\" nunca é perdido.",
                         },
                         {
-                            q: "A soma dos cards Em Aberto + Aguardando Resposta + Resolvidos não bate com Enviadas. Por quê?",
-                            a: "Esses três cards contam apenas quem ainda está na campanha e tem uma conversa naquela conexão. Quem foi para Removidos sai da conta, e quem recebeu a mensagem mas nunca teve conversa aberta também não aparece em nenhum dos três.",
+                            q: "Pendente + Aberto + Resolvido + Removido não bate com Enviadas. Por quê?",
+                            a: "Porque esses 4 números somam as Respondidas, não as Enviadas. Eles contam apenas quem respondeu ao disparo. Para fechar com Enviadas, some Respondidas + Sem Resposta.",
+                        },
+                        {
+                            q: "O que exatamente entra em \"Em Atendimento\"?",
+                            a: "Quem respondeu ao disparo e JÁ foi respondido de volta, com a conversa ainda viva: se foi um atendente, a conversa fica Aberta; se foi a IA, fica Pendente. Quem respondeu e ainda está esperando alguém responder não entra — esse é justamente o público que precisa de atenção.",
                         },
                         {
                             q: "O que significa \"Movido Para Outra Campanha\"?",

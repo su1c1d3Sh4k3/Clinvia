@@ -225,9 +225,9 @@ export interface CampaignContactReport {
     agent: string | null;
     frozen: boolean;
     frozen_reason: "scheduled" | "resolved" | "moved" | "expired" | null;
-    /** Estado ATUAL do ticket do cliente nessa conexão (espelha as abas do inbox).
-     *  'removed' = perdeu a etiqueta da campanha (movido/expirado). */
-    conv_status: "open" | "awaiting" | "pending" | "resolved" | "removed" | null;
+    /** Estágio = estado ATUAL do ticket do cliente nessa conexão (espelha as abas
+     *  do inbox). 'removed' = perdeu a etiqueta da campanha (movido/expirado). */
+    conv_status: "open" | "pending" | "resolved" | "removed" | null;
 }
 
 /** Map campaign_contact_id -> relatório congelado/vivo (RPC frozen-aware get_campaign_contact_report). */

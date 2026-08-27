@@ -37,9 +37,8 @@ const FROZEN_META: Record<string, { className: string; title: string }> = {
 
 // Estado ATUAL do ticket (espelha as abas do inbox); 'removed' = perdeu a etiqueta
 const CONV_META: Record<string, { label: string; className: string }> = {
-    open: { label: "Em Aberto", className: GREEN },
-    awaiting: { label: "Aguardando Resposta", className: AMBER },
-    pending: { label: "Pendente", className: SLATE },
+    pending: { label: "Pendente", className: AMBER },
+    open: { label: "Aberto", className: GREEN },
     resolved: { label: "Resolvido", className: SKY },
     removed: { label: "Removido", className: ORANGE },
 };
@@ -90,7 +89,6 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
     const [respondedFilter, setRespondedFilter] = useState<string>("all");
     const [scheduledFilter, setScheduledFilter] = useState<string>("all");
     const [convFilter, setConvFilter] = useState<string>("all");
-    const [stageFilter, setStageFilter] = useState<string>("all");
     const [agentFilter, setAgentFilter] = useState<string>("all");
     const [search, setSearch] = useState("");
 
@@ -167,16 +165,8 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
         return { scheduled, notScheduled, pending };
     }, [rows, scheduledState]);
 
-    // Estágios/atendentes presentes NESTA campanha (só os que têm contatos), com contagem
-    const stageCounts = useMemo(() => {
-        const counts = new Map<string, number>();
-        for (const r of rows || []) {
-            const stage = report?.get(r.id)?.stage;
-            if (stage) counts.set(stage, (counts.get(stage) || 0) + 1);
-        }
-        return counts;
-    }, [rows, report]);
-
+    // Estágio = estado ATUAL da conversa (espelha as abas do inbox); atendentes
+    // presentes NESTA campanha (só os que têm contatos), com contagem
     const convCounts = useMemo(() => {
         const counts = new Map<string, number>();
         for (const r of rows || []) {
@@ -202,12 +192,11 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
             if (respondedFilter !== "all" && respondedState(r) !== respondedFilter) return false;
             if (scheduledFilter !== "all" && scheduledState(r) !== scheduledFilter) return false;
             if (convFilter !== "all" && report?.get(r.id)?.conv_status !== convFilter) return false;
-            if (stageFilter !== "all" && report?.get(r.id)?.stage !== stageFilter) return false;
             if (agentFilter !== "all" && report?.get(r.id)?.agent !== agentFilter) return false;
             if (q && !normalizeTxt(rowName(r)).includes(q)) return false;
             return true;
         });
-    }, [rows, statusFilter, respondedFilter, scheduledFilter, convFilter, stageFilter, agentFilter, search, report, respondedState, scheduledState]);
+    }, [rows, statusFilter, respondedFilter, scheduledFilter, convFilter, agentFilter, search, report, respondedState, scheduledState]);
 
     if (isLoading) {
         return (
@@ -267,10 +256,10 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
                 {convCounts.size > 0 && (
                     <Select value={convFilter} onValueChange={(v) => { setConvFilter(v); refresh(); }}>
                         <SelectTrigger className="h-8 w-[180px] text-xs bg-background">
-                            <SelectValue placeholder="Conversa" />
+                            <SelectValue placeholder="Estágio" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="all">Conversa: todas</SelectItem>
+                            <SelectItem value="all">Estágio: todos</SelectItem>
                             {Object.entries(CONV_META)
                                 .filter(([key]) => convCounts.get(key))
                                 .map(([key, meta]) => (
@@ -278,22 +267,6 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
                                         {meta.label} ({convCounts.get(key)})
                                     </SelectItem>
                                 ))}
-                        </SelectContent>
-                    </Select>
-                )}
-
-                {stageCounts.size > 0 && (
-                    <Select value={stageFilter} onValueChange={(v) => { setStageFilter(v); refresh(); }}>
-                        <SelectTrigger className="h-8 w-[180px] text-xs bg-background">
-                            <SelectValue placeholder="Estágio" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">Estágio: todos</SelectItem>
-                            {[...stageCounts.entries()].sort((a, b) => b[1] - a[1]).map(([stage, count]) => (
-                                <SelectItem key={stage} value={stage}>
-                                    {stage} ({count})
-                                </SelectItem>
-                            ))}
                         </SelectContent>
                     </Select>
                 )}
@@ -343,7 +316,7 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
             </div>
 
             <div className="overflow-y-auto overflow-x-auto" style={{ maxHeight: tableHeight }}>
-                <table className="w-full min-w-[1000px] text-sm">
+                <table className="w-full min-w-[880px] text-sm">
                     <thead className="bg-muted/50 sticky top-0">
                         <tr className="text-left text-xs text-muted-foreground">
                             <th className="px-3 py-2 font-medium">Contato</th>
@@ -351,7 +324,6 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
                             <th className="px-3 py-2 font-medium">Status</th>
                             <th className="px-3 py-2 font-medium">Respondida</th>
                             <th className="px-3 py-2 font-medium">Agendamento</th>
-                            <th className="px-3 py-2 font-medium">Conversa</th>
                             <th className="px-3 py-2 font-medium">Estágio</th>
                             <th className="px-3 py-2 font-medium">Atendente</th>
                             <th className="px-3 py-2 font-medium">Enviado em</th>
@@ -360,7 +332,7 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
                     <tbody className="divide-y">
                         {filteredRows.length === 0 && (
                             <tr>
-                                <td colSpan={9} className="px-3 py-4 text-center text-xs text-muted-foreground">
+                                <td colSpan={8} className="px-3 py-4 text-center text-xs text-muted-foreground">
                                     Nenhum contato com os filtros selecionados.
                                 </td>
                             </tr>
@@ -435,15 +407,6 @@ export function CampaignContactsTable({ campaignId }: CampaignContactsTableProps
                                                 title={rep.frozen ? FROZEN_META[rep.frozen_reason || ""]?.title : undefined}
                                             >
                                                 {CONV_META[rep.conv_status].label}
-                                            </Badge>
-                                        ) : (
-                                            <span className="text-xs text-muted-foreground">—</span>
-                                        )}
-                                    </td>
-                                    <td className="px-3 py-1.5">
-                                        {rep?.stage ? (
-                                            <Badge variant="secondary" className="bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300 whitespace-nowrap">
-                                                {rep.stage}
                                             </Badge>
                                         ) : (
                                             <span className="text-xs text-muted-foreground">—</span>

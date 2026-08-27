@@ -197,10 +197,10 @@ const SCENARIOS: Scenario[] = [
         statusBadge: { label: "Entregue", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300" },
         respondida: { label: "Sim", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300" },
         agendamento: { label: "Pendente", cls: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300" },
-        conversa: { label: "Aguardando Resposta", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300" },
+        conversa: { label: "Pendente", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300" },
         atendente: { label: "IA", cls: "bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-300" },
         explain:
-            "O cliente respondeu! A conversa entra na fila de atendimento (IA ou humano, conforme você escolheu na campanha) e ele conta no card 'respondidas'. Enquanto ninguém responder, ele fica em 'Aguardando Resposta' — igualzinho ao Inbox.",
+            "O cliente respondeu! Ele passa a contar no card 'Respondidas' e o Estágio mostra onde a conversa está agora — igualzinho às abas do Inbox. Enquanto ninguém da equipe responder, ele fica em 'Pendente'; assim que a IA ou um atendente responder, ele também entra em 'Em Atendimento'.",
     },
     {
         key: "scheduled",
@@ -209,10 +209,10 @@ const SCENARIOS: Scenario[] = [
         statusBadge: { label: "Entregue", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300" },
         respondida: { label: "Sim", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300" },
         agendamento: { label: "Agendado", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300" },
-        conversa: { label: "Em Aberto", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300" },
+        conversa: { label: "Aberto", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300" },
         atendente: { label: "Dra. Ana", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300" },
         explain:
-            "Melhor resultado possível: o agendamento é CONGELADO como 'Agendado' e fica registrado para sempre, mesmo que o horário seja cancelado depois. Repare que a conversa segue ao vivo: ela pode estar Em Aberto, Aguardando Resposta ou Resolvida — agendamento e status são colunas diferentes e não se anulam.",
+            "Melhor resultado possível: o agendamento é CONGELADO como 'Agendado' e fica registrado para sempre, mesmo que o horário seja cancelado depois. Repare que o Estágio segue ao vivo: pode estar Pendente, Aberto ou Resolvido — agendamento e estágio são colunas diferentes e não se anulam.",
     },
     {
         key: "resolved",
@@ -224,7 +224,7 @@ const SCENARIOS: Scenario[] = [
         conversa: { label: "Resolvido", cls: "bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300" },
         atendente: { label: "Dra. Ana", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300" },
         explain:
-            "A conversa foi encerrada sem agendamento e o contato entra no card 'resolvidos'. Isso NÃO fecha o resultado dele: enquanto tiver a etiqueta da campanha, se voltar a falar ele sai de 'Resolvido' e volta para 'Aguardando Resposta' automaticamente.",
+            "A conversa foi encerrada sem agendamento e o contato aparece como 'Resolvido' dentro das Respondidas. Isso NÃO fecha o resultado dele: enquanto tiver a etiqueta da campanha, se voltar a falar ele sai de 'Resolvido' e volta para 'Pendente' automaticamente.",
     },
     {
         key: "no_response",
@@ -236,7 +236,7 @@ const SCENARIOS: Scenario[] = [
         conversa: { label: "Removido", cls: "bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300" },
         atendente: { label: "Campanha Encerrada", cls: "bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300" },
         explain:
-            "A validade da campanha chegou e o cliente nunca respondeu. A etiqueta sai, ele entra no card 'removidos' e congela como 'Sem Resposta' — esse número ajuda a medir se a mensagem e o público foram bem escolhidos.",
+            "A validade da campanha chegou e o cliente nunca respondeu. A etiqueta sai e ele congela como 'Sem Resposta' — quem não respondeu fica FORA do card Respondidas e do detalhamento (Pendente/Aberto/Resolvido/Removido), aparecendo só no card 'Sem Resposta'.",
     },
     {
         key: "open_ticket",
@@ -292,7 +292,7 @@ export function ContactStatusSimulator() {
                                 <th className="px-3 py-2 text-left font-medium">Status</th>
                                 <th className="px-3 py-2 text-left font-medium">Respondida</th>
                                 <th className="px-3 py-2 text-left font-medium">Agendamento</th>
-                                <th className="px-3 py-2 text-left font-medium">Conversa</th>
+                                <th className="px-3 py-2 text-left font-medium">Estágio</th>
                                 <th className="px-3 py-2 text-left font-medium">Atendente</th>
                             </tr>
                         </thead>

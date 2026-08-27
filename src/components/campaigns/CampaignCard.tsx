@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
     ChevronDown, Clock, DollarSign, Users, Pencil, Trash2, RefreshCw,
     Sparkles, AlertTriangle, Loader2, Bot, User as UserIcon, Send, RotateCcw,
+    CheckCheck, XCircle, CalendarCheck, BellOff, Headphones, MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -75,32 +76,122 @@ export function ResendCampaignDialog({
     );
 }
 
-/** Grade de resultados da campanha (compartilhada /campanhas + dashboard). */
+interface StatCell {
+    label: string;
+    value: number;
+    icon: JSX.Element;
+    hint?: string;
+    gradient: string;
+    iconBg: string;
+    bar: string;
+    valueClass?: string;
+}
+
+/** Grade de resultados da campanha (compartilhada /campanhas + dashboard).
+ *  Card grande = Respondidas, com o estado ATUAL da conversa de quem respondeu
+ *  (os 4 números somam exatamente as respondidas). Respondidas + Sem Resposta
+ *  = Enviadas. */
 export function CampaignStatsGrid({ stats }: { stats: CampaignStatsRow }) {
-    const cells: { value: number; label: string; className?: string }[] = [
-        { value: stats.sent_count, label: "enviadas" },
-        { value: stats.delivered_count, label: "entregues", className: "text-emerald-600" },
-        { value: stats.failed_count, label: "rejeitadas", className: "text-red-600" },
-        { value: stats.responded_count, label: "respondidas", className: "text-violet-600" },
-        { value: stats.no_response_count ?? 0, label: "sem resposta", className: "text-red-600" },
-        { value: stats.scheduled_count ?? 0, label: "agendados", className: "text-emerald-600" },
-        { value: stats.open_count ?? 0, label: "em aberto", className: "text-emerald-600" },
-        {
-            value: stats.awaiting_count ?? 0,
-            label: "aguardando resposta",
-            className: "text-amber-600",
-        },
-        { value: stats.resolved_count ?? 0, label: "resolvidos", className: "text-sky-600" },
-        { value: stats.removed_count ?? 0, label: "removidos", className: "text-muted-foreground" },
+    const sent = stats.sent_count || 0;
+    const responded = stats.responded_count || 0;
+    const pct = (v: number) => (sent > 0 ? `${Math.round((v / sent) * 100)}% dos enviados` : undefined);
+
+    const breakdown: { label: string; value: number; className: string }[] = [
+        { label: "Pendente", value: stats.pending_count ?? 0, className: "text-amber-600" },
+        { label: "Aberto", value: stats.open_count ?? 0, className: "text-emerald-600" },
+        { label: "Resolvido", value: stats.resolved_count ?? 0, className: "text-sky-600" },
+        { label: "Removido", value: stats.removed_count ?? 0, className: "text-muted-foreground" },
     ];
-    return (
-        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2 text-sm">
-            {cells.map((c) => (
-                <div key={c.label} className="border rounded-xl p-2.5">
-                    <p className={cn("font-semibold", c.className)}>{c.value}</p>
-                    <p className="text-[10px] text-muted-foreground">{c.label}</p>
+
+    const row1: StatCell[] = [
+        {
+            label: "Enviadas", value: sent, icon: <Send className="w-4 h-4 text-blue-500" />,
+            gradient: "from-blue-500/10 via-blue-500/[0.03] to-transparent",
+            iconBg: "bg-blue-500/15", bar: "bg-blue-500",
+        },
+        {
+            label: "Entregues", value: stats.delivered_count || 0, hint: pct(stats.delivered_count || 0),
+            icon: <CheckCheck className="w-4 h-4 text-emerald-500" />,
+            gradient: "from-emerald-500/10 via-emerald-500/[0.03] to-transparent",
+            iconBg: "bg-emerald-500/15", bar: "bg-emerald-500", valueClass: "text-emerald-600",
+        },
+        {
+            label: "Rejeitadas", value: stats.failed_count || 0, hint: pct(stats.failed_count || 0),
+            icon: <XCircle className="w-4 h-4 text-red-500" />,
+            gradient: "from-red-500/10 via-red-500/[0.03] to-transparent",
+            iconBg: "bg-red-500/15", bar: "bg-red-500", valueClass: "text-red-600",
+        },
+    ];
+
+    const row2: StatCell[] = [
+        {
+            label: "Agendados", value: stats.scheduled_count || 0, hint: "agendaram na validade da campanha",
+            icon: <CalendarCheck className="w-4 h-4 text-teal-500" />,
+            gradient: "from-teal-500/10 via-teal-500/[0.03] to-transparent",
+            iconBg: "bg-teal-500/15", bar: "bg-teal-500", valueClass: "text-teal-600",
+        },
+        {
+            label: "Sem Resposta", value: stats.no_response_count || 0, hint: pct(stats.no_response_count || 0),
+            icon: <BellOff className="w-4 h-4 text-rose-500" />,
+            gradient: "from-rose-500/10 via-rose-500/[0.03] to-transparent",
+            iconBg: "bg-rose-500/15", bar: "bg-rose-500", valueClass: "text-rose-600",
+        },
+        {
+            label: "Em Atendimento", value: stats.in_progress_count || 0,
+            hint: "um humano ou a IA já respondeu",
+            icon: <Headphones className="w-4 h-4 text-indigo-500" />,
+            gradient: "from-indigo-500/10 via-indigo-500/[0.03] to-transparent",
+            iconBg: "bg-indigo-500/15", bar: "bg-indigo-500", valueClass: "text-indigo-600",
+        },
+    ];
+
+    const renderCell = (c: StatCell) => (
+        <div
+            key={c.label}
+            className={cn(
+                "relative overflow-hidden p-4 rounded-xl border border-border/40 bg-gradient-to-br transition-shadow hover:shadow-md",
+                c.gradient,
+            )}
+        >
+            <div className={cn("absolute left-0 top-0 h-full w-1", c.bar)} />
+            <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-medium text-muted-foreground">{c.label}</span>
+                <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center shrink-0", c.iconBg)}>
+                    {c.icon}
                 </div>
-            ))}
+            </div>
+            <p className={cn("text-2xl font-bold tracking-tight tabular-nums", c.valueClass)}>{c.value}</p>
+            {c.hint && <p className="text-[11px] text-muted-foreground mt-1.5">{c.hint}</p>}
+        </div>
+    );
+
+    return (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {/* Respondidas — ocupa as duas linhas na 1ª coluna */}
+            <div className="relative overflow-hidden p-5 rounded-xl border border-border/40 bg-gradient-to-br from-violet-500/15 via-violet-500/[0.05] to-transparent sm:col-span-2 lg:col-span-1 lg:row-span-2 flex flex-col justify-center transition-shadow hover:shadow-md">
+                <div className="absolute left-0 top-0 h-full w-1 bg-violet-500" />
+                <div className="flex items-center justify-between mb-4">
+                    <span className="text-xs font-medium text-muted-foreground">Respondidas</span>
+                    <div className="w-9 h-9 rounded-lg bg-violet-500/15 flex items-center justify-center shrink-0">
+                        <MessageCircle className="w-5 h-5 text-violet-500" />
+                    </div>
+                </div>
+                <p className="text-3xl font-bold tracking-tight tabular-nums text-violet-600">{responded}</p>
+                <p className="text-xs text-muted-foreground mt-2 tabular-nums">
+                    de <span className="font-semibold text-foreground/80">{sent}</span> enviadas
+                </p>
+                <div className="mt-4 pt-3 border-t border-border/40 grid grid-cols-2 gap-2">
+                    {breakdown.map((b) => (
+                        <div key={b.label}>
+                            <p className="text-[11px] text-muted-foreground">{b.label}</p>
+                            <p className={cn("text-sm font-semibold tabular-nums", b.className)}>{b.value}</p>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            {row1.map(renderCell)}
+            {row2.map(renderCell)}
         </div>
     );
 }
