@@ -279,7 +279,7 @@ export function AgendamentosColaboradorSection() {
             <div className="border rounded-xl bg-card overflow-hidden">
                 <Tabs value={activeTab} onValueChange={setActiveTab}>
                     <div className="border-b px-2 pt-2">
-                        <TabsList className="overflow-x-auto flex-nowrap max-w-full justify-start">
+                        <TabsList className="flex-wrap h-auto justify-start gap-1">
                             <TabsTrigger value="todos" className="shrink-0">
                                 Todos
                                 <Badge variant="secondary" className="ml-1.5">{rows?.length ?? 0}</Badge>
