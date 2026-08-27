@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Send, Sparkles, TrendingUp, ChevronUp, ChevronRight, Zap, Settings, RefreshCw, DollarSign, Calendar, MessageSquare, FileText, Bot, Pencil, Plus, Radar } from "lucide-react";
+import { Send, Sparkles, TrendingUp, ChevronUp, ChevronRight, Zap, Settings, RefreshCw, DollarSign, Calendar, MessageSquare, FileText, Bot, Pencil, Plus, Radar, History } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -16,6 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { CopilotSettingsModal } from "./CopilotSettingsModal";
 import { NegotiationQuickModal } from "@/components/crm/NegotiationQuickModal";
 import { GroupMonitoringSection } from "@/components/chat/GroupMonitoringSection";
+import { PreviousTicketsSection } from "@/components/chat/PreviousTicketsSection";
 import { SaleModal } from "@/components/sales/SaleModal";
 import { AppointmentModal } from "@/components/scheduling/AppointmentModal";
 import { format } from "date-fns";
@@ -41,9 +42,18 @@ interface AIIntelligenceSidebarProps {
   conversationId?: string;
   onFollowUpMessageClick?: (message: string) => void;
   onOpportunitySelect?: (conversationId: string, message: string) => void;
+  /** Recorte de ticket anterior em exibição no chat (null = conversa geral) */
+  activeSliceId?: string | null;
+  onOpenSlice?: (ticketId: string) => void;
+  onExitSlice?: () => void;
 }
 
-export const AIIntelligenceSidebar = ({ conversationId }: AIIntelligenceSidebarProps) => {
+export const AIIntelligenceSidebar = ({
+  conversationId,
+  activeSliceId = null,
+  onOpenSlice,
+  onExitSlice,
+}: AIIntelligenceSidebarProps) => {
   const queryClient = useQueryClient();
   const { analysis } = useAIAnalysis(conversationId);
   const { mutate: generateSummary, isPending: isGeneratingSummary } = useGenerateSummary();
@@ -219,6 +229,7 @@ export const AIIntelligenceSidebar = ({ conversationId }: AIIntelligenceSidebarP
     { id: "sale", icon: DollarSign, label: "Venda", hideGroup: true },
     { id: "schedule", icon: Calendar, label: "Agenda", hideGroup: true },
     { id: "satisfaction", icon: TrendingUp, label: "Satisfação", hideGroup: true },
+    { id: "tickets", icon: History, label: "Tickets anteriores", hideGroup: true },
     { id: "monitoring", icon: Radar, label: "Monitoramento", hideGroup: false, groupOnly: true },
     { id: "summary", icon: FileText, label: "Resumo", hideGroup: false },
     { id: "copilot", icon: Bot, label: "Copilot", hideGroup: false },
@@ -521,6 +532,18 @@ export const AIIntelligenceSidebar = ({ conversationId }: AIIntelligenceSidebarP
                   </CollapsibleContent>
                 </Card>
               </Collapsible>
+            )}
+
+            {/* ── Tickets anteriores (mesma conexão) ── */}
+            {!isGroup && contactId && (
+              <PreviousTicketsSection
+                conversationId={conversationId}
+                open={openSection === "tickets"}
+                onToggle={() => toggleSection("tickets")}
+                activeSliceId={activeSliceId}
+                onOpenSlice={(id) => onOpenSlice?.(id)}
+                onExitSlice={() => onExitSlice?.()}
+              />
             )}
 
             {/* ── Monitoramento de Grupo Section ── */}

@@ -68,8 +68,10 @@ export const useSendMessage = () => {
         // ✨ ADICIONAR mensagem à UI IMEDIATAMENTE (antes de enviar ao servidor)
         // Só se tivermos conversationId (se não tiver, será criado no backend)
         if (conversationId) {
-          queryClient.setQueryData(
-            ["messages", conversationId],
+          // setQueriesData (prefixo): a queryKey de useMessages carrega scope +
+          // janela do histórico — o patch precisa atingir todas as variações.
+          queryClient.setQueriesData(
+            { queryKey: ["messages", conversationId] },
             (old: any) => {
               if (!old) return [optimisticMessage];
               return [...old, optimisticMessage];
@@ -140,8 +142,8 @@ export const useSendMessage = () => {
           }
 
           // ✨ SUBSTITUIR mensagem temporária pela mensagem real do servidor
-          queryClient.setQueryData(
-            ["messages", conversationId],
+          queryClient.setQueriesData(
+            { queryKey: ["messages", conversationId] },
             (old: any) => {
               if (!old) return old;
               return old.map((msg: any) =>
@@ -160,8 +162,8 @@ export const useSendMessage = () => {
           return data;
         } catch (error: any) {
           // ✨ MARCAR mensagem como erro na UI
-          queryClient.setQueryData(
-            ["messages", conversationId],
+          queryClient.setQueriesData(
+            { queryKey: ["messages", conversationId] },
             (old: any) => {
               if (!old) return old;
               return old.map((msg: any) =>

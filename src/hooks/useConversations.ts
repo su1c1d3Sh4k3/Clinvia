@@ -178,7 +178,7 @@ export const useConversations = (options: UseConversationsOptions = {}) => {
           follow_up_notified_at, channel, instagram_instance_id, nps_sent_at,
           first_response_at, first_response_by_ai, first_response_duration_seconds,
           is_ai_handled, is_outside_business_hours, last_customer_message_at,
-          instagram_window_expired, resolved_at, awaiting_reply,
+          instagram_window_expired, resolved_at, awaiting_reply, resolved_head,
           last_hist:messages_history->-1,
           ${contactSelect},
           groups (*),
@@ -240,7 +240,12 @@ export const useConversations = (options: UseConversationsOptions = {}) => {
       } else if (tab === "pending") {
         query = query.eq("status", "pending");
       } else if (tab === "resolved") {
-        query = query.eq("status", "resolved");
+        // TICKET ÚNICO POR (CONTATO, CONEXÃO) — user rule: cada instância é um
+        // workflow separado. `resolved_head` (mantida por trigger) marca a
+        // conversa resolvida mais recente de cada par que não tem ticket
+        // aberto/pendente; os fragmentos anteriores ficam no menu lateral
+        // "Tickets anteriores" do chat.
+        query = query.eq("status", "resolved").eq("resolved_head", true);
       }
       // if tab === "all", no status filter is applied
 
@@ -402,6 +407,9 @@ export const useConversations = (options: UseConversationsOptions = {}) => {
       const ch = row.channel || "whatsapp";
       if (kChannel && ch !== kChannel) return false;
       if (kTab !== "all" && row.status !== kTab) return false;
+      // Aba Resolvidos mostra só a cabeça do par (contato, conexão) — os
+      // fragmentos anteriores não podem voltar pela lista por realtime.
+      if (kTab === "resolved" && row.resolved_head === false) return false;
       if (kRole === "agent" && kTeamMemberId) {
         if (row.group_id) return true;
         if (row.status === "pending") return true;

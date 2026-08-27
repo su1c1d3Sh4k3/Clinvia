@@ -23,6 +23,8 @@ const Index = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [selectedConversationId, setSelectedConversationId] = useState<string>();
+  /** Recorte de ticket anterior aberto pelo menu lateral (null = conversa geral) */
+  const [sliceConversationId, setSliceConversationId] = useState<string | null>(null);
   const { setHideFloatingButton } = useMobileMenu();
   useSuporteTour(!loading);
 
@@ -49,6 +51,7 @@ const Index = () => {
   // Handle conversation selection - switch to chat view on mobile
   const handleSelectConversation = (id: string) => {
     setSelectedConversationId(id);
+    setSliceConversationId(null);
     setMobileView("chat");
   };
 
@@ -256,10 +259,15 @@ const Index = () => {
             onOpenNewMessage={handleOpenNewMessage}
             externalMessage={followUpMessage}
             clearExternalMessage={() => setFollowUpMessage("")}
+            sliceConversationId={sliceConversationId}
+            onExitSlice={() => setSliceConversationId(null)}
           />
         </ErrorBoundary>
         <AIIntelligenceSidebar
           conversationId={selectedConversationId}
+          activeSliceId={sliceConversationId}
+          onOpenSlice={setSliceConversationId}
+          onExitSlice={() => setSliceConversationId(null)}
         />
       </div>
 
@@ -320,6 +328,8 @@ const Index = () => {
                   onOpenNewMessage={handleOpenNewMessage}
                   externalMessage={followUpMessage}
                   clearExternalMessage={() => setFollowUpMessage("")}
+                  sliceConversationId={sliceConversationId}
+                  onExitSlice={() => setSliceConversationId(null)}
                   isMobile={true}
                 />
               </ErrorBoundary>
@@ -336,6 +346,16 @@ const Index = () => {
             <div className="p-0">
               <AIIntelligenceSidebar
                 conversationId={selectedConversationId}
+                activeSliceId={sliceConversationId}
+                onOpenSlice={(id) => {
+                  setSliceConversationId(id);
+                  // No mobile o chat fica atrás do sheet: fechar para mostrar o recorte
+                  setIsActionsSheetOpen(false);
+                }}
+                onExitSlice={() => {
+                  setSliceConversationId(null);
+                  setIsActionsSheetOpen(false);
+                }}
               />
             </div>
           </SheetContent>

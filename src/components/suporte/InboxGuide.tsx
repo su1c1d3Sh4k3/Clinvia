@@ -23,7 +23,7 @@ const TOPICS = [
     { id: "sidebar", label: "Painel lateral" },
     { id: "midias-acoes", label: "Mídias e ações" },
     { id: "notas", label: "Notas internas" },
-    { id: "historico", label: "Histórico" },
+    { id: "historico", label: "Histórico e tickets anteriores" },
     { id: "faq", label: "FAQ" },
 ];
 
@@ -54,7 +54,7 @@ export function InboxGuide() {
                         <LearnChip topicId="atendendo">Assumir e encerrar conversas</LearnChip>
                         <LearnChip topicId="transferindo">Transferir para filas e colegas</LearnChip>
                         <LearnChip topicId="sidebar">Usar o painel de inteligência</LearnChip>
-                        <LearnChip topicId="historico">Onde ficam as conversas antigas</LearnChip>
+                        <LearnChip topicId="historico">Tickets anteriores e conversas antigas</LearnChip>
                     </div>
                 </div>
             </div>
@@ -219,6 +219,7 @@ export function InboxGuide() {
                     {[
                         { t: "Dados e etapa do CRM", d: "Nome, telefone, etiquetas, categoria (contato/lead/cliente) e a etapa atual no funil desta conexão." },
                         { t: "Negociação rápida", d: "Crie ou edite a negociação (serviços + valores) sem abrir o CRM — o card nasce no funil da conexão desta conversa." },
+                        { t: "Tickets anteriores", d: "Todos os atendimentos já encerrados deste cliente nesta conexão, em cartões. Clique em um deles para ver aquele trecho isolado." },
                         { t: "Resumo e sentimento", d: "Resumo da conversa gerado pela IA e o termômetro do humor do cliente." },
                         { t: "Atalhos", d: "Registrar venda, criar agendamento e abrir o perfil completo em um clique." },
                     ].map((x) => (
@@ -307,13 +308,38 @@ export function InboxGuide() {
             </TopicSection>
 
             {/* 9 */}
-            <TopicSection id="historico" index={9} icon={Archive} title="Histórico de conversas"
-                subtitle="Nada se perde ao resolver">
+            <TopicSection id="historico" index={9} icon={Archive} title="Histórico e tickets anteriores"
+                subtitle="Um ticket por cliente em cada conexão — nada se perde ao resolver">
                 <p className="text-sm text-muted-foreground">
                     Ao resolver uma conversa, as mensagens são <strong className="text-foreground">arquivadas no histórico do
                     contato</strong>. Quando ele escrever de novo, a conversa nova mostra também o histórico anterior — você (e
                     a IA) sempre têm o contexto completo.
                 </p>
+                <Callout type="dica" title="A aba Resolvidos mostra um ticket por cliente, por conexão">
+                    Antes, um cliente que falou dez vezes aparecia dez vezes em Resolvidos. Agora ele aparece{" "}
+                    <strong>uma única vez em cada número (ou conta do Instagram)</strong>, com todo o histórico daquela conexão
+                    reunido na mesma conversa — nada foi apagado, só deixou de ficar repetido. Se o mesmo cliente falou em dois
+                    números diferentes, são <strong>dois tickets</strong>: cada conexão é um atendimento próprio e o histórico de
+                    um nunca se mistura com o do outro.
+                </Callout>
+                <Callout type="atencao" title="Cliente com ticket aberto ou pendente não aparece em Resolvidos">
+                    Se existe atendimento em andamento naquele número, o cliente fica só nas abas{" "}
+                    <strong>Abertos</strong> ou <strong>Pendentes</strong> — assim ninguém responde pelo ticket errado. O
+                    histórico continua acessível pelo painel lateral, dentro da conversa atual.
+                </Callout>
+                <StepByStep steps={[
+                    { title: "Role para cima para carregar mais", description: "A conversa abre com os atendimentos mais recentes. À medida que você rola para o topo, o sistema traz os anteriores automaticamente, sempre da mesma conexão. Quando chegar em Início do histórico desta conexão, acabou." },
+                    { title: "Abra Tickets anteriores no painel lateral", description: <>No painel à direita há a seção <strong>Tickets anteriores</strong> — disponível também em conversas abertas e pendentes. Cada atendimento encerrado vira um cartão com o número do ticket, a conexão, quem encerrou (se não foi ninguém, foi a IA), a data de abertura e a de fechamento.</>, },
+                    { title: "Clique no cartão para ver o trecho isolado", description: "O chat passa a mostrar somente aquele atendimento, do começo ao fim. Útil para reler uma promessa feita ao cliente sem se perder no meio de tudo." },
+                    { title: "Volte quando quiser", description: <>Use <strong>Retornar para a conversa geral</strong> — o botão aparece tanto no topo da seção Tickets anteriores quanto embaixo do chat.</>, },
+                ]} />
+                <Callout type="atencao" title="Ticket anterior é somente leitura">
+                    Enquanto você estiver vendo um trecho antigo, o campo de mensagem some — para não responder dentro de um
+                    atendimento já encerrado. Para falar com o cliente, volte para a conversa geral (se ela estiver aberta ou
+                    pendente) ou clique em <strong>Reabrir conversa</strong>, que abre a janela de nova mensagem já com o
+                    contato preenchido. Ticket resolvido também não tem mais o botão <strong>Atender</strong>: o caminho é
+                    sempre iniciar uma conversa nova.
+                </Callout>
                 <Callout type="dica">
                     Precisa reler um atendimento antigo? Abra o perfil do cliente (página Clientes &gt; clique no nome) e veja a
                     aba Atendimentos, com todas as conversas encerradas.
@@ -339,6 +365,22 @@ export function InboxGuide() {
                         {
                             q: "O que significa a bolinha/contador na conversa?",
                             a: "O contador azul são mensagens não lidas — ao abrir a conversa, ele zera. A bolinha ao lado do nome mostra quem falou por último: laranja = a última mensagem é do cliente (resposta do atendente pendente); verde = a última mensagem foi da equipe. Toda conversa com a bolinha laranja também ganha uma barra fina laranja na lateral esquerda do cartão (mesmo esquema da urgência no card do CRM), para você bater o olho e ver o que está esperando resposta. Os balões vermelhos nas abas Abertos/Pendentes/Grupos somam as não lidas e respeitam os Filtros Avançados: com um filtro de fila, tag, conexão ou usuário aplicado, o balão mostra só as não lidas daquele recorte — se os clientes do filtro não têm nada não lido, o balão some.",
+                        },
+                        {
+                            q: "A aba Resolvidos tinha vários tickets do mesmo cliente e agora só tem um. Apagaram os outros?",
+                            a: "Não. Cada cliente passou a aparecer uma única vez por conexão, e essa conversa reúne TODO o histórico daquele número — role para cima e os atendimentos anteriores vão carregando. Para ver um atendimento específico isolado, abra Tickets anteriores no painel lateral direito e clique no cartão desejado.",
+                        },
+                        {
+                            q: "O cliente não aparece em Resolvidos. Por quê?",
+                            a: "Porque ele tem atendimento em andamento naquela conexão: enquanto houver ticket aberto ou pendente, ele fica só nessas abas. Abra a conversa atual e use Tickets anteriores no painel lateral para consultar o histórico encerrado.",
+                        },
+                        {
+                            q: "Estou vendo um ticket anterior e sumiu o campo de mensagem.",
+                            a: "É proposital: trecho antigo é somente leitura, para ninguém responder dentro de um atendimento já encerrado. Clique em Retornar para a conversa geral, ou em Reabrir conversa para abrir a janela de nova mensagem já com o contato preenchido.",
+                        },
+                        {
+                            q: "Por que o histórico de um número não mostra as conversas do outro?",
+                            a: "Cada conexão (número de WhatsApp ou conta do Instagram) é um atendimento independente. Se o cliente falou 3 vezes no número A e 5 no número B, o ticket do A mostra só as 3 do A e o do B só as 5 do B — inclusive na lista de Tickets anteriores.",
                         },
                         {
                             q: "Não acho a conversa de um cliente na lista. Sumiu?",

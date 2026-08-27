@@ -37,7 +37,7 @@ import { TemplatePickerModal } from "@/components/chat/TemplatePickerModal";
 import { AddNoteModal } from "@/components/chat/AddNoteModal";
 import { useConversationNotes, mergeNotesIntoMessages } from "@/hooks/useConversationNotes";
 import { useGroupMonitoringVisuals } from "@/hooks/useGroupMonitoring";
-import { LayoutTemplate, Clock, Paperclip } from "lucide-react";
+import { LayoutTemplate, Clock, Paperclip, History, ArrowLeft, MessageSquarePlus } from "lucide-react";
 
 // Performance: Limit messages rendered at once
 const MESSAGES_PER_PAGE = 50;
@@ -73,7 +73,9 @@ export const ChatArea = ({
   onOpenNewMessage,
   externalMessage,
   clearExternalMessage,
-  isMobile = false
+  isMobile = false,
+  sliceConversationId,
+  onExitSlice
 }: {
   conversationId?: string;
   searchTerm?: string;
@@ -83,6 +85,9 @@ export const ChatArea = ({
   externalMessage?: string;
   clearExternalMessage?: () => void;
   isMobile?: boolean;
+  /** Recorte aberto pelo menu "Tickets anteriores": exibe só aquele ticket, somente leitura */
+  sliceConversationId?: string | null;
+  onExitSlice?: () => void;
 }) => {
   const [message, setMessage] = useState("");
   const { setTyping } = useTypingContext();
@@ -99,7 +104,7 @@ export const ChatArea = ({
   // Reset visible count when conversation changes so the slice always starts from the end
   useEffect(() => {
     setVisibleMessagesCount(MESSAGES_PER_PAGE);
-  }, [conversationId]);
+  }, [conversationId, sliceConversationId]);
 
   // Audio Recording State
   const [isRecording, setIsRecording] = useState(false);
@@ -152,10 +157,15 @@ export const ChatArea = ({
   const [isTemplatePickerOpen, setIsTemplatePickerOpen] = useState(false);
 
   // Core Hooks
-  const { messages, isLoading } = useMessages(conversationId);
+  // Recorte ("Tickets anteriores"): a timeline passa a ser a daquele ticket,
+  // sem juntar o histórico do contato — e sem campo de envio.
+  const isSlice = !!sliceConversationId;
+  const timelineConversationId = sliceConversationId || conversationId;
+  const { messages, isLoading, hasMoreHistory, loadMoreHistory, isLoadingMoreHistory } =
+    useMessages(timelineConversationId, { scope: isSlice ? "ticket" : "contact" });
 
   // Notas de conversa (internas, roxas) — mescladas na timeline por created_at
-  const { notes, addNote, editNote } = useConversationNotes(conversationId);
+  const { notes, addNote, editNote } = useConversationNotes(timelineConversationId);
   const messagesWithNotes = useMemo(
     () => mergeNotesIntoMessages(messages || [], notes),
     [messages, notes]
@@ -828,7 +838,7 @@ export const ChatArea = ({
       }
       if (data?.error) throw new Error(data.message || data.error);
 
-      queryClient.setQueryData(["messages", conversationId], (old: any) => {
+      queryClient.setQueriesData({ queryKey: ["messages", conversationId] }, (old: any) => {
         if (!old) return old;
         return [...old, {
           id: data?.messageId || `temp-contact-${Date.now()}`,
@@ -975,9 +985,42 @@ export const ChatArea = ({
         onEditNote={handleEditNote}
         monitorTriggerColors={monitorVisuals?.triggerColorByMessageId}
         monitorLeadColors={monitorVisuals?.colorByPhoneLast8}
+        hasMoreHistory={hasMoreHistory}
+        onLoadMoreHistory={loadMoreHistory}
+        isLoadingMoreHistory={isLoadingMoreHistory}
       />
 
-      {isWindowClosed ? (
+      {isSlice ? (
+        /* Recorte de ticket anterior: somente leitura (user rule — mensagem só
+           pelo ticket principal). No lugar do campo de texto, atalho para
+           reabrir a conversa numa janela nova já preenchida. */
+        <div className="p-3 border-t bg-muted/30">
+          <div className="flex flex-col items-center gap-2 py-3 px-4 rounded-lg bg-muted/60 border border-border">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <History className="w-4 h-4" />
+              <span className="text-sm font-medium">Você está vendo um ticket anterior</span>
+            </div>
+            <p className="text-xs text-muted-foreground text-center">
+              Este recorte é somente leitura. Para falar com o cliente, use o ticket atual
+              ou reabra a conversa em uma nova janela.
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-2 mt-1">
+              <Button size="sm" variant="outline" className="gap-2" onClick={onExitSlice}>
+                <ArrowLeft className="w-4 h-4" />
+                Retornar para a conversa geral
+              </Button>
+              <Button
+                size="sm"
+                className="gap-2"
+                onClick={() => onOpenNewMessage?.(contactNumber || undefined)}
+              >
+                <MessageSquarePlus className="w-4 h-4" />
+                Reabrir conversa
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : isWindowClosed ? (
         <div className="p-3 border-t bg-muted/30">
           <div className="flex flex-col items-center gap-2 py-3 px-4 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
             <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">

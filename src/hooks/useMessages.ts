@@ -1,30 +1,59 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Tables } from "@/integrations/supabase/types";
 import { resolveOutboundSenderName } from "@/lib/messageSender";
 
 type Message = Tables<"messages">;
 
+/** Quantos tickets anteriores entram por rodada de "scrollou até o topo". */
+const HISTORY_TICKETS_PAGE = 3;
+
+/**
+ * `contact` = ticket consolidado: junta o histórico das conversas anteriores do
+ * MESMO contato na MESMA conexão (user rule: cada instância é um workflow).
+ * `ticket`  = recorte: só as mensagens daquela conversa (aberto pelo menu
+ *             lateral "Tickets anteriores", somente leitura).
+ */
+export type MessagesScope = "contact" | "ticket";
+
 /**
  * Custom hook to fetch and subscribe to messages for a specific conversation.
- * 
+ *
  * @param conversationId - The ID of the conversation to fetch messages for.
+ * @param options.scope - "contact" (default) junta os tickets anteriores da
+ *   mesma conexão; "ticket" mostra apenas o recorte daquela conversa.
  * @returns An object containing:
  * - `messages`: Array of Message objects (sorted by creation time).
  * - `isLoading`: Boolean indicating if the initial fetch is in progress.
- * 
+ * - `hasMoreHistory` / `loadMoreHistory`: paginação do histórico anterior
+ *   (o chat carrega mais tickets conforme o usuário sobe a rolagem).
+ *
  * @remarks
  * This hook handles both active conversations (fetching from `messages` table with realtime subscription)
  * and resolved conversations (parsing JSON `messages_history` from `conversations` table).
  */
-export const useMessages = (conversationId?: string) => {
+export const useMessages = (
+  conversationId?: string,
+  options?: { scope?: MessagesScope }
+) => {
+  const scope = options?.scope ?? "contact";
   const queryClient = useQueryClient();
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const reconcileTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const { data: messages, isLoading } = useQuery({
-    queryKey: ["messages", conversationId],
+  // Janela do histórico anterior, em TICKETS (não em mensagens): cresce quando
+  // o usuário chega ao topo da conversa.
+  const [historyLimit, setHistoryLimit] = useState(HISTORY_TICKETS_PAGE);
+  const [hasMoreHistory, setHasMoreHistory] = useState(false);
+
+  useEffect(() => {
+    setHistoryLimit(HISTORY_TICKETS_PAGE);
+    setHasMoreHistory(false);
+  }, [conversationId, scope]);
+
+  const { data: messages, isLoading, isFetching } = useQuery({
+    queryKey: ["messages", conversationId, scope, historyLimit],
     queryFn: async () => {
       if (!conversationId) return [];
 
@@ -60,7 +89,9 @@ export const useMessages = (conversationId?: string) => {
       const [convRes, msgsRes] = await Promise.all([
         supabase
           .from("conversations")
-          .select("status, messages_history, contact_id, created_at, contact:contacts(push_name)")
+          .select(
+            "status, messages_history, contact_id, group_id, instance_id, instagram_instance_id, created_at, contact:contacts(push_name)"
+          )
           .eq("id", conversationId)
           .single(),
         supabase
@@ -108,12 +139,15 @@ export const useMessages = (conversationId?: string) => {
       };
 
       // 2. History from PREVIOUS resolved conversations of the same contact
-      //    (archived in conversations.messages_history JSON) — shown before the
-      //    current conversation so the inbox keeps full context per contact.
+      //    NA MESMA CONEXÃO (user rule: cada instância é um workflow separado —
+      //    se o cliente tem 3 tickets na instância A e 5 na B, abrir um ticket
+      //    da A mostra só o histórico da A). Arquivado em messages_history.
+      //    Carrega HISTORY_TICKETS_PAGE tickets por vez; o chat pede mais
+      //    conforme o usuário sobe a rolagem. Recorte ("ticket") não junta nada.
       let previousHistory: Message[] = [];
       let hasPrevHistory = false;
-      if (conversation.contact_id) {
-        const { data: prevConvs } = await supabase
+      if (scope === "contact" && conversation.contact_id && !conversation.group_id) {
+        let prevQuery = supabase
           .from("conversations")
           .select("id, messages_history, created_at")
           .eq("contact_id", conversation.contact_id)
@@ -121,15 +155,33 @@ export const useMessages = (conversationId?: string) => {
           .neq("id", conversationId)
           .lt("created_at", conversation.created_at)
           .order("created_at", { ascending: false })
-          .limit(10); // bound payload: last 10 resolved conversations
+          // +1 = sonda "tem mais?" sem uma segunda query de count
+          .limit(historyLimit + 1);
 
-        const ordered = (prevConvs || []).reverse(); // chronological (oldest first)
+        if (conversation.instance_id) {
+          prevQuery = prevQuery.eq("instance_id", conversation.instance_id);
+        } else if (conversation.instagram_instance_id) {
+          prevQuery = prevQuery.eq("instagram_instance_id", conversation.instagram_instance_id);
+        } else {
+          prevQuery = prevQuery.is("instance_id", null).is("instagram_instance_id", null);
+        }
+
+        const { data: prevConvs, error: prevError } = await prevQuery;
+        if (prevError) throw prevError;
+
+        const rows = prevConvs || [];
+        const more = rows.length > historyLimit;
+        setHasMoreHistory(more);
+
+        const ordered = (more ? rows.slice(0, historyLimit) : rows).reverse(); // chronological
         hasPrevHistory = ordered.length > 0;
         previousHistory = ordered.flatMap((c) => {
           const msgs = mapHistory(c.messages_history, c.id);
           // Divider "Conversa iniciada..." antes de cada conversa arquivada
           return [makeConvStart(c.id, c.created_at, msgs[0]), ...msgs];
         });
+      } else {
+        setHasMoreHistory(false);
       }
 
       // 3. If resolved, parse this conversation's JSON history.
@@ -158,6 +210,9 @@ export const useMessages = (conversationId?: string) => {
     // PERF: reabrir a mesma conversa em <30s usa o cache direto (o realtime
     // invalida imediatamente quando chega mensagem nova — sem risco de stale)
     staleTime: 30_000,
+    // Ao pedir mais tickets antigos a queryKey muda: manter a lista atual na
+    // tela evita o chat piscar vazio no meio da rolagem.
+    placeholderData: keepPreviousData,
   });
 
   // Set up realtime subscriptions for new messages.
@@ -201,10 +256,12 @@ export const useMessages = (conversationId?: string) => {
           const row = payload.new ?? payload.old;
           if (row?.conversation_id !== conversationId) return;
 
-          const key = ["messages", conversationId];
+          // Prefixo: a queryKey carrega scope + janela do histórico, então o
+          // patch precisa atingir TODAS as variações em cache dessa conversa.
+          const key = { queryKey: ["messages", conversationId] };
 
           if (payload.eventType === "INSERT" && payload.new) {
-            queryClient.setQueryData<Message[]>(key, (old) => {
+            queryClient.setQueriesData<Message[]>(key, (old) => {
               if (!old) return old; // sem cache = fetch inicial em voo, não tocar
               if (old.some((m) => m.id === payload.new.id)) return old;
               // Race com envio otimista: substitui a entrada _optimistic de
@@ -224,11 +281,11 @@ export const useMessages = (conversationId?: string) => {
               return [...old, payload.new as Message];
             });
           } else if (payload.eventType === "UPDATE" && payload.new) {
-            queryClient.setQueryData<Message[]>(key, (old) =>
+            queryClient.setQueriesData<Message[]>(key, (old) =>
               old?.map((m) => (m.id === payload.new.id ? { ...m, ...payload.new } : m))
             );
           } else if (payload.eventType === "DELETE" && payload.old?.id) {
-            queryClient.setQueryData<Message[]>(key, (old) =>
+            queryClient.setQueriesData<Message[]>(key, (old) =>
               old?.filter((m) => m.id !== payload.old.id)
             );
           }
@@ -274,5 +331,10 @@ export const useMessages = (conversationId?: string) => {
   return {
     messages: messages || [],
     isLoading,
+    /** Existem tickets anteriores além dos já carregados. */
+    hasMoreHistory,
+    /** Traz o próximo lote de tickets anteriores (rolagem até o topo). */
+    loadMoreHistory: () => setHistoryLimit((prev) => prev + HISTORY_TICKETS_PAGE),
+    isLoadingMoreHistory: isFetching && !isLoading,
   };
 };

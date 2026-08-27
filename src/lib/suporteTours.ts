@@ -53,6 +53,12 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
             description:
                 "Passe o mouse para expandir: dados do cliente, etapa do CRM, negociação rápida, resumo da IA e atalhos de venda/agendamento.",
         },
+        {
+            element: '[data-tour="inbox-sidebar"]',
+            title: "Tickets anteriores",
+            description:
+                "Na seção Tickets anteriores ficam, em cartões, todos os atendimentos já encerrados deste cliente NESTA conexão — com número do ticket, quem encerrou e as datas. Clique num cartão para ver aquele trecho isolado (somente leitura) e use Retornar para a conversa geral para voltar.",
+        },
     ],
     "inbox-filtros": [
         {

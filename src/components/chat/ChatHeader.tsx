@@ -150,14 +150,18 @@ export const ChatHeader = ({
                             dataTour="chat-transfer"
                         />
 
-                        {/* Atender / Ticket Aberto */}
-                        <ExpandButton
-                            icon={<CheckCircle className="w-4 h-4" />}
-                            label={isOpen ? "Ticket Aberto" : "Atender Ticket"}
-                            onClick={() => updateStatus.mutate({ conversationId, status: "open" })}
-                            disabled={isOpen || updateStatus.isPending}
-                            className={isOpen ? "opacity-50 cursor-not-allowed" : ""}
-                        />
+                        {/* Atender / Ticket Aberto — ticket resolvido não reabre por
+                            aqui (user rule): o histórico é só leitura, para falar com
+                            o cliente usa-se "Reabrir conversa" (nova mensagem) */}
+                        {!isResolved && (
+                            <ExpandButton
+                                icon={<CheckCircle className="w-4 h-4" />}
+                                label={isOpen ? "Ticket Aberto" : "Atender Ticket"}
+                                onClick={() => updateStatus.mutate({ conversationId, status: "open" })}
+                                disabled={isOpen || updateStatus.isPending}
+                                className={isOpen ? "opacity-50 cursor-not-allowed" : ""}
+                            />
+                        )}
 
                         {/* Resolver Ticket */}
                         <ExpandButton

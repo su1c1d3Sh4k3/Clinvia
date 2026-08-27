@@ -46,6 +46,11 @@ interface MessageListProps {
     monitorTriggerColors?: Record<string, string>;
     /** Monitoramento de Grupo: últimos 8 dígitos do telefone do lead → cor (borda na foto) */
     monitorLeadColors?: Record<string, string>;
+    /** Há tickets anteriores (mesma conexão) ainda não carregados */
+    hasMoreHistory?: boolean;
+    /** Traz o próximo lote de tickets anteriores quando a rolagem chega ao topo */
+    onLoadMoreHistory?: () => void;
+    isLoadingMoreHistory?: boolean;
 }
 
 // memo: o input do ChatArea é controlado (state `message`) — cada tecla
@@ -76,7 +81,10 @@ export const MessageList = memo(({
     hideEditDelete = false,
     onEditNote,
     monitorTriggerColors,
-    monitorLeadColors
+    monitorLeadColors,
+    hasMoreHistory = false,
+    onLoadMoreHistory,
+    isLoadingMoreHistory = false
 }: MessageListProps) => {
 
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -118,6 +126,10 @@ export const MessageList = memo(({
     const loadingMoreRef = useRef(false);
     // Scroll position at the moment load-more fired (for restoration)
     const prevScrollTopRef = useRef(0);
+    // Idem para o carregamento de TICKETS anteriores (assíncrono, vem do
+    // servidor): guarda a âncora até as mensagens novas chegarem
+    const historyRestoreRef = useRef<{ scrollTop: number; scrollHeight: number; len: number } | null>(null);
+    const historyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Handle Infinite Scroll (Load previous messages)
     useEffect(() => {
@@ -141,19 +153,38 @@ export const MessageList = memo(({
             }
 
             // Infinite Load Trigger (near top, with in-flight lock)
-            if (scrollTop < 50 && !loadingMoreRef.current && visibleMessagesCount < messages.length) {
-                loadingMoreRef.current = true;
-                // Save current scroll position to prevent jumping
-                prevScrollTopRef.current = scrollTop;
-                setPrevScrollHeight(container.scrollHeight);
-                // Load more messages
-                setVisibleMessagesCount(prev => Math.min(prev + MESSAGES_PER_PAGE, messages.length));
+            if (scrollTop < 50 && !loadingMoreRef.current) {
+                if (visibleMessagesCount < messages.length) {
+                    loadingMoreRef.current = true;
+                    // Save current scroll position to prevent jumping
+                    prevScrollTopRef.current = scrollTop;
+                    setPrevScrollHeight(container.scrollHeight);
+                    // Load more messages
+                    setVisibleMessagesCount(prev => Math.min(prev + MESSAGES_PER_PAGE, messages.length));
+                } else if (hasMoreHistory && !isLoadingMoreHistory && onLoadMoreHistory) {
+                    // Acabaram as mensagens em memória: buscar o próximo lote de
+                    // tickets anteriores (mesma conexão) no servidor. A âncora de
+                    // rolagem fica no ref até as mensagens chegarem (assíncrono);
+                    // o timer solta a trava se a busca não trouxer nada.
+                    loadingMoreRef.current = true;
+                    historyRestoreRef.current = {
+                        scrollTop,
+                        scrollHeight: container.scrollHeight,
+                        len: messages.length,
+                    };
+                    if (historyTimerRef.current) clearTimeout(historyTimerRef.current);
+                    historyTimerRef.current = setTimeout(() => {
+                        historyRestoreRef.current = null;
+                        loadingMoreRef.current = false;
+                    }, 4000);
+                    onLoadMoreHistory();
+                }
             }
         };
 
         container.addEventListener('scroll', handleScroll);
         return () => container.removeEventListener('scroll', handleScroll);
-    }, [messages.length, visibleMessagesCount, searchTerm, MESSAGES_PER_PAGE, setVisibleMessagesCount]);
+    }, [messages.length, visibleMessagesCount, searchTerm, MESSAGES_PER_PAGE, setVisibleMessagesCount, hasMoreHistory, isLoadingMoreHistory, onLoadMoreHistory]);
 
 
     // Restore scroll position after loading previous messages
@@ -171,6 +202,33 @@ export const MessageList = memo(({
             loadingMoreRef.current = false;
         }
     }, [messagesToDisplay.length, prevScrollHeight]);
+
+    // Restauração após chegarem TICKETS anteriores do servidor: primeiro abre a
+    // janela visível para incluir o que foi prependado, depois reancora o scroll.
+    useLayoutEffect(() => {
+        const container = scrollContainerRef.current;
+        const pending = historyRestoreRef.current;
+        if (!container || !pending) return;
+        if (messages.length <= pending.len) return; // ainda não chegou
+
+        if (visibleMessagesCount < messages.length) {
+            setVisibleMessagesCount(messages.length);
+            return; // reancora no próximo layout, já com o DOM crescido
+        }
+
+        const diff = container.scrollHeight - pending.scrollHeight;
+        if (diff > 0) container.scrollTop = pending.scrollTop + diff;
+        historyRestoreRef.current = null;
+        loadingMoreRef.current = false;
+        if (historyTimerRef.current) {
+            clearTimeout(historyTimerRef.current);
+            historyTimerRef.current = null;
+        }
+    }, [messages.length, visibleMessagesCount, messagesToDisplay.length, setVisibleMessagesCount]);
+
+    useEffect(() => () => {
+        if (historyTimerRef.current) clearTimeout(historyTimerRef.current);
+    }, []);
 
 
     // Helper: Scroll to Bottom
@@ -706,9 +764,19 @@ export const MessageList = memo(({
                     )}
                 >
                     {/* Top Sentinel for Infinite Scroll (if needed more space) */}
-                    {!searchTerm && visibleMessagesCount < messages.length && (
+                    {!searchTerm && (visibleMessagesCount < messages.length || isLoadingMoreHistory) && (
                         <div className="h-8 flex items-center justify-center w-full">
                             <span className="loading loading-spinner loading-xs text-muted-foreground opacity-50"></span>
+                        </div>
+                    )}
+
+                    {/* Fim do histórico daquela conexão */}
+                    {!searchTerm && !hasMoreHistory && !isLoadingMoreHistory
+                        && visibleMessagesCount >= messages.length && messages.length > 0 && (
+                        <div className="flex justify-center py-3 px-4">
+                            <span className="text-[11px] text-muted-foreground/70 select-none">
+                                Início do histórico desta conexão
+                            </span>
                         </div>
                     )}
 
