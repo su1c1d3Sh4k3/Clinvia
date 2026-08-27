@@ -207,7 +207,7 @@ export function CampaignsGuide() {
                     {[
                         { t: "Planilha (CSV/Excel)", d: "Envie um arquivo com telefone + colunas extras (nome, serviço, data...). O sistema encontra o contato pelo telefone e cria os que não existem." },
                         { t: "CRM", d: "Selecione etapas do funil (ex.: todos em \"Sem Contato\") e a campanha pega os contatos dessas colunas." },
-                        { t: "Tags", d: "Todos os contatos que têm determinada etiqueta — inclusive tags de campanhas anteriores." },
+                        { t: "Tags", d: "Todos os contatos que têm determinada etiqueta — inclusive tags de campanhas anteriores (que marcam apenas quem recebeu a mensagem daquela campanha)." },
                         { t: "Agendamentos", d: "Filtre por período, profissional, serviço e status (ex.: quem fez botox há mais de 5 meses)." },
                         { t: "Vendas", d: "Filtre por serviço comprado e período — ideal para recompra e recorrência." },
                     ].map((x) => (
@@ -258,6 +258,10 @@ export function CampaignsGuide() {
                     {
                         title: "Tag automática",
                         description: "1 hora antes do disparo, os contatos da audiência ganham uma etiqueta com o nome da campanha — útil para montar públicos futuros e para o aviso de 7 dias. Cada contato tem no máximo uma tag de campanha por conexão: se ele entra em outra campanha da mesma conexão, a tag antiga sai; quando a campanha encerra, a tag é removida de todos. As campanhas de Recorrência seguem a mesma regra: elas sobrepõem uma campanha de disparo antiga (o contato fica com a tag de recorrência) e podem ser sobrepostas por uma campanha nova criada depois.",
+                    },
+                    {
+                        title: "Quem não recebeu perde a etiqueta",
+                        description: <>A etiqueta entra para todo mundo no T-1h, mas <strong>sai automaticamente</strong> de quem o sistema identificou que não recebeu a mensagem: <strong>Atendimento Em Aberto</strong>, <strong>Rejeitada</strong>, <strong>Inválido</strong> e <strong>Ignorado</strong> — inclusive quando o WhatsApp aceita o envio e recusa depois (filtro de spam). Assim, a etiqueta significa sempre "recebeu a mensagem desta campanha", e não apenas "estava na lista".</>,
                     },
                 ]} />
             </TopicSection>
@@ -376,6 +380,10 @@ export function CampaignsGuide() {
                         {
                             q: "Por que fulano não recebeu a campanha?",
                             a: "Veja a coluna Status na tabela de contatos: \"Atendimento Em Aberto\" = estava conversando com a equipe na hora (a campanha não interrompe atendimentos); \"Inválido\" = telefone em formato errado; \"Ignorado\" = a campanha encerrou antes da vez dele; \"Rejeitada\" = o WhatsApp recusou.",
+                        },
+                        {
+                            q: "Filtrei pela etiqueta da campanha e vieram menos pessoas do que a audiência. Por quê?",
+                            a: "A etiqueta fica só com quem realmente recebeu a mensagem. Todo mundo é etiquetado 1 hora antes do disparo, mas quem acabou como \"Atendimento Em Aberto\", \"Rejeitada\", \"Inválido\" ou \"Ignorado\" perde a etiqueta automaticamente — inclusive quando o WhatsApp aceita o envio e recusa depois. Para ver a audiência completa, use a tabela de contatos da campanha, não o filtro de etiqueta.",
                         },
                         {
                             q: "O que significa \"Movido Para Outra Campanha\"?",
