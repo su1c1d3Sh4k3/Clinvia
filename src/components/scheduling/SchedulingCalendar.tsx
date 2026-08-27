@@ -34,6 +34,9 @@ interface SchedulingCalendarProps {
     /** Profissionais com a agenda fechada nesta data (professional_day_blocks) */
     blockedProfessionalIds?: string[];
     onToggleDayBlock?: (professionalId: string, block: boolean) => void;
+    /** Solo view (controlada pela página): exibe só a agenda desse profissional */
+    soloProfessionalId: string | null;
+    onSoloProfessionalChange: (professionalId: string | null) => void;
 }
 
 const START_HOUR = 8;
@@ -42,7 +45,7 @@ const END_HOUR = 22;
 const HOUR_HEIGHT_DESKTOP = 120;
 const HOUR_HEIGHT_MOBILE = 80;
 
-export function SchedulingCalendar({ date, professionals, appointments, settings, onSlotClick, onEventClick, onStatusChange, onEditProfessional, canCreateAppointment = true, canEditAppointment = true, canEditProfessional = true, blockedProfessionalIds = [], onToggleDayBlock }: SchedulingCalendarProps) {
+export function SchedulingCalendar({ date, professionals, appointments, settings, onSlotClick, onEventClick, onStatusChange, onEditProfessional, canCreateAppointment = true, canEditAppointment = true, canEditProfessional = true, blockedProfessionalIds = [], onToggleDayBlock, soloProfessionalId, onSoloProfessionalChange }: SchedulingCalendarProps) {
     const startHour = settings?.start_hour ?? 8;
     const endHour = settings?.end_hour ?? 22;
     const workDays = settings?.work_days ?? [0, 1, 2, 3, 4, 5, 6];
@@ -76,8 +79,10 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
         }
     };
 
-    // Solo view: clique no nome do profissional exibe apenas a agenda dele
-    const [soloId, setSoloId] = useState<string | null>(null);
+    // Solo view: clique no nome do profissional (ou na lista da barra lateral)
+    // exibe apenas a agenda dele
+    const soloId = soloProfessionalId;
+    const setSoloId = onSoloProfessionalChange;
     const soloProfessional = soloId ? professionals.find((p) => p.id === soloId) : undefined;
 
     // Pagination state for 5+ professionals
@@ -92,10 +97,10 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
             ? professionals.slice(startIndex, startIndex + MAX_VISIBLE)
             : professionals;
 
-    // Reset to first when date changes
+    // Reset to first when date changes (a solo view é mantida: o usuário pode
+    // navegar pelos dias acompanhando o mesmo profissional)
     useEffect(() => {
         setStartIndex(0);
-        setSoloId(null);
     }, [date]);
 
     // Refs for syncing horizontal scroll between header and body on mobile

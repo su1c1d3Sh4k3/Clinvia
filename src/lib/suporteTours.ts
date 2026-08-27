@@ -251,7 +251,7 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
             element: '[data-tour="agenda-sidebar"]',
             title: "Barra lateral",
             description:
-                "Passe o mouse para expandir: mini-calendário, Adicionar Profissional, Importar Agendamentos, Relatório Diário e filtro por serviço.",
+                "Passe o mouse para expandir: mini-calendário, lista de profissionais (clique num deles para ver só a agenda dele), Adicionar Profissional, Importar Agendamentos, Relatório Diário e filtro por serviço.",
         },
         {
             element: '[data-tour="agenda-criar"]',

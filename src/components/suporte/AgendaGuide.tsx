@@ -83,6 +83,7 @@ export function AgendaGuide() {
                     { title: "Escolha o dia", description: "Use as setas ‹ › no topo, o botão Hoje, ou o mini-calendário na barra lateral (passe o mouse sobre os ícones à esquerda para expandi-la)." },
                     { title: "Leia a grade", description: "Cada coluna é um profissional; a área cinza é fora do horário dele. Passe o mouse sobre um evento para ver o card completo com botões de status." },
                     { title: "Visão solo", description: "Clique no nome do profissional no cabeçalho para ver só a agenda dele; a seta restaura a visão geral." },
+                    { title: "Lista de profissionais", description: "Na barra lateral, logo abaixo do calendário, há um botão para cada profissional: clique e a grade mostra só a agenda dele. O botão Todos volta à visão geral. Ideal para clínicas com muitos profissionais — a escolha continua valendo quando você troca de dia." },
                     { title: "Filtre e busque", description: "Na barra lateral, filtre por categoria/serviço (só aparecem profissionais que executam aquele serviço); no topo, busque cliente agendado no dia." },
                 ]} />
                 <div className="flex flex-wrap gap-2">
@@ -238,7 +239,7 @@ export function AgendaGuide() {
                     {[
                         {
                             q: "Um profissional não aparece na grade. Por quê?",
-                            a: "Duas causas comuns: 1) há um filtro de categoria/serviço ativo na barra lateral e ele não executa aquele serviço; 2) o dia selecionado não está nos dias de trabalho dele. Limpe o filtro e confira o cadastro do profissional.",
+                            a: "Três causas comuns: 1) a grade está na visão solo de outro profissional — clique em Todos na lista da barra lateral; 2) há um filtro de categoria/serviço ativo e ele não executa aquele serviço; 3) o dia selecionado não está nos dias de trabalho dele. Limpe o filtro e confira o cadastro do profissional.",
                         },
                         {
                             q: "A IA ofereceu um horário que eu não queria abrir. Como restringir?",

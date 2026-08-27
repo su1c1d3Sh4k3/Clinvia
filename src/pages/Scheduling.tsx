@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Plus, Filter, ChevronLeft, ChevronRight, Search, Settings, FileText, RefreshCw, Upload, CalendarDays, UserPlus } from "lucide-react";
+import { Plus, Filter, ChevronLeft, ChevronRight, Search, Settings, FileText, RefreshCw, Upload, CalendarDays, UserPlus, Users } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { SchedulingCalendar } from "@/components/scheduling/SchedulingCalendar";
 import { ProfessionalModal } from "@/components/scheduling/ProfessionalModal";
 import { AppointmentModal } from "@/components/scheduling/AppointmentModal";
@@ -39,6 +40,7 @@ export default function Scheduling() {
     const [searchTerm, setSearchTerm] = useState("");
     const [isSidebarOpen, setIsSidebarOpen] = useState(true); // mobile
     const [isSidebarExpanded, setIsSidebarExpanded] = useState(false); // desktop (hover no rail)
+    const [soloProfessionalId, setSoloProfessionalId] = useState<string | null>(null);
     const [isProfessionalModalOpen, setIsProfessionalModalOpen] = useState(false);
     const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false);
     const [isViewModalOpen, setIsViewModalOpen] = useState(false);
@@ -306,6 +308,13 @@ export default function Scheduling() {
         return professionals.filter(p => profIds.has(p.id));
     }, [professionals, serviceClients, selectedCategoryId, selectedServiceNameId]);
 
+    // Filtro de serviço pode tirar da lista o profissional em exibição solo
+    useEffect(() => {
+        if (soloProfessionalId && !filteredProfessionals.some((p: any) => p.id === soloProfessionalId)) {
+            setSoloProfessionalId(null);
+        }
+    }, [filteredProfessionals, soloProfessionalId]);
+
     const handleSlotClick = (professionalId: string, slotDate: Date) => {
         setSelectedSlot({ professionalId, date: slotDate });
         setAppointmentToEdit(null);
@@ -516,6 +525,11 @@ export default function Scheduling() {
                         <Button variant="ghost" size="icon" title="Calendário" onClick={() => setIsSidebarExpanded(true)}>
                             <CalendarDays className="h-5 w-5" />
                         </Button>
+                        {filteredProfessionals.length > 1 && (
+                            <Button variant="ghost" size="icon" title="Profissionais" onClick={() => setIsSidebarExpanded(true)}>
+                                <Users className="h-5 w-5" />
+                            </Button>
+                        )}
                         {canCreate('professionals') && (
                             <Button variant="ghost" size="icon" title="Adicionar Profissional" onClick={() => {
                                 setProfessionalToEdit(null);
@@ -566,6 +580,43 @@ export default function Scheduling() {
                                 />
                             </CardContent>
                         </Card>
+
+                        {/* Atalho por profissional: exibe só a agenda do escolhido */}
+                        {filteredProfessionals.length > 1 && (
+                            <Card className="w-full">
+                                <CardHeader className="pb-3">
+                                    <CardTitle className="text-sm font-medium flex items-center">
+                                        <Users className="w-4 h-4 mr-2" />
+                                        Profissionais
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-1.5 px-4 pb-4 pt-0">
+                                    <Button
+                                        variant={soloProfessionalId ? "outline" : "default"}
+                                        className="w-full justify-start"
+                                        onClick={() => setSoloProfessionalId(null)}
+                                    >
+                                        <Users className="w-4 h-4 mr-2 shrink-0" />
+                                        Todos
+                                    </Button>
+                                    {filteredProfessionals.map((p: any) => (
+                                        <Button
+                                            key={p.id}
+                                            variant={soloProfessionalId === p.id ? "default" : "outline"}
+                                            className="w-full justify-start"
+                                            title={`Ver apenas a agenda de ${p.name}`}
+                                            onClick={() => setSoloProfessionalId(p.id)}
+                                        >
+                                            <Avatar className="w-5 h-5 mr-2 shrink-0">
+                                                <AvatarImage src={p.photo_url} />
+                                                <AvatarFallback className="text-[10px]">{p.name[0]}</AvatarFallback>
+                                            </Avatar>
+                                            <span className="truncate">{p.name}</span>
+                                        </Button>
+                                    ))}
+                                </CardContent>
+                            </Card>
+                        )}
 
                         {canCreate('professionals') && (
                             <Button onClick={() => {
@@ -691,6 +742,8 @@ export default function Scheduling() {
                         canEditProfessional={canEdit('professionals')}
                         blockedProfessionalIds={blockedProfessionalIds}
                         onToggleDayBlock={canCreate('appointments') ? handleToggleDayBlock : undefined}
+                        soloProfessionalId={soloProfessionalId}
+                        onSoloProfessionalChange={setSoloProfessionalId}
                     />
                 )}
             </div>
