@@ -184,20 +184,24 @@ export function SchedulingMonthView({
 
                                 <div className="flex flex-col gap-0.5 min-w-0">
                                     {list.slice(0, MAX_VISIBLE).map((apt) => (
-                                        <span
+                                        // Nome e horário são prioridade: só o serviço no meio encolhe/trunca
+                                        <div
                                             key={apt.id}
                                             className={cn(
-                                                "text-[10px] md:text-[11px] leading-tight truncate rounded px-1 py-0.5",
+                                                "flex items-center gap-1 text-[10px] md:text-[11px] leading-tight rounded px-1 py-0.5 min-w-0",
                                                 ["canceled", "no-show"].includes(apt.status)
                                                     ? "bg-muted text-muted-foreground line-through"
                                                     : "bg-primary/10 text-foreground"
                                             )}
                                         >
-                                            {firstName(apt)}
-                                            {serviceName(apt) && ` - ${serviceName(apt)}`}
-                                            {" - "}
-                                            {format(new Date(apt.start_time), "HH:mm")}
-                                        </span>
+                                            <span className="shrink-0">{firstName(apt)}</span>
+                                            {serviceName(apt) && (
+                                                <span className="flex-1 min-w-0 truncate">- {serviceName(apt)}</span>
+                                            )}
+                                            <span className="shrink-0 ml-auto">
+                                                - {format(new Date(apt.start_time), "HH:mm")}
+                                            </span>
+                                        </div>
                                     ))}
                                     {overflow > 0 && (
                                         <button
