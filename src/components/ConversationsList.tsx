@@ -210,22 +210,36 @@ export const ConversationsList = ({
     return () => clearTimeout(t);
   }, [searchQuery]);
 
+  // Filtros avançados: vão para o BANCO (user rule) — antes eram aplicados só
+  // sobre a página já carregada, então "filtrava de 100 em 100"
+  const conversationFilters = useMemo(
+    () => ({
+      queueIds: selectedQueueFilter,
+      tagIds: selectedTagFilter,
+      instanceIds: selectedInstanceFilter,
+      agentIds: selectedAgentFilter,
+      unansweredOnly,
+    }),
+    [selectedQueueFilter, selectedTagFilter, selectedInstanceFilter, selectedAgentFilter, unansweredOnly]
+  );
+
   // Scroll paginado: começa com 1 página; "Carregar mais" soma outra
   const [visibleCount, setVisibleCount] = useState(CONVERSATIONS_PAGE_SIZE);
   useEffect(() => {
     setVisibleCount(CONVERSATIONS_PAGE_SIZE);
-  }, [tab, selectedChannelFilter, selectedTypeFilter]);
+  }, [tab, selectedChannelFilter, selectedTypeFilter, conversationFilters]);
 
   // Passar role e teamMemberId para filtrar por agente
-  const { conversations, isLoading, isFetching, isSearching, hasMore } = useConversations({
+  const { conversations, isLoading, isFetching, isSearching, hasFilters, total, hasMore } = useConversations({
     tab: selectedTypeFilter === "groups" ? "all" : tab,
     userId: user?.id,
     role: userRole,
     teamMemberId: currentTeamMember?.id,
     channel: selectedChannelFilter,
-    onlyGroups: selectedTypeFilter === "groups",
+    groupScope: selectedTypeFilter === "groups" ? "only" : "exclude",
     search: debouncedSearch,
     limit: visibleCount,
+    filters: conversationFilters,
   });
 
   // Buscar lista de membros da equipe para exibir nome do atendente atribuído
@@ -358,39 +372,9 @@ export const ConversationsList = ({
     return acc;
   }, [unreadRows, selectedChannelFilter, selectedQueueFilter, selectedInstanceFilter, selectedAgentFilter, selectedTagFilter]);
 
-  const filteredConversations = conversations.filter((conv) => {
-    const contact = conv.contacts;
-    const isGroup = !!(conv as any).group_id;
-
-    const matchesQueue = selectedQueueFilter.length > 0
-      ? selectedQueueFilter.includes((conv as any).queue_id || "")
-      : true;
-
-    const matchesTag = selectedTagFilter.length > 0
-      ? contact?.contact_tags?.some((ct: any) => selectedTagFilter.includes(ct.tags.id))
-      : true;
-
-    const matchesInstance = selectedInstanceFilter.length > 0
-      ? selectedInstanceFilter.includes((conv as any).instance_id || "")
-      : true;
-
-    const matchesAgent = selectedAgentFilter.length > 0
-      ? (selectedAgentFilter.includes("unassigned") && !(conv as any).assigned_agent_id) ||
-        (!!(conv as any).assigned_agent_id && selectedAgentFilter.includes((conv as any).assigned_agent_id))
-      : true;
-
-    // Filter by People vs Groups
-    const matchesType = selectedTypeFilter === "groups" ? isGroup : !isGroup;
-
-    // Filtro "Não respondidas": espelha a bolinha laranja do card — última
-    // mensagem existe e não é outbound nem de sistema (cliente aguardando resposta)
-    const lastMsgObj = (conv as any).last_message_obj;
-    const matchesUnanswered = unansweredOnly
-      ? !!lastMsgObj && lastMsgObj.direction !== "outbound" && lastMsgObj.direction !== "system"
-      : true;
-
-    return matchesQueue && matchesTag && matchesInstance && matchesAgent && matchesType && matchesUnanswered;
-  });
+  // Fila, etiqueta, instância, responsável, "não respondidas" e Pessoas/Grupos
+  // são resolvidos no banco (useConversations) — a lista aqui já vem filtrada.
+  const filteredConversations = conversations;
 
   // A busca varre o banco inteiro, mas dentro da aba/filtro atual.
   const searchScopeLabel = selectedTypeFilter === "groups"
@@ -691,11 +675,19 @@ export const ConversationsList = ({
         </div>
       </div>
 
-      {isSearching && (
+      {/* Barra de resultados: vale para busca E para filtro ativo. O número é o
+          TOTAL do banco (count exato), não o tamanho da página carregada. */}
+      {(isSearching || hasFilters) && (
         <div className="px-3 py-1.5 text-[11px] text-muted-foreground bg-muted/40 border-b border-border">
           {isFetching && filteredConversations.length === 0
-            ? `Buscando em todos os tickets ${searchScopeLabel}...`
-            : `${filteredConversations.length} resultado${filteredConversations.length === 1 ? "" : "s"} em todos os tickets ${searchScopeLabel}`}
+            ? `${isSearching ? "Buscando" : "Filtrando"} em todos os tickets ${searchScopeLabel}...`
+            : (() => {
+                const n = total ?? filteredConversations.length;
+                const carregadas = filteredConversations.length < n
+                  ? ` · ${filteredConversations.length} na tela`
+                  : "";
+                return `${n} resultado${n === 1 ? "" : "s"} em todos os tickets ${searchScopeLabel}${carregadas}`;
+              })()}
         </div>
       )}
 
@@ -738,6 +730,9 @@ export const ConversationsList = ({
               const lastMsg = (conversation as any).last_message_obj;
               const isOutbound = lastMsg?.direction === 'outbound';
               const isSystem = lastMsg?.direction === 'system';
+              // Aguardando resposta: última mensagem é do cliente (mesma regra
+              // da bolinha laranja e do filtro "Não respondidas")
+              const isAwaitingReply = !!lastMsg && !isOutbound && !isSystem;
               // Instagram only: bolinha vermelha quando janela de 24h expirou
               const isInstagramWindowExpired =
                 (conversation as any).channel === 'instagram' &&
@@ -788,7 +783,10 @@ export const ConversationsList = ({
                     "block w-full max-w-[340px] mx-auto overflow-hidden p-2.5 rounded-xl border bg-white dark:bg-card text-left transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 group relative animate-stagger-in",
                     selectedId === conversation.id
                       ? "conversation-card-selected border-primary/40 z-10"
-                      : "border-[#1E2229]/20 dark:border-border/50 hover:border-primary/20"
+                      : "border-[#1E2229]/20 dark:border-border/50 hover:border-primary/20",
+                    // Barra lateral laranja = aguardando resposta (mesmo esquema
+                    // da urgência no card do CRM)
+                    isAwaitingReply && "border-l-4 border-l-orange-500"
                   )}
                   style={{ animationDelay: `${index * 45}ms` }}
                 >

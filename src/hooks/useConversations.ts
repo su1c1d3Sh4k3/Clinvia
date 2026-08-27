@@ -69,22 +69,42 @@ const buildSearchConditions = async (term: string): Promise<string[]> => {
   return conds;
 };
 
+/**
+ * Filtros avançados da lista. USER RULE: filtro consulta o BANCO INTEIRO —
+ * aplicar client-side sobre a página já carregada escondia tickets reais e
+ * fazia o total mentir ("só filtra de 100 em 100").
+ */
+export interface ConversationFilters {
+  queueIds?: string[];
+  tagIds?: string[];
+  instanceIds?: string[];
+  /** Pode conter o valor especial "unassigned" (conversa sem responsável). */
+  agentIds?: string[];
+  /** Só conversas em que a última mensagem é do cliente (bolinha laranja). */
+  unansweredOnly?: boolean;
+}
+
 interface UseConversationsOptions {
   tab?: TabFilter;
   userId?: string;
   role?: string;
   teamMemberId?: string;
   channel?: 'whatsapp' | 'instagram';
-  /** true = só conversas de grupo (filtro server-side — sem ele, tenants com
-   * alto volume estouram o cap de 1000 linhas do PostgREST e os grupos, com
-   * last_message_at mais antigo, ficam fora do corte). */
-  onlyGroups?: boolean;
+  /** Escopo de grupos, server-side. "only" = aba Grupos, "exclude" = abas de
+   * pessoas. Sem isso, tenants com alto volume estouram o cap de 1000 linhas do
+   * PostgREST e os grupos (last_message_at antigo) ficam fora do corte — e nas
+   * abas de pessoas os grupos ocupavam vagas da página só para serem
+   * descartados no browser. */
+  groupScope?: 'only' | 'exclude' | 'all';
   /** Termo de busca. Com 2+ caracteres a query passa a ser uma BUSCA GLOBAL:
    * varre o banco inteiro ignorando aba de status e Pessoas/Grupos. */
   search?: string;
   /** Quantas conversas carregar no scroll (sem busca). Default = 1 página. */
   limit?: number;
+  filters?: ConversationFilters;
 }
+
+const sortedIds = (ids?: string[]) => [...(ids ?? [])].filter(Boolean).sort();
 
 export const useConversations = (options: UseConversationsOptions = {}) => {
   const {
@@ -93,15 +113,30 @@ export const useConversations = (options: UseConversationsOptions = {}) => {
     role,
     teamMemberId,
     channel,
-    onlyGroups,
+    groupScope = "all",
     search,
     limit = CONVERSATIONS_PAGE_SIZE,
+    filters,
   } = options;
   const queryClient = useQueryClient();
   const isTyping = useIsTyping();
   const isTypingRef = useRef(isTyping);
   // Há mais conversas além das carregadas? (habilita o botão "Carregar mais")
   const [hasMore, setHasMore] = useState(false);
+  // Total de ocorrências no banco (não só na página) — barra de resultados
+  const [total, setTotal] = useState<number | null>(null);
+
+  const queueIds = sortedIds(filters?.queueIds);
+  const tagIds = sortedIds(filters?.tagIds);
+  const instanceIds = sortedIds(filters?.instanceIds);
+  const agentIds = sortedIds(filters?.agentIds);
+  const unansweredOnly = !!filters?.unansweredOnly;
+  const hasFilters =
+    queueIds.length > 0 || tagIds.length > 0 || instanceIds.length > 0 ||
+    agentIds.length > 0 || unansweredOnly;
+  const filterKey = hasFilters
+    ? JSON.stringify([queueIds, tagIds, instanceIds, agentIds, unansweredOnly])
+    : "";
 
   // Keep ref updated so subscription callbacks have latest value
   useEffect(() => {
@@ -115,10 +150,20 @@ export const useConversations = (options: UseConversationsOptions = {}) => {
     // ATENÇÃO: rowMatchesKey/patchLists leem esta chave por POSIÇÃO — chaves
     // novas só podem ser acrescentadas NO FIM.
     queryKey: [
-      "conversations", tab, userId, role, teamMemberId, channel, onlyGroups ?? false,
-      isSearch ? term : "", isSearch ? 0 : limit,
+      "conversations", tab, userId, role, teamMemberId, channel, groupScope,
+      isSearch ? term : "", isSearch ? 0 : limit, filterKey,
     ],
     queryFn: async () => {
+      // Etiquetas moram em contact_tags (não é coluna de conversations): o
+      // embed extra com !inner filtra as conversas no servidor, e o alias
+      // preserva o contact_tags completo que a lista usa para desenhar os
+      // ícones de etiqueta.
+      const contactSelect = tagIds.length > 0
+        ? "contacts!inner ( *, contact_tags ( tags (*) ), ftags:contact_tags!inner (tag_id) )"
+        : "contacts ( *, contact_tags ( tags (*) ) )";
+      // count exato só quando a barra de resultados vai aparecer (busca ou
+      // filtro) — contar em toda abertura de aba seria custo puro.
+      const wantsCount = isSearch || hasFilters;
       // PERF: select explícito SEM messages_history (72% do payload do tenant
       // de maior volume — ~9MB de JSON arquivado baixado só pra montar a lista).
       // Para conversas resolvidas, só o ÚLTIMO item do histórico é necessário
@@ -133,38 +178,59 @@ export const useConversations = (options: UseConversationsOptions = {}) => {
           follow_up_notified_at, channel, instagram_instance_id, nps_sent_at,
           first_response_at, first_response_by_ai, first_response_duration_seconds,
           is_ai_handled, is_outside_business_hours, last_customer_message_at,
-          instagram_window_expired, resolved_at,
+          instagram_window_expired, resolved_at, awaiting_reply,
           last_hist:messages_history->-1,
-          contacts (
-            *,
-            contact_tags (
-              tags (*)
-            )
-          ),
+          ${contactSelect},
           groups (*),
           queues (
             name
           )
-        `)
+        `, wantsCount ? { count: "exact" } : undefined)
         // nullsFirst: false é obrigatório com paginação — no DESC o Postgres
         // põe NULL primeiro e as conversas sem mensagem ocupariam a 1ª página.
         .order("last_message_at", { ascending: false, nullsFirst: false });
 
       // PERF: filtro de canal server-side (antes baixava tudo e descartava
       // client-side). Conversas antigas têm channel NULL = whatsapp.
-      // Na busca o `.or(...)` é usado pelas condições do termo — WhatsApp
-      // (channel whatsapp OU null) volta a ser filtrado client-side ali, para
-      // não empilhar dois `or=` na mesma query.
+      // Vários `or=` na mesma query são combinados com AND pelo PostgREST
+      // (verificado em produção) — por isso canal, responsável e busca podem
+      // coexistir sem virar filtro client-side.
       if (channel === "instagram") {
         query = query.eq("channel", "instagram");
-      } else if (channel === "whatsapp" && !isSearch) {
+      } else if (channel === "whatsapp") {
         query = query.or("channel.eq.whatsapp,channel.is.null");
       }
 
-      // Aba Grupos: filtro server-side (grupos têm last_message_at antigo e
-      // caíam fora do cap de 1000 linhas do PostgREST em tenants com volume)
-      if (onlyGroups) {
+      // Grupos: server-side (grupos têm last_message_at antigo e caíam fora do
+      // cap de 1000 linhas do PostgREST em tenants com volume)
+      if (groupScope === "only") {
         query = query.not("group_id", "is", null);
+      } else if (groupScope === "exclude") {
+        query = query.is("group_id", null);
+      }
+
+      // Visibilidade do atendente, server-side (era client-side e fazia o total
+      // divergir da lista): grupos são de todos, pendentes ficam disponíveis
+      // para quem quiser pegar, o resto só se for dele.
+      if (role === "agent" && teamMemberId && tab !== "pending") {
+        query = query.or(`group_id.not.is.null,assigned_agent_id.eq.${teamMemberId}`);
+      }
+
+      // Filtros avançados — TODOS no banco (user rule)
+      if (queueIds.length > 0) query = query.in("queue_id", queueIds);
+      if (instanceIds.length > 0) query = query.in("instance_id", instanceIds);
+      if (tagIds.length > 0) query = query.in("contacts.ftags.tag_id", tagIds);
+      if (unansweredOnly) query = query.eq("awaiting_reply", true);
+      if (agentIds.length > 0) {
+        const wantsUnassigned = agentIds.includes("unassigned");
+        const realAgents = agentIds.filter((a) => a !== "unassigned");
+        if (wantsUnassigned && realAgents.length > 0) {
+          query = query.or(`assigned_agent_id.is.null,assigned_agent_id.in.(${realAgents.join(",")})`);
+        } else if (wantsUnassigned) {
+          query = query.is("assigned_agent_id", null);
+        } else {
+          query = query.in("assigned_agent_id", realAgents);
+        }
       }
 
       // Status da aba. USER RULE: vale TAMBÉM na busca — ela varre o banco
@@ -186,6 +252,7 @@ export const useConversations = (options: UseConversationsOptions = {}) => {
         const conds = await buildSearchConditions(term);
         if (conds.length === 0) {
           setHasMore(false);
+          setTotal(0);
           return [];
         }
         query = query.or(conds.join(",")).limit(SEARCH_LIMIT);
@@ -193,34 +260,16 @@ export const useConversations = (options: UseConversationsOptions = {}) => {
         query = query.range(0, limit - 1);
       }
 
-      const { data, error } = await query;
+      const { data, error, count } = await query;
 
       if (error) throw error;
 
-      setHasMore(!isSearch && (data?.length ?? 0) >= limit);
+      setTotal(wantsCount ? (count ?? null) : null);
+      setHasMore(
+        !isSearch && (count != null ? (data?.length ?? 0) < count : (data?.length ?? 0) >= limit)
+      );
 
-      let filteredData = data as Conversation[];
-
-      // Canal na busca (ver comentário acima): WhatsApp = channel whatsapp/null
-      if (isSearch && channel === "whatsapp") {
-        filteredData = filteredData.filter((c) => (c.channel || "whatsapp") !== "instagram");
-      }
-
-      // Para agentes, filtrar apenas conversas atribuídas a eles (quando abertas)
-      // Agentes podem ver: conversas atribuídas a eles OU conversas pendentes
-      if (role === "agent" && teamMemberId) {
-        filteredData = filteredData.filter((conv) => {
-          // Grupos nunca têm atribuição — sempre visíveis a todos (user rule)
-          if (conv.group_id) return true;
-          // Agente pode ver conversas pendentes (para pegar novos tickets)
-          if (conv.status === "pending") return true;
-          // Agente pode ver conversas abertas atribuídas a ele
-          if (conv.status === "open" && conv.assigned_agent_id === teamMemberId) return true;
-          // Agente pode ver conversas resolvidas que foram atribuídas a ele
-          if (conv.status === "resolved" && conv.assigned_agent_id === teamMemberId) return true;
-          return false;
-        });
-      }
+      const filteredData = data as Conversation[];
 
       // ----------------------------------------------------------------------
       // BATCH FETCH das últimas mensagens via RPC dedicada — substitui N+1
@@ -338,14 +387,18 @@ export const useConversations = (options: UseConversationsOptions = {}) => {
       }
     };
 
-    // Lista de resultados de busca: não recebe linhas novas por realtime (o
-    // critério vive no servidor). Só atualiza o que já está nela.
-    const isSearchKey = (key: readonly unknown[]) => !!(key as any[])[7];
+    // Busca e filtros avançados: o critério vive no servidor (etiqueta,
+    // responsável, "não respondidas"...), então essas listas só atualizam o que
+    // já está nelas — nunca recebem linhas novas por realtime. A reconciliação
+    // debounced traz o que faltar.
+    const isServerScopedKey = (key: readonly unknown[]) =>
+      !!(key as any[])[7] || !!(key as any[])[9];
 
     // Espelha os filtros da queryFn: a linha pertence à lista dessa queryKey?
     const rowMatchesKey = (row: any, key: readonly unknown[]) => {
-      const [, kTab, , kRole, kTeamMemberId, kChannel, kOnlyGroups] = key as any[];
-      if (kOnlyGroups && !row.group_id) return false;
+      const [, kTab, , kRole, kTeamMemberId, kChannel, kGroupScope] = key as any[];
+      if (kGroupScope === "only" && !row.group_id) return false;
+      if (kGroupScope === "exclude" && row.group_id) return false;
       const ch = row.channel || "whatsapp";
       if (kChannel && ch !== kChannel) return false;
       if (kTab !== "all" && row.status !== kTab) return false;
@@ -414,8 +467,10 @@ export const useConversations = (options: UseConversationsOptions = {}) => {
           let needsReconcile = false;
           patchLists((list, key) => {
             const idx = list.findIndex((c) => c.id === raw.id);
-            if (isSearchKey(key)) {
+            if (isServerScopedKey(key)) {
               if (idx < 0) return null;
+              // A linha pode ter saído do escopo base (ex.: foi resolvida)
+              if (!rowMatchesKey(scalar, key)) return list.filter((c) => c.id !== raw.id);
               const next = [...list];
               next[idx] = { ...next[idx], ...scalar };
               return sortByLastMessage(next);
@@ -472,6 +527,8 @@ export const useConversations = (options: UseConversationsOptions = {}) => {
             next[idx] = {
               ...next[idx],
               last_message_at: row.created_at,
+              // espelha o trigger update_conversation_on_message
+              awaiting_reply: row.direction === "inbound",
               last_message_obj: {
                 direction: row.direction,
                 body: row.body,
@@ -522,6 +579,9 @@ export const useConversations = (options: UseConversationsOptions = {}) => {
     isLoading,
     isFetching,
     isSearching: isSearch,
+    hasFilters,
+    /** Total de ocorrências no banco (null quando a barra não é exibida). */
+    total,
     hasMore,
   };
 };

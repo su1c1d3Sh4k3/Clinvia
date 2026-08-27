@@ -76,6 +76,13 @@ export function InboxGuide() {
                     <strong>salvo no navegador</strong> — permanece ativo mesmo ao atualizar a página ou sair e voltar;
                     para removê-lo, use o botão <strong>Limpar Filtros</strong> no topo da janela de filtros.
                 </Callout>
+                <Callout type="dica" title="Filtro ativo mostra o total do banco">
+                    Com qualquer filtro ligado (inclusive <strong>Não respondidas</strong>) aparece uma barra logo acima da
+                    lista com o <strong>total de conversas encontradas no banco inteiro</strong>, não só nas que já estão na
+                    tela — o filtro procura em todos os tickets da aba, da mais recente para a mais antiga. A exibição
+                    continua de <strong>100 em 100</strong>: quando o resultado é maior, a barra mostra quantas estão na tela
+                    e o botão <strong>Carregar mais</strong>, no fim da lista, traz as próximas 100.
+                </Callout>
                 <Callout type="dica" title="Busca: procura em TODOS os tickets">
                     O campo <strong>Buscar em todos os tickets</strong> não filtra só o que está na tela — ele consulta o
                     banco inteiro. Digite o nome, o telefone (ou só os últimos dígitos), o nome do grupo ou o número do
@@ -331,7 +338,7 @@ export function InboxGuide() {
                         },
                         {
                             q: "O que significa a bolinha/contador na conversa?",
-                            a: "O contador azul são mensagens não lidas — ao abrir a conversa, ele zera. A bolinha ao lado do nome mostra quem falou por último: laranja = a última mensagem é do cliente (resposta do atendente pendente); verde = a última mensagem foi da equipe. Os balões vermelhos nas abas Abertos/Pendentes/Grupos somam as não lidas e respeitam os Filtros Avançados: com um filtro de fila, tag, conexão ou usuário aplicado, o balão mostra só as não lidas daquele recorte — se os clientes do filtro não têm nada não lido, o balão some.",
+                            a: "O contador azul são mensagens não lidas — ao abrir a conversa, ele zera. A bolinha ao lado do nome mostra quem falou por último: laranja = a última mensagem é do cliente (resposta do atendente pendente); verde = a última mensagem foi da equipe. Toda conversa com a bolinha laranja também ganha uma barra fina laranja na lateral esquerda do cartão (mesmo esquema da urgência no card do CRM), para você bater o olho e ver o que está esperando resposta. Os balões vermelhos nas abas Abertos/Pendentes/Grupos somam as não lidas e respeitam os Filtros Avançados: com um filtro de fila, tag, conexão ou usuário aplicado, o balão mostra só as não lidas daquele recorte — se os clientes do filtro não têm nada não lido, o balão some.",
                         },
                         {
                             q: "Não acho a conversa de um cliente na lista. Sumiu?",
@@ -339,7 +346,7 @@ export function InboxGuide() {
                         },
                         {
                             q: "Como vejo só as conversas que aguardam resposta?",
-                            a: "Use o botão Não respondidas ao lado da busca: a lista passa a mostrar apenas as conversas cuja última mensagem é do cliente (bolinha laranja ao lado do nome). Clique de novo para voltar à lista completa.",
+                            a: "Use o botão Não respondidas ao lado da busca: a lista passa a mostrar apenas as conversas cuja última mensagem é do cliente (bolinha laranja e barra laranja na lateral do cartão). O filtro procura no banco inteiro, não só nas conversas já carregadas — a barra acima da lista mostra o total encontrado e a exibição continua de 100 em 100 (use Carregar mais no fim). Clique de novo para voltar à lista completa.",
                         },
                         {
                             q: "Grupos de WhatsApp têm atendente responsável?",

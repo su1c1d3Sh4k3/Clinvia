@@ -65,7 +65,7 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
             element: '[data-tour="inbox-list"]',
             title: "A lista obedece ao filtro",
             description:
-                "Com filtros ativos, só as conversas que combinam aparecem — ótimo para focar numa fila ou num número específico. Limpe os filtros para voltar a ver tudo.",
+                "Com filtros ativos, só as conversas que combinam aparecem — a busca roda no banco inteiro e uma barra acima da lista mostra o total encontrado. A exibição continua de 100 em 100: use Carregar mais no fim para trazer as próximas. Limpe os filtros para voltar a ver tudo.",
         },
     ],
     "inbox-notas": [
