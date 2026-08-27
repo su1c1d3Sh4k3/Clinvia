@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { format } from "date-fns";
+import { endOfMonth, format, startOfMonth } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useOwnerId } from "@/hooks/useOwnerId";
 
@@ -54,5 +54,60 @@ export function useProfessionalDayBlocks(date: Date | undefined) {
         isLoading: query.isLoading,
         toggleBlock: toggle.mutateAsync,
         isToggling: toggle.isPending,
+    };
+}
+
+/**
+ * Mesma tabela, recorte do MÊS para um profissional — usado pela visão
+ * calendário, onde o cadeado aparece em cada quadrado de dia.
+ */
+export function useProfessionalMonthBlocks(month: Date | undefined, professionalId: string | null) {
+    const { data: ownerId } = useOwnerId();
+    const from = month ? format(startOfMonth(month), "yyyy-MM-dd") : null;
+    const to = month ? format(endOfMonth(month), "yyyy-MM-dd") : null;
+
+    const query = useQuery({
+        queryKey: ["professional-month-blocks", from, professionalId],
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from("professional_day_blocks" as any)
+                .select("block_date")
+                .eq("professional_id", professionalId)
+                .gte("block_date", from)
+                .lte("block_date", to);
+            if (error) throw error;
+            return (data as any[]).map((r) => r.block_date as string);
+        },
+        enabled: !!from && !!professionalId,
+    });
+
+    const queryClient = useQueryClient();
+
+    const toggle = useMutation({
+        mutationFn: async ({ dateStr, block }: { dateStr: string; block: boolean }) => {
+            if (!professionalId) throw new Error("Profissional não selecionado");
+            if (block) {
+                const { error } = await supabase
+                    .from("professional_day_blocks" as any)
+                    .insert({ user_id: ownerId, professional_id: professionalId, block_date: dateStr });
+                if (error) throw error;
+            } else {
+                const { error } = await supabase
+                    .from("professional_day_blocks" as any)
+                    .delete()
+                    .eq("professional_id", professionalId)
+                    .eq("block_date", dateStr);
+                if (error) throw error;
+            }
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["professional-month-blocks"] });
+            queryClient.invalidateQueries({ queryKey: ["professional-day-blocks"] });
+        },
+    });
+
+    return {
+        blockedDates: query.data ?? [],
+        toggleBlock: toggle.mutateAsync,
     };
 }

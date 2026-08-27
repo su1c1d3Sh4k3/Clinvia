@@ -245,7 +245,7 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
         {
             element: '[data-tour="agenda-nav"]',
             title: "Navegação de dias",
-            description: "A agenda mostra um dia por vez. Use as setas ou o botão Hoje para trocar o dia.",
+            description: "A agenda mostra um dia por vez. Use as setas ou o botão Hoje para trocar o dia. O botão de calendário logo ao lado troca para a visão mês (um profissional por vez, com os agendamentos dentro do quadrado de cada dia); o modo escolhido fica salvo no seu usuário.",
         },
         {
             element: '[data-tour="agenda-sidebar"]',

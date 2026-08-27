@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import {
-    Calendar, MousePointerClick, UserCog, Wallet, BellRing, Upload, Link2,
+    Calendar, CalendarDays, MousePointerClick, UserCog, Wallet, BellRing, Upload, Link2,
     KanbanSquare, HelpCircle, ExternalLink, Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import { ConfirmationFlowSimulator, DailyScheduleDemo } from "./simulators-agend
 const TOPICS = [
     { id: "o-que-e", label: "O que é" },
     { id: "calendario", label: "O calendário" },
+    { id: "visao-mes", label: "Visão mês" },
     { id: "criando", label: "Criando agendamento" },
     { id: "horarios", label: "Horários do profissional" },
     { id: "fechar-dia", label: "Fechar a agenda no dia" },
@@ -52,6 +53,7 @@ export function AgendaGuide() {
                     </p>
                     <div className="flex flex-wrap gap-2">
                         <LearnChip topicId="criando">Criar um agendamento em 30s</LearnChip>
+                        <LearnChip topicId="visao-mes">Ver o mês inteiro em calendário</LearnChip>
                         <LearnChip topicId="venda-automatica">Por que todo agendamento vira venda</LearnChip>
                         <LearnChip topicId="confirmacoes">As 3 mensagens automáticas</LearnChip>
                         <LearnChip topicId="status-e-crm">O que cada status dispara</LearnChip>
@@ -95,7 +97,36 @@ export function AgendaGuide() {
             </TopicSection>
 
             {/* 3 */}
-            <TopicSection id="criando" index={3} icon={MousePointerClick} title="Criando um agendamento"
+            <TopicSection id="visao-mes" index={3} icon={CalendarDays} title="Visão mês (calendário)"
+                subtitle="O mês inteiro de um profissional numa tela só">
+                <p className="text-sm text-muted-foreground">
+                    O botão com o ícone de <strong className="text-foreground">calendário</strong>, ao lado das setas de
+                    data, troca a grade do dia por um{" "}
+                    <strong className="text-foreground">calendário do mês</strong>. Cada quadrado é um dia, com os
+                    agendamentos no formato <em>primeiro nome - horário</em>. Para voltar, clique no ícone de grade que
+                    aparece no mesmo lugar.
+                </p>
+                <StepByStep steps={[
+                    { title: "Escolha o profissional", description: "Nesta visão a tela mostra UM profissional por vez: use as abas com as fotos no topo (elas ficam no lugar do campo de busca) para trocar." },
+                    { title: "Navegue por mês", description: "As setas ‹ › passam a andar de mês em mês e o botão Hoje volta para o mês atual." },
+                    { title: "Leia o quadrado do dia", description: "Ao lado do número do dia aparece o gráfico de ocupação daquele dia. Se o dia não tem nenhum agendamento, no lugar do gráfico aparece o cadeado para fechar a agenda." },
+                    { title: "Veja o dia inteiro", description: "Se houver mais agendamentos do que cabe no quadrado, aparece um +N. Clicando no dia (ou no +N) abre a lista completa daquele dia, com os horários livres logo abaixo." },
+                    { title: "Agende pelo horário livre", description: "No modal do dia, cada horário livre é um botão: clicar já abre o modal de agendamento com data, hora e profissional preenchidos. Clicar num agendamento da lista abre o modal dele." },
+                ]} />
+                <Callout type="dica" title="A escolha fica salva no seu usuário">
+                    O modo escolhido é gravado no seu perfil: ele continua valendo quando você troca de página, sai e
+                    entra de novo, ou acessa de outro dispositivo. Cada pessoa da equipe pode usar o modo que preferir —
+                    um na grade, outro no calendário.
+                </Callout>
+                <Callout type="atencao" title="Os horários livres são de 30 em 30 minutos">
+                    O calendário mostra as opções a cada meia hora só para facilitar a escolha. A duração real do
+                    atendimento continua sendo a do procedimento selecionado no modal de agendamento — e as validações de
+                    conflito, intervalo e horário de trabalho continuam valendo.
+                </Callout>
+            </TopicSection>
+
+            {/* 4 */}
+            <TopicSection id="criando" index={4} icon={MousePointerClick} title="Criando um agendamento"
                 subtitle="Clique no horário vago ou no botão Criar Agendamento">
                 <StepByStep steps={[
                     { title: "Abra o modal", description: "Clique direto num horário vago da coluna do profissional (já preenche data/hora/profissional) ou use o botão Criar Agendamento no topo." },
@@ -110,8 +141,8 @@ export function AgendaGuide() {
                 </Callout>
             </TopicSection>
 
-            {/* 4 */}
-            <TopicSection id="horarios" index={4} icon={UserCog} title="Horários do profissional"
+            {/* 5 */}
+            <TopicSection id="horarios" index={5} icon={UserCog} title="Horários do profissional"
                 subtitle="Global ou dia a dia — e vale para IA e link público">
                 <p className="text-sm text-muted-foreground">
                     No cadastro do profissional (barra lateral &gt; Adicionar Profissional, ou lápis no cabeçalho da coluna)
@@ -121,8 +152,8 @@ export function AgendaGuide() {
                 <DailyScheduleDemo />
             </TopicSection>
 
-            {/* 5 */}
-            <TopicSection id="fechar-dia" index={5} icon={Lock} title="Fechar a agenda no dia"
+            {/* 6 */}
+            <TopicSection id="fechar-dia" index={6} icon={Lock} title="Fechar a agenda no dia"
                 subtitle="O cadeado ao lado do nome do profissional">
                 <p className="text-sm text-muted-foreground">
                     Feriado, folga, congresso, atestado: quando o profissional não vai atender em um dia específico,
@@ -141,6 +172,10 @@ export function AgendaGuide() {
                     naquele dia, o cadeado não aparece — o sistema não deixa fechar por cima de cliente marcado. Cancele
                     ou reagende os atendimentos primeiro e o cadeado volta a aparecer.
                 </Callout>
+                <Callout type="dica" title="Na visão mês o cadeado fica no quadrado do dia">
+                    No modo calendário o mesmo cadeado aparece dentro do quadrado de cada dia sem agendamento (no lugar do
+                    gráfico de ocupação) — dá para fechar vários dias de folga do mês seguidos, sem trocar de tela.
+                </Callout>
                 <Callout type="dica" title="Diferente de tirar o dia do horário de trabalho">
                     O cadeado é pontual: fecha <strong className="text-foreground">só aquela data</strong> e não mexe no
                     cadastro. Se a folga é toda semana (ex.: nunca atende às quartas), o certo é desmarcar o dia nos dias
@@ -148,8 +183,8 @@ export function AgendaGuide() {
                 </Callout>
             </TopicSection>
 
-            {/* 6 */}
-            <TopicSection id="venda-automatica" index={6} icon={Wallet} title="Todo agendamento vira venda"
+            {/* 7 */}
+            <TopicSection id="venda-automatica" index={7} icon={Wallet} title="Todo agendamento vira venda"
                 subtitle="A regra financeira mais importante da Agenda">
                 <StepByStep steps={[
                     { title: "Agendou → venda pendente", description: "Ao criar o agendamento, o sistema cria (ou vincula) automaticamente uma venda com pagamento pendente para aquele serviço." },
@@ -162,8 +197,8 @@ export function AgendaGuide() {
                 </Callout>
             </TopicSection>
 
-            {/* 7 */}
-            <TopicSection id="confirmacoes" index={7} icon={BellRing} title="Mensagens automáticas"
+            {/* 8 */}
+            <TopicSection id="confirmacoes" index={8} icon={BellRing} title="Mensagens automáticas"
                 subtitle="Confirmação, lembrete e pesquisa — sem mexer um dedo">
                 <p className="text-sm text-muted-foreground">
                     Todo agendamento ativa três mensagens automáticas no WhatsApp do cliente. Clique em cada etapa:
@@ -175,8 +210,8 @@ export function AgendaGuide() {
                 </Callout>
             </TopicSection>
 
-            {/* 8 */}
-            <TopicSection id="importacao" index={8} icon={Upload} title="Importando agendamentos"
+            {/* 9 */}
+            <TopicSection id="importacao" index={9} icon={Upload} title="Importando agendamentos"
                 subtitle="Migre de outro sistema por planilha">
                 <StepByStep steps={[
                     { title: "Suba a planilha", description: "Barra lateral > Importar Agendamentos. Aceita Excel/CSV com cliente, telefone, serviço, profissional, data e hora." },
@@ -185,8 +220,8 @@ export function AgendaGuide() {
                 ]} />
             </TopicSection>
 
-            {/* 9 */}
-            <TopicSection id="link-publico" index={9} icon={Link2} title="Link público de agendamento"
+            {/* 10 */}
+            <TopicSection id="link-publico" index={10} icon={Link2} title="Link público de agendamento"
                 subtitle="O cliente marca sozinho, sem falar com ninguém">
                 <p className="text-sm text-muted-foreground">
                     O sistema gera um <strong className="text-foreground">link exclusivo por cliente</strong> onde ele mesmo
@@ -206,8 +241,8 @@ export function AgendaGuide() {
                 </Callout>
             </TopicSection>
 
-            {/* 10 */}
-            <TopicSection id="status-e-crm" index={10} icon={KanbanSquare} title="Status do agendamento e CRM"
+            {/* 11 */}
+            <TopicSection id="status-e-crm" index={11} icon={KanbanSquare} title="Status do agendamento e CRM"
                 subtitle="Cada status dispara uma reação em cadeia">
                 <div className="overflow-x-auto rounded-xl border">
                     <table className="w-full min-w-[560px] text-sm">
@@ -233,8 +268,8 @@ export function AgendaGuide() {
                 </Callout>
             </TopicSection>
 
-            {/* 11 */}
-            <TopicSection id="faq" index={11} icon={HelpCircle} title="Perguntas frequentes">
+            {/* 12 */}
+            <TopicSection id="faq" index={12} icon={HelpCircle} title="Perguntas frequentes">
                 <Accordion type="single" collapsible className="rounded-xl border px-4">
                     {[
                         {

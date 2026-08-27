@@ -6,15 +6,17 @@ import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Plus, Filter, ChevronLeft, ChevronRight, Search, Settings, FileText, RefreshCw, Upload, CalendarDays, UserPlus, Users } from "lucide-react";
+import { Plus, Filter, ChevronLeft, ChevronRight, Search, Settings, FileText, RefreshCw, Upload, CalendarDays, UserPlus, Users, LayoutGrid } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { SchedulingCalendar } from "@/components/scheduling/SchedulingCalendar";
+import { SchedulingMonthView } from "@/components/scheduling/SchedulingMonthView";
+import { DayAppointmentsModal } from "@/components/scheduling/DayAppointmentsModal";
 import { ProfessionalModal } from "@/components/scheduling/ProfessionalModal";
 import { AppointmentModal } from "@/components/scheduling/AppointmentModal";
 import { ViewAppointmentModal } from "@/components/scheduling/ViewAppointmentModal";
 import { SchedulingSettingsModal } from "@/components/scheduling/SchedulingSettingsModal";
 import { AppointmentImportWizard } from "@/components/scheduling/AppointmentImportWizard";
-import { format, addDays, subDays, isSameDay } from "date-fns";
+import { format, addDays, subDays, isSameDay, addMonths, subMonths, startOfMonth, endOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -22,7 +24,8 @@ import { generateDailyReport } from "@/utils/generateDailyReport";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useCrmAppointmentSync } from "@/hooks/useCrmAppointmentSync";
-import { useProfessionalDayBlocks } from "@/hooks/useProfessionalDayBlocks";
+import { useProfessionalDayBlocks, useProfessionalMonthBlocks } from "@/hooks/useProfessionalDayBlocks";
+import { useAgendaView } from "@/hooks/useAgendaView";
 import { useSuporteTour } from "@/lib/suporteTours";
 
 export default function Scheduling() {
@@ -41,6 +44,11 @@ export default function Scheduling() {
     const [isSidebarOpen, setIsSidebarOpen] = useState(true); // mobile
     const [isSidebarExpanded, setIsSidebarExpanded] = useState(false); // desktop (hover no rail)
     const [soloProfessionalId, setSoloProfessionalId] = useState<string | null>(null);
+    // Visão calendário (mês): profissional exibido nas abas + dia aberto no modal
+    const { view: agendaView, setView: setAgendaView } = useAgendaView();
+    const isMonthView = agendaView === "calendario";
+    const [monthProfessionalId, setMonthProfessionalId] = useState<string | null>(null);
+    const [dayModalDate, setDayModalDate] = useState<Date | null>(null);
     const [isProfessionalModalOpen, setIsProfessionalModalOpen] = useState(false);
     const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false);
     const [isViewModalOpen, setIsViewModalOpen] = useState(false);
@@ -117,6 +125,8 @@ export default function Scheduling() {
 
     const handlePreviousDay = () => date && setDate(subDays(date, 1));
     const handleNextDay = () => date && setDate(addDays(date, 1));
+    const handlePreviousMonth = () => date && setDate(subMonths(date, 1));
+    const handleNextMonth = () => date && setDate(addMonths(date, 1));
     const handleToday = () => setDate(new Date());
 
     // ── Novo sistema de serviços: categorias + service_name + services_client ──
@@ -180,8 +190,40 @@ export default function Scheduling() {
         enabled: !!date,
     });
 
+    // Visão calendário: agendamentos do mês inteiro (pagina o cap de 1000 do PostgREST)
+    const monthKey = date ? format(startOfMonth(date), "yyyy-MM") : null;
+    const { data: monthAppointments } = useQuery({
+        queryKey: ["appointments", "month", monthKey],
+        queryFn: async () => {
+            if (!date) return [];
+            const start = startOfMonth(date);
+            start.setHours(0, 0, 0, 0);
+            const end = endOfMonth(date);
+            end.setHours(23, 59, 59, 999);
+
+            const PAGE = 1000;
+            const rows: any[] = [];
+            for (let page = 0; page < 20; page++) {
+                const { data, error } = await supabase
+                    .from("appointments")
+                    .select(`*, contacts (push_name, number)`)
+                    .gte("start_time", start.toISOString())
+                    .lte("start_time", end.toISOString())
+                    .order("start_time", { ascending: true })
+                    .range(page * PAGE, page * PAGE + PAGE - 1);
+                if (error) throw error;
+                rows.push(...(data || []));
+                if (!data || data.length < PAGE) break;
+            }
+            return rows;
+        },
+        enabled: !!date && isMonthView,
+    });
+
     // Agenda fechada por profissional neste dia (cadeado no cabeçalho da agenda)
     const { blockedIds: blockedProfessionalIds, toggleBlock } = useProfessionalDayBlocks(date);
+    const { blockedDates: monthBlockedDates, toggleBlock: toggleMonthBlock } =
+        useProfessionalMonthBlocks(isMonthView ? date : undefined, monthProfessionalId);
 
     const handleToggleDayBlock = async (professionalId: string, block: boolean) => {
         try {
@@ -206,6 +248,42 @@ export default function Scheduling() {
                 }
             }
             await toggleBlock({ professionalId, block });
+            toast({
+                title: block ? "Agenda fechada" : "Agenda liberada",
+                description: block
+                    ? "Nenhum horário será oferecido para este profissional nesta data."
+                    : "O profissional voltou a receber agendamentos nesta data.",
+            });
+        } catch (error: any) {
+            toast({ title: "Erro", description: error.message, variant: "destructive" });
+        }
+    };
+
+    // Cadeado dentro do quadrado do dia (visão calendário)
+    const handleToggleMonthDayBlock = async (dateStr: string, block: boolean) => {
+        if (!monthProfessionalId) return;
+        try {
+            if (block) {
+                const [y, m, d] = dateStr.split("-").map(Number);
+                const dayStart = new Date(y, m - 1, d, 0, 0, 0, 0);
+                const dayEnd = new Date(y, m - 1, d, 23, 59, 59, 999);
+                const { count } = await supabase
+                    .from("appointments")
+                    .select("id", { count: "exact", head: true })
+                    .eq("professional_id", monthProfessionalId)
+                    .not("status", "in", "(canceled,no-show)")
+                    .gte("start_time", dayStart.toISOString())
+                    .lte("start_time", dayEnd.toISOString());
+                if ((count ?? 0) > 0) {
+                    toast({
+                        title: "Não é possível fechar a agenda",
+                        description: "Este profissional já tem agendamento neste dia.",
+                        variant: "destructive",
+                    });
+                    return;
+                }
+            }
+            await toggleMonthBlock({ dateStr, block });
             toast({
                 title: block ? "Agenda fechada" : "Agenda liberada",
                 description: block
@@ -315,6 +393,27 @@ export default function Scheduling() {
         }
     }, [filteredProfessionals, soloProfessionalId]);
 
+    // A visão calendário mostra sempre UM profissional — garante uma aba ativa válida
+    useEffect(() => {
+        if (!filteredProfessionals.length) return;
+        if (!monthProfessionalId || !filteredProfessionals.some((p: any) => p.id === monthProfessionalId)) {
+            setMonthProfessionalId(filteredProfessionals[0].id);
+        }
+    }, [filteredProfessionals, monthProfessionalId]);
+
+    const monthProfessional = useMemo(
+        () => filteredProfessionals.find((p: any) => p.id === monthProfessionalId),
+        [filteredProfessionals, monthProfessionalId]
+    );
+
+    const dayModalAppointments = useMemo(() => {
+        if (!dayModalDate || !monthProfessionalId) return [];
+        return (monthAppointments || []).filter((a: any) =>
+            a.professional_id === monthProfessionalId &&
+            a.type !== "absence" &&
+            isSameDay(new Date(a.start_time), dayModalDate));
+    }, [monthAppointments, monthProfessionalId, dayModalDate]);
+
     const handleSlotClick = (professionalId: string, slotDate: Date) => {
         setSelectedSlot({ professionalId, date: slotDate });
         setAppointmentToEdit(null);
@@ -384,8 +483,9 @@ export default function Scheduling() {
                 }
             }
 
-            // Force refetch
+            // Force refetch (dia + visão calendário)
             refetchAppointments();
+            queryClient.invalidateQueries({ queryKey: ["appointments"] });
 
         } catch (error) {
             console.error("Error updating status:", error);
@@ -450,21 +550,34 @@ export default function Scheduling() {
                     </Button>
 
                     <div data-tour="agenda-nav" className="flex items-center border rounded-md bg-white dark:bg-background border-[#D4D5D6] dark:border-border">
-                        <Button variant="ghost" size="icon" onClick={handlePreviousDay} className="h-9 w-9 rounded-none rounded-l-md border-r">
+                        <Button variant="ghost" size="icon" onClick={isMonthView ? handlePreviousMonth : handlePreviousDay} className="h-9 w-9 rounded-none rounded-l-md border-r">
                             <ChevronLeft className="h-4 w-4" />
                         </Button>
                         <div className="px-2 md:px-4 py-2 text-xs md:text-sm font-medium min-w-[100px] md:min-w-[140px] text-center">
                             {date ? (
-                                <div className="flex flex-col leading-none">
-                                    <span className="font-bold">{format(date, "d MMM", { locale: ptBR })}</span>
-                                    <span className="text-[10px] md:text-xs text-muted-foreground capitalize hidden sm:block">{format(date, "EEEE", { locale: ptBR })}</span>
-                                </div>
+                                isMonthView ? (
+                                    <span className="font-bold capitalize">{format(date, "MMMM yyyy", { locale: ptBR })}</span>
+                                ) : (
+                                    <div className="flex flex-col leading-none">
+                                        <span className="font-bold">{format(date, "d MMM", { locale: ptBR })}</span>
+                                        <span className="text-[10px] md:text-xs text-muted-foreground capitalize hidden sm:block">{format(date, "EEEE", { locale: ptBR })}</span>
+                                    </div>
+                                )
                             ) : "Selecione"}
                         </div>
-                        <Button variant="ghost" size="icon" onClick={handleNextDay} className="h-9 w-9 rounded-none rounded-r-md border-l">
+                        <Button variant="ghost" size="icon" onClick={isMonthView ? handleNextMonth : handleNextDay} className="h-9 w-9 rounded-none rounded-r-md border-l">
                             <ChevronRight className="h-4 w-4" />
                         </Button>
                     </div>
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        title={isMonthView ? "Voltar para a grade por profissional" : "Ver o mês em formato calendário"}
+                        onClick={() => setAgendaView(isMonthView ? "grade" : "calendario")}
+                        className="h-9 w-9 md:h-auto md:w-12 md:self-stretch"
+                    >
+                        {isMonthView ? <LayoutGrid className="h-4 w-4" /> : <CalendarDays className="h-4 w-4" />}
+                    </Button>
                     <Button variant="outline" onClick={handleToday} className="h-9 md:h-auto md:self-stretch text-xs md:text-sm px-2 md:px-4 bg-white dark:bg-transparent border border-[#D4D5D6] dark:border-border">
                         Hoje
                     </Button>
@@ -472,17 +585,36 @@ export default function Scheduling() {
                         <Settings className="h-4 w-4" />
                     </Button>
 
-                    <div className="hidden md:block md:w-72 lg:w-96 xl:w-[40rem] self-stretch">
-                        <div className="relative w-full h-full">
-                            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                placeholder="Buscar clientes agendados hoje"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="pl-8 h-full bg-white dark:bg-background border border-[#D4D5D6] dark:border-border"
-                            />
+                    {isMonthView ? (
+                        <div className="w-full md:w-72 lg:w-96 xl:w-[40rem] self-stretch overflow-x-auto flex-nowrap flex items-center gap-1.5">
+                            {filteredProfessionals.map((p: any) => (
+                                <Button
+                                    key={p.id}
+                                    variant={monthProfessionalId === p.id ? "default" : "outline"}
+                                    className="shrink-0 h-9 md:h-auto md:self-stretch text-xs md:text-sm"
+                                    onClick={() => setMonthProfessionalId(p.id)}
+                                >
+                                    <Avatar className="w-5 h-5 mr-2 shrink-0">
+                                        <AvatarImage src={p.photo_url} />
+                                        <AvatarFallback className="text-[10px]">{p.name[0]}</AvatarFallback>
+                                    </Avatar>
+                                    {p.name}
+                                </Button>
+                            ))}
                         </div>
-                    </div>
+                    ) : (
+                        <div className="hidden md:block md:w-72 lg:w-96 xl:w-[40rem] self-stretch">
+                            <div className="relative w-full h-full">
+                                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    placeholder="Buscar clientes agendados hoje"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    className="pl-8 h-full bg-white dark:bg-background border border-[#D4D5D6] dark:border-border"
+                                />
+                            </div>
+                        </div>
+                    )}
 
                     {canCreate('appointments') && (
                         <Button data-tour="agenda-criar" onClick={() => {
@@ -496,8 +628,8 @@ export default function Scheduling() {
                     )}
                 </div>
 
-                {/* Mobile search bar */}
-                <div className="md:hidden">
+                {/* Mobile search bar (na visão calendário as abas de profissional ocupam o lugar) */}
+                <div className={isMonthView ? "hidden" : "md:hidden"}>
                     <div className="relative w-full">
                         <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                         <Input
@@ -525,7 +657,7 @@ export default function Scheduling() {
                         <Button variant="ghost" size="icon" title="Calendário" onClick={() => setIsSidebarExpanded(true)}>
                             <CalendarDays className="h-5 w-5" />
                         </Button>
-                        {filteredProfessionals.length > 1 && (
+                        {!isMonthView && filteredProfessionals.length > 1 && (
                             <Button variant="ghost" size="icon" title="Profissionais" onClick={() => setIsSidebarExpanded(true)}>
                                 <Users className="h-5 w-5" />
                             </Button>
@@ -574,15 +706,19 @@ export default function Scheduling() {
                                 <Calendar
                                     mode="single"
                                     selected={date}
-                                    onSelect={setDate}
+                                    onSelect={(day) => {
+                                        setDate(day);
+                                        // Visão calendário: escolher um dia abre a lista daquele dia
+                                        if (isMonthView && day) setDayModalDate(day);
+                                    }}
                                     locale={ptBR}
                                     className="rounded-md border flex justify-center"
                                 />
                             </CardContent>
                         </Card>
 
-                        {/* Atalho por profissional: exibe só a agenda do escolhido */}
-                        {filteredProfessionals.length > 1 && (
+                        {/* Atalho por profissional: exibe só a agenda do escolhido (visão grade) */}
+                        {!isMonthView && filteredProfessionals.length > 1 && (
                             <Card className="w-full">
                                 <CardHeader className="pb-3">
                                     <CardTitle className="text-sm font-medium flex items-center">
@@ -721,7 +857,18 @@ export default function Scheduling() {
 
             {/* Main Calendar */}
             <div data-tour="agenda-grade" className={`flex-1 flex flex-col overflow-hidden ${isSidebarOpen ? "hidden md:flex" : "flex"}`}>
-                {date && (
+                {date && isMonthView && (
+                    <SchedulingMonthView
+                        date={date}
+                        professional={monthProfessional}
+                        appointments={monthAppointments || []}
+                        settings={settings}
+                        blockedDates={monthBlockedDates}
+                        onToggleDayBlock={canCreate('appointments') ? handleToggleMonthDayBlock : undefined}
+                        onDayClick={(day) => { setDate(day); setDayModalDate(day); }}
+                    />
+                )}
+                {date && !isMonthView && (
                     <SchedulingCalendar
                         date={date}
                         professionals={filteredProfessionals}
@@ -787,6 +934,27 @@ export default function Scheduling() {
                 open={isImportWizardOpen}
                 onOpenChange={setIsImportWizardOpen}
             />
+
+            {dayModalDate && monthProfessional && (
+                <DayAppointmentsModal
+                    open={!!dayModalDate}
+                    onOpenChange={(open) => !open && setDayModalDate(null)}
+                    date={dayModalDate}
+                    professional={monthProfessional}
+                    appointments={dayModalAppointments}
+                    settings={settings}
+                    isClosed={monthBlockedDates.includes(format(dayModalDate, "yyyy-MM-dd"))}
+                    canCreate={canCreate('appointments')}
+                    onSelectAppointment={(apt) => {
+                        setDayModalDate(null);
+                        handleEventClick(apt);
+                    }}
+                    onSelectSlot={(professionalId, slot) => {
+                        setDayModalDate(null);
+                        handleSlotClick(professionalId, slot);
+                    }}
+                />
+            )}
         </div>
     );
 }
