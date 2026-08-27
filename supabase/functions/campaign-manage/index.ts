@@ -133,31 +133,16 @@ async function resolveExistingTemplate(
     return tpl;
 }
 
-async function syncContactTags(
-    supabase: any,
-    ownerId: string,
-    tagId: string | null,
-    addContactIds: string[],
-    removeContactIds: string[]
-) {
-    if (!tagId) return;
-    if (removeContactIds.length > 0) {
-        await supabase
-            .from("contact_tags")
-            .delete()
-            .eq("tag_id", tagId)
-            .in("contact_id", removeContactIds);
-    }
-    if (addContactIds.length > 0) {
-        // user_id OBRIGATÓRIO: rodamos com service role, então o trigger
-        // set_contact_tags_user_id não resolve o dono (auth.uid() é null) —
-        // sem user_id a RLS esconde a tag do front (bug campanha 2026-08-17)
-        const payload = addContactIds.map((id) => ({ contact_id: id, tag_id: tagId, user_id: ownerId }));
-        const { error } = await supabase
-            .from("contact_tags")
-            .upsert(payload, { onConflict: "contact_id,tag_id", ignoreDuplicates: true });
-        if (error) console.warn("[campaign-manage] contact_tags upsert error:", error.message);
-    }
+// Quem coloca a etiqueta é o campaign-dispatch, no momento do envio
+// (USER RULE 2026-08-27) — aqui só removemos de quem saiu da audiência
+async function removeContactTags(supabase: any, tagId: string | null, contactIds: string[]) {
+    if (!tagId || contactIds.length === 0) return;
+    const { error } = await supabase
+        .from("contact_tags")
+        .delete()
+        .eq("tag_id", tagId)
+        .in("contact_id", contactIds);
+    if (error) console.warn("[campaign-manage] contact_tags delete error:", error.message);
 }
 
 function validateDates(scheduledAt: string, validUntil: string) {
@@ -850,13 +835,10 @@ serve(async (req) => {
                     (body.invalid_rows as any[]) || []
                 );
 
-                // Tags só existem após o T-1h (campaign_takeover_sweep); antes
-                // disso não há vínculo para sincronizar — USER RULE 2026-08-18
-                if (campaign.takeover_processed) {
-                    const toAdd = newIds.filter((id) => !oldIds.includes(id));
-                    const toRemove = oldIds.filter((id) => !newSet.has(id) && !keptIds.has(id));
-                    await syncContactTags(supabase, ownerId, campaign.tag_id, toAdd, toRemove);
-                }
+                // USER RULE 2026-08-27: a etiqueta é colocada pelo dispatch, no
+                // momento do envio — a edição só REMOVE de quem saiu da audiência
+                const toRemove = oldIds.filter((id) => !newSet.has(id) && !keptIds.has(id));
+                await removeContactTags(supabase, campaign.tag_id, toRemove);
             }
 
             const { data: updated, error: updErr } = await supabase

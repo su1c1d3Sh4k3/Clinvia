@@ -257,11 +257,11 @@ export function CampaignsGuide() {
                     },
                     {
                         title: "Tag automática",
-                        description: "1 hora antes do disparo, os contatos da audiência ganham uma etiqueta com o nome da campanha — útil para montar públicos futuros e para o aviso de 7 dias. Cada contato tem no máximo uma tag de campanha por conexão: se ele entra em outra campanha da mesma conexão, a tag antiga sai; quando a campanha encerra, a tag é removida de todos. As campanhas de Recorrência seguem a mesma regra: elas sobrepõem uma campanha de disparo antiga (o contato fica com a tag de recorrência) e podem ser sobrepostas por uma campanha nova criada depois.",
+                        description: "Cada contato ganha a etiqueta com o nome da campanha no exato momento em que a mensagem sai para ele — não de uma vez só no começo. Como o disparo é espaçado, a etiqueta vai aparecendo aos poucos, no ritmo da fila: quem ainda não recebeu não tem etiqueta. Ela é útil para montar públicos futuros e para o aviso de 7 dias. Cada contato tem no máximo uma tag de campanha por conexão: se ele entra em outra campanha da mesma conexão, a tag antiga sai; quando a campanha encerra, a tag é removida de todos. As campanhas de Recorrência seguem a mesma regra: elas sobrepõem uma campanha de disparo antiga (o contato fica com a tag de recorrência) e podem ser sobrepostas por uma campanha nova criada depois.",
                     },
                     {
-                        title: "Quem não recebeu perde a etiqueta",
-                        description: <>A etiqueta entra para todo mundo no T-1h, mas <strong>sai automaticamente</strong> de quem o sistema identificou que não recebeu a mensagem: <strong>Atendimento Em Aberto</strong>, <strong>Rejeitada</strong>, <strong>Inválido</strong> e <strong>Ignorado</strong> — inclusive quando o WhatsApp aceita o envio e recusa depois (filtro de spam). Assim, a etiqueta significa sempre "recebeu a mensagem desta campanha", e não apenas "estava na lista".</>,
+                        title: "Quem não recebeu não fica com a etiqueta",
+                        description: <>A etiqueta entra <strong>um a um, junto com o envio</strong>, e <strong>sai automaticamente</strong> se depois o sistema identificar que a pessoa não recebeu: <strong>Atendimento Em Aberto</strong>, <strong>Rejeitada</strong>, <strong>Inválido</strong> e <strong>Ignorado</strong> — inclusive quando o WhatsApp aceita o envio e recusa depois (filtro de spam). Assim, a etiqueta significa sempre "recebeu a mensagem desta campanha", e nunca "estava na lista".</>,
                     },
                 ]} />
             </TopicSection>
@@ -422,7 +422,7 @@ export function CampaignsGuide() {
                         },
                         {
                             q: "Filtrei pela etiqueta da campanha e vieram menos pessoas do que a audiência. Por quê?",
-                            a: "A etiqueta fica só com quem realmente recebeu a mensagem. Todo mundo é etiquetado 1 hora antes do disparo, mas quem acabou como \"Atendimento Em Aberto\", \"Rejeitada\", \"Inválido\" ou \"Ignorado\" perde a etiqueta automaticamente — inclusive quando o WhatsApp aceita o envio e recusa depois. Para ver a audiência completa, use a tabela de contatos da campanha, não o filtro de etiqueta.",
+                            a: "A etiqueta fica só com quem realmente recebeu a mensagem. Ela é colocada contato a contato, no momento do envio: enquanto a campanha está disparando, quem ainda está na fila não tem etiqueta (ela aparece quando chegar a vez dele). E quem acabou como \"Atendimento Em Aberto\", \"Rejeitada\", \"Inválido\" ou \"Ignorado\" perde a etiqueta automaticamente — inclusive quando o WhatsApp aceita o envio e recusa depois. Para ver a audiência completa, use a tabela de contatos da campanha, não o filtro de etiqueta.",
                         },
                         {
                             q: "Qual a diferença entre \"Resolvido\" e \"Removido\"?",
