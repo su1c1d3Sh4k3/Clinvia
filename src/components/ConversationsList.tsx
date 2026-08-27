@@ -785,10 +785,15 @@ export const ConversationsList = ({
                       ? "conversation-card-selected border-primary/40 z-10"
                       : "border-[#1E2229]/20 dark:border-border/50 hover:border-primary/20",
                     // Barra lateral laranja = aguardando resposta (mesmo esquema
-                    // da urgência no card do CRM)
-                    isAwaitingReply && "border-l-4 border-l-orange-500"
+                    // da urgência no card do CRM). A cor vai inline: as classes de
+                    // borda com variante (dark:/hover:) vencem em especificidade e
+                    // apagariam o laranja quando o card não está selecionado.
+                    isAwaitingReply && "border-l-4"
                   )}
-                  style={{ animationDelay: `${index * 45}ms` }}
+                  style={{
+                    animationDelay: `${index * 45}ms`,
+                    ...(isAwaitingReply ? { borderLeftColor: "#f97316" } : {}),
+                  }}
                 >
                   {/* 3-column layout: Avatar | Content | Meta */}
                   <div className="flex gap-2.5 w-full">
