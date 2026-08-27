@@ -103,11 +103,11 @@ export function AgendaGuide() {
                     O botão com o ícone de <strong className="text-foreground">calendário</strong>, ao lado das setas de
                     data, troca a grade do dia por um{" "}
                     <strong className="text-foreground">calendário do mês</strong>. Cada quadrado é um dia, com os
-                    agendamentos no formato <em>primeiro nome - horário</em>. Para voltar, clique no ícone de grade que
-                    aparece no mesmo lugar.
+                    agendamentos no formato <em>primeiro nome - serviço - horário</em>. Para voltar, clique no ícone de
+                    grade que aparece no mesmo lugar.
                 </p>
                 <StepByStep steps={[
-                    { title: "Escolha o profissional", description: "Nesta visão a tela mostra UM profissional por vez: use as abas com as fotos no topo (elas ficam no lugar do campo de busca) para trocar." },
+                    { title: "Escolha o profissional", description: "Nesta visão a tela mostra UM profissional por vez: troque pelo card Profissionais do menu lateral (o mesmo da visão grade). O nome de quem está sendo exibido aparece no topo do calendário." },
                     { title: "Navegue por mês", description: "As setas ‹ › passam a andar de mês em mês e o botão Hoje volta para o mês atual." },
                     { title: "Leia o quadrado do dia", description: "Ao lado do número do dia aparece o gráfico de ocupação daquele dia. Se o dia não tem nenhum agendamento, no lugar do gráfico aparece o cadeado para fechar a agenda." },
                     { title: "Veja o dia inteiro", description: "Se houver mais agendamentos do que cabe no quadrado, aparece um +N. Clicando no dia (ou no +N) abre a lista completa daquele dia, com os horários livres logo abaixo." },

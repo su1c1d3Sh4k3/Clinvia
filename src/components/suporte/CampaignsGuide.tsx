@@ -281,7 +281,7 @@ export function CampaignsGuide() {
                         <LegendRow badge="Enviadas / Entregues / Rejeitadas" cls="bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300" text="A linha de cima é a entrega da mensagem: quantas saíram, quantas chegaram no celular e quantas o WhatsApp recusou." />
                         <LegendRow badge="Agendados" cls="bg-teal-100 text-teal-700 dark:bg-teal-900/50 dark:text-teal-300" text="Quantas pessoas marcaram horário dentro da validade da campanha. É a conversão — não depende do estado da conversa." />
                         <LegendRow badge="Sem Resposta" cls="bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-300" text="Recebeu e nunca respondeu. Respondidas + Sem Resposta = Enviadas." />
-                        <LegendRow badge="Em Atendimento" cls="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300" text="A pessoa respondeu e já foi respondida de volta — por um atendente (conversa Aberta) ou pela IA (conversa Pendente). Quem respondeu e ainda não foi atendido NÃO entra aqui." />
+                        <LegendRow badge="Em Atendimento" cls="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300" text="A pessoa respondeu e alguém assumiu: a conversa está Aberta e atribuída a um atendente, ou está Pendente na fila Atendimento IA. Conversa aberta sem responsável, conversa pendente na fila humana e mensagens automáticas (confirmação, lembrete, pesquisa) NÃO contam como atendimento." />
                     </div>
                 </div>
                 <Callout type="dica" title="Só quem respondeu aparece no detalhamento">
@@ -428,7 +428,7 @@ export function CampaignsGuide() {
                         },
                         {
                             q: "O que exatamente entra em \"Em Atendimento\"?",
-                            a: "Quem respondeu ao disparo e JÁ foi respondido de volta, com a conversa ainda viva: se foi um atendente, a conversa fica Aberta; se foi a IA, fica Pendente. Quem respondeu e ainda está esperando alguém responder não entra — esse é justamente o público que precisa de atenção.",
+                            a: "Quem respondeu ao disparo e tem alguém responsável pela conversa: ou ela está Aberta e atribuída a um atendente, ou está Pendente na fila Atendimento IA. Conversa aberta que ninguém assumiu e conversa pendente na fila humana ficam de fora — é justamente o público que precisa de atenção. Mensagem automática (confirmação de agendamento, lembrete, pesquisa de satisfação) não coloca ninguém em atendimento: com a IA desligada, só contam as conversas abertas com atendente.",
                         },
                         {
                             q: "O que significa \"Movido Para Outra Campanha\"?",

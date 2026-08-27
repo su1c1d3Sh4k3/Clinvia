@@ -585,24 +585,8 @@ export default function Scheduling() {
                         <Settings className="h-4 w-4" />
                     </Button>
 
-                    {isMonthView ? (
-                        <div className="w-full md:w-72 lg:w-96 xl:w-[40rem] self-stretch overflow-x-auto flex-nowrap flex items-center gap-1.5">
-                            {filteredProfessionals.map((p: any) => (
-                                <Button
-                                    key={p.id}
-                                    variant={monthProfessionalId === p.id ? "default" : "outline"}
-                                    className="shrink-0 h-9 md:h-auto md:self-stretch text-xs md:text-sm"
-                                    onClick={() => setMonthProfessionalId(p.id)}
-                                >
-                                    <Avatar className="w-5 h-5 mr-2 shrink-0">
-                                        <AvatarImage src={p.photo_url} />
-                                        <AvatarFallback className="text-[10px]">{p.name[0]}</AvatarFallback>
-                                    </Avatar>
-                                    {p.name}
-                                </Button>
-                            ))}
-                        </div>
-                    ) : (
+                    {/* Busca só na grade — na visão mês o profissional é escolhido pelo menu lateral */}
+                    {!isMonthView && (
                         <div className="hidden md:block md:w-72 lg:w-96 xl:w-[40rem] self-stretch">
                             <div className="relative w-full h-full">
                                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -657,7 +641,7 @@ export default function Scheduling() {
                         <Button variant="ghost" size="icon" title="Calendário" onClick={() => setIsSidebarExpanded(true)}>
                             <CalendarDays className="h-5 w-5" />
                         </Button>
-                        {!isMonthView && filteredProfessionals.length > 1 && (
+                        {filteredProfessionals.length > 1 && (
                             <Button variant="ghost" size="icon" title="Profissionais" onClick={() => setIsSidebarExpanded(true)}>
                                 <Users className="h-5 w-5" />
                             </Button>
@@ -717,8 +701,9 @@ export default function Scheduling() {
                             </CardContent>
                         </Card>
 
-                        {/* Atalho por profissional: exibe só a agenda do escolhido (visão grade) */}
-                        {!isMonthView && filteredProfessionals.length > 1 && (
+                        {/* Atalho por profissional: na grade exibe só a agenda do escolhido;
+                            na visão mês troca o profissional do calendário (sem "Todos") */}
+                        {filteredProfessionals.length > 1 && (
                             <Card className="w-full">
                                 <CardHeader className="pb-3">
                                     <CardTitle className="text-sm font-medium flex items-center">
@@ -727,29 +712,40 @@ export default function Scheduling() {
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent className="space-y-1.5 px-4 pb-4 pt-0">
-                                    <Button
-                                        variant={soloProfessionalId ? "outline" : "default"}
-                                        className="w-full justify-start"
-                                        onClick={() => setSoloProfessionalId(null)}
-                                    >
-                                        <Users className="w-4 h-4 mr-2 shrink-0" />
-                                        Todos
-                                    </Button>
-                                    {filteredProfessionals.map((p: any) => (
+                                    {!isMonthView && (
                                         <Button
-                                            key={p.id}
-                                            variant={soloProfessionalId === p.id ? "default" : "outline"}
+                                            variant={soloProfessionalId ? "outline" : "default"}
                                             className="w-full justify-start"
-                                            title={`Ver apenas a agenda de ${p.name}`}
-                                            onClick={() => setSoloProfessionalId(p.id)}
+                                            onClick={() => setSoloProfessionalId(null)}
                                         >
-                                            <Avatar className="w-5 h-5 mr-2 shrink-0">
-                                                <AvatarImage src={p.photo_url} />
-                                                <AvatarFallback className="text-[10px]">{p.name[0]}</AvatarFallback>
-                                            </Avatar>
-                                            <span className="truncate">{p.name}</span>
+                                            <Users className="w-4 h-4 mr-2 shrink-0" />
+                                            Todos
                                         </Button>
-                                    ))}
+                                    )}
+                                    {filteredProfessionals.map((p: any) => {
+                                        const selected = isMonthView
+                                            ? monthProfessionalId === p.id
+                                            : soloProfessionalId === p.id;
+                                        return (
+                                            <Button
+                                                key={p.id}
+                                                variant={selected ? "default" : "outline"}
+                                                className="w-full justify-start"
+                                                title={isMonthView
+                                                    ? `Ver o mês de ${p.name}`
+                                                    : `Ver apenas a agenda de ${p.name}`}
+                                                onClick={() => isMonthView
+                                                    ? setMonthProfessionalId(p.id)
+                                                    : setSoloProfessionalId(p.id)}
+                                            >
+                                                <Avatar className="w-5 h-5 mr-2 shrink-0">
+                                                    <AvatarImage src={p.photo_url} />
+                                                    <AvatarFallback className="text-[10px]">{p.name[0]}</AvatarFallback>
+                                                </Avatar>
+                                                <span className="truncate">{p.name}</span>
+                                            </Button>
+                                        );
+                                    })}
                                 </CardContent>
                             </Card>
                         )}

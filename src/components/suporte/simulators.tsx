@@ -200,7 +200,7 @@ const SCENARIOS: Scenario[] = [
         conversa: { label: "Pendente", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300" },
         atendente: { label: "IA", cls: "bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-300" },
         explain:
-            "O cliente respondeu! Ele passa a contar no card 'Respondidas' e o Estágio mostra onde a conversa está agora — igualzinho às abas do Inbox. Enquanto ninguém da equipe responder, ele fica em 'Pendente'; assim que a IA ou um atendente responder, ele também entra em 'Em Atendimento'.",
+            "O cliente respondeu! Ele passa a contar no card 'Respondidas' e o Estágio mostra onde a conversa está agora — igualzinho às abas do Inbox. Ele só entra em 'Em Atendimento' quando alguém assume: um atendente abre a conversa e fica como responsável, ou ela está pendente na fila Atendimento IA.",
     },
     {
         key: "scheduled",

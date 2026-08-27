@@ -9,6 +9,7 @@ import {
     startOfMonth,
 } from "date-fns";
 import { Lock } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { getWorkHoursForDay } from "@/lib/professionalSchedule";
@@ -90,8 +91,20 @@ export function SchedulingMonthView({
         return name.trim().split(/\s+/)[0];
     };
 
+    const serviceName = (apt: any) => apt.service_name || "";
+
     return (
         <div className="flex flex-col h-full border rounded-lg overflow-hidden bg-background">
+            {professional && (
+                <div className="flex items-center justify-center gap-2 py-2 border-b shrink-0 bg-muted/10">
+                    <Avatar className="w-6 h-6">
+                        <AvatarImage src={professional.photo_url} />
+                        <AvatarFallback className="text-[10px]">{professional.name?.[0]}</AvatarFallback>
+                    </Avatar>
+                    <span className="text-sm font-semibold truncate">{professional.name}</span>
+                </div>
+            )}
+
             <div className="grid grid-cols-7 border-b shrink-0">
                 {WEEKDAYS.map((w) => (
                     <div key={w} className="py-2 text-center text-[11px] md:text-xs font-medium text-muted-foreground bg-muted/20 border-r last:border-r-0">
@@ -101,7 +114,7 @@ export function SchedulingMonthView({
             </div>
 
             <div className="flex-1 overflow-y-auto">
-                <div className="grid grid-cols-7 auto-rows-fr h-full">
+                <div className="grid grid-cols-7 auto-rows-fr">
                     {Array.from({ length: leadingBlanks }).map((_, i) => (
                         <div key={`blank-${i}`} className="border-r border-b bg-muted/10" />
                     ))}
@@ -119,7 +132,7 @@ export function SchedulingMonthView({
                                 key={key}
                                 onClick={() => onDayClick(day)}
                                 className={cn(
-                                    "border-r border-b p-1 md:p-1.5 min-h-[92px] md:min-h-[120px] flex flex-col gap-1 cursor-pointer transition-colors hover:bg-muted/40",
+                                    "border-r border-b p-1 md:p-1.5 min-h-[110px] md:min-h-[144px] overflow-hidden flex flex-col gap-1 cursor-pointer transition-colors hover:bg-muted/40",
                                     isSameDay(day, date) && "bg-primary/5 ring-1 ring-inset ring-primary/40",
                                     closed && "bg-red-50/60 dark:bg-red-950/20"
                                 )}
@@ -180,7 +193,10 @@ export function SchedulingMonthView({
                                                     : "bg-primary/10 text-foreground"
                                             )}
                                         >
-                                            {firstName(apt)} - {format(new Date(apt.start_time), "HH:mm")}
+                                            {firstName(apt)}
+                                            {serviceName(apt) && ` - ${serviceName(apt)}`}
+                                            {" - "}
+                                            {format(new Date(apt.start_time), "HH:mm")}
                                         </span>
                                     ))}
                                     {overflow > 0 && (
