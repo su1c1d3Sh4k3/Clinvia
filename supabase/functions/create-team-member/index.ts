@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
+import { sendEmailSafe, emailConviteColaborador } from "../_shared/emails.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -114,6 +115,21 @@ serve(async (req) => {
             await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
             throw dbError;
         }
+
+        // 3. Manda as credenciais para o colaborador
+        const { data: owner } = await supabaseAdmin
+            .from("profiles")
+            .select("company_name")
+            .eq("id", resolvedOwnerId)
+            .maybeSingle();
+
+        await sendEmailSafe("team_invite", email, emailConviteColaborador({
+            full_name: name,
+            company_name: owner?.company_name ?? undefined,
+            login_email: email,
+            temp_password: password,
+            role,
+        }));
 
         return new Response(
             JSON.stringify({ message: "Member created successfully", user: authData.user }),

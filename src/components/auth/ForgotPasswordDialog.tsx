@@ -36,7 +36,7 @@ export function ForgotPasswordDialog() {
                 throw new Error(data?.message || "Erro ao solicitar recuperação de senha.");
             }
 
-            toast.success("Se o email estiver cadastrado, você receberá uma nova senha no WhatsApp.");
+            toast.success("Se o email estiver cadastrado, você receberá o link para criar uma nova senha.");
             setOpen(false);
             setEmail("");
         } catch (error: any) {
@@ -58,7 +58,7 @@ export function ForgotPasswordDialog() {
                 <DialogHeader>
                     <DialogTitle>Recuperar Senha</DialogTitle>
                     <DialogDescription className="text-white/70">
-                        Digite seu email cadastrado para receber uma nova senha provisória via WhatsApp.
+                        Digite seu email cadastrado para receber o link de redefinição de senha.
                     </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4 py-4">
@@ -90,7 +90,7 @@ export function ForgotPasswordDialog() {
                                     Enviando...
                                 </>
                             ) : (
-                                "Enviar Nova Senha"
+                                "Enviar link de redefinição"
                             )}
                         </Button>
                     </DialogFooter>

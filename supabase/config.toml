@@ -241,3 +241,11 @@ verify_jwt = false
 # (chave de servico ou usuario super-admin)
 [functions.send-account-email]
 verify_jwt = false
+
+# Confirmacao de e-mail do cadastro publico (chamada da tela de signup, sem sessao)
+[functions.signup-confirm]
+verify_jwt = false
+
+# Relatorio mensal de consumo + aviso de exclusao (pg_cron diario)
+[functions.account-emails-cron]
+verify_jwt = false

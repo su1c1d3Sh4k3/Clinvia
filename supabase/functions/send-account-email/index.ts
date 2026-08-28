@@ -15,6 +15,13 @@ import {
     emailRecuperacaoSenha,
     emailConsumoMensal,
     emailContaEncerrada,
+    emailConviteColaborador,
+    emailCadastroRecusado,
+    emailConexaoCaiu,
+    emailContaReativada,
+    emailAvisoExclusao,
+    emailRestricaoMeta,
+    emailSenhaAlterada,
     type BuiltEmail,
 } from "../_shared/emails.ts";
 
@@ -34,22 +41,49 @@ const SERVICE_KEYS = [
     ...(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "").split(","),
 ].map((k) => k?.trim()).filter(Boolean) as string[];
 
-async function isAuthorized(req: Request): Promise<boolean> {
-    const bearer = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim();
-    if (!bearer) return false;
-    if (SERVICE_KEYS.includes(bearer)) return true;
+/** Único template que um usuário comum pode disparar — e só para o próprio
+ *  e-mail, resolvido do JWT (o campo `to` da requisição é ignorado). */
+const SELF_SERVICE_TEMPLATE = "password_changed";
 
-    // usuário logado: só super-admin pode disparar
+type Auth =
+    | { kind: "service" }
+    | { kind: "super-admin" }
+    | { kind: "self"; email: string; fullName?: string }
+    | null;
+
+async function authenticate(req: Request): Promise<Auth> {
+    const bearer = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim();
+    if (!bearer) return null;
+    if (SERVICE_KEYS.includes(bearer)) return { kind: "service" };
+
     const admin = createClient(
         Deno.env.get("SUPABASE_URL") ?? "",
         Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
     const { data: userData } = await admin.auth.getUser(bearer);
-    if (!userData?.user) return false;
+    if (!userData?.user) return null;
+
     const { data: profile } = await admin
-        .from("profiles").select("role").eq("id", userData.user.id).maybeSingle();
-    return profile?.role === "super-admin";
+        .from("profiles").select("role, full_name").eq("id", userData.user.id).maybeSingle();
+    if (profile?.role === "super-admin") return { kind: "super-admin" };
+    if (!userData.user.email) return null;
+
+    const { data: member } = await admin
+        .from("team_members").select("full_name, name")
+        .eq("auth_user_id", userData.user.id).maybeSingle();
+
+    return {
+        kind: "self",
+        email: userData.user.email,
+        fullName: member?.full_name || member?.name || profile?.full_name || undefined,
+    };
 }
+
+const TEMPLATES = [
+    "signup_confirmation", "access_released", "password_reset", "usage_report",
+    "account_closed", "team_invite", "signup_rejected", "connection_down",
+    "account_reactivated", "deletion_warning", "meta_restriction", "password_changed",
+] as const;
 
 function build(template: string, vars: Record<string, any>): BuiltEmail {
     switch (template) {
@@ -58,9 +92,16 @@ function build(template: string, vars: Record<string, any>): BuiltEmail {
         case "password_reset": return emailRecuperacaoSenha(vars as any);
         case "usage_report": return emailConsumoMensal(vars as any);
         case "account_closed": return emailContaEncerrada(vars as any);
+        case "team_invite": return emailConviteColaborador(vars as any);
+        case "signup_rejected": return emailCadastroRecusado(vars as any);
+        case "connection_down": return emailConexaoCaiu(vars as any);
+        case "account_reactivated": return emailContaReativada(vars as any);
+        case "deletion_warning": return emailAvisoExclusao(vars as any);
+        case "meta_restriction": return emailRestricaoMeta(vars as any);
+        case "password_changed": return emailSenhaAlterada(vars as any);
         default:
             throw new Error(
-                `Template desconhecido: "${template}". Válidos: signup_confirmation, access_released, password_reset, usage_report, account_closed.`,
+                `Template desconhecido: "${template}". Válidos: ${TEMPLATES.join(", ")}.`,
             );
     }
 }
@@ -104,25 +145,75 @@ const SAMPLE: Record<string, Record<string, any>> = {
         data_encerramento: "28/08/2026",
         dias_retencao: 30,
     },
+    team_invite: {
+        full_name: "Rafael Prado",
+        company_name: "Clínica Vitalis",
+        login_email: "rafael@clinicavitalis.com.br",
+        temp_password: "Clinbia123",
+        role: "agent",
+    },
+    signup_rejected: {
+        full_name: "Marina Alves",
+        company_name: "Clínica Vitalis",
+    },
+    connection_down: {
+        full_name: "Marina Alves",
+        company_name: "Clínica Vitalis",
+        instance_name: "Recepção",
+        phone: "(11) 98888-7777",
+    },
+    account_reactivated: {
+        full_name: "Marina Alves",
+        company_name: "Clínica Vitalis",
+        login_email: "marina@clinicavitalis.com.br",
+    },
+    deletion_warning: {
+        full_name: "Marina Alves",
+        company_name: "Clínica Vitalis",
+        data_exclusao: "27/09/2026",
+        dias_restantes: 7,
+    },
+    meta_restriction: {
+        full_name: "Marina Alves",
+        company_name: "Clínica Vitalis",
+        instance_name: "WhatsApp Oficial",
+        phone: "(11) 98888-7777",
+    },
+    password_changed: {
+        full_name: "Marina Alves",
+        login_email: "marina@clinicavitalis.com.br",
+        data_alteracao: "28/08/2026 às 14:32",
+    },
 };
 
 serve(async (req) => {
     if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
     try {
-        if (!(await isAuthorized(req))) {
-            return json({ success: false, error: "Não autorizado" }, 401);
-        }
+        const auth = await authenticate(req);
+        if (!auth) return json({ success: false, error: "Não autorizado" }, 401);
 
         const body = await req.json().catch(() => ({}));
-        const { template, to, vars, preview, reply_to } = body as {
-            template?: string; to?: string | string[];
-            vars?: Record<string, any>; preview?: boolean; reply_to?: string;
+        const { template, vars, preview, reply_to } = body as {
+            template?: string; vars?: Record<string, any>;
+            preview?: boolean; reply_to?: string;
         };
+        let to = (body as { to?: string | string[] }).to;
+        let finalVars = vars ?? {};
+
+        // usuário comum: só o aviso de senha alterada, sempre para o próprio
+        // e-mail, com nome e login vindos do JWT (não do corpo da requisição)
+        if (auth.kind === "self") {
+            if (template !== SELF_SERVICE_TEMPLATE || preview) {
+                return json({ success: false, error: "Não autorizado" }, 403);
+            }
+            to = auth.email;
+            finalVars = { ...finalVars, login_email: auth.email, full_name: auth.fullName };
+        }
 
         if (!to) return json({ success: false, error: "Campo obrigatório ausente: to" }, 400);
 
-        // preview: manda os 5 modelos com dados de exemplo para revisão
+        // preview: manda todos os modelos com dados de exemplo para revisão
         if (preview && !template) {
             const sent: Array<Record<string, unknown>> = [];
             for (const name of Object.keys(SAMPLE)) {
@@ -137,7 +228,7 @@ serve(async (req) => {
             return json({ success: false, error: "Campo obrigatório ausente: template" }, 400);
         }
 
-        const mail = build(template, preview ? SAMPLE[template] ?? {} : vars ?? {});
+        const mail = build(template, preview ? SAMPLE[template] ?? {} : finalVars);
         const { id } = await sendEmail({ to, ...mail, replyTo: reply_to });
         return json({ success: true, id, template, subject: mail.subject });
     } catch (error) {

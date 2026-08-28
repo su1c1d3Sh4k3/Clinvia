@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { sendEmailSafe, emailRestricaoMeta } from "../_shared/emails.ts";
 
 /**
  * meta-verify-connection
@@ -46,7 +47,7 @@ serve(async (req) => {
 
         const { data: instance } = await supabase
             .from("instances")
-            .select("id, status, meta_access_token, meta_phone_number_id, meta_waba_id, restriction_active, restriction_type, restriction_detected_at")
+            .select("id, name, user_id, client_number, status, meta_access_token, meta_phone_number_id, meta_waba_id, restriction_active, restriction_type, restriction_detected_at, restriction_email_sent_at")
             .eq("id", instance_id)
             .eq("provider", "meta")
             .maybeSingle();
@@ -207,9 +208,17 @@ serve(async (req) => {
                     restriction_type: null,
                     restriction_until: null,
                     restriction_detected_at: null,
+                    // libera o aviso por e-mail para uma eventual próxima restrição
+                    restriction_email_sent_at: null,
                 };
             }
         }
+
+        // Avisa o dono uma única vez por episódio de restrição (a coluna zera
+        // quando a restrição é levantada, acima). Esta fn roda a cada mount da
+        // tela de Conexões — sem a guarda, seria um e-mail por carregamento.
+        const shouldEmailRestriction =
+            !!restriction && checks.token_valid && !instance.restriction_email_sent_at;
 
         const newStatus = connected ? "connected" : "disconnected";
         await supabase
@@ -226,6 +235,27 @@ serve(async (req) => {
                 ...restrictionUpdate,
             })
             .eq("id", instance.id);
+
+        if (shouldEmailRestriction) {
+            const { data: owner } = await supabase
+                .from("profiles")
+                .select("email, full_name, company_name")
+                .eq("id", instance.user_id)
+                .maybeSingle();
+
+            const sent = await sendEmailSafe("meta_restriction", owner?.email, emailRestricaoMeta({
+                full_name: owner?.full_name || owner?.email || "tudo bem",
+                company_name: owner?.company_name ?? undefined,
+                instance_name: instance.name,
+                phone: instance.client_number ?? undefined,
+            }));
+            if (sent) {
+                await supabase
+                    .from("instances")
+                    .update({ restriction_email_sent_at: new Date().toISOString() })
+                    .eq("id", instance.id);
+            }
+        }
 
         console.log("[meta-verify-connection]", instance.id, "connected:", connected, "repaired:", repaired, "reason:", reason, "restriction:", restriction?.type ?? "none");
         return json({ connected, repaired, reason, restriction, checks });

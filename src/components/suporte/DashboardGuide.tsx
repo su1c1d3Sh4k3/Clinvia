@@ -274,6 +274,11 @@ export function DashboardGuide() {
                     No filtro Total, o gauge de ocupação considera os últimos 12 meses (senão anos sem agenda zerariam a
                     taxa); procedimentos e faturamento seguem o histórico completo.
                 </Callout>
+                <Callout type="dica" title="O mesmo resumo chega por e-mail todo dia 1º">
+                    Na virada do mês, o administrador recebe no e-mail da conta o consumo do mês anterior — tokens de IA,
+                    disparos de campanha e automáticos, templates da Meta e o custo estimado em reais, pelo mesmo
+                    critério desta aba. Mês sem nenhum consumo não gera e-mail.
+                </Callout>
                 <div className="flex flex-wrap gap-2">
                     <Button size="sm" variant="outline" onClick={() => navigate("/dashboard?tab=minha-conta&tour=dashboard-abas")}>
                         <ExternalLink className="mr-1.5 h-3.5 w-3.5" />

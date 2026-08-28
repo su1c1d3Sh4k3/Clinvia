@@ -186,6 +186,14 @@ const Auth = () => {
         return;
       }
 
+      // Manda o e-mail de confirmação (falhar aqui não invalida o cadastro:
+      // o time comercial ainda vê o pedido no super admin)
+      supabase.functions
+        .invoke("signup-confirm", {
+          body: { action: "request", email: signupEmail.toLowerCase().trim() },
+        })
+        .catch((err) => console.error("Confirmation email error:", err));
+
       // Successfully inserted - send webhook with form data
       try {
         sendClientSignupWebhook({
@@ -230,8 +238,9 @@ const Auth = () => {
             <CheckCircle className="w-16 h-16 text-green-400 mx-auto mb-4" />
             <h2 className="text-2xl font-bold text-white mb-2">Cadastro Enviado!</h2>
             <p className="text-white/70 mb-6">
-              Seu cadastro foi recebido e está aguardando aprovação.
-              Você receberá as credenciais de acesso em breve.
+              Enviamos um e-mail para confirmar o seu endereço. Clique no link da
+              mensagem para validar o cadastro — depois disso nosso time de
+              implementação entra em contato para liberar o seu acesso.
             </p>
             <Button
               onClick={() => setSignupSuccess(false)}

@@ -25,6 +25,7 @@
 // Invocado pelo cron a cada 10 minutos.
 // =====================================================
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+import { sendEmailSafe, emailConexaoCaiu } from '../_shared/emails.ts';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -42,6 +43,8 @@ interface Instance {
     last_health_check: string | null;
     restriction_active: boolean | null;
     restriction_until: string | null;
+    client_number: string | null;
+    disconnect_email_sent_at: string | null;
 }
 
 type HealthStatus = 'connected' | 'disconnected' | 'connecting' | 'error';
@@ -182,7 +185,7 @@ Deno.serve(async (req) => {
 
         let listQuery = supabase
             .from('instances')
-            .select('id, name, user_id, status, server_url, apikey, last_disconnect_notified_at, last_health_check, restriction_active, restriction_until, provider')
+            .select('id, name, user_id, status, server_url, apikey, last_disconnect_notified_at, last_health_check, restriction_active, restriction_until, provider, client_number, disconnect_email_sent_at')
             .not('apikey', 'is', null)
             .not('server_url', 'is', null)
             .neq('provider', 'meta');
@@ -280,6 +283,32 @@ Deno.serve(async (req) => {
                         .update({ last_disconnect_notified_at: now })
                         .eq('id', inst.id);
                     summary.notifications_created++;
+                }
+
+                // E-mail para o dono da conta (guarda própria de 24h, para que
+                // uma falha de envio não fique presa ao aviso in-app)
+                const lastEmail = inst.disconnect_email_sent_at
+                    ? new Date(inst.disconnect_email_sent_at).getTime()
+                    : 0;
+                if ((Date.now() - lastEmail) / 3600_000 >= 24) {
+                    const { data: owner } = await supabase
+                        .from('profiles')
+                        .select('email, full_name, company_name')
+                        .eq('id', inst.user_id)
+                        .maybeSingle();
+
+                    const sent = await sendEmailSafe('connection_down', owner?.email, emailConexaoCaiu({
+                        full_name: owner?.full_name || owner?.email || 'tudo bem',
+                        company_name: owner?.company_name ?? undefined,
+                        instance_name: inst.name,
+                        phone: inst.client_number ?? undefined,
+                    }));
+                    if (sent) {
+                        await supabase
+                            .from('instances')
+                            .update({ disconnect_email_sent_at: now })
+                            .eq('id', inst.id);
+                    }
                 }
             }
 

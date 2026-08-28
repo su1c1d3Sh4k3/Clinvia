@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import {
-    Settings, User, Lock, Bell, Tag, Zap, HelpCircle, ExternalLink,
+    Settings, User, Lock, Bell, Tag, Zap, HelpCircle, ExternalLink, Mail,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +19,7 @@ const TOPICS = [
     { id: "sistema", label: "Sistema" },
     { id: "tags", label: "Tags" },
     { id: "automacoes", label: "Automações" },
+    { id: "emails", label: "E-mails da conta" },
     { id: "faq", label: "FAQ" },
 ];
 
@@ -48,6 +49,7 @@ export function ConfiguracoesGuide() {
                         <LearnChip topicId="sistema">Notificações e instalar o app</LearnChip>
                         <LearnChip topicId="tags">Organizar contatos com tags</LearnChip>
                         <LearnChip topicId="automacoes">Instância primária dos disparos</LearnChip>
+                        <LearnChip topicId="emails">Quais e-mails a Clinbia envia</LearnChip>
                     </div>
                 </div>
             </div>
@@ -96,6 +98,13 @@ export function ConfiguracoesGuide() {
                 <Callout type="atencao" title="Funcionário saiu da clínica?">
                     Trocar a senha não basta se o login era compartilhado. O caminho certo é cada pessoa ter seu acesso
                     (página Equipe) e o admin desativar o membro que saiu.
+                </Callout>
+                <Callout type="dica" title="Esqueceu a senha? O link chega por e-mail">
+                    Na tela de login, em <strong>Esqueci minha senha</strong>, informe o e-mail cadastrado: a Clinbia
+                    envia um <strong>link para você criar uma nova senha</strong>, válido por 1 hora e de uso único. A
+                    tela sempre responde da mesma forma, exista ou não a conta — é assim que ninguém descobre quem é
+                    cliente por tentativa. Toda troca de senha (por esse link ou pela aba Segurança) gera um e-mail de
+                    aviso: se você não reconhecer a alteração, fale com o suporte na hora.
                 </Callout>
             </TopicSection>
 
@@ -178,7 +187,35 @@ export function ConfiguracoesGuide() {
             </TopicSection>
 
             {/* 7 */}
-            <TopicSection id="faq" index={7} icon={HelpCircle} title="Perguntas frequentes">
+            <TopicSection id="emails" index={7} icon={Mail} title="E-mails que a Clinbia envia"
+                subtitle="Avisos automáticos para o e-mail cadastrado na conta">
+                <p className="text-sm text-muted-foreground">
+                    Tudo sai de <strong className="text-foreground">nao-responda@clinbia.ai</strong> — responder essa
+                    mensagem não abre chamado. Se algum aviso não chegar, procure na caixa de spam e marque como
+                    confiável para os próximos.
+                </p>
+                <StepByStep steps={[
+                    { title: "Confirmação de cadastro", description: "Logo após você pedir uma conta no site. Clique no link para validar o e-mail — só depois disso nosso time de implementação entra em contato para liberar o acesso. O link vale 7 dias." },
+                    { title: "Acesso liberado", description: "Quando a conta é aprovada. Traz o e-mail de login e, quando a senha é provisória, a senha inicial — que o sistema pede para trocar no primeiro acesso." },
+                    { title: "Convite de colaborador", description: "Enviado para cada pessoa cadastrada na página Equipe, com o login, a senha provisória e o cargo." },
+                    { title: "Recuperação e troca de senha", description: "O link de redefinição e, depois, o aviso de que a senha foi alterada." },
+                    { title: "Conexão fora do ar", description: "Quando um número de WhatsApp perde a conexão, ou quando a Meta bloqueia o envio pelo número oficial. No máximo um e-mail a cada 24h por conexão." },
+                    { title: "Relatório de consumo", description: "Todo dia 1º, com o consumo do mês anterior: tokens de IA, disparos de campanha e automáticos, templates da Meta e o custo estimado em reais." },
+                    { title: "Encerramento e exclusão", description: "Se a conta for encerrada, você recebe o aviso na hora, outro 7 dias antes da exclusão definitiva dos dados, e um e-mail de boas-vindas de volta caso a conta seja reativada." },
+                ]} />
+                <Callout type="atencao" title="Mantenha o e-mail da conta atualizado">
+                    Todos esses avisos vão para o e-mail de acesso (aba Segurança). Se ele estiver desatualizado, você
+                    deixa de saber que uma conexão caiu ou que o consumo do mês subiu.
+                </Callout>
+                <Callout type="dica" title="O relatório de consumo não é a fatura">
+                    Os valores em reais são uma <strong>estimativa</strong> do custo de IA e de mensagens da Meta,
+                    calculada pelo mesmo critério da aba Minha Conta do Dashboard. A cobrança oficial continua vindo
+                    pelos canais comerciais.
+                </Callout>
+            </TopicSection>
+
+            {/* 8 */}
+            <TopicSection id="faq" index={8} icon={HelpCircle} title="Perguntas frequentes">
                 <Accordion type="single" collapsible className="rounded-xl border px-4">
                     {[
                         {
@@ -196,6 +233,14 @@ export function ConfiguracoesGuide() {
                         {
                             q: "Apaguei uma tag — os contatos perdem a etiqueta?",
                             a: "Sim, remover a tag a remove de todos os contatos que a tinham. Os contatos em si não são afetados.",
+                        },
+                        {
+                            q: "Recebi um e-mail dizendo que minha senha foi alterada e não fui eu.",
+                            a: "Peça imediatamente a redefinição pelo 'Esqueci minha senha' na tela de login — isso invalida a senha atual — e avise o suporte. Confira também, na página Equipe, se algum acesso desconhecido foi criado.",
+                        },
+                        {
+                            q: "Não recebi o e-mail de confirmação / de redefinição de senha.",
+                            a: "Procure na caixa de spam por nao-responda@clinbia.ai e confirme se o e-mail digitado é o mesmo cadastrado. O link de cadastro vale 7 dias e o de senha 1 hora; se venceu, basta pedir de novo.",
                         },
                         {
                             q: "Onde configuro horário de funcionamento e serviços?",

@@ -88,7 +88,7 @@ export function EquipeGuide() {
             <TopicSection id="convidando" index={3} icon={UserPlus} title="Convidando membros"
                 subtitle="Da recepção ao sistema em 2 minutos">
                 <StepByStep steps={[
-                    { title: "Adicionar membro", description: "Na aba Equipes, informe nome, e-mail e papel. A pessoa recebe as credenciais e já entra na conta da clínica." },
+                    { title: "Adicionar membro", description: "Na aba Equipes, informe nome, e-mail e papel. A pessoa recebe um e-mail de convite com o login, a senha provisória e o cargo — e já entra na conta da clínica." },
                     { title: "Escolha o papel com calma", description: "O papel define o alcance (veja o tópico anterior). Supervisor com acesso financeiro vê a aba Vendas; sem, não." },
                     { title: "Se for Agente, defina o escopo", description: <>Aparecem três campos extras: <strong>Instâncias liberadas</strong>, <strong>Filas atribuídas</strong> e <strong>Tags visíveis</strong>. Marque o que ele pode ver — ou deixe "Todas" para não restringir (próximo tópico).</>, },
                     { title: "Desativar quando sair", description: "Funcionário saiu? Remova/desative o membro — o histórico de atendimentos dele permanece registrado." },
@@ -96,6 +96,11 @@ export function EquipeGuide() {
                 <Callout type="atencao" title="Nunca compartilhe um login">
                     Cada pessoa com seu acesso: é isso que permite saber quem atendeu cada conversa, medir tempos por
                     atendente e desligar acessos individualmente sem trocar senha de todo mundo.
+                </Callout>
+                <Callout type="dica" title="O convite não chegou?">
+                    Confira a caixa de spam por <strong>nao-responda@clinbia.ai</strong> e se o e-mail foi digitado
+                    corretamente. Se preferir, passe a senha provisória por outro canal: o cadastro funciona mesmo que o
+                    e-mail falhe, e o sistema pede a troca da senha no primeiro acesso.
                 </Callout>
             </TopicSection>
 

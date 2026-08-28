@@ -58,6 +58,9 @@ const TeamPage = React.lazy(() => import("./pages/TeamPage"));
 const WhatsAppConnectionTeste = React.lazy(() => import("./pages/WhatsAppConnectionTeste"));
 // Página pública de agendamento (sem login, acesso via link)
 const PublicBooking = React.lazy(() => import("./pages/PublicBooking"));
+// Páginas públicas dos e-mails transacionais (confirmação de cadastro e senha)
+const ConfirmEmail = React.lazy(() => import("./pages/ConfirmEmail"));
+const ResetPassword = React.lazy(() => import("./pages/ResetPassword"));
 
 // Fallback de loading enquanto o chunk da página carrega
 const PageLoader = () => (
@@ -158,6 +161,8 @@ const App = () => (
                 {/* BETA — página standalone, fora do Layout (sem menu lateral) */}
                 <Route path="/whatsapp-connection-teste" element={<WhatsAppConnectionTeste />} />
                 <Route path="/agendar" element={<PublicBooking />} />
+                <Route path="/confirmar-email" element={<ConfirmEmail />} />
+                <Route path="/redefinir-senha" element={<ResetPassword />} />
                 <Route element={<ErrorBoundary name="MainLayout"><Layout /></ErrorBoundary>}>
                   <Route path="/" element={<Index />} />
                   <Route path="/internal_inbox" element={<InternalInbox />} />

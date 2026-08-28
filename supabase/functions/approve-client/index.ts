@@ -1,5 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
+import {
+    sendEmailSafe,
+    emailAcessoLiberado,
+    emailCadastroRecusado,
+} from "../_shared/emails.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -53,6 +58,11 @@ serve(async (req) => {
 
             if (updateError) throw updateError;
 
+            await sendEmailSafe("signup_rejected", signup.email, emailCadastroRecusado({
+                full_name: signup.full_name,
+                company_name: signup.company_name,
+            }));
+
             return new Response(
                 JSON.stringify({ success: true, message: "Cadastro rejeitado" }),
                 { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -65,6 +75,7 @@ serve(async (req) => {
 
         // Check if user with this email already exists in auth
         let newAuthUserId: string;
+        let createdWithDefaultPassword = false;
         const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
         const existingUser = existingUsers?.users?.find(u => u.email === signup.email);
 
@@ -86,6 +97,7 @@ serve(async (req) => {
 
             if (authError) throw authError;
             newAuthUserId = authData.user.id;
+            createdWithDefaultPassword = true;
         }
 
         // 2. Create/Update profile with the auth user id (upsert to handle trigger race condition)
@@ -132,6 +144,14 @@ serve(async (req) => {
             .from("pending_signups")
             .delete()
             .eq("id", profile_id);
+
+        // 5. Avisa o cliente que o acesso está liberado
+        await sendEmailSafe("access_released", signup.email, emailAcessoLiberado({
+            full_name: signup.full_name,
+            company_name: signup.company_name,
+            login_email: signup.email,
+            temp_password: createdWithDefaultPassword ? DEFAULT_PASSWORD : undefined,
+        }));
 
         return new Response(
             JSON.stringify({

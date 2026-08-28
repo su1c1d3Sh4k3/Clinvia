@@ -390,6 +390,30 @@ const Admin = () => {
         }
     };
 
+    /** Avisa o cliente por e-mail. Falhar aqui não desfaz a ação no super admin. */
+    const sendAccountEmail = async (
+        template: string,
+        profile: Profile,
+        vars: Record<string, unknown>,
+    ) => {
+        if (!profile.email) return;
+        try {
+            await supabase.functions.invoke("send-account-email", {
+                body: {
+                    template,
+                    to: profile.email,
+                    vars: {
+                        full_name: profile.full_name || profile.email,
+                        company_name: profile.company_name || undefined,
+                        ...vars,
+                    },
+                },
+            });
+        } catch (err) {
+            console.error(`[Admin] e-mail "${template}" não enviado:`, err);
+        }
+    };
+
     const handleConfirmDeactivate = async () => {
         if (!profileToDeactivate) return;
         setDeactivateLoadingId(profileToDeactivate.id);
@@ -399,6 +423,11 @@ const Admin = () => {
             });
             if (error) throw error;
             if (!data?.success) throw new Error(data?.error || "Falha ao desativar");
+
+            await sendAccountEmail("account_closed", profileToDeactivate, {
+                data_encerramento: new Date().toLocaleDateString("pt-BR"),
+                dias_retencao: DEACTIVATION_RETENTION_DAYS,
+            });
 
             toast.success(`Conta de "${profileToDeactivate.full_name || profileToDeactivate.email}" foi desativada. Cliente não conseguirá mais fazer login.`);
             setProfileToDeactivate(null);
@@ -418,6 +447,10 @@ const Admin = () => {
             });
             if (error) throw error;
             if (!data?.success) throw new Error(data?.error || "Falha ao reativar");
+
+            await sendAccountEmail("account_reactivated", profile, {
+                login_email: profile.email,
+            });
 
             toast.success(`Conta de "${profile.full_name || profile.email}" foi reativada. Cliente já pode fazer login.`);
             fetchProfiles();

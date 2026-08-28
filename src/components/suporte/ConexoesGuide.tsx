@@ -114,6 +114,11 @@ export function ConexoesGuide() {
                     { title: "WhatsApp oficial (Meta)", description: "Botão de conexão Meta > login no Facebook da empresa > escolha/crie o número. O sistema registra e verifica tudo sozinho — e AVISA no card se algo ficou pendente." },
                     { title: "Instagram", description: "Conecte a conta profissional via login Meta. As DMs caem no inbox como um canal próprio, com fila padrão configurável.", icon: Instagram },
                 ]} />
+                <Callout type="dica" title="Caiu? Você é avisado por e-mail">
+                    Além da notificação dentro do sistema, quando uma conexão perde o WhatsApp o dono da conta recebe um
+                    e-mail com o nome do número e o passo a passo para reconectar. Para não virar enxurrada, é no máximo
+                    um aviso a cada 24h por conexão.
+                </Callout>
                 <Callout type="atencao" title="Card conectado ≠ tudo certo (Meta)">
                     No número oficial, o sistema verifica automaticamente registro, assinatura de webhook e status do nome
                     de exibição a cada visita à página — problemas aparecem como badge no card com os passos de correção.
@@ -179,7 +184,7 @@ export function ConexoesGuide() {
             <TopicSection id="restricoes" index={7} icon={ShieldAlert} title="Restrições da Meta"
                 subtitle="Quando o número é penalizado — e como sair">
                 <StepByStep steps={[
-                    { title: "Onde aparece", description: "Badge âmbar no card da instância (com os passos de correção), alerta no painel de Qualidade Meta e aviso no assistente de campanhas — nunca passa despercebido." },
+                    { title: "Onde aparece", description: "Badge âmbar no card da instância (com os passos de correção), alerta no painel de Qualidade Meta, aviso no assistente de campanhas e um e-mail para o dono da conta — nunca passa despercebido." },
                     { title: "Causa típica", description: "Nome de exibição recusado pela Meta ou qualidade vermelha por excesso de denúncias/bloqueios de clientes." },
                     { title: "Como resolver", description: "Siga os passos do badge (ex.: corrigir o nome de exibição no Gerenciador da Meta). Qualidade se recupera sozinha com dias de bom uso: menos volume, mais relevância." },
                 ]} />

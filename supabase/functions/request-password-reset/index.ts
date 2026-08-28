@@ -1,121 +1,77 @@
+/** Recuperação de senha por e-mail.
+ *
+ *  Gera um token de recuperação do próprio Supabase Auth (generateLink) e manda
+ *  o link pela Resend, no nosso template em português. O link aponta para a
+ *  página /redefinir-senha da plataforma, que troca o token por uma sessão
+ *  temporária (verifyOtp) e pede a nova senha.
+ *
+ *  Antes disto o fluxo sorteava uma senha aleatória e mandava por WhatsApp —
+ *  a senha trafegava em texto puro e quem não tinha telefone cadastrado ficava
+ *  sem saída. */
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
+import { sendEmailSafe, emailRecuperacaoSenha } from "../_shared/emails.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const SYSTEM_INSTANCE_APIKEY = "982bc9e2-98aa-4756-b00d-5cadac4cacb8";
-const SYSTEM_INSTANCE_ENDPOINT = "https://clinvia.uazapi.com/send/text";
+const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), {
+        status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+
+const APP_URL = Deno.env.get("APP_PUBLIC_URL") ?? "https://app.clinbia.ai";
 
 serve(async (req) => {
-    if (req.method === "OPTIONS") {
-        return new Response("ok", { headers: corsHeaders });
-    }
+    if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
     try {
-        const supabaseClient = createClient(
+        const admin = createClient(
             Deno.env.get("SUPABASE_URL") ?? "",
-            Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+            Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
         );
 
-        const { email } = await req.json();
+        const { email } = await req.json().catch(() => ({}));
+        const mail = String(email ?? "").toLowerCase().trim();
+        if (!mail) return json({ success: false, error: "Informe o e-mail da conta." }, 400);
 
-        if (!email) {
-            throw new Error("Email is required");
-        }
+        // Resposta sempre igual: não revelamos quais e-mails existem na base.
+        const ok = json({ success: true, message: "Se o e-mail estiver cadastrado, o link de redefinição chega em instantes." });
 
-        // 1. Find user in team_members
-        const { data: teamMember, error: teamError } = await supabaseClient
+        const { data: member, error: memberError } = await admin
             .from("team_members")
-            .select("id, user_id, phone, name")
-            .eq("email", email)
-            .single();
+            .select("name, full_name")
+            .eq("email", mail)
+            .maybeSingle();
 
-        if (teamError || !teamMember) {
-            console.error("Team member not found:", teamError);
-            // Return success even if not found to prevent user enumeration
-            return new Response(
-                JSON.stringify({ success: true, message: "If the email exists, a password reset will be sent." }),
-                { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
+        if (memberError) {
+            console.error("[request-password-reset] busca do membro falhou:", memberError.message);
         }
 
-        if (!teamMember.phone) {
-            console.error("User has no phone number in team_members");
-            throw new Error("User has no registered phone number.");
-        }
-
-        // 2. Generate random password (8 chars)
-        const newPassword = Math.random().toString(36).slice(-8);
-
-        // 3. Update Auth User Password
-        const { error: updateAuthError } = await supabaseClient.auth.admin.updateUserById(
-            teamMember.user_id,
-            { password: newPassword }
-        );
-
-        if (updateAuthError) {
-            throw updateAuthError;
-        }
-
-        // 4. Set must_change_password = true in profiles
-        const { error: profileError } = await supabaseClient
-            .from("profiles")
-            .update({ must_change_password: true })
-            .eq("id", teamMember.user_id);
-
-        if (profileError) {
-            console.error("Error updating profile flag:", profileError);
-            // Continue anyway, it's not blocking but good to know
-        }
-
-        // 5. Send WhatsApp Message
-        const firstName = teamMember.name ? teamMember.name.split(' ')[0] : 'Usuário';
-        const messageText = `Olá, aqui é a Bia da Clinbia, vi que esqueceu sua senha ne, sem problmeas, vou gerar pra você uma nova senha, assim que entrar vai aparecer um campo para criar uma nova senha beleza?
-
-Aqui esta sua senha provisoria *${newPassword}*`;
-
-        // Clean phone number (remove non-digits)
-        let targetNumber = teamMember.phone.replace(/\D/g, "");
-        // Ensure 55 prefix if missing (assuming BR for now based on context)
-        if (targetNumber.length <= 11) {
-            targetNumber = "55" + targetNumber;
-        }
-
-        console.log(`Sending password reset to ${targetNumber}`);
-
-        const payload = {
-            number: targetNumber,
-            text: messageText
-        };
-
-        const response = await fetch(SYSTEM_INSTANCE_ENDPOINT, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "token": SYSTEM_INSTANCE_APIKEY
-            },
-            body: JSON.stringify(payload)
+        const { data: link, error: linkError } = await admin.auth.admin.generateLink({
+            type: "recovery",
+            email: mail,
         });
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error("Uzapi sending error:", errorText);
-            throw new Error("Failed to send WhatsApp message via System Instance");
+        if (linkError || !link?.properties?.hashed_token) {
+            // e-mail inexistente cai aqui — segue com a resposta neutra
+            console.warn("[request-password-reset] sem token para", mail, linkError?.message);
+            return ok;
         }
 
-        return new Response(
-            JSON.stringify({ success: true, message: "Password reset processed." }),
-            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        await sendEmailSafe("password_reset", mail, emailRecuperacaoSenha({
+            full_name: member?.full_name || member?.name || undefined,
+            reset_url: `${APP_URL}/redefinir-senha?token=${link.properties.hashed_token}`,
+            validade: "1 hora",
+        }));
 
+        return ok;
     } catch (error) {
-        console.error("Error:", error);
-        return new Response(
-            JSON.stringify({ error: error.message }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        console.error("[request-password-reset]", error);
+        return json({ success: false, error: (error as Error).message }, 500);
     }
 });

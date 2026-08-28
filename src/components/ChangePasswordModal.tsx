@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Lock, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
+import { notifyPasswordChanged } from "@/lib/passwordChangedEmail";
 
 interface ChangePasswordModalProps {
     open: boolean;
@@ -51,6 +52,8 @@ export function ChangePasswordModal({ open, onClose }: ChangePasswordModalProps)
                     .update({ must_change_password: false })
                     .eq("id", user.id);
             }
+
+            await notifyPasswordChanged();
 
             toast.success("Senha alterada com sucesso!");
             onClose();

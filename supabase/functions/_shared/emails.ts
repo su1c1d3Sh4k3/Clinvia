@@ -381,6 +381,302 @@ Equipe Clinbia`;
     return { subject, html, text };
 }
 
+/* ===================================================================
+   6. Convite de colaborador
+   =================================================================== */
+
+const CARGOS: Record<string, string> = {
+    admin: "Administrador",
+    supervisor: "Supervisor",
+    agent: "Atendente",
+};
+
+export function emailConviteColaborador(v: {
+    full_name: string;
+    company_name?: string;
+    login_email: string;
+    temp_password: string;
+    role?: string;
+    login_url?: string;
+}): BuiltEmail {
+    const nome = v.full_name?.trim().split(/\s+/)[0] || "tudo bem";
+    const url = v.login_url || `${APP_URL}/auth`;
+    const cargo = CARGOS[v.role ?? ""] ?? null;
+    const subject = `Você foi adicionado à equipe ${v.company_name ? `da ${v.company_name}` : ""} na Clinbia`.replace(/\s+/g, " ").trim();
+    const html = layout({
+        preheader: "Seu usuário já está criado. Use os dados abaixo para entrar.",
+        title: "Bem-vindo(a) à equipe",
+        body:
+            p(`Olá, ${esc(nome)}!`) +
+            p(`Você foi adicionado(a) à equipe ${v.company_name ? `da ${strong(esc(v.company_name))} ` : ""}na Clinbia — a plataforma onde o time atende os pacientes pelo WhatsApp e Instagram, acompanha o funil de vendas e organiza a agenda.`) +
+            dataTable("Dados de acesso", [
+                ["Endereço", url.replace(/^https?:\/\//, "")],
+                ["E-mail", v.login_email],
+                ["Senha provisória", v.temp_password],
+                ...(cargo ? [["Seu perfil", cargo] as [string, string]] : []),
+            ]) +
+            button("Entrar na plataforma", url) +
+            callout(`No primeiro login a plataforma pede a <strong>troca da senha provisória</strong>. Escolha uma senha só sua e não compartilhe com ninguém.`, "amber") +
+            p(`Dentro da plataforma, o menu <strong>Suporte</strong> traz o manual completo com passo a passo e tours guiados de cada tela.`),
+    });
+    const text = `Olá, ${nome}!
+
+Você foi adicionado(a) à equipe${v.company_name ? ` da ${v.company_name}` : ""} na Clinbia.
+
+DADOS DE ACESSO
+Endereço: ${url}
+E-mail: ${v.login_email}
+Senha provisória: ${v.temp_password}${cargo ? `\nSeu perfil: ${cargo}` : ""}
+
+No primeiro login a plataforma pede a troca da senha provisória. Escolha uma senha só sua e não compartilhe com ninguém.
+
+Dentro da plataforma, o menu Suporte traz o manual completo com passo a passo e tours guiados de cada tela.
+
+Equipe Clinbia`;
+    return { subject, html, text };
+}
+
+/* ===================================================================
+   7. Cadastro recusado
+   =================================================================== */
+
+export function emailCadastroRecusado(v: {
+    full_name: string;
+    company_name?: string;
+    motivo?: string;
+}): BuiltEmail {
+    const nome = v.full_name?.trim().split(/\s+/)[0] || "tudo bem";
+    const subject = "Sobre o seu cadastro na Clinbia";
+    const html = layout({
+        preheader: "Não foi possível seguir com o seu cadastro neste momento.",
+        title: "Sobre o seu cadastro",
+        body:
+            p(`Olá, ${esc(nome)}!`) +
+            p(`Agradecemos o interesse na Clinbia. Após a análise, não foi possível seguir com o cadastro ${v.company_name ? `da ${strong(esc(v.company_name))} ` : ""}neste momento.`) +
+            (v.motivo ? callout(esc(v.motivo), "amber") : "") +
+            p(`Isso não é definitivo: se algum dado estava incompleto ou se a sua operação mudou desde o cadastro, é só falar com o nosso time que revisamos o pedido com prazer.`) +
+            p(`Ficamos à disposição e desejamos muito sucesso na sua clínica.`),
+    });
+    const text = `Olá, ${nome}!
+
+Agradecemos o interesse na Clinbia. Após a análise, não foi possível seguir com o cadastro${v.company_name ? ` da ${v.company_name}` : ""} neste momento.
+${v.motivo ? `\n${v.motivo}\n` : ""}
+Isso não é definitivo: se algum dado estava incompleto ou se a sua operação mudou desde o cadastro, é só falar com o nosso time que revisamos o pedido com prazer.
+
+Ficamos à disposição e desejamos muito sucesso na sua clínica.
+
+Equipe Clinbia`;
+    return { subject, html, text };
+}
+
+/* ===================================================================
+   8. Conexão do WhatsApp caiu
+   =================================================================== */
+
+export function emailConexaoCaiu(v: {
+    full_name: string;
+    company_name?: string;
+    instance_name: string;
+    phone?: string;
+    connections_url?: string;
+}): BuiltEmail {
+    const nome = v.full_name?.trim().split(/\s+/)[0] || "tudo bem";
+    const url = v.connections_url || `${APP_URL}/whatsapp-connection`;
+    const subject = `Atenção: a conexão "${v.instance_name}" caiu`;
+    const html = layout({
+        preheader: "Sua conexão do WhatsApp está fora do ar e as mensagens não estão sendo enviadas nem recebidas.",
+        title: "Sua conexão do WhatsApp caiu",
+        body:
+            p(`Olá, ${esc(nome)}!`) +
+            p(`A conexão ${strong(esc(v.instance_name))}${v.phone ? ` (${esc(v.phone)})` : ""} ${v.company_name ? `da ${esc(v.company_name)} ` : ""}foi desconectada do WhatsApp.`) +
+            callout(
+                `Enquanto ela estiver fora do ar, <strong>as mensagens dos seus pacientes não chegam ao inbox</strong> e nada é enviado por esse número — inclusive campanhas, lembretes de consulta e as respostas da inteligência artificial.`,
+                "red",
+            ) +
+            button("Reconectar agora", url) +
+            p(`Para reconectar: entre na plataforma, abra ${strong("Conexões")}, clique em ${strong("Conectar")} no cartão dessa conexão e leia o QR Code com o WhatsApp do aparelho.`) +
+            p(`Quedas costumam acontecer quando o celular fica sem internet, sem bateria, ou quando a sessão é encerrada em <em>Aparelhos conectados</em> no WhatsApp.`, `font-size:13px;color:${C.muted}`),
+    });
+    const text = `Olá, ${nome}!
+
+A conexão "${v.instance_name}"${v.phone ? ` (${v.phone})` : ""} foi desconectada do WhatsApp.
+
+Enquanto ela estiver fora do ar, as mensagens dos seus pacientes não chegam ao inbox e nada é enviado por esse número — inclusive campanhas, lembretes de consulta e as respostas da inteligência artificial.
+
+Reconecte aqui: ${url}
+
+Para reconectar: entre na plataforma, abra Conexões, clique em Conectar no cartão dessa conexão e leia o QR Code com o WhatsApp do aparelho.
+
+Quedas costumam acontecer quando o celular fica sem internet, sem bateria, ou quando a sessão é encerrada em "Aparelhos conectados" no WhatsApp.
+
+Equipe Clinbia`;
+    return { subject, html, text };
+}
+
+/* ===================================================================
+   9. Conta reativada
+   =================================================================== */
+
+export function emailContaReativada(v: {
+    full_name: string;
+    company_name?: string;
+    login_email?: string;
+    login_url?: string;
+}): BuiltEmail {
+    const nome = v.full_name?.trim().split(/\s+/)[0] || "tudo bem";
+    const url = v.login_url || `${APP_URL}/auth`;
+    const subject = "Sua conta Clinbia foi reativada";
+    const html = layout({
+        preheader: "O acesso à plataforma voltou e seus dados estão no lugar.",
+        title: "Sua conta foi reativada",
+        body:
+            p(`Olá, ${esc(nome)}!`) +
+            p(`Boas notícias: a conta ${v.company_name ? `da ${strong(esc(v.company_name))} ` : ""}na Clinbia foi <strong style="color:${C.ink}">reativada</strong> e o acesso já está liberado para você e para toda a equipe.`) +
+            callout(`Suas conversas, contatos, agendamentos, campanhas e relatórios foram preservados — está tudo exatamente como você deixou.`, "green") +
+            button("Voltar para a plataforma", url) +
+            (v.login_email ? p(`Seu login continua sendo ${strong(esc(v.login_email))} com a mesma senha de antes. Se não lembrar, use a opção "Esqueci minha senha" na tela de entrada.`) : p(`Seu login e a sua senha continuam os mesmos. Se não lembrar, use a opção "Esqueci minha senha" na tela de entrada.`)) +
+            p(`Vale conferir a página ${strong("Conexões")}: se o WhatsApp tiver desconectado durante o período parado, basta ler o QR Code de novo.`) +
+            p(`Que bom ter você de volta!`),
+    });
+    const text = `Olá, ${nome}!
+
+Boas notícias: a conta${v.company_name ? ` da ${v.company_name}` : ""} na Clinbia foi reativada e o acesso já está liberado para você e para toda a equipe.
+
+Suas conversas, contatos, agendamentos, campanhas e relatórios foram preservados — está tudo exatamente como você deixou.
+
+Acesse: ${url}
+${v.login_email ? `\nSeu login continua sendo ${v.login_email} com a mesma senha de antes.` : "\nSeu login e a sua senha continuam os mesmos."} Se não lembrar, use a opção "Esqueci minha senha" na tela de entrada.
+
+Vale conferir a página Conexões: se o WhatsApp tiver desconectado durante o período parado, basta ler o QR Code de novo.
+
+Que bom ter você de volta!
+
+Equipe Clinbia`;
+    return { subject, html, text };
+}
+
+/* ===================================================================
+   10. Aviso de exclusão definitiva dos dados
+   =================================================================== */
+
+export function emailAvisoExclusao(v: {
+    full_name: string;
+    company_name?: string;
+    data_exclusao: string;
+    dias_restantes: number;
+}): BuiltEmail {
+    const nome = v.full_name?.trim().split(/\s+/)[0] || "tudo bem";
+    const dias = v.dias_restantes;
+    const subject = `Seus dados na Clinbia serão excluídos em ${dias} ${dias === 1 ? "dia" : "dias"}`;
+    const html = layout({
+        preheader: `Faltam ${dias} ${dias === 1 ? "dia" : "dias"} para a exclusão definitiva dos dados da sua conta encerrada.`,
+        title: "Seus dados serão excluídos em breve",
+        body:
+            p(`Olá, ${esc(nome)}!`) +
+            p(`A conta ${v.company_name ? `da ${strong(esc(v.company_name))} ` : ""}na Clinbia está encerrada e o prazo de guarda dos dados está chegando ao fim.`) +
+            callout(
+                `Em <strong>${esc(String(dias))} ${dias === 1 ? "dia" : "dias"}</strong>, no dia <strong>${esc(v.data_exclusao)}</strong>, todas as conversas, contatos, agendamentos, vendas e relatórios serão <strong>excluídos em definitivo</strong>. Depois dessa data não há como recuperar nenhuma informação.`,
+                "red",
+            ) +
+            p(`Se quiser ${strong("reativar a conta")} ou ${strong("receber uma cópia dos seus dados")} antes da exclusão, fale com o seu consultor Clinbia ainda hoje — depois do prazo, infelizmente, não é possível.`) +
+            p(`Se você já não precisa mais dessas informações, não é preciso fazer nada: a exclusão acontece automaticamente na data acima.`, `font-size:13px;color:${C.muted}`),
+    });
+    const text = `Olá, ${nome}!
+
+A conta${v.company_name ? ` da ${v.company_name}` : ""} na Clinbia está encerrada e o prazo de guarda dos dados está chegando ao fim.
+
+Em ${dias} ${dias === 1 ? "dia" : "dias"}, no dia ${v.data_exclusao}, todas as conversas, contatos, agendamentos, vendas e relatórios serão excluídos em definitivo. Depois dessa data não há como recuperar nenhuma informação.
+
+Se quiser reativar a conta ou receber uma cópia dos seus dados antes da exclusão, fale com o seu consultor Clinbia ainda hoje — depois do prazo, infelizmente, não é possível.
+
+Se você já não precisa mais dessas informações, não é preciso fazer nada: a exclusão acontece automaticamente na data acima.
+
+Equipe Clinbia`;
+    return { subject, html, text };
+}
+
+/* ===================================================================
+   11. Restrição da Meta no número oficial
+   =================================================================== */
+
+export function emailRestricaoMeta(v: {
+    full_name: string;
+    company_name?: string;
+    instance_name: string;
+    phone?: string;
+    connections_url?: string;
+}): BuiltEmail {
+    const nome = v.full_name?.trim().split(/\s+/)[0] || "tudo bem";
+    const url = v.connections_url || `${APP_URL}/whatsapp-connection`;
+    const subject = `A Meta restringiu o envio pelo número "${v.instance_name}"`;
+    const html = layout({
+        preheader: "O nome de exibição do seu WhatsApp oficial foi recusado e o envio está bloqueado.",
+        title: "Envio bloqueado pela Meta",
+        body:
+            p(`Olá, ${esc(nome)}!`) +
+            p(`A Meta recusou o ${strong("nome de exibição")} do número ${strong(esc(v.instance_name))}${v.phone ? ` (${esc(v.phone)})` : ""}${v.company_name ? ` da ${esc(v.company_name)}` : ""}.`) +
+            callout(
+                `Enquanto a restrição estiver ativa, <strong>nenhuma mensagem sai por esse número</strong>: campanhas, lembretes automáticos e respostas da inteligência artificial ficam bloqueados. As mensagens recebidas continuam chegando normalmente no inbox.`,
+                "red",
+            ) +
+            p(`Para resolver, acesse o ${strong("Gerenciador do WhatsApp")} na Meta, abra as configurações do número e ${strong("envie um novo nome de exibição")} que represente de fato o seu negócio — normalmente o nome fantasia da clínica, sem promoções nem palavras genéricas. A análise costuma levar algumas horas.`) +
+            button("Ver a conexão na plataforma", url) +
+            p(`Assim que a Meta aprovar o novo nome, o envio é liberado sozinho e o aviso some do cartão da conexão.`, `font-size:13px;color:${C.muted}`),
+    });
+    const text = `Olá, ${nome}!
+
+A Meta recusou o nome de exibição do número "${v.instance_name}"${v.phone ? ` (${v.phone})` : ""}${v.company_name ? ` da ${v.company_name}` : ""}.
+
+Enquanto a restrição estiver ativa, nenhuma mensagem sai por esse número: campanhas, lembretes automáticos e respostas da inteligência artificial ficam bloqueados. As mensagens recebidas continuam chegando normalmente no inbox.
+
+Para resolver, acesse o Gerenciador do WhatsApp na Meta, abra as configurações do número e envie um novo nome de exibição que represente de fato o seu negócio — normalmente o nome fantasia da clínica, sem promoções nem palavras genéricas. A análise costuma levar algumas horas.
+
+Ver a conexão: ${url}
+
+Assim que a Meta aprovar o novo nome, o envio é liberado sozinho e o aviso some do cartão da conexão.
+
+Equipe Clinbia`;
+    return { subject, html, text };
+}
+
+/* ===================================================================
+   12. Senha alterada (aviso de segurança)
+   =================================================================== */
+
+export function emailSenhaAlterada(v: {
+    full_name?: string;
+    login_email?: string;
+    data_alteracao: string;
+}): BuiltEmail {
+    const nome = v.full_name?.trim().split(/\s+/)[0];
+    const subject = "Sua senha da Clinbia foi alterada";
+    const html = layout({
+        preheader: "Confirmação de segurança: a senha da sua conta acabou de ser alterada.",
+        title: "Sua senha foi alterada",
+        body:
+            p(nome ? `Olá, ${esc(nome)}!` : "Olá!") +
+            p(`A senha da conta ${v.login_email ? `${strong(esc(v.login_email))} ` : ""}foi alterada em ${strong(esc(v.data_alteracao))}.`) +
+            p(`Se foi você quem alterou, está tudo certo — pode ignorar este aviso.`) +
+            callout(
+                `<strong>Não foi você?</strong> Entre em contato com o seu consultor Clinbia imediatamente e peça a redefinição da senha. Enquanto isso, avise o administrador da conta para revisar os acessos da equipe.`,
+                "amber",
+            ) +
+            p(`Este aviso é enviado sempre que a senha muda, para proteger o acesso aos dados dos seus pacientes.`, `font-size:13px;color:${C.muted}`),
+    });
+    const text = `${nome ? `Olá, ${nome}!` : "Olá!"}
+
+A senha da conta${v.login_email ? ` ${v.login_email}` : ""} foi alterada em ${v.data_alteracao}.
+
+Se foi você quem alterou, está tudo certo — pode ignorar este aviso.
+
+Não foi você? Entre em contato com o seu consultor Clinbia imediatamente e peça a redefinição da senha. Enquanto isso, avise o administrador da conta para revisar os acessos da equipe.
+
+Este aviso é enviado sempre que a senha muda, para proteger o acesso aos dados dos seus pacientes.
+
+Equipe Clinbia`;
+    return { subject, html, text };
+}
+
 /* ------------------------------------------------------------------- envio */
 
 /** Envia pelo HTTP da Resend. Erro da API vira exceção com o corpo real. */
@@ -410,4 +706,26 @@ export async function sendEmail(opts: {
     const raw = await res.text();
     if (!res.ok) throw new Error(`Resend ${res.status}: ${raw}`);
     return JSON.parse(raw);
+}
+
+/** Envia sem nunca derrubar o fluxo que chamou (aprovar cliente, cron, webhook).
+ *  Falha de e-mail vira log — o resto da operação continua valendo. */
+export async function sendEmailSafe(
+    tag: string,
+    to: string | string[] | null | undefined,
+    mail: BuiltEmail,
+    replyTo?: string,
+): Promise<boolean> {
+    if (!to || (Array.isArray(to) && to.length === 0)) {
+        console.warn(`[email:${tag}] sem destinatário, envio ignorado`);
+        return false;
+    }
+    try {
+        const { id } = await sendEmail({ to, ...mail, replyTo });
+        console.log(`[email:${tag}] enviado para ${Array.isArray(to) ? to.join(",") : to} (${id})`);
+        return true;
+    } catch (e) {
+        console.error(`[email:${tag}] falhou:`, (e as Error).message);
+        return false;
+    }
 }
