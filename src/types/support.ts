@@ -2,10 +2,14 @@ import { Clock, Eye, Wrench, CheckCircle2, type LucideIcon } from "lucide-react"
 
 export type SupportPriority = "low" | "medium" | "high" | "urgent";
 export type SupportStatus = "open" | "viewed" | "in_progress" | "resolved";
+/** Quem atende o chamado agora: a IA de 1º nível ou a equipe humana. */
+export type SupportHandledBy = "ai" | "support";
+export type SupportSenderType = "client" | "ai" | "support";
 
 export interface SupportTicket {
     id: string;
     user_id: string;
+    auth_user_id: string | null;
     title: string;
     description: string | null;
     client_summary: string | null;
@@ -15,7 +19,12 @@ export interface SupportTicket {
     support_response: string | null;
     assigned_admin_id: string | null;
     last_message_at: string | null;
-    last_sender_type: "client" | "support" | null;
+    last_sender_type: SupportSenderType | null;
+    handled_by: SupportHandledBy;
+    /** Resumo escrito pela IA na transferência — visível SÓ para o suporte. */
+    ai_summary: string | null;
+    transfer_reason: string | null;
+    transferred_at: string | null;
     created_at: string;
     updated_at: string;
 }
@@ -23,7 +32,7 @@ export interface SupportTicket {
 export interface SupportMessage {
     id: string;
     ticket_id: string;
-    sender_type: "client" | "support";
+    sender_type: SupportSenderType;
     sender_auth_user_id: string | null;
     sender_name: string;
     body: string;

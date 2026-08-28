@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { chatDateTime } from "@/lib/chatDates";
 import { SupportMetrics } from "@/components/support/SupportMetrics";
 import { SupportThread } from "@/components/support/SupportThread";
-import { NewTicketForm } from "@/components/support/NewTicketForm";
+import { NewSupportChat } from "@/components/support/NewSupportChat";
 import { useMyTickets, useSupportSenderName } from "@/hooks/useSupportChat";
 import {
     SUPPORT_PRIORITY_CONFIG,
@@ -130,7 +130,7 @@ export default function Support() {
                             ) : filteredTickets.length === 0 ? (
                                 <p className="text-center text-sm text-muted-foreground py-8 px-4">
                                     Nenhum chamado por aqui. Clique em "Novo chamado" para falar com o
-                                    suporte.
+                                    assistente.
                                 </p>
                             ) : (
                                 filteredTickets.map((t) => {
@@ -189,16 +189,12 @@ export default function Support() {
                     {/* Conversa / novo chamado */}
                     <div className="border rounded-xl bg-card overflow-hidden flex flex-col max-h-[70vh]">
                         {creating ? (
-                            <div className="overflow-y-auto">
-                                <NewTicketForm
-                                    senderName={senderName}
-                                    onCreated={(id) => {
-                                        setCreating(false);
-                                        setSelectedId(id);
-                                    }}
-                                    onCancel={() => setCreating(false)}
-                                />
-                            </div>
+                            <NewSupportChat
+                                onCreated={(id) => {
+                                    setCreating(false);
+                                    setSelectedId(id);
+                                }}
+                            />
                         ) : selected ? (
                             <>
                                 <div className="px-4 py-3 border-b shrink-0">

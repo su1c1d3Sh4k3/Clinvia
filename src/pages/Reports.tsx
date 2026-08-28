@@ -1,7 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
+import { useSystemUpdates, useUnreadUpdates, type SystemUpdate, type UpdateType } from "@/hooks/useSystemUpdates";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -17,7 +15,7 @@ import { cn } from "@/lib/utils";
 // =============================================
 // Tipos e constantes de identidade visual
 // =============================================
-export type UpdateType = "update" | "improvement" | "fix" | "alert";
+export type { UpdateType } from "@/hooks/useSystemUpdates";
 
 export const UPDATE_TYPE_CONFIG: Record<UpdateType, {
   label: string;
@@ -79,16 +77,6 @@ function getImpactInfo(level: number) {
 // =============================================
 // Componente de Card de Update
 // =============================================
-interface SystemUpdate {
-  id: string;
-  type: UpdateType;
-  title: string;
-  content: string;
-  affected_areas: string[];
-  impact_level: number;
-  published_at: string;
-}
-
 function UpdateCard({ update }: { update: SystemUpdate }) {
   const cfg = UPDATE_TYPE_CONFIG[update.type];
   const impact = getImpactInfo(update.impact_level);
@@ -165,51 +153,13 @@ function UpdateCard({ update }: { update: SystemUpdate }) {
 // Componente principal
 // =============================================
 const Reports = () => {
-  const { user } = useAuth();
-  const queryClient = useQueryClient();
-
-  const { data: updates = [], isLoading } = useQuery({
-    queryKey: ["system-updates"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("system_updates" as any)
-        .select("*")
-        .order("published_at", { ascending: false });
-      if (error) throw error;
-      return (data || []) as SystemUpdate[];
-    },
-  });
-
-  const { data: readIds = [] } = useQuery({
-    queryKey: ["system-update-reads", user?.id],
-    queryFn: async () => {
-      if (!user?.id) return [];
-      const { data } = await supabase
-        .from("system_update_reads" as any)
-        .select("update_id")
-        .eq("user_id", user.id);
-      return (data || []).map((r: any) => r.update_id as string);
-    },
-    enabled: !!user?.id,
-  });
+  const { data: updates = [], isLoading } = useSystemUpdates();
+  const { markAllRead } = useUnreadUpdates();
 
   // Marca todos não lidos como lidos ao abrir a página
   useEffect(() => {
-    if (!user?.id || updates.length === 0) return;
-
-    const readSet = new Set(readIds);
-    const unread = updates.filter(u => !readSet.has(u.id));
-    if (unread.length === 0) return;
-
-    const rows = unread.map(u => ({ update_id: u.id, user_id: user.id }));
-    supabase
-      .from("system_update_reads" as any)
-      .upsert(rows, { onConflict: "update_id,user_id", ignoreDuplicates: true })
-      .then(() => {
-        queryClient.invalidateQueries({ queryKey: ["system-update-reads"] });
-        queryClient.invalidateQueries({ queryKey: ["system-updates-unread"] });
-      });
-  }, [updates, readIds, user?.id, queryClient]);
+    markAllRead();
+  }, [markAllRead]);
 
   const grouped = useMemo(() => {
     const groups: Record<UpdateType, SystemUpdate[]> = {

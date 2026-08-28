@@ -12,7 +12,20 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { Headphones, Search, Send, CalendarDays, UserCheck, Building2 } from "lucide-react";
+import {
+    Headphones,
+    Search,
+    Send,
+    CalendarDays,
+    UserCheck,
+    Building2,
+    Sparkles,
+    User,
+    Mail,
+    ChevronDown,
+    ChevronRight,
+    EyeOff,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { chatDateTime, chatDayLabel, isSameChatDay } from "@/lib/chatDates";
 import { FormattedText } from "@/components/chat/FormattedText";
@@ -49,7 +62,9 @@ export default function AdminSupport({ canEdit, agentName, adminUserId }: AdminS
     const [search, setSearch] = useState("");
     const [statusFilter, setStatusFilter] = useState<string>("all");
     const [priorityFilter, setPriorityFilter] = useState<string>("all");
+    const [handledFilter, setHandledFilter] = useState<string>("all");
     const [draft, setDraft] = useState("");
+    const [summaryOpen, setSummaryOpen] = useState(true);
     const bottomRef = useRef<HTMLDivElement>(null);
 
     const { data: tickets = [], isLoading } = useSupportTickets();
@@ -68,12 +83,13 @@ export default function AdminSupport({ canEdit, agentName, adminUserId }: AdminS
         return tickets.filter((t) => {
             if (statusFilter !== "all" && t.status !== statusFilter) return false;
             if (priorityFilter !== "all" && t.priority !== priorityFilter) return false;
+            if (handledFilter !== "all" && (t.handled_by || "support") !== handledFilter) return false;
             if (!term) return true;
             return [t.title, t.company_name, t.creator_name, t.owner_name, t.last_preview]
                 .filter(Boolean)
                 .some((v) => normalize(String(v)).includes(term));
         });
-    }, [tickets, search, statusFilter, priorityFilter]);
+    }, [tickets, search, statusFilter, priorityFilter, handledFilter]);
 
     // marca lidas + status "visualizado" ao abrir
     useEffect(() => {
@@ -169,6 +185,16 @@ export default function AdminSupport({ canEdit, agentName, adminUserId }: AdminS
                                 </SelectContent>
                             </Select>
                         </div>
+                        <Select value={handledFilter} onValueChange={setHandledFilter}>
+                            <SelectTrigger className="bg-gray-800 border-gray-700 text-white h-9 text-xs">
+                                <SelectValue placeholder="Atendimento" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">Todos os atendimentos</SelectItem>
+                                <SelectItem value="ai">Com a IA</SelectItem>
+                                <SelectItem value="support">Com o suporte</SelectItem>
+                            </SelectContent>
+                        </Select>
                     </div>
 
                     <div className="flex-1 overflow-y-auto">
@@ -227,6 +253,12 @@ export default function AdminSupport({ canEdit, agentName, adminUserId }: AdminS
                                             >
                                                 {pr.label}
                                             </span>
+                                            {t.handled_by === "ai" && (
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-300 flex items-center gap-1">
+                                                    <Sparkles className="w-2.5 h-2.5" />
+                                                    IA
+                                                </span>
+                                            )}
                                             <span className="text-[10px] text-gray-600 ml-auto">
                                                 {chatDateTime(t.last_message_at || t.created_at)}
                                             </span>
@@ -249,13 +281,42 @@ export default function AdminSupport({ canEdit, agentName, adminUserId }: AdminS
                         <>
                             <div className="p-3 border-b border-gray-800 shrink-0 space-y-2">
                                 <div className="flex items-start gap-2">
-                                    <div className="min-w-0 flex-1">
+                                    <div className="min-w-0 flex-1 space-y-1">
                                         <p className="text-white font-medium truncate">{selected.title}</p>
-                                        <p className="text-xs text-gray-400 flex items-center gap-1.5 truncate">
-                                            <Building2 className="w-3 h-3 shrink-0" />
-                                            {selected.company_name || "—"}
-                                            {selected.creator_name && ` · ${selected.creator_name}`}
-                                        </p>
+                                        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-400">
+                                            <span className="flex items-center gap-1.5 truncate">
+                                                <User className="w-3 h-3 shrink-0" />
+                                                {selected.creator_name || "—"}
+                                            </span>
+                                            <span className="flex items-center gap-1.5 truncate">
+                                                <Building2 className="w-3 h-3 shrink-0" />
+                                                {selected.company_name || "—"}
+                                            </span>
+                                            <span className="flex items-center gap-1.5 truncate">
+                                                <Mail className="w-3 h-3 shrink-0" />
+                                                {selected.owner_email || selected.owner_name || "—"}
+                                            </span>
+                                            <span
+                                                className={cn(
+                                                    "flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px]",
+                                                    selected.handled_by === "ai"
+                                                        ? "bg-violet-500/20 text-violet-300"
+                                                        : "bg-blue-500/20 text-blue-300"
+                                                )}
+                                            >
+                                                {selected.handled_by === "ai" ? (
+                                                    <>
+                                                        <Sparkles className="w-2.5 h-2.5" />
+                                                        Com a IA
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Headphones className="w-2.5 h-2.5" />
+                                                        Com o suporte
+                                                    </>
+                                                )}
+                                            </span>
+                                        </div>
                                     </div>
                                     {canEdit && (
                                         <Button
@@ -311,6 +372,49 @@ export default function AdminSupport({ canEdit, agentName, adminUserId }: AdminS
                                 )}
                             </div>
 
+                            {selected.ai_summary && (
+                                <div className="mx-3 mt-3 shrink-0 rounded-lg border border-amber-500/40 bg-amber-500/10">
+                                    <button
+                                        onClick={() => setSummaryOpen((v) => !v)}
+                                        className="w-full flex items-center gap-2 px-3 py-2 text-left"
+                                    >
+                                        {summaryOpen ? (
+                                            <ChevronDown className="w-4 h-4 text-amber-300 shrink-0" />
+                                        ) : (
+                                            <ChevronRight className="w-4 h-4 text-amber-300 shrink-0" />
+                                        )}
+                                        <Sparkles className="w-4 h-4 text-amber-300 shrink-0" />
+                                        <span className="text-sm font-medium text-amber-200 flex-1">
+                                            Resumo da IA
+                                        </span>
+                                        <span className="flex items-center gap-1 text-[10px] text-amber-300/80 shrink-0">
+                                            <EyeOff className="w-3 h-3" />
+                                            visível apenas para o suporte
+                                        </span>
+                                    </button>
+                                    {summaryOpen && (
+                                        <div className="px-3 pb-3 space-y-2">
+                                            <p className="text-xs text-amber-100/90 whitespace-pre-wrap break-words">
+                                                {selected.ai_summary}
+                                            </p>
+                                            {selected.transfer_reason && (
+                                                <p className="text-xs text-amber-100/70">
+                                                    <span className="font-medium text-amber-200">
+                                                        Motivo da transferência:{" "}
+                                                    </span>
+                                                    {selected.transfer_reason}
+                                                </p>
+                                            )}
+                                            {selected.transferred_at && (
+                                                <p className="text-[10px] text-amber-300/70">
+                                                    Transferido em {chatDateTime(selected.transferred_at)}
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
                             <div className="flex-1 overflow-y-auto p-4 space-y-1">
                                 {loadingMessages ? (
                                     <div className="text-center text-gray-500 text-sm py-8">
@@ -326,6 +430,7 @@ export default function AdminSupport({ canEdit, agentName, adminUserId }: AdminS
                                         const showDay =
                                             !prev || !isSameChatDay(prev.created_at, m.created_at);
                                         const isSupport = m.sender_type === "support";
+                                        const isAi = m.sender_type === "ai";
                                         return (
                                             <div key={m.id}>
                                                 {showDay && (
@@ -343,12 +448,20 @@ export default function AdminSupport({ canEdit, agentName, adminUserId }: AdminS
                                                     )}
                                                 >
                                                     <div className="max-w-[75%]">
+                                                        {isAi && (
+                                                            <p className="text-[10px] text-violet-300 flex items-center gap-1 mb-0.5">
+                                                                <Sparkles className="w-3 h-3" />
+                                                                Assistente Clinvia
+                                                            </p>
+                                                        )}
                                                         <div
                                                             className={cn(
                                                                 "rounded-lg px-3 py-2 text-sm whitespace-pre-wrap break-words",
                                                                 isSupport
                                                                     ? "bg-blue-600 text-white"
-                                                                    : "bg-gray-800 text-gray-100"
+                                                                    : isAi
+                                                                      ? "bg-violet-500/15 border border-violet-500/30 text-violet-50"
+                                                                      : "bg-gray-800 text-gray-100"
                                                             )}
                                                         >
                                                             <FormattedText text={m.body} />

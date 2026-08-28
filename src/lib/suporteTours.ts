@@ -310,7 +310,17 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
             element: '[data-tour="support-widget"]',
             title: "Falar com o suporte",
             description:
-                "Este botão azul abre o chat com o time da Clinvia. Ele fica colado na borda do menu lateral e acompanha o menu quando ele expande — clique para abrir um chamado e continuar a conversa por ali.",
+                "Este botão azul abre o chat com o time da Clinvia. Ele fica colado na borda do menu lateral e acompanha o menu quando ele expande. A bolinha vermelha avisa que chegou resposta nova ou um aviso que você ainda não leu.",
+        },
+        {
+            title: "Aba Suporte",
+            description:
+                "É onde você conversa. Quem atende primeiro é o assistente virtual: ele conhece o manual inteiro e responde na hora. Se não resolver, encaminha para a equipe sem você precisar repetir nada — e a conversa continua no mesmo chat. O ícone de relógio no topo abre os chamados antigos.",
+        },
+        {
+            title: "Aba Avisos",
+            description:
+                "Aqui aparecem as novidades e atualizações publicadas pela Clinvia. Os itens que você ainda não leu ficam destacados; abrir a aba marca todos como lidos.",
         },
     ],
 };

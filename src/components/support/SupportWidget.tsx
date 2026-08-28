@@ -1,37 +1,51 @@
 import { useMemo, useState } from "react";
-import { ArrowLeft, Headphones, Plus, X } from "lucide-react";
+import { ArrowLeft, Headphones, History, Megaphone, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { chatDateTime } from "@/lib/chatDates";
 import { SupportThread } from "./SupportThread";
-import { NewTicketForm } from "./NewTicketForm";
-import {
-    useMyTickets,
-    useSupportSenderName,
-    useSupportUnread,
-} from "@/hooks/useSupportChat";
+import { NewSupportChat } from "./NewSupportChat";
+import { UpdatesTab } from "./UpdatesTab";
+import { useMyTickets, useSupportSenderName, useSupportUnread } from "@/hooks/useSupportChat";
+import { useUnreadUpdates } from "@/hooks/useSystemUpdates";
 import { SUPPORT_PRIORITY_CONFIG, SUPPORT_STATUS_CONFIG } from "@/types/support";
 
-type View = "list" | "thread" | "new";
+type Tab = "suporte" | "avisos";
+/** Dentro da aba Suporte: conversa ativa, histórico de chamados ou chamado antigo. */
+type SupportView = "chat" | "list" | "thread";
 
 /**
- * Botão flutuante de suporte + painel de chat com o atendimento da Clinvia.
+ * Botão flutuante de suporte + painel com duas abas: Suporte (chat atendido
+ * primeiro pela IA) e Avisos (atualizações publicadas no painel admin).
  * Fica ancorado no canto inferior esquerdo do CONTEÚDO (irmão do menu lateral),
  * então acompanha a largura do menu quando ele expande.
  */
 export function SupportWidget() {
     const [open, setOpen] = useState(false);
-    const [view, setView] = useState<View>("list");
+    const [tab, setTab] = useState<Tab>("suporte");
+    const [view, setView] = useState<SupportView>("chat");
     const [ticketId, setTicketId] = useState<string | null>(null);
     const isMobile = useIsMobile();
 
     const senderName = useSupportSenderName();
     const { data: tickets = [], isLoading } = useMyTickets();
-    const { unread, markSeen } = useSupportUnread(tickets);
+    const { unread: unreadMessages, markSeen } = useSupportUnread(tickets);
+    const { unread: unreadUpdates } = useUnreadUpdates();
 
-    const ticket = useMemo(() => tickets.find((t) => t.id === ticketId) || null, [tickets, ticketId]);
+    const totalUnread = unreadMessages + unreadUpdates;
+
+    // O chamado ativo abre direto na conversa; sem chamado ativo, tela do assistente.
+    const activeTicket = useMemo(
+        () => tickets.find((t) => t.status !== "resolved") || null,
+        [tickets]
+    );
+    const openedTicket = useMemo(
+        () => tickets.find((t) => t.id === ticketId) || null,
+        [tickets, ticketId]
+    );
+    const currentTicket = view === "thread" ? openedTicket : activeTicket;
 
     const handleOpen = () => {
         setOpen(true);
@@ -40,7 +54,8 @@ export function SupportWidget() {
 
     const handleClose = () => {
         setOpen(false);
-        setView("list");
+        setTab("suporte");
+        setView("chat");
         setTicketId(null);
     };
 
@@ -50,13 +65,20 @@ export function SupportWidget() {
         markSeen();
     };
 
+    const headerTitle =
+        tab === "avisos"
+            ? "Avisos"
+            : view === "list"
+              ? "Chamados antigos"
+              : currentTicket?.title || "Suporte Clinvia";
+
     const panel = (
         <div className="flex flex-col h-full min-h-0">
-            <div className="flex items-center gap-2 px-3 py-2.5 border-b shrink-0 bg-[#0175EC] text-white rounded-t-xl">
-                {view !== "list" ? (
+            <div className="flex items-center gap-2 px-3 py-2.5 shrink-0 bg-[#0175EC] text-white rounded-t-xl">
+                {tab === "suporte" && view !== "chat" ? (
                     <button
                         onClick={() => {
-                            setView("list");
+                            setView(view === "thread" ? "list" : "chat");
                             setTicketId(null);
                         }}
                         className="p-1 rounded hover:bg-white/15"
@@ -64,22 +86,59 @@ export function SupportWidget() {
                     >
                         <ArrowLeft className="w-4 h-4" />
                     </button>
+                ) : tab === "avisos" ? (
+                    <Megaphone className="w-4 h-4" />
                 ) : (
                     <Headphones className="w-4 h-4" />
                 )}
-                <span className="font-medium text-sm truncate flex-1">
-                    {view === "new"
-                        ? "Novo chamado"
-                        : view === "thread"
-                          ? ticket?.title || "Chamado"
-                          : "Suporte Clinvia"}
-                </span>
+                <span className="font-medium text-sm truncate flex-1">{headerTitle}</span>
+                {tab === "suporte" && view === "chat" && (
+                    <button
+                        onClick={() => setView("list")}
+                        title="Ver chamados antigos"
+                        className="p-1 rounded hover:bg-white/15"
+                        aria-label="Ver chamados antigos"
+                    >
+                        <History className="w-4 h-4" />
+                    </button>
+                )}
                 <button onClick={handleClose} className="p-1 rounded hover:bg-white/15" aria-label="Fechar">
                     <X className="w-4 h-4" />
                 </button>
             </div>
 
-            {view === "list" && (
+            <div className="flex border-b shrink-0">
+                {(
+                    [
+                        { id: "suporte" as const, label: "Suporte", badge: unreadMessages },
+                        { id: "avisos" as const, label: "Avisos", badge: unreadUpdates },
+                    ]
+                ).map((t) => (
+                    <button
+                        key={t.id}
+                        onClick={() => setTab(t.id)}
+                        className={cn(
+                            "flex-1 py-2 text-sm font-medium transition-colors relative",
+                            tab === t.id
+                                ? "text-[#0175EC] border-b-2 border-[#0175EC]"
+                                : "text-muted-foreground hover:text-foreground"
+                        )}
+                    >
+                        {t.label}
+                        {t.badge > 0 && (
+                            <span className="ml-1.5 inline-flex min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold items-center justify-center align-middle">
+                                {t.badge}
+                            </span>
+                        )}
+                    </button>
+                ))}
+            </div>
+
+            {tab === "avisos" ? (
+                <div className="flex-1 overflow-y-auto">
+                    <UpdatesTab />
+                </div>
+            ) : view === "list" ? (
                 <>
                     <div className="flex-1 overflow-y-auto">
                         {isLoading ? (
@@ -88,9 +147,6 @@ export function SupportWidget() {
                             <div className="text-center text-sm text-muted-foreground py-10 px-4">
                                 <Headphones className="w-10 h-10 mx-auto mb-2 opacity-40" />
                                 <p>Você ainda não abriu nenhum chamado.</p>
-                                <p className="text-xs mt-1">
-                                    Clique em "Novo chamado" e fale direto com nosso time.
-                                </p>
                             </div>
                         ) : (
                             tickets.map((t) => {
@@ -108,11 +164,13 @@ export function SupportWidget() {
                                             <span className="text-sm font-medium truncate flex-1">
                                                 {t.title}
                                             </span>
-                                            {t.last_sender_type === "support" && t.status !== "resolved" && (
-                                                <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">
-                                                    respondido
-                                                </span>
-                                            )}
+                                            {(t.last_sender_type === "support" ||
+                                                t.last_sender_type === "ai") &&
+                                                t.status !== "resolved" && (
+                                                    <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">
+                                                        respondido
+                                                    </span>
+                                                )}
                                         </div>
                                         <div className="flex items-center gap-1.5 mt-1">
                                             <span className={cn("text-[10px] px-1.5 py-0.5 rounded", st.bg, st.color)}>
@@ -132,27 +190,22 @@ export function SupportWidget() {
                     </div>
                     <div className="p-2.5 border-t shrink-0">
                         <Button
-                            onClick={() => setView("new")}
+                            onClick={() => {
+                                setTicketId(null);
+                                setView("chat");
+                            }}
                             className="w-full bg-[#0175EC] hover:bg-[#0165cc] text-white"
                         >
                             <Plus className="w-4 h-4 mr-1.5" />
-                            Novo chamado
+                            Voltar ao atendimento
                         </Button>
                     </div>
                 </>
+            ) : currentTicket ? (
+                <SupportThread ticket={currentTicket} senderName={senderName} />
+            ) : (
+                <NewSupportChat onCreated={(id) => openThread(id)} />
             )}
-
-            {view === "new" && (
-                <div className="flex-1 overflow-y-auto">
-                    <NewTicketForm
-                        senderName={senderName}
-                        onCreated={(id) => openThread(id)}
-                        onCancel={() => setView("list")}
-                    />
-                </div>
-            )}
-
-            {view === "thread" && ticket && <SupportThread ticket={ticket} senderName={senderName} />}
         </div>
     );
 
@@ -170,9 +223,9 @@ export function SupportWidget() {
                     )}
                 >
                     <Headphones className="h-5 w-5" />
-                    {unread > 0 && (
+                    {totalUnread > 0 && (
                         <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold flex items-center justify-center animate-pulse">
-                            {unread}
+                            {totalUnread}
                         </span>
                     )}
                 </button>

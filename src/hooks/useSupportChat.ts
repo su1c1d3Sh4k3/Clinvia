@@ -2,8 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useOwnerId } from "@/hooks/useOwnerId";
-import type { SupportMessage, SupportPriority, SupportTicket } from "@/types/support";
+import type { SupportMessage, SupportTicket } from "@/types/support";
 
 const LAST_SEEN_KEY = "clinvia:support-last-seen";
 
@@ -76,7 +75,7 @@ export function useMyTickets() {
     return query;
 }
 
-/** Badge do botão flutuante: respostas do suporte ainda não vistas. */
+/** Badge do botão flutuante: respostas do suporte ou da IA ainda não vistas. */
 export function useSupportUnread(tickets: SupportTicket[]) {
     const [lastSeen, setLastSeen] = useState<number>(() => readLastSeen());
 
@@ -88,7 +87,7 @@ export function useSupportUnread(tickets: SupportTicket[]) {
 
     const unread = tickets.filter(
         (t) =>
-            t.last_sender_type === "support" &&
+            (t.last_sender_type === "support" || t.last_sender_type === "ai") &&
             t.last_message_at &&
             Date.parse(t.last_message_at) > lastSeen
     ).length;
@@ -146,53 +145,29 @@ export function useTicketMessages(ticketId: string | null) {
     return query;
 }
 
-/** Abre um chamado novo: cria o ticket e grava o relato como 1ª mensagem. */
-export function useCreateTicket() {
+/**
+ * Fala com o assistente de 1º nível (edge fn support-ai-chat).
+ * Sem ticketId, a própria função abre o chamado na 1ª mensagem.
+ */
+export function useSendToAi() {
     const queryClient = useQueryClient();
-    const { data: ownerId } = useOwnerId();
 
     return useMutation({
-        mutationFn: async ({
-            title,
-            description,
-            priority,
-            creatorName,
-        }: {
-            title: string;
-            description: string;
-            priority: SupportPriority;
-            creatorName: string;
-        }) => {
-            const { data: auth } = await supabase.auth.getUser();
-            const { data: ticket, error } = await supabase
-                .from("support_tickets")
-                .insert({
-                    user_id: ownerId,
-                    auth_user_id: auth?.user?.id,
-                    title,
-                    description,
-                    priority,
-                    status: "open",
-                    creator_name: creatorName,
-                })
-                .select()
-                .single();
-            if (error) throw error;
-
-            const { error: msgError } = await supabase.from("support_messages").insert({
-                ticket_id: ticket.id,
-                sender_type: "client",
-                sender_auth_user_id: auth?.user?.id ?? null,
-                sender_name: creatorName,
-                body: description,
+        mutationFn: async ({ ticketId, message }: { ticketId?: string | null; message: string }) => {
+            const { data, error } = await supabase.functions.invoke("support-ai-chat", {
+                body: { ticketId: ticketId ?? undefined, message },
             });
-            if (msgError) throw msgError;
-
-            return ticket as SupportTicket;
+            if (error) {
+                // erro HTTP: o corpo traz a mensagem humana do contrato de erros
+                const detail = await (error as any)?.context?.json?.().catch(() => null);
+                throw new Error(detail?.message || error.message || "Não foi possível falar com o assistente");
+            }
+            if (data && data.success === false) throw new Error(data.message || "Não foi possível falar com o assistente");
+            return data as { ticket_id: string; transferred: boolean; handled_by: string; message: SupportMessage };
         },
-        onSuccess: () => {
+        onSuccess: (data) => {
+            queryClient.invalidateQueries({ queryKey: ["support-messages", data.ticket_id] });
             queryClient.invalidateQueries({ queryKey: ["my-support-tickets"] });
-            queryClient.invalidateQueries({ queryKey: ["support-tickets"] });
         },
     });
 }

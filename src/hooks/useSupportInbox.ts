@@ -7,6 +7,7 @@ import type { SupportMessage, SupportPriority, SupportStatus, SupportTicket } fr
 export interface SupportInboxTicket extends SupportTicket {
     company_name: string | null;
     owner_name: string | null;
+    owner_email: string | null;
     unread_count: number;
     last_preview: string | null;
 }
@@ -34,7 +35,7 @@ export function useSupportTickets() {
             const [{ data: profiles }, { data: messages }] = await Promise.all([
                 supabase
                     .from("profiles")
-                    .select("id, company_name, full_name")
+                    .select("id, company_name, full_name, email")
                     .in("id", userIds),
                 supabase
                     .from("support_messages")
@@ -59,6 +60,7 @@ export function useSupportTickets() {
                     ...t,
                     company_name: profile?.company_name ?? null,
                     owner_name: profile?.full_name ?? null,
+                    owner_email: profile?.email ?? null,
                     unread_count: unread.get(t.id) || 0,
                     last_preview: preview.get(t.id) ?? t.client_summary ?? t.description ?? null,
                 };
