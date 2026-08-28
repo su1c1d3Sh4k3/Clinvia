@@ -84,7 +84,7 @@ interface PendingProfile {
 
 const ITEMS_PER_PAGE = 10;
 
-export function AdminClients({ canEdit }: { canEdit: boolean }) {
+export default function AdminClients({ canEdit }: { canEdit: boolean }) {
     const [searchParams, setSearchParams] = useSearchParams();
     const [profiles, setProfiles] = useState<Profile[]>([]);
     const [totalCount, setTotalCount] = useState(0);
