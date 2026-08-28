@@ -6,45 +6,53 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { RecurrenceTab, RecurrenceData, defaultRecurrenceData, hasInvalidRecurrenceVariables } from "./RecurrenceTab";
+import {
+  RecurrenceTab,
+  RecurrenceData,
+  defaultRecurrenceData,
+  hasInvalidRecurrenceVariables,
+  messagesForSave,
+} from "./RecurrenceTab";
 import { ServiceName } from "@/types/services";
 import { supabase } from "@/integrations/supabase/client";
 import { syncRecurrenceTemplates } from "@/lib/recurrenceTemplateSync";
+import { useAccountRecurrenceDefaults } from "@/hooks/useRecurrenceDefaults";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+
+export interface ServiceDraftPayload extends RecurrenceData {
+  name: string;
+  description: string;
+  recurrence: boolean;
+}
 
 interface EditServiceModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   service: ServiceName | null;
+  /**
+   * Modo rascunho (usado pelo modal de templates): em vez de gravar no banco,
+   * devolve os dados editados para quem abriu.
+   */
+  onSaveDraft?: (payload: ServiceDraftPayload) => void;
 }
 
 /**
  * Edição do SERVIÇO (service_name): dados + configuração de recorrência
- * (ativa, tempos, descontos e mensagens personalizadas — em branco usa o
- * template padrão da conta). Mensagem personalizada alterada em conta com
- * Meta ⇒ alerta de aprovação antes de salvar.
+ * (ativa, tempos, descontos e mensagens). A mensagem em branco usa o template
+ * padrão da conta; o alerta de aprovação da Meta aparece dentro da aba de
+ * recorrência, no momento em que o usuário clica para personalizar.
  */
-export const EditServiceModal = ({ open, onOpenChange, service }: EditServiceModalProps) => {
+export const EditServiceModal = ({ open, onOpenChange, service, onSaveDraft }: EditServiceModalProps) => {
   const queryClient = useQueryClient();
+  const defaults = useAccountRecurrenceDefaults();
   const [saving, setSaving] = useState(false);
-  const [showMetaAlert, setShowMetaAlert] = useState(false);
 
   const [form, setForm] = useState({ name: "", description: "", recurrence: false });
   const [recurrenceData, setRecurrenceData] = useState<RecurrenceData>(defaultRecurrenceData);
@@ -70,52 +78,43 @@ export const EditServiceModal = ({ open, onOpenChange, service }: EditServiceMod
     }
   }, [service]);
 
-  const customMessagesChanged = () => {
-    if (!service) return false;
-    return ([1, 2, 3] as const).some((n) => {
-      const before = ((service as any)[`msg_recurrence_${n}`] || "").trim();
-      const after = ((recurrenceData as any)[`msg_recurrence_${n}`] || "").trim();
-      return before !== after && after !== "";
-    });
-  };
-
-  const handleSaveClick = async () => {
+  const handleSave = async () => {
     if (!service) return;
     if (hasInvalidRecurrenceVariables(recurrenceData)) {
       toast.error("Mensagem de recorrência com variável desconhecida — use os botões de variáveis");
       return;
     }
-    if (customMessagesChanged()) {
-      // Alerta só se o tenant tem instância Meta conectada
-      const { data } = await supabase
-        .from("instances")
-        .select("id")
-        .eq("provider", "meta")
-        .eq("status", "connected")
-        .limit(1);
-      if (data && data.length > 0) {
-        setShowMetaAlert(true);
-        return;
-      }
-    }
-    doSave();
-  };
 
-  const doSave = async () => {
-    if (!service) return;
-    setShowMetaAlert(false);
+    const msgs = messagesForSave(recurrenceData, defaults);
+
+    if (onSaveDraft) {
+      onSaveDraft({
+        ...recurrenceData,
+        msg_recurrence_1: msgs.msg_recurrence_1 || "",
+        msg_recurrence_2: msgs.msg_recurrence_2 || "",
+        msg_recurrence_3: msgs.msg_recurrence_3 || "",
+        name: form.name,
+        description: form.description,
+        recurrence: form.recurrence,
+      });
+      onOpenChange(false);
+      return;
+    }
+
     setSaving(true);
     try {
-      const hadCustomChange = customMessagesChanged();
+      const customChanged = ([1, 2, 3] as const).some((n) => {
+        const before = ((service as any)[`msg_recurrence_${n}`] || "").trim() || null;
+        return before !== msgs[`msg_recurrence_${n}` as const];
+      });
+
       const { error } = await supabase
         .from("service_name" as any)
         .update({
           name: form.name,
           description: form.description || null,
           recurrence: form.recurrence,
-          msg_recurrence_1: recurrenceData.msg_recurrence_1.trim() || null,
-          msg_recurrence_2: recurrenceData.msg_recurrence_2.trim() || null,
-          msg_recurrence_3: recurrenceData.msg_recurrence_3.trim() || null,
+          ...msgs,
           time_recurrence_1: recurrenceData.time_recurrence_1,
           time_recurrence_2: recurrenceData.time_recurrence_2,
           time_recurrence_3: recurrenceData.time_recurrence_3,
@@ -127,7 +126,7 @@ export const EditServiceModal = ({ open, onOpenChange, service }: EditServiceMod
       if (error) throw error;
 
       // Template personalizado alterado → submete à Meta (fire-and-forget)
-      if (hadCustomChange) {
+      if (customChanged) {
         syncRecurrenceTemplates({ serviceNameIds: [service.id] });
       }
 
@@ -144,84 +143,64 @@ export const EditServiceModal = ({ open, onOpenChange, service }: EditServiceMod
   };
 
   return (
-    <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="w-[95vw] sm:w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-lg">
-          <DialogHeader>
-            <DialogTitle>Editar Serviço</DialogTitle>
-          </DialogHeader>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="w-[95vw] sm:w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-lg">
+        <DialogHeader>
+          <DialogTitle>Editar Serviço</DialogTitle>
+        </DialogHeader>
 
-          <Tabs defaultValue="dados">
-            <TabsList>
-              <TabsTrigger value="dados">Dados</TabsTrigger>
-              <TabsTrigger value="recurrence">Recorrência</TabsTrigger>
-            </TabsList>
+        <Tabs defaultValue="dados">
+          <TabsList>
+            <TabsTrigger value="dados">Dados</TabsTrigger>
+            <TabsTrigger value="recurrence">Recorrência</TabsTrigger>
+          </TabsList>
 
-            <TabsContent value="dados">
-              <div className="grid gap-4 py-4">
-                <div className="space-y-1.5">
-                  <Label>Nome do Serviço</Label>
-                  <Input
-                    value={form.name}
-                    onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Descrição</Label>
-                  <Textarea
-                    value={form.description}
-                    onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
-                    rows={3}
-                  />
-                </div>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="recurrence" className="py-4 space-y-4">
-              <div className="flex items-center justify-between rounded-md border px-3 py-2">
-                <div>
-                  <Label>Recorrência ativa</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Vale para todas as aplicações deste serviço
-                  </p>
-                </div>
-                <Switch
-                  checked={form.recurrence}
-                  onCheckedChange={(v) => setForm((p) => ({ ...p, recurrence: v }))}
+          <TabsContent value="dados">
+            <div className="grid gap-4 py-4">
+              <div className="space-y-1.5">
+                <Label>Nome do Serviço</Label>
+                <Input
+                  value={form.name}
+                  onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
                 />
               </div>
-              <RecurrenceTab data={recurrenceData} onChange={setRecurrenceData} />
-            </TabsContent>
-          </Tabs>
+              <div className="space-y-1.5">
+                <Label>Descrição</Label>
+                <Textarea
+                  value={form.description}
+                  onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+                  rows={3}
+                />
+              </div>
+            </div>
+          </TabsContent>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSaveClick} disabled={saving || !form.name}>
-              {saving ? "Salvando..." : "Salvar"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          <TabsContent value="recurrence" className="py-4 space-y-4">
+            <div className="flex items-center justify-between rounded-md border px-3 py-2">
+              <div>
+                <Label>Recorrência ativa</Label>
+                <p className="text-xs text-muted-foreground">
+                  Vale para todas as aplicações deste serviço
+                </p>
+              </div>
+              <Switch
+                checked={form.recurrence}
+                onCheckedChange={(v) => setForm((p) => ({ ...p, recurrence: v }))}
+              />
+            </div>
+            <RecurrenceTab data={recurrenceData} onChange={setRecurrenceData} />
+          </TabsContent>
+        </Tabs>
 
-      <AlertDialog open={showMetaAlert} onOpenChange={setShowMetaAlert}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Template será enviado para aprovação da Meta</AlertDialogTitle>
-            <AlertDialogDescription>
-              Você alterou uma mensagem personalizada de recorrência. Para instâncias da
-              API oficial (Meta), o novo texto será submetido como template e só passa a
-              ser usado após a aprovação. Enquanto isso, campanhas deste serviço podem
-              ficar bloqueadas aguardando aprovação. Deseja continuar?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={doSave}>Salvar e enviar</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancelar
+          </Button>
+          <Button onClick={handleSave} disabled={saving || !form.name}>
+            {saving ? "Salvando..." : onSaveDraft ? "Aplicar" : "Salvar"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };

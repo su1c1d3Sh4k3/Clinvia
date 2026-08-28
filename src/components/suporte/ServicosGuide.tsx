@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import {
     Package, GitBranch, FolderPlus, PlusCircle, UserCheck, CircleDollarSign,
-    HelpCircle, ExternalLink, Repeat,
+    HelpCircle, ExternalLink, Repeat, LayoutTemplate,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,6 +17,7 @@ import { HierarchyExplorer } from "./simulators-servicos";
 const TOPICS = [
     { id: "o-que-e", label: "O que é" },
     { id: "hierarquia", label: "A hierarquia" },
+    { id: "templates", label: "Utilizar templates" },
     { id: "adicionando", label: "Adicionando" },
     { id: "categorias-proprias", label: "Categorias próprias" },
     { id: "profissionais", label: "Profissionais vinculados" },
@@ -49,6 +50,7 @@ export function ServicosGuide() {
                     </p>
                     <div className="flex flex-wrap gap-2">
                         <LearnChip topicId="hierarquia">Categoria → Serviço → Aplicação</LearnChip>
+                        <LearnChip topicId="templates">Catálogo pronto em 1 clique</LearnChip>
                         <LearnChip topicId="adicionando">Montar o catálogo em minutos</LearnChip>
                         <LearnChip topicId="profissionais">Quem executa o quê</LearnChip>
                         <LearnChip topicId="precos">De onde a IA tira os preços</LearnChip>
@@ -88,8 +90,35 @@ export function ServicosGuide() {
             </TopicSection>
 
             {/* 3 */}
-            <TopicSection id="adicionando" index={3} icon={PlusCircle} title="Adicionando serviços"
-                subtitle="O caminho feliz: Adicionar Serviço por Categoria">
+            <TopicSection id="templates" index={3} icon={LayoutTemplate} title="Utilizar templates"
+                subtitle="O catálogo pronto — o jeito mais rápido de começar">
+                <p className="text-sm text-muted-foreground">
+                    O botão azul <strong className="text-foreground">Utilizar templates</strong> abre um catálogo pronto
+                    de categorias, serviços e aplicações (com preços, tempo de retorno e duração sugeridos). Tudo já vem{" "}
+                    <strong className="text-foreground">marcado e editável</strong>: você desmarca o que a clínica não
+                    oferece, ajusta o que quiser e importa de uma vez.
+                </p>
+                <StepByStep steps={[
+                    { title: "Escolha como importar os nomes", description: "Na caixa do topo, decida entre MAIÚSCULAS ou Normal (só a primeira letra). Vale para categorias, serviços e aplicações — as descrições nunca são alteradas." },
+                    { title: "Desmarque o que não usa", description: "As caixinhas são em cascata: desmarcar a categoria desmarca os serviços e aplicações dela; desmarcar todas as aplicações de um serviço desmarca o serviço. O contador do rodapé mostra quantas aplicações serão criadas." },
+                    { title: "Renomeie categorias e serviços", description: "O lápis ao lado da categoria renomeia na hora, direto na linha. O lápis na aba do serviço abre a edição completa (nome, descrição e a aba Recorrência)." },
+                    { title: "Ajuste a tabela de aplicações", description: "Nome, descrição, valor, preço mínimo, retorno (meses), tempo (minutos) e comissão (%) são campos livres. A comissão vem 0 — preencha se a clínica trabalha com comissionamento." },
+                    { title: "Importar", description: "O botão do rodapé cria tudo de uma vez. Depois é só vincular os profissionais em cada aplicação." },
+                ]} />
+                <Callout type="atencao" title="Nada é substituído">
+                    Se a clínica <strong>já tem</strong> a categoria ou o serviço cadastrado, o sistema{" "}
+                    <strong>reaproveita o que existe</strong> e só acrescenta o que falta. Aplicação com o mesmo nome
+                    dentro do mesmo serviço é ignorada — seus preços e vínculos atuais ficam intactos.
+                </Callout>
+                <Callout type="dica" title="Pode importar em partes">
+                    Nada impede usar o botão várias vezes: importe hoje só as categorias que precisa e volte depois para
+                    trazer as outras. O que já existe nunca duplica.
+                </Callout>
+            </TopicSection>
+
+            {/* 4 */}
+            <TopicSection id="adicionando" index={4} icon={PlusCircle} title="Adicionando serviços"
+                subtitle="O caminho manual: Adicionar Serviço por Categoria">
                 <StepByStep steps={[
                     { title: "Escolha a categoria", description: "O botão 'Adicionar Serviço por Categoria' abre a lista de categorias (modelos prontos + as suas)." },
                     { title: "Escolha os serviços", description: "Marque os procedimentos que a clínica oferece. Não achou? Use '+ Criar novo serviço' dentro da categoria." },
@@ -102,8 +131,8 @@ export function ServicosGuide() {
                 </Callout>
             </TopicSection>
 
-            {/* 4 */}
-            <TopicSection id="categorias-proprias" index={4} icon={FolderPlus} title="Categorias próprias"
+            {/* 5 */}
+            <TopicSection id="categorias-proprias" index={5} icon={FolderPlus} title="Categorias próprias"
                 subtitle="Quando os modelos prontos não bastam">
                 <p className="text-sm text-muted-foreground">
                     O botão <strong className="text-foreground">Adicionar Categoria</strong> cria uma categoria exclusiva da
@@ -117,8 +146,8 @@ export function ServicosGuide() {
                 </Callout>
             </TopicSection>
 
-            {/* 5 */}
-            <TopicSection id="profissionais" index={5} icon={UserCheck} title="Profissionais vinculados"
+            {/* 6 */}
+            <TopicSection id="profissionais" index={6} icon={UserCheck} title="Profissionais vinculados"
                 subtitle="O vínculo que controla a Agenda e a IA">
                 <p className="text-sm text-muted-foreground">
                     Cada aplicação lista <strong className="text-foreground">quais profissionais a executam</strong>. Esse
@@ -135,8 +164,8 @@ export function ServicosGuide() {
                 </Callout>
             </TopicSection>
 
-            {/* 6 */}
-            <TopicSection id="precos" index={6} icon={CircleDollarSign} title="Preços: uma fonte única"
+            {/* 7 */}
+            <TopicSection id="precos" index={7} icon={CircleDollarSign} title="Preços: uma fonte única"
                 subtitle="O valor da aplicação manda em tudo">
                 <p className="text-sm text-muted-foreground">
                     O preço cadastrado na aplicação é o que a <strong className="text-foreground">IA informa</strong>, o que
@@ -150,8 +179,8 @@ export function ServicosGuide() {
                 </Callout>
             </TopicSection>
 
-            {/* 7 */}
-            <TopicSection id="recorrencia" index={7} icon={Repeat} title="Mensagens de recorrência"
+            {/* 8 */}
+            <TopicSection id="recorrencia" index={8} icon={Repeat} title="Mensagens de recorrência"
                 subtitle="Configuração por serviço + template padrão da conta">
                 <p className="text-sm text-muted-foreground">
                     A recorrência é configurada <strong className="text-foreground">no serviço</strong> (não em cada
@@ -167,29 +196,42 @@ export function ServicosGuide() {
                     { title: "Ative a recorrência do serviço", description: "Lápis ao lado do nome do serviço → aba Recorrência → toggle 'Recorrência ativa'. A configuração vale para todas as aplicações daquele serviço." },
                     { title: "Defina os tempos (dias)", description: "Quantos dias após o procedimento cada abordagem 1/2/3 deve ser enviada. Os campos são sempre manuais — sem valor, a abordagem não é agendada." },
                     { title: "Defina o desconto (%)", description: "Cada abordagem tem desconto opcional — ele vira o desconto da campanha e a variável {{desconto}} do texto." },
-                    { title: "(Opcional) personalize as mensagens", description: "Mensagem em branco = usa o template padrão da conta. Escreveu texto próprio? Use os chips de variáveis ({{nome_cliente}}, {{servico}}, {{preco}}, {{desconto}}, {{meses}}, {{data_procedimento}}...) — variável fora do catálogo bloqueia o salvamento." },
+                    { title: "(Opcional) personalize as mensagens", description: "Cada abordagem já mostra o texto do template padrão da conta, com o selo 'Padrão da conta'. Clique em 'Editar só para este serviço' para escrever o seu — os chips de variáveis ({{nome_cliente}}, {{servico}}, {{preco}}, {{desconto}}, {{meses}}, {{data_procedimento}}...) inserem no cursor e variável fora do catálogo bloqueia o salvamento. O botão 'Voltar ao padrão da conta' desfaz a personalização." },
                 ]} />
+                <Callout type="atencao" title="Padrão da conta × template do serviço">
+                    Editar em <strong>Conexões → Templates → Recorrência</strong> muda o{" "}
+                    <strong>padrão de todos os serviços</strong>. Editar pelo lápis do serviço → aba Recorrência cria um
+                    template <strong>só daquele serviço</strong> — os demais continuam no padrão. Enquanto a mensagem
+                    ficar em branco (selo "Padrão da conta"), o serviço acompanha automaticamente qualquer mudança que
+                    você fizer no padrão.
+                </Callout>
                 <Callout type="dica" title="Prévia em tempo real">
                     Abaixo do campo aparece uma prévia com dados de exemplo (Maria, Botox Full Face...) — confira como o
                     cliente vai receber antes de salvar.
                 </Callout>
                 <Callout type="atencao" title="API oficial (Meta)">
                     O template padrão da conta é enviado para aprovação da Meta automaticamente ao conectar a instância.
-                    Se você personalizar as mensagens de um serviço, um alerta avisa que{" "}
-                    <strong>o template será encaminhado para aprovação da Meta</strong> ao salvar — o selo ao lado do
+                    Ao clicar em <strong>Editar só para este serviço</strong>, um alerta avisa antes que{" "}
+                    <strong>o template será encaminhado para aprovação da Meta</strong> (de alguns minutos até 24 horas,
+                    com os disparos de recorrência deste serviço pausados nesse período; os outros serviços seguem
+                    normais com o padrão da conta) — o selo ao lado do
                     nome do serviço mostra o status: <strong>aprovado</strong> (verde), <strong>pendente</strong> (âmbar)
                     ou <strong>negado</strong> (vermelho). Editou de novo? Nova versão é submetida e o selo volta a
                     pendente. Quem usa API não oficial recebe o texto livre com as variáveis substituídas (sem aprovação).
                 </Callout>
             </TopicSection>
 
-            {/* 8 */}
-            <TopicSection id="faq" index={8} icon={HelpCircle} title="Perguntas frequentes">
+            {/* 9 */}
+            <TopicSection id="faq" index={9} icon={HelpCircle} title="Perguntas frequentes">
                 <Accordion type="single" collapsible className="rounded-xl border px-4">
                     {[
                         {
                             q: "Qual a diferença entre serviço e aplicação?",
                             a: "O serviço é o nome genérico ('Botox Full Face'); a aplicação é a SUA versão dele, com preço, duração e profissionais. O sistema inteiro (agenda, IA, vendas) trabalha com as aplicações.",
+                        },
+                        {
+                            q: "Usei os templates e uma categoria minha já existia. Perdi algo?",
+                            a: "Não. A importação reaproveita categorias e serviços que já existem e só cria o que falta. Aplicação com o mesmo nome dentro do mesmo serviço é ignorada — nenhum preço, duração ou vínculo de profissional seu é sobrescrito.",
                         },
                         {
                             q: "Cadastrei o serviço mas a IA não oferece. Por quê?",

@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Plus, Search, Package, Upload, FolderPlus } from "lucide-react";
+import { Loader2, Plus, Search, Package, Upload, FolderPlus, LayoutTemplate } from "lucide-react";
 import { ImportWizard } from "@/components/import/ImportWizard";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { ServiceClient, ServiceName, ServiceCategory } from "@/types/services";
@@ -11,6 +11,7 @@ import { ServiceCategoryCard } from "@/components/services/ServiceCategoryCard";
 import { DirectCategoryCard } from "@/components/services/DirectCategoryCard";
 import { AddByCategoryModal } from "@/components/services/AddByCategoryModal";
 import { AddCategoryModal } from "@/components/services/AddCategoryModal";
+import { ServiceTemplatesModal } from "@/components/services/ServiceTemplatesModal";
 import { useSuporteTour } from "@/lib/suporteTours";
 
 export default function ProductsServices() {
@@ -20,6 +21,7 @@ export default function ProductsServices() {
   const [importWizardOpen, setImportWizardOpen] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
+  const [showTemplatesModal, setShowTemplatesModal] = useState(false);
 
   const { data: categories } = useQuery({
     queryKey: ["services-categories"],
@@ -106,7 +108,15 @@ export default function ProductsServices() {
             Gerencie suas categorias, serviços e aplicações
           </p>
         </div>
-        <div data-tour="servicos-acoes" className="flex gap-2">
+        <div data-tour="servicos-acoes" className="flex flex-wrap gap-2">
+          <Button
+            data-tour="servicos-templates"
+            onClick={() => setShowTemplatesModal(true)}
+            className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+          >
+            <LayoutTemplate className="w-4 h-4" />
+            Utilizar templates
+          </Button>
           <Button variant="outline" onClick={() => setImportWizardOpen(true)} className="gap-2">
             <Upload className="w-4 h-4" />
             Importar
@@ -148,10 +158,19 @@ export default function ProductsServices() {
             Comece adicionando serviços por categoria. Selecione uma categoria,
             escolha os serviços e personalize as aplicações conforme sua necessidade.
           </p>
-          <Button onClick={() => setShowAddModal(true)} className="gap-2">
-            <Plus className="w-4 h-4" />
-            Adicionar Serviço por Categoria
-          </Button>
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button
+              onClick={() => setShowTemplatesModal(true)}
+              className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              <LayoutTemplate className="w-4 h-4" />
+              Utilizar templates
+            </Button>
+            <Button variant="outline" onClick={() => setShowAddModal(true)} className="gap-2">
+              <Plus className="w-4 h-4" />
+              Adicionar Serviço por Categoria
+            </Button>
+          </div>
         </div>
       ) : (
         <div className="space-y-4">
@@ -193,6 +212,11 @@ export default function ProductsServices() {
       <AddCategoryModal
         open={showAddCategoryModal}
         onOpenChange={setShowAddCategoryModal}
+      />
+
+      <ServiceTemplatesModal
+        open={showTemplatesModal}
+        onOpenChange={setShowTemplatesModal}
       />
 
       <ImportWizard

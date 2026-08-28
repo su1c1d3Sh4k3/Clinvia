@@ -177,10 +177,16 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
             description: "A fonte de verdade de preços e procedimentos — a IA, a Agenda e as vendas leem daqui.",
         },
         {
-            element: '[data-tour="servicos-acoes"]',
-            title: "Os 3 botões",
+            element: '[data-tour="servicos-templates"]',
+            title: "Utilizar templates",
             description:
-                "Importar (planilha em massa), Adicionar Categoria (categoria própria) e Adicionar Serviço por Categoria — o caminho principal para montar o catálogo.",
+                "O jeito mais rápido de começar: abre um catálogo pronto de categorias, serviços e aplicações. Vem tudo marcado e editável — desmarque o que não usa, ajuste preços e importe.",
+        },
+        {
+            element: '[data-tour="servicos-acoes"]',
+            title: "Os outros botões",
+            description:
+                "Importar (planilha em massa), Adicionar Categoria (categoria própria) e Adicionar Serviço por Categoria — o caminho manual para montar o catálogo.",
         },
     ],
     "clientes-tour": [

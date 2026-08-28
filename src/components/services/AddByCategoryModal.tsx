@@ -38,8 +38,9 @@ import {
   ServiceName,
   ServiceApplication,
 } from "@/types/services";
-import { RecurrenceTab, RecurrenceData, defaultRecurrenceData, hasInvalidRecurrenceVariables } from "./RecurrenceTab";
+import { RecurrenceTab, RecurrenceData, defaultRecurrenceData, hasInvalidRecurrenceVariables, messagesForSave } from "./RecurrenceTab";
 import { syncRecurrenceTemplates } from "@/lib/recurrenceTemplateSync";
+import { useAccountRecurrenceDefaults } from "@/hooks/useRecurrenceDefaults";
 import { DirectEntryModal } from "./DirectEntryModal";
 import { AddApplicationModal } from "./AddApplicationModal";
 import { Input } from "@/components/ui/input";
@@ -61,6 +62,7 @@ export const AddByCategoryModal = ({
   const { user } = useAuth();
   const { data: ownerId } = useOwnerId();
   const queryClient = useQueryClient();
+  const recurrenceDefaults = useAccountRecurrenceDefaults();
 
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
   const [selectedServiceId, setSelectedServiceId] = useState<string>("");
@@ -279,18 +281,13 @@ export const AddByCategoryModal = ({
     setSaving(true);
     try {
       // Config de recorrência vive no SERVIÇO (service_name)
-      const hasCustomMsgs = [
-        recurrence.msg_recurrence_1,
-        recurrence.msg_recurrence_2,
-        recurrence.msg_recurrence_3,
-      ].some((m) => m.trim() !== "");
+      const msgs = messagesForSave(recurrence, recurrenceDefaults);
+      const hasCustomMsgs = Object.values(msgs).some((m) => m !== null);
       const { error: svcError } = await supabase
         .from("service_name" as any)
         .update({
           recurrence: recurrenceOn,
-          msg_recurrence_1: recurrence.msg_recurrence_1.trim() || null,
-          msg_recurrence_2: recurrence.msg_recurrence_2.trim() || null,
-          msg_recurrence_3: recurrence.msg_recurrence_3.trim() || null,
+          ...msgs,
           time_recurrence_1: recurrence.time_recurrence_1,
           time_recurrence_2: recurrence.time_recurrence_2,
           time_recurrence_3: recurrence.time_recurrence_3,
