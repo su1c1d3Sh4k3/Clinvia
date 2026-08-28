@@ -236,3 +236,8 @@ verify_jwt = false
 
 [functions.appointment-confirmation-respond]
 verify_jwt = false
+
+# E-mails transacionais da conta (Resend) — auth conferida dentro da funcao
+# (chave de servico ou usuario super-admin)
+[functions.send-account-email]
+verify_jwt = false
