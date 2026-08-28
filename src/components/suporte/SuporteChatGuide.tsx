@@ -115,8 +115,8 @@ export function SuporteChatGuide() {
                     <div className="rounded-xl border p-3">
                         <p className="text-sm font-semibold">O que ele faz</p>
                         <ul className="mt-1.5 space-y-1 text-sm text-muted-foreground">
-                            <li>Explica o passo a passo de qualquer tela</li>
-                            <li>Indica a aba do manual e o guia interativo certo</li>
+                            <li>Te acompanha um passo por vez, esperando você fazer para seguir</li>
+                            <li>Manda o link pronto da aba do manual e do guia interativo certo</li>
                             <li>Consulta dados da sua conta para orientar (conexões, IA ligada, conversas abertas)</li>
                         </ul>
                     </div>

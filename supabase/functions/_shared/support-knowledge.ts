@@ -6,6 +6,15 @@
 // entrada correspondente aqui no MESMO commit, senao a IA passa a orientar errado.
 // ---------------------------------------------------------------------------
 
+/**
+ * As rotas abaixo sao escritas relativas (fonte unica com o front), mas TUDO que
+ * sai daqui para o prompt/tools ja vai como URL ABSOLUTA — a IA precisa mandar o
+ * link completo para o cliente conseguir clicar.
+ */
+const APP_URL = (Deno.env.get("APP_PUBLIC_URL") ?? "https://app.clinbia.ai").replace(/\/+$/, "");
+
+const abs = (path: string) => (path.startsWith("http") ? path : `${APP_URL}${path}`);
+
 export interface SupportTopic {
     /** = value da aba em GUIDE_TABS */
     id: string;
@@ -345,11 +354,13 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
     },
 ];
 
-/** Versao compacta usada no system prompt. */
+/** Versao compacta usada no system prompt (links ja absolutos). */
 export const KNOWLEDGE_SUMMARY = SUPPORT_TOPICS.map((t) => {
-    const tours = t.tours?.length ? `\n  Tours: ${t.tours.map((x) => `${x.label} -> ${x.url}`).join(" | ")}` : "";
+    const tours = t.tours?.length
+        ? `\n  Tours: ${t.tours.map((x) => `${x.label} -> ${abs(x.url)}`).join(" | ")}`
+        : "";
     return [
-        `### ${t.label} (id: ${t.id}) — manual: ${t.route}${tours}`,
+        `### ${t.label} (id: ${t.id}) — manual: ${abs(t.route)}${tours}`,
         `  Resolve: ${t.resolves.join("; ")}`,
         `  Passos: ${t.steps.map((s, i) => `${i + 1}) ${s}`).join(" ")}`,
         t.gotchas?.length ? `  Atencao: ${t.gotchas.join(" ")}` : "",
@@ -358,9 +369,16 @@ export const KNOWLEDGE_SUMMARY = SUPPORT_TOPICS.map((t) => {
         .join("\n");
 }).join("\n\n");
 
+/** Devolve o topico com os links ja absolutos (a IA precisa colar URL clicavel). */
 export function getTopic(id: string): SupportTopic | null {
     const key = (id || "").trim().toLowerCase();
-    return SUPPORT_TOPICS.find((t) => t.id === key) || null;
+    const topic = SUPPORT_TOPICS.find((t) => t.id === key);
+    if (!topic) return null;
+    return {
+        ...topic,
+        route: abs(topic.route),
+        tours: topic.tours?.map((t) => ({ ...t, url: abs(t.url) })),
+    };
 }
 
 export const TOPIC_IDS = SUPPORT_TOPICS.map((t) => t.id);
