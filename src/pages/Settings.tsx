@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
-import { User, Building2, Lock, Camera, Loader2, Bell, BellRing, Users, Volume2, DollarSign, Settings as SettingsIcon, Pen, Download, Smartphone, Monitor, CheckCircle2, Calendar, ListTodo, TrendingUp, Lightbulb, ChevronDown, ChevronUp, AlertCircle, Zap, Tag as TagIcon } from "lucide-react";
+import { User, Building2, Lock, Camera, Loader2, Bell, BellRing, Users, Volume2, DollarSign, Settings as SettingsIcon, Pen, Download, Smartphone, Monitor, CheckCircle2, Calendar, ListTodo, TrendingUp, Lightbulb, ChevronDown, ChevronUp, AlertCircle, Zap, Tag as TagIcon, PanelLeft } from "lucide-react";
 import { AutomationSettings } from "@/components/settings/AutomationSettings";
 import { TagsSettings } from "@/components/settings/TagsSettings";
 import { FaInstagram } from "react-icons/fa";
@@ -19,6 +19,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { useCurrentTeamMember } from "@/hooks/useStaff";
 import { useInstallPWA } from "@/hooks/useInstallPWA";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
+import { useGroupedMenu } from "@/hooks/useGroupedMenu";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
     AlertDialog,
@@ -74,6 +75,17 @@ export default function Settings() {
     // Delete account states
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
     const [deleteLoading, setDeleteLoading] = useState(false);
+
+    // Menu lateral agrupado (preferência de cada pessoa, em team_members)
+    const { grouped: groupedMenu, setGrouped: setGroupedMenu } = useGroupedMenu();
+    const handleGroupedMenuChange = async (value: boolean) => {
+        try {
+            await setGroupedMenu(value);
+            toast.success(value ? "Menu agrupado ativado" : "Menu agrupado desativado");
+        } catch {
+            toast.error("Não foi possível salvar a preferência do menu");
+        }
+    };
 
     // PWA install hook
     const { isInstallable, isInstalled, isIOS, installApp, showIOSInstructions } = useInstallPWA();
@@ -761,6 +773,25 @@ export default function Settings() {
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="p-4 md:p-6 pt-0 md:pt-0 space-y-3 md:space-y-6">
+                            {/* Menu agrupado */}
+                            <div className="flex items-center justify-between p-3 md:p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors gap-3">
+                                <div className="flex items-center gap-3 md:gap-4">
+                                    <div className="p-1.5 md:p-2 bg-primary/10 rounded-full">
+                                        <PanelLeft className="h-4 w-4 md:h-5 md:w-5 text-primary" />
+                                    </div>
+                                    <div className="space-y-0.5">
+                                        <h4 className="font-medium text-sm md:text-base">Menu agrupado</h4>
+                                        <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">
+                                            Organiza o menu lateral em Atendimento, Cadastros e Marketing.
+                                        </p>
+                                    </div>
+                                </div>
+                                <Switch
+                                    checked={groupedMenu}
+                                    onCheckedChange={handleGroupedMenuChange}
+                                />
+                            </div>
+
                             {/* Browser Notifications */}
                             <div className="flex items-center justify-between p-3 md:p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors gap-3">
                                 <div className="flex items-center gap-3 md:gap-4">

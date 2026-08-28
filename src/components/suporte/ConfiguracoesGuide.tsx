@@ -101,12 +101,19 @@ export function ConfiguracoesGuide() {
 
             {/* 4 */}
             <TopicSection id="sistema" index={4} icon={Bell} title="Sistema"
-                subtitle="Notificações, sons e instalação do aplicativo">
+                subtitle="Menu lateral, notificações, sons e instalação do aplicativo">
                 <StepByStep steps={[
+                    { title: "Menu agrupado", description: "Ligado (padrão), o menu lateral fica organizado em Atendimento (Inbox, CRM, Conexões), Cadastros (Serviços, Clientes, Equipe, IA) e Marketing (Recorrência, Campanhas). Desligue para ver todas as páginas em lista única." },
                     { title: "Notificações push", description: "Ative para receber alertas de novas mensagens mesmo com a aba fechada — o navegador vai pedir permissão." },
                     { title: "Sons e alertas", description: "Personalize como você é avisado de novas conversas enquanto usa o sistema." },
                     { title: "Instalar o app", description: "O Clinvia é um PWA: instale no celular ou no computador para abrir como aplicativo, com ícone próprio." },
                 ]} />
+                <p className="text-sm text-muted-foreground">
+                    A escolha do <strong className="text-foreground">menu agrupado</strong> é de cada pessoa: você muda
+                    aqui e ela vale em qualquer computador ou celular onde você entrar. Quais grupos ficam abertos é
+                    guardado no próprio navegador — trocar de página ou atualizar não fecha o que você deixou aberto, e
+                    o grupo da página em que você está abre sozinho.
+                </p>
                 <Callout type="pratica" title="Recepção sempre notificada">
                     No computador da recepção, instale o app e ative as notificações push — nenhuma mensagem de cliente
                     passa despercebida, mesmo com o navegador minimizado.

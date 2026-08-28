@@ -1,7 +1,8 @@
 import {
   Users, Settings, LayoutDashboard, MessageSquare, Briefcase,
   Smartphone, LogOut, BookUser, Calendar, Repeat,
-  Package, Bot, Megaphone, LifeBuoy
+  Package, Bot, Megaphone, LifeBuoy, Headset, FolderKanban,
+  TrendingUp, ChevronRight
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -17,31 +18,71 @@ import { differenceInDays } from "date-fns";
 import { useState, useEffect } from "react";
 import { useMobileMenu } from "@/contexts/MobileMenuContext";
 import { AnimatedNavIcon } from "@/components/AnimatedNavIcon";
+import { useGroupedMenu } from "@/hooks/useGroupedMenu";
 import { FaWhatsapp, FaInstagram } from "react-icons/fa";
 
-// Flat menu structure (no submenus)
 interface MenuItem {
   icon: any;
   label: string;
   id: string;
-  path: string;
+  /** Grupos não navegam — só abrem/fecham a lista de filhos */
+  path?: string;
+  children?: MenuItem[];
 }
 
-const menuStructure: MenuItem[] = [
-  { icon: LayoutDashboard, label: "Dashboard", id: "dashboard", path: "/dashboard" },
-  { icon: MessageSquare, label: "Inbox", id: "inbox", path: "/" },
-  { icon: Briefcase, label: "CRM", id: "crm", path: "/crm" },
-  { icon: Package, label: "Serviços", id: "products-services", path: "/products-services" },
-  { icon: BookUser, label: "Clientes", id: "contacts", path: "/contacts" },
-  { icon: Users, label: "Equipe", id: "team", path: "/equipe" },
-  { icon: Calendar, label: "Agenda", id: "scheduling", path: "/scheduling" },
-  { icon: Repeat, label: "Recorrência", id: "recurrence", path: "/recurrence" },
-  { icon: Megaphone, label: "Campanhas", id: "campaigns", path: "/campanhas" },
-  { icon: Bot, label: "IA", id: "ia-config", path: "/ia-config" },
-  { icon: Smartphone, label: "Conexões", id: "whatsapp", path: "/whatsapp-connection" },
-  { icon: LifeBuoy, label: "Suporte", id: "suporte", path: "/suporte" },
-  { icon: Settings, label: "Configurações", id: "settings", path: "/settings" },
+const ITEMS = {
+  dashboard: { icon: LayoutDashboard, label: "Dashboard", id: "dashboard", path: "/dashboard" },
+  inbox: { icon: MessageSquare, label: "Inbox", id: "inbox", path: "/" },
+  crm: { icon: Briefcase, label: "CRM", id: "crm", path: "/crm" },
+  services: { icon: Package, label: "Serviços", id: "products-services", path: "/products-services" },
+  contacts: { icon: BookUser, label: "Clientes", id: "contacts", path: "/contacts" },
+  team: { icon: Users, label: "Equipe", id: "team", path: "/equipe" },
+  scheduling: { icon: Calendar, label: "Agenda", id: "scheduling", path: "/scheduling" },
+  recurrence: { icon: Repeat, label: "Recorrência", id: "recurrence", path: "/recurrence" },
+  campaigns: { icon: Megaphone, label: "Campanhas", id: "campaigns", path: "/campanhas" },
+  ia: { icon: Bot, label: "IA", id: "ia-config", path: "/ia-config" },
+  whatsapp: { icon: Smartphone, label: "Conexões", id: "whatsapp", path: "/whatsapp-connection" },
+  suporte: { icon: LifeBuoy, label: "Suporte", id: "suporte", path: "/suporte" },
+  settings: { icon: Settings, label: "Configurações", id: "settings", path: "/settings" },
+} satisfies Record<string, MenuItem>;
+
+const groupedMenu: MenuItem[] = [
+  ITEMS.dashboard,
+  ITEMS.scheduling,
+  {
+    icon: Headset, label: "Atendimento", id: "g-atendimento",
+    children: [ITEMS.inbox, ITEMS.crm, ITEMS.whatsapp],
+  },
+  {
+    icon: FolderKanban, label: "Cadastros", id: "g-cadastros",
+    children: [ITEMS.services, ITEMS.contacts, ITEMS.team, ITEMS.ia],
+  },
+  {
+    icon: TrendingUp, label: "Marketing", id: "g-marketing",
+    children: [ITEMS.recurrence, ITEMS.campaigns],
+  },
+  ITEMS.suporte,
+  ITEMS.settings,
 ];
+
+const flatMenu: MenuItem[] = [
+  ITEMS.dashboard, ITEMS.inbox, ITEMS.crm, ITEMS.services, ITEMS.contacts,
+  ITEMS.team, ITEMS.scheduling, ITEMS.recurrence, ITEMS.campaigns, ITEMS.ia,
+  ITEMS.whatsapp, ITEMS.suporte, ITEMS.settings,
+];
+
+/** Grupos abertos ficam no navegador: sobrevivem a troca de página e F5 */
+const OPEN_GROUPS_KEY = "clinvia:sidebar-open-groups";
+
+const readOpenGroups = (): string[] => {
+  try {
+    const raw = localStorage.getItem(OPEN_GROUPS_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed) ? parsed.filter((v) => typeof v === "string") : [];
+  } catch {
+    return [];
+  }
+};
 
 export const NavigationSidebar = () => {
   const location = useLocation();
@@ -50,7 +91,9 @@ export const NavigationSidebar = () => {
   const { theme, setTheme } = useTheme();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [openGroups, setOpenGroups] = useState<string[]>(readOpenGroups);
   const { hideFloatingButton } = useMobileMenu();
+  const { grouped } = useGroupedMenu();
 
   // Detect mobile screen
   useEffect(() => {
@@ -161,7 +204,19 @@ export const NavigationSidebar = () => {
   };
 
   const handleNavClick = (item: MenuItem) => {
-    navigate(item.path);
+    if (item.path) navigate(item.path);
+  };
+
+  const toggleGroup = (groupId: string) => {
+    setOpenGroups((prev) => {
+      const next = prev.includes(groupId)
+        ? prev.filter((id) => id !== groupId)
+        : [...prev, groupId];
+      try {
+        localStorage.setItem(OPEN_GROUPS_KEY, JSON.stringify(next));
+      } catch { /* modo privado / storage cheio */ }
+      return next;
+    });
   };
 
   const handleLogout = async () => {
@@ -180,15 +235,14 @@ export const NavigationSidebar = () => {
 
   const ANIMATED_IDS = new Set(["dashboard", "inbox", "crm"]);
 
-  const renderMenuItem = (item: MenuItem) => {
+  const renderMenuItem = (item: MenuItem, isChild = false) => {
     const Icon = item.icon;
-    const isActive = isPathActive(item.path);
+    const isItemActive = isPathActive(item.path);
     const useAnimated = ANIMATED_IDS.has(item.id);
 
     const dashboardBadge = item.id === "dashboard" ? (dashboardNotificationsCount || 0) : 0;
     const crmBadge = item.id === "crm" ? (stagnatedCount || 0) : 0;
     const badgeCount = dashboardBadge || crmBadge;
-    const isItemActive = isActive;
 
     return (
       <div key={item.id} className="relative">
@@ -200,7 +254,9 @@ export const NavigationSidebar = () => {
             isItemActive
               ? "bg-sidebar-accent dark:bg-[#22262E] hover:bg-sidebar-accent dark:hover:bg-[#22262E]"
               : "hover:bg-sidebar-accent dark:hover:bg-[#1E2229]",
-            "px-4"
+            "px-4",
+            // recuo do submenu só faz sentido com a barra aberta
+            isChild && (isMobile ? "pl-8" : "group-hover/sidebar:pl-8")
           )}
         >
           {isItemActive && (
@@ -239,6 +295,84 @@ export const NavigationSidebar = () => {
       </div>
     );
   };
+
+  const renderGroup = (group: MenuItem) => {
+    const Icon = group.icon;
+    const isOpen = openGroups.includes(group.id);
+    const hasActiveChild = (group.children || []).some((c) => isPathActive(c.path));
+
+    return (
+      <div key={group.id} className="relative">
+        <button
+          onClick={() => toggleGroup(group.id)}
+          className={cn(
+            "w-full flex items-center gap-2.5 py-2.5 px-4 transition-all duration-200 relative",
+            "text-sidebar-foreground/70 dark:text-white/70 hover:text-sidebar-foreground dark:hover:text-white",
+            "hover:bg-sidebar-accent dark:hover:bg-[#1E2229]"
+          )}
+        >
+          <div className="relative shrink-0 ml-1">
+            <Icon className={cn(
+              "w-[14px] h-[14px] transition-colors",
+              hasActiveChild && "text-primary drop-shadow-[0_0_4px_hsl(var(--primary)/0.6)]"
+            )} />
+          </div>
+
+          <span className={cn(
+            "whitespace-nowrap text-[12px] font-semibold flex-1 text-left transition-opacity duration-300",
+            hasActiveChild && "text-sidebar-foreground dark:text-white",
+            isMobile ? "opacity-100" : "opacity-0 group-hover/sidebar:opacity-100"
+          )}>
+            {group.label}
+          </span>
+
+          <ChevronRight className={cn(
+            "w-3 h-3 shrink-0 transition-all duration-200",
+            isOpen && "rotate-90",
+            isMobile ? "opacity-100" : "opacity-0 group-hover/sidebar:opacity-100"
+          )} />
+        </button>
+
+        {isOpen && (
+          <div className={cn(
+            "flex flex-col",
+            isMobile ? "ml-5 border-l border-sidebar-border dark:border-white/10" : "group-hover/sidebar:ml-5 group-hover/sidebar:border-l border-sidebar-border dark:border-white/10"
+          )}>
+            {(group.children || []).map((child) => renderMenuItem(child, true))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const canSee = (item: MenuItem) => {
+    if (item.id === "team") return userRole === "admin" || hasAnyAccess("team_members");
+    if (item.id === "campaigns") return userRole === "admin" || hasAnyAccess("campaigns");
+    if (item.id === "ia-config") return userRole === "admin" || hasAnyAccess("ia_config");
+    return true;
+  };
+
+  // Grupo sem nenhum filho permitido some da barra
+  const visibleMenu = (grouped ? groupedMenu : flatMenu)
+    .map(item => item.children
+      ? { ...item, children: item.children.filter(canSee) }
+      : item)
+    .filter(item => item.children ? item.children.length > 0 : canSee(item));
+
+  // Abre sozinho o grupo da página atual (sem fechar os que o usuário abriu)
+  useEffect(() => {
+    const activeGroup = groupedMenu.find(g =>
+      g.children?.some(c => c.path === location.pathname));
+    if (!activeGroup) return;
+    setOpenGroups((prev) => {
+      if (prev.includes(activeGroup.id)) return prev;
+      const next = [...prev, activeGroup.id];
+      try {
+        localStorage.setItem(OPEN_GROUPS_KEY, JSON.stringify(next));
+      } catch { /* modo privado / storage cheio */ }
+      return next;
+    });
+  }, [location.pathname]);
 
   // Combine all instances for status display
   const allInstances = [
@@ -299,14 +433,8 @@ export const NavigationSidebar = () => {
 
         {/* Scrollable Menu Items */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col py-3 scrollbar-none">
-          {menuStructure
-            .filter(item => {
-              if (item.id === "team") return userRole === "admin" || hasAnyAccess("team_members");
-              if (item.id === "campaigns") return userRole === "admin" || hasAnyAccess("campaigns");
-              if (item.id === "ia-config") return userRole === "admin" || hasAnyAccess("ia_config");
-              return true;
-            })
-            .map(item => renderMenuItem(item))}
+          {visibleMenu.map(item =>
+            item.children ? renderGroup(item) : renderMenuItem(item))}
         </div>
 
         {/* Fixed Bottom Section */}
