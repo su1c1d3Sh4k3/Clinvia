@@ -88,10 +88,10 @@ interface StatCell {
 }
 
 /** Grade de resultados da campanha (compartilhada /campanhas + dashboard).
- *  Card grande = Respondidas; o detalhamento embaixo é o estado ATUAL das
- *  conversas de quem RECEBEU (enviadas − rejeitadas, que é quem fica com a
- *  etiqueta da campanha) — os 4 números somam exatamente as recebidas.
- *  Respondidas + Sem Resposta = Recebidas. */
+ *  USER RULE: só entra no detalhamento quem RESPONDEU à mensagem da campanha
+ *  (na conversa que ela abriu) — Pendente + Aberto + Resolvido + Removido
+ *  somam exatamente as Respondidas. Respondidas + Sem Resposta = Recebidas
+ *  (Enviadas − Rejeitadas). */
 export function CampaignStatsGrid({ stats }: { stats: CampaignStatsRow }) {
     const sent = stats.sent_count || 0;
     const responded = stats.responded_count || 0;
@@ -188,11 +188,11 @@ export function CampaignStatsGrid({ stats }: { stats: CampaignStatsRow }) {
                 </div>
                 <p className="text-3xl font-bold tracking-tight tabular-nums text-violet-600">{responded}</p>
                 <p className="text-xs text-muted-foreground mt-2 tabular-nums">
-                    de <span className="font-semibold text-foreground/80">{sent}</span> enviadas
+                    de <span className="font-semibold text-foreground/80">{received}</span> recebidas
                 </p>
                 <div className="mt-4 pt-3 border-t border-border/40">
                     <p className="text-[11px] font-medium text-muted-foreground mb-2">
-                        Conversas de quem recebeu ({received})
+                        Onde estão as {responded} que responderam
                     </p>
                     <div className="grid grid-cols-2 gap-2">
                         {breakdown.map((b) => (

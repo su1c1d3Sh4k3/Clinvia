@@ -277,20 +277,21 @@ export function CampaignsGuide() {
                 <div className="space-y-2">
                     <p className="text-sm font-semibold">Como ler o quadro</p>
                     <div className="grid gap-2 lg:grid-cols-2">
-                        <LegendRow badge="Respondidas" cls="bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-300" text="O card grande. Quantas pessoas responderam ao disparo. Logo abaixo, em “Conversas de quem recebeu”, está onde cada pessoa que recebeu a mensagem está agora — respondendo ou não: Pendente, Aberto, Resolvido e Removido. Esses 4 números sempre somam as recebidas." />
+                        <LegendRow badge="Respondidas" cls="bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-300" text="O card grande. Quantas pessoas responderam à mensagem da campanha — e, logo abaixo, onde cada uma delas está agora: Pendente, Aberto, Resolvido e Removido. Esses 4 números sempre somam o total de respondidas." />
                         <LegendRow badge="Enviadas / Entregues / Rejeitadas" cls="bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300" text="A linha de cima é a entrega da mensagem: quantas saíram, quantas chegaram no celular e quantas o WhatsApp recusou." />
                         <LegendRow badge="Agendados" cls="bg-teal-100 text-teal-700 dark:bg-teal-900/50 dark:text-teal-300" text="Quantas pessoas marcaram horário dentro da validade da campanha. É a conversão — não depende do estado da conversa." />
                         <LegendRow badge="Sem Resposta" cls="bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-300" text="Recebeu e nunca respondeu. Respondidas + Sem Resposta = Recebidas (Enviadas menos Rejeitadas)." />
                         <LegendRow badge="Em Atendimento" cls="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300" text="A pessoa respondeu e alguém assumiu: a conversa está Aberta e atribuída a um atendente, ou está Pendente na fila Atendimento IA. Conversa aberta sem responsável, conversa pendente na fila humana e mensagens automáticas (confirmação, lembrete, pesquisa) NÃO contam como atendimento." />
                     </div>
                 </div>
-                <Callout type="dica" title="O detalhamento é de quem recebeu, e bate com o Inbox">
+                <Callout type="dica" title="Só quem respondeu entra no detalhamento">
                     Os 4 números embaixo de <strong>Respondidas</strong> (Pendente, Aberto, Resolvido, Removido) contam{" "}
-                    <em>todo mundo que recebeu</em> a mensagem — inclusive quem ficou em silêncio. É a mesma população que
-                    ganha a etiqueta da campanha, então filtrar o Inbox por essa etiqueta devolve exatamente esses números.{" "}
-                    <strong>Rejeitadas ficam de fora</strong> (não receberam e não têm etiqueta). Embaixo de{" "}
-                    <strong>Pendente</strong> aparece ainda quantas estão <em>aguardando você</em> — as que a última
-                    mensagem foi do cliente, o filtro "Não respondidas" do Inbox.
+                    <em>apenas</em> quem respondeu — e por isso somam exatamente o total de respondidas. Quem recebeu e
+                    ficou em silêncio está no card <strong>Sem Resposta</strong>. "Respondeu" significa ter escrito{" "}
+                    <strong>na conversa que a campanha abriu</strong>: se a pessoa falou com você por outro número ou em
+                    outro atendimento, isso não conta como resposta à campanha. Embaixo de <strong>Pendente</strong>{" "}
+                    aparece quantas estão <em>aguardando você</em> — aquelas em que a última mensagem foi do cliente
+                    (o filtro "Não respondidas" do Inbox).
                 </Callout>
                 <ContactStatusSimulator />
                 <div className="space-y-2">
@@ -321,16 +322,16 @@ export function CampaignsGuide() {
                         <LegendRow badge="Aberto" cls="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300" text="Um atendente assumiu — a conversa está na aba Abertos do Inbox." />
                         <LegendRow badge="Resolvido" cls="bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300" text="O atendimento foi encerrado. Se a pessoa voltar a falar, ela sai daqui e volta para as pendências." />
                         <LegendRow badge="Removido" cls="bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300" text="Saiu da campanha (entrou em outra ou a campanha encerrou) — o resultado dela ficou congelado nesse momento." />
-                        <LegendRow badge="— (traço)" cls="bg-muted text-muted-foreground" text="Quem não recebeu a mensagem (ainda na fila, rejeitada, inválida ou ignorada) não tem estágio nem atendente — mesmo que tenha uma conversa antiga naquele número." />
+                        <LegendRow badge="— (traço)" cls="bg-muted text-muted-foreground" text="Quem não respondeu à mensagem da campanha não tem estágio nem atendente: está em Sem Resposta, não em atendimento — mesmo que tenha uma conversa aberta naquele número por outro motivo." />
                     </div>
                     <p className="text-xs text-muted-foreground">
                         As colunas <strong className="text-foreground">Estágio</strong> e{" "}
-                        <strong className="text-foreground">Atendente</strong> existem para quem{" "}
-                        <strong className="text-foreground">recebeu</strong> a mensagem — é a mesma base do quadro de
+                        <strong className="text-foreground">Atendente</strong> existem apenas para quem{" "}
+                        <strong className="text-foreground">respondeu</strong> à campanha — é a mesma base do quadro de
                         resultados. Por isso, filtrar a tabela por "Resolvido" devolve exatamente o número de{" "}
                         <strong className="text-foreground">Resolvidos</strong> do quadro, e Pendente + Aberto + Resolvido +
-                        Removido somam as <strong className="text-foreground">recebidas</strong>. O estágio é o da conversa
-                        que a própria campanha abriu com a pessoa, na conexão da campanha.
+                        Removido somam as <strong className="text-foreground">Respondidas</strong>. O estágio é o da
+                        conversa que a própria campanha abriu, na conexão da campanha.
                     </p>
                 </div>
                 <Callout type="dica">
@@ -436,11 +437,11 @@ export function CampaignsGuide() {
                         },
                         {
                             q: "Pendente + Aberto + Resolvido + Removido não bate com Enviadas. Por quê?",
-                            a: "Porque esses 4 números somam as Recebidas, não as Enviadas. A diferença são as Rejeitadas: o WhatsApp aceitou o envio mas recusou a entrega, então a pessoa não recebeu nada e nem ficou com a etiqueta da campanha. Enviadas − Rejeitadas = Recebidas, e é esse total que aparece no detalhamento.",
+                            a: "Porque esses 4 números somam as Respondidas, não as Enviadas: só entra quem respondeu à mensagem da campanha. Para fechar com Enviadas: Respondidas + Sem Resposta = Recebidas, e Recebidas + Rejeitadas = Enviadas.",
                         },
                         {
-                            q: "Como conferir o quadro contando na mão pelo Inbox?",
-                            a: "No Inbox, filtre pela etiqueta da campanha e pela conexão que disparou. A aba Abertos deve dar o mesmo que \"Aberto\", a aba Pendentes o mesmo que \"Pendente\", e a aba Resolvidos o mesmo que \"Resolvido\". Se você ligar também o filtro \"Não respondidas\" dentro de Pendentes, o número é o \"aguardando você\" que aparece embaixo de Pendente. Contatos rejeitados não têm etiqueta, então não aparecem nem no Inbox nem no detalhamento.",
+                            q: "Contei no Inbox e deu mais que o quadro. Por quê?",
+                            a: "O Inbox filtrado pela etiqueta mostra TODO MUNDO que recebeu a campanha (o card Recebidas), inclusive quem nunca respondeu. O detalhamento embaixo de Respondidas mostra só quem respondeu — sempre vai ser um número menor. Para comparar direto: dentro de Pendentes, ligue o filtro \"Não respondidas\" — esse total é o \"aguardando você\" que aparece embaixo de Pendente no quadro.",
                         },
                         {
                             q: "O que exatamente entra em \"Em Atendimento\"?",
