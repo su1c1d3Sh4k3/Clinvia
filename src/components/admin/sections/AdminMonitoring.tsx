@@ -1,16 +1,11 @@
-// @ts-nocheck - RPC functions will be available after migration runs
+// @ts-nocheck - herdado de DevManager.tsx (RPCs fora dos types gerados)
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Activity,
   AlertTriangle,
-  Bell,
   CheckCircle,
-  Cpu,
   Database,
-  HardDrive,
-  LogOut,
   RefreshCw,
   Server,
   Settings,
@@ -249,12 +244,9 @@ function analyzeDocker(d: InfraData): HealthAnalysis {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function DevManager() {
-  const navigate = useNavigate();
-  const [isLoading, setIsLoading] = useState(true);
+export default function AdminMonitoring({ canEdit }: { canEdit: boolean }) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isCollecting, setIsCollecting] = useState(false);
-  const [authChecked, setAuthChecked] = useState(false);
   const [data, setData] = useState<InfraData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -270,32 +262,6 @@ export default function DevManager() {
 
   const [activeTooltip, setActiveTooltip] = useState<"supabase" | "docker" | null>(null);
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
-  const refreshRef = useRef<NodeJS.Timeout | null>(null);
-
-  // =============================================
-  // Auth check
-  // =============================================
-  useEffect(() => {
-    (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { navigate("/auth"); return; }
-
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", session.user.id)
-        .single();
-
-      if (profile?.role !== "super-admin") {
-        toast.error("Acesso negado: somente super-admin");
-        navigate("/");
-        return;
-      }
-
-      setAuthChecked(true);
-      setIsLoading(false);
-    })();
-  }, [navigate]);
 
   // =============================================
   // Load system_config
@@ -423,11 +389,9 @@ export default function DevManager() {
   // Initial load + auto-refresh
   // =============================================
   useEffect(() => {
-    if (!authChecked) return;
     loadConfig();
     fetchMetrics();
 
-    // Countdown timer
     countdownRef.current = setInterval(() => {
       setCountdown(prev => {
         if (prev <= 1) {
@@ -440,33 +404,13 @@ export default function DevManager() {
 
     return () => {
       if (countdownRef.current) clearInterval(countdownRef.current);
-      if (refreshRef.current) clearInterval(refreshRef.current);
     };
-  }, [authChecked, fetchMetrics, loadConfig]);
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    navigate("/auth");
-  };
+  }, [fetchMetrics, loadConfig]);
 
   const formatTime = (iso: string | null) => {
     if (!iso) return "Nunca";
     return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
   };
-
-  // =============================================
-  // Loading state
-  // =============================================
-  if (isLoading || !authChecked) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "#0a0a0a" }}>
-        <div className="text-center">
-          <div className="w-12 h-12 border-2 border-t-orange-500 border-orange-500/20 rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-sm font-mono" style={{ color: "#666" }}>Autenticando...</p>
-        </div>
-      </div>
-    );
-  }
 
   const statusBarCards = data ? [
     {
@@ -522,22 +466,19 @@ export default function DevManager() {
   ] : [];
 
   return (
-    <div className="min-h-screen" style={{ background: "#0a0a0a", color: "#fff" }}>
+    <div className="rounded-xl overflow-hidden" style={{ background: "#0a0a0a", color: "#fff" }}>
       {/* ============================================= */}
       {/* HEADER */}
       {/* ============================================= */}
       <div
-        className="sticky top-0 z-40 flex items-center gap-3 px-4 py-3 border-b"
+        className="flex flex-wrap items-center gap-3 px-4 py-3 border-b"
         style={{ background: "#0a0a0aee", borderColor: "#1a1a1a", backdropFilter: "blur(12px)" }}
       >
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: "#f97316" }}>
             <Shield size={14} style={{ color: "#fff" }} />
           </div>
-          <span className="font-mono font-bold text-sm" style={{ color: "#f97316" }}>⚡ Dev Manager</span>
-          <span className="hidden sm:inline text-xs px-2 py-0.5 rounded font-mono" style={{ background: "#f9731620", color: "#f97316" }}>
-            SUPER-ADMIN
-          </span>
+          <span className="font-mono font-bold text-sm" style={{ color: "#f97316" }}>⚡ Monitoramento</span>
         </div>
 
         {/* ── Health Indicators ── */}
@@ -669,20 +610,22 @@ export default function DevManager() {
         )}
 
         {/* Collect now button */}
-        <button
-          onClick={triggerCollector}
-          disabled={isCollecting}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-          style={{
-            background: "#1a1a1a",
-            color: isCollecting ? "#f97316" : "#888",
-            border: "1px solid #2a2a2a",
-          }}
-          title="Disparar coleta agora"
-        >
-          <Play size={12} className={isCollecting ? "animate-pulse" : ""} />
-          <span className="hidden sm:inline">{isCollecting ? "Coletando..." : "Coletar"}</span>
-        </button>
+        {canEdit && (
+          <button
+            onClick={triggerCollector}
+            disabled={isCollecting}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+            style={{
+              background: "#1a1a1a",
+              color: isCollecting ? "#f97316" : "#888",
+              border: "1px solid #2a2a2a",
+            }}
+            title="Disparar coleta agora"
+          >
+            <Play size={12} className={isCollecting ? "animate-pulse" : ""} />
+            <span className="hidden sm:inline">{isCollecting ? "Coletando..." : "Coletar"}</span>
+          </button>
+        )}
 
         {/* Refresh button */}
         <button
@@ -700,28 +643,21 @@ export default function DevManager() {
         </button>
 
         {/* Settings */}
-        <button
-          onClick={() => setSettingsOpen(true)}
-          className="p-2 rounded-lg transition-all"
-          style={{ background: "#1a1a1a", color: "#888", border: "1px solid #2a2a2a" }}
-        >
-          <Settings size={14} />
-        </button>
-
-        {/* Logout */}
-        <button
-          onClick={handleLogout}
-          className="p-2 rounded-lg transition-all"
-          style={{ background: "#1a1a1a", color: "#666", border: "1px solid #2a2a2a" }}
-        >
-          <LogOut size={14} />
-        </button>
+        {canEdit && (
+          <button
+            onClick={() => setSettingsOpen(true)}
+            className="p-2 rounded-lg transition-all"
+            style={{ background: "#1a1a1a", color: "#888", border: "1px solid #2a2a2a" }}
+          >
+            <Settings size={14} />
+          </button>
+        )}
       </div>
 
       {/* ============================================= */}
       {/* MAIN CONTENT */}
       {/* ============================================= */}
-      <div className="p-4 space-y-4 max-w-screen-2xl mx-auto">
+      <div className="p-4 space-y-4">
 
         {/* Error banner */}
         {error && (
@@ -948,7 +884,7 @@ export default function DevManager() {
         {/* Footer */}
         <div className="text-center py-4">
           <p className="text-xs font-mono" style={{ color: "#333" }}>
-            Dev Manager · Clinbia · Última atualização: {data ? formatTime(data.refreshed_at) : "—"}
+            Monitoramento · Clinvia · Última atualização: {data ? formatTime(data.refreshed_at) : "—"}
           </p>
         </div>
       </div>

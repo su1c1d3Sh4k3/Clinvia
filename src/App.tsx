@@ -49,7 +49,6 @@ const Suporte = React.lazy(() => import("./pages/Suporte"));
 const Delivery = React.lazy(() => import("./pages/Delivery"));
 const Admin = React.lazy(() => import("./pages/Admin"));
 const AdminAuth = React.lazy(() => import("./pages/AdminAuth"));
-const DevManager = React.lazy(() => import("./pages/DevManager"));
 const Reports = React.lazy(() => import("./pages/Reports"));
 const AutoMessages = React.lazy(() => import("./pages/AutoMessages"));
 const BusinessReports = React.lazy(() => import("./pages/BusinessReports"));
@@ -157,7 +156,8 @@ const App = () => (
                 <Route path="/login" element={<Navigate to="/auth" replace />} />
                 <Route path="/admin-oath" element={<AdminAuth />} />
                 <Route path="/admin" element={<Admin />} />
-                <Route path="/dev-manager" element={<DevManager />} />
+                {/* Monitoramento virou seção do painel admin — link antigo segue funcionando */}
+                <Route path="/dev-manager" element={<Navigate to="/admin?tab=monitoramento" replace />} />
                 {/* BETA — página standalone, fora do Layout (sem menu lateral) */}
                 <Route path="/whatsapp-connection-teste" element={<WhatsAppConnectionTeste />} />
                 <Route path="/agendar" element={<PublicBooking />} />

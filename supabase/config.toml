@@ -181,6 +181,9 @@ verify_jwt = false
 [functions.cleanup-storage]
 verify_jwt = false
 
+[functions.admin-create-user]
+verify_jwt = false
+
 [functions.create-team-member]
 verify_jwt = false
 

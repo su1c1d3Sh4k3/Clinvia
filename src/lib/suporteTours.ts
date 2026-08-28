@@ -305,6 +305,14 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
                 "O interruptor geral. Com ele ligado, aparecem abaixo os botões de cada conexão — você escolhe quais números têm IA.",
         },
     ],
+    "suporte-chat": [
+        {
+            element: '[data-tour="support-widget"]',
+            title: "Falar com o suporte",
+            description:
+                "Este botão azul abre o chat com o time da Clinvia. Ele fica colado na borda do menu lateral e acompanha o menu quando ele expande — clique para abrir um chamado e continuar a conversa por ali.",
+        },
+    ],
 };
 
 /**

@@ -2,8 +2,9 @@ import { ComponentType } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
     LayoutDashboard, MessageSquare, KanbanSquare, Package, Users, ShieldCheck,
-    Calendar, Repeat, Megaphone, Bot, Plug, Settings, LucideIcon,
+    Calendar, Repeat, Megaphone, Bot, Plug, Settings, Headphones, LucideIcon,
 } from "lucide-react";
+import { SuporteChatGuide } from "@/components/suporte/SuporteChatGuide";
 import { CampaignsGuide } from "@/components/suporte/CampaignsGuide";
 import { IaGuide } from "@/components/suporte/IaGuide";
 import { InboxGuide } from "@/components/suporte/InboxGuide";
@@ -39,6 +40,7 @@ const GUIDE_TABS: GuideTab[] = [
     { value: "ia", label: "IA", icon: Bot, component: IaGuide },
     { value: "conexoes", label: "Conexões", icon: Plug, component: ConexoesGuide },
     { value: "configuracoes", label: "Configurações", icon: Settings, component: ConfiguracoesGuide },
+    { value: "atendimento", label: "Falar com o suporte", icon: Headphones, component: SuporteChatGuide },
 ];
 
 /**

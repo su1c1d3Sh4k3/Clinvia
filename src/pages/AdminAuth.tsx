@@ -81,15 +81,27 @@ const AdminAuth = () => {
                 return;
             }
 
-            // Check if user is super-admin
-            const { data: profile, error: profileError } = await supabase
+            // Acesso: super-admin (profiles) ou membro ativo da equipe do painel (admin_users)
+            const { data: profile } = await supabase
                 .from("profiles")
                 .select("role")
                 .eq("id", authData.user.id)
-                .single();
+                .maybeSingle();
 
-            if (profileError || profile?.role !== "super-admin") {
-                toast.error("Acesso negado. Apenas super-admin pode acessar.");
+            let hasAccess = profile?.role === "super-admin";
+
+            if (!hasAccess) {
+                const { data: adminUser } = await supabase
+                    .from("admin_users" as any)
+                    .select("id")
+                    .eq("auth_user_id", authData.user.id)
+                    .eq("is_active", true)
+                    .maybeSingle();
+                hasAccess = !!adminUser;
+            }
+
+            if (!hasAccess) {
+                toast.error("Acesso negado. Você não faz parte da equipe do painel.");
                 await supabase.auth.signOut();
                 setIsLoading(false);
                 resetCaptcha();

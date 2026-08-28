@@ -3,6 +3,7 @@ import { NavigationSidebar } from "./NavigationSidebar";
 import { ImpersonationBanner } from "./ImpersonationBanner";
 import { DisconnectedInstancesBanner } from "./DisconnectedInstancesBanner";
 import { RestrictedInstancesBanner } from "./RestrictedInstancesBanner";
+import { SupportWidget } from "./support/SupportWidget";
 
 export const Layout = () => {
     return (
@@ -15,8 +16,13 @@ export const Layout = () => {
 
             <div className="flex flex-1 overflow-hidden min-h-0">
                 <NavigationSidebar />
-                <div className="flex-1 flex flex-col overflow-y-auto overflow-x-hidden min-w-0">
-                    <Outlet />
+                {/* wrapper relative: o widget de suporte ancora na borda do conteúdo,
+                    então acompanha o menu lateral quando ele expande no hover */}
+                <div className="flex-1 flex flex-col min-w-0 relative">
+                    <div className="flex-1 flex flex-col overflow-y-auto overflow-x-hidden min-w-0">
+                        <Outlet />
+                    </div>
+                    <SupportWidget />
                 </div>
             </div>
         </div>
