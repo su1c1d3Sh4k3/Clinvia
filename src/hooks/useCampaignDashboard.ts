@@ -67,13 +67,17 @@ export interface CampaignStatsRow {
     converted_count: number;
     scheduled_count: number;
     no_response_count: number;
-    /** Estado da conversa SÓ de quem respondeu — os 4 somam responded_count */
+    /** Estado ATUAL da conversa de quem recebeu — os 4 somam received_count */
     open_count: number;
     pending_count: number;
     resolved_count: number;
     removed_count: number;
     /** Respondeu, ticket vivo e a última mensagem é nossa (humano ou IA) */
     in_progress_count: number;
+    /** Enviadas menos rejeitadas — quem de fato recebeu (e ficou com a etiqueta) */
+    received_count: number;
+    /** Pendentes em que a última mensagem foi do cliente */
+    awaiting_reply_count: number;
 }
 
 export function useCampaignDashboardStats(period: CampanhasPeriod) {

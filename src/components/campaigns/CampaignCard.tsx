@@ -88,16 +88,23 @@ interface StatCell {
 }
 
 /** Grade de resultados da campanha (compartilhada /campanhas + dashboard).
- *  Card grande = Respondidas, com o estado ATUAL da conversa de quem respondeu
- *  (os 4 números somam exatamente as respondidas). Respondidas + Sem Resposta
- *  = Enviadas. */
+ *  Card grande = Respondidas; o detalhamento embaixo é o estado ATUAL das
+ *  conversas de quem RECEBEU (enviadas − rejeitadas, que é quem fica com a
+ *  etiqueta da campanha) — os 4 números somam exatamente as recebidas.
+ *  Respondidas + Sem Resposta = Recebidas. */
 export function CampaignStatsGrid({ stats }: { stats: CampaignStatsRow }) {
     const sent = stats.sent_count || 0;
     const responded = stats.responded_count || 0;
+    const received = stats.received_count ?? sent;
     const pct = (v: number) => (sent > 0 ? `${Math.round((v / sent) * 100)}% dos enviados` : undefined);
 
-    const breakdown: { label: string; value: number; className: string }[] = [
-        { label: "Pendente", value: stats.pending_count ?? 0, className: "text-amber-600" },
+    const breakdown: { label: string; value: number; className: string; sub?: string }[] = [
+        {
+            label: "Pendente", value: stats.pending_count ?? 0, className: "text-amber-600",
+            sub: stats.awaiting_reply_count
+                ? `${stats.awaiting_reply_count} aguardando você`
+                : undefined,
+        },
         { label: "Aberto", value: stats.open_count ?? 0, className: "text-emerald-600" },
         { label: "Resolvido", value: stats.resolved_count ?? 0, className: "text-sky-600" },
         { label: "Removido", value: stats.removed_count ?? 0, className: "text-muted-foreground" },
@@ -131,7 +138,10 @@ export function CampaignStatsGrid({ stats }: { stats: CampaignStatsRow }) {
             iconBg: "bg-teal-500/15", bar: "bg-teal-500", valueClass: "text-teal-600",
         },
         {
-            label: "Sem Resposta", value: stats.no_response_count || 0, hint: pct(stats.no_response_count || 0),
+            label: "Sem Resposta", value: stats.no_response_count || 0,
+            hint: received > 0
+                ? `${Math.round(((stats.no_response_count || 0) / received) * 100)}% de quem recebeu`
+                : undefined,
             icon: <BellOff className="w-4 h-4 text-rose-500" />,
             gradient: "from-rose-500/10 via-rose-500/[0.03] to-transparent",
             iconBg: "bg-rose-500/15", bar: "bg-rose-500", valueClass: "text-rose-600",
@@ -180,13 +190,19 @@ export function CampaignStatsGrid({ stats }: { stats: CampaignStatsRow }) {
                 <p className="text-xs text-muted-foreground mt-2 tabular-nums">
                     de <span className="font-semibold text-foreground/80">{sent}</span> enviadas
                 </p>
-                <div className="mt-4 pt-3 border-t border-border/40 grid grid-cols-2 gap-2">
-                    {breakdown.map((b) => (
-                        <div key={b.label}>
-                            <p className="text-[11px] text-muted-foreground">{b.label}</p>
-                            <p className={cn("text-sm font-semibold tabular-nums", b.className)}>{b.value}</p>
-                        </div>
-                    ))}
+                <div className="mt-4 pt-3 border-t border-border/40">
+                    <p className="text-[11px] font-medium text-muted-foreground mb-2">
+                        Conversas de quem recebeu ({received})
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                        {breakdown.map((b) => (
+                            <div key={b.label}>
+                                <p className="text-[11px] text-muted-foreground">{b.label}</p>
+                                <p className={cn("text-sm font-semibold tabular-nums", b.className)}>{b.value}</p>
+                                {b.sub && <p className="text-[10px] text-muted-foreground">{b.sub}</p>}
+                            </div>
+                        ))}
+                    </div>
                 </div>
             </div>
 
