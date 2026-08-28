@@ -184,6 +184,9 @@ verify_jwt = false
 [functions.admin-create-user]
 verify_jwt = false
 
+[functions.support-ai-chat]
+verify_jwt = false
+
 [functions.create-team-member]
 verify_jwt = false
 
