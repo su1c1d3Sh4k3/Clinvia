@@ -78,6 +78,9 @@ export interface CampaignStatsRow {
     received_count: number;
     /** Respondeu, está pendente e a última mensagem foi do cliente */
     awaiting_reply_count: number;
+    /** Recebeu, NÃO respondeu e alguém já encerrou o ticket. Fora de todas as
+     *  somas — é a diferença entre o "Resolvido" daqui e a aba Resolvidos do inbox */
+    closed_no_reply_count: number;
 }
 
 export function useCampaignDashboardStats(period: CampanhasPeriod) {

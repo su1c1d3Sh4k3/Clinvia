@@ -91,7 +91,9 @@ interface StatCell {
  *  USER RULE: só entra no detalhamento quem RESPONDEU à mensagem da campanha
  *  (na conversa que ela abriu) — Pendente + Aberto + Resolvido + Removido
  *  somam exatamente as Respondidas. Respondidas + Sem Resposta = Recebidas
- *  (Enviadas − Rejeitadas). */
+ *  (Enviadas − Rejeitadas). A legenda sob "Resolvido" mostra quantos tickets
+ *  foram encerrados SEM o cliente responder — é o que faz o inbox listar mais
+ *  conversas resolvidas do que este número. */
 export function CampaignStatsGrid({ stats }: { stats: CampaignStatsRow }) {
     const sent = stats.sent_count || 0;
     const responded = stats.responded_count || 0;
@@ -106,7 +108,13 @@ export function CampaignStatsGrid({ stats }: { stats: CampaignStatsRow }) {
                 : undefined,
         },
         { label: "Aberto", value: stats.open_count ?? 0, className: "text-emerald-600" },
-        { label: "Resolvido", value: stats.resolved_count ?? 0, className: "text-sky-600" },
+        {
+            label: "Resolvido", value: stats.resolved_count ?? 0, className: "text-sky-600",
+            // explica por que o inbox lista mais conversas encerradas do que este número
+            sub: stats.closed_no_reply_count
+                ? `${stats.closed_no_reply_count} encerrados antes da resposta`
+                : undefined,
+        },
         { label: "Removido", value: stats.removed_count ?? 0, className: "text-muted-foreground" },
     ];
 

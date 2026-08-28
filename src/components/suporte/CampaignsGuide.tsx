@@ -291,7 +291,10 @@ export function CampaignsGuide() {
                     <strong>na conversa que a campanha abriu</strong>: se a pessoa falou com você por outro número ou em
                     outro atendimento, isso não conta como resposta à campanha. Embaixo de <strong>Pendente</strong>{" "}
                     aparece quantas estão <em>aguardando você</em> — aquelas em que a última mensagem foi do cliente
-                    (o filtro "Não respondidas" do Inbox).
+                    (o filtro "Não respondidas" do Inbox). E embaixo de <strong>Resolvido</strong> aparece quantos
+                    tickets foram <em>encerrados antes da resposta</em>: conversas que a equipe abriu, viu que o
+                    cliente não tinha respondido e fechou. Elas aparecem na aba Resolvidos do Inbox, mas não entram
+                    em Resolvido aqui, porque ninguém respondeu.
                 </Callout>
                 <ContactStatusSimulator />
                 <div className="space-y-2">
@@ -320,7 +323,7 @@ export function CampaignsGuide() {
                     <div className="grid gap-2 lg:grid-cols-2">
                         <LegendRow badge="Pendente" cls="bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300" text="A conversa está na aba Pendentes do Inbox: ninguém assumiu o atendimento (ou quem está conduzindo é a IA)." />
                         <LegendRow badge="Aberto" cls="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300" text="Um atendente assumiu — a conversa está na aba Abertos do Inbox." />
-                        <LegendRow badge="Resolvido" cls="bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300" text="O atendimento foi encerrado. Se a pessoa voltar a falar, ela sai daqui e volta para as pendências." />
+                        <LegendRow badge="Resolvido" cls="bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300" text="A pessoa respondeu e o atendimento dela foi encerrado. Se voltar a falar, ela sai daqui e volta para as pendências. Ticket encerrado sem o cliente ter respondido não aparece aqui — ele é contado na legenda “encerrados antes da resposta”, embaixo do card Resolvido." />
                         <LegendRow badge="Removido" cls="bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300" text="Saiu da campanha (entrou em outra ou a campanha encerrou) — o resultado dela ficou congelado nesse momento." />
                         <LegendRow badge="— (traço)" cls="bg-muted text-muted-foreground" text="Quem não respondeu à mensagem da campanha não tem estágio nem atendente: está em Sem Resposta, não em atendimento — mesmo que tenha uma conversa aberta naquele número por outro motivo." />
                     </div>
@@ -442,6 +445,10 @@ export function CampaignsGuide() {
                         {
                             q: "Contei no Inbox e deu mais que o quadro. Por quê?",
                             a: "O Inbox filtrado pela etiqueta mostra TODO MUNDO que recebeu a campanha (o card Recebidas), inclusive quem nunca respondeu. O detalhamento embaixo de Respondidas mostra só quem respondeu — sempre vai ser um número menor. Para comparar direto: dentro de Pendentes, ligue o filtro \"Não respondidas\" — esse total é o \"aguardando você\" que aparece embaixo de Pendente no quadro.",
+                        },
+                        {
+                            q: "O Inbox mostra 21 conversas resolvidas e o quadro mostra 8. Quem está certo?",
+                            a: "Os dois. O Inbox conta TICKET ENCERRADO; o quadro conta CLIENTE QUE RESPONDEU. Encerrar é ação do atendente: ele pode abrir a conversa, ver que a pessoa não respondeu e fechar mesmo assim — e isso é comum quando a equipe limpa a fila depois de um disparo. Por isso o card Resolvido traz embaixo, em cinza, quantos foram \"encerrados antes da resposta\": some esse número ao Resolvido e você chega ao total que o Inbox lista.",
                         },
                         {
                             q: "O que exatamente entra em \"Em Atendimento\"?",
