@@ -24,7 +24,9 @@ npm run lint       # eslint
 npm test           # vitest (config: vitest.config.ts, setup: src/test/setup.ts)
 ```
 
-Frontend deploys via Vercel (vercel.json) on push to main. Do NOT wait for local `npm run build` to verify (PWA precache + OneDrive makes it take 8-10 min) — push and let Vercel build.
+**O DEPLOY DO FRONTEND É SEMPRE MANUAL, FEITO PELO USER.** Não existe deploy automático no push para main — nunca fique esperando o bundle de produção trocar sozinho, nem prometa que a correção "já está no ar" depois de um push. Seu trabalho termina em commit + push; avise o user que o deploy depende dele.
+
+Do NOT wait for local `npm run build` to verify (PWA precache + OneDrive makes it take 8-10 min).
 
 Python integration tests live in `tests/` (test_*.py) — run manually with python.
 
