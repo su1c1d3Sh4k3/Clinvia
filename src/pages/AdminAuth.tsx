@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/
 import { Lock, Mail, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import TurnstileWidget, { TurnstileWidgetHandle } from "@/components/TurnstileWidget";
+import { getOrCreateSessionId, detectDeviceLabel } from "@/hooks/useSessionLock";
 
 const AdminAuth = () => {
     const navigate = useNavigate();
@@ -103,6 +104,29 @@ const AdminAuth = () => {
             if (!hasAccess) {
                 toast.error("Acesso negado. Você não faz parte da equipe do painel.");
                 await supabase.auth.signOut();
+                setIsLoading(false);
+                resetCaptcha();
+                return;
+            }
+
+            // Registra o slot de sessão. O heartbeat do single-session roda em
+            // TODA a árvore (AuthCacheManager), inclusive no painel — sem esta
+            // chamada não existe linha em active_sessions com este session_id,
+            // o heartbeat devolve session_lost e o admin cai fora sozinho.
+            const { data: lockData, error: lockErr } = await (supabase.rpc as any)("acquire_session", {
+                p_session_id: getOrCreateSessionId(),
+                p_device_label: detectDeviceLabel(),
+                p_ip: null,
+            });
+
+            if (lockErr) {
+                console.warn("[AdminAuth] acquire_session failed:", lockErr);
+            } else if (lockData?.acquired === false) {
+                await supabase.auth.signOut();
+                toast.error(
+                    `Esta conta já está em uso em ${lockData.device_label || "outro dispositivo"}. ` +
+                    "Faça logout no outro dispositivo ou aguarde 2 minutos sem atividade."
+                );
                 setIsLoading(false);
                 resetCaptcha();
                 return;

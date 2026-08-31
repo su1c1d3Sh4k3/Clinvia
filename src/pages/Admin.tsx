@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useUrlTab } from "@/hooks/useUrlTab";
 import { useAdminUser } from "@/hooks/useAdminUser";
+import { getOrCreateSessionId } from "@/hooks/useSessionLock";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { ADMIN_PAGES, type AdminPage } from "@/lib/adminPermissions";
 import AdminDashboard from "@/components/admin/sections/AdminDashboard";
@@ -50,6 +51,13 @@ export default function Admin() {
     });
 
     const handleLogout = async () => {
+        // Libera o slot antes de sair — senão o próximo login bate em
+        // "conta em uso" até o heartbeat ficar stale (2min).
+        try {
+            await supabase.rpc("release_session", { p_session_id: getOrCreateSessionId() });
+        } catch (e) {
+            console.warn("[Admin] release_session failed:", e);
+        }
         await supabase.auth.signOut();
         navigate("/admin-oath");
     };
