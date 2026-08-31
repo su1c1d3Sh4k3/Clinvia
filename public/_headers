@@ -1,0 +1,22 @@
+# Cloudflare Pages — regras de cache de borda.
+#
+# INCIDENTE 2026-08-31: o edge da Cloudflare guardou /custom-sw.js por 4h
+# (Cache-Control: max-age=14400, cf-cache-status HIT). O service worker antigo
+# continuou sendo servido a todo mundo, e como ele tem precache do index.html
+# antigo, TODOS os usuarios seguiram bootando o bundle velho — mesmo limpando o
+# cache do navegador (limpar cache nao mexe em Cache Storage / service worker).
+#
+# O service worker e o manifest NUNCA podem ser cacheados: sao o unico caminho
+# pelo qual um deploy novo chega ao navegador.
+/custom-sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/manifest.json
+  Cache-Control: no-cache
+
+/index.html
+  Cache-Control: no-cache
+
+# Assets tem hash no nome — podem ser imutaveis.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
