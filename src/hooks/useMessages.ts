@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect, useRef, useState } from "react";
 import type { Tables } from "@/integrations/supabase/types";
@@ -212,7 +212,15 @@ export const useMessages = (
     staleTime: 30_000,
     // Ao pedir mais tickets antigos a queryKey muda: manter a lista atual na
     // tela evita o chat piscar vazio no meio da rolagem.
-    placeholderData: keepPreviousData,
+    //
+    // ⚠️ NUNCA usar keepPreviousData puro aqui: a queryKey também carrega o
+    // conversationId, então TROCAR DE CONVERSA reaproveitava as mensagens da
+    // conversa anterior como placeholder — o atendente abria o cliente B e via
+    // o histórico do cliente A (mensagens de outro contato "vazando" pro topo
+    // do chat) até a busca do B responder. Só reaproveitamos a lista quando a
+    // conversa é a MESMA e o que mudou foi a janela do histórico/escopo.
+    placeholderData: (prev: Message[] | undefined, prevQuery: any) =>
+      prevQuery?.queryKey?.[1] === conversationId ? prev : undefined,
   });
 
   // Set up realtime subscriptions for new messages.
