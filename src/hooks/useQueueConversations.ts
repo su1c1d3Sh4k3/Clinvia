@@ -84,7 +84,7 @@ export function useQueueConversations() {
                     instance:instances (
                         name
                     ),
-                    assigned_agent:team_members (
+                    assigned_agent:team_members!conversations_assigned_agent_id_fkey (
                         id,
                         name
                     )
