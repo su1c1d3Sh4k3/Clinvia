@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
@@ -372,7 +373,7 @@ export const ServiceTemplatesModal = ({ open, onOpenChange }: ServiceTemplatesMo
   return (
     <>
       <Dialog open={open && !editing} onOpenChange={onOpenChange}>
-        <DialogContent className="w-[95vw] sm:w-full max-w-6xl max-h-[90vh] overflow-y-auto rounded-lg">
+        <DialogContent className="w-[95vw] max-w-[1840px] max-h-[90vh] overflow-y-auto rounded-lg">
           <DialogHeader>
             <DialogTitle>Utilizar templates</DialogTitle>
             <DialogDescription>
@@ -491,7 +492,7 @@ export const ServiceTemplatesModal = ({ open, onOpenChange }: ServiceTemplatesMo
                     {isOpen && cat.services.length > 0 && (
                       <div className="border-t px-4 py-3">
                         <Tabs defaultValue={cat.services[0].id}>
-                          <TabsList className="overflow-x-auto flex-nowrap max-w-full">
+                          <TabsList className="nav-scrollbar h-auto w-full justify-start overflow-x-auto flex-nowrap pb-2.5">
                             {cat.services.map((svc) => (
                               <TabsTrigger
                                 key={svc.id}
@@ -535,24 +536,24 @@ export const ServiceTemplatesModal = ({ open, onOpenChange }: ServiceTemplatesMo
 
                           {cat.services.map((svc) => (
                             <TabsContent key={svc.id} value={svc.id} className="mt-4">
-                              <div className="rounded-md border overflow-x-auto">
-                                <Table>
+                              <div className="rounded-md border">
+                                <Table className="table-fixed">
                                   <TableHeader>
                                     <TableRow>
-                                      <TableHead className="w-[40px]" />
-                                      <TableHead className="min-w-[200px]">Nome</TableHead>
-                                      <TableHead className="min-w-[240px]">Descrição</TableHead>
-                                      <TableHead className="w-[110px]">Valor</TableHead>
-                                      <TableHead className="w-[110px]">Preço Mín.</TableHead>
-                                      <TableHead className="w-[100px]">Retorno (m)</TableHead>
-                                      <TableHead className="w-[100px]">Tempo (min)</TableHead>
-                                      <TableHead className="w-[100px]">Comissão (%)</TableHead>
+                                      <TableHead className="w-[44px] px-2" />
+                                      <TableHead className="w-[22%] px-2">Nome</TableHead>
+                                      <TableHead className="w-[30%] px-2">Descrição</TableHead>
+                                      <TableHead className="w-[130px] px-2 whitespace-nowrap">Valor</TableHead>
+                                      <TableHead className="w-[130px] px-2 whitespace-nowrap">Preço Mín.</TableHead>
+                                      <TableHead className="w-[110px] px-2 whitespace-nowrap">Retorno (m)</TableHead>
+                                      <TableHead className="w-[110px] px-2 whitespace-nowrap">Tempo (min)</TableHead>
+                                      <TableHead className="w-[110px] px-2 whitespace-nowrap">Comissão (%)</TableHead>
                                     </TableRow>
                                   </TableHeader>
                                   <TableBody>
                                     {svc.applications.map((app) => (
                                       <TableRow key={app.id}>
-                                        <TableCell>
+                                        <TableCell className="p-2 align-top pt-4">
                                           <Checkbox
                                             checked={app.checked}
                                             onCheckedChange={(v) =>
@@ -562,9 +563,10 @@ export const ServiceTemplatesModal = ({ open, onOpenChange }: ServiceTemplatesMo
                                             }
                                           />
                                         </TableCell>
-                                        <TableCell>
-                                          <Input
-                                            className="h-8 text-sm"
+                                        <TableCell className="p-2 align-top">
+                                          <Textarea
+                                            rows={2}
+                                            className="min-h-[56px] text-sm resize-none px-2 py-1.5 leading-snug"
                                             value={nameOf(app)}
                                             onChange={(e) =>
                                               patchApp(cat.id, svc.id, app.id, {
@@ -573,9 +575,10 @@ export const ServiceTemplatesModal = ({ open, onOpenChange }: ServiceTemplatesMo
                                             }
                                           />
                                         </TableCell>
-                                        <TableCell>
-                                          <Input
-                                            className="h-8 text-sm"
+                                        <TableCell className="p-2 align-top">
+                                          <Textarea
+                                            rows={2}
+                                            className="min-h-[56px] text-sm resize-none px-2 py-1.5 leading-snug"
                                             value={app.description}
                                             placeholder="Descrição..."
                                             onChange={(e) =>
@@ -585,9 +588,9 @@ export const ServiceTemplatesModal = ({ open, onOpenChange }: ServiceTemplatesMo
                                             }
                                           />
                                         </TableCell>
-                                        <TableCell>
+                                        <TableCell className="p-2 align-top">
                                           <Input
-                                            className="h-8 text-sm"
+                                            className="h-9 text-sm px-2"
                                             type="number"
                                             step="0.01"
                                             value={app.price}
@@ -598,9 +601,9 @@ export const ServiceTemplatesModal = ({ open, onOpenChange }: ServiceTemplatesMo
                                             }
                                           />
                                         </TableCell>
-                                        <TableCell>
+                                        <TableCell className="p-2 align-top">
                                           <Input
-                                            className="h-8 text-sm"
+                                            className="h-9 text-sm px-2"
                                             type="number"
                                             step="0.01"
                                             value={app.minPrice ?? ""}
@@ -613,9 +616,9 @@ export const ServiceTemplatesModal = ({ open, onOpenChange }: ServiceTemplatesMo
                                             }
                                           />
                                         </TableCell>
-                                        <TableCell>
+                                        <TableCell className="p-2 align-top">
                                           <Input
-                                            className="h-8 text-sm"
+                                            className="h-9 text-sm px-2"
                                             type="number"
                                             value={app.expiryMonths ?? ""}
                                             onChange={(e) =>
@@ -627,9 +630,9 @@ export const ServiceTemplatesModal = ({ open, onOpenChange }: ServiceTemplatesMo
                                             }
                                           />
                                         </TableCell>
-                                        <TableCell>
+                                        <TableCell className="p-2 align-top">
                                           <Input
-                                            className="h-8 text-sm"
+                                            className="h-9 text-sm px-2"
                                             type="number"
                                             value={app.durationMinutes ?? ""}
                                             onChange={(e) =>
@@ -641,9 +644,9 @@ export const ServiceTemplatesModal = ({ open, onOpenChange }: ServiceTemplatesMo
                                             }
                                           />
                                         </TableCell>
-                                        <TableCell>
+                                        <TableCell className="p-2 align-top">
                                           <Input
-                                            className="h-8 text-sm"
+                                            className="h-9 text-sm px-2"
                                             type="number"
                                             step="0.1"
                                             value={app.commissionPct}
