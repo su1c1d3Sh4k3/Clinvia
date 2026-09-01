@@ -554,7 +554,7 @@ export const ServiceTemplatesModal = ({ open, onOpenChange }: ServiceTemplatesMo
                                       <TableHead className="w-[44px] px-2" />
                                       <TableHead className="px-2">Nome</TableHead>
                                       <TableHead className="px-2">Descrição</TableHead>
-                                      <TableHead className="w-[86px] px-2 text-xs whitespace-nowrap">Valor</TableHead>
+                                      <TableHead className="w-[96px] px-2 text-xs whitespace-nowrap">Valor</TableHead>
                                       <TableHead className="w-[96px] px-2 text-xs whitespace-nowrap">Preço Mín.</TableHead>
                                       <TableHead className="w-[98px] px-2 text-xs whitespace-nowrap">Retorno (m)</TableHead>
                                       <TableHead className="w-[96px] px-2 text-xs whitespace-nowrap">Tempo (min)</TableHead>
@@ -601,7 +601,7 @@ export const ServiceTemplatesModal = ({ open, onOpenChange }: ServiceTemplatesMo
                                         </TableCell>
                                         <TableCell className="p-2 align-top">
                                           <Input
-                                            className={cn(NUM_INPUT, "w-[62px]")}
+                                            className={cn(NUM_INPUT, "w-[74px]")}
                                             type="number"
                                             step="0.01"
                                             value={app.price}
@@ -614,7 +614,7 @@ export const ServiceTemplatesModal = ({ open, onOpenChange }: ServiceTemplatesMo
                                         </TableCell>
                                         <TableCell className="p-2 align-top">
                                           <Input
-                                            className={cn(NUM_INPUT, "w-[62px]")}
+                                            className={cn(NUM_INPUT, "w-[74px]")}
                                             type="number"
                                             step="0.01"
                                             value={app.minPrice ?? ""}
@@ -629,7 +629,7 @@ export const ServiceTemplatesModal = ({ open, onOpenChange }: ServiceTemplatesMo
                                         </TableCell>
                                         <TableCell className="p-2 align-top">
                                           <Input
-                                            className={cn(NUM_INPUT, "w-[40px]")}
+                                            className={cn(NUM_INPUT, "w-[48px]")}
                                             type="number"
                                             value={app.expiryMonths ?? ""}
                                             onChange={(e) =>
@@ -643,7 +643,7 @@ export const ServiceTemplatesModal = ({ open, onOpenChange }: ServiceTemplatesMo
                                         </TableCell>
                                         <TableCell className="p-2 align-top">
                                           <Input
-                                            className={cn(NUM_INPUT, "w-[40px]")}
+                                            className={cn(NUM_INPUT, "w-[48px]")}
                                             type="number"
                                             value={app.durationMinutes ?? ""}
                                             onChange={(e) =>
@@ -657,7 +657,7 @@ export const ServiceTemplatesModal = ({ open, onOpenChange }: ServiceTemplatesMo
                                         </TableCell>
                                         <TableCell className="p-2 align-top">
                                           <Input
-                                            className={cn(NUM_INPUT, "w-[40px]")}
+                                            className={cn(NUM_INPUT, "w-[48px]")}
                                             type="number"
                                             step="0.1"
                                             value={app.commissionPct}

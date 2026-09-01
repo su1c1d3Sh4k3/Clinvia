@@ -60,12 +60,15 @@ export const ServiceCategoryCard = ({
 
       {/* Expanded Content */}
       {expanded && (
-        <div className="border-t px-5 py-4">
-          <Tabs defaultValue={defaultTab}>
-            <div className="flex items-center gap-2 mb-4">
-              <TabsList>
+        <div className="border-t px-5 py-4 min-w-0 overflow-hidden">
+          <Tabs defaultValue={defaultTab} className="w-full min-w-0">
+            <div className="flex items-center gap-2 mb-4 min-w-0">
+              {/* min-w-0 + overflow-x-auto: sem isso a faixa de abas de uma
+                  categoria com muitos serviços estica e vaza pra fora do card,
+                  e a barra de rolagem nunca aparece. */}
+              <TabsList className="nav-scrollbar flex h-auto min-w-0 flex-1 justify-start overflow-x-auto flex-nowrap pb-2.5">
                 {services.map((svc) => (
-                  <TabsTrigger key={svc.id} value={svc.id} className="text-sm gap-1.5">
+                  <TabsTrigger key={svc.id} value={svc.id} className="text-sm gap-1.5 shrink-0">
                     {svc.name}
                     {templateBadges?.hasMeta && svc.recurrence && (
                       <RecurrenceTemplateBadge
@@ -97,7 +100,7 @@ export const ServiceCategoryCard = ({
               <Button
                 variant="outline"
                 size="sm"
-                className="gap-1 text-xs"
+                className="gap-1 text-xs shrink-0"
                 onClick={() => setShowAddService(true)}
               >
                 <Plus className="w-3 h-3" />
