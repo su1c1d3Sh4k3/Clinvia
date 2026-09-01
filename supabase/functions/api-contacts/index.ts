@@ -50,6 +50,27 @@ serve(async (req) => {
             return phone.replace(/\D/g, "");
         };
 
+        // Regra do projeto: o mesmo cliente chega ora com o 9o digito ora sem
+        // (Meta manda 12 digitos, UAZAPI manda 13), entao a identidade e sempre
+        // pelos ULTIMOS 8 DIGITOS. Buscar por prefixo (`5511...%`) nao cruza os
+        // dois formatos e era o que fazia esta API criar cadastro duplicado.
+        const findContactByPhone = async (phone: string) => {
+            const last8 = cleanPhone(String(phone)).slice(-8);
+            if (last8.length < 8) return { data: null, error: null };
+            return await supabase
+                .from("contacts")
+                .select("*")
+                .eq("user_id", user_id)
+                .like("number", `%${last8}%`)
+                .order("created_at", { ascending: true })
+                .limit(1)
+                .maybeSingle();
+        };
+
+        // contacts.number nunca guarda @s.whatsapp.net (o banco tambem tira via
+        // trigger); @g.us/@lid/instagram: seguem intactos.
+        const stripWaSuffix = (value: string) => value.replace(/@(s\.whatsapp\.net|c\.us)$/i, "");
+
         // contact_data precisa ser objeto: espalhar string/array monta um payload
         // sem sentido e o erro sairia como violação de coluna do Postgres.
         const ensureContactDataObject = (): Response | null => {
@@ -73,19 +94,11 @@ serve(async (req) => {
 
             const cleaned = cleanPhone(String(phone_number));
 
-            // Search for number starting with cleaned version (matches @s.whatsapp.net or @whatsapp.com)
-            const { data, error } = await supabase
-                .from("contacts")
-                .select("*")
-                .eq("user_id", user_id)
-                .ilike("number", `${cleaned}%`)
-                .single();
+            const { data, error } = await findContactByPhone(String(phone_number));
 
-            // PGRST116 = nenhuma (ou mais de uma) linha para o .single(): não é
-            // falha de banco, é "contato não encontrado" → resposta null, como antes.
-            if (error && error.code !== "PGRST116") {
+            if (error) {
                 return dbErrorResponse(corsHeaders, "contact_read_failed",
-                    `buscar o contato com telefone começando em ${cleaned} na conta ${user_id}`, error);
+                    `buscar o contato com telefone terminando em ${cleaned.slice(-8)} na conta ${user_id}`, error);
             }
 
             return new Response(JSON.stringify(data || null), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -94,11 +107,40 @@ serve(async (req) => {
         if (action === "create_contact") {
             const invalidData = ensureContactDataObject();
             if (invalidData) return invalidData;
-            // contact_data should have: name (push_name?), number, etc.
-            // Ensure number is formatted if needed, or trust user?
-            // Let's assume user sends raw data, but we enforce user_id
-
             const payload = { ...contact_data, user_id };
+            if (typeof payload.number === "string") payload.number = stripWaSuffix(payload.number);
+
+            // Nunca criar um segundo cadastro pro mesmo telefone: se ja existe
+            // contato com os mesmos 8 ultimos digitos, completa o que estiver
+            // faltando nele e devolve. (Sem isto, o n8n abria um cadastro novo
+            // toda vez que mandava o numero num formato diferente.)
+            if (typeof payload.number === "string" && payload.number) {
+                const { data: existente, error: lookupError } = await findContactByPhone(payload.number);
+                if (lookupError) {
+                    return dbErrorResponse(corsHeaders, "contact_read_failed",
+                        `verificar se já existe contato com o telefone ${payload.number} na conta ${user_id}`, lookupError);
+                }
+                if (existente) {
+                    const merge: Record<string, unknown> = {};
+                    for (const [campo, valor] of Object.entries(payload)) {
+                        if (campo === "number" || campo === "user_id" || campo === "id") continue;
+                        if (valor === null || valor === undefined || valor === "") continue;
+                        if (existente[campo] === null || existente[campo] === undefined || existente[campo] === "") {
+                            merge[campo] = valor;
+                        }
+                    }
+                    if (Object.keys(merge).length === 0) {
+                        return new Response(JSON.stringify(existente), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+                    }
+                    const { data: atualizado, error: mergeError } = await supabase
+                        .from("contacts").update(merge).eq("id", existente.id).select().single();
+                    if (mergeError) {
+                        return dbErrorResponse(corsHeaders, "contact_update_failed",
+                            `completar o contato ${existente.id} já existente com o telefone ${payload.number}`, mergeError);
+                    }
+                    return new Response(JSON.stringify(atualizado), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+                }
+            }
 
             const { data, error } = await supabase
                 .from("contacts")
@@ -125,9 +167,9 @@ serve(async (req) => {
                 query = query.eq("id", contact_data.id);
                 identificador = `id ${contact_data.id}`;
             } else if (phone_number) {
-                const cleaned = cleanPhone(String(phone_number));
-                query = query.ilike("number", `${cleaned}%`);
-                identificador = `telefone começando em ${cleaned}`;
+                const last8 = cleanPhone(String(phone_number)).slice(-8);
+                query = query.like("number", `%${last8}%`);
+                identificador = `telefone terminando em ${last8}`;
             } else {
                 return apiError(corsHeaders, {
                     status: 400,

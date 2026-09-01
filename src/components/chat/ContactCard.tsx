@@ -66,7 +66,7 @@ export function ContactCard({ body }: ContactCardProps) {
             <ContactModal
                 open={contactModalOpen}
                 onOpenChange={setContactModalOpen}
-                contactToEdit={{ id: '', push_name: name, number: cleanPhone ? `${cleanPhone}@s.whatsapp.net` : '', phone: cleanPhone, company: company || undefined } as any}
+                contactToEdit={{ id: '', push_name: name, number: cleanPhone, phone: cleanPhone, company: company || undefined } as any}
             />
             <NewMessageModal
                 open={messageModalOpen}

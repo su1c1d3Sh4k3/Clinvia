@@ -63,8 +63,6 @@ export const ForwardMessageModal = ({ open, onOpenChange, messageToForward }: Fo
         }
 
         try {
-            const remoteJid = `${number}@s.whatsapp.net`;
-
             if (!ownerId) {
                 throw new Error("Usuário não autenticado");
             }
@@ -82,11 +80,11 @@ export const ForwardMessageModal = ({ open, onOpenChange, messageToForward }: Fo
                 .maybeSingle();
 
             if (!contact) {
-                const isMetaInstance = (instance as any)?.provider === "meta";
                 const { data: newContact, error: contactError } = await supabase
                     .from("contacts")
                     .insert({
-                        number: isMetaInstance ? number : remoteJid,
+                        // só dígitos nos dois provedores — @s.whatsapp.net duplicava cadastro
+                        number,
                         push_name: number,
                         user_id: ownerId,
                         instance_id: instance.id,

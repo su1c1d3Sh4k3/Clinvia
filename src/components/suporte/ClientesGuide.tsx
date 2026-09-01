@@ -194,7 +194,7 @@ export function ClientesGuide() {
                         },
                         {
                             q: "Apareceu um contato duplicado. O que houve?",
-                            a: "Quase sempre é o mesmo cliente com números diferentes (ou um número salvo errado). Confira os telefones nos dois cadastros; o canal Instagram também cria um contato próprio, que o sistema vincula ao contato de WhatsApp quando identifica a pessoa.",
+                            a: "O mesmo número nunca gera dois cadastros: o telefone é sempre guardado só com os dígitos, e o sistema reaproveita o cadastro existente pelos últimos 8 dígitos. Se você vê dois cadastros parecidos, os números são realmente diferentes — normalmente DDDs diferentes, que são pessoas diferentes para o sistema. O canal Instagram também cria um contato próprio, vinculado ao de WhatsApp quando o sistema identifica a pessoa.",
                         },
                         {
                             q: "Desliguei a IA do contato mas ela continuou respondendo.",

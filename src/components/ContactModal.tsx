@@ -111,7 +111,9 @@ export const ContactModal = ({ open, onOpenChange, contactToEdit }: ContactModal
                 push_name: name,
                 phone: phone,
                 // Agentes não podem alterar o number; admin/supervisor podem
-                number: (contactToEdit && isAgent) ? contactToEdit.number : `${phone}@s.whatsapp.net`,
+                // number guarda só os dígitos — @s.whatsapp.net duplicava o cadastro
+                // do mesmo cliente entre UAZAPI e Meta
+                number: (contactToEdit && isAgent) ? contactToEdit.number : phone,
                 company: company || null,
                 cpf: cpf || null,
                 email: email || null,

@@ -310,8 +310,6 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
             }
 
             // 2. Handle Database Updates
-            const remoteJid = `${number}@s.whatsapp.net`;
-
             // Use ownerId from hook for multi-tenancy
             if (!ownerId) {
                 throw new Error("Usuário não autenticado");
@@ -350,8 +348,9 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
                 const { data: newContact, error: contactError } = await supabase
                     .from("contacts")
                     .insert({
-                        // Meta salva sem sufixo; UAZAPI com @s.whatsapp.net
-                        number: isMetaSelected ? number : remoteJid,
+                        // number guarda só os dígitos nos dois provedores — o sufixo
+                        // @s.whatsapp.net duplicava o cadastro do mesmo cliente
+                        number,
                         push_name: number, // Use number as initial name
                         user_id: ownerId,
                         instance_id: instance.id,

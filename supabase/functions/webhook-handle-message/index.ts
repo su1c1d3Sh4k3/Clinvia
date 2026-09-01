@@ -878,7 +878,10 @@ serve(async (req) => {
                 const { data: newContact, error: createError } = await supabase
                     .from('contacts')
                     .insert({
-                        number: waNumber,
+                        // contacts.number nunca guarda @s.whatsapp.net: o sufixo é detalhe do
+                        // JID da UAZAPI e fazia o mesmo cliente ter 2 cadastros quando também
+                        // chegava pela Meta (que grava só os dígitos). @lid/@g.us continuam.
+                        number: waNumber.replace(/@(s\.whatsapp\.net|c\.us)$/i, ''),
                         push_name: contactName,
                         profile_pic_url: profilePicUrl,
                         is_group: false,
@@ -1709,7 +1712,10 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                                     const { data: newMonContact } = await supabase
                                         .from('contacts')
                                         .insert({
-                                            number: `${digits}@s.whatsapp.net`,
+                                            // contacts.number guarda SÓ os dígitos (o sufixo @s.whatsapp.net
+                                            // é detalhe do JID da UAZAPI e duplicava o cadastro do
+                                            // mesmo cliente quando ele também vinha pela Meta)
+                                            number: digits,
                                             push_name: senderName || digits,
                                             profile_pic_url: senderProfilePicUrl,
                                             is_group: false,
