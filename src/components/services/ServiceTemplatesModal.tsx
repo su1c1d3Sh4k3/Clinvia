@@ -577,7 +577,7 @@ export const ServiceTemplatesModal = ({ open, onOpenChange }: ServiceTemplatesMo
                                         <TableCell className="p-2 align-top">
                                           <Textarea
                                             rows={2}
-                                            className="min-h-[56px] text-sm resize-none px-2 py-1.5 leading-snug"
+                                            className="nav-scrollbar min-h-[56px] text-sm resize-none px-2 py-1.5 leading-snug"
                                             value={nameOf(app)}
                                             onChange={(e) =>
                                               patchApp(cat.id, svc.id, app.id, {
@@ -589,7 +589,7 @@ export const ServiceTemplatesModal = ({ open, onOpenChange }: ServiceTemplatesMo
                                         <TableCell className="p-2 align-top">
                                           <Textarea
                                             rows={2}
-                                            className="min-h-[56px] text-sm resize-none px-2 py-1.5 leading-snug"
+                                            className="nav-scrollbar min-h-[56px] text-sm resize-none px-2 py-1.5 leading-snug"
                                             value={app.description}
                                             placeholder="Descrição..."
                                             onChange={(e) =>
@@ -601,7 +601,7 @@ export const ServiceTemplatesModal = ({ open, onOpenChange }: ServiceTemplatesMo
                                         </TableCell>
                                         <TableCell className="p-2 align-top">
                                           <Input
-                                            className={cn(NUM_INPUT, "w-[52px]")}
+                                            className={cn(NUM_INPUT, "w-[62px]")}
                                             type="number"
                                             step="0.01"
                                             value={app.price}
@@ -614,7 +614,7 @@ export const ServiceTemplatesModal = ({ open, onOpenChange }: ServiceTemplatesMo
                                         </TableCell>
                                         <TableCell className="p-2 align-top">
                                           <Input
-                                            className={cn(NUM_INPUT, "w-[52px]")}
+                                            className={cn(NUM_INPUT, "w-[62px]")}
                                             type="number"
                                             step="0.01"
                                             value={app.minPrice ?? ""}
@@ -629,7 +629,7 @@ export const ServiceTemplatesModal = ({ open, onOpenChange }: ServiceTemplatesMo
                                         </TableCell>
                                         <TableCell className="p-2 align-top">
                                           <Input
-                                            className={cn(NUM_INPUT, "w-[33px]")}
+                                            className={cn(NUM_INPUT, "w-[40px]")}
                                             type="number"
                                             value={app.expiryMonths ?? ""}
                                             onChange={(e) =>
@@ -643,7 +643,7 @@ export const ServiceTemplatesModal = ({ open, onOpenChange }: ServiceTemplatesMo
                                         </TableCell>
                                         <TableCell className="p-2 align-top">
                                           <Input
-                                            className={cn(NUM_INPUT, "w-[33px]")}
+                                            className={cn(NUM_INPUT, "w-[40px]")}
                                             type="number"
                                             value={app.durationMinutes ?? ""}
                                             onChange={(e) =>
@@ -657,7 +657,7 @@ export const ServiceTemplatesModal = ({ open, onOpenChange }: ServiceTemplatesMo
                                         </TableCell>
                                         <TableCell className="p-2 align-top">
                                           <Input
-                                            className={cn(NUM_INPUT, "w-[33px]")}
+                                            className={cn(NUM_INPUT, "w-[40px]")}
                                             type="number"
                                             step="0.1"
                                             value={app.commissionPct}
