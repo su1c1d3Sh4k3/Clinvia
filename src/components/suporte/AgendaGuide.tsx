@@ -142,10 +142,16 @@ export function AgendaGuide() {
             </TopicSection>
 
             {/* 5 */}
-            <TopicSection id="horarios" index={5} icon={UserCog} title="Horários do profissional"
+            <TopicSection id="horarios" index={5} icon={UserCog} title="Horários da sala"
                 subtitle="Global ou dia a dia — e vale para IA e link público">
+                <Callout type="dica" title="Cada coluna da grade é uma sala">
+                    A sala de um profissional leva o nome dele e é criada junto com o cadastro, em{" "}
+                    <strong>Equipe &gt; Profissionais</strong>. Salas avulsas (laser, procedimentos) ficam em{" "}
+                    <strong>Equipe &gt; Salas</strong> e atendem com qualquer profissional disponível. Inativar uma sala tira
+                    a coluna da agenda e cancela os agendamentos futuros dela.
+                </Callout>
                 <p className="text-sm text-muted-foreground">
-                    No cadastro do profissional (barra lateral &gt; Adicionar Profissional, ou lápis no cabeçalho da coluna)
+                    No cadastro da sala (barra lateral &gt; Adicionar Sala, ou lápis no cabeçalho da coluna)
                     você define dias de trabalho, horário e intervalo. Precisa de horários diferentes por dia? Ligue{" "}
                     <strong className="text-foreground">"Configurar horário individualmente"</strong>:
                 </p>
@@ -274,7 +280,7 @@ export function AgendaGuide() {
                     {[
                         {
                             q: "Um profissional não aparece na grade. Por quê?",
-                            a: "Três causas comuns: 1) a grade está na visão solo de outro profissional — clique em Todos na lista da barra lateral; 2) há um filtro de categoria/serviço ativo e ele não executa aquele serviço; 3) o dia selecionado não está nos dias de trabalho dele. Limpe o filtro e confira o cadastro do profissional.",
+                            a: "Quatro causas comuns: 1) o profissional (ou a sala) está inativo em Equipe > Profissionais / Salas — a chave desligada tira a coluna da agenda; 2) a grade está na visão solo de outro profissional — clique em Todos na lista da barra lateral; 3) há um filtro de categoria/serviço ativo e ele não executa aquele serviço; 4) o dia selecionado não está nos dias de trabalho dele. Limpe o filtro e confira o cadastro.",
                         },
                         {
                             q: "A IA ofereceu um horário que eu não queria abrir. Como restringir?",

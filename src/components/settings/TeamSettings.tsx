@@ -4,8 +4,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useUserRole } from "@/hooks/useUserRole";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useOwnerId } from "@/hooks/useOwnerId";
-import { useProfessionals } from "@/hooks/useFinancial";
-import { ProfessionalModal } from "@/components/scheduling/ProfessionalModal";
 import { Button } from "@/components/ui/button";
 import {
     Table,
@@ -34,7 +32,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, Plus, Pencil, Trash2, Users, Briefcase } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Users } from "lucide-react";
 
 interface ScopeOption {
     id: string;
@@ -95,9 +93,6 @@ export const TeamSettings = () => {
     const [isEditOpen, setIsEditOpen] = useState(false);
     const [selectedMember, setSelectedMember] = useState<any>(null);
 
-    const [isProfessionalModalOpen, setIsProfessionalModalOpen] = useState(false);
-    const [selectedProfessional, setSelectedProfessional] = useState<any>(null);
-
     const [formData, setFormData] = useState({
         name: "",
         email: "",
@@ -124,8 +119,6 @@ export const TeamSettings = () => {
             return data;
         },
     });
-
-    const { data: professionals, isLoading: isProfessionalsLoading } = useProfessionals();
 
     // Instâncias (WhatsApp + Instagram) e filas do owner p/ escopo de visibilidade
     const { data: instanceOptions } = useQuery({
@@ -186,47 +179,6 @@ export const TeamSettings = () => {
         const labels = ids.map((id) => tagOptions?.find((o) => o.id === id)?.label).filter(Boolean);
         return labels.length ? labels.join(", ") : "Todas";
     };
-
-    const { data: services } = useQuery({
-        queryKey: ["services-for-professionals"],
-        queryFn: async () => {
-            const { data, error } = await supabase
-                .from("products_services")
-                .select("id, name")
-                .eq("type", "service");
-            if (error) throw error;
-            return data || [];
-        },
-    });
-
-    const DAY_NAMES = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-
-    const getServiceNames = (serviceIds: string[] | null) => {
-        if (!serviceIds || serviceIds.length === 0 || !services) return "-";
-        return serviceIds
-            .map(id => services.find((s: any) => s.id === id)?.name)
-            .filter(Boolean)
-            .join(", ") || "-";
-    };
-
-    const getWorkDaysNames = (workDays: number[] | null) => {
-        if (!workDays || workDays.length === 0) return "-";
-        return workDays.map(d => DAY_NAMES[d]).join(", ");
-    };
-
-    const deleteProfessionalMutation = useMutation({
-        mutationFn: async (id: string) => {
-            const { error } = await supabase.from("professionals").delete().eq("id", id);
-            if (error) throw error;
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["professionals-list"] });
-            toast({ title: "Profissional removido com sucesso!" });
-        },
-        onError: (error: any) => {
-            toast({ title: "Erro ao remover profissional", description: error.message, variant: "destructive" });
-        },
-    });
 
     const createMemberMutation = useMutation({
         mutationFn: async (newMember: any) => {
@@ -586,105 +538,6 @@ export const TeamSettings = () => {
                 </DialogContent>
             </Dialog>
 
-            {/* === PROFISSIONAIS === */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t">
-                <div className="space-y-1">
-                    <h3 className="text-lg md:text-xl font-bold tracking-tight flex items-center gap-2">
-                        <Briefcase className="h-5 w-5" />
-                        Profissionais
-                    </h3>
-                    <p className="text-muted-foreground text-sm hidden sm:block">
-                        Profissionais cadastrados para agendamentos
-                    </p>
-                </div>
-                {canCreate('professionals') && (
-                    <Button size="sm" className="h-8 md:h-9 text-xs md:text-sm w-fit" onClick={() => {
-                        setSelectedProfessional(null);
-                        setIsProfessionalModalOpen(true);
-                    }}>
-                        <Plus className="mr-1 md:mr-2 h-4 w-4" />
-                        <span className="hidden sm:inline">Adicionar </span>Prof.
-                    </Button>
-                )}
-            </div>
-
-            <div className="rounded-md border overflow-x-auto bg-white dark:bg-[#303541] border-[#D4D5D6] dark:border-border">
-                <Table>
-                    <TableHeader>
-                        <TableHead className="min-w-[120px]">Nome</TableHead>
-                        <TableHead className="hidden sm:table-cell">Função</TableHead>
-                        <TableHead className="hidden md:table-cell">Serviços</TableHead>
-                        <TableHead className="hidden lg:table-cell">Dias</TableHead>
-                        <TableHead className="text-right">Ações</TableHead>
-                    </TableHeader>
-                    <TableBody>
-                        {isProfessionalsLoading ? (
-                            <TableRow>
-                                <TableCell colSpan={5} className="text-center py-8">
-                                    <Loader2 className="h-6 w-6 animate-spin mx-auto" />
-                                </TableCell>
-                            </TableRow>
-                        ) : !professionals || professionals.length === 0 ? (
-                            <TableRow>
-                                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground text-sm">
-                                    Nenhum profissional cadastrado.
-                                </TableCell>
-                            </TableRow>
-                        ) : (
-                            professionals.map((professional: any) => (
-                                <TableRow key={professional.id}>
-                                    <TableCell className="font-medium py-2 md:py-4">
-                                        <div className="flex items-center gap-2">
-                                            {professional.photo_url ? (
-                                                <img src={professional.photo_url} alt={professional.name} className="w-6 h-6 md:w-8 md:h-8 rounded-full object-cover" />
-                                            ) : (
-                                                <div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-cyan-500/20 flex items-center justify-center text-cyan-500 text-xs md:text-sm font-semibold">
-                                                    {professional.name?.charAt(0).toUpperCase()}
-                                                </div>
-                                            )}
-                                            <span className="text-sm">{professional.name}</span>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell className="hidden sm:table-cell py-2 md:py-4">
-                                        <Badge variant="default" className="text-[10px] md:text-xs">{professional.role || "Prof."}</Badge>
-                                    </TableCell>
-                                    <TableCell className="max-w-[150px] hidden md:table-cell py-2 md:py-4">
-                                        <span className="text-xs text-muted-foreground truncate block">{getServiceNames(professional.service_ids)}</span>
-                                    </TableCell>
-                                    <TableCell className="hidden lg:table-cell py-2 md:py-4">
-                                        <span className="text-xs">{getWorkDaysNames(professional.work_days)}</span>
-                                    </TableCell>
-                                    <TableCell className="text-right py-2 md:py-4">
-                                        <div className="flex justify-end gap-1">
-                                            {canEdit('professionals') && (
-                                                <Button variant="ghost" size="icon" className="h-7 w-7 md:h-8 md:w-8" onClick={() => {
-                                                    setSelectedProfessional(professional);
-                                                    setIsProfessionalModalOpen(true);
-                                                }}>
-                                                    <Pencil className="h-3.5 w-3.5 md:h-4 md:w-4" />
-                                                </Button>
-                                            )}
-                                            {canDelete('professionals') && (
-                                                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive h-7 w-7 md:h-8 md:w-8" onClick={() => {
-                                                    if (confirm("Remover este profissional?")) deleteProfessionalMutation.mutate(professional.id);
-                                                }}>
-                                                    <Trash2 className="h-3.5 w-3.5 md:h-4 md:w-4" />
-                                                </Button>
-                                            )}
-                                        </div>
-                                    </TableCell>
-                                </TableRow>
-                            ))
-                        )}
-                    </TableBody>
-                </Table>
-            </div>
-
-            <ProfessionalModal
-                open={isProfessionalModalOpen}
-                onOpenChange={setIsProfessionalModalOpen}
-                professionalToEdit={selectedProfessional}
-            />
         </div>
     );
 };

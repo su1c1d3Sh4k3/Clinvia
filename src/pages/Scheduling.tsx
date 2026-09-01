@@ -160,9 +160,17 @@ export default function Scheduling() {
     const { data: professionals } = useQuery({
         queryKey: ["professionals"],
         queryFn: async () => {
-            const { data, error } = await supabase.from("professionals").select("*");
+            const { data, error } = await supabase
+                .from("professionals" as any)
+                .select("*, responsavel:responsaveis(id, name, role, photo_url)")
+                .eq("active", true);
             if (error) throw error;
-            return data;
+            // Foto e cargo pertencem ao profissional; a sala só empresta pra UI da agenda.
+            return (data || []).map((p: any) => ({
+                ...p,
+                photo_url: p.responsavel?.photo_url ?? p.photo_url ?? null,
+                role: p.responsavel?.role ?? p.role ?? null,
+            }));
         },
     });
 
@@ -642,12 +650,12 @@ export default function Scheduling() {
                             <CalendarDays className="h-5 w-5" />
                         </Button>
                         {filteredProfessionals.length > 1 && (
-                            <Button variant="ghost" size="icon" title="Profissionais" onClick={() => setIsSidebarExpanded(true)}>
+                            <Button variant="ghost" size="icon" title="Salas" onClick={() => setIsSidebarExpanded(true)}>
                                 <Users className="h-5 w-5" />
                             </Button>
                         )}
                         {canCreate('professionals') && (
-                            <Button variant="ghost" size="icon" title="Adicionar Profissional" onClick={() => {
+                            <Button variant="ghost" size="icon" title="Adicionar Sala" onClick={() => {
                                 setProfessionalToEdit(null);
                                 setIsProfessionalModalOpen(true);
                             }}>
@@ -708,7 +716,7 @@ export default function Scheduling() {
                                 <CardHeader className="pb-3">
                                     <CardTitle className="text-sm font-medium flex items-center">
                                         <Users className="w-4 h-4 mr-2" />
-                                        Profissionais
+                                        Salas
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent className="space-y-1.5 px-4 pb-4 pt-0">
@@ -756,7 +764,7 @@ export default function Scheduling() {
                                 setIsProfessionalModalOpen(true);
                             }} variant="outline" className="w-full justify-start bg-white dark:bg-transparent border border-[#D4D5D6] dark:border-border">
                                 <Plus className="w-4 h-4 mr-2" />
-                                Adicionar Profissional
+                                Adicionar Sala
                             </Button>
                         )}
 

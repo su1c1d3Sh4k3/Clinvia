@@ -190,10 +190,15 @@ export function DealDetailModal({ deal, open, onOpenChange, onDealWon, onDealLos
         queryFn: async () => {
             const { data, error } = await supabase
                 .from("professionals" as any)
-                .select("id,name,role")
+                .select("id, name, responsavel:responsaveis(role)")
+                .eq("active", true)
                 .order("name", { ascending: true });
             if (error) throw error;
-            return data as { id: string; name: string; role?: string }[];
+            return (data || []).map((p: any) => ({
+                id: p.id,
+                name: p.name,
+                role: p.responsavel?.role ?? undefined,
+            })) as { id: string; name: string; role?: string }[];
         },
         enabled: open,
     });

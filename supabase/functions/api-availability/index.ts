@@ -271,7 +271,7 @@ serve(async (req) => {
         }
 
         const { data: professionals, error: profError } = await supabase
-            .from("professionals").select("id, name, work_hours, work_days, use_daily_schedule, work_hours_daily").in("id", profIds);
+            .from("professionals").select("id, name, work_hours, work_days, use_daily_schedule, work_hours_daily").in("id", profIds).eq("active", true);
         if (profError) {
             return dbErrorResponse(corsHeaders, "professionals_read_failed",
                 `buscar os profissionais vinculados à aplicação "${sc.name}"`, profError);

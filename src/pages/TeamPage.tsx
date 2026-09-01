@@ -1,11 +1,13 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, ShieldCheck, Loader2 } from "lucide-react";
+import { Users, ShieldCheck, Loader2, Stethoscope, DoorOpen } from "lucide-react";
 import { Navigate } from "react-router-dom";
 import { useUserRole } from "@/hooks/useUserRole";
 import { usePermissions } from "@/hooks/usePermissions";
 import { TeamSettings } from "@/components/settings/TeamSettings";
 import { PermissionsSettings } from "@/components/settings/PermissionsSettings";
+import { ProfissionaisTab } from "@/components/team/ProfissionaisTab";
+import { SalasTab } from "@/components/team/SalasTab";
 import { useUrlTab } from "@/hooks/useUrlTab";
 import { useSuporteTour } from "@/lib/suporteTours";
 
@@ -43,7 +45,17 @@ export default function TeamPage() {
                 <TabsList data-tour="equipe-tabs" className="flex w-full justify-between mb-4 md:mb-8 h-auto">
                     <TabsTrigger value="team" className="flex-1 flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
                         <Users className="h-4 w-4" />
-                        Equipes
+                        <span className="hidden sm:inline">Equipe Comercial</span>
+                        <span className="sm:hidden">Equipe</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="profissionais" className="flex-1 flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
+                        <Stethoscope className="h-4 w-4" />
+                        <span className="hidden sm:inline">Profissionais</span>
+                        <span className="sm:hidden">Prof.</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="salas" className="flex-1 flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
+                        <DoorOpen className="h-4 w-4" />
+                        Salas
                     </TabsTrigger>
                     {isAdmin && (
                         <TabsTrigger value="permissions" className="flex-1 flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
@@ -55,6 +67,42 @@ export default function TeamPage() {
 
                 <TabsContent value="team">
                     <TeamSettings />
+                </TabsContent>
+
+                <TabsContent value="profissionais">
+                    <Card>
+                        <CardHeader className="p-4 md:p-6">
+                            <CardTitle className="text-base md:text-lg flex items-center gap-2">
+                                <Stethoscope className="h-5 w-5 text-primary" />
+                                Profissionais
+                            </CardTitle>
+                            <CardDescription className="text-xs md:text-sm">
+                                Cadastre quem atende na clínica. A sala de cada profissional é criada automaticamente
+                                com o mesmo nome e a agenda definida aqui.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="p-4 md:p-6 pt-0">
+                            <ProfissionaisTab />
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                <TabsContent value="salas">
+                    <Card>
+                        <CardHeader className="p-4 md:p-6">
+                            <CardTitle className="text-base md:text-lg flex items-center gap-2">
+                                <DoorOpen className="h-5 w-5 text-primary" />
+                                Salas
+                            </CardTitle>
+                            <CardDescription className="text-xs md:text-sm">
+                                Cada sala é uma agenda. Os agendamentos são sempre feitos em uma sala — as de
+                                profissional pertencem a ele, as avulsas atendem quem estiver disponível.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="p-4 md:p-6 pt-0">
+                            <SalasTab />
+                        </CardContent>
+                    </Card>
                 </TabsContent>
 
                 {isAdmin && (

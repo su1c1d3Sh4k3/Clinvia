@@ -234,6 +234,7 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
             const { data, error } = await supabase
                 .from("professionals")
                 .select("id, name")
+                .eq("active", true)
                 .order("name");
             if (error) throw error;
             return (data || []) as { id: string; name: string }[];

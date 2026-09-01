@@ -96,8 +96,8 @@ export function useRevenueByProfessional() {
         queryFn: async (): Promise<ProfessionalRevenue[]> => {
             // First get all professionals with commission rate
             const { data: professionals, error: profError } = await supabase
-                .from('professionals')
-                .select('id, name, photo_url, commission');
+                .from('professionals' as any)
+                .select('id, name, commission, responsavel:responsaveis(photo_url)') as any;
 
             if (profError) throw profError;
             if (!professionals || professionals.length === 0) return [];
@@ -140,7 +140,7 @@ export function useRevenueByProfessional() {
                     return {
                         id: p.id,
                         name: p.name,
-                        photo: p.photo_url,
+                        photo: p.responsavel?.photo_url ?? null,
                         revenue: stats.total,
                         appointments: stats.count,
                         commissionRate: commissionRates.get(p.id) || 0,
@@ -246,7 +246,7 @@ export function useTeamCosts(startDate?: string, endDate?: string) {
                 .select(`
                     *,
                     team_member:team_members(id, name, avatar_url),
-                    professional:professionals(id, name, photo_url)
+                    professional:professionals(id, name)
                 `);
 
             if (startDate && endDate) {
@@ -323,19 +323,19 @@ export function useProfessionals() {
     return useQuery({
         queryKey: ['professionals-list'],
         queryFn: async () => {
-            console.log('DEBUG: Fetching professionals...');
             const { data, error } = await supabase
-                .from('professionals')
-                .select('id, name, photo_url, role, service_ids, work_days, work_hours, commission')
+                .from('professionals' as any)
+                .select('id, name, service_ids, work_days, work_hours, commission, responsavel:responsaveis(role, photo_url)')
+                .eq('active', true)
                 .order('name');
 
-            console.log('DEBUG: Professionals query result:', { data, error });
-
-            if (error) {
-                console.error('DEBUG: Error fetching professionals:', error);
-                throw error;
-            }
-            return data || [];
+            if (error) throw error;
+            // Foto e cargo vêm do profissional dono da sala.
+            return (data || []).map((p: any) => ({
+                ...p,
+                photo_url: p.responsavel?.photo_url ?? null,
+                role: p.responsavel?.role ?? null,
+            }));
         },
     });
 }

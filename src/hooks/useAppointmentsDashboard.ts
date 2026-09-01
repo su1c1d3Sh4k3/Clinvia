@@ -36,10 +36,15 @@ export function useProfessionalsDashboard() {
         queryFn: async (): Promise<DashProfessional[]> => {
             const { data, error } = await supabase
                 .from("professionals" as any)
-                .select("id, name, photo_url, work_days, work_hours, use_daily_schedule, work_hours_daily")
+                .select("id, name, work_days, work_hours, use_daily_schedule, work_hours_daily, responsavel:responsaveis(photo_url)")
+                .eq("active", true)
                 .order("name");
             if (error) throw error;
-            return (data || []) as unknown as DashProfessional[];
+            // A foto é do profissional dono da sala; sala avulsa fica sem.
+            return (data || []).map((p: any) => ({
+                ...p,
+                photo_url: p.responsavel?.photo_url ?? null,
+            })) as unknown as DashProfessional[];
         },
     });
 }

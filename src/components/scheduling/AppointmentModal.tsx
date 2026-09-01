@@ -139,7 +139,10 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
     const { data: professionals } = useQuery({
         queryKey: ["professionals-list"],
         queryFn: async () => {
-            const { data, error } = await supabase.from("professionals").select("id, name");
+            const { data, error } = await supabase
+                .from("professionals")
+                .select("id, name")
+                .eq("active", true);
             if (error) throw error;
             return data;
         },

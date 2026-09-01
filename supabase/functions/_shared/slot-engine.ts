@@ -87,6 +87,7 @@ export async function computeAvailableSlots(
         .from("professionals")
         .select("id, work_days, work_hours, use_daily_schedule, work_hours_daily")
         .eq("id", professionalId)
+        .eq("active", true)
         .maybeSingle();
     if (profErr) throw profErr;
     if (!professional) return [];

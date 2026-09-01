@@ -32,11 +32,17 @@ export const ProfessionalSelector = ({
     queryKey: ["professionals"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("professionals")
-        .select("id, name, role")
+        .from("professionals" as any)
+        .select("id, name, responsavel:responsaveis(role)")
+        .eq("active", true)
         .order("name");
       if (error) throw error;
-      return data as Professional[];
+      // O cargo é do profissional dono da sala; sala avulsa não tem.
+      return (data || []).map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        role: p.responsavel?.role ?? undefined,
+      })) as Professional[];
     },
   });
 

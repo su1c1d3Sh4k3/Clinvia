@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import {
-    ShieldCheck, UserPlus, SlidersHorizontal, Wifi, HelpCircle, ExternalLink, Users, ScanEye,
+    ShieldCheck, UserPlus, SlidersHorizontal, Wifi, HelpCircle, ExternalLink, Users, ScanEye, Stethoscope,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,6 +16,7 @@ import { RoleMatrixExplorer } from "./simulators-equipe";
 const TOPICS = [
     { id: "o-que-e", label: "O que é" },
     { id: "papeis", label: "Os 3 papéis" },
+    { id: "profissionais-salas", label: "Profissionais e Salas" },
     { id: "convidando", label: "Convidando" },
     { id: "escopo", label: "Escopo de visão" },
     { id: "permissoes", label: "Permissões finas" },
@@ -47,6 +48,7 @@ export function EquipeGuide() {
                     </p>
                     <div className="flex flex-wrap gap-2">
                         <LearnChip topicId="papeis">Admin, Supervisor e Agente</LearnChip>
+                        <LearnChip topicId="profissionais-salas">Profissionais e Salas</LearnChip>
                         <LearnChip topicId="convidando">Adicionar um membro</LearnChip>
                         <LearnChip topicId="escopo">Limitar o que o atendente enxerga</LearnChip>
                         <LearnChip topicId="permissoes">Liberar/bloquear ações por módulo</LearnChip>
@@ -63,7 +65,10 @@ export function EquipeGuide() {
                     Todos da clínica trabalham na <strong className="text-foreground">mesma conta</strong>: veem os mesmos
                     clientes, conversas e agenda. O que muda é o <strong className="text-foreground">papel</strong> de cada
                     um (o que pode ver) e as <strong className="text-foreground">permissões finas</strong> (o que pode
-                    criar, editar e apagar). Duas abas: <strong className="text-foreground">Equipes</strong> (membros) e{" "}
+                    criar, editar e apagar). Quatro abas:{" "}
+                    <strong className="text-foreground">Equipe Comercial</strong> (quem usa o sistema),{" "}
+                    <strong className="text-foreground">Profissionais</strong> (quem atende os clientes),{" "}
+                    <strong className="text-foreground">Salas</strong> (as agendas) e{" "}
                     <strong className="text-foreground">Permissões</strong> (ajuste fino).
                 </p>
                 <div className="flex flex-wrap gap-2">
@@ -85,7 +90,59 @@ export function EquipeGuide() {
             </TopicSection>
 
             {/* 3 */}
-            <TopicSection id="convidando" index={3} icon={UserPlus} title="Convidando membros"
+            <TopicSection id="profissionais-salas" index={3} icon={Stethoscope} title="Profissionais e Salas"
+                subtitle="Quem atende × onde a agenda acontece">
+                <p className="text-sm text-muted-foreground">
+                    São duas coisas diferentes, em duas abas. O <strong className="text-foreground">Profissional</strong> é a
+                    pessoa que atende (nome, foto e cargo). A <strong className="text-foreground">Sala</strong> é a agenda: é
+                    nela que os agendamentos são marcados e é ela que aparece como coluna na Agenda.
+                </p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-xl border p-3.5">
+                        <p className="text-sm font-semibold">Sala do profissional</p>
+                        <p className="mt-0.5 text-sm text-muted-foreground">
+                            Criada <strong>automaticamente</strong> ao cadastrar o profissional, com o mesmo nome e os
+                            horários informados no cadastro. Renomear o profissional renomeia a sala (e vice-versa).
+                        </p>
+                    </div>
+                    <div className="rounded-xl border p-3.5">
+                        <p className="text-sm font-semibold">Sala avulsa</p>
+                        <p className="mt-0.5 text-sm text-muted-foreground">
+                            Criada pelo botão <strong>Adicionar Sala</strong>, na aba Salas. Não pertence a ninguém: serve para
+                            ambientes que atendem com qualquer profissional disponível (sala de laser, sala de procedimentos).
+                        </p>
+                    </div>
+                </div>
+                <StepByStep steps={[
+                    { title: "Cadastre o profissional", description: "Aba Profissionais > Adicionar Profissional. Informe nome, cargo, foto e os dias/horários de atendimento. A sala dele nasce junto — você não precisa criar nada na aba Salas." },
+                    { title: "Vincule aos serviços", description: "Em Serviços, cada serviço define quais salas o executam. É esse vínculo que faz a sala aparecer como opção ao agendar e para a IA." },
+                    { title: "Crie salas avulsas se precisar", description: "Aba Salas > Adicionar Sala, com nome e horários próprios. Ela entra na Agenda como mais uma coluna." },
+                    { title: "Inative em vez de excluir", description: "A chave Ativo/Ativa tira a agenda de circulação sem apagar nada — o histórico e os relatórios continuam completos." },
+                ]} />
+                <Callout type="atencao" title="Inativar cancela os agendamentos futuros">
+                    Ao desligar a chave, o sistema avisa quantos agendamentos futuros existem e, se você confirmar, todos eles
+                    passam para <strong>cancelado</strong>. O que já aconteceu é preservado. A sala de um profissional não é
+                    inativada sozinha: desligue o profissional e a sala dele acompanha.
+                </Callout>
+                <Callout type="atencao" title="Não dá para excluir com agenda marcada">
+                    A exclusão é bloqueada enquanto houver <strong>agendamentos futuros</strong> na sala — cancele ou reagende
+                    antes. Excluir o profissional exclui a sala dele junto; salas de profissional não são excluídas pela aba
+                    Salas.
+                </Callout>
+                <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" onClick={() => navigate("/equipe?tab=profissionais")}>
+                        <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                        Abrir Profissionais
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => navigate("/equipe?tab=salas")}>
+                        <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                        Abrir Salas
+                    </Button>
+                </div>
+            </TopicSection>
+
+            {/* 4 */}
+            <TopicSection id="convidando" index={4} icon={UserPlus} title="Convidando membros"
                 subtitle="Da recepção ao sistema em 2 minutos">
                 <StepByStep steps={[
                     { title: "Adicionar membro", description: "Na aba Equipes, informe nome, e-mail e papel. A pessoa recebe um e-mail de convite com o login, a senha provisória e o cargo — e já entra na conta da clínica." },
@@ -104,8 +161,8 @@ export function EquipeGuide() {
                 </Callout>
             </TopicSection>
 
-            {/* 4 */}
-            <TopicSection id="escopo" index={4} icon={ScanEye} title="Escopo de visão do Atendente"
+            {/* 5 */}
+            <TopicSection id="escopo" index={5} icon={ScanEye} title="Escopo de visão do Atendente"
                 subtitle="Quais conexões, filas e tags cada agente enxerga">
                 <p className="text-sm text-muted-foreground">
                     Agentes podem ter a visão <strong className="text-foreground">limitada por três filtros</strong>, definidos
@@ -156,8 +213,8 @@ export function EquipeGuide() {
                 </Callout>
             </TopicSection>
 
-            {/* 5 */}
-            <TopicSection id="permissoes" index={5} icon={SlidersHorizontal} title="Permissões finas"
+            {/* 6 */}
+            <TopicSection id="permissoes" index={6} icon={SlidersHorizontal} title="Permissões finas"
                 subtitle="Criar / Editar / Apagar, módulo por módulo">
                 <p className="text-sm text-muted-foreground">
                     Na aba <strong className="text-foreground">Permissões</strong>, você define para Supervisores e Agentes
@@ -176,8 +233,8 @@ export function EquipeGuide() {
                 </Callout>
             </TopicSection>
 
-            {/* 6 */}
-            <TopicSection id="online" index={6} icon={Wifi} title="Quem está online"
+            {/* 7 */}
+            <TopicSection id="online" index={7} icon={Wifi} title="Quem está online"
                 subtitle="O termômetro da operação em tempo real">
                 <p className="text-sm text-muted-foreground">
                     O Dashboard (aba Monitoramento) mostra o <strong className="text-foreground">status online</strong> de
@@ -186,8 +243,8 @@ export function EquipeGuide() {
                 </p>
             </TopicSection>
 
-            {/* 7 */}
-            <TopicSection id="faq" index={7} icon={HelpCircle} title="Perguntas frequentes">
+            {/* 8 */}
+            <TopicSection id="faq" index={8} icon={HelpCircle} title="Perguntas frequentes">
                 <Accordion type="single" collapsible className="rounded-xl border px-4">
                     {[
                         {

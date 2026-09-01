@@ -186,7 +186,8 @@ serve(async (req) => {
 
             const { data: profs, error } = await supabase.from("professionals")
                 .select("id, name, work_hours, work_days, use_daily_schedule, work_hours_daily")
-                .in("id", profIds);
+                .in("id", profIds)
+                .eq("active", true);
             if (error) {
                 throw new ApiError({
                     status: 500, code: "professional_lookup_failed",

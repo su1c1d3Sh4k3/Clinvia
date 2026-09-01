@@ -462,7 +462,7 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                                             </p>
                                                         )}
                                                         <p><span className="text-muted-foreground">Serviço: </span>{apt.service_name || "Serviço"}</p>
-                                                        <p><span className="text-muted-foreground">Profissional: </span>{professional.name}</p>
+                                                        <p><span className="text-muted-foreground">Sala: </span>{professional.name}</p>
                                                         <p><span className="text-muted-foreground">Horário: </span>{format(aptStart, "HH:mm")} - {format(aptEnd, "HH:mm")} ({aptDuration} min)</p>
                                                         <p><span className="text-muted-foreground">Status: </span><span className="font-medium">{getStatusLabel(displayStatus)}</span></p>
                                                     </div>

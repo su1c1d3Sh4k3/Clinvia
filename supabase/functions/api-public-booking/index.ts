@@ -205,13 +205,21 @@ serve(async (req) => {
         // ── get_prof_list: all professionals ──
         if (action === "get_prof_list") {
             const { data: profs, error: profErr } = await supabase.from("professionals")
-                .select("id, name, photo_url, role")
-                .eq("user_id", user_id);
+                .select("id, name, responsavel:responsaveis(role, photo_url)")
+                .eq("user_id", user_id)
+                .eq("active", true);
             if (profErr) {
                 return patientDbError("professionals_read_failed", "carregar os profissionais da clínica", profErr,
                     "Não conseguimos carregar a lista de profissionais agora. Tente novamente em alguns instantes ou fale com a clínica.");
             }
-            return new Response(JSON.stringify({ professionals: profs || [] }),
+            // Foto e cargo são do profissional dono da sala; sala avulsa aparece sem eles.
+            const profList = (profs || []).map((p: any) => ({
+                id: p.id,
+                name: p.name,
+                photo_url: p.responsavel?.photo_url ?? null,
+                role: p.responsavel?.role ?? null,
+            }));
+            return new Response(JSON.stringify({ professionals: profList }),
                 { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
@@ -246,7 +254,7 @@ serve(async (req) => {
 
             // Get professional work settings
             const { data: prof, error: profErr } = await supabase.from("professionals")
-                .select("work_hours, work_days, use_daily_schedule, work_hours_daily").eq("id", professional_id).maybeSingle();
+                .select("work_hours, work_days, use_daily_schedule, work_hours_daily").eq("id", professional_id).eq("active", true).maybeSingle();
             if (profErr) {
                 return patientDbError("professional_read_failed", "buscar os horários de trabalho do profissional", profErr,
                     "Não conseguimos consultar os horários agora. Tente novamente em alguns instantes ou fale com a clínica.");
@@ -328,7 +336,7 @@ serve(async (req) => {
 
             const [{ data: svc, error: svcErr }, { data: prof, error: profErr }] = await Promise.all([
                 supabase.from("services_client").select("name, price, duration_minutes, category_id, service_name_id").eq("id", service_id).maybeSingle(),
-                supabase.from("professionals").select("name").eq("id", professional_id).maybeSingle(),
+                supabase.from("professionals").select("name").eq("id", professional_id).eq("active", true).maybeSingle(),
             ]);
             if (svcErr) {
                 return patientDbError("service_read_failed", "buscar o serviço escolhido", svcErr,

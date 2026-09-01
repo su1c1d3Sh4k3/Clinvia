@@ -58,7 +58,6 @@ const dayHoursSchema = z.object({
 const formSchema = z.object({
     name: z.string().min(1, "Nome é obrigatório"),
     role: z.string().optional(),
-    commission: z.number().min(0).max(100).default(0),
     service_ids: z.array(z.string()).default([]),
     work_days: z.array(z.number()).default([]),
     work_hours: dayHoursSchema,
@@ -69,7 +68,15 @@ const formSchema = z.object({
 interface ProfessionalModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    /** Linha de `professionals` (a sala). No modo responsável é a sala dele. */
     professionalToEdit?: any;
+    /**
+     * "sala"        → agenda avulsa, sem pessoa vinculada.
+     * "responsavel" → pessoa + agenda: salva em `responsaveis` e cria/atualiza a sala junto.
+     */
+    variant?: "sala" | "responsavel";
+    /** Linha de `responsaveis` quando `variant === "responsavel"` e é edição. */
+    responsavelToEdit?: any;
 }
 
 const DAYS = [
@@ -82,7 +89,15 @@ const DAYS = [
     { id: 6, label: "Sáb" },
 ];
 
-export function ProfessionalModal({ open, onOpenChange, professionalToEdit }: ProfessionalModalProps) {
+export function ProfessionalModal({
+    open,
+    onOpenChange,
+    professionalToEdit,
+    variant = "sala",
+    responsavelToEdit,
+}: ProfessionalModalProps) {
+    const isResponsavel = variant === "responsavel";
+    const entityLabel = isResponsavel ? "Profissional" : "Sala";
     const { toast } = useToast();
     const queryClient = useQueryClient();
     const { data: ownerId } = useOwnerId();
@@ -111,7 +126,6 @@ export function ProfessionalModal({ open, onOpenChange, professionalToEdit }: Pr
         defaultValues: {
             name: "",
             role: "",
-            commission: 0,
             service_ids: [],
             work_days: [1, 2, 3, 4, 5], // Mon-Fri default
             work_hours: {
@@ -132,9 +146,8 @@ export function ProfessionalModal({ open, onOpenChange, professionalToEdit }: Pr
                 .filter(s => (s.professionals || []).includes(professionalToEdit.id))
                 .map(s => s.id);
             form.reset({
-                name: professionalToEdit.name,
-                role: professionalToEdit.role || "",
-                commission: professionalToEdit.commission || 0,
+                name: responsavelToEdit?.name ?? professionalToEdit.name,
+                role: responsavelToEdit?.role || "",
                 service_ids: linkedServiceIds,
                 work_days: professionalToEdit.work_days || [],
                 work_hours: professionalToEdit.work_hours || {
@@ -146,14 +159,13 @@ export function ProfessionalModal({ open, onOpenChange, professionalToEdit }: Pr
                 use_daily_schedule: professionalToEdit.use_daily_schedule || false,
                 work_hours_daily: professionalToEdit.work_hours_daily || null,
             });
-            setExistingPhoto(professionalToEdit.photo_url);
+            setExistingPhoto(responsavelToEdit?.photo_url ?? null);
             const firstDay = (professionalToEdit.work_days || [1])[0];
             setActiveDayTab(String(firstDay ?? 1));
         } else {
             form.reset({
                 name: "",
                 role: "",
-                commission: 0,
                 service_ids: [],
                 work_days: [1, 2, 3, 4, 5],
                 work_hours: {
@@ -169,7 +181,7 @@ export function ProfessionalModal({ open, onOpenChange, professionalToEdit }: Pr
             setPhotoFile(null);
             setActiveDayTab("1");
         }
-    }, [professionalToEdit, open, form, services]);
+    }, [professionalToEdit, responsavelToEdit, open, form, services]);
 
     const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files?.[0]) {
@@ -260,17 +272,41 @@ export function ProfessionalModal({ open, onOpenChange, professionalToEdit }: Pr
                 photoUrl = publicUrl;
             }
 
-            const payload = {
+            // Foto e cargo pertencem à pessoa; a sala só guarda nome e agenda.
+            let responsavelId: string | null = responsavelToEdit?.id ?? null;
+            if (isResponsavel) {
+                const respPayload = {
+                    user_id: ownerId,
+                    name: values.name,
+                    role: values.role || null,
+                    photo_url: photoUrl,
+                };
+                if (responsavelId) {
+                    const { error } = await supabase
+                        .from("responsaveis" as any)
+                        .update(respPayload)
+                        .eq("id", responsavelId);
+                    if (error) throw error;
+                } else {
+                    const { data: newResp, error } = await supabase
+                        .from("responsaveis" as any)
+                        .insert(respPayload)
+                        .select("id")
+                        .single();
+                    if (error) throw error;
+                    responsavelId = (newResp as any).id;
+                }
+            }
+
+            const payload: Record<string, unknown> = {
                 user_id: ownerId,
                 name: values.name,
-                role: values.role,
-                commission: values.commission,
                 work_days: values.work_days,
                 work_hours: values.work_hours,
                 use_daily_schedule: values.use_daily_schedule,
                 work_hours_daily: values.work_hours_daily,
-                photo_url: photoUrl,
             };
+            if (isResponsavel) payload.responsavel_id = responsavelId;
 
             let professionalId: string;
 
@@ -281,12 +317,12 @@ export function ProfessionalModal({ open, onOpenChange, professionalToEdit }: Pr
                     .eq("id", professionalToEdit.id);
                 if (error) {
                     if (error.code === "PGRST116") {
-                        throw new Error("Não foi possível atualizar o profissional. Verifique suas permissões.");
+                        throw new Error(`Não foi possível atualizar ${isResponsavel ? "o profissional" : "a sala"}. Verifique suas permissões.`);
                     }
                     throw error;
                 }
                 professionalId = professionalToEdit.id;
-                toast({ title: "Profissional atualizado com sucesso!" });
+                toast({ title: `${entityLabel} atualizado com sucesso!` });
             } else {
                 const { data: newProf, error } = await supabase
                     .from("professionals" as any)
@@ -295,7 +331,11 @@ export function ProfessionalModal({ open, onOpenChange, professionalToEdit }: Pr
                     .single();
                 if (error) throw error;
                 professionalId = newProf.id;
-                toast({ title: "Profissional criado com sucesso!" });
+                toast({
+                    title: isResponsavel
+                        ? "Profissional criado — a sala dele também foi criada."
+                        : "Sala criada com sucesso!",
+                });
 
                 // Fire-and-forget: criar sub-calendário Google para o novo profissional
                 if (newProf?.id) {
@@ -343,6 +383,9 @@ export function ProfessionalModal({ open, onOpenChange, professionalToEdit }: Pr
             await Promise.all(updates);
 
             queryClient.invalidateQueries({ queryKey: ["professionals-list"] });
+            queryClient.invalidateQueries({ queryKey: ["professionals-dashboard"] });
+            queryClient.invalidateQueries({ queryKey: ["responsaveis"] });
+            queryClient.invalidateQueries({ queryKey: ["salas"] });
             queryClient.invalidateQueries({ queryKey: ["services-client-list"] });
             onOpenChange(false);
         } catch (error: any) {
@@ -360,28 +403,32 @@ export function ProfessionalModal({ open, onOpenChange, professionalToEdit }: Pr
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
                 <DialogHeader>
-                    <DialogTitle>{professionalToEdit ? "Editar Profissional" : "Novo Profissional"}</DialogTitle>
+                    <DialogTitle>
+                        {professionalToEdit ? `Editar ${entityLabel}` : `${isResponsavel ? "Novo" : "Nova"} ${entityLabel}`}
+                    </DialogTitle>
                 </DialogHeader>
 
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                        <div className="flex justify-center mb-4">
-                            <div className="relative w-24 h-24">
-                                <Avatar className="w-24 h-24 border-2 border-border">
-                                    <AvatarImage
-                                        src={photoFile ? URL.createObjectURL(photoFile) : existingPhoto || undefined}
-                                        className="object-cover"
-                                    />
-                                    <AvatarFallback className="bg-gray-500 text-white font-semibold text-3xl">
-                                        {(form.watch("name") || "P").charAt(0).toUpperCase()}
-                                    </AvatarFallback>
-                                </Avatar>
-                                <label className="absolute bottom-0 right-0 bg-primary text-primary-foreground rounded-full p-1 cursor-pointer hover:bg-primary/90">
-                                    <Upload className="w-4 h-4" />
-                                    <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
-                                </label>
+                        {isResponsavel && (
+                            <div className="flex justify-center mb-4">
+                                <div className="relative w-24 h-24">
+                                    <Avatar className="w-24 h-24 border-2 border-border">
+                                        <AvatarImage
+                                            src={photoFile ? URL.createObjectURL(photoFile) : existingPhoto || undefined}
+                                            className="object-cover"
+                                        />
+                                        <AvatarFallback className="bg-gray-500 text-white font-semibold text-3xl">
+                                            {(form.watch("name") || "P").charAt(0).toUpperCase()}
+                                        </AvatarFallback>
+                                    </Avatar>
+                                    <label className="absolute bottom-0 right-0 bg-primary text-primary-foreground rounded-full p-1 cursor-pointer hover:bg-primary/90">
+                                        <Upload className="w-4 h-4" />
+                                        <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
+                                    </label>
+                                </div>
                             </div>
-                        </div>
+                        )}
 
                         <FormField
                             control={form.control}
@@ -390,50 +437,33 @@ export function ProfessionalModal({ open, onOpenChange, professionalToEdit }: Pr
                                 <FormItem>
                                     <FormLabel>Nome</FormLabel>
                                     <FormControl>
-                                        <Input placeholder="Nome do profissional" {...field} />
+                                        <Input placeholder={isResponsavel ? "Nome do profissional" : "Ex: Sala 1"} {...field} />
                                     </FormControl>
+                                    {isResponsavel && (
+                                        <p className="text-xs text-muted-foreground">
+                                            A sala deste profissional usa o mesmo nome — renomear aqui renomeia a sala.
+                                        </p>
+                                    )}
                                     <FormMessage />
                                 </FormItem>
                             )}
                         />
 
-                        <FormField
-                            control={form.control}
-                            name="role"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Função</FormLabel>
-                                    <FormControl>
-                                        <Input placeholder="Ex: Biomédica" {...field} />
-                                    </FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-
-                        <FormField
-                            control={form.control}
-                            name="commission"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Comissão (%)</FormLabel>
-                                    <FormControl>
-                                        <div className="relative">
-                                            <Input
-                                                type="number"
-                                                min={0}
-                                                max={100}
-                                                placeholder="0"
-                                                {...field}
-                                                onChange={(e) => field.onChange(Number(e.target.value))}
-                                            />
-                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">%</span>
-                                        </div>
-                                    </FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
+                        {isResponsavel && (
+                            <FormField
+                                control={form.control}
+                                name="role"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Cargo</FormLabel>
+                                        <FormControl>
+                                            <Input placeholder="Ex: Biomédica" {...field} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                        )}
 
                         <div className="space-y-2">
                             <FormLabel>Serviços</FormLabel>

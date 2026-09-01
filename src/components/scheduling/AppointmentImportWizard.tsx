@@ -53,7 +53,7 @@ export function AppointmentImportWizard({ open, onOpenChange }: AppointmentImpor
     const { data: professionals } = useQuery({
         queryKey: ["professionals"],
         queryFn: async () => {
-            const { data, error } = await supabase.from("professionals").select("*");
+            const { data, error } = await supabase.from("professionals").select("*").eq("active", true);
             if (error) throw error;
             return data as any[];
         },

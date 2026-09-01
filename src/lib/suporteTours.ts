@@ -137,9 +137,9 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
     "equipe-tour": [
         {
             element: '[data-tour="equipe-tabs"]',
-            title: "As duas abas da Equipe",
+            title: "As quatro abas da Equipe",
             description:
-                "Equipes: adicione membros e escolha o papel (Admin, Supervisor ou Agente). Permissões: ajuste fino do que cada nível pode criar, editar e apagar em cada módulo.",
+                "Equipe Comercial: membros do sistema e seus papéis (Admin, Supervisor ou Agente). Profissionais: quem atende na clínica — cada um ganha uma sala automaticamente. Salas: as agendas (as de profissional e as avulsas). Permissões: ajuste fino do que cada nível pode criar, editar e apagar.",
         },
     ],
     "conexoes-templates": [
