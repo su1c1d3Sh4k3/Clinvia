@@ -205,7 +205,8 @@ serve(async (req) => {
         // ── get_prof_list: all professionals ──
         if (action === "get_prof_list") {
             const { data: profs, error: profErr } = await supabase.from("professionals")
-                .select("id, name, photo_url, role");
+                .select("id, name, photo_url, role")
+                .eq("user_id", user_id);
             if (profErr) {
                 return patientDbError("professionals_read_failed", "carregar os profissionais da clínica", profErr,
                     "Não conseguimos carregar a lista de profissionais agora. Tente novamente em alguns instantes ou fale com a clínica.");
