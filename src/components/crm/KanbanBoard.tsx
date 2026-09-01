@@ -226,7 +226,7 @@ export function KanbanBoard({ funnelId, filters }: KanbanBoardProps) {
                     .select(`
                         *,
                         product_service:products_services(id, name, type, price),
-                        assigned_professional:professionals(id, name, role),
+                        assigned_professional:professionals(id, name),
                         contact:contacts(id, push_name),
                         deal_products:crm_deal_products(*, product_service:products_services(id, name, type, price))
                     `)

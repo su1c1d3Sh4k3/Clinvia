@@ -64,4 +64,7 @@ Python integration tests live in `tests/` (test_*.py) — run manually with pyth
 
 Every task must end with the full deploy ritual: commit + push + apply migrations + deploy affected edge functions. Work is not finished until it's in production.
 
-BEFORE committing any change that alters app behavior, UI, or business rules: check the support manual (`src/pages/Suporte.tsx` + `src/components/suporte/` guides, simulators, and tours in `src/lib/suporteTours.ts`) and update any affected guide in the SAME commit (or a follow-up docs commit in the same task). Keep the manual's style: TopicSection/Callout/StepByStep blocks, interactive simulators, and `?tour=` anchors.
+BEFORE committing any change that alters app behavior, UI, or business rules, update BOTH of these in the SAME commit (or a follow-up docs commit in the same task):
+
+1. **Support manual** — `src/pages/Suporte.tsx` + `src/components/suporte/` guides, simulators, and tours in `src/lib/suporteTours.ts`. Keep the manual's style: TopicSection/Callout/StepByStep blocks, interactive simulators, and `?tour=` anchors.
+2. **Support AI knowledge base** — `supabase/functions/_shared/support-knowledge.ts` (`SUPPORT_TOPICS`: resolves/steps/gotchas/tours per manual tab). It mirrors the manual; if it drifts, the assistant starts giving customers wrong instructions. Editing it requires `npx supabase functions deploy support-ai-chat`.

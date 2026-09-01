@@ -153,7 +153,7 @@ export interface TeamCost {
     updated_at: string;
     // Joined fields
     team_member?: { id: string; name: string; avatar_url?: string };
-    professional?: { id: string; name: string; photo_url?: string };
+    professional?: { id: string; name: string };
 }
 
 export interface MarketingCampaign {

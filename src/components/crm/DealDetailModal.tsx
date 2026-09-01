@@ -403,7 +403,7 @@ export function DealDetailModal({ deal, open, onOpenChange, onDealWon, onDealLos
         // Busca dados completos do deal
         const { data: fullDeal } = await supabase
             .from("crm_deals" as any)
-            .select("*, product_service:products_services(id,name,type,price), assigned_professional:professionals(id,name,role), deal_products:crm_deal_products(*, product_service:products_services(id,name,type,price))")
+            .select("*, product_service:products_services(id,name,type,price), assigned_professional:professionals(id,name), deal_products:crm_deal_products(*, product_service:products_services(id,name,type,price))")
             .eq("id", deal.id)
             .single();
 

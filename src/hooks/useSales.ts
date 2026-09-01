@@ -51,7 +51,7 @@ export function useSales(startDate?: string, endDate?: string) {
                     *,
                     product_service:products_services(id, name, type, price),
                     team_member:team_members(id, name, avatar_url),
-                    professional:professionals(id, name, photo_url),
+                    professional:professionals(id, name),
                     installments_data:sale_installments(id, installment_number, due_date, amount, status, paid_date)
                 `);
 
