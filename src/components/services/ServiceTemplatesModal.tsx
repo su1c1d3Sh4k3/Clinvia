@@ -83,6 +83,12 @@ interface CatDraft {
   services: SvcDraft[];
 }
 
+// Campos numéricos da tabela de aplicações: caixa estreita (as setinhas de
+// incremento do input number são escondidas, senão comem metade do espaço).
+const NUM_INPUT =
+  "h-9 px-1 text-xs text-center [appearance:textfield] " +
+  "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
+
 const buildDrafts = (catalog: CatalogCategory[]): CatDraft[] =>
   catalog.map((cat) => ({
     id: cat.id,
@@ -420,12 +426,17 @@ export const ServiceTemplatesModal = ({ open, onOpenChange }: ServiceTemplatesMo
               Nenhum template disponível no momento.
             </div>
           ) : (
-            <div className="space-y-3">
+            // min-w-0: DialogContent é grid e o filho nasce com min-width:auto —
+            // sem isso a faixa de abas de uma categoria com muitos serviços
+            // (ex.: "Equipamento sem consumível") estica a coluna do grid, o
+            // conteúdo vaza pra fora do modal e o overflow-x-auto das abas nunca
+            // chega a rolar (por isso a barrinha de hover não aparecia).
+            <div className="space-y-3 min-w-0">
               {drafts.map((cat) => {
                 const apps = catApps(cat);
                 const isOpen = expanded.has(cat.id);
                 return (
-                  <div key={cat.id} className="border rounded-lg overflow-hidden bg-card">
+                  <div key={cat.id} className="border rounded-lg overflow-hidden bg-card min-w-0">
                     <div className="w-full flex items-center gap-3 px-4 py-3">
                       <Checkbox
                         checked={stateOf(apps)}
@@ -490,9 +501,9 @@ export const ServiceTemplatesModal = ({ open, onOpenChange }: ServiceTemplatesMo
                     </div>
 
                     {isOpen && cat.services.length > 0 && (
-                      <div className="border-t px-4 py-3">
-                        <Tabs defaultValue={cat.services[0].id}>
-                          <TabsList className="nav-scrollbar h-auto w-full justify-start overflow-x-auto flex-nowrap pb-2.5">
+                      <div className="border-t px-4 py-3 min-w-0 overflow-hidden">
+                        <Tabs defaultValue={cat.services[0].id} className="w-full min-w-0">
+                          <TabsList className="nav-scrollbar flex h-auto w-full max-w-full justify-start overflow-x-auto flex-nowrap pb-2.5">
                             {cat.services.map((svc) => (
                               <TabsTrigger
                                 key={svc.id}
@@ -541,13 +552,13 @@ export const ServiceTemplatesModal = ({ open, onOpenChange }: ServiceTemplatesMo
                                   <TableHeader>
                                     <TableRow>
                                       <TableHead className="w-[44px] px-2" />
-                                      <TableHead className="w-[22%] px-2">Nome</TableHead>
-                                      <TableHead className="w-[30%] px-2">Descrição</TableHead>
-                                      <TableHead className="w-[130px] px-2 whitespace-nowrap">Valor</TableHead>
-                                      <TableHead className="w-[130px] px-2 whitespace-nowrap">Preço Mín.</TableHead>
-                                      <TableHead className="w-[110px] px-2 whitespace-nowrap">Retorno (m)</TableHead>
-                                      <TableHead className="w-[110px] px-2 whitespace-nowrap">Tempo (min)</TableHead>
-                                      <TableHead className="w-[110px] px-2 whitespace-nowrap">Comissão (%)</TableHead>
+                                      <TableHead className="px-2">Nome</TableHead>
+                                      <TableHead className="px-2">Descrição</TableHead>
+                                      <TableHead className="w-[86px] px-2 text-xs whitespace-nowrap">Valor</TableHead>
+                                      <TableHead className="w-[96px] px-2 text-xs whitespace-nowrap">Preço Mín.</TableHead>
+                                      <TableHead className="w-[98px] px-2 text-xs whitespace-nowrap">Retorno (m)</TableHead>
+                                      <TableHead className="w-[96px] px-2 text-xs whitespace-nowrap">Tempo (min)</TableHead>
+                                      <TableHead className="w-[104px] px-2 text-xs whitespace-nowrap">Comissão (%)</TableHead>
                                     </TableRow>
                                   </TableHeader>
                                   <TableBody>
@@ -590,7 +601,7 @@ export const ServiceTemplatesModal = ({ open, onOpenChange }: ServiceTemplatesMo
                                         </TableCell>
                                         <TableCell className="p-2 align-top">
                                           <Input
-                                            className="h-9 text-sm px-2"
+                                            className={cn(NUM_INPUT, "w-[52px]")}
                                             type="number"
                                             step="0.01"
                                             value={app.price}
@@ -603,7 +614,7 @@ export const ServiceTemplatesModal = ({ open, onOpenChange }: ServiceTemplatesMo
                                         </TableCell>
                                         <TableCell className="p-2 align-top">
                                           <Input
-                                            className="h-9 text-sm px-2"
+                                            className={cn(NUM_INPUT, "w-[52px]")}
                                             type="number"
                                             step="0.01"
                                             value={app.minPrice ?? ""}
@@ -618,7 +629,7 @@ export const ServiceTemplatesModal = ({ open, onOpenChange }: ServiceTemplatesMo
                                         </TableCell>
                                         <TableCell className="p-2 align-top">
                                           <Input
-                                            className="h-9 text-sm px-2"
+                                            className={cn(NUM_INPUT, "w-[33px]")}
                                             type="number"
                                             value={app.expiryMonths ?? ""}
                                             onChange={(e) =>
@@ -632,7 +643,7 @@ export const ServiceTemplatesModal = ({ open, onOpenChange }: ServiceTemplatesMo
                                         </TableCell>
                                         <TableCell className="p-2 align-top">
                                           <Input
-                                            className="h-9 text-sm px-2"
+                                            className={cn(NUM_INPUT, "w-[33px]")}
                                             type="number"
                                             value={app.durationMinutes ?? ""}
                                             onChange={(e) =>
@@ -646,7 +657,7 @@ export const ServiceTemplatesModal = ({ open, onOpenChange }: ServiceTemplatesMo
                                         </TableCell>
                                         <TableCell className="p-2 align-top">
                                           <Input
-                                            className="h-9 text-sm px-2"
+                                            className={cn(NUM_INPUT, "w-[33px]")}
                                             type="number"
                                             step="0.1"
                                             value={app.commissionPct}
