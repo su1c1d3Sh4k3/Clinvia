@@ -318,10 +318,16 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
             description: "A agenda mostra um dia por vez. Use as setas ou o botão Hoje para trocar o dia. O botão de calendário logo ao lado troca para a visão mês (um profissional por vez, com os agendamentos dentro do quadrado de cada dia); o modo escolhido fica salvo no seu usuário.",
         },
         {
+            element: '[data-tour="agenda-modo"]',
+            title: "Profissionais ou Salas",
+            description:
+                "Alterna o que a grade exibe: as agendas dos profissionais cadastrados, ou só as salas avulsas (laser, consultório, equipamento) que não têm profissional vinculado. A lista de botões da barra lateral acompanha o modo escolhido.",
+        },
+        {
             element: '[data-tour="agenda-sidebar"]',
             title: "Barra lateral",
             description:
-                "Passe o mouse para expandir: mini-calendário, lista de profissionais (clique num deles para ver só a agenda dele), Adicionar Profissional, Importar Agendamentos, Relatório Diário e filtro por serviço.",
+                "Passe o mouse para expandir: mini-calendário, lista do modo atual (Profissionais ou Salas — clique num deles para ver só aquela agenda), Adicionar Sala, Importar Agendamentos, Relatório Diário e filtro por serviço.",
         },
         {
             element: '[data-tour="agenda-criar"]',

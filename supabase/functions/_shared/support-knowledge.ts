@@ -257,13 +257,17 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "as mensagens automaticas de confirmacao e lembrete",
             "como importar agendamentos por planilha",
             "por que um profissional nao aparece na grade",
+            "como ver so as salas (laser, consultorio, equipamento) na agenda",
+            "alternar a agenda entre profissionais e salas",
         ],
         steps: [
             "Abra Agenda no menu lateral. O botao no cabecalho alterna entre grade (dia) e calendario (mes).",
+            "Ao lado do botao Hoje ha o alternador Profissionais | Salas: em Profissionais a grade traz so as agendas dos profissionais cadastrados; em Salas, so as salas avulsas (sem profissional vinculado). A lista de botoes da barra lateral acompanha o modo.",
             "Cada coluna da grade e uma SALA (a agenda). Clique num horario livre para abrir o agendamento: cliente, servico, sala e forma de pagamento.",
             "O horario de trabalho fica no cadastro da sala (Equipe > Salas, ou Adicionar Sala na barra lateral da agenda), com opcao de horario diferente por dia da semana.",
         ],
         gotchas: [
+            "Primeira coisa a conferir quando 'sumiu uma agenda': o alternador Profissionais | Salas mostra um grupo por vez. Sala avulsa so aparece no modo Salas; profissional so no modo Profissionais.",
             "Profissional ou sala inativa some da grade, do modal de agendamento e do link publico.",
             "Todo agendamento precisa de um cliente vinculado e cria/liga uma venda com pagamento pendente.",
             "Concluir o agendamento NAO cria venda nova — ela ja existe desde a criacao.",

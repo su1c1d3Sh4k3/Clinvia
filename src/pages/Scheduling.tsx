@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Plus, Filter, ChevronLeft, ChevronRight, Search, Settings, FileText, RefreshCw, Upload, CalendarDays, UserPlus, Users, LayoutGrid } from "lucide-react";
+import { Plus, Filter, ChevronLeft, ChevronRight, Search, Settings, FileText, RefreshCw, Upload, CalendarDays, UserPlus, Users, LayoutGrid, DoorOpen } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { SchedulingCalendar } from "@/components/scheduling/SchedulingCalendar";
 import { SchedulingMonthView } from "@/components/scheduling/SchedulingMonthView";
@@ -28,6 +28,8 @@ import { useProfessionalDayBlocks, useProfessionalMonthBlocks } from "@/hooks/us
 import { useAgendaView } from "@/hooks/useAgendaView";
 import { useSuporteTour } from "@/lib/suporteTours";
 
+type AgendaMode = "profissionais" | "salas";
+
 export default function Scheduling() {
     const { toast } = useToast();
     useSuporteTour();
@@ -44,6 +46,8 @@ export default function Scheduling() {
     const [isSidebarOpen, setIsSidebarOpen] = useState(true); // mobile
     const [isSidebarExpanded, setIsSidebarExpanded] = useState(false); // desktop (hover no rail)
     const [soloProfessionalId, setSoloProfessionalId] = useState<string | null>(null);
+    // null = ainda não escolhido pelo usuário (o padrão é calculado a partir das agendas existentes)
+    const [agendaModeChoice, setAgendaModeChoice] = useState<AgendaMode | null>(null);
     // Visão calendário (mês): profissional exibido nas abas + dia aberto no modal
     const { view: agendaView, setView: setAgendaView } = useAgendaView();
     const isMonthView = agendaView === "calendario";
@@ -373,10 +377,22 @@ export default function Scheduling() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [ownerId, activeGCalConnection]);
 
+    // Modo da agenda: agendas de profissionais (sala vinculada a um responsável)
+    // x salas avulsas (consultório/equipamento sem profissional).
+    // Sem escolha explícita, cai no modo que tem agenda — evita grade vazia.
+    const hasProfissionaisAgenda = (professionals || []).some((p: any) => !!p.responsavel_id);
+    const agendaMode: AgendaMode = agendaModeChoice ?? (hasProfissionaisAgenda ? "profissionais" : "salas");
+    const isSalasMode = agendaMode === "salas";
+
+    const modeProfessionals = useMemo(
+        () => (professionals || []).filter((p: any) => (isSalasMode ? !p.responsavel_id : !!p.responsavel_id)),
+        [professionals, isSalasMode]
+    );
+
     // Filtro por categoria/serviço: encontra profissionais com aplicações vinculadas
     const filteredProfessionals = useMemo(() => {
         if (!professionals) return [];
-        if (!selectedCategoryId && !selectedServiceNameId) return professionals;
+        if (!selectedCategoryId && !selectedServiceNameId) return modeProfessionals;
 
         let filtered = serviceClients || [];
         if (selectedCategoryId) {
@@ -391,8 +407,8 @@ export default function Scheduling() {
             sc.professionals?.forEach((pid: string) => profIds.add(pid));
         });
 
-        return professionals.filter(p => profIds.has(p.id));
-    }, [professionals, serviceClients, selectedCategoryId, selectedServiceNameId]);
+        return modeProfessionals.filter((p: any) => profIds.has(p.id));
+    }, [professionals, modeProfessionals, serviceClients, selectedCategoryId, selectedServiceNameId]);
 
     // Filtro de serviço pode tirar da lista o profissional em exibição solo
     useEffect(() => {
@@ -403,7 +419,10 @@ export default function Scheduling() {
 
     // A visão calendário mostra sempre UM profissional — garante uma aba ativa válida
     useEffect(() => {
-        if (!filteredProfessionals.length) return;
+        if (!filteredProfessionals.length) {
+            if (monthProfessionalId) setMonthProfessionalId(null);
+            return;
+        }
         if (!monthProfessionalId || !filteredProfessionals.some((p: any) => p.id === monthProfessionalId)) {
             setMonthProfessionalId(filteredProfessionals[0].id);
         }
@@ -589,6 +608,31 @@ export default function Scheduling() {
                     <Button variant="outline" onClick={handleToday} className="h-9 md:h-auto md:self-stretch text-xs md:text-sm px-2 md:px-4 bg-white dark:bg-transparent border border-[#D4D5D6] dark:border-border">
                         Hoje
                     </Button>
+
+                    {/* Alterna as agendas exibidas: profissionais x salas avulsas */}
+                    <div
+                        data-tour="agenda-modo"
+                        className="flex items-center rounded-md border border-[#D4D5D6] dark:border-border bg-white dark:bg-background overflow-hidden h-9 md:h-auto md:self-stretch"
+                    >
+                        <Button
+                            variant="ghost"
+                            title="Ver as agendas dos profissionais"
+                            onClick={() => setAgendaModeChoice("profissionais")}
+                            className={`h-full rounded-none px-2 md:px-3 text-xs md:text-sm ${!isSalasMode ? "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground" : ""}`}
+                        >
+                            <Users className="h-4 w-4 md:mr-2" />
+                            <span className="hidden md:inline">Profissionais</span>
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            title="Ver as agendas das salas avulsas"
+                            onClick={() => setAgendaModeChoice("salas")}
+                            className={`h-full rounded-none px-2 md:px-3 text-xs md:text-sm border-l border-[#D4D5D6] dark:border-border ${isSalasMode ? "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground" : ""}`}
+                        >
+                            <DoorOpen className="h-4 w-4 md:mr-2" />
+                            <span className="hidden md:inline">Salas</span>
+                        </Button>
+                    </div>
                     <Button variant="outline" size="icon" onClick={() => setIsSettingsModalOpen(true)} className="h-9 w-9 md:h-auto md:w-12 md:self-stretch">
                         <Settings className="h-4 w-4" />
                     </Button>
@@ -649,11 +693,14 @@ export default function Scheduling() {
                         <Button variant="ghost" size="icon" title="Calendário" onClick={() => setIsSidebarExpanded(true)}>
                             <CalendarDays className="h-5 w-5" />
                         </Button>
-                        {filteredProfessionals.length > 1 && (
-                            <Button variant="ghost" size="icon" title="Salas" onClick={() => setIsSidebarExpanded(true)}>
-                                <Users className="h-5 w-5" />
-                            </Button>
-                        )}
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            title={isSalasMode ? "Salas" : "Profissionais"}
+                            onClick={() => setIsSidebarExpanded(true)}
+                        >
+                            {isSalasMode ? <DoorOpen className="h-5 w-5" /> : <Users className="h-5 w-5" />}
+                        </Button>
                         {canCreate('professionals') && (
                             <Button variant="ghost" size="icon" title="Adicionar Sala" onClick={() => {
                                 setProfessionalToEdit(null);
@@ -711,16 +758,22 @@ export default function Scheduling() {
 
                         {/* Atalho por profissional: na grade exibe só a agenda do escolhido;
                             na visão mês troca o profissional do calendário (sem "Todos") */}
-                        {filteredProfessionals.length > 1 && (
-                            <Card className="w-full">
-                                <CardHeader className="pb-3">
-                                    <CardTitle className="text-sm font-medium flex items-center">
-                                        <Users className="w-4 h-4 mr-2" />
-                                        Salas
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-1.5 px-4 pb-4 pt-0">
-                                    {!isMonthView && (
+                        <Card className="w-full">
+                            <CardHeader className="pb-3">
+                                <CardTitle className="text-sm font-medium flex items-center">
+                                    {isSalasMode ? <DoorOpen className="w-4 h-4 mr-2" /> : <Users className="w-4 h-4 mr-2" />}
+                                    {isSalasMode ? "Salas" : "Profissionais"}
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-1.5 px-4 pb-4 pt-0">
+                                    {filteredProfessionals.length === 0 && (
+                                        <p className="text-xs text-muted-foreground">
+                                            {isSalasMode
+                                                ? "Nenhuma sala avulsa. Salas avulsas são consultórios ou equipamentos sem profissional vinculado."
+                                                : "Nenhum profissional com agenda. Cadastre em Equipe > Profissionais."}
+                                        </p>
+                                    )}
+                                    {!isMonthView && filteredProfessionals.length > 1 && (
                                         <Button
                                             variant={soloProfessionalId ? "outline" : "default"}
                                             className="w-full justify-start"
@@ -754,9 +807,8 @@ export default function Scheduling() {
                                             </Button>
                                         );
                                     })}
-                                </CardContent>
-                            </Card>
-                        )}
+                            </CardContent>
+                        </Card>
 
                         {canCreate('professionals') && (
                             <Button onClick={() => {
@@ -861,7 +913,7 @@ export default function Scheduling() {
 
             {/* Main Calendar */}
             <div data-tour="agenda-grade" className={`flex-1 flex flex-col overflow-hidden ${isSidebarOpen ? "hidden md:flex" : "flex"}`}>
-                {date && isMonthView && (
+                {date && isMonthView && monthProfessional && (
                     <SchedulingMonthView
                         date={date}
                         professional={monthProfessional}

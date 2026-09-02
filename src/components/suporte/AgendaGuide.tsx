@@ -83,9 +83,10 @@ export function AgendaGuide() {
                 subtitle="Grade por profissional, hover e visão solo">
                 <StepByStep steps={[
                     { title: "Escolha o dia", description: "Use as setas ‹ › no topo, o botão Hoje, ou o mini-calendário na barra lateral (passe o mouse sobre os ícones à esquerda para expandi-la)." },
+                    { title: "Profissionais ou Salas", description: "Ao lado do botão Hoje há o alternador Profissionais | Salas. Em Profissionais a grade traz só as agendas de quem está cadastrado em Equipe > Profissionais; em Salas, só as salas avulsas (laser, consultório, equipamento) que não têm profissional vinculado. A lista de botões da barra lateral acompanha o modo escolhido." },
                     { title: "Leia a grade", description: "Cada coluna é um profissional; a área cinza é fora do horário dele. Passe o mouse sobre um evento para ver o card completo com botões de status." },
                     { title: "Visão solo", description: "Clique no nome do profissional no cabeçalho para ver só a agenda dele; a seta restaura a visão geral." },
-                    { title: "Lista de profissionais", description: "Na barra lateral, logo abaixo do calendário, há um botão para cada profissional: clique e a grade mostra só a agenda dele. O botão Todos volta à visão geral. Ideal para clínicas com muitos profissionais — a escolha continua valendo quando você troca de dia." },
+                    { title: "Lista de profissionais", description: "Na barra lateral, logo abaixo do calendário, há um botão para cada agenda do modo atual: clique e a grade mostra só aquela. O botão Todos volta à visão geral. Ideal para clínicas com muitos profissionais — a escolha continua valendo quando você troca de dia." },
                     { title: "Filtre e busque", description: "Na barra lateral, filtre por categoria/serviço (só aparecem profissionais que executam aquele serviço); no topo, busque cliente agendado no dia." },
                 ]} />
                 <div className="flex flex-wrap gap-2">
@@ -280,7 +281,7 @@ export function AgendaGuide() {
                     {[
                         {
                             q: "Um profissional não aparece na grade. Por quê?",
-                            a: "Quatro causas comuns: 1) o profissional (ou a sala) está inativo em Equipe > Profissionais / Salas — a chave desligada tira a coluna da agenda; 2) a grade está na visão solo de outro profissional — clique em Todos na lista da barra lateral; 3) há um filtro de categoria/serviço ativo e ele não executa aquele serviço; 4) o dia selecionado não está nos dias de trabalho dele. Limpe o filtro e confira o cadastro.",
+                            a: "Cinco causas comuns: 1) a agenda está no modo errado — o alternador Profissionais | Salas ao lado do botão Hoje mostra um grupo por vez (salas avulsas só aparecem em Salas); 2) o profissional (ou a sala) está inativo em Equipe > Profissionais / Salas — a chave desligada tira a coluna da agenda; 3) a grade está na visão solo de outro profissional — clique em Todos na lista da barra lateral; 4) há um filtro de categoria/serviço ativo e ele não executa aquele serviço; 5) o dia selecionado não está nos dias de trabalho dele. Limpe o filtro e confira o cadastro.",
                         },
                         {
                             q: "A IA ofereceu um horário que eu não queria abrir. Como restringir?",
