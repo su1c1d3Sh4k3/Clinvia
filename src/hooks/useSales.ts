@@ -269,16 +269,7 @@ export function useTopSellers(month?: number, year?: number) {
 
             let query = supabase
                 .from('sales' as any)
-                .select(`
-                    product_service_id,
-                    quantity,
-                    total_amount,
-                    product_service_id,
-                    product_name,
-                    quantity,
-                    total_amount,
-                    product_service:products_services(id, name, type)
-                `);
+                .select('service_client_id, product_service_id, product_name, category, quantity, total_amount');
 
             if (startDate && endDate) {
                 query = query.gte('sale_date', startDate).lte('sale_date', endDate);
@@ -287,23 +278,24 @@ export function useTopSellers(month?: number, year?: number) {
             const { data, error } = await query.limit(5000);
             if (error) throw error;
 
-            // Agrupar por produto
+            // Agrupa pelo serviço vendido. product_service_id é legado (praticamente
+            // nunca preenchido) — a venda real aponta para services_client.
             const productMap: Record<string, TopSeller> = {};
             (data || []).forEach((sale: any) => {
-                const prodId = sale.product_service_id;
-                if (!prodId) return;
+                const name = sale.product_name || 'Sem nome';
+                const key = sale.service_client_id || sale.product_service_id || `name:${name.toLowerCase()}`;
 
-                if (!productMap[prodId]) {
-                    productMap[prodId] = {
-                        product_id: prodId || 'unknown',
-                        product_name: sale.product_name || sale.product_service?.name || 'Produto desconhecido',
-                        product_type: sale.product_service?.type || 'product',
+                if (!productMap[key]) {
+                    productMap[key] = {
+                        product_id: key,
+                        product_name: name,
+                        product_type: sale.category === 'product' ? 'product' : 'service',
                         total_quantity: 0,
                         total_value: 0,
                     };
                 }
-                productMap[prodId].total_quantity += Number(sale.quantity);
-                productMap[prodId].total_value += Number(sale.total_amount);
+                productMap[key].total_quantity += Number(sale.quantity || 0);
+                productMap[key].total_value += Number(sale.total_amount || 0);
             });
 
             // Ordenar por quantidade decrescente e retornar top 10

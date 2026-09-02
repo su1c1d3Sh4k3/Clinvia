@@ -7,12 +7,12 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { TrendingUp } from "lucide-react";
-
-// Componentes de vendas
+import { ClientProfileModal } from "@/components/contacts/ClientProfileModal";
 import { SalesCards } from "@/components/sales/SalesCards";
 import { SalesCharts } from "@/components/sales/SalesCharts";
 import { SalesByPersonTables } from "@/components/sales/SalesByPersonTables";
 import { TopSellersTable } from "@/components/sales/TopSellersTable";
+import { VendasTable } from "./VendasTable";
 
 const MONTHS = [
     { value: 1, label: "Janeiro" },
@@ -32,49 +32,40 @@ const MONTHS = [
 const currentYear = new Date().getFullYear();
 const YEARS = Array.from({ length: 5 }, (_, i) => currentYear - 2 + i);
 
-// ========================================
-// MAIN COMPONENT: SALES DASHBOARD
-// ========================================
-export function SalesDashboard() {
-    const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
-    const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+export function VendasTab() {
+    const [month, setMonth] = useState(new Date().getMonth() + 1);
+    const [year, setYear] = useState(new Date().getFullYear());
+    const [selectedContact, setSelectedContact] = useState<{ id: string; push_name: string } | null>(null);
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
-            {/* Filtros de Período */}
-            <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-4" data-tour="financeiro-vendas-periodo">
                 <div className="flex items-center gap-2">
                     <TrendingUp className="w-5 h-5 text-emerald-500" />
                     <span className="text-sm font-medium text-muted-foreground">Período:</span>
                 </div>
                 <div className="flex items-center gap-3">
-                    <Select
-                        value={String(selectedMonth)}
-                        onValueChange={(value) => setSelectedMonth(parseInt(value))}
-                    >
+                    <Select value={String(month)} onValueChange={(v) => setMonth(parseInt(v))}>
                         <SelectTrigger className="w-[140px]">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                            {MONTHS.map((month) => (
-                                <SelectItem key={month.value} value={String(month.value)}>
-                                    {month.label}
+                            {MONTHS.map((m) => (
+                                <SelectItem key={m.value} value={String(m.value)}>
+                                    {m.label}
                                 </SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
 
-                    <Select
-                        value={String(selectedYear)}
-                        onValueChange={(value) => setSelectedYear(parseInt(value))}
-                    >
+                    <Select value={String(year)} onValueChange={(v) => setYear(parseInt(v))}>
                         <SelectTrigger className="w-[100px]">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                            {YEARS.map((year) => (
-                                <SelectItem key={year} value={String(year)}>
-                                    {year}
+                            {YEARS.map((y) => (
+                                <SelectItem key={y} value={String(y)}>
+                                    {y}
                                 </SelectItem>
                             ))}
                         </SelectContent>
@@ -82,17 +73,26 @@ export function SalesDashboard() {
                 </div>
             </div>
 
-            {/* Cards de Resumo */}
-            <SalesCards month={selectedMonth} year={selectedYear} />
+            <SalesCards month={month} year={year} />
 
-            {/* Gráficos */}
-            <SalesCharts month={selectedMonth} year={selectedYear} />
+            <SalesCharts month={month} year={year} />
 
-            {/* Tabela Mais Vendidos - DESTAQUE */}
-            <TopSellersTable month={selectedMonth} year={selectedYear} />
+            <div data-tour="financeiro-vendas-tabela">
+                <VendasTable onOpenContact={setSelectedContact} />
+            </div>
 
-            {/* Faturamento por Pessoa */}
-            <SalesByPersonTables month={selectedMonth} year={selectedYear} />
+            <TopSellersTable month={month} year={year} />
+
+            <div data-tour="financeiro-faturamento">
+                <SalesByPersonTables month={month} year={year} />
+            </div>
+
+            <ClientProfileModal
+                open={!!selectedContact}
+                onOpenChange={(open) => !open && setSelectedContact(null)}
+                contact={selectedContact}
+                defaultTab="vendas"
+            />
         </div>
     );
 }

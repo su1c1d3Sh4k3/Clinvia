@@ -122,6 +122,50 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
                 "No card, o relógio marca o que o cliente ainda não comprou. Em 'Lançar venda' você percorre 4 passos (o que foi levado, como foi vendido, agendamentos e revisão) — nada é gravado até o último clique.",
         },
     ],
+    "financeiro-visao-geral": [
+        {
+            element: '[data-tour="financeiro-tabs"]',
+            title: "1. Duas abas",
+            description:
+                "Orçamentos mostra o que foi PROPOSTO aos clientes; Vendas mostra o que foi FECHADO. A aba escolhida fica salva no endereço da página.",
+        },
+        {
+            element: '[data-tour="financeiro-filtro"]',
+            title: "2. Filtro de período",
+            description:
+                "Todo o período, hoje, 7 dias, 30 dias ou datas personalizadas. Ele manda apenas nos 4 cards de valores logo abaixo.",
+        },
+        {
+            element: '[data-tour="financeiro-criar-orcamento"]',
+            title: "3. Criar orçamento",
+            description:
+                "Mesmo formulário da lateral do Inbox, com um campo a mais para buscar o cliente por nome ou número — dá para orçar sem abrir a conversa.",
+        },
+        {
+            element: '[data-tour="financeiro-cards"]',
+            title: "4. Os 4 cards",
+            description:
+                "Em reais: totais, aprovados (valor final vendido, já com desconto), rejeitados (recusados + expirados) e pendentes — o dinheiro que ainda está na mesa.",
+        },
+        {
+            element: '[data-tour="financeiro-grafico"]',
+            title: "5. Últimos 12 meses",
+            description:
+                "Aqui a conta é em QUANTIDADE de itens (um orçamento com 3 serviços conta 3). O botão do canto alterna entre linhas e barras.",
+        },
+        {
+            element: '[data-tour="financeiro-tabela"]',
+            title: "6. Orçamentos realizados",
+            description:
+                "Uma linha por orçamento, o mais novo no topo. Clique no nome do cliente para abrir a ficha dele já na aba Orçamentos.",
+        },
+        {
+            element: '[data-tour="financeiro-rankings"]',
+            title: "7. Profissional e serviços",
+            description:
+                "Quem mais orçou e quais serviços são mais propostos (top 10). Cada quadro tem o seu próprio filtro de período.",
+        },
+    ],
     "crm-board": [
         {
             element: '[data-tour="crm-title"]',

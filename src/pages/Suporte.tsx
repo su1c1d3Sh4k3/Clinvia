@@ -2,7 +2,7 @@ import { ComponentType } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
     LayoutDashboard, MessageSquare, KanbanSquare, Package, FileText, Users, ShieldCheck,
-    Calendar, Repeat, Megaphone, Bot, Plug, Settings, Headphones, LucideIcon,
+    Calendar, Repeat, Megaphone, Bot, Plug, Settings, Headphones, DollarSign, LucideIcon,
 } from "lucide-react";
 import { SuporteChatGuide } from "@/components/suporte/SuporteChatGuide";
 import { CampaignsGuide } from "@/components/suporte/CampaignsGuide";
@@ -18,6 +18,7 @@ import { EquipeGuide } from "@/components/suporte/EquipeGuide";
 import { ConfiguracoesGuide } from "@/components/suporte/ConfiguracoesGuide";
 import { RecorrenciaGuide } from "@/components/suporte/RecorrenciaGuide";
 import { OrcamentosGuide } from "@/components/suporte/OrcamentosGuide";
+import { FinanceiroGuide } from "@/components/suporte/FinanceiroGuide";
 import { useUrlTab } from "@/hooks/useUrlTab";
 
 interface GuideTab {
@@ -41,6 +42,7 @@ const GUIDE_TABS: GuideTab[] = [
     { value: "campanhas", label: "Campanhas", icon: Megaphone, component: CampaignsGuide },
     { value: "ia", label: "IA", icon: Bot, component: IaGuide },
     { value: "conexoes", label: "Conexões", icon: Plug, component: ConexoesGuide },
+    { value: "financeiro", label: "Financeiro", icon: DollarSign, component: FinanceiroGuide },
     { value: "configuracoes", label: "Configurações", icon: Settings, component: ConfiguracoesGuide },
     { value: "atendimento", label: "Falar com o suporte", icon: Headphones, component: SuporteChatGuide },
 ];

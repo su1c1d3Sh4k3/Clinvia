@@ -2,7 +2,7 @@ import {
   Users, Settings, LayoutDashboard, MessageSquare, Briefcase,
   Smartphone, LogOut, BookUser, Calendar, Repeat,
   Package, Bot, Megaphone, LifeBuoy, Headset, FolderKanban,
-  TrendingUp, ChevronRight
+  TrendingUp, ChevronRight, DollarSign
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -42,6 +42,7 @@ const ITEMS = {
   campaigns: { icon: Megaphone, label: "Campanhas", id: "campaigns", path: "/campanhas" },
   ia: { icon: Bot, label: "IA", id: "ia-config", path: "/ia-config" },
   whatsapp: { icon: Smartphone, label: "Conexões", id: "whatsapp", path: "/whatsapp-connection" },
+  financial: { icon: DollarSign, label: "Financeiro", id: "financial", path: "/financial" },
   suporte: { icon: LifeBuoy, label: "Suporte", id: "suporte", path: "/suporte" },
   settings: { icon: Settings, label: "Configurações", id: "settings", path: "/settings" },
 } satisfies Record<string, MenuItem>;
@@ -61,6 +62,7 @@ const groupedMenu: MenuItem[] = [
     icon: TrendingUp, label: "Marketing", id: "g-marketing",
     children: [ITEMS.recurrence, ITEMS.campaigns],
   },
+  ITEMS.financial,
   ITEMS.suporte,
   ITEMS.settings,
 ];
@@ -68,7 +70,7 @@ const groupedMenu: MenuItem[] = [
 const flatMenu: MenuItem[] = [
   ITEMS.dashboard, ITEMS.inbox, ITEMS.crm, ITEMS.services, ITEMS.contacts,
   ITEMS.team, ITEMS.scheduling, ITEMS.recurrence, ITEMS.campaigns, ITEMS.ia,
-  ITEMS.whatsapp, ITEMS.suporte, ITEMS.settings,
+  ITEMS.whatsapp, ITEMS.financial, ITEMS.suporte, ITEMS.settings,
 ];
 
 /** Grupos abertos ficam no navegador: sobrevivem a troca de página e F5 */
@@ -349,6 +351,7 @@ export const NavigationSidebar = () => {
     if (item.id === "team") return userRole === "admin" || hasAnyAccess("team_members");
     if (item.id === "campaigns") return userRole === "admin" || hasAnyAccess("campaigns");
     if (item.id === "ia-config") return userRole === "admin" || hasAnyAccess("ia_config");
+    if (item.id === "financial") return userRole === "admin" || hasAnyAccess("financial");
     return true;
   };
 

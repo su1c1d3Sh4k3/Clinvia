@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { ServiceCascadePicker } from "@/components/services/ServiceCascadePicker";
+import { ContactPicker } from "@/components/ui/contact-picker";
 import { useResponsaveis } from "@/hooks/useResponsaveis";
 import {
     Orcamento,
@@ -29,7 +30,8 @@ interface Line {
 interface OrcamentoModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    contactId: string;
+    /** Ausente quando o orçamento nasce fora da ficha do cliente (ex.: /financial) — aí o modal pede o contato. */
+    contactId?: string;
     /** Quando presente, edita o orçamento (só os itens pendentes). */
     orcamento?: Orcamento | null;
 }
@@ -43,6 +45,9 @@ export function OrcamentoModal({ open, onOpenChange, contactId, orcamento }: Orc
     const [indicacao, setIndicacao] = useState("");
     const [validade, setValidade] = useState("");
     const [notes, setNotes] = useState("");
+    const [pickedContactId, setPickedContactId] = useState("");
+    const needsContactPicker = !contactId && !isEditing;
+    const effectiveContactId = contactId || orcamento?.contact_id || pickedContactId;
 
     const { data: responsaveis = [] } = useResponsaveis();
     const { data: indicacoes = [] } = useIndicacoes(indicacao);
@@ -75,6 +80,7 @@ export function OrcamentoModal({ open, onOpenChange, contactId, orcamento }: Orc
             setIndicacao("");
             setValidade("");
             setNotes("");
+            setPickedContactId("");
         }
     }, [open, orcamento]);
 
@@ -96,6 +102,10 @@ export function OrcamentoModal({ open, onOpenChange, contactId, orcamento }: Orc
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!effectiveContactId) {
+            toast.error("Selecione o cliente do orçamento");
+            return;
+        }
         if (!responsavelId) {
             toast.error("Selecione o profissional responsável");
             return;
@@ -113,7 +123,7 @@ export function OrcamentoModal({ open, onOpenChange, contactId, orcamento }: Orc
         }));
 
         const input = {
-            contact_id: contactId,
+            contact_id: effectiveContactId,
             responsavel_id: responsavelId,
             indicacao: indicacao.trim() || null,
             validade: validade || null,
@@ -145,6 +155,18 @@ export function OrcamentoModal({ open, onOpenChange, contactId, orcamento }: Orc
 
                 <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
                     <div className="flex-1 overflow-y-auto pr-2 space-y-4 scrollbar-thin">
+                        {needsContactPicker && (
+                            <div className="space-y-2">
+                                <Label>Cliente *</Label>
+                                <ContactPicker
+                                    value={pickedContactId}
+                                    onChange={(id) => setPickedContactId(id)}
+                                    placeholder="Busque o cliente por nome ou número..."
+                                    modal
+                                />
+                            </div>
+                        )}
+
                         <div className="border rounded-lg p-3 space-y-3 bg-muted/10 dark:bg-white/5">
                             <Label className="text-sm font-medium">Adicionar Serviço</Label>
                             <ServiceCascadePicker onAdd={handleAdd} showQuantity excludeAvaliacao />
@@ -256,7 +278,7 @@ export function OrcamentoModal({ open, onOpenChange, contactId, orcamento }: Orc
 
                     <DialogFooter className="pt-4 border-t mt-4 shrink-0">
                         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-                        <Button type="submit" disabled={isPending || lines.length === 0}>
+                        <Button type="submit" disabled={isPending || lines.length === 0 || !effectiveContactId}>
                             {isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                             {isEditing ? "Salvar Alterações" : "Criar Orçamento"}
                         </Button>

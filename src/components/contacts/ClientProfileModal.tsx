@@ -18,12 +18,15 @@ interface ClientProfileModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   contact: any | null;
+  /** Aba aberta ao montar o modal (ex.: /financial abre direto em Orçamentos). */
+  defaultTab?: string;
 }
 
 export const ClientProfileModal = ({
   open,
   onOpenChange,
   contact,
+  defaultTab = "cadastro",
 }: ClientProfileModalProps) => {
   // Resolve vínculo Instagram ↔ WhatsApp: se o contato (IG) tem linked_contact_id,
   // o contato WhatsApp "mestre" fornece os dados do perfil; conversas dos contatos
@@ -77,7 +80,7 @@ export const ClientProfileModal = ({
         <div className="flex flex-1 overflow-hidden">
           {/* Left: Main content */}
           <div className="flex-1 flex flex-col overflow-hidden">
-            <Tabs defaultValue="cadastro" className="flex flex-col flex-1 overflow-hidden">
+            <Tabs key={defaultTab} defaultValue={defaultTab} className="flex flex-col flex-1 overflow-hidden">
               <div className="px-3 sm:px-5 pt-3 border-b">
                 <TabsList className="flex md:justify-between w-full h-auto overflow-x-auto flex-nowrap justify-start [scrollbar-width:thin]">
                   <TabsTrigger value="cadastro" className="md:flex-1 shrink-0 px-3 text-xs py-2">Cadastro</TabsTrigger>
