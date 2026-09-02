@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import {
     Bot, ShieldCheck, Building2, HelpCircle, Workflow, Timer, KanbanSquare,
-    PowerOff, ExternalLink, Mic,
+    PowerOff, ExternalLink, Mic, CalendarClock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,6 +20,7 @@ const TOPICS = [
     { id: "empresa", label: "Empresa" },
     { id: "faq-da-ia", label: "F.A.Q da IA" },
     { id: "ajustes", label: "Delay, voz e workflow" },
+    { id: "horarios", label: "Horários de agendamento" },
     { id: "ia-e-crm", label: "IA e CRM" },
     { id: "desligando", label: "Desligando" },
     { id: "faq", label: "FAQ" },
@@ -161,7 +162,41 @@ export function IaGuide() {
             </TopicSection>
 
             {/* 6 */}
-            <TopicSection id="ia-e-crm" index={6} icon={KanbanSquare} title="IA e CRM andam juntos"
+            <TopicSection id="horarios" index={6} icon={CalendarClock} title="Horários de agendamento"
+                subtitle="Aba Config — de quanto em quanto tempo a IA oferece horários">
+                <StepByStep steps={[
+                    {
+                        title: "Tamanho do slot",
+                        description: <>De quanto em quanto tempo os horários são oferecidos. Com <strong>30 minutos</strong>, a IA propõe 08:00, 08:30, 09:00... Com <strong>10 minutos</strong> (o padrão), ela propõe 08:00, 08:10, 08:20... Quanto menor o slot, mais opções o cliente recebe e mais "picada" fica a agenda.</>,
+                    },
+                    {
+                        title: "Intervalo entre atendimentos",
+                        description: <>Folga exigida <strong>antes e depois</strong> de cada agendamento já marcado — tempo de limpar a sala, higienizar o equipamento, respirar. O padrão é <strong>sem intervalo</strong>. Com 15 minutos, um atendimento das 10h às 11h bloqueia das 09h45 às 11h15.</>,
+                    },
+                    {
+                        title: "Salvar",
+                        description: "Clique em Salvar. A partir daí a IA, o link público e as automações que oferecem horários já seguem a nova regra.",
+                    },
+                ]} />
+                <Callout type="atencao" title="O encaixe manual continua livre">
+                    Essas duas regras valem para os canais automáticos: <strong>IA</strong>, <strong>link público de
+                    agendamento</strong> e automações que oferecem horários pelo WhatsApp. Quem marca pela agenda do painel
+                    continua podendo encaixar qualquer horário — a recepção não fica de mãos atadas.
+                </Callout>
+                <Callout type="dica" title="Slot não é duração">
+                    O tamanho do slot não muda quanto tempo o procedimento leva: a duração continua vindo do cadastro da
+                    aplicação em <strong>Serviços</strong>. O slot só define de quanto em quanto tempo os horários aparecem.
+                </Callout>
+                <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" onClick={() => navigate("/ia-config?tab=settings&tour=ia-horarios")}>
+                        <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                        Me mostre na prática
+                    </Button>
+                </div>
+            </TopicSection>
+
+            {/* 7 */}
+            <TopicSection id="ia-e-crm" index={7} icon={KanbanSquare} title="IA e CRM andam juntos"
                 subtitle="Fila de atendimento e etapa do funil se movem em par">
                 <StepByStep steps={[
                     { title: "Cliente novo chega", description: <>Com a IA ligada, a conversa nasce na fila <strong>Atendimento IA</strong> e um card é criado no CRM em "Em Atendimento IA".</>, },
@@ -174,8 +209,8 @@ export function IaGuide() {
                 </Callout>
             </TopicSection>
 
-            {/* 7 */}
-            <TopicSection id="desligando" index={7} icon={PowerOff} title="Desligando a IA"
+            {/* 8 */}
+            <TopicSection id="desligando" index={8} icon={PowerOff} title="Desligando a IA"
                 subtitle="Do bisturi ao disjuntor: 3 níveis de controle">
                 <StepByStep steps={[
                     { title: "Por cliente (bisturi)", description: <>Na página <strong>Clientes</strong>, cada contato tem um botão de IA. Perfeito para aquele paciente que só quer falar com a Dra.</>, },
@@ -194,8 +229,8 @@ export function IaGuide() {
                 </div>
             </TopicSection>
 
-            {/* 8 */}
-            <TopicSection id="faq" index={8} icon={HelpCircle} title="Perguntas frequentes">
+            {/* 9 */}
+            <TopicSection id="faq" index={9} icon={HelpCircle} title="Perguntas frequentes">
                 <Accordion type="single" collapsible className="rounded-xl border px-4">
                     {[
                         {

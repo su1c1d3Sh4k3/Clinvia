@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { getWorkHoursForDay } from "../_shared/professional-schedule.ts";
 import { getBlockedProfessionalIds } from "../_shared/day-blocks.ts";
+import { getSlotSettings, padBusyRange, type SlotSettings } from "../_shared/slot-settings.ts";
 import {
     ApiError,
     apiError,
@@ -61,7 +62,8 @@ interface Slot { time: string; professional: string; minuteOfDay: number; }
 
 /** Get all free slots for a given date across all professionals */
 async function getSlotsForDate(
-    supabase: any, professionals: any[], dateStr: string, dayOfWeek: number, duration: number
+    supabase: any, professionals: any[], dateStr: string, dayOfWeek: number, duration: number,
+    slotSettings: SlotSettings
 ): Promise<Slot[]> {
     const slots: Slot[] = [];
 
@@ -99,12 +101,14 @@ async function getSlotsForDate(
             });
         }
 
-        const busy = (appointments || []).map((a: any) => ({
+        // A folga da conta entra aqui: cada agendamento ocupa a própria duração
+        // mais o intervalo configurado dos dois lados.
+        const busy = (appointments || []).map((a: any) => padBusyRange({
             start: spMinuteOfDay(a.start_time),
             end: spMinuteOfDay(a.end_time),
-        }));
+        }, slotSettings.bufferMinutes));
 
-        for (let m = whStart; m + duration <= whEnd; m += 10) {
+        for (let m = whStart; m + duration <= whEnd; m += slotSettings.stepMinutes) {
             if (breakStart !== null && breakEnd !== null && m < breakEnd && m + duration > breakStart) continue;
             let conflict = false;
             for (const b of busy) { if (m < b.end && m + duration > b.start) { conflict = true; break; } }
@@ -148,6 +152,9 @@ serve(async (req) => {
             Deno.env.get("SUPABASE_URL") ?? "",
             Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
         );
+
+        // Passo da grade e folga entre atendimentos (IA > Configurações)
+        const slotSettings = await getSlotSettings(supabase, user_id);
 
         // Find the service
         const { data: sc, error: scError } = await supabase
@@ -323,7 +330,7 @@ serve(async (req) => {
             // Try the requested date first
             const reqDate = new Date(date + "T12:00:00");
             const dateStr = formatDate(reqDate);
-            const allSlots = await getSlotsForDate(supabase, professionals, dateStr, reqDate.getDay(), duration);
+            const allSlots = await getSlotsForDate(supabase, professionals, dateStr, reqDate.getDay(), duration, slotSettings);
             const filtered = allSlots.filter(filterFn);
 
             if (filtered.length > 0) {
@@ -344,7 +351,7 @@ serve(async (req) => {
 
             for (let i = 0; i < MAX_SEARCH; i++) {
                 const sDateStr = formatDate(search);
-                const sSlots = await getSlotsForDate(supabase, professionals, sDateStr, search.getDay(), duration);
+                const sSlots = await getSlotsForDate(supabase, professionals, sDateStr, search.getDay(), duration, slotSettings);
                 const sFiltered = sSlots.filter(filterFn);
 
                 if (sFiltered.length > 0) {
@@ -383,7 +390,7 @@ serve(async (req) => {
 
         for (let attempt = 0; attempt < MAX_SEARCH && availability.length < 3; attempt++) {
             const dateStr = formatDate(searchDate);
-            const daySlots = await getSlotsForDate(supabase, professionals, dateStr, searchDate.getDay(), duration);
+            const daySlots = await getSlotsForDate(supabase, professionals, dateStr, searchDate.getDay(), duration, slotSettings);
 
             if (daySlots.length > 0) {
                 // 3 horários POR PROFISSIONAL (um por faixa manhã/meio-dia/tarde)

@@ -375,6 +375,14 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
                 "O interruptor geral. Com ele ligado, aparecem abaixo os botões de cada conexão — você escolhe quais números têm IA.",
         },
     ],
+    "ia-horarios": [
+        {
+            element: '[data-tour="ia-slots"]',
+            title: "Horários de agendamento",
+            description:
+                "Aqui você define de quanto em quanto tempo a IA e o link público oferecem horários, e quanta folga exigir antes e depois de cada agendamento já marcado. Depois de escolher, clique em Salvar. O encaixe manual pela agenda continua livre.",
+        },
+    ],
     "suporte-chat": [
         {
             element: '[data-tour="support-widget"]',

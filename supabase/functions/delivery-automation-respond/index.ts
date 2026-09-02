@@ -160,6 +160,8 @@ serve(async (req) => {
 // ---------------------------------------------------------------------------
 
 interface SessionContext {
+    /** Dono da conta — usado para ler o slot/folga configurados em ia_config */
+    userId: string;
     instance: { id: string; apikey: string };
     patient: { id: string; nome: string | null; telefone: string; contact_id: string | null };
     service: { id: string; name: string; duration_minutes: number };
@@ -201,6 +203,7 @@ async function loadContext(supabase: any, session: any): Promise<SessionContext>
     ]);
 
     return {
+        userId: session.user_id,
         instance: { id: instance.id, apikey: instance.apikey },
         patient: patientRes.data!,
         service: {
@@ -485,7 +488,7 @@ async function advanceToPeriodOrTime(
 ): Promise<{ newState: string; action: string }> {
     const slots = await computeAvailableSlots({
         supabase,
-        userId: ctx.delivery.id, // not used by engine but kept for future
+        userId: ctx.userId,
         professionalId: ctx.professional.id,
         serviceId: ctx.service.id,
         targetDateYmd: targetDate,

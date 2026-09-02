@@ -19,6 +19,7 @@ import {
 } from "./timezone.ts";
 import { getWorkHoursForDay } from "./professional-schedule.ts";
 import { isProfessionalDayBlocked } from "./day-blocks.ts";
+import { getSlotSettings } from "./slot-settings.ts";
 
 export interface Slot {
     time: string;       // 'HH:MM' in Brasília wall clock
@@ -31,7 +32,8 @@ export interface ComputeSlotsParams {
     professionalId: string;
     serviceId: string;
     targetDateYmd: string;    // 'YYYY-MM-DD' Brasília
-    slotStepMinutes?: number; // default 30
+    /** Sobrescreve o passo configurado em IA > Configurações (ia_config.slot_minutes). */
+    slotStepMinutes?: number;
 }
 
 /** Flexible HH/MM parser — accepts "HH:MM", integer hour, decimal hour (8.5). */
@@ -79,8 +81,13 @@ export async function computeAvailableSlots(
         professionalId,
         serviceId,
         targetDateYmd,
-        slotStepMinutes = 30,
+        slotStepMinutes,
     } = params;
+
+    // Passo da grade e folga entre atendimentos configurados na conta
+    const slotSettings = await getSlotSettings(supabase, userId);
+    const stepMinutes = slotStepMinutes ?? slotSettings.stepMinutes;
+    const bufferMinutes = slotSettings.bufferMinutes;
 
     // 1. Fetch professional
     const { data: professional, error: profErr } = await supabase
@@ -159,7 +166,7 @@ export async function computeAvailableSlots(
         // If the appointment spans midnight across BRT dates, clamp to this day.
         const sMin = s.ymd === targetDateYmd ? hmToMinutes(s.hour, s.minute) : 0;
         const eMin = e.ymd === targetDateYmd ? hmToMinutes(e.hour, e.minute) : 24 * 60;
-        if (eMin > sMin) blocked.push({ startMin: sMin, endMin: eMin });
+        if (eMin > sMin) blocked.push({ startMin: sMin - bufferMinutes, endMin: eMin + bufferMinutes });
     };
 
     for (const a of aptRes.data || []) {
@@ -172,7 +179,7 @@ export async function computeAvailableSlots(
 
     // 6. Generate candidate slots
     const slots: Slot[] = [];
-    for (let m = startMin; m + serviceDuration <= endMin; m += slotStepMinutes) {
+    for (let m = startMin; m + serviceDuration <= endMin; m += stepMinutes) {
         const slotStart = m;
         const slotEnd = m + serviceDuration;
 

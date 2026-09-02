@@ -4,6 +4,7 @@ import { getWorkHoursForDay } from "../_shared/professional-schedule.ts";
 import { isProfessionalDayBlocked } from "../_shared/day-blocks.ts";
 import { TERMINAL_STAGES } from "../_shared/crm-stages.ts";
 import { applyCampaignDiscount, type CampaignDiscountInfo } from "../_shared/campaign-discount.ts";
+import { bufferedOverlapWindow, getSlotSettings } from "../_shared/slot-settings.ts";
 import {
     findActiveCardForChannel,
     resolveConversation,
@@ -352,11 +353,13 @@ serve(async (req) => {
                 });
             }
 
-            // Check overlap
+            // Check overlap — a janela inclui a folga entre atendimentos da conta
+            const { bufferMinutes } = await getSlotSettings(supabase, user_id);
+            const overlapWindow = bufferedOverlapWindow(startDate, endDate, bufferMinutes);
             const { data: overlap, error: overlapError } = await supabase.rpc("check_appointment_overlap", {
                 p_professional_id: prof.id,
-                p_start_time: startDate.toISOString(),
-                p_end_time: endDate.toISOString(),
+                p_start_time: overlapWindow.start,
+                p_end_time: overlapWindow.end,
                 p_exclude_id: null,
             });
             if (overlapError) {
@@ -364,10 +367,13 @@ serve(async (req) => {
                     `verificar se ${prof.name} já tem outro agendamento em ${date} às ${time} (RPC check_appointment_overlap)`, overlapError);
             }
             if (overlap) {
+                const folga = bufferMinutes > 0
+                    ? ` A conta exige ${bufferMinutes} min de folga antes e depois de cada atendimento.`
+                    : "";
                 return apiError(corsHeaders, {
                     status: 409,
                     code: "slot_taken",
-                    message: `${prof.name} já tem outro agendamento que conflita com ${date} às ${time} (${duration} min). Consulte a disponibilidade (api-availability) e escolha outro horário.`,
+                    message: `${prof.name} já tem outro agendamento que conflita com ${date} às ${time} (${duration} min).${folga} Consulte a disponibilidade (api-availability) e escolha outro horário.`,
                 });
             }
 
@@ -596,11 +602,13 @@ serve(async (req) => {
                 }
             }
 
-            // Check overlap
+            // Check overlap — a janela inclui a folga entre atendimentos da conta
+            const { bufferMinutes: reschedBuffer } = await getSlotSettings(supabase, user_id);
+            const reschedWindow = bufferedOverlapWindow(startDate, endDate, reschedBuffer);
             const { data: overlap, error: overlapError } = await supabase.rpc("check_appointment_overlap", {
                 p_professional_id: existing.professional_id,
-                p_start_time: startDate.toISOString(),
-                p_end_time: endDate.toISOString(),
+                p_start_time: reschedWindow.start,
+                p_end_time: reschedWindow.end,
                 p_exclude_id: appointment_id,
             });
             if (overlapError) {
@@ -608,10 +616,13 @@ serve(async (req) => {
                     `verificar conflitos de agenda em ${new_date} às ${new_time} (RPC check_appointment_overlap)`, overlapError);
             }
             if (overlap) {
+                const folga = reschedBuffer > 0
+                    ? ` A conta exige ${reschedBuffer} min de folga antes e depois de cada atendimento.`
+                    : "";
                 return apiError(corsHeaders, {
                     status: 409,
                     code: "slot_taken",
-                    message: `Já existe outro agendamento deste profissional que conflita com ${new_date} às ${new_time} (${durationMin} min). Consulte a disponibilidade (api-availability) e escolha outro horário.`,
+                    message: `Já existe outro agendamento deste profissional que conflita com ${new_date} às ${new_time} (${durationMin} min).${folga} Consulte a disponibilidade (api-availability) e escolha outro horário.`,
                 });
             }
 

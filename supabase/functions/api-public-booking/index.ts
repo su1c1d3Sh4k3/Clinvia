@@ -5,6 +5,7 @@ import { isProfessionalDayBlocked } from "../_shared/day-blocks.ts";
 import { TERMINAL_STAGES } from "../_shared/crm-stages.ts";
 import { applyCampaignDiscount, type CampaignDiscountInfo } from "../_shared/campaign-discount.ts";
 import { findActiveCardForChannel } from "../_shared/resolve-conversation.ts";
+import { bufferedOverlapWindow, getSlotSettings, padBusyRange } from "../_shared/slot-settings.ts";
 import {
     apiError,
     describeDbError,
@@ -300,13 +301,19 @@ serve(async (req) => {
                     "Não conseguimos consultar os horários agora. Tente novamente em alguns instantes ou fale com a clínica.");
             }
 
+            // Passo da grade e folga entre atendimentos (IA > Configurações)
+            const slotSettings = await getSlotSettings(supabase, user_id);
+
             const busy = (apts || []).map((a: any) => {
                 const s = new Date(a.start_time); const e = new Date(a.end_time);
-                return { start: s.getHours() * 60 + s.getMinutes(), end: e.getHours() * 60 + e.getMinutes() };
+                return padBusyRange(
+                    { start: s.getHours() * 60 + s.getMinutes(), end: e.getHours() * 60 + e.getMinutes() },
+                    slotSettings.bufferMinutes,
+                );
             });
 
             const available: string[] = [];
-            for (let m = whStart; m + duration <= whEnd; m += 10) {
+            for (let m = whStart; m + duration <= whEnd; m += slotSettings.stepMinutes) {
                 if (brkStart !== null && brkEnd !== null && m < brkEnd && m + duration > brkStart) continue;
                 let conflict = false;
                 for (const b of busy) { if (m < b.end && m + duration > b.start) { conflict = true; break; } }
@@ -374,11 +381,13 @@ serve(async (req) => {
                     `${prof.name} não está atendendo no dia ${date}. Escolha outra data ou outro profissional.`);
             }
 
-            // Check overlap
+            // Check overlap (a janela já inclui a folga entre atendimentos)
+            const { bufferMinutes } = await getSlotSettings(supabase, user_id);
+            const window = bufferedOverlapWindow(startDate, endDate, bufferMinutes);
             const { data: overlap, error: overlapErr } = await supabase.rpc("check_appointment_overlap", {
                 p_professional_id: professional_id,
-                p_start_time: startDate.toISOString(),
-                p_end_time: endDate.toISOString(),
+                p_start_time: window.start,
+                p_end_time: window.end,
                 p_exclude_id: null,
             });
             if (overlapErr) {
@@ -389,7 +398,7 @@ serve(async (req) => {
             if (overlap) {
                 return patientError(409, "slot_taken",
                     `O horário de ${time} do dia ${date} com ${prof.name} acabou de ser ocupado. Escolha outro horário.`,
-                    `Duração do serviço: ${duration} min`);
+                    `Duração do serviço: ${duration} min; folga entre atendimentos: ${bufferMinutes} min`);
             }
 
             const campaign = await resolveActiveCampaign();
@@ -675,10 +684,13 @@ serve(async (req) => {
                     `${existing.professional_name || "O profissional"} não está atendendo no dia ${date}. Escolha outra data.`);
             }
 
+            // A janela inclui a folga entre atendimentos configurada na conta
+            const reschedWindow = bufferedOverlapWindow(
+                startDate, endDate, (await getSlotSettings(supabase, user_id)).bufferMinutes);
             const { data: overlap, error: overlapErr } = await supabase.rpc("check_appointment_overlap", {
                 p_professional_id: existing.professional_id,
-                p_start_time: startDate.toISOString(),
-                p_end_time: endDate.toISOString(),
+                p_start_time: reschedWindow.start,
+                p_end_time: reschedWindow.end,
                 p_exclude_id: appointment_id,
             });
             if (overlapErr) {

@@ -269,6 +269,7 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
         gotchas: [
             "Primeira coisa a conferir quando 'sumiu uma agenda': o alternador Profissionais | Salas mostra um grupo por vez. Sala avulsa so aparece no modo Salas; profissional so no modo Profissionais.",
             "Profissional ou sala inativa some da grade, do modal de agendamento e do link publico.",
+            "Os horarios oferecidos pela IA e pelo link publico seguem o Tamanho do slot e o Intervalo entre atendimentos configurados em IA > Configuracoes. Quem agenda pela agenda do painel nao sofre essas restricoes.",
             "Todo agendamento precisa de um cliente vinculado e cria/liga uma venda com pagamento pendente.",
             "Concluir o agendamento NAO cria venda nova — ela ja existe desde a criacao.",
             "As mensagens automaticas (confirmacao 24h, lembrete 2h e pesquisa 24h depois) funcionam independentemente da IA estar ligada.",
@@ -327,23 +328,33 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
         id: "ia",
         label: "IA",
         route: "/suporte?tab=ia",
-        tours: [{ label: "Configurar a IA", url: "/ia-config?tab=settings&tour=ia-config" }],
+        tours: [
+            { label: "Configurar a IA", url: "/ia-config?tab=settings&tour=ia-config" },
+            { label: "Horarios de agendamento da IA", url: "/ia-config?tab=settings&tour=ia-horarios" },
+        ],
         resolves: [
             "por que a IA nao esta respondendo",
             "como ligar ou desligar a IA (geral, por conexao ou por cliente)",
             "como alimentar a IA com dados da empresa e F.A.Q",
             "como ajustar o tempo de resposta e a voz",
             "quando a IA para de responder sozinha",
+            "como mudar o tamanho do slot dos horarios que a IA oferece",
+            "como deixar um intervalo entre um atendimento e o proximo",
+            "por que a IA oferece horarios de 10 em 10 minutos",
         ],
         steps: [
             "Abra IA no menu lateral: aba Empresa (dados e horarios), F.A.Q (perguntas frequentes) e Configuracoes (switch geral, delay, voz, follow-up).",
             "O switch por conexao fica em Conexoes, no card da instancia.",
             "O switch por cliente fica na pagina Clientes.",
+            "Em IA > Configuracoes, no bloco 'Horarios de agendamento', escolha o Tamanho do slot (de quantos em quantos minutos os horarios sao oferecidos, padrao 10 min) e o Intervalo entre atendimentos (folga exigida antes e depois de cada agendamento ja marcado, padrao sem intervalo). Clique em Salvar.",
         ],
         gotchas: [
             "Para a IA responder e preciso: switch geral ligado, IA ligada NAQUELA conexao, IA ligada no contato, conversa em status pendente e na fila 'Atendimento IA'.",
             "Assim que alguem clica em Atender, a conversa sai da fila da IA e ela para de responder.",
             "Desligar a IA de uma conexao devolve as conversas abertas dela para o atendimento humano.",
+            "O tamanho do slot e o intervalo valem para a IA, para o link publico de agendamento e para as automacoes que oferecem horarios. O encaixe MANUAL feito pelo atendente na agenda continua livre.",
+            "O tamanho do slot nao muda a duracao do procedimento: a duracao continua vindo do cadastro da aplicacao em Servicos. O slot so define de quanto em quanto tempo os horarios sao oferecidos.",
+            "Intervalo alto derruba muito a oferta de horarios: com 30 min de folga, um atendimento das 10h as 11h bloqueia das 9h30 as 11h30.",
         ],
     },
     {

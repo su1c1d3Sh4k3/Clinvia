@@ -25,7 +25,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Building2, HelpCircle, Settings, Plus, Trash2, Loader2, Play, FlaskConical, X, Phone } from "lucide-react";
+import { Building2, HelpCircle, Settings, Plus, Trash2, Loader2, Play, FlaskConical, X, Phone, CalendarClock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 interface IAConfigData {
@@ -65,6 +65,8 @@ interface IAConfigData {
     convenio: string;
     test_mode: boolean;
     test_numbers: string[];
+    slot_minutes: number;
+    slot_buffer_minutes: number;
 }
 
 interface QualifyItem {
@@ -121,6 +123,8 @@ const defaultConfig: IAConfigData = {
     convenio: "",
     test_mode: false,
     test_numbers: [],
+    slot_minutes: 10,
+    slot_buffer_minutes: 0,
 };
 
 export default function IAConfig() {
@@ -224,6 +228,8 @@ export default function IAConfig() {
                 ...existingConfig,
                 test_mode: existingConfig.test_mode ?? false,
                 test_numbers: existingConfig.test_numbers ?? [],
+                slot_minutes: existingConfig.slot_minutes ?? 10,
+                slot_buffer_minutes: existingConfig.slot_buffer_minutes ?? 0,
             });
 
             // Parse restrictions
@@ -1257,6 +1263,62 @@ export default function IAConfig() {
                                         </div>
                                     </div>
                                 )}
+                            </div>
+
+                            {/* Grade de horários oferecida pela IA e pelo link público */}
+                            <div data-tour="ia-slots" className="space-y-3 md:space-y-4 p-3 md:p-4 border rounded-lg">
+                                <div className="flex items-center gap-2">
+                                    <CalendarClock className="h-4 w-4 text-primary" />
+                                    <div className="space-y-0.5">
+                                        <h4 className="font-medium text-sm md:text-base">Horários de agendamento</h4>
+                                        <p className="text-xs md:text-sm text-muted-foreground">
+                                            Vale para os horários que a IA oferece e para o link público de agendamento. O encaixe manual pela agenda não muda.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="grid gap-4 sm:grid-cols-2">
+                                    <div className="space-y-2">
+                                        <Label>Tamanho do slot</Label>
+                                        <Select
+                                            value={String(config.slot_minutes ?? 10)}
+                                            onValueChange={(value) => setConfig({ ...config, slot_minutes: Number(value) })}
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {[5, 10, 15, 20, 30, 45, 60].map((m) => (
+                                                    <SelectItem key={m} value={String(m)}>{m} minutos</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <p className="text-xs text-muted-foreground">
+                                            De quantos em quantos minutos os horários são oferecidos (30 min = 08:00, 08:30, 09:00...).
+                                        </p>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label>Intervalo entre atendimentos</Label>
+                                        <Select
+                                            value={String(config.slot_buffer_minutes ?? 0)}
+                                            onValueChange={(value) => setConfig({ ...config, slot_buffer_minutes: Number(value) })}
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="0">Sem intervalo</SelectItem>
+                                                {[5, 10, 15, 20, 30, 45, 60].map((m) => (
+                                                    <SelectItem key={m} value={String(m)}>{m} minutos</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <p className="text-xs text-muted-foreground">
+                                            Folga exigida antes e depois de cada agendamento já marcado.
+                                        </p>
+                                    </div>
+                                </div>
                             </div>
 
                             <div className="flex justify-end pt-4">
