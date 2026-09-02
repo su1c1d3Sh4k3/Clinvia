@@ -20,10 +20,14 @@ interface ServiceCascadePickerProps {
     /** Exibe campo de quantidade ao lado do botão Adicionar */
     showQuantity?: boolean;
     disabled?: boolean;
+    /** Esconde a categoria Avaliação (ela não entra em orçamento — é só agendada) */
+    excludeAvaliacao?: boolean;
 }
 
+const normalizeTxt = (v: string) => v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+
 /** Cascata Categoria → Procedimento → Aplicação (services_category → service_name → services_client). */
-export function ServiceCascadePicker({ onAdd, showQuantity, disabled }: ServiceCascadePickerProps) {
+export function ServiceCascadePicker({ onAdd, showQuantity, disabled, excludeAvaliacao }: ServiceCascadePickerProps) {
     const [selCategoryId, setSelCategoryId] = useState("");
     const [selServiceNameId, setSelServiceNameId] = useState("");
     const [selApplicationId, setSelApplicationId] = useState("");
@@ -66,6 +70,10 @@ export function ServiceCascadePicker({ onAdd, showQuantity, disabled }: ServiceC
         },
     });
 
+    const visibleCategories = (categories || []).filter(
+        (c) => !excludeAvaliacao || normalizeTxt(c.name) !== "avaliacao",
+    );
+
     const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
     const nativeSelectClass = "h-8 text-xs w-full rounded-md border border-input bg-background px-2 py-1 focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50";
 
@@ -90,7 +98,7 @@ export function ServiceCascadePicker({ onAdd, showQuantity, disabled }: ServiceC
                         onChange={(e) => { setSelCategoryId(e.target.value); setSelServiceNameId(""); setSelApplicationId(""); }}
                     >
                         <option value="">Selecione...</option>
-                        {(categories || []).map((c) => (
+                        {visibleCategories.map((c) => (
                             <option key={c.id} value={c.id}>{c.name}</option>
                         ))}
                     </select>

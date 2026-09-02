@@ -17,7 +17,10 @@ import { CopilotSettingsModal } from "./CopilotSettingsModal";
 import { NegotiationQuickModal } from "@/components/crm/NegotiationQuickModal";
 import { GroupMonitoringSection } from "@/components/chat/GroupMonitoringSection";
 import { PreviousTicketsSection } from "@/components/chat/PreviousTicketsSection";
-import { SaleModal } from "@/components/sales/SaleModal";
+import { OrcamentoModal } from "@/components/orcamentos/OrcamentoModal";
+import { OrcamentoCard } from "@/components/orcamentos/OrcamentoCard";
+import { hasPendentes, isOrcamentoExpirado, useOrcamentos } from "@/hooks/useOrcamentos";
+import { usePermissions } from "@/hooks/usePermissions";
 import { AppointmentModal } from "@/components/scheduling/AppointmentModal";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -153,7 +156,7 @@ export const AIIntelligenceSidebar = ({
   const [isLoadingCopilot, setIsLoadingCopilot] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isUpdatingSatisfaction, setIsUpdatingSatisfaction] = useState(false);
-  const [showSaleModal, setShowSaleModal] = useState(false);
+  const [showOrcamentoModal, setShowOrcamentoModal] = useState(false);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [showNegotiationModal, setShowNegotiationModal] = useState(false);
 
@@ -220,13 +223,17 @@ export const AIIntelligenceSidebar = ({
   };
 
   const isGroup = !!conversationData?.group_id;
+  const { canCreate } = usePermissions();
+  const { data: orcamentos = [] } = useOrcamentos(!isGroup ? contactId : null);
+  // Só orçamento em aberto fica na lateral — os resolvidos vivem no modal do cliente
+  const orcamentosAbertos = orcamentos.filter((o) => hasPendentes(o) && !isOrcamentoExpirado(o));
   const { satisfactionScore: autoScore, lastUpdated: autoLastUpdated } = useAutoAnalysis(conversationId, isGroup);
   const satisfactionScore = analysis?.sentiment_score ?? 5;
 
   // ── Menu items for icon-only sidebar ──
   const menuItems = [
     { id: "crm", icon: MessageSquare, label: "CRM", hideGroup: true },
-    { id: "sale", icon: DollarSign, label: "Venda", hideGroup: true },
+    { id: "orcamento", icon: DollarSign, label: "Orçamento", hideGroup: true },
     { id: "schedule", icon: Calendar, label: "Agenda", hideGroup: true },
     { id: "satisfaction", icon: TrendingUp, label: "Satisfação", hideGroup: true },
     { id: "tickets", icon: History, label: "Tickets anteriores", hideGroup: true },
@@ -254,7 +261,9 @@ export const AIIntelligenceSidebar = ({
           instagramInstanceId={convIgInstanceId}
         />
       )}
-      <SaleModal open={showSaleModal} onOpenChange={setShowSaleModal} fixedContactId={!isGroup ? contactId : undefined} />
+      {contactId && !isGroup && (
+        <OrcamentoModal open={showOrcamentoModal} onOpenChange={setShowOrcamentoModal} contactId={contactId} />
+      )}
       <AppointmentModal
         open={showAppointmentModal}
         onOpenChange={setShowAppointmentModal}
@@ -398,27 +407,36 @@ export const AIIntelligenceSidebar = ({
               </Collapsible>
             )}
 
-            {/* ── Venda Section ── */}
+            {/* ── Orçamento Section ── */}
             {!isGroup && contactId && (
-              <Collapsible open={openSection === "sale"} onOpenChange={() => toggleSection("sale")}>
+              <Collapsible open={openSection === "orcamento"} onOpenChange={() => toggleSection("orcamento")}>
                 <Card className="border-[#1E2229]/20 dark:border-border">
                   <CardHeader className="pb-2 px-3 pt-3">
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-xs flex items-center gap-1.5">
-                        <DollarSign className="w-3.5 h-3.5" /> Realizar Venda
+                        <DollarSign className="w-3.5 h-3.5" /> Orçamento
                       </CardTitle>
                       <CollapsibleTrigger asChild>
                         <Button variant="ghost" size="sm" className="w-7 h-7 p-0">
-                          <ChevronUp className={`h-3.5 w-3.5 transition-transform ${openSection === "sale" ? "" : "rotate-180"}`} />
+                          <ChevronUp className={`h-3.5 w-3.5 transition-transform ${openSection === "orcamento" ? "" : "rotate-180"}`} />
                         </Button>
                       </CollapsibleTrigger>
                     </div>
                   </CardHeader>
                   <CollapsibleContent>
-                    <CardContent className="px-3 pb-3 pt-0">
-                      <Button onClick={() => setShowSaleModal(true)} variant="default" size="sm" className="w-full text-xs">
-                        <DollarSign className="w-3.5 h-3.5 mr-1.5" /> Nova Venda
-                      </Button>
+                    <CardContent className="px-3 pb-3 pt-0 space-y-2">
+                      {orcamentosAbertos.length > 0 ? (
+                        orcamentosAbertos.map((o) => <OrcamentoCard key={o.id} orcamento={o} />)
+                      ) : (
+                        <p className="text-xs text-muted-foreground text-center py-1">
+                          Nenhum orçamento em aberto
+                        </p>
+                      )}
+                      {canCreate("orcamentos") && (
+                        <Button onClick={() => setShowOrcamentoModal(true)} variant="default" size="sm" className="w-full text-xs">
+                          <Plus className="w-3.5 h-3.5 mr-1.5" /> Realizar orçamento
+                        </Button>
+                      )}
                     </CardContent>
                   </CollapsibleContent>
                 </Card>

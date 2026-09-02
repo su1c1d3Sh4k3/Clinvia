@@ -1,7 +1,7 @@
 import { ComponentType } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-    LayoutDashboard, MessageSquare, KanbanSquare, Package, Users, ShieldCheck,
+    LayoutDashboard, MessageSquare, KanbanSquare, Package, FileText, Users, ShieldCheck,
     Calendar, Repeat, Megaphone, Bot, Plug, Settings, Headphones, LucideIcon,
 } from "lucide-react";
 import { SuporteChatGuide } from "@/components/suporte/SuporteChatGuide";
@@ -17,6 +17,7 @@ import { ConexoesGuide } from "@/components/suporte/ConexoesGuide";
 import { EquipeGuide } from "@/components/suporte/EquipeGuide";
 import { ConfiguracoesGuide } from "@/components/suporte/ConfiguracoesGuide";
 import { RecorrenciaGuide } from "@/components/suporte/RecorrenciaGuide";
+import { OrcamentosGuide } from "@/components/suporte/OrcamentosGuide";
 import { useUrlTab } from "@/hooks/useUrlTab";
 
 interface GuideTab {
@@ -32,6 +33,7 @@ const GUIDE_TABS: GuideTab[] = [
     { value: "inbox", label: "Inbox", icon: MessageSquare, component: InboxGuide },
     { value: "crm", label: "CRM", icon: KanbanSquare, component: CrmGuide },
     { value: "servicos", label: "Serviços", icon: Package, component: ServicosGuide },
+    { value: "orcamentos", label: "Orçamentos", icon: FileText, component: OrcamentosGuide },
     { value: "clientes", label: "Clientes", icon: Users, component: ClientesGuide },
     { value: "equipe", label: "Equipe", icon: ShieldCheck, component: EquipeGuide },
     { value: "agenda", label: "Agenda", icon: Calendar, component: AgendaGuide },

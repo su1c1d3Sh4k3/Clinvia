@@ -80,6 +80,87 @@ const formSchema = z.object({
     }
 });
 
+/**
+ * Rascunho validado de um agendamento — permite montar o agendamento em um passo
+ * do wizard de venda e só gravar depois, na confirmação final.
+ */
+export interface AppointmentDraft {
+    payload: Record<string, any>;
+    campaignId: string | null;
+    contactId: string | null;
+    serviceId: string | null;
+    professionalId: string;
+    instanceId: string | null;
+    serviceSnapshot: { name: string; price: number; min_price: number } | null;
+    price: number;
+    startISO: string;
+    endISO: string;
+    /** "dd/MM/yyyy às HH:mm" — usado nas telas de revisão */
+    label: string;
+}
+
+/**
+ * Grava um rascunho de agendamento (insert + Google Calendar + CRM).
+ * Usado pelo próprio modal e pelo wizard de lançamento de venda.
+ * `expectedSaleId` faz o trigger link_or_create_sale_on_appointment vincular
+ * EXATAMENTE aquela venda, em vez de adivinhar a mais antiga sem agendamento.
+ */
+export async function commitAppointmentDraft(
+    draft: AppointmentDraft,
+    opts: {
+        ownerId: string;
+        expectedSaleId?: string | null;
+        syncCrm?: (args: any) => Promise<any>;
+    },
+): Promise<string> {
+    let createdBy: string | null = null;
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+            const { data: tm } = await supabase
+                .from("team_members")
+                .select("id")
+                .eq("auth_user_id", user.id)
+                .maybeSingle();
+            createdBy = tm?.id ?? null;
+        }
+    } catch { /* fire-and-forget */ }
+
+    const { data: created, error } = await supabase
+        .from("appointments")
+        .insert({
+            ...draft.payload,
+            campaign_id: draft.campaignId,
+            created_by: createdBy,
+            created_via: "manual",
+            expected_sale_id: opts.expectedSaleId ?? null,
+        } as any)
+        .select()
+        .single();
+    if (error) throw error;
+
+    if (created?.id) {
+        supabase.functions.invoke("google-calendar-sync", {
+            body: { action: "sync_appointment", appointment_id: created.id, user_id: opts.ownerId },
+        }).catch(() => { });
+    }
+
+    if (opts.syncCrm && draft.contactId) {
+        opts.syncCrm({
+            contactId: draft.contactId,
+            ownerId: opts.ownerId,
+            serviceClientId: draft.serviceId,
+            serviceName: draft.serviceSnapshot?.name || "",
+            servicePrice: draft.serviceSnapshot?.price ?? draft.price ?? 0,
+            serviceMinPrice: draft.serviceSnapshot?.min_price || 0,
+            professionalId: draft.professionalId,
+            instanceId: draft.instanceId,
+        }).catch(() => { });
+    }
+
+    return created.id as string;
+}
+
 interface AppointmentModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
@@ -96,9 +177,19 @@ interface AppointmentModalProps {
     hideTypeTabs?: boolean; // Hide appointment/absence tabs
     onAppointmentCreated?: () => void;
     lockHour?: boolean; // Travar o campo de hora (apenas quando aberto via clique em slot específico do calendário)
+    /** Renderiza o formulário sem o wrapper <Dialog> (uso dentro de wizards) */
+    embedded?: boolean;
+    /** Valida tudo mas NÃO grava: devolve o rascunho em onDraft */
+    deferSubmit?: boolean;
+    onDraft?: (draft: AppointmentDraft) => void;
+    /** Esconde o bloco de pagamento (o wizard de venda já tem o dele) */
+    hidePaymentSection?: boolean;
+    submitLabel?: string;
+    /** Trava a cascata Categoria → Serviço → Aplicação (serviço já definido pelo orçamento) */
+    lockService?: boolean;
 }
 
-export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfessionalId, defaultServiceId, appointmentToEdit, defaultContactId, defaultContactName, defaultContactPhone, defaultInstanceId, hideTypeTabs, onAppointmentCreated, lockHour }: AppointmentModalProps) {
+export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfessionalId, defaultServiceId, appointmentToEdit, defaultContactId, defaultContactName, defaultContactPhone, defaultInstanceId, hideTypeTabs, onAppointmentCreated, lockHour, embedded, deferSubmit, onDraft, hidePaymentSection, submitLabel, lockService }: AppointmentModalProps) {
     const { toast } = useToast();
     const queryClient = useQueryClient();
     const [activeTab, setActiveTab] = useState<"appointment" | "absence">("appointment");
@@ -796,41 +887,37 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                     }).catch(() => {});
                 }
             } else {
-                // created_by = team_member do usuário logado (para congelar atendente da campanha)
-                let createdBy: string | null = null;
-                try {
-                    const { data: tm } = await supabase
-                        .from("team_members")
-                        .select("id")
-                        .eq("auth_user_id", user.id)
-                        .maybeSingle();
-                    createdBy = tm?.id ?? null;
-                } catch { /* fire-and-forget */ }
-
-                const insertPayload = {
-                    ...payload,
-                    campaign_id: values.type === "appointment" ? (selectedCampaignId || null) : null,
-                    created_by: createdBy,
-                    created_via: "manual",
+                const svc = serviceClients?.find((s: any) => s.id === values.service_id);
+                const draft: AppointmentDraft = {
+                    payload,
+                    campaignId: values.type === "appointment" ? (selectedCampaignId || null) : null,
+                    contactId: values.type === "appointment" ? (values.contact_id || null) : null,
+                    serviceId: values.service_id || null,
+                    professionalId: values.professional_id,
+                    instanceId: values.instance_id || null,
+                    serviceSnapshot: svc ? { name: svc.name, price: svc.price ?? 0, min_price: svc.min_price ?? 0 } : null,
+                    price: values.price || 0,
+                    startISO: startDateTime.toISOString(),
+                    endISO: endDateTime.toISOString(),
+                    label: format(startDateTime, "dd/MM/yyyy 'às' HH:mm"),
                 };
-                const { data: created, error } = await supabase
-                    .from("appointments")
-                    .insert(insertPayload)
-                    .select()
-                    .single();
-                if (error) throw error;
-                toast({ title: "Agendamento criado!" });
-                // Fire-and-forget: sincronizar com Google Calendar
-                if (created?.id && ownerId) {
-                    supabase.functions.invoke("google-calendar-sync", {
-                        body: { action: "sync_appointment", appointment_id: created.id, user_id: ownerId },
-                    }).catch(() => {});
+
+                // Modo rascunho: o wizard grava depois, na confirmação final
+                if (deferSubmit) {
+                    onDraft?.(draft);
+                    return;
                 }
+
+                const createdId = await commitAppointmentDraft(draft, {
+                    ownerId,
+                    syncCrm: values.type === "appointment" ? syncCrmOnCreate : undefined,
+                });
+                toast({ title: "Agendamento criado!" });
                 onAppointmentCreated?.();
 
                 // Atualizar pagamento da venda criada automaticamente pelo trigger
                 // (parcelas são regeneradas automaticamente pelo trigger de installments)
-                if (values.type === "appointment" && values.contact_id && values.service_id && created?.id && paymentType !== "pending") {
+                if (values.type === "appointment" && values.contact_id && values.service_id && paymentType !== "pending") {
                     const isFinanced = paymentType === "installment" || paymentType === "mixed";
                     const { error: saleErr } = await supabase
                         .from("sales")
@@ -840,25 +927,9 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                             interest_rate: isFinanced ? interestRate : 0,
                             cash_amount: paymentType === "mixed" ? cashAmount : paymentType === "cash" ? (values.price || 0) : 0,
                         })
-                        .eq("appointment_id", created.id);
+                        .eq("appointment_id", createdId);
                     if (saleErr) console.error("Erro ao atualizar pagamento da venda:", saleErr);
                     queryClient.invalidateQueries({ queryKey: ["sales"] });
-                }
-
-                // CRM sync: create/move card to "Agendado" + add service
-                if (values.type === "appointment" && values.contact_id) {
-                    const svc = serviceClients?.find((s: any) => s.id === values.service_id);
-                    syncCrmOnCreate({
-                        contactId: values.contact_id,
-                        ownerId,
-                        serviceClientId: values.service_id || null,
-                        serviceName: svc?.name || "",
-                        // Regra: negociação sempre usa o preço cadastrado do serviço
-                        servicePrice: svc?.price ?? values.price ?? 0,
-                        serviceMinPrice: svc?.min_price || 0,
-                        professionalId: values.professional_id,
-                        instanceId: values.instance_id || null,
-                    }).catch(() => {}); // fire-and-forget
                 }
             }
 
@@ -876,13 +947,8 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
         }
     };
 
-    return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="w-[95vw] sm:w-full max-w-md max-h-[90vh] overflow-y-auto rounded-lg [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
-                <DialogHeader>
-                    <DialogTitle>{appointmentToEdit ? "Editar" : "Novo"} {activeTab === "appointment" ? "Agendamento" : "Ausência"}</DialogTitle>
-                </DialogHeader>
-
+    const body = (
+        <>
                 <Tabs value={activeTab} onValueChange={(v) => {
                     if (!appointmentToEdit) {
                         setActiveTab(v as any);
@@ -1042,7 +1108,7 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                                                 <Select
                                                     onValueChange={handleCategoryChange}
                                                     value={field.value}
-                                                    disabled={isPast || !watchProfessionalId}
+                                                    disabled={isPast || !watchProfessionalId || lockService}
                                                 >
                                                     <FormControl>
                                                         <SelectTrigger>
@@ -1071,7 +1137,7 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                                                     <Select
                                                         onValueChange={handleServiceNameChange}
                                                         value={field.value}
-                                                        disabled={isPast}
+                                                        disabled={isPast || lockService}
                                                     >
                                                         <FormControl>
                                                             <SelectTrigger>
@@ -1101,7 +1167,7 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                                                     <Select
                                                         onValueChange={(val) => { field.onChange(val); handleApplicationChange(val); }}
                                                         value={field.value}
-                                                        disabled={isPast}
+                                                        disabled={isPast || lockService}
                                                     >
                                                         <FormControl>
                                                             <SelectTrigger>
@@ -1257,7 +1323,7 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                             )}
 
                             {/* ── Pagamento da venda gerada automaticamente ── */}
-                            {activeTab === "appointment" && !appointmentToEdit && (
+                            {activeTab === "appointment" && !appointmentToEdit && !hidePaymentSection && (
                                 <div className="space-y-3 rounded-md border p-3">
                                     <div className="space-y-2">
                                         <Label>Forma de Pagamento</Label>
@@ -1360,11 +1426,23 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
 
                             <Button type="submit" className="w-full" disabled={isLoading || isPast}>
                                 {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                                {isPast ? "Agendamento Finalizado" : "Salvar"}
+                                {isPast ? "Agendamento Finalizado" : (submitLabel || "Salvar")}
                             </Button>
                         </form>
                     </Form>
                 </Tabs>
+        </>
+    );
+
+    if (embedded) return open ? body : null;
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="w-[95vw] sm:w-full max-w-md max-h-[90vh] overflow-y-auto rounded-lg [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
+                <DialogHeader>
+                    <DialogTitle>{appointmentToEdit ? "Editar" : "Novo"} {activeTab === "appointment" ? "Agendamento" : "Ausência"}</DialogTitle>
+                </DialogHeader>
+                {body}
             </DialogContent>
         </Dialog>
     );

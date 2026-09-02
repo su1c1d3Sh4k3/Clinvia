@@ -7,13 +7,14 @@ import { Button } from "@/components/ui/button";
 import {
   Phone, Mail, CreditCard, User, Calendar, MessageSquare,
   Star, Ticket, ListFilter, Link2, Unlink, Instagram,
-  Tag as TagIcon, Trash2,
+  Tag as TagIcon, Trash2, DollarSign,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { STAGE_COLORS, CrmStage } from "@/types/crm-client";
 import { useCrmChannels } from "@/hooks/useCrmChannels";
 import { npsAverage } from "@/lib/nps";
+import { useValorMovimentado } from "@/hooks/useOrcamentos";
 import { toast } from "sonner";
 import { LinkInstagramContactDialog } from "./LinkInstagramContactDialog";
 
@@ -231,6 +232,9 @@ export const ClientSidebar = ({ contact, sourceContact, contactIds }: ClientSide
 
   const hasOpenTicket = ["open", "pending"].includes(lastConversation?.status ?? "");
 
+  // Soma de todas as vendas do cliente
+  const { data: valorMovimentado } = useValorMovimentado(contact.id);
+
   const InfoRow = ({ icon: Icon, label, value, className }: { icon: any; label: string; value: string; className?: string }) => (
     <div className="flex items-start gap-2 py-1.5">
       <Icon className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0" />
@@ -360,6 +364,13 @@ export const ClientSidebar = ({ contact, sourceContact, contactIds }: ClientSide
           label="Satisfação (NPS)"
           value={satisfactionIndex ? `${satisfactionIndex} / 5` : "Sem avaliações"}
           className={satisfactionIndex ? "font-medium" : "text-muted-foreground italic"}
+        />
+
+        <InfoRow
+          icon={DollarSign}
+          label="Valor movimentado"
+          value={new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(valorMovimentado || 0)}
+          className="font-medium"
         />
 
         {/* Tags do cliente */}

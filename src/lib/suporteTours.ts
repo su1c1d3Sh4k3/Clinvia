@@ -51,7 +51,7 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
             element: '[data-tour="inbox-sidebar"]',
             title: "Painel de inteligência",
             description:
-                "Passe o mouse para expandir: dados do cliente, etapa do CRM, negociação rápida, resumo da IA e atalhos de venda/agendamento.",
+                "Passe o mouse para expandir: dados do cliente, etapa do CRM, negociação rápida, resumo da IA, orçamentos e atalhos de agendamento.",
         },
         {
             element: '[data-tour="inbox-sidebar"]',
@@ -100,6 +100,26 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
             title: "2. Transferir Atendimento",
             description:
                 "Este é o botão (ele expande ao passar o mouse). Clique nele para abrir o modal de duas etapas: primeiro a fila de destino, depois o responsável — ou 'Não atribuir usuário'. Só aparecem colegas com acesso àquela fila e àquela conexão.",
+        },
+    ],
+    "orcamento-criar": [
+        {
+            element: '[data-tour="inbox-list"]',
+            title: "1. Abra a conversa do cliente",
+            description:
+                "O orçamento nasce dentro do atendimento. Clique na conversa da pessoa para quem você vai montar a proposta.",
+        },
+        {
+            element: '[data-tour="inbox-sidebar"]',
+            title: "2. Menu Orçamento",
+            description:
+                "Na barra lateral direita, abra o menu Orçamento. Sem proposta aberta aparece o botão 'Realizar orçamento'; com proposta aberta aparecem os cards, cada um com seus serviços, o profissional e o botão 'Lançar venda'.",
+        },
+        {
+            element: '[data-tour="inbox-sidebar"]',
+            title: "3. Do orçamento à venda",
+            description:
+                "No card, o relógio marca o que o cliente ainda não comprou. Em 'Lançar venda' você percorre 4 passos (o que foi levado, como foi vendido, agendamentos e revisão) — nada é gravado até o último clique.",
         },
     ],
     "crm-board": [

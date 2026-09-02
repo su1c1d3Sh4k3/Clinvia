@@ -135,8 +135,43 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
         ],
         gotchas: [
             "O preco cadastrado no servico e a fonte unica: valor digitado em planilha de importacao nao altera o cadastro.",
-            "A categoria 'Avaliacao' e protegida — nao pode ser renomeada nem excluida (o link publico de agendamento depende dela).",
+            "A categoria 'Avaliacao' e protegida — nao pode ser renomeada nem excluida (o link publico de agendamento e a regra de orcamento dependem dela). Avaliacao nao e vendida por orcamento, so agendada.",
+            "Servico sem sala vinculada bloqueia o lancamento da venda do orcamento: vincule as salas no lapis do servico.",
             "A pagina so lista categorias que ja tenham pelo menos um servico cadastrado.",
+        ],
+    },
+    {
+        id: "orcamentos",
+        label: "Orcamentos",
+        route: "/suporte?tab=orcamentos",
+        tours: [{ label: "Criar um orcamento", url: "/?tour=orcamento-criar" }],
+        resolves: [
+            "como fazer um orcamento para o cliente",
+            "como lancar a venda de um orcamento",
+            "o que significam os icones de status do orcamento (relogio, check, x)",
+            "por que o orcamento sumiu da lateral do inbox",
+            "por que nao consigo excluir ou editar um orcamento",
+            "por que o servico de avaliacao nao aparece no orcamento",
+            "onde vejo tudo o que o cliente ja comprou e o valor movimentado",
+        ],
+        steps: [
+            "O orcamento nasce na conversa: abra o Inbox, entre na conversa do cliente e clique no menu Orcamento na barra lateral direita.",
+            "Clique em 'Realizar orcamento', escolha os servicos (categoria > servico > aplicacao) com a quantidade, selecione o Profissional (obrigatorio), preencha a Indicacao (de onde veio o cliente, opcional) e a Validade (opcional).",
+            "Quando o cliente aceitar, clique em 'Lancar venda' no card: passo 1 marque Vender ou Remover em cada item (o valor e editavel); passo 2 defina Sala, Forma de pagamento, Data do pagamento e se vai agendar agora; passo 3 preencha os agendamentos; passo 4 revise e confirme.",
+            "Se responder 'nao' para agendar, ligue o switch 'Agendamento pela IA' e informe em quantos dias a IA deve procurar o cliente.",
+            "Todos os orcamentos do cliente (abertos e resolvidos) ficam no perfil dele: Clientes > clique no nome > aba Orcamentos. As vendas ficam na aba Vendas e a soma de tudo aparece como 'Valor movimentado' na lateral do perfil.",
+        ],
+        gotchas: [
+            "Toda venda passa por orcamento. A unica excecao e a categoria Avaliacao, que nao e vendida — so agendada (ela nem aparece no seletor do orcamento).",
+            "A lateral do Inbox mostra apenas orcamentos com item pendente e dentro da validade; os resolvidos ou expirados vivem no perfil do cliente.",
+            "Os icones falam de VENDA, nunca de agendamento: relogio = o cliente ainda nao comprou, check verde = vendido, x vermelho = recusado, x cinza = expirado.",
+            "Exclusao so e permitida enquanto TODOS os itens estao pendentes; depois que um item vira vendido ou recusado, da para editar apenas os pendentes e a exclusao fica bloqueada.",
+            "No passo 2 so aparecem as salas atreladas aquele procedimento. Sem sala vinculada o assistente bloqueia — vincule em Servicos (lapis do servico) e volte.",
+            "Atendente e Profissional nao sao editaveis no assistente: o atendente e quem esta logado e o profissional vem do orcamento.",
+            "Cada unidade da quantidade e uma linha independente, com valor e status proprios (da para vender uma e o cliente recusar a outra).",
+            "Orcamento nao movimenta o CRM e nao existe em conversa de grupo.",
+            "Por padrao o atendente pode criar e editar orcamento mas nao pode excluir nem lancar venda — o gestor libera em Equipe > Permissoes (modulos Orcamentos e Vendas).",
+            "Orcamento vencido vira somente leitura automaticamente (rotina diaria de madrugada): nao da para editar, excluir nem lancar venda.",
         ],
     },
     {
@@ -153,7 +188,7 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
         ],
         steps: [
             "Abra Clientes no menu lateral.",
-            "Clique no nome do cliente para abrir o perfil completo (cadastro, vendas, procedimentos, agendamentos, atendimentos, historico, avaliacao, resumos e negociacoes).",
+            "Clique no nome do cliente para abrir o perfil completo (cadastro, orcamentos, vendas, agendamentos, atendimentos, historico, avaliacao, resumos e negociacoes).",
             "O switch de IA na linha do cliente e o UNICO lugar que desliga a IA para aquele contato.",
         ],
         gotchas: [

@@ -15,6 +15,7 @@ export type PermissionFeature =
     | "professionals"
     | "crm_deals"
     | "financial"
+    | "orcamentos"
     | "sales"
     | "team_members"
     | "followup"
@@ -42,6 +43,7 @@ export const PERMISSION_FEATURES: FeatureDef[] = [
     { key: "professionals", label: "Profissionais", icon: "Briefcase" },
     { key: "crm_deals", label: "CRM / Negócios", icon: "TrendingUp" },
     { key: "financial", label: "Financeiro", icon: "DollarSign" },
+    { key: "orcamentos", label: "Orçamentos", icon: "FileText" },
     { key: "sales", label: "Vendas", icon: "ShoppingCart" },
     { key: "team_members", label: "Membros da Equipe", icon: "UserPlus" },
     { key: "followup", label: "Follow-up", icon: "MessageSquare" },
@@ -75,6 +77,7 @@ export const DEFAULT_PERMISSIONS: Record<"supervisor" | "agent", DefaultPermissi
         professionals:     { can_create: true,  can_edit: true,  can_delete: true  },
         crm_deals:         { can_create: true,  can_edit: true,  can_delete: true  },
         financial:         { can_create: true,  can_edit: true,  can_delete: true  },
+        orcamentos:        { can_create: true,  can_edit: true,  can_delete: true  },
         sales:             { can_create: true,  can_edit: true,  can_delete: false },
         team_members:      { can_create: true,  can_edit: true,  can_delete: false },
         followup:          { can_create: true,  can_edit: true,  can_delete: true  },
@@ -98,6 +101,7 @@ export const DEFAULT_PERMISSIONS: Record<"supervisor" | "agent", DefaultPermissi
         professionals:     { can_create: true,  can_edit: true,  can_delete: true  },
         crm_deals:         { can_create: false, can_edit: true,  can_delete: false },
         financial:         { can_create: false, can_edit: false, can_delete: false },
+        orcamentos:        { can_create: true,  can_edit: true,  can_delete: false },
         sales:             { can_create: false, can_edit: false, can_delete: false },
         team_members:      { can_create: false, can_edit: false, can_delete: false },
         followup:          { can_create: true,  can_edit: true,  can_delete: true  },

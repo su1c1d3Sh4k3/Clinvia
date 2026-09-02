@@ -5,8 +5,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ClientSidebar } from "./ClientSidebar";
 import { CadastroTab } from "./tabs/CadastroTab";
+import { OrcamentosTab } from "./tabs/OrcamentosTab";
 import { VendasTab } from "./tabs/VendasTab";
-import { ProcedimentosTab } from "./tabs/ProcedimentosTab";
 import { AgendamentosTab } from "./tabs/AgendamentosTab";
 import { AtendimentosTab } from "./tabs/AtendimentosTab";
 import { HistoricoTab } from "./tabs/HistoricoTab";
@@ -81,8 +81,8 @@ export const ClientProfileModal = ({
               <div className="px-3 sm:px-5 pt-3 border-b">
                 <TabsList className="flex md:justify-between w-full h-auto overflow-x-auto flex-nowrap justify-start [scrollbar-width:thin]">
                   <TabsTrigger value="cadastro" className="md:flex-1 shrink-0 px-3 text-xs py-2">Cadastro</TabsTrigger>
+                  <TabsTrigger value="orcamentos" className="md:flex-1 shrink-0 px-3 text-xs py-2">Orçamentos</TabsTrigger>
                   <TabsTrigger value="vendas" className="md:flex-1 shrink-0 px-3 text-xs py-2">Vendas</TabsTrigger>
-                  <TabsTrigger value="procedimentos" className="md:flex-1 shrink-0 px-3 text-xs py-2">Procedimentos</TabsTrigger>
                   <TabsTrigger value="agendamentos" className="md:flex-1 shrink-0 px-3 text-xs py-2">Agendamentos</TabsTrigger>
                   <TabsTrigger value="atendimentos" className="md:flex-1 shrink-0 px-3 text-xs py-2">Atendimentos</TabsTrigger>
                   <TabsTrigger value="historico" className="md:flex-1 shrink-0 px-3 text-xs py-2">Histórico</TabsTrigger>
@@ -94,8 +94,8 @@ export const ClientProfileModal = ({
 
               <ScrollArea className="flex-1 px-3 sm:px-5 py-4 [&_[data-radix-scroll-area-viewport]>div]:!block">
                 <TabsContent value="cadastro" className="mt-0"><CadastroTab contact={effectiveContact} /></TabsContent>
+                <TabsContent value="orcamentos" className="mt-0"><OrcamentosTab contactId={effectiveContact.id} /></TabsContent>
                 <TabsContent value="vendas" className="mt-0"><VendasTab contactId={effectiveContact.id} /></TabsContent>
-                <TabsContent value="procedimentos" className="mt-0"><ProcedimentosTab contactId={effectiveContact.id} /></TabsContent>
                 <TabsContent value="agendamentos" className="mt-0"><AgendamentosTab contactId={effectiveContact.id} /></TabsContent>
                 <TabsContent value="atendimentos" className="mt-0"><AtendimentosTab contactId={effectiveContact.id} contactIds={contactIds} /></TabsContent>
                 <TabsContent value="historico" className="mt-0"><HistoricoTab contactId={effectiveContact.id} /></TabsContent>
