@@ -231,6 +231,19 @@ export function EquipeGuide() {
                     Agentes: criar contatos e agendamentos, sem apagar nada. Supervisores: tudo exceto apagar vendas.
                     Apagar é a permissão mais perigosa — dê a poucos.
                 </Callout>
+                <p className="text-sm text-muted-foreground">
+                    Logo abaixo da lista de módulos existe a subcategoria{" "}
+                    <strong className="text-foreground">Abas do Dashboard</strong>: uma chave de{" "}
+                    <strong className="text-foreground">Acesso</strong> por aba (Minha Conta, Monitoramento, CRM, Vendas,
+                    Agendamentos, Campanhas, Recorrência e Satisfação). É por aqui que você libera abas do Dashboard para
+                    Atendentes — antes eles só enxergavam o CRM.
+                </p>
+                <Callout type="atencao" title="Sem nenhuma aba, o Dashboard some">
+                    Se você desligar todas as abas de um nível, a página Dashboard desaparece do menu dessa pessoa.
+                    Quem abrir um link direto para uma aba bloqueada cai automaticamente na primeira aba liberada.
+                    Minha Conta (custos de IA e Meta) vem desligada para Supervisor e Agente — ligue só se quiser
+                    expor os valores da conta.
+                </Callout>
             </TopicSection>
 
             {/* 7 */}
@@ -248,8 +261,12 @@ export function EquipeGuide() {
                 <Accordion type="single" collapsible className="rounded-xl border px-4">
                     {[
                         {
-                            q: "Um supervisor não vê a aba Vendas do Dashboard.",
-                            a: "O acesso financeiro de supervisores é uma permissão à parte — libere na aba Permissões. Agentes nunca veem Vendas, independente de permissão.",
+                            q: "Um supervisor ou agente não vê a aba Vendas do Dashboard.",
+                            a: "Vá em Equipe > Permissões, abra o bloco do nível e ligue 'Vendas' na subcategoria Abas do Dashboard. Cada aba do Dashboard tem a própria chave de Acesso.",
+                        },
+                        {
+                            q: "Quero que o atendente veja Monitoramento e Agendamentos no Dashboard.",
+                            a: "Equipe > Permissões > bloco Agente > subcategoria Abas do Dashboard: ligue Monitoramento e Agendamentos, salve e peça para a pessoa recarregar a página.",
                         },
                         {
                             q: "O agente diz que 'não tem o botão' de apagar/editar.",

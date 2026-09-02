@@ -81,14 +81,20 @@ export function DashboardGuide() {
                     ))}
                 </div>
                 <Callout type="dica" title="Quem vê o quê">
-                    Admins veem tudo. Supervisores veem tudo (Vendas depende da permissão financeira). Atendentes veem
-                    apenas a aba CRM — e, se tiverem escopo de visão (conexões/filas/tags liberadas na página Equipe), os números
-                    refletem só o que está no escopo deles. A aba <strong>Minha Conta</strong> é exclusiva do administrador.
+                    Admins veem todas as abas, sempre. Para Supervisores e Atendentes, cada aba tem uma chave própria em{" "}
+                    <strong>Equipe &gt; Permissões &gt; Abas do Dashboard</strong>. Por padrão o Supervisor vê tudo menos
+                    Minha Conta, e o Atendente vê só o CRM — mas você pode liberar qualquer aba para ele. Se o membro tiver
+                    escopo de visão (conexões/filas/tags liberadas na página Equipe), os números refletem só o escopo dele.
+                    Sem nenhuma aba liberada, a página Dashboard some do menu.
                 </Callout>
                 <div className="flex flex-wrap gap-2">
                     <Button size="sm" variant="outline" onClick={() => navigate("/dashboard?tour=dashboard-abas")}>
                         <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
                         Me mostre na prática
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => navigate("/equipe?tab=permissoes")}>
+                        <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                        Liberar abas por permissão
                     </Button>
                 </div>
             </TopicSection>
@@ -259,7 +265,7 @@ export function DashboardGuide() {
 
             {/* 9 */}
             <TopicSection id="minha-conta" index={9} icon={Wallet} title="Aba Minha Conta"
-                subtitle="A visão geral da conta — exclusiva do administrador">
+                subtitle="A visão geral da conta — só o admin vê por padrão">
                 <p className="text-sm text-muted-foreground">
                     Quatro containers que respondem "como está a minha conta?": consumo da IA, conexões,
                     status da IA e desempenho dos colaboradores.

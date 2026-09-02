@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useUrlTab } from "@/hooks/useUrlTab";
 import { MonitoramentoTab } from "@/components/dashboard/monitoramento/MonitoramentoTab";
 import { MinhaContaTab } from "@/components/dashboard/minha-conta/MinhaContaTab";
@@ -9,29 +9,46 @@ import { CampanhasDashboard } from "@/components/dashboard/campanhas/CampanhasDa
 import { RecorrenciaDashboard } from "@/components/dashboard/recorrencia/RecorrenciaDashboard";
 import { SatisfacaoDashboard } from "@/components/dashboard/satisfacao/SatisfacaoDashboard";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Headphones, Users, ShoppingCart, CalendarDays, Megaphone, RefreshCcw, Smile, Wallet } from "lucide-react";
+import { Headphones, Users, ShoppingCart, CalendarDays, Megaphone, RefreshCcw, Smile, Wallet, LucideIcon } from "lucide-react";
 import { useUserRole } from "@/hooks/useUserRole";
-import { useFinancialAccess } from "@/hooks/useFinancialAccess";
-import { cn } from "@/lib/utils";
+import { useDashboardTabAccess } from "@/hooks/useDashboardTabAccess";
 import { useSuporteTour } from "@/lib/suporteTours";
 
 type DashboardTab = "monitoramento" | "crm" | "vendas" | "agendamentos" | "campanhas" | "recorrencia" | "satisfacao" | "minha-conta";
 
+const TABS: { value: DashboardTab; label: string; icon: LucideIcon; tour?: string; render: () => JSX.Element }[] = [
+    { value: "minha-conta", label: "Minha Conta", icon: Wallet, tour: "dash-minha-conta", render: () => <MinhaContaTab /> },
+    { value: "monitoramento", label: "Monitoramento", icon: Headphones, render: () => <MonitoramentoTab /> },
+    { value: "crm", label: "CRM", icon: Users, render: () => <CrmDashboard /> },
+    { value: "vendas", label: "Vendas", icon: ShoppingCart, render: () => <SalesDashboard /> },
+    { value: "agendamentos", label: "Agendamentos", icon: CalendarDays, render: () => <AgendamentosDashboard /> },
+    { value: "campanhas", label: "Campanhas", icon: Megaphone, render: () => <CampanhasDashboard /> },
+    { value: "recorrencia", label: "Recorrência", icon: RefreshCcw, render: () => <RecorrenciaDashboard /> },
+    { value: "satisfacao", label: "Satisfação", icon: Smile, render: () => <SatisfacaoDashboard /> },
+];
+
 const Dashboard = () => {
     const { data: userRole } = useUserRole();
-    const { data: financialAccess } = useFinancialAccess();
+    const { canSeeTab, isReady } = useDashboardTabAccess();
     const [urlTab, setActiveTab] = useUrlTab("crm");
     const activeTab = urlTab as DashboardTab;
 
-    const canViewSales = userRole === 'admin' || (userRole === 'supervisor' && financialAccess !== false);
     useSuporteTour(!!userRole);
 
-    // Forçar aba "crm" para agentes
+    const visibleTabs = useMemo(
+        () => (isReady ? TABS.filter(t => canSeeTab(t.value)) : []),
+        [isReady, canSeeTab]
+    );
+
+    // Se a aba da URL não é permitida, cai na primeira liberada
     useEffect(() => {
-        if (userRole === 'agent') {
-            setActiveTab("crm");
+        if (!isReady || visibleTabs.length === 0) return;
+        if (!visibleTabs.some(t => t.value === activeTab)) {
+            setActiveTab(visibleTabs[0].value);
         }
-    }, [userRole]);
+    }, [isReady, visibleTabs, activeTab]);
+
+    const current = visibleTabs.find(t => t.value === activeTab);
 
     return (
         <div className="flex-1 space-y-4 md:space-y-8 p-4 md:p-8 pt-4 md:pt-6">
@@ -39,121 +56,37 @@ const Dashboard = () => {
                 <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Dashboard</h2>
             </div>
 
-            <div className="space-y-4 md:space-y-6">
-                {/* Dashboard Tabs - Agentes só veem Painel de Negócios */}
-                <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as DashboardTab)} className="w-full">
-                    <TabsList data-tour="dash-tabs" className={cn(
-                        "grid w-full max-w-[89.6rem] mx-auto",
-                        userRole === 'agent' ? "grid-cols-1" : userRole === 'admin' ? "grid-cols-8" : canViewSales ? "grid-cols-7" : "grid-cols-6"
-                    )}>
-                        {userRole === 'admin' && (
-                            <TabsTrigger
-                                value="minha-conta"
-                                data-tour="dash-minha-conta"
-                                className="flex items-center gap-2"
-                            >
-                                <Wallet className="h-4 w-4 shrink-0 transition-transform duration-300 data-[state=active]:scale-110" />
-                                <span className="hidden sm:inline">Minha Conta</span>
-                            </TabsTrigger>
-                        )}
-                        {userRole !== 'agent' && (
-                            <TabsTrigger
-                                value="monitoramento"
-                                className="flex items-center gap-2"
-                            >
-                                <Headphones className="h-4 w-4 shrink-0 transition-transform duration-300 data-[state=active]:scale-110" />
-                                <span className="hidden sm:inline">Monitoramento</span>
-                            </TabsTrigger>
-                        )}
-                        <TabsTrigger
-                            value="crm"
-                            className="flex items-center gap-2"
+            {!isReady ? null : visibleTabs.length === 0 ? (
+                <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+                    Você não tem permissão para ver nenhuma aba do Dashboard.
+                </div>
+            ) : (
+                <div className="space-y-4 md:space-y-6">
+                    <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as DashboardTab)} className="w-full">
+                        <TabsList
+                            data-tour="dash-tabs"
+                            className="grid w-full max-w-[89.6rem] mx-auto"
+                            style={{ gridTemplateColumns: `repeat(${Math.max(visibleTabs.length, 1)}, minmax(0, 1fr))` }}
                         >
-                            <Users className="h-4 w-4 shrink-0 transition-transform duration-300 data-[state=active]:scale-110" />
-                            <span className="hidden sm:inline">CRM</span>
-                        </TabsTrigger>
-                        {canViewSales && (
-                            <TabsTrigger
-                                value="vendas"
-                                className="flex items-center gap-2"
-                            >
-                                <ShoppingCart className="h-4 w-4 shrink-0 transition-transform duration-300 data-[state=active]:scale-110" />
-                                <span className="hidden sm:inline">Vendas</span>
-                            </TabsTrigger>
-                        )}
-                        {userRole !== 'agent' && (
-                            <TabsTrigger
-                                value="agendamentos"
-                                className="flex items-center gap-2"
-                            >
-                                <CalendarDays className="h-4 w-4 shrink-0 transition-transform duration-300 data-[state=active]:scale-110" />
-                                <span className="hidden sm:inline">Agendamentos</span>
-                            </TabsTrigger>
-                        )}
-                        {userRole !== 'agent' && (
-                            <TabsTrigger
-                                value="campanhas"
-                                className="flex items-center gap-2"
-                            >
-                                <Megaphone className="h-4 w-4 shrink-0 transition-transform duration-300 data-[state=active]:scale-110" />
-                                <span className="hidden sm:inline">Campanhas</span>
-                            </TabsTrigger>
-                        )}
-                        {userRole !== 'agent' && (
-                            <TabsTrigger
-                                value="recorrencia"
-                                className="flex items-center gap-2"
-                            >
-                                <RefreshCcw className="h-4 w-4 shrink-0 transition-transform duration-300 data-[state=active]:scale-110" />
-                                <span className="hidden sm:inline">Recorrência</span>
-                            </TabsTrigger>
-                        )}
-                        {userRole !== 'agent' && (
-                            <TabsTrigger
-                                value="satisfacao"
-                                className="flex items-center gap-2"
-                            >
-                                <Smile className="h-4 w-4 shrink-0 transition-transform duration-300 data-[state=active]:scale-110" />
-                                <span className="hidden sm:inline">Satisfação</span>
-                            </TabsTrigger>
-                        )}
-                    </TabsList>
-                </Tabs>
+                            {visibleTabs.map(({ value, label, icon: Icon, tour }) => (
+                                <TabsTrigger
+                                    key={value}
+                                    value={value}
+                                    data-tour={tour}
+                                    className="flex items-center gap-2"
+                                >
+                                    <Icon className="h-4 w-4 shrink-0 transition-transform duration-300 data-[state=active]:scale-110" />
+                                    <span className="hidden sm:inline">{label}</span>
+                                </TabsTrigger>
+                            ))}
+                        </TabsList>
+                    </Tabs>
 
-                {/* Tab Content */}
-                {activeTab === "monitoramento" && userRole !== 'agent' && (
-                    <MonitoramentoTab />
-                )}
-
-                {activeTab === "crm" && <CrmDashboard />}
-
-                {activeTab === "vendas" && canViewSales && (
-                    <SalesDashboard />
-                )}
-
-                {activeTab === "agendamentos" && userRole !== 'agent' && (
-                    <AgendamentosDashboard />
-                )}
-
-                {activeTab === "campanhas" && userRole !== 'agent' && (
-                    <CampanhasDashboard />
-                )}
-
-                {activeTab === "recorrencia" && userRole !== 'agent' && (
-                    <RecorrenciaDashboard />
-                )}
-
-                {activeTab === "satisfacao" && userRole !== 'agent' && (
-                    <SatisfacaoDashboard />
-                )}
-
-                {activeTab === "minha-conta" && userRole === 'admin' && (
-                    <MinhaContaTab />
-                )}
-            </div>
+                    {current?.render()}
+                </div>
+            )}
         </div>
     );
 };
 
 export default Dashboard;
-

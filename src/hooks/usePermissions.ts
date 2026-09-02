@@ -25,13 +25,37 @@ export type PermissionFeature =
     | "campaigns"
     | "automations"
     | "company_settings"
-    | "reports";
+    | "reports"
+    // Abas do Dashboard (acesso de visualização)
+    | "dash_minha_conta"
+    | "dash_monitoramento"
+    | "dash_crm"
+    | "dash_vendas"
+    | "dash_agendamentos"
+    | "dash_campanhas"
+    | "dash_recorrencia"
+    | "dash_satisfacao";
+
+export type PermissionCategory = "modulos" | "dashboard";
 
 export interface FeatureDef {
     key: PermissionFeature;
     label: string;
     icon: string; // lucide icon name for reference
+    category?: PermissionCategory; // default: "modulos"
 }
+
+/** Aba do Dashboard -> feature de permissão. Ordem = ordem das abas na página. */
+export const DASHBOARD_TAB_FEATURES = [
+    { tab: "minha-conta", feature: "dash_minha_conta" },
+    { tab: "monitoramento", feature: "dash_monitoramento" },
+    { tab: "crm", feature: "dash_crm" },
+    { tab: "vendas", feature: "dash_vendas" },
+    { tab: "agendamentos", feature: "dash_agendamentos" },
+    { tab: "campanhas", feature: "dash_campanhas" },
+    { tab: "recorrencia", feature: "dash_recorrencia" },
+    { tab: "satisfacao", feature: "dash_satisfacao" },
+] as const satisfies ReadonlyArray<{ tab: string; feature: PermissionFeature }>;
 
 export const PERMISSION_FEATURES: FeatureDef[] = [
     { key: "contacts", label: "Contatos", icon: "Users" },
@@ -54,6 +78,15 @@ export const PERMISSION_FEATURES: FeatureDef[] = [
     { key: "automations", label: "Automações", icon: "Zap" },
     { key: "company_settings", label: "Empresa", icon: "Building2" },
     { key: "reports", label: "Relatórios", icon: "BarChart3" },
+    // ─── Subcategoria: abas do Dashboard ───
+    { key: "dash_minha_conta", label: "Minha Conta", icon: "Wallet", category: "dashboard" },
+    { key: "dash_monitoramento", label: "Monitoramento", icon: "Headphones", category: "dashboard" },
+    { key: "dash_crm", label: "CRM", icon: "Users", category: "dashboard" },
+    { key: "dash_vendas", label: "Vendas", icon: "ShoppingCart", category: "dashboard" },
+    { key: "dash_agendamentos", label: "Agendamentos", icon: "CalendarDays", category: "dashboard" },
+    { key: "dash_campanhas", label: "Campanhas", icon: "Megaphone", category: "dashboard" },
+    { key: "dash_recorrencia", label: "Recorrência", icon: "RefreshCcw", category: "dashboard" },
+    { key: "dash_satisfacao", label: "Satisfação", icon: "Smile", category: "dashboard" },
 ];
 
 // ─── Default permissions (mirrors current hardcoded behavior) ─────────────────
@@ -90,6 +123,15 @@ export const DEFAULT_PERMISSIONS: Record<"supervisor" | "agent", DefaultPermissi
         automations:       { can_create: false, can_edit: false, can_delete: false },
         company_settings:  { can_create: false, can_edit: false, can_delete: false },
         reports:           { can_create: false, can_edit: false, can_delete: false },
+        // Abas do Dashboard: supervisor via tudo menos Minha Conta (admin-only)
+        dash_minha_conta:   { can_create: false, can_edit: false, can_delete: false },
+        dash_monitoramento: { can_create: true,  can_edit: true,  can_delete: true  },
+        dash_crm:           { can_create: true,  can_edit: true,  can_delete: true  },
+        dash_vendas:        { can_create: true,  can_edit: true,  can_delete: true  },
+        dash_agendamentos:  { can_create: true,  can_edit: true,  can_delete: true  },
+        dash_campanhas:     { can_create: true,  can_edit: true,  can_delete: true  },
+        dash_recorrencia:   { can_create: true,  can_edit: true,  can_delete: true  },
+        dash_satisfacao:    { can_create: true,  can_edit: true,  can_delete: true  },
     },
     agent: {
         contacts:          { can_create: true,  can_edit: true,  can_delete: true  },
@@ -112,6 +154,15 @@ export const DEFAULT_PERMISSIONS: Record<"supervisor" | "agent", DefaultPermissi
         automations:       { can_create: false, can_edit: false, can_delete: false },
         company_settings:  { can_create: false, can_edit: false, can_delete: false },
         reports:           { can_create: false, can_edit: false, can_delete: false },
+        // Abas do Dashboard: agente historicamente só via o CRM
+        dash_minha_conta:   { can_create: false, can_edit: false, can_delete: false },
+        dash_monitoramento: { can_create: false, can_edit: false, can_delete: false },
+        dash_crm:           { can_create: true,  can_edit: true,  can_delete: true  },
+        dash_vendas:        { can_create: false, can_edit: false, can_delete: false },
+        dash_agendamentos:  { can_create: false, can_edit: false, can_delete: false },
+        dash_campanhas:     { can_create: false, can_edit: false, can_delete: false },
+        dash_recorrencia:   { can_create: false, can_edit: false, can_delete: false },
+        dash_satisfacao:    { can_create: false, can_edit: false, can_delete: false },
     },
 };
 

@@ -6,10 +6,13 @@ import { PERMISSION_FEATURES, DEFAULT_PERMISSIONS, PermissionFeature, Permission
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronDown, ChevronUp, Shield, Users, Save } from "lucide-react";
+import { ChevronDown, ChevronUp, Shield, Users, Save, LayoutDashboard } from "lucide-react";
 import { toast } from "sonner";
 
 type RoleKey = "supervisor" | "agent";
+
+const MODULE_FEATURES = PERMISSION_FEATURES.filter(f => f.category !== "dashboard");
+const DASHBOARD_FEATURES = PERMISSION_FEATURES.filter(f => f.category === "dashboard");
 
 type PermissionsState = Record<PermissionFeature, PermissionSet>;
 
@@ -63,18 +66,13 @@ export function PermissionsSettings() {
     const resolvedSupervisor = supervisorPerms ?? mergeWithCustom("supervisor", customRows);
     const resolvedAgent = agentPerms ?? mergeWithCustom("agent", customRows);
 
-    const handleToggle = (role: RoleKey, feature: PermissionFeature, field: keyof PermissionSet, value: boolean) => {
-        if (role === "supervisor") {
-            setSupervisorPerms(prev => {
-                const base = prev ?? mergeWithCustom("supervisor", customRows);
-                return { ...base, [feature]: { ...base[feature], [field]: value } };
-            });
-        } else {
-            setAgentPerms(prev => {
-                const base = prev ?? mergeWithCustom("agent", customRows);
-                return { ...base, [feature]: { ...base[feature], [field]: value } };
-            });
-        }
+    const handleToggle = (role: RoleKey, feature: PermissionFeature, patch: Partial<PermissionSet>) => {
+        const apply = (prev: PermissionsState | null) => {
+            const base = prev ?? mergeWithCustom(role, customRows);
+            return { ...base, [feature]: { ...base[feature], ...patch } };
+        };
+        if (role === "supervisor") setSupervisorPerms(apply);
+        else setAgentPerms(apply);
     };
 
     const handleSave = async (role: RoleKey) => {
@@ -131,7 +129,7 @@ export function PermissionsSettings() {
                     <div className="rounded-b-lg border border-t-0 bg-card px-4 pb-4 pt-2">
                         <PermissionTable
                             perms={resolvedSupervisor}
-                            onToggle={(feature, field, value) => handleToggle("supervisor", feature, field, value)}
+                            onToggle={(feature, patch) => handleToggle("supervisor", feature, patch)}
                         />
                         <div className="mt-4 flex justify-end">
                             <Button
@@ -162,7 +160,7 @@ export function PermissionsSettings() {
                     <div className="rounded-b-lg border border-t-0 bg-card px-4 pb-4 pt-2">
                         <PermissionTable
                             perms={resolvedAgent}
-                            onToggle={(feature, field, value) => handleToggle("agent", feature, field, value)}
+                            onToggle={(feature, patch) => handleToggle("agent", feature, patch)}
                         />
                         <div className="mt-4 flex justify-end">
                             <Button
@@ -183,47 +181,88 @@ export function PermissionsSettings() {
 
 interface PermissionTableProps {
     perms: PermissionsState;
-    onToggle: (feature: PermissionFeature, field: keyof PermissionSet, value: boolean) => void;
+    onToggle: (feature: PermissionFeature, patch: Partial<PermissionSet>) => void;
 }
 
 function PermissionTable({ perms, onToggle }: PermissionTableProps) {
     return (
-        <div className="w-full">
-            {/* Header */}
-            <div className="grid grid-cols-[1fr_80px_80px_80px] gap-2 px-2 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                <span>Módulo</span>
-                <span className="text-center">Criar</span>
-                <span className="text-center">Editar</span>
-                <span className="text-center">Deletar</span>
+        <div className="w-full space-y-6">
+            <div>
+                {/* Header */}
+                <div className="grid grid-cols-[1fr_80px_80px_80px] gap-2 px-2 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    <span>Módulo</span>
+                    <span className="text-center">Criar</span>
+                    <span className="text-center">Editar</span>
+                    <span className="text-center">Deletar</span>
+                </div>
+
+                <div className="divide-y">
+                    {MODULE_FEATURES.map(feature => (
+                        <div
+                            key={feature.key}
+                            className="grid grid-cols-[1fr_80px_80px_80px] items-center gap-2 px-2 py-3"
+                        >
+                            <span className="text-sm font-medium">{feature.label}</span>
+                            <div className="flex justify-center">
+                                <Switch
+                                    checked={perms[feature.key].can_create}
+                                    onCheckedChange={v => onToggle(feature.key, { can_create: v })}
+                                />
+                            </div>
+                            <div className="flex justify-center">
+                                <Switch
+                                    checked={perms[feature.key].can_edit}
+                                    onCheckedChange={v => onToggle(feature.key, { can_edit: v })}
+                                />
+                            </div>
+                            <div className="flex justify-center">
+                                <Switch
+                                    checked={perms[feature.key].can_delete}
+                                    onCheckedChange={v => onToggle(feature.key, { can_delete: v })}
+                                />
+                            </div>
+                        </div>
+                    ))}
+                </div>
             </div>
 
-            <div className="divide-y">
-                {PERMISSION_FEATURES.map(feature => (
-                    <div
-                        key={feature.key}
-                        className="grid grid-cols-[1fr_80px_80px_80px] items-center gap-2 px-2 py-3"
-                    >
-                        <span className="text-sm font-medium">{feature.label}</span>
-                        <div className="flex justify-center">
-                            <Switch
-                                checked={perms[feature.key].can_create}
-                                onCheckedChange={v => onToggle(feature.key, "can_create", v)}
-                            />
+            {/* Subcategoria: abas do Dashboard (só visualização, 1 chave por aba) */}
+            <div>
+                <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2">
+                    <LayoutDashboard className="h-4 w-4 text-purple-500" />
+                    <span className="text-sm font-medium">Abas do Dashboard</span>
+                </div>
+                <p className="px-3 pt-2 text-xs text-muted-foreground">
+                    Libera a visualização de cada aba da página Dashboard. Quem não tem nenhuma aba liberada não vê a página.
+                </p>
+
+                <div className="grid grid-cols-[1fr_80px] gap-2 px-2 pt-3 pb-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    <span>Aba</span>
+                    <span className="text-center">Acesso</span>
+                </div>
+
+                <div className="divide-y">
+                    {DASHBOARD_FEATURES.map(feature => (
+                        <div
+                            key={feature.key}
+                            className="grid grid-cols-[1fr_80px] items-center gap-2 px-2 py-3"
+                        >
+                            <span className="text-sm font-medium">{feature.label}</span>
+                            <div className="flex justify-center">
+                                <Switch
+                                    checked={
+                                        perms[feature.key].can_create
+                                        || perms[feature.key].can_edit
+                                        || perms[feature.key].can_delete
+                                    }
+                                    onCheckedChange={v =>
+                                        onToggle(feature.key, { can_create: v, can_edit: v, can_delete: v })
+                                    }
+                                />
+                            </div>
                         </div>
-                        <div className="flex justify-center">
-                            <Switch
-                                checked={perms[feature.key].can_edit}
-                                onCheckedChange={v => onToggle(feature.key, "can_edit", v)}
-                            />
-                        </div>
-                        <div className="flex justify-center">
-                            <Switch
-                                checked={perms[feature.key].can_delete}
-                                onCheckedChange={v => onToggle(feature.key, "can_delete", v)}
-                            />
-                        </div>
-                    </div>
-                ))}
+                    ))}
+                </div>
             </div>
         </div>
     );

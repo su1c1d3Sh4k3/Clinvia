@@ -14,6 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useCurrentTeamMember } from "@/hooks/useStaff";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useDashboardTabAccess } from "@/hooks/useDashboardTabAccess";
 import { differenceInDays } from "date-fns";
 import { useState, useEffect } from "react";
 import { useMobileMenu } from "@/contexts/MobileMenuContext";
@@ -199,6 +200,7 @@ export const NavigationSidebar = () => {
 
   const { data: userRole } = useUserRole();
   const { hasAnyAccess } = usePermissions();
+  const { allowedTabs: dashboardTabs } = useDashboardTabAccess();
 
   const isPathActive = (path?: string) => {
     if (!path) return false;
@@ -352,6 +354,7 @@ export const NavigationSidebar = () => {
     if (item.id === "campaigns") return userRole === "admin" || hasAnyAccess("campaigns");
     if (item.id === "ia-config") return userRole === "admin" || hasAnyAccess("ia_config");
     if (item.id === "financial") return userRole === "admin" || hasAnyAccess("financial");
+    if (item.id === "dashboard") return userRole === "admin" || dashboardTabs.length > 0;
     return true;
   };
 
