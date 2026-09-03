@@ -461,6 +461,7 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
         gotchas: [
             "O encerramento automatico so nasce ligado em contas novas; contas antigas precisam ligar manualmente.",
             "O prazo do encerramento conta sempre a partir da ultima mensagem DO CLIENTE — se ele responder, o ciclo zera.",
+            "A mensagem final e enviada no mesmo instante em que a conversa e arquivada; o aviso de entrega do WhatsApp chega segundos depois e o sistema aplica esse status no historico por ate 15 minutos apos o encerramento. Se o recibo demorar mais que isso, a mensagem fica marcada como 'Enviada' no historico mesmo tendo sido entregue.",
         ],
     },
     {

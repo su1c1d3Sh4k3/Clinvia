@@ -184,6 +184,12 @@ export function ConfiguracoesGuide() {
                     enviar mensagem, conversas em que o cliente nunca respondeu — após 48h, tempo configurável. Grupos
                     e Instagram ficam de fora do encerramento automático.
                 </Callout>
+                <Callout type="atencao" title="Tique da mensagem final no histórico">
+                    A mensagem de encerramento sai no mesmo instante em que o ticket é arquivado, e o aviso de entrega do
+                    WhatsApp chega alguns segundos depois. O sistema aplica esse status no histórico por até{" "}
+                    <strong>15 minutos</strong> após o encerramento — se o recibo demorar mais que isso, a mensagem fica
+                    marcada como <strong>Enviada</strong> no histórico mesmo tendo sido entregue ao cliente.
+                </Callout>
             </TopicSection>
 
             {/* 7 */}

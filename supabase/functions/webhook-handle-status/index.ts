@@ -58,6 +58,26 @@ serve(async (req) => {
 
         const supabase = createSupabaseClient();
 
+        /**
+         * Ticket encerrado arquiva as mensagens em conversations.messages_history e
+         * apaga as linhas de messages. O recibo da Meta chega depois disso, entao o
+         * UPDATE acima nao acha nada — aplica o status direto no historico.
+         */
+        const applyToArchivedHistory = async (messageId: string, status: string) => {
+            const { data, error } = await supabase.rpc('apply_archived_message_status', {
+                p_wamid: messageId,
+                p_status: status,
+            });
+            if (error) {
+                console.error('[webhook-handle-status] Error patching history:', messageId, error);
+                return false;
+            }
+            if (data === true) {
+                console.log('[webhook-handle-status] Patched archived message:', messageId, '→', status);
+            }
+            return data === true;
+        };
+
         // Handle Read Receipts
         if (payload.type === 'ReadReceipt' || eventType === 'messages_update') {
             console.log('[webhook-handle-status] Processing Read Receipt...');
@@ -91,6 +111,7 @@ serve(async (req) => {
 
             // Update each message
             let updated = 0;
+            let archived = 0;
             let notFound = 0;
 
             for (const messageId of messageIds) {
@@ -105,6 +126,8 @@ serve(async (req) => {
                 } else if (data && data.length > 0) {
                     console.log('[webhook-handle-status] Updated message:', messageId, '→', status);
                     updated++;
+                } else if (await applyToArchivedHistory(messageId, status)) {
+                    archived++;
                 } else {
                     console.log('[webhook-handle-status] Message not found:', messageId);
                     notFound++;
@@ -116,6 +139,7 @@ serve(async (req) => {
                     success: true,
                     message: "Read receipt processed",
                     updated,
+                    archived,
                     notFound
                 }),
                 { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
@@ -144,6 +168,8 @@ serve(async (req) => {
                     console.error('[webhook-handle-status] Error updating ACK:', error);
                 } else if (data && data.length > 0) {
                     console.log('[webhook-handle-status] ACK updated:', messageId, '→', status);
+                } else {
+                    await applyToArchivedHistory(messageId, status);
                 }
             }
 
