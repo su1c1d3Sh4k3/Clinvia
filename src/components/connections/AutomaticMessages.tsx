@@ -36,7 +36,6 @@ const AUTO_MSG_META: Record<string, {
             { key: "horario", label: "Horário" },
             { key: "clinica", label: "Nome da clínica" },
             { key: "servico", label: "Serviço" },
-            { key: "profissional", label: "Profissional" },
         ],
         buttonsNote: "Os botões de resposta rápida (Sim, pode confirmar / Vou precisar reagendar / Não vou poder ir) são fixos e enviados automaticamente junto com a mensagem.",
     },

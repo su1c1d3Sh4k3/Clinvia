@@ -383,6 +383,7 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "No numero oficial so da para iniciar conversa com template aprovado; texto livre so dentro da janela de 24h apos a ultima mensagem do cliente.",
             "Qualidade baixa ou limite de nivel baixo derruba disparos grandes — confira o painel de qualidade antes da campanha.",
             "Nome de exibicao recusado pela Meta bloqueia envios: aparece um aviso ambar no card da conexao com os passos.",
+            "A mensagem de Confirmacao 24h nao cita mais o nome do profissional (agora usa nome do cliente, horario, clinica e servico). Motivo: o sistema so guarda o nome da SALA do agendamento, e em sala avulsa (Sala 2, Consultorio 1) o paciente recebia 'procedimento de Botox com Sala 2'. No WhatsApp nao oficial a mudanca ja vale para todos. No oficial vale para os templates enviados a aprovacao a partir de agora: numeros ja conectados seguem com o template aprovado pela Meta e, para tirar o profissional, e preciso editar o template na aba Templates de Conexoes (o template volta para revisao da Meta e a confirmacao fica parada ate reaprovar).",
         ],
     },
     {

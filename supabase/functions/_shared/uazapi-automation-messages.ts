@@ -5,7 +5,11 @@
 // uazapi_automation_messages) e switch liga/desliga independente do da Meta.
 // Ausência de linha = habilitado + corpo default abaixo.
 // Variáveis nomeadas: {{nome_cliente}}, {{horario}}, {{horarios}}, {{clinica}},
-// {{servico}}, {{profissional}}, {{agendamentos}}.
+// {{servico}}, {{agendamentos}}.
+//
+// O nome do profissional NÃO é usado: appointments.professional_name guarda o
+// nome da SALA (professionals.name), que em sala avulsa é "Sala 2" e sairia
+// como "...com Sala 2" para o paciente.
 // -----------------------------------------------------------------------------
 
 export interface UazapiAutomationMessage {
@@ -15,7 +19,7 @@ export interface UazapiAutomationMessage {
 
 export const DEFAULT_UAZAPI_BODIES: Record<string, string> = {
     sys_confirm_24h_v1:
-        "Olá {{nome_cliente}}, tudo bem com você? Estou entrando em contato para confirmar seu agendamento amanhã às {{horario}} aqui na {{clinica}} para o procedimento de {{servico}} com {{profissional}}. Posso confirmar sua presença?",
+        "Olá {{nome_cliente}}, tudo bem com você? Estou entrando em contato para confirmar seu agendamento amanhã às {{horario}} aqui na {{clinica}} para o procedimento de {{servico}}. Posso confirmar sua presença?",
     sys_confirm_multi_v1:
         "Olá {{nome_cliente}}, tudo bem com você? Estou entrando em contato para confirmar seus agendamentos de amanhã aqui na {{clinica}}:\n\n{{agendamentos}}\n\nPosso confirmar sua presença em todos?",
     sys_reminder_2h_v1:

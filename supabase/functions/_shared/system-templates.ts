@@ -39,14 +39,14 @@ export const TPL_FEEDBACK = "sys_feedback_24h_v1";
 
 export const SYSTEM_TEMPLATES: SystemTemplateDef[] = [
     {
-        // {{1}} nome, {{2}} hora, {{3}} clínica, {{4}} procedimento, {{5}} profissional
+        // {{1}} nome, {{2}} hora, {{3}} clínica, {{4}} procedimento
         name: TPL_CONFIRM_SINGLE,
         category: "UTILITY",
         language: "pt_BR",
         components: [
             {
                 type: "BODY",
-                text: "Olá {{1}}, tudo bem com você? Estou entrando em contato para confirmar seu agendamento amanhã às {{2}} aqui na {{3}} para o procedimento de {{4}} com {{5}}. Posso confirmar sua presença?",
+                text: "Olá {{1}}, tudo bem com você? Estou entrando em contato para confirmar seu agendamento amanhã às {{2}} aqui na {{3}} para o procedimento de {{4}}. Posso confirmar sua presença?",
             },
             { type: "BUTTONS", buttons: CONFIRM_BUTTONS },
         ],
@@ -97,15 +97,36 @@ export const SYSTEM_TEMPLATE_NAMES = SYSTEM_TEMPLATES.map((t) => t.name);
 // corresponde aos {{n}} dos bodies default acima. Quando o cliente edita o
 // template, message_templates.variable_map sobrescreve essa ordem.
 export const DEFAULT_VARIABLE_MAP: Record<string, string[]> = {
-    [TPL_CONFIRM_SINGLE]: ["nome_cliente", "horario", "clinica", "servico", "profissional"],
+    [TPL_CONFIRM_SINGLE]: ["nome_cliente", "horario", "clinica", "servico"],
     [TPL_CONFIRM_MULTI]: ["nome_cliente", "clinica", "agendamentos"],
     [TPL_REMINDER]: ["nome_cliente", "horarios"],
     [TPL_FEEDBACK]: ["nome_cliente"],
 };
 
+// Gerações anteriores do mesmo template, indexadas pela quantidade de {{n}} do
+// corpo REGISTRADO na Meta. Um template já aprovado numa WABA nunca é reescrito
+// por nós — WABAs antigas seguem com o corpo que citava o profissional, e a
+// contagem de parâmetros precisa bater com o corpo delas, não com a fôrma atual.
+const LEGACY_VARIABLE_MAPS: Record<string, Record<number, string[]>> = {
+    [TPL_CONFIRM_SINGLE]: {
+        5: ["nome_cliente", "horario", "clinica", "servico", "profissional"],
+    },
+};
+
+/** Quantidade de placeholders {{n}} distintos no BODY de um template salvo. */
+function countBodyPlaceholders(components: unknown): number {
+    if (!Array.isArray(components)) return 0;
+    const body = components.find((c: any) => String(c?.type).toUpperCase() === "BODY");
+    const text = (body as any)?.text;
+    if (typeof text !== "string") return 0;
+    const found = text.match(/\{\{\s*(\d+)\s*\}\}/g) || [];
+    return new Set(found.map((m) => m.replace(/\D/g, ""))).size;
+}
+
 /**
- * Carrega variable_map dos templates de sistema (Map name → string[]).
- * Só retorna entradas com variable_map salvo (template editado pelo cliente).
+ * Ordem das variáveis de cada template de sistema NAQUELA WABA (Map name → string[]).
+ * Precedência: variable_map salvo (template editado pelo cliente) > geração antiga
+ * detectada pelo corpo registrado > fôrma atual (DEFAULT_VARIABLE_MAP, implícita).
  */
 export async function getSystemTemplateVariableMaps(
     supabase: any,
@@ -113,7 +134,7 @@ export async function getSystemTemplateVariableMaps(
 ): Promise<Map<string, string[]>> {
     let query = supabase
         .from("message_templates")
-        .select("name, variable_map")
+        .select("name, variable_map, components")
         .in("name", SYSTEM_TEMPLATE_NAMES);
     query = instanceRef.meta_waba_id
         ? query.eq("waba_id", instanceRef.meta_waba_id)
@@ -123,7 +144,10 @@ export async function getSystemTemplateVariableMaps(
     for (const t of data || []) {
         if (Array.isArray(t.variable_map) && t.variable_map.length > 0) {
             map.set(t.name, t.variable_map);
+            continue;
         }
+        const legacy = LEGACY_VARIABLE_MAPS[t.name]?.[countBodyPlaceholders(t.components)];
+        if (legacy) map.set(t.name, legacy);
     }
     return map;
 }

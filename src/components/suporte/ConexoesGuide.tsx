@@ -165,6 +165,13 @@ export function ConexoesGuide() {
                     Se você tem os dois provedores, o texto Meta (template) e o texto não oficial são editados separadamente
                     — o sistema escolhe sozinho qual usar conforme o número que envia.
                 </Callout>
+                <Callout type="atencao" title="A confirmação não cita mais o profissional">
+                    O sistema só guarda o nome da <strong>sala</strong> do agendamento. Em sala avulsa ("Sala 2",
+                    "Consultório 1") o paciente recebia "procedimento de Botox <strong>com Sala 2</strong>", então a variável
+                    saiu: a confirmação de 24h usa nome do cliente, horário, clínica e serviço. No WhatsApp{" "}
+                    <strong>oficial</strong>, isso vale para os templates enviados à aprovação a partir de agora — números já
+                    conectados continuam com o template que a Meta aprovou, e para trocar é preciso editá-lo na aba Templates.
+                </Callout>
             </TopicSection>
 
             {/* 6 */}

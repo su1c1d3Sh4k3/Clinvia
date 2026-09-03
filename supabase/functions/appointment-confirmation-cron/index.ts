@@ -462,7 +462,7 @@ async function processConfirm24h(ctx: CronContext): Promise<{ sent: number; erro
         const to = new Date(now.getTime() + 25 * 3600_000);
         const { data: windowAppointments } = await supabase
             .from("appointments")
-            .select("id, contact_id, start_time, service_name, professional_name")
+            .select("id, contact_id, start_time, service_name")
             .eq("user_id", userId)
             .eq("type", "appointment")
             .in("status", ["pending", "confirmed", "rescheduled"])
@@ -510,6 +510,8 @@ async function processConfirm24h(ctx: CronContext): Promise<{ sent: number; erro
             const dayEnd = `${dateBR}T23:59:59-03:00`;
             const { data: allDayAppointments } = await supabase
                 .from("appointments")
+                // professional_name só é usado por WABAs antigas, cujo template
+                // aprovado ainda tem a variável do profissional (LEGACY_VARIABLE_MAPS)
                 .select("id, contact_id, start_time, service_name, professional_name")
                 .eq("user_id", userId)
                 .eq("contact_id", contactId)
@@ -556,19 +558,23 @@ async function processConfirm24h(ctx: CronContext): Promise<{ sent: number; erro
                     continue;
                 }
                 const a = group[0];
+                // WABAs conectadas antes da remoção da variável ainda têm o
+                // template aprovado citando o profissional — o valor é enviado
+                // só quando a ordem resolvida para AQUELA WABA pede por ele.
+                const usaProfissional = (ctx.variableMaps.get(tplName) || []).includes("profissional");
                 const values: Record<string, string> = group.length === 1
                     ? {
                         nome_cliente: firstName,
                         horario: formatTimeBR(a.start_time),
                         clinica: ctx.clinicName,
                         servico: a.service_name || "atendimento",
-                        profissional: a.professional_name || "nosso profissional",
+                        ...(usaProfissional ? { profissional: a.professional_name || "nosso profissional" } : {}),
                     }
                     : {
                         nome_cliente: firstName,
                         clinica: ctx.clinicName,
                         agendamentos: group.map((g: any) =>
-                            `${formatTimeBR(g.start_time)} — ${g.service_name} com ${g.professional_name}`
+                            `${formatTimeBR(g.start_time)} — ${g.service_name}`
                         ).join("; "),
                     };
                 const parameters = buildTemplateParameters(tplName, ctx.variableMaps, values);
@@ -576,7 +582,7 @@ async function processConfirm24h(ctx: CronContext): Promise<{ sent: number; erro
                     conversationId,
                     templateName: tplName,
                     parameters,
-                    bodyPreview: buildConfirmMessage(firstName, group, ctx.clinicName),
+                    bodyPreview: buildConfirmMessage(firstName, group, ctx.clinicName, usaProfissional),
                 });
                 await logTemplateSend(supabase, {
                     userId, templateName: tplName, conversationId,
@@ -590,13 +596,12 @@ async function processConfirm24h(ctx: CronContext): Promise<{ sent: number; erro
                         horario: formatTimeBR(a.start_time),
                         clinica: ctx.clinicName,
                         servico: a.service_name || "atendimento",
-                        profissional: a.professional_name || "nosso profissional",
                     }
                     : {
                         nome_cliente: firstName,
                         clinica: ctx.clinicName,
                         agendamentos: group.map((g: any) =>
-                            `• ${formatTimeBR(g.start_time)} — ${g.service_name} com ${g.professional_name}`
+                            `• ${formatTimeBR(g.start_time)} — ${g.service_name}`
                         ).join("\n"),
                     });
 
@@ -672,7 +677,7 @@ async function processReminder2h(ctx: CronContext): Promise<{ sent: number; erro
         const to = new Date(now.getTime() + 130 * 60_000);   // 2h10m
         const { data: windowAppointments } = await supabase
             .from("appointments")
-            .select("id, contact_id, start_time, service_name, professional_name")
+            .select("id, contact_id, start_time, service_name")
             .eq("user_id", userId)
             .eq("type", "appointment")
             .in("status", ["pending", "confirmed", "rescheduled"])
@@ -719,7 +724,7 @@ async function processReminder2h(ctx: CronContext): Promise<{ sent: number; erro
             const dayEnd = `${dateBR}T23:59:59-03:00`;
             const { data: allDayAppointments } = await supabase
                 .from("appointments")
-                .select("id, contact_id, start_time, service_name, professional_name")
+                .select("id, contact_id, start_time, service_name")
                 .eq("user_id", userId)
                 .eq("contact_id", contactId)
                 .eq("type", "appointment")
@@ -839,7 +844,7 @@ async function processFeedback24h(ctx: CronContext): Promise<{ sent: number; err
 
     const { data: windowAppointments } = await supabase
         .from("appointments")
-        .select("id, contact_id, start_time, end_time, status, service_name, professional_name")
+        .select("id, contact_id, start_time, end_time, status, service_name")
         .eq("user_id", userId)
         .eq("type", "appointment")
         .in("status", ["confirmed", "completed", "waiting"])
@@ -907,7 +912,7 @@ async function processFeedback24h(ctx: CronContext): Promise<{ sent: number; err
             const dayEnd = `${dateBR}T23:59:59-03:00`;
             const { data: allDayAppointments } = await supabase
                 .from("appointments")
-                .select("id, contact_id, start_time, end_time, status, service_name, professional_name")
+                .select("id, contact_id, start_time, end_time, status, service_name")
                 .eq("user_id", userId)
                 .eq("contact_id", contactId)
                 .eq("type", "appointment")
@@ -1137,15 +1142,18 @@ function formatTimeBR(isoString: string): string {
     return `${String(parts.hour).padStart(2, "0")}:${String(parts.minute).padStart(2, "0")}`;
 }
 
-function buildConfirmMessage(firstName: string, group: any[], clinicName: string): string {
+// `comProfissional` espelha o corpo aprovado na WABA: o preview salvo em messages
+// precisa bater com o texto que a Meta realmente renderizou para o paciente.
+function buildConfirmMessage(firstName: string, group: any[], clinicName: string, comProfissional = false): string {
     if (group.length === 1) {
         const a = group[0];
-        return `Olá ${firstName}, tudo bem com você? Estou entrando em contato para confirmar seu agendamento amanhã às ${formatTimeBR(a.start_time)} aqui na ${clinicName} para o procedimento de ${a.service_name} com ${a.professional_name}. Posso confirmar sua presença?`;
+        const prof = comProfissional ? ` com ${a.professional_name || "nosso profissional"}` : "";
+        return `Olá ${firstName}, tudo bem com você? Estou entrando em contato para confirmar seu agendamento amanhã às ${formatTimeBR(a.start_time)} aqui na ${clinicName} para o procedimento de ${a.service_name}${prof}. Posso confirmar sua presença?`;
     }
 
     // Multiple appointments — list all, use first time
     const lines = group.map((a: any) =>
-        `• ${formatTimeBR(a.start_time)} — ${a.service_name} com ${a.professional_name}`
+        `• ${formatTimeBR(a.start_time)} — ${a.service_name}`
     ).join("\n");
     return `Olá ${firstName}, tudo bem com você? Estou entrando em contato para confirmar seus agendamentos de amanhã aqui na ${clinicName}:\n\n${lines}\n\nPosso confirmar sua presença em todos?`;
 }
