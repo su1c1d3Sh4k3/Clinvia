@@ -115,6 +115,7 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
         gotchas: [
             "Atendente com escopo configurado so enxerga as conexoes, filas e tags liberadas para ele; conversa ja atribuida a outro colega tambem fica invisivel.",
             "Conversa encerrada tem as mensagens arquivadas: o historico aparece dentro da propria conversa do cliente, nao some.",
+            "Ao abrir um ticket anterior pelo painel lateral, o recorte e SOMENTE LEITURA e nao existe botao de reabrir: cada cliente tem um ticket unico por conexao e a conversa continua nele. Use 'Retornar para a conversa geral'.",
             "Numero oficial da Meta nao permite editar nem apagar mensagem — esses botoes so aparecem na conexao nao oficial.",
             "Conversa de grupo nunca fica atribuida a um colaborador e e visivel para todos, salvo se o grupo for restrito.",
             "O filtro 'Etapas do CRM' olha a etapa do card ATIVO do cliente no funil. Cliente sem card ativo e conversa de grupo (que nao tem card) ficam de fora enquanto o filtro estiver marcado — por isso a aba Grupos aparece vazia com ele ligado.",

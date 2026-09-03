@@ -337,10 +337,9 @@ export function InboxGuide() {
                 ]} />
                 <Callout type="atencao" title="Ticket anterior é somente leitura">
                     Enquanto você estiver vendo um trecho antigo, o campo de mensagem some — para não responder dentro de um
-                    atendimento já encerrado. Para falar com o cliente, volte para a conversa geral (se ela estiver aberta ou
-                    pendente) ou clique em <strong>Reabrir conversa</strong>, que abre a janela de nova mensagem já com o
-                    contato preenchido. Ticket resolvido também não tem mais o botão <strong>Atender</strong>: o caminho é
-                    sempre iniciar uma conversa nova.
+                    atendimento já encerrado. Para falar com o cliente, use <strong>Retornar para a conversa geral</strong>:
+                    cada cliente tem um ticket único por conexão, e é sempre nele que a conversa continua. Ticket resolvido
+                    também não tem o botão <strong>Atender</strong>.
                 </Callout>
                 <Callout type="dica">
                     Precisa reler um atendimento antigo? Abra o perfil do cliente (página Clientes &gt; clique no nome) e veja a
@@ -378,7 +377,7 @@ export function InboxGuide() {
                         },
                         {
                             q: "Estou vendo um ticket anterior e sumiu o campo de mensagem.",
-                            a: "É proposital: trecho antigo é somente leitura, para ninguém responder dentro de um atendimento já encerrado. Clique em Retornar para a conversa geral, ou em Reabrir conversa para abrir a janela de nova mensagem já com o contato preenchido.",
+                            a: "É proposital: trecho antigo é somente leitura, para ninguém responder dentro de um atendimento já encerrado. Clique em Retornar para a conversa geral — o cliente tem um ticket único por conexão e é nele que a conversa continua.",
                         },
                         {
                             q: "Por que o histórico de um número não mostra as conversas do outro?",

@@ -37,7 +37,7 @@ import { TemplatePickerModal } from "@/components/chat/TemplatePickerModal";
 import { AddNoteModal } from "@/components/chat/AddNoteModal";
 import { useConversationNotes, mergeNotesIntoMessages } from "@/hooks/useConversationNotes";
 import { useGroupMonitoringVisuals } from "@/hooks/useGroupMonitoring";
-import { LayoutTemplate, Clock, Paperclip, History, ArrowLeft, MessageSquarePlus } from "lucide-react";
+import { LayoutTemplate, Clock, Paperclip, History, ArrowLeft } from "lucide-react";
 
 // Performance: Limit messages rendered at once
 const MESSAGES_PER_PAGE = 50;
@@ -992,8 +992,7 @@ export const ChatArea = ({
 
       {isSlice ? (
         /* Recorte de ticket anterior: somente leitura (user rule — mensagem só
-           pelo ticket principal). No lugar do campo de texto, atalho para
-           reabrir a conversa numa janela nova já preenchida. */
+           pelo ticket principal, que é único por cliente). */
         <div className="p-3 border-t bg-muted/30">
           <div className="flex flex-col items-center gap-2 py-3 px-4 rounded-lg bg-muted/60 border border-border">
             <div className="flex items-center gap-2 text-muted-foreground">
@@ -1001,21 +1000,12 @@ export const ChatArea = ({
               <span className="text-sm font-medium">Você está vendo um ticket anterior</span>
             </div>
             <p className="text-xs text-muted-foreground text-center">
-              Este recorte é somente leitura. Para falar com o cliente, use o ticket atual
-              ou reabra a conversa em uma nova janela.
+              Este recorte é somente leitura. Para falar com o cliente, volte para a conversa geral.
             </p>
             <div className="flex flex-wrap items-center justify-center gap-2 mt-1">
               <Button size="sm" variant="outline" className="gap-2" onClick={onExitSlice}>
                 <ArrowLeft className="w-4 h-4" />
                 Retornar para a conversa geral
-              </Button>
-              <Button
-                size="sm"
-                className="gap-2"
-                onClick={() => onOpenNewMessage?.(contactNumber || undefined)}
-              >
-                <MessageSquarePlus className="w-4 h-4" />
-                Reabrir conversa
               </Button>
             </div>
           </div>

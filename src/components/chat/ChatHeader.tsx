@@ -150,9 +150,9 @@ export const ChatHeader = ({
                             dataTour="chat-transfer"
                         />
 
-                        {/* Atender / Ticket Aberto — ticket resolvido não reabre por
-                            aqui (user rule): o histórico é só leitura, para falar com
-                            o cliente usa-se "Reabrir conversa" (nova mensagem) */}
+                        {/* Atender / Ticket Aberto — ticket resolvido não reabre
+                            (user rule): o cliente tem um ticket único e o histórico
+                            é somente leitura */}
                         {!isResolved && (
                             <ExpandButton
                                 icon={<CheckCircle className="w-4 h-4" />}
