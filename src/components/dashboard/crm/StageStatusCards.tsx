@@ -1,10 +1,9 @@
 import { useState } from "react";
-import { isToday } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
 import { STAGE_COLORS } from "@/types/crm-client";
-import { DayPicker } from "./DayPicker";
+import { PeriodPicker, useCrmPeriod } from "./PeriodPicker";
 import { ChannelPicker } from "./ChannelPicker";
-import { useCrmStageCounts } from "@/hooks/useCrmDashboard";
+import { useCrmStageMovement } from "@/hooks/useCrmDashboard";
 
 interface StageStatusCardsProps {
     title: string;
@@ -12,40 +11,32 @@ interface StageStatusCardsProps {
 }
 
 /**
- * Section with one small card per stage: total deals + breakdown by the
- * contact's latest conversation status (Aberto / Pendente / Concluído).
- * The three lines always sum to the total.
+ * Section with one small card per stage: deals that entered the stage within the
+ * period + breakdown by the contact's latest conversation status
+ * (Aberto / Pendente / Concluído). The three lines always sum to the total.
  */
 export function StageStatusCards({ title, stages }: StageStatusCardsProps) {
-    const [date, setDate] = useState(new Date());
+    const periodState = useCrmPeriod();
     const [channelId, setChannelId] = useState<string | null>(null);
-    const live = isToday(date);
-    // Snapshot histórico é agregado por conta — só hoje dá para separar por conexão
-    const { data, isLoading } = useCrmStageCounts(date, live ? channelId : null);
+    const { data, isLoading } = useCrmStageMovement(periodState.range, channelId);
 
-    const isEmpty = !isLoading && (!data || data.length === 0) && !live;
+    const isEmpty = !isLoading && (!data || data.length === 0);
 
     return (
         <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <h3 className="text-base font-semibold">{title}</h3>
                 <div className="flex flex-wrap items-center gap-2">
-                    <ChannelPicker value={channelId} onChange={setChannelId} disabled={!live} />
-                    <DayPicker date={date} onDateChange={setDate} />
+                    <ChannelPicker value={channelId} onChange={setChannelId} />
+                    <PeriodPicker {...periodState} />
                 </div>
             </div>
-
-            {!live && channelId && (
-                <p className="text-xs text-muted-foreground">
-                    O histórico de dias anteriores é somado entre todas as conexões.
-                </p>
-            )}
 
             {isEmpty ? (
                 <Card className="rounded-2xl border border-border/50 shadow-sm">
                     <CardContent className="py-10">
                         <p className="text-sm text-muted-foreground text-center">
-                            Sem dados registrados para esta data
+                            Nenhuma negociação mudou de etapa no período
                         </p>
                     </CardContent>
                 </Card>

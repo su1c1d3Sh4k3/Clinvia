@@ -1,5 +1,4 @@
-import { useMemo, useState } from "react";
-import { isToday } from "date-fns";
+import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart3 } from "lucide-react";
 import {
@@ -13,14 +12,14 @@ import {
     Tooltip,
 } from "recharts";
 import { CRM_STAGES, TERMINAL_STAGES, STAGE_COLORS } from "@/types/crm-client";
-import { DayPicker } from "./DayPicker";
-import { useCrmStageCounts } from "@/hooks/useCrmDashboard";
+import { PeriodPicker, useCrmPeriod } from "./PeriodPicker";
+import { useCrmStageMovement } from "@/hooks/useCrmDashboard";
 
 const ACTIVE_STAGES = CRM_STAGES.filter((s) => !TERMINAL_STAGES.includes(s as any));
 
 export function MonitoramentoSection() {
-    const [date, setDate] = useState(new Date());
-    const { data, isLoading } = useCrmStageCounts(date);
+    const periodState = useCrmPeriod();
+    const { data, isLoading } = useCrmStageMovement(periodState.range);
 
     const chartData = useMemo(
         () =>
@@ -31,20 +30,20 @@ export function MonitoramentoSection() {
         [data]
     );
 
-    const isEmpty = !isLoading && (!data || data.length === 0) && !isToday(date);
+    const isEmpty = !isLoading && (!data || data.length === 0);
 
     return (
         <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <h3 className="text-base font-semibold">Monitoramento CRM</h3>
-                <DayPicker date={date} onDateChange={setDate} />
+                <PeriodPicker {...periodState} />
             </div>
 
             <Card className="rounded-2xl border border-border/50 shadow-sm">
                 <CardHeader className="pb-2">
                     <CardTitle className="text-sm flex items-center gap-2">
                         <BarChart3 className="w-4 h-4 text-primary" />
-                        Negociações ativas por etapa
+                        Negociações que entraram em cada etapa no período
                     </CardTitle>
                 </CardHeader>
                 <CardContent className="pt-2">
@@ -52,7 +51,7 @@ export function MonitoramentoSection() {
                         <p className="text-sm text-muted-foreground py-16 text-center">Carregando...</p>
                     ) : isEmpty ? (
                         <p className="text-sm text-muted-foreground py-16 text-center">
-                            Sem dados registrados para esta data
+                            Nenhuma negociação mudou de etapa no período
                         </p>
                     ) : (
                         <div className="h-[320px]">

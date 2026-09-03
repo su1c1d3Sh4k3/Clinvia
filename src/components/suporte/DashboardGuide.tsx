@@ -141,21 +141,27 @@ export function DashboardGuide() {
 
             {/* 3 */}
             <TopicSection id="crm-metricas" index={3} icon={Users} title="Aba CRM"
-                subtitle="O funil em números — hoje ao vivo, passado congelado">
+                subtitle="Quanto o funil andou no período — não quanto está parado nele">
+                <p className="text-sm text-muted-foreground">
+                    Todas as seções da aba contam a <strong className="text-foreground">movimentação do período</strong>:
+                    negociações que <strong className="text-foreground">entraram</strong> naquela etapa dentro do filtro
+                    escolhido. Não é o total parado na etapa — é o que se mexeu.
+                </p>
                 <StepByStep steps={[
-                    { title: "Hoje = ao vivo", description: "Com a data de hoje selecionada, os contadores por etapa refletem o quadro do CRM em tempo real." },
-                    { title: "Passado = fotografia", description: "Todo dia às 23:59 o sistema tira uma 'foto' do funil. Ao navegar para datas passadas, você vê exatamente como o funil estava naquele dia." },
-                    { title: "Compare períodos", description: "Use a navegação de datas para responder: quantos clientes estavam em 'Agendado' na semana passada vs. hoje? O funil está enchendo ou esvaziando?" },
-                    { title: "Filtre por conexão", description: "Com mais de um número (ou conta do Instagram), aparece o seletor de conexão: cada uma tem o seu próprio funil. 'Todas as conexões' soma tudo." },
+                    { title: "O filtro é o mesmo em todas as seções", description: "Hoje, Últimos 7 dias, Últimos 30 dias ou Personalizado (você escolhe as duas datas). Cada seção tem o seu próprio seletor, então dá para comparar: Resultados em 30 dias e Negociações em 7, lado a lado." },
+                    { title: "Resultados = os 5 desfechos", description: "Ganho, Perdido, Sem Contato, Sem Interesse e Finalizado, com a quantidade e a soma dos valores de cada um no período. Todo desfecho possível de uma negociação está aqui." },
+                    { title: "Monitoramento CRM", description: "O gráfico mostra quantas negociações entraram em cada etapa em andamento no período — dá para ver por onde o funil está passando." },
+                    { title: "Filas e Negociações", description: "Um card por etapa com o total do período e o desdobramento por situação da conversa: Aberto, Pendente e Concluído. As três linhas sempre somam o total." },
+                    { title: "Filtre por conexão", description: "Com mais de um número (ou conta do Instagram), aparece o seletor de conexão: cada uma tem o seu próprio funil. 'Todas as conexões' soma tudo — e agora isso vale para qualquer período, inclusive datas passadas." },
                 ]} />
-                <Callout type="atencao" title="Números de hoje mudam o dia todo">
-                    É normal os contadores de hoje oscilarem — cards entram e saem das etapas em tempo real. A comparação
-                    justa é sempre entre fotografias de fim de dia.
+                <Callout type="atencao" title="Uma negociação conta uma vez só, na última etapa">
+                    O sistema guarda a etapa <strong>atual</strong> de cada negociação e a data em que ela chegou lá. Se um
+                    cliente passou por Qualificado e depois foi para Ganho no mesmo dia, ele aparece só em Ganho. Por isso
+                    os números não podem ser somados como "passagens pelo funil" — cada negociação está em um card só.
                 </Callout>
-                <Callout type="atencao" title="O histórico não separa por conexão">
-                    A fotografia de fim de dia é tirada com a conta inteira somada. Por isso, ao escolher uma data passada,
-                    o seletor de conexão fica desativado e os números aparecem de todas as conexões juntas. Para ver um
-                    número específico, use a data de hoje.
+                <Callout type="dica" title="Números de hoje mudam o dia todo">
+                    É normal o filtro "Hoje" oscilar: cada card que muda de etapa entra na conta na hora. Para comparar
+                    semanas, use 7 ou 30 dias, que só mudam quando alguém realmente movimenta o funil.
                 </Callout>
             </TopicSection>
 
