@@ -48,6 +48,7 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "nota de satisfacao (NPS) dos pacientes",
             "liberar abas do Dashboard para supervisor ou atendente",
             "o colaborador nao ve a aba Vendas / Monitoramento / Satisfacao do Dashboard",
+            "os quadros do Monitoramento aparecem fechados / sumiram os cards",
         ],
         steps: [
             "Abra Dashboard no menu lateral.",
@@ -63,6 +64,7 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "Minha Conta expoe custos de IA e Meta — so ligue para supervisor/atendente se quiser mostrar os valores da conta.",
             "O custo da Meta e uma ESTIMATIVA por categoria de template, nao a fatura oficial da Meta.",
             "Na coluna Concluido do CRM o numero costuma ser baixo: encerrar a conversa remove o card do funil.",
+            "No Monitoramento todos os quadros de fila (incluindo Finalizados) abrem FECHADOS. Nada sumiu: a contagem entre parenteses no titulo mostra quantas conversas tem em cada fila; clique no titulo para expandir.",
         ],
     },
     {

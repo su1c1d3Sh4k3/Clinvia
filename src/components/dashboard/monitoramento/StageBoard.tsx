@@ -32,7 +32,9 @@ export function StageBoard({
     onOpenProfile,
     nowTick,
 }: StageBoardProps) {
-    const [open, setOpen] = useState(true);
+    // Todos os quadros nascem fechados: a aba abre mostrando só os títulos com a
+    // contagem, e o usuário expande a fila que quer olhar.
+    const [open, setOpen] = useState(false);
     const color = STAGE_COLORS[stage] || "#8b5cf6";
 
     return (

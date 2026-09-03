@@ -282,7 +282,7 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
             element: '[data-tour="monitor-boards"]',
             title: "Quadros por etapa",
             description:
-                "As conversas abertas e pendentes do período, agrupadas pela etapa do CRM. Cada card mostra quem falou por último e a janela de 24h do número oficial.",
+                "As conversas abertas e pendentes do período, agrupadas pela etapa do CRM. Os quadros abrem fechados: o número entre parênteses mostra quantas conversas tem na fila e o clique no título expande. Cada card mostra quem falou por último e a janela de 24h do número oficial.",
         },
         {
             element: '[data-tour="monitor-finalizados"]',

@@ -111,6 +111,7 @@ export function DashboardGuide() {
                 </p>
                 <MiniMonitorSimulator />
                 <StepByStep steps={[
+                    { title: "Os quadros abrem fechados", description: "Cada fila é uma faixa com o nome da etapa e, entre parênteses, quantas conversas ela tem no período. Todas começam recolhidas para você bater o olho no panorama inteiro sem rolagem — clique no título da fila que quer investigar para expandir os cards." },
                     { title: "Quadro Finalizados", description: "Abaixo de Follow Up fica o quadro Finalizados: atendimentos que chegaram a uma etapa de conclusão (Ganho, Perdido, Sem Contato, Sem Interesse ou Finalizado) dentro do período e foram encerrados por alguém da equipe. Cada card traz um selo com a etapa e a cor dela." },
                     { title: "Só encerramentos humanos", description: "Resoluções automáticas — encerramento de campanhas, rotinas do sistema — não aparecem no quadro nem contam para os atendentes. Quem encerra um atendimento leva a atribuição dele, mesmo que a conversa não estivesse atribuída antes." },
                     { title: "Detalhamento por atendente", description: "Cada atendente mostra abertos, pendentes e resolvidos no período selecionado, além do status online/offline. Resolvidos = conversas que aquele usuário encerrou." },
