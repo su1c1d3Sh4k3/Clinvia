@@ -168,11 +168,16 @@ export default function Scheduling() {
                 .eq("active", true);
             if (error) throw error;
             // Foto e cargo pertencem ao profissional; a sala só empresta pra UI da agenda.
-            return (data || []).map((p: any) => ({
-                ...p,
-                photo_url: p.responsavel?.photo_url ?? p.photo_url ?? null,
-                role: p.responsavel?.role ?? p.role ?? null,
-            }));
+            return (data || [])
+                .map((p: any) => ({
+                    ...p,
+                    photo_url: p.responsavel?.photo_url ?? p.photo_url ?? null,
+                    role: p.responsavel?.role ?? p.role ?? null,
+                }))
+                // Ordem alfabética pt-BR (localeCompare respeita acento) — vale para
+                // os botões da barra lateral e para as colunas da grade, que leem
+                // a mesma lista e precisam bater uma com a outra.
+                .sort((a: any, b: any) => (a.name || "").localeCompare(b.name || "", "pt-BR"));
         },
     });
 

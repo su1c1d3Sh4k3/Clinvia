@@ -290,6 +290,7 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "Abra Agenda no menu lateral. O botao no cabecalho alterna entre grade (dia) e calendario (mes).",
             "Ao lado do botao Hoje ha o alternador Profissionais | Salas: em Profissionais a grade traz so as agendas dos profissionais cadastrados; em Salas, so as salas avulsas (sem profissional vinculado). A lista de botoes da barra lateral acompanha o modo.",
             "Cada coluna da grade e uma SALA (a agenda). Clique num horario livre para abrir o agendamento: cliente, servico, sala e forma de pagamento.",
+            "A lista de botoes abaixo do calendario (barra lateral) segue ordem alfabetica, a mesma das colunas da grade. Clicar num botao mostra so aquela agenda; 'Todos' volta a visao geral.",
             "O horario de trabalho fica no cadastro da sala (Equipe > Salas, ou Adicionar Sala na barra lateral da agenda), com opcao de horario diferente por dia da semana.",
         ],
         gotchas: [
