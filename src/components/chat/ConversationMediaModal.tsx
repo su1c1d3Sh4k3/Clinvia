@@ -8,6 +8,7 @@ import { ptBR } from "date-fns/locale";
 import { FileText, Image, Link2, Files, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { downloadFile, getFileConfig } from "@/lib/fileTypes";
 
 interface ConversationMediaModalProps {
     open: boolean;
@@ -16,47 +17,7 @@ interface ConversationMediaModalProps {
     onJumpToMessage?: (messageId: string) => void;
 }
 
-const FILE_CONFIG: Record<string, { iconUrl: string; label: string }> = {
-    pdf:  { iconUrl: '/assets/file-icons/pdf.png',  label: 'PDF' },
-    doc:  { iconUrl: '/assets/file-icons/doc.png',  label: 'Word' },
-    docx: { iconUrl: '/assets/file-icons/doc.png',  label: 'Word' },
-    xls:  { iconUrl: '/assets/file-icons/xls.png',  label: 'Excel' },
-    xlsx: { iconUrl: '/assets/file-icons/xls.png',  label: 'Excel' },
-    ppt:  { iconUrl: '/assets/file-icons/ppt.png',  label: 'PowerPoint' },
-    pptx: { iconUrl: '/assets/file-icons/ppt.png',  label: 'PowerPoint' },
-    zip:  { iconUrl: '/assets/file-icons/zip.png',  label: 'ZIP' },
-    txt:  { iconUrl: '/assets/file-icons/txt.png',  label: 'Texto' },
-    jpg:  { iconUrl: '/assets/file-icons/jpg.png',  label: 'JPG' },
-    jpeg: { iconUrl: '/assets/file-icons/jpg.png',  label: 'JPEG' },
-    png:  { iconUrl: '/assets/file-icons/png.png',  label: 'PNG' },
-    gif:  { iconUrl: '/assets/file-icons/gif.png',  label: 'GIF' },
-    mp3:  { iconUrl: '/assets/file-icons/mp3.png',  label: 'MP3' },
-    mpg:  { iconUrl: '/assets/file-icons/mpg.png',  label: 'MPG' },
-    mpeg: { iconUrl: '/assets/file-icons/mpg.png',  label: 'MPEG' },
-};
-
-const MIME_TO_EXT: Record<string, string> = {
-    'application/pdf': 'pdf',
-    'application/msword': 'doc',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
-    'application/vnd.ms-excel': 'xls',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
-    'application/vnd.ms-powerpoint': 'ppt',
-    'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
-    'application/zip': 'zip',
-    'text/plain': 'txt',
-    'image/jpeg': 'jpg',
-    'image/png': 'png',
-    'image/gif': 'gif',
-};
-
 const URL_REGEX = /(https?:\/\/[^\s]+)/gi;
-
-function getFileConfig(filename: string, mimetype?: string) {
-    let ext = filename.split('.').pop()?.toLowerCase() || '';
-    if (!ext && mimetype) ext = MIME_TO_EXT[mimetype] || '';
-    return FILE_CONFIG[ext] || { iconUrl: '/assets/file-icons/default.png', label: 'Arquivo' };
-}
 
 function extractUrls(text?: string | null): string[] {
     if (!text) return [];
@@ -121,20 +82,6 @@ export function ConversationMediaModal({ open, onOpenChange, conversationId, onJ
             toast.error("Erro ao carregar mídia da conversa");
         } finally {
             setIsLoading(false);
-        }
-    };
-
-    const handleDownload = async (url: string, filename: string) => {
-        try {
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = filename;
-            link.target = '_blank';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        } catch {
-            toast.error('Erro ao baixar arquivo');
         }
     };
 
@@ -260,7 +207,7 @@ export function ConversationMediaModal({ open, onOpenChange, conversationId, onJ
                                                             variant="ghost"
                                                             size="icon"
                                                             className="shrink-0 w-7 h-7 text-muted-foreground hover:text-foreground"
-                                                            onClick={() => handleDownload(msg.media_url, filename)}
+                                                            onClick={() => downloadFile(msg.media_url, filename, msg.media_mimetype)}
                                                             title="Baixar arquivo"
                                                         >
                                                             <Download className="w-3.5 h-3.5" />

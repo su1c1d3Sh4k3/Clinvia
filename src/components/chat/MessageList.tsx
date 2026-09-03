@@ -7,7 +7,6 @@ import { cn } from "@/lib/utils";
 import { MessageActionsMenu } from "@/components/MessageActionsMenu";
 import { ReplyQuoteBox, QuotedMessage } from "@/components/ReplyQuoteBox";
 import { LazyMedia } from "@/components/LazyMedia";
-import { toast } from "sonner";
 import { useGroupMembers } from "@/hooks/useGroupMembers";
 import { ContactCard } from "@/components/chat/ContactCard";
 import { CustomAudioPlayer } from "@/components/chat/CustomAudioPlayer";
@@ -15,6 +14,7 @@ import { FormattedText, parseTemplateBody, stripSenderSignature } from "@/compon
 import { NoteBubble } from "@/components/chat/NoteBubble";
 import { resolveOutboundSenderName } from "@/lib/messageSender";
 import { chatDateTime, chatDayLabel, isSameChatDay } from "@/lib/chatDates";
+import { downloadFile, getFileConfig, getFileExtension } from "@/lib/fileTypes";
 
 interface MessageListProps {
     messages: any[];
@@ -329,20 +329,6 @@ export const MessageList = memo(({
 
     const cleanMessageBody = (body: string, senderName?: string | null) => stripSenderSignature(body, senderName);
 
-    const handleDownloadFile = async (url: string, filename: string) => {
-        try {
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = filename;
-            link.target = '_blank';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        } catch (error) {
-            console.error('Download error:', error);
-            toast.error('Erro ao baixar arquivo');
-        }
-    };
 
     const renderMessage = (msg: any) => {
         // Nota de Conversa (interna, roxa) — nunca enviada ao cliente
@@ -556,72 +542,16 @@ export const MessageList = memo(({
                                 const filename = (msg as any).media_filename || msg.body || 'documento';
                                 const fileMimetype = (msg as any).media_mimetype;
 
-                                // Extract extension from filename or map from mimetype
-                                let fileExt = filename.split('.').pop()?.toLowerCase() || '';
-
-                                // If no extension but have mimetype, map to extension
-                                if (!fileExt && fileMimetype) {
-                                    const mimeToExt: Record<string, string> = {
-                                        'application/pdf': 'pdf',
-                                        'application/msword': 'doc',
-                                        'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
-                                        'application/vnd.ms-excel': 'xls',
-                                        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
-                                        'application/vnd.ms-powerpoint': 'ppt',
-                                        'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
-                                        'text/plain': 'txt',
-                                        'text/markdown': 'md',
-                                        'text/csv': 'csv',
-                                        'application/zip': 'zip',
-                                        'application/x-rar-compressed': 'rar',
-                                        'application/x-7z-compressed': '7z'
-                                    };
-                                    fileExt = mimeToExt[fileMimetype] || '';
-                                }
-
                                 const caption = (msg as any).caption; // Mensagem do usuário
 
-                                // Configuração de ícones por tipo de arquivo
-                                const FILE_CONFIG: Record<string, { icon?: any; iconUrl?: string; color: string; bgColor: string; label: string }> = {
-                                    pdf: { iconUrl: '/assets/file-icons/pdf.png', color: '', bgColor: 'bg-white dark:bg-gray-800', label: 'PDF' },
-                                    doc: { iconUrl: '/assets/file-icons/doc.png', color: '', bgColor: 'bg-white dark:bg-gray-800', label: 'Word' },
-                                    docx: { iconUrl: '/assets/file-icons/doc.png', color: '', bgColor: 'bg-white dark:bg-gray-800', label: 'Word' },
-                                    xls: { iconUrl: '/assets/file-icons/xls.png', color: '', bgColor: 'bg-white dark:bg-gray-800', label: 'Excel' },
-                                    xlsx: { iconUrl: '/assets/file-icons/xls.png', color: '', bgColor: 'bg-white dark:bg-gray-800', label: 'Excel' },
-                                    ppt: { iconUrl: '/assets/file-icons/ppt.png', color: '', bgColor: 'bg-white dark:bg-gray-800', label: 'PowerPoint' },
-                                    pptx: { iconUrl: '/assets/file-icons/ppt.png', color: '', bgColor: 'bg-white dark:bg-gray-800', label: 'PowerPoint' },
-                                    zip: { iconUrl: '/assets/file-icons/zip.png', color: '', bgColor: 'bg-white dark:bg-gray-800', label: 'ZIP' },
-                                    txt: { iconUrl: '/assets/file-icons/txt.png', color: '', bgColor: 'bg-white dark:bg-gray-800', label: 'Texto' },
-                                    jpg: { iconUrl: '/assets/file-icons/jpg.png', color: '', bgColor: 'bg-white dark:bg-gray-800', label: 'JPG' },
-                                    jpeg: { iconUrl: '/assets/file-icons/jpg.png', color: '', bgColor: 'bg-white dark:bg-gray-800', label: 'JPEG' },
-                                    png: { iconUrl: '/assets/file-icons/png.png', color: '', bgColor: 'bg-white dark:bg-gray-800', label: 'PNG' },
-                                    gif: { iconUrl: '/assets/file-icons/gif.png', color: '', bgColor: 'bg-white dark:bg-gray-800', label: 'GIF' },
-                                    mp3: { iconUrl: '/assets/file-icons/mp3.png', color: '', bgColor: 'bg-white dark:bg-gray-800', label: 'MP3' },
-                                    mpg: { iconUrl: '/assets/file-icons/mpg.png', color: '', bgColor: 'bg-white dark:bg-gray-800', label: 'MPG' },
-                                    mpeg: { iconUrl: '/assets/file-icons/mpg.png', color: '', bgColor: 'bg-white dark:bg-gray-800', label: 'MPEG' }
-                                };
-
-                                const config = FILE_CONFIG[fileExt] || {
-                                    iconUrl: '/assets/file-icons/default.png',
-                                    color: '',
-                                    bgColor: 'bg-white dark:bg-gray-800',
-                                    label: 'Arquivo'
-                                };
-
-                                const FileIcon = config.icon;
+                                // Ícone/rótulo e download vêm de lib/fileTypes (fonte única)
+                                const config = getFileConfig(filename, fileMimetype);
 
                                 return (
                                     <div className="flex flex-col gap-2 max-w-xs mb-2">
                                         {/* Ícone do arquivo */}
-                                        <div className={cn(
-                                            "flex items-center justify-center p-6 rounded-t-lg",
-                                            config.bgColor
-                                        )}>
-                                            {config.iconUrl ? (
-                                                <img src={config.iconUrl} alt={config.label} className="w-16 h-16 object-contain" />
-                                            ) : FileIcon ? (
-                                                <FileIcon className={cn("w-12 h-12", config.color)} />
-                                            ) : null}
+                                        <div className="flex items-center justify-center p-6 rounded-t-lg bg-white dark:bg-gray-800">
+                                            <img src={config.iconUrl} alt={config.label} className="w-16 h-16 object-contain" />
                                         </div>
 
                                         {/* Nome truncado */}
@@ -631,7 +561,7 @@ export const MessageList = memo(({
 
                                         {/* Botão de download */}
                                         <button
-                                            onClick={() => handleDownloadFile(msg.media_url!, filename)}
+                                            onClick={() => downloadFile(msg.media_url!, filename, fileMimetype)}
                                             className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white px-4 py-2.5 rounded-lg transition-colors font-medium"
                                         >
                                             <Download className="w-4 h-4 shrink-0" />
@@ -662,26 +592,12 @@ export const MessageList = memo(({
                                     return <ContactCard body={body} />;
                                 }
 
-                                const knownExts = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'md', 'csv', 'zip', 'rar', '7z', 'png', 'jpg', 'jpeg', 'gif', 'mp3', 'mp4', 'webm'];
-                                const ext = body.split('.').pop()?.toLowerCase() || '';
-                                const looksLikeFile = knownExts.includes(ext) && body.includes('.');
+                                const knownExts = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'md', 'csv', 'xml', 'json', 'zip', 'rar', '7z', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'mp3', 'mp4', 'webm'];
+                                const ext = getFileExtension(body);
+                                const looksLikeFile = knownExts.includes(ext);
 
                                 if (looksLikeFile) {
-                                    const FILE_CONFIG: Record<string, { iconUrl: string; label: string }> = {
-                                        pdf: { iconUrl: '/assets/file-icons/pdf.png', label: 'PDF' },
-                                        doc: { iconUrl: '/assets/file-icons/doc.png', label: 'Word' },
-                                        docx: { iconUrl: '/assets/file-icons/doc.png', label: 'Word' },
-                                        xls: { iconUrl: '/assets/file-icons/xls.png', label: 'Excel' },
-                                        xlsx: { iconUrl: '/assets/file-icons/xls.png', label: 'Excel' },
-                                        ppt: { iconUrl: '/assets/file-icons/ppt.png', label: 'PowerPoint' },
-                                        pptx: { iconUrl: '/assets/file-icons/ppt.png', label: 'PowerPoint' },
-                                        zip: { iconUrl: '/assets/file-icons/zip.png', label: 'ZIP' },
-                                        txt: { iconUrl: '/assets/file-icons/txt.png', label: 'Texto' },
-                                        jpg: { iconUrl: '/assets/file-icons/jpg.png', label: 'Image' },
-                                        jpeg: { iconUrl: '/assets/file-icons/jpg.png', label: 'Image' },
-                                        png: { iconUrl: '/assets/file-icons/png.png', label: 'Image' },
-                                    };
-                                    const cfg = FILE_CONFIG[ext] || { iconUrl: '/assets/file-icons/default.png', label: 'Arquivo' };
+                                    const cfg = getFileConfig(body);
                                     return (
                                         <div className="flex items-center gap-2 py-1">
                                             <img src={cfg.iconUrl} alt={cfg.label} className="w-8 h-8 object-contain shrink-0" />

@@ -1,11 +1,11 @@
 import React from "react";
-import { Download, Clock, AlertCircle, Check, CheckCheck, FileText } from "lucide-react";
+import { Download, Clock, AlertCircle, Check, CheckCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LazyMedia } from "@/components/LazyMedia";
 import { CustomAudioPlayer } from "@/components/chat/CustomAudioPlayer";
 import { FormattedText, parseTemplateBody, stripSenderSignature } from "@/components/chat/FormattedText";
-import { toast } from "sonner";
 import { resolveOutboundSenderName } from "@/lib/messageSender";
+import { downloadFile, getFileConfig } from "@/lib/fileTypes";
 import { chatDateTime } from "@/lib/chatDates";
 
 interface MessageBubbleProps {
@@ -26,59 +26,6 @@ export function MessageBubble({
     matchIndex = -1,
 }: MessageBubbleProps) {
     const isMatch = searchTerm && msg.body?.toLowerCase().includes(searchTerm.toLowerCase());
-
-    // Configuração de ícones por tipo de arquivo
-    const FILE_CONFIG: Record<string, { icon?: any; iconUrl?: string; color: string; bgColor: string; label: string }> = {
-        pdf: { iconUrl: '/assets/file-icons/pdf.png', color: '', bgColor: 'bg-white dark:bg-gray-800', label: 'PDF' },
-        doc: { iconUrl: '/assets/file-icons/doc.png', color: '', bgColor: 'bg-white dark:bg-gray-800', label: 'Word' },
-        docx: { iconUrl: '/assets/file-icons/doc.png', color: '', bgColor: 'bg-white dark:bg-gray-800', label: 'Word' },
-        xls: { iconUrl: '/assets/file-icons/xls.png', color: '', bgColor: 'bg-white dark:bg-gray-800', label: 'Excel' },
-        xlsx: { iconUrl: '/assets/file-icons/xls.png', color: '', bgColor: 'bg-white dark:bg-gray-800', label: 'Excel' },
-        ppt: { iconUrl: '/assets/file-icons/ppt.png', color: '', bgColor: 'bg-white dark:bg-gray-800', label: 'PowerPoint' },
-        pptx: { iconUrl: '/assets/file-icons/ppt.png', color: '', bgColor: 'bg-white dark:bg-gray-800', label: 'PowerPoint' },
-        zip: { iconUrl: '/assets/file-icons/zip.png', color: '', bgColor: 'bg-white dark:bg-gray-800', label: 'ZIP' },
-        txt: { iconUrl: '/assets/file-icons/txt.png', color: '', bgColor: 'bg-white dark:bg-gray-800', label: 'Texto' },
-        jpg: { iconUrl: '/assets/file-icons/jpg.png', color: '', bgColor: 'bg-white dark:bg-gray-800', label: 'JPG' },
-        jpeg: { iconUrl: '/assets/file-icons/jpg.png', color: '', bgColor: 'bg-white dark:bg-gray-800', label: 'JPEG' },
-        png: { iconUrl: '/assets/file-icons/png.png', color: '', bgColor: 'bg-white dark:bg-gray-800', label: 'PNG' },
-        gif: { iconUrl: '/assets/file-icons/gif.png', color: '', bgColor: 'bg-white dark:bg-gray-800', label: 'GIF' },
-        mp3: { iconUrl: '/assets/file-icons/mp3.png', color: '', bgColor: 'bg-white dark:bg-gray-800', label: 'MP3' },
-        mpg: { iconUrl: '/assets/file-icons/mpg.png', color: '', bgColor: 'bg-white dark:bg-gray-800', label: 'MPG' },
-        mpeg: { iconUrl: '/assets/file-icons/mpg.png', color: '', bgColor: 'bg-white dark:bg-gray-800', label: 'MPEG' }
-    };
-
-    const handleDownloadFile = async (url: string, filename: string) => {
-        try {
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = filename;
-            link.target = '_blank';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-
-            setTimeout(async () => {
-                try {
-                    const response = await fetch(url);
-                    if (!response.ok) throw new Error('Fetch failed');
-                    const blob = await response.blob();
-                    const blobUrl = URL.createObjectURL(blob);
-                    const blobLink = document.createElement('a');
-                    blobLink.href = blobUrl;
-                    blobLink.download = filename;
-                    document.body.appendChild(blobLink);
-                    blobLink.click();
-                    document.body.removeChild(blobLink);
-                    URL.revokeObjectURL(blobUrl);
-                } catch (fetchError) {
-                    console.error('Fallback download failed:', fetchError);
-                }
-            }, 1000);
-        } catch (error) {
-            console.error('Download error:', error);
-            toast.error('Erro ao baixar arquivo');
-        }
-    };
 
     // Formatação compartilhada com o Inbox — regras novas vão em FormattedText
     const HighlightText = ({ text, highlight }: { text: string, highlight: string }) => (
@@ -154,42 +101,16 @@ export function MessageBubble({
             {msg.message_type === 'document' && msg.media_url && (() => {
                 const filename = (msg as any).media_filename || msg.body || 'documento';
                 const fileMimetype = (msg as any).media_mimetype;
-                let fileExt = filename.split('.').pop()?.toLowerCase() || '';
-
-                // Mimetype map fallback
-                if (!fileExt && fileMimetype) {
-                    const mimeToExt: Record<string, string> = {
-                        'application/pdf': 'pdf',
-                        'application/msword': 'doc',
-                        'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
-                        'text/plain': 'txt',
-                        'image/jpeg': 'jpg',
-                        'image/png': 'png'
-                    };
-                    fileExt = mimeToExt[fileMimetype] || '';
-                }
-
-                const config = FILE_CONFIG[fileExt] || {
-                    iconUrl: '/assets/file-icons/default.png',
-                    color: '',
-                    bgColor: 'bg-white dark:bg-gray-800',
-                    label: 'Arquivo'
-                };
-
-                const FileIcon = config.icon || FileText; // Fallback icon
+                const config = getFileConfig(filename, fileMimetype);
 
                 return (
                     <div className="flex flex-col gap-2 max-w-xs mb-2">
-                        <div className={cn("flex items-center justify-center p-6 rounded-t-lg", config.bgColor || 'bg-gray-100')}>
-                            {config.iconUrl ? (
-                                <img src={config.iconUrl} alt={config.label} className="w-16 h-16 object-contain" onError={(e) => e.currentTarget.style.display = 'none'} />
-                            ) : (
-                                <FileIcon className={cn("w-12 h-12", config.color)} />
-                            )}
+                        <div className="flex items-center justify-center p-6 rounded-t-lg bg-white dark:bg-gray-800">
+                            <img src={config.iconUrl} alt={config.label} className="w-16 h-16 object-contain" onError={(e) => e.currentTarget.style.display = 'none'} />
                         </div>
                         <p className="text-sm font-medium truncate px-2">{filename}</p>
                         <button
-                            onClick={() => handleDownloadFile(msg.media_url!, filename)}
+                            onClick={() => downloadFile(msg.media_url!, filename, fileMimetype)}
                             className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg text-sm"
                         >
                             <Download className="w-4 h-4" />

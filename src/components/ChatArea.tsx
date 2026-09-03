@@ -23,6 +23,7 @@ import { EmojiPickerStandalone } from "@/components/EmojiReactionPicker";
 import { ForwardMessageModal } from "@/components/chat/ForwardMessageModal";
 import { ContactPickerModal } from "@/components/chat/ContactPickerModal";
 import { cn } from "@/lib/utils";
+import { contentTypeForUpload } from "@/lib/fileTypes";
 import {
   Dialog,
   DialogContent,
@@ -469,7 +470,11 @@ export const ChatArea = ({
       if (!conversationId) throw new Error("No conversation selected");
       const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
       const filePath = `${conversationId}/${Date.now()}_${safeName}`;
-      const { error } = await supabase.storage.from('media').upload(filePath, file);
+      // contentType pela extensão: o navegador rotula errado alguns formatos
+      // (no Windows um .xml chega como application/vnd.ms-excel)
+      const { error } = await supabase.storage
+        .from('media')
+        .upload(filePath, file, { contentType: contentTypeForUpload(file) });
       if (error) throw error;
       const { data } = supabase.storage.from('media').getPublicUrl(filePath);
       return data.publicUrl;

@@ -43,19 +43,50 @@ serve(async (req) => {
         // Extract filename from path
         const fileName = filePath.split('/').pop() || 'file';
 
-        // Detect content type from filename
-        let contentType = fileResponse.headers.get('Content-Type') || 'application/octet-stream';
-        const ext = fileName.toLowerCase().split('.').pop();
-
-        // Override content type if we can detect it better
-        if (ext === 'pdf') contentType = 'application/pdf';
-        else if (['jpg', 'jpeg'].includes(ext)) contentType = 'image/jpeg';
-        else if (ext === 'png') contentType = 'image/png';
-        else if (ext === 'gif') contentType = 'image/gif';
-        else if (ext === 'webp') contentType = 'image/webp';
-        else if (['doc', 'docx'].includes(ext)) contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-        else if (['xls', 'xlsx'].includes(ext)) contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-        else if (['ppt', 'pptx'].includes(ext)) contentType = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+        // Content-Type pela extensão real do arquivo. O que veio do storage é
+        // o rótulo que o navegador do remetente mandou no upload, e ele erra
+        // (no Windows um .xml chega como application/vnd.ms-excel) — aí quem
+        // baixa recebe o arquivo com a extensão errada.
+        const ext = (fileName.toLowerCase().split('.').pop() || '').replace(/[^a-z0-9]/g, '');
+        const EXT_TO_MIME: Record<string, string> = {
+            pdf: 'application/pdf',
+            doc: 'application/msword',
+            docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            xls: 'application/vnd.ms-excel',
+            xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            ppt: 'application/vnd.ms-powerpoint',
+            pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            rtf: 'application/rtf',
+            odt: 'application/vnd.oasis.opendocument.text',
+            ods: 'application/vnd.oasis.opendocument.spreadsheet',
+            txt: 'text/plain',
+            md: 'text/markdown',
+            csv: 'text/csv',
+            html: 'text/html',
+            xml: 'text/xml',
+            json: 'application/json',
+            zip: 'application/zip',
+            rar: 'application/vnd.rar',
+            '7z': 'application/x-7z-compressed',
+            jpg: 'image/jpeg',
+            jpeg: 'image/jpeg',
+            png: 'image/png',
+            gif: 'image/gif',
+            webp: 'image/webp',
+            svg: 'image/svg+xml',
+            heic: 'image/heic',
+            mp3: 'audio/mpeg',
+            m4a: 'audio/mp4',
+            ogg: 'audio/ogg',
+            wav: 'audio/wav',
+            mp4: 'video/mp4',
+            mov: 'video/quicktime',
+            webm: 'video/webm',
+            '3gp': 'video/3gpp',
+        };
+        const contentType = EXT_TO_MIME[ext]
+            || fileResponse.headers.get('Content-Type')
+            || 'application/octet-stream';
 
         // Return file with inline Content-Disposition
         return new Response(blob, {

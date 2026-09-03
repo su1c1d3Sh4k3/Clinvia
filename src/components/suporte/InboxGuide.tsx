@@ -275,6 +275,12 @@ export function InboxGuide() {
                     simplesmente <strong className="text-foreground">arrastar o arquivo do computador e soltar sobre a
                     conversa</strong> — aparece a área "Solte o arquivo para anexar" e o arquivo fica pronto para envio.
                 </p>
+                <p className="text-sm text-muted-foreground">
+                    Para baixar um documento recebido ou enviado, clique no botão com o nome do arquivo dentro da mensagem (ou
+                    no ícone de download em <strong className="text-foreground">Mídias e arquivos</strong> da conversa). O arquivo
+                    é salvo com o <strong className="text-foreground">nome e a extensão originais</strong> — um .xml continua .xml,
+                    um .pdf continua .pdf.
+                </p>
                 <Callout type="atencao" title="Janela de 24h no WhatsApp Oficial">
                     No número oficial, você só pode mandar texto livre até <strong>24h após a última mensagem do cliente</strong>.
                     Passou disso, é preciso usar um template aprovado (ou esperar o cliente escrever). O sistema avisa quando a
