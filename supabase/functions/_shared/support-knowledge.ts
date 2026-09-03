@@ -374,6 +374,7 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "Em IA > Configuracoes, no bloco 'Horarios de agendamento', escolha o Tamanho do slot (de quantos em quantos minutos os horarios sao oferecidos, padrao 10 min) e o Intervalo entre atendimentos (folga exigida antes e depois de cada agendamento ja marcado, padrao sem intervalo). Clique em Salvar.",
         ],
         gotchas: [
+            "A aba F.A.Q tem um unico campo, geral da clinica. Nao existe mais F.A.Q por produto ou servico: o que e especifico de um procedimento (preco, duracao, descricao) a IA le do cadastro em Servicos.",
             "Para a IA responder e preciso: switch geral ligado, IA ligada NAQUELA conexao, IA ligada no contato, conversa em status pendente e na fila 'Atendimento IA'.",
             "Assim que alguem clica em Atender, a conversa sai da fila da IA e ela para de responder.",
             "Desligar a IA de uma conexao devolve as conversas abertas dela para o atendimento humano.",

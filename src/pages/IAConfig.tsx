@@ -149,7 +149,6 @@ export default function IAConfig() {
     // Estados para campos dinâmicos
     const [restrictions, setRestrictions] = useState<RestrictionItem[]>([]);
     const [qualifyItems, setQualifyItems] = useState<QualifyItem[]>([]);
-    const [faqItems, setFaqItems] = useState<QualifyItem[]>([]);
     const [companyFaq, setCompanyFaq] = useState<string>(""); // Dúvidas sobre a empresa
     const [convenioItems, setConvenioItems] = useState<ConvenioItem[]>([]); // Convênios
     const [showCreateFunnelModal, setShowCreateFunnelModal] = useState(false); // Modal de criação do funil IA
@@ -250,17 +249,14 @@ export default function IAConfig() {
                 setQualifyItems(items);
             }
 
-            // Parse FAQ
+            // Parse FAQ — só o bloco da empresa; o F.A.Q por produto/serviço
+            // foi removido da tela (decisão do usuário)
             if (existingConfig.frequent_questions) {
                 const allItems = parseProductText(existingConfig.frequent_questions);
-                // Separar dúvidas da empresa dos demais
                 const companyItem = allItems.find(item => item.productName === "Dúvidas frequentes sobre a empresa");
-                const productItems = allItems.filter(item => item.productName !== "Dúvidas frequentes sobre a empresa");
-
                 if (companyItem) {
                     setCompanyFaq(companyItem.text);
                 }
-                setFaqItems(productItems);
             }
 
             // Parse convenios
@@ -421,7 +417,7 @@ export default function IAConfig() {
             const payload = {
                 ...data,
                 user_id: ownerId,
-                frequent_questions: formatProductItems(faqItems, companyFaq),
+                frequent_questions: formatProductItems([], companyFaq),
             };
 
             const { data: result, error } = await supabase
@@ -481,27 +477,6 @@ export default function IAConfig() {
 
     const removeQualifyItem = (index: number) => {
         setQualifyItems(qualifyItems.filter((_, i) => i !== index));
-    };
-
-    // Handlers para FAQ
-    const addFaqItem = () => {
-        setFaqItems([...faqItems, { productId: "", productName: "", text: "" }]);
-    };
-
-    const updateFaqItem = (index: number, field: keyof QualifyItem, value: string) => {
-        const updated = [...faqItems];
-        updated[index] = { ...updated[index], [field]: value };
-
-        if (field === "productId") {
-            const product = productsServices?.find((p) => p.id === value);
-            updated[index].productName = product?.name || "";
-        }
-
-        setFaqItems(updated);
-    };
-
-    const removeFaqItem = (index: number) => {
-        setFaqItems(faqItems.filter((_, i) => i !== index));
     };
 
     // Handlers para Convênios
@@ -974,7 +949,7 @@ export default function IAConfig() {
                         <CardHeader className="p-4 md:p-6">
                             <CardTitle className="text-base md:text-lg">F.A.Q</CardTitle>
                             <CardDescription className="text-xs md:text-sm">
-                                Dúvidas frequentes sobre seus produtos.
+                                Dúvidas frequentes sobre a clínica.
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="p-4 md:p-6 pt-0 md:pt-0 space-y-4 md:space-y-6">
@@ -993,58 +968,6 @@ export default function IAConfig() {
                                     />
                                 </div>
                             </div>
-
-                            {/* Itens dinâmicos de produto/serviço */}
-                            {faqItems.map((item, index) => (
-                                <div key={index} className="relative border rounded-lg p-4 space-y-4">
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => removeFaqItem(index)}
-                                        className="absolute top-2 right-2 text-destructive hover:text-destructive"
-                                    >
-                                        <Trash2 className="h-4 w-4" />
-                                    </Button>
-
-                                    <div className="space-y-2 pr-10">
-                                        <Label>Produto/Serviço</Label>
-                                        <Select
-                                            value={item.productId}
-                                            onValueChange={(value) => updateFaqItem(index, "productId", value)}
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Selecione um produto ou serviço" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {productsServices?.map((ps) => (
-                                                    <SelectItem key={ps.id} value={ps.id}>
-                                                        {ps.name} ({ps.type === "product" ? "Produto" : "Serviço"})
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-
-                                    {(item.productId || item.productName) && (
-                                        <div className="space-y-2">
-                                            <Label>Perguntas e respostas sobre esse item</Label>
-                                            <Textarea
-                                                value={item.text}
-                                                onChange={(e) => updateFaqItem(index, "text", e.target.value)}
-                                                placeholder="P: Qual o prazo de entrega?&#10;R: O prazo é de 3 a 5 dias úteis..."
-                                                rows={6}
-                                            />
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
-
-                            <Button variant="outline" onClick={addFaqItem} className="w-full">
-                                <Plus className="mr-2 h-4 w-4" />
-                                {faqItems.length === 0
-                                    ? "Adicionar F.A.Q sobre um Produto/Serviço"
-                                    : "Adicionar outro F.A.Q sobre um Produto/Serviço"}
-                            </Button>
 
                             <div className="flex justify-end pt-4">
                                 <Button onClick={handleSave} disabled={saveMutation.isPending}>

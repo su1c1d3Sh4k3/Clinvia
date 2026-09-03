@@ -127,6 +127,11 @@ export function IaGuide() {
                     exata que a IA deve dar. Quando o cliente pergunta algo parecido, ela usa a sua resposta em vez de
                     improvisar.
                 </p>
+                <p className="text-sm text-muted-foreground">
+                    É um campo único, geral da clínica. Não existe F.A.Q por produto ou serviço: o que é específico de um
+                    procedimento (preço, duração, descrição) a IA lê do cadastro em{" "}
+                    <strong className="text-foreground">Serviços</strong>.
+                </p>
                 <Callout type="dica">
                     Alimente o F.A.Q com as perguntas reais que sua equipe mais recebe ("faz cartão?", "atende sábado?",
                     "botox dói?"). Uma semana de anotações rende um F.A.Q excelente.
