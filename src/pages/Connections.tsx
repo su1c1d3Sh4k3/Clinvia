@@ -794,7 +794,7 @@ const Connections = () => {
                                 <CardHeader className="p-4 md:p-6">
                                     <CardTitle className="text-base md:text-lg">Nova Instância WhatsApp</CardTitle>
                                     <CardDescription className="text-xs md:text-sm">
-                                        Adicione uma nova conexão com a Evolution API
+                                        Adicione uma nova conexão da API não oficial
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent className="p-4 md:p-6 pt-0 md:pt-0">

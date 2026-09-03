@@ -250,7 +250,7 @@ const WhatsAppConnection = () => {
         <div>
           <h1 className="text-2xl md:text-3xl font-bold">Conexões WhatsApp</h1>
           <p className="text-muted-foreground text-sm md:text-base">
-            Gerencie suas instâncias da Evolution API
+            Gerencie suas conexões da API não oficial
           </p>
           {/* Debug info */}
           <p className="text-xs text-muted-foreground/50 mt-1">
@@ -263,7 +263,7 @@ const WhatsAppConnection = () => {
             <CardHeader className="p-4 md:p-6">
               <CardTitle className="text-base md:text-lg">Nova Instância</CardTitle>
               <CardDescription className="text-xs md:text-sm">
-                Adicione uma nova conexão com a Evolution API
+                Adicione uma nova conexão da API não oficial
               </CardDescription>
             </CardHeader>
             <CardContent className="p-4 md:p-6 pt-0 md:pt-0">

@@ -164,7 +164,7 @@ export function InstancePrimarySelector({
                                 {isMetaInstance(inst) ? (
                                     <Badge className="text-[10px] bg-emerald-600 hover:bg-emerald-600">API Oficial (Meta)</Badge>
                                 ) : (
-                                    <Badge variant="outline" className="text-[10px]">WhatsApp Web (UZAPI)</Badge>
+                                    <Badge variant="outline" className="text-[10px]">API Não Oficial</Badge>
                                 )}
                                 {!!inst[flagColumn] && (
                                     <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />

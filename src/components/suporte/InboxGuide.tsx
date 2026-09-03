@@ -400,11 +400,11 @@ export function InboxGuide() {
                         },
                         {
                             q: "De onde vem a foto de perfil do contato?",
-                            a: "Das conexões não oficiais (UAZAPI): a cada interação do cliente, o sistema pega a foto do próprio WhatsApp e a guarda de forma permanente — inclusive quando o contato ainda está sem foto. A API oficial (Meta) não fornece foto de perfil, então interações por ela nunca alteram nem apagam a foto já obtida: quem tem as duas conexões mantém a foto capturada pela não oficial mesmo que o cliente passe a conversar pelo número oficial.",
+                            a: "Das conexões não oficiais: a cada interação do cliente, o sistema pega a foto do próprio WhatsApp e a guarda de forma permanente — inclusive quando o contato ainda está sem foto. A API oficial (Meta) não fornece foto de perfil, então interações por ela nunca alteram nem apagam a foto já obtida: quem tem as duas conexões mantém a foto capturada pela não oficial mesmo que o cliente passe a conversar pelo número oficial.",
                         },
                         {
                             q: "Sou avisado quando alguém entra ou sai de um grupo?",
-                            a: "Sim. Quando um participante entra ou sai de um grupo (conexões não oficiais/UAZAPI), aparece uma notificação centralizada no chat — no mesmo estilo das notificações de transferência — informando quem entrou ou saiu e o horário. Essas notificações não contam como última mensagem da conversa.",
+                            a: "Sim. Quando um participante entra ou sai de um grupo (conexões não oficiais), aparece uma notificação centralizada no chat — no mesmo estilo das notificações de transferência — informando quem entrou ou saiu e o horário. Essas notificações não contam como última mensagem da conversa.",
                         },
                         {
                             q: "Aparece um aviso quando alguém visualiza a conversa?",
@@ -416,7 +416,7 @@ export function InboxGuide() {
                         },
                         {
                             q: "O que é o Monitoramento de Grupos?",
-                            a: "Uma captação automática de leads dentro de um grupo (conexões não oficiais/UAZAPI). Abra o grupo, menu lateral direito → Monitoramento: defina um termo (ex.: 'eu quero'), o modo (contém/igual), a mensagem de abordagem (as variáveis {{nome_cliente}}, {{telefone}} e {{servico}} aparecem como botões clicáveis abaixo do campo — clique para inserir), a validade e, se quiser, ligue 'Enviar botões de escolha' (até 3 botões de resposta rápida enviados junto da abordagem). Ligando 'IA aborda', você define a Função da IA (Agendamento ou Qualificação), o objetivo, os serviços — pelo botão 'Adicionar serviço', escolhendo o serviço inteiro ou só aplicações específicas — e o desconto. Quando um participante escrever o termo no grupo, ele ganha a tag 'Monitoramento - <grupo> - <data>', recebe a mensagem no privado (conversa 1:1 criada na hora) e cai na fila da IA ou do humano. Só a primeira mensagem com o termo dispara; mensagens suas são ignoradas. Criar/encerrar é para admin e supervisor; cada grupo tem no máximo 1 monitoramento ativo.",
+                            a: "Uma captação automática de leads dentro de um grupo (conexões não oficiais). Abra o grupo, menu lateral direito → Monitoramento: defina um termo (ex.: 'eu quero'), o modo (contém/igual), a mensagem de abordagem (as variáveis {{nome_cliente}}, {{telefone}} e {{servico}} aparecem como botões clicáveis abaixo do campo — clique para inserir), a validade e, se quiser, ligue 'Enviar botões de escolha' (até 3 botões de resposta rápida enviados junto da abordagem). Ligando 'IA aborda', você define a Função da IA (Agendamento ou Qualificação), o objetivo, os serviços — pelo botão 'Adicionar serviço', escolhendo o serviço inteiro ou só aplicações específicas — e o desconto. Quando um participante escrever o termo no grupo, ele ganha a tag 'Monitoramento - <grupo> - <data>', recebe a mensagem no privado (conversa 1:1 criada na hora) e cai na fila da IA ou do humano. Só a primeira mensagem com o termo dispara; mensagens suas são ignoradas. Criar/encerrar é para admin e supervisor; cada grupo tem no máximo 1 monitoramento ativo.",
                         },
                         {
                             q: "O que significam as bordas coloridas nas fotos dentro do grupo monitorado?",
