@@ -18,6 +18,7 @@ import { useOwnerId } from "@/hooks/useOwnerId";
 import { useProfessionalNps } from "@/hooks/useAppointmentsDashboard";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { getWorkHoursForDay } from "@/lib/professionalSchedule";
+import { convenioRanges, parseTimeToMinutes } from "@/lib/convenioSchedule";
 
 interface SchedulingCalendarProps {
     date: Date;
@@ -403,6 +404,35 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                     </div>
                                 );
                             })}
+
+                            {/* Faixa dedicada a convênio — informativa: o encaixe manual segue livre */}
+                            {(() => {
+                                if (isDayClosed(professional.id)) return null;
+                                const wd = date.getDay();
+                                const days = professional.work_days || settings?.work_days || [0, 1, 2, 3, 4, 5, 6];
+                                if (!days.includes(wd)) return null;
+                                const wh: any = { start: "08:00", end: "22:00", break_start: null, break_end: null, ...getWorkHoursForDay(professional, wd) };
+                                const ranges = convenioRanges(professional, wd, {
+                                    start: parseTimeToMinutes(wh.start) ?? 0,
+                                    end: parseTimeToMinutes(wh.end) ?? 24 * 60,
+                                    breakStart: parseTimeToMinutes(wh.break_start),
+                                    breakEnd: parseTimeToMinutes(wh.break_end),
+                                });
+                                return ranges.map((r) => (
+                                    <div
+                                        key={`conv-${r.start}`}
+                                        className="absolute inset-x-0 pointer-events-none bg-amber-300/25 dark:bg-amber-400/15 border-y border-amber-400/60"
+                                        style={{
+                                            top: (r.start - startHour * 60) * PX_PER_MIN,
+                                            height: (r.end - r.start) * PX_PER_MIN,
+                                        }}
+                                    >
+                                        <span className="absolute top-0.5 left-1 text-[10px] font-medium text-amber-700 dark:text-amber-300 select-none">
+                                            Convênio
+                                        </span>
+                                    </div>
+                                ));
+                            })()}
 
                             {/* Events */}
                             {appointments

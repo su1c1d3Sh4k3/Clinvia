@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import {
     ShieldCheck, UserPlus, SlidersHorizontal, Wifi, HelpCircle, ExternalLink, Users, ScanEye, Stethoscope,
+    HeartHandshake,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,6 +18,7 @@ const TOPICS = [
     { id: "o-que-e", label: "O que é" },
     { id: "papeis", label: "Os 3 papéis" },
     { id: "profissionais-salas", label: "Profissionais e Salas" },
+    { id: "convenios", label: "Convênios" },
     { id: "convidando", label: "Convidando" },
     { id: "escopo", label: "Escopo de visão" },
     { id: "permissoes", label: "Permissões finas" },
@@ -49,6 +51,7 @@ export function EquipeGuide() {
                     <div className="flex flex-wrap gap-2">
                         <LearnChip topicId="papeis">Admin, Supervisor e Agente</LearnChip>
                         <LearnChip topicId="profissionais-salas">Profissionais e Salas</LearnChip>
+                        <LearnChip topicId="convenios">Atendimento por convênio</LearnChip>
                         <LearnChip topicId="convidando">Adicionar um membro</LearnChip>
                         <LearnChip topicId="escopo">Limitar o que o atendente enxerga</LearnChip>
                         <LearnChip topicId="permissoes">Liberar/bloquear ações por módulo</LearnChip>
@@ -65,10 +68,11 @@ export function EquipeGuide() {
                     Todos da clínica trabalham na <strong className="text-foreground">mesma conta</strong>: veem os mesmos
                     clientes, conversas e agenda. O que muda é o <strong className="text-foreground">papel</strong> de cada
                     um (o que pode ver) e as <strong className="text-foreground">permissões finas</strong> (o que pode
-                    criar, editar e apagar). Quatro abas:{" "}
+                    criar, editar e apagar). Cinco abas:{" "}
                     <strong className="text-foreground">Equipe Comercial</strong> (quem usa o sistema),{" "}
                     <strong className="text-foreground">Profissionais</strong> (quem atende os clientes),{" "}
-                    <strong className="text-foreground">Salas</strong> (as agendas) e{" "}
+                    <strong className="text-foreground">Salas</strong> (as agendas),{" "}
+                    <strong className="text-foreground">Convênios</strong> (planos atendidos) e{" "}
                     <strong className="text-foreground">Permissões</strong> (ajuste fino).
                 </p>
                 <div className="flex flex-wrap gap-2">
@@ -142,7 +146,50 @@ export function EquipeGuide() {
             </TopicSection>
 
             {/* 4 */}
-            <TopicSection id="convidando" index={4} icon={UserPlus} title="Convidando membros"
+            <TopicSection id="convenios" index={4} icon={HeartHandshake} title="Convênios"
+                subtitle="Quais planos a clínica atende, em quais serviços, salas e horários">
+                <p className="text-sm text-muted-foreground">
+                    Na aba <strong className="text-foreground">Convênios</strong> você cadastra os planos atendidos. O que
+                    for configurado aqui é o que a <strong className="text-foreground">IA</strong>, o{" "}
+                    <strong className="text-foreground">link público de agendamento</strong> e as{" "}
+                    <strong className="text-foreground">APIs</strong> usam para oferecer horário de convênio. Marcar a
+                    agenda manualmente continua livre: nada disso te impede de encaixar um paciente.
+                </p>
+                <StepByStep steps={[
+                    { title: "Crie o convênio", description: "Aba Convênios > Adicionar Convênio. Informe o nome (ex.: Unimed) e, se quiser, uma descrição — ela é enviada junto para a IA (útil para regras do tipo 'somente titular' ou 'consulta com coparticipação')." },
+                    { title: "Marque os serviços atendidos", description: "No mesmo modal, um seletor por categoria: expanda a pasta e marque os serviços. Marcar a categoria seleciona todos de uma vez. Esses serviços passam a ser apresentados à IA com a observação (apto para convênio)." },
+                    { title: "Marque as salas que atendem", description: "Ainda no modal, escolha quais salas recebem esse convênio. Uma sala só aparece na lista se estiver com o Atendimento de Convênio ligado no cadastro dela." },
+                    { title: "Defina os dias e horários dedicados", description: "No cadastro da sala (aba Salas ou Profissionais), logo abaixo dos Dias de Atendimento, ligue Atendimento de Convênio e escolha os dias e a faixa de início e fim reservada para convênio. Dá para configurar horário individual por dia." },
+                ]} />
+                <Callout type="atencao" title="O horário de convênio sai das buscas normais">
+                    A faixa reservada deixa de ser oferecida no atendimento particular: quando a IA ou o link público
+                    procuram horário comum, esses intervalos são pulados; quando a busca é de convênio, só aparecem esses
+                    intervalos e só nas salas marcadas para aquele plano. É assim que você garante que o horário
+                    reservado não seja ocupado por outro paciente.
+                </Callout>
+                <Callout type="dica" title="Habilitar todos os convênios">
+                    Se a clínica aceita qualquer plano, ligue a chave{" "}
+                    <strong>Habilitar todos os convênios</strong> no topo da aba. A IA passa a responder
+                    "Habilitado para todos os convênios" em vez de listar nomes (a descrição, se houver, vai junto), e a
+                    lista cadastrada fica guardada sem ser usada. Os serviços e salas continuam sendo configurados
+                    normalmente pelo botão Configurar.
+                </Callout>
+                <Callout type="pratica" title="Exemplo: Unimed nas terças e quintas à tarde">
+                    Cadastre o convênio Unimed, marque as consultas atendidas, marque a sala da Dra. Ana e, no cadastro
+                    dessa sala, ligue Atendimento de Convênio nas terças e quintas das 14h às 16h. Resultado: quem procura
+                    horário particular nunca recebe 14h-16h dessas duas datas, e quem procura Unimed só recebe esses
+                    horários — na sala da Dra. Ana.
+                </Callout>
+                <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" onClick={() => navigate("/equipe?tab=convenios&tour=convenio-cadastrar")}>
+                        <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                        Me mostre na prática
+                    </Button>
+                </div>
+            </TopicSection>
+
+            {/* 5 */}
+            <TopicSection id="convidando" index={5} icon={UserPlus} title="Convidando membros"
                 subtitle="Da recepção ao sistema em 2 minutos">
                 <StepByStep steps={[
                     { title: "Adicionar membro", description: "Na aba Equipes, informe nome, e-mail e papel. A pessoa recebe um e-mail de convite com o login, a senha provisória e o cargo — e já entra na conta da clínica." },
@@ -161,8 +208,8 @@ export function EquipeGuide() {
                 </Callout>
             </TopicSection>
 
-            {/* 5 */}
-            <TopicSection id="escopo" index={5} icon={ScanEye} title="Escopo de visão do Atendente"
+            {/* 6 */}
+            <TopicSection id="escopo" index={6} icon={ScanEye} title="Escopo de visão do Atendente"
                 subtitle="Quais conexões, filas e tags cada agente enxerga">
                 <p className="text-sm text-muted-foreground">
                     Agentes podem ter a visão <strong className="text-foreground">limitada por três filtros</strong>, definidos
@@ -213,8 +260,8 @@ export function EquipeGuide() {
                 </Callout>
             </TopicSection>
 
-            {/* 6 */}
-            <TopicSection id="permissoes" index={6} icon={SlidersHorizontal} title="Permissões finas"
+            {/* 7 */}
+            <TopicSection id="permissoes" index={7} icon={SlidersHorizontal} title="Permissões finas"
                 subtitle="Criar / Editar / Apagar, módulo por módulo">
                 <p className="text-sm text-muted-foreground">
                     Na aba <strong className="text-foreground">Permissões</strong>, você define para Supervisores e Agentes
@@ -246,8 +293,8 @@ export function EquipeGuide() {
                 </Callout>
             </TopicSection>
 
-            {/* 7 */}
-            <TopicSection id="online" index={7} icon={Wifi} title="Quem está online"
+            {/* 8 */}
+            <TopicSection id="online" index={8} icon={Wifi} title="Quem está online"
                 subtitle="O termômetro da operação em tempo real">
                 <p className="text-sm text-muted-foreground">
                     O Dashboard (aba Monitoramento) mostra o <strong className="text-foreground">status online</strong> de
@@ -256,8 +303,8 @@ export function EquipeGuide() {
                 </p>
             </TopicSection>
 
-            {/* 8 */}
-            <TopicSection id="faq" index={8} icon={HelpCircle} title="Perguntas frequentes">
+            {/* 9 */}
+            <TopicSection id="faq" index={9} icon={HelpCircle} title="Perguntas frequentes">
                 <Accordion type="single" collapsible className="rounded-xl border px-4">
                     {[
                         {
@@ -271,6 +318,14 @@ export function EquipeGuide() {
                         {
                             q: "O agente diz que 'não tem o botão' de apagar/editar.",
                             a: "É o esperado: sem a permissão fina, o botão nem aparece. Ajuste em Equipe > Permissões e peça para a pessoa recarregar a página.",
+                        },
+                        {
+                            q: "A sala não aparece na lista de salas do convênio.",
+                            a: "Só aparecem salas com o Atendimento de Convênio ligado. Abra o cadastro da sala (ou do profissional dono dela), ligue a chave Atendimento de Convênio, marque os dias e a faixa de horário e salve — ela passa a aparecer no modal do convênio.",
+                        },
+                        {
+                            q: "A IA não está oferecendo o horário de convênio.",
+                            a: "Confira os quatro elos: o convênio existe na aba Convênios, o serviço está marcado nele, a sala está marcada nele, e essa sala tem dias/horário de convênio configurados. Faltando qualquer um, a busca de convênio volta vazia. Lembre que a faixa de convênio precisa estar dentro do expediente da sala — o que ficar fora do horário de atendimento é ignorado.",
                         },
                         {
                             q: "Um agente não enxerga conversas/cards que o admin vê.",

@@ -6,6 +6,20 @@ import { TERMINAL_STAGES } from "../_shared/crm-stages.ts";
 import { applyCampaignDiscount, type CampaignDiscountInfo } from "../_shared/campaign-discount.ts";
 import { bufferedOverlapWindow, getSlotSettings } from "../_shared/slot-settings.ts";
 import {
+    CONVENIO_PROF_COLUMNS,
+    NO_CONVENIO,
+    assertServiceAptoConvenio,
+    convenioRanges,
+    describeRanges,
+    filterRoomsForConvenio,
+    getConvenioRoomIds,
+    insideConvenio,
+    overlapsConvenio,
+    resolveConvenioSelection,
+    selectionFromConvenioId,
+    type ConvenioSelection,
+} from "../_shared/convenio-schedule.ts";
+import {
     findActiveCardForChannel,
     resolveConversation,
 } from "../_shared/resolve-conversation.ts";
@@ -94,7 +108,10 @@ function checkDateTimeFormat(
  * check_appointment_overlap only catches conflicts with other appointments — without
  * this, bookings could silently land outside the professional's schedule.
  */
-function validateWorkSchedule(prof: any, dateStr: string, timeStr: string, duration: number): string | null {
+function validateWorkSchedule(
+    prof: any, dateStr: string, timeStr: string, duration: number,
+    convenio: ConvenioSelection = NO_CONVENIO,
+): string | null {
     const dow = new Date(dateStr + "T12:00:00").getDay();
     const workDays: number[] = prof.work_days || [0, 1, 2, 3, 4, 5, 6];
     if (!workDays.includes(dow)) {
@@ -116,6 +133,20 @@ function validateWorkSchedule(prof: any, dateStr: string, timeStr: string, durat
     const breakEnd = parseWorkTime(wh.break_end);
     if (breakStart !== null && breakEnd !== null && start < breakEnd && end > breakStart) {
         return `${timeStr} cai no intervalo/pausa de ${prof.name}`;
+    }
+
+    // Faixas dedicadas a convênio: agendamento de convênio só cabe DENTRO delas,
+    // agendamento particular nunca pode encostar.
+    const ranges = convenioRanges(prof, dow, { start: whStart, end: whEnd, breakStart, breakEnd });
+    if (convenio.requested) {
+        if (ranges.length === 0) {
+            return `${prof.name} não tem horário de convênio na ${DAY_NAMES[dow]} (${dateStr})`;
+        }
+        if (!insideConvenio(start, duration, ranges)) {
+            return `${timeStr} está fora do horário de convênio de ${prof.name} nesse dia (${describeRanges(ranges)})`;
+        }
+    } else if (overlapsConvenio(start, duration, ranges)) {
+        return `${timeStr} cai no horário reservado para convênio de ${prof.name} (${describeRanges(ranges)})`;
     }
 
     return null;
@@ -178,7 +209,9 @@ serve(async (req) => {
         };
 
         // Helper: find a professional for the service
-        const resolveProfessional = async (sc: any, preferredName?: string) => {
+        const resolveProfessional = async (
+            sc: any, preferredName?: string, convenio: ConvenioSelection = NO_CONVENIO,
+        ) => {
             const profIds: string[] = sc.professionals || [];
             if (profIds.length === 0) {
                 throw new ApiError({
@@ -187,8 +220,8 @@ serve(async (req) => {
                 });
             }
 
-            const { data: profs, error } = await supabase.from("professionals")
-                .select("id, name, work_hours, work_days, use_daily_schedule, work_hours_daily")
+            const { data: allProfs, error } = await supabase.from("professionals")
+                .select(`id, name, work_hours, work_days, use_daily_schedule, work_hours_daily, ${CONVENIO_PROF_COLUMNS}`)
                 .in("id", profIds)
                 .eq("active", true);
             if (error) {
@@ -198,12 +231,25 @@ serve(async (req) => {
                     details: String((error as any)?.message ?? error),
                 });
             }
-            if (!profs || profs.length === 0) {
+            if (!allProfs || allProfs.length === 0) {
                 throw new ApiError({
                     status: 409, code: "professional_not_found",
                     message: `A aplicação "${sc.name}" aponta para ${profIds.length} profissional(is) que não existem mais no cadastro. Revise os profissionais vinculados a ela em Serviços.`,
                     details: `ids vinculados: ${profIds.join(", ")}`,
                 });
+            }
+
+            // Convênio só agenda em sala habilitada (e ligada ao convênio escolhido)
+            let profs = allProfs as any[];
+            if (convenio.requested && convenio.convenio) {
+                const roomIds = await getConvenioRoomIds(supabase, convenio.convenio.id);
+                profs = filterRoomsForConvenio(allProfs as any[], roomIds);
+                if (profs.length === 0) {
+                    throw new ApiError({
+                        status: 409, code: "convenio_without_rooms",
+                        message: `Nenhuma sala que atende a aplicação "${sc.name}" está habilitada para ${convenio.catchAll ? "convênio" : `o convênio ${convenio.convenio.nome}`}. Habilite o atendimento de convênio na sala em Equipe > Salas, ou agende como particular (convenio="nao").`,
+                    });
+                }
             }
 
             const names = profs.map((p: any) => p.name).join(", ");
@@ -397,7 +443,10 @@ serve(async (req) => {
             const cid = conv!.contactId;
             const campaign = await resolveCampaignForContact(cid, conv!.instanceId);
             const sc = await resolveService(service_name);
-            const prof = await resolveProfessional(sc, professional_name);
+            // Convênio pedido na chamada (ausente = particular)
+            const convenio = await resolveConvenioSelection(supabase, user_id, body);
+            await assertServiceAptoConvenio(supabase, convenio, sc.id, sc.name);
+            const prof = await resolveProfessional(sc, professional_name, convenio);
             const duration = sc.duration_minutes || 30;
             // Preço com desconto de campanha (se o serviço estiver na campanha ativa);
             // a venda criada pelo trigger herda esse valor
@@ -427,7 +476,7 @@ serve(async (req) => {
             }
 
             // Validate professional work schedule (work_days/work_hours/break)
-            const scheduleError = validateWorkSchedule(prof, date, time, duration);
+            const scheduleError = validateWorkSchedule(prof, date, time, duration, convenio);
             if (scheduleError) {
                 return apiError(corsHeaders, {
                     status: 409,
@@ -475,6 +524,7 @@ serve(async (req) => {
                 campaign_id: campaign?.id ?? null,
                 instance_id: conv!.instanceId,
                 created_via: "ia",
+                convenio_id: convenio.convenio?.id ?? null,
             };
 
             const { data: created, error } = await supabase.from("appointments").insert(payload).select().single();
@@ -614,7 +664,7 @@ serve(async (req) => {
 
             // Fetch existing to get duration
             const { data: existing, error: existingErr } = await supabase.from("appointments")
-                .select("start_time, end_time, professional_id, user_id, status")
+                .select("start_time, end_time, professional_id, user_id, status, convenio_id")
                 .eq("id", appointment_id).maybeSingle();
             if (existingErr) {
                 return dbErrorResponse(corsHeaders, "appointment_read_failed",
@@ -657,10 +707,14 @@ serve(async (req) => {
                 });
             }
 
+            // Um agendamento de convênio continua sendo de convênio ao remarcar:
+            // o novo horário tem de cair na janela dedicada da sala.
+            const reschedConvenio = await selectionFromConvenioId(supabase, existing.convenio_id);
+
             // Validate professional work schedule at the new date/time
             if (existing.professional_id) {
                 const { data: profRec, error: profErr } = await supabase.from("professionals")
-                    .select("id, name, work_hours, work_days, use_daily_schedule, work_hours_daily")
+                    .select(`id, name, work_hours, work_days, use_daily_schedule, work_hours_daily, ${CONVENIO_PROF_COLUMNS}`)
                     .eq("id", existing.professional_id).maybeSingle();
                 if (profErr) {
                     return dbErrorResponse(corsHeaders, "professional_lookup_failed",
@@ -674,7 +728,7 @@ serve(async (req) => {
                             message: `A agenda de ${profRec.name} está fechada em ${new_date} (o dia inteiro foi bloqueado na agenda). Consulte a disponibilidade (api-availability) para outra data.`,
                         });
                     }
-                    const scheduleError = validateWorkSchedule(profRec, new_date, new_time, durationMin);
+                    const scheduleError = validateWorkSchedule(profRec, new_date, new_time, durationMin, reschedConvenio);
                     if (scheduleError) {
                         return apiError(corsHeaders, {
                             status: 409,

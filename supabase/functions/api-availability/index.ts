@@ -4,6 +4,17 @@ import { getWorkHoursForDay } from "../_shared/professional-schedule.ts";
 import { getBlockedProfessionalIds } from "../_shared/day-blocks.ts";
 import { getSlotSettings, padBusyRange, type SlotSettings } from "../_shared/slot-settings.ts";
 import {
+    CONVENIO_PROF_COLUMNS,
+    assertServiceAptoConvenio,
+    convenioRanges,
+    filterRoomsForConvenio,
+    getConvenioRoomIds,
+    insideConvenio,
+    overlapsConvenio,
+    resolveConvenioSelection,
+    type ConvenioSelection,
+} from "../_shared/convenio-schedule.ts";
+import {
     ApiError,
     apiError,
     dbErrorResponse,
@@ -86,7 +97,7 @@ function groupByProfessional(
 /** Get all free slots for a given date across all professionals */
 async function getSlotsForDate(
     supabase: any, professionals: any[], dateStr: string, dayOfWeek: number, duration: number,
-    slotSettings: SlotSettings
+    slotSettings: SlotSettings, convenio: ConvenioSelection
 ): Promise<Slot[]> {
     const slots: Slot[] = [];
 
@@ -103,6 +114,14 @@ async function getSlotsForDate(
         const whEnd = parseWorkTime(wh.end) ?? 20 * 60;
         const breakStart = parseWorkTime(wh.break_start);
         const breakEnd = parseWorkTime(wh.break_end);
+
+        // Faixas dedicadas a convênio nesta sala neste dia (já cortadas pelo
+        // expediente e pelo intervalo).
+        const convRanges = convenioRanges(prof, dayOfWeek, {
+            start: whStart, end: whEnd, breakStart, breakEnd,
+        });
+        // Sala habilitada mas sem janela válida no dia não tem agenda de convênio.
+        if (convenio.requested && convRanges.length === 0) continue;
 
         const { data: appointments, error: apptError } = await supabase
             .from("appointments")
@@ -133,6 +152,13 @@ async function getSlotsForDate(
 
         for (let m = whStart; m + duration <= whEnd; m += slotSettings.stepMinutes) {
             if (breakStart !== null && breakEnd !== null && m < breakEnd && m + duration > breakStart) continue;
+            // Convênio "sim" só oferece o que cabe inteiro na janela dedicada;
+            // convênio "nao" nunca encosta nela.
+            if (convenio.requested) {
+                if (!insideConvenio(m, duration, convRanges)) continue;
+            } else if (overlapsConvenio(m, duration, convRanges)) {
+                continue;
+            }
             let conflict = false;
             for (const b of busy) { if (m < b.end && m + duration > b.start) { conflict = true; break; } }
             if (conflict) continue;
@@ -214,6 +240,11 @@ serve(async (req) => {
                 message: `Aplicação "${service_name}" não encontrada no catálogo ativo desta conta. Confira o nome exato em Serviços — aplicações desativadas não aparecem aqui. Aplicações disponíveis: ${names || "(nenhuma aplicação ativa cadastrada nesta conta)"}.`,
             });
         }
+
+        // Convênio pedido na chamada (ausente = particular). Feito depois do
+        // serviço porque a checagem de "apto" depende do id da aplicação.
+        const convenio = await resolveConvenioSelection(supabase, user_id, body!);
+        await assertServiceAptoConvenio(supabase, convenio, sc.id, sc.name);
 
         const duration = sc.duration_minutes || 30;
         let profIds: string[] = sc.professionals || [];
@@ -300,12 +331,29 @@ serve(async (req) => {
             }
         }
 
-        const { data: professionals, error: profError } = await supabase
-            .from("professionals").select("id, name, work_hours, work_days, use_daily_schedule, work_hours_daily").in("id", profIds).eq("active", true);
+        const { data: allProfessionals, error: profError } = await supabase
+            .from("professionals")
+            .select(`id, name, work_hours, work_days, use_daily_schedule, work_hours_daily, ${CONVENIO_PROF_COLUMNS}`)
+            .in("id", profIds).eq("active", true);
         if (profError) {
             return dbErrorResponse(corsHeaders, "professionals_read_failed",
                 `buscar os profissionais vinculados à aplicação "${sc.name}"`, profError);
         }
+
+        // Convênio "sim" só enxerga salas habilitadas (e ligadas ao convênio).
+        let professionals = allProfessionals as any[] | null;
+        if (convenio.requested && convenio.convenio) {
+            const roomIds = await getConvenioRoomIds(supabase, convenio.convenio.id);
+            professionals = filterRoomsForConvenio((allProfessionals || []) as any[], roomIds);
+            if (professionals.length === 0) {
+                return apiError(corsHeaders, {
+                    status: 409,
+                    code: "convenio_without_rooms",
+                    message: `Nenhuma sala que atende a aplicação "${sc.name}" está habilitada para ${convenio.catchAll ? "convênio" : `o convênio ${convenio.convenio.nome}`}. Habilite o atendimento de convênio na sala em Equipe > Salas, ou ofereça a aplicação como particular.`,
+                });
+            }
+        }
+
         if (!professionals || professionals.length === 0) {
             // Não é 404 do pedido do chamador: o pedido está certo, o cadastro é que
             // aponta para profissionais que já foram excluídos.
@@ -331,6 +379,17 @@ serve(async (req) => {
             }
             : {};
 
+        // Deixa explícito na resposta se a lista é de convênio ou particular —
+        // sem isso a IA não sabe qual agenda está lendo.
+        const convenioInfo = convenio.requested && convenio.convenio
+            ? {
+                convenio: {
+                    nome: convenio.catchAll ? "Habilitado para todos os convênios" : convenio.convenio.nome,
+                    note: "Somente horários reservados para atendimento de convênio.",
+                },
+            }
+            : { convenio: null };
+
         // ════════════════════════════════════════════
         // MODE 2: date + period → all slots in period
         // ════════════════════════════════════════════
@@ -353,7 +412,7 @@ serve(async (req) => {
             // Try the requested date first
             const reqDate = new Date(date + "T12:00:00");
             const dateStr = formatDate(reqDate);
-            const allSlots = await getSlotsForDate(supabase, professionals, dateStr, reqDate.getDay(), duration, slotSettings);
+            const allSlots = await getSlotsForDate(supabase, professionals, dateStr, reqDate.getDay(), duration, slotSettings, convenio);
             const filtered = allSlots.filter(filterFn);
 
             if (filtered.length > 0) {
@@ -367,6 +426,7 @@ serve(async (req) => {
                     by_professional: groupByProfessional(flat),
                     slots: flat,
                     ...campaignInfo,
+                ...convenioInfo,
                 }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
             }
 
@@ -376,7 +436,7 @@ serve(async (req) => {
 
             for (let i = 0; i < MAX_SEARCH; i++) {
                 const sDateStr = formatDate(search);
-                const sSlots = await getSlotsForDate(supabase, professionals, sDateStr, search.getDay(), duration, slotSettings);
+                const sSlots = await getSlotsForDate(supabase, professionals, sDateStr, search.getDay(), duration, slotSettings, convenio);
                 const sFiltered = sSlots.filter(filterFn);
 
                 if (sFiltered.length > 0) {
@@ -392,6 +452,7 @@ serve(async (req) => {
                         by_professional: groupByProfessional(sFlat),
                         slots: sFlat,
                         ...campaignInfo,
+                        ...convenioInfo,
                     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
                 }
 
@@ -404,6 +465,7 @@ serve(async (req) => {
                 by_professional: [],
                 slots: [],
                 ...campaignInfo,
+                ...convenioInfo,
             }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
@@ -418,7 +480,7 @@ serve(async (req) => {
 
         for (let attempt = 0; attempt < MAX_SEARCH && availability.length < 3; attempt++) {
             const dateStr = formatDate(searchDate);
-            const daySlots = await getSlotsForDate(supabase, professionals, dateStr, searchDate.getDay(), duration, slotSettings);
+            const daySlots = await getSlotsForDate(supabase, professionals, dateStr, searchDate.getDay(), duration, slotSettings, convenio);
 
             if (daySlots.length > 0) {
                 // 3 horários POR PROFISSIONAL (um por faixa manhã/meio-dia/tarde)
@@ -452,6 +514,7 @@ serve(async (req) => {
             duration_minutes: duration,
             availability,
             ...campaignInfo,
+            ...convenioInfo,
         }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     } catch (error) {

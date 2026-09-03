@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getWorkHoursForDay, type DayHours } from "@/lib/professionalSchedule";
+import type { ConvenioScheduleFields } from "@/lib/convenioSchedule";
 
-export interface DashProfessional {
+export interface DashProfessional extends ConvenioScheduleFields {
     id: string;
     name: string;
     photo_url: string | null;
@@ -36,7 +37,7 @@ export function useProfessionalsDashboard() {
         queryFn: async (): Promise<DashProfessional[]> => {
             const { data, error } = await supabase
                 .from("professionals" as any)
-                .select("id, name, work_days, work_hours, use_daily_schedule, work_hours_daily, responsavel:responsaveis(photo_url)")
+                .select("id, name, work_days, work_hours, use_daily_schedule, work_hours_daily, convenio_enabled, convenio_days, convenio_hours, convenio_use_daily, convenio_hours_daily, responsavel:responsaveis(photo_url)")
                 .eq("active", true)
                 .order("name");
             if (error) throw error;

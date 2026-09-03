@@ -21,7 +21,7 @@ async function callApi(body: any) {
 }
 
 interface BookingParams { user_id: string; contact_id: string; contact_name: string; instance_id: string; }
-type Step = "home" | "service" | "professional" | "datetime" | "confirm" | "done" | "reschedule" | "canceled";
+type Step = "home" | "service" | "convenio" | "professional" | "datetime" | "confirm" | "done" | "reschedule" | "canceled";
 
 export default function PublicBooking() {
   const [searchParams] = useSearchParams();
@@ -29,12 +29,15 @@ export default function PublicBooking() {
   const [error, setError] = useState("");
 
   const [applications, setApplications] = useState<any[]>([]);
+  const [convenios, setConvenios] = useState<any[]>([]);
   const [allProfessionals, setAllProfessionals] = useState<any[]>([]);
   const [pendingApts, setPendingApts] = useState<any[]>([]);
   const [slots, setSlots] = useState<string[]>([]);
 
   const [step, setStep] = useState<Step>("home");
   const [selApp, setSelApp] = useState<any>(null);
+  /** null = particular. Guarda o convênio escolhido para o serviço atual. */
+  const [selConvenio, setSelConvenio] = useState<any>(null);
   const [selProf, setSelProf] = useState<any>(null);
   const [selDate, setSelDate] = useState<Date | null>(null);
   const [selTime, setSelTime] = useState("");
@@ -78,6 +81,7 @@ export default function PublicBooking() {
         callApi({ action: "get_pending", user_id: params.user_id, contact_id: params.contact_id }),
       ]);
       setApplications(svcData.applications || []);
+      setConvenios(svcData.convenios || []);
       setAllProfessionals(profData.professionals || []);
       setPendingApts(aptData.appointments || []);
     } catch (err: any) { setError(err.message); }
@@ -86,24 +90,39 @@ export default function PublicBooking() {
 
   useEffect(() => { loadData(); }, [params]);
 
-  const filteredProfs = useMemo(() => {
-    if (!selApp) return [];
-    return allProfessionals.filter(p => (selApp.professionals || []).includes(p.id));
-  }, [selApp, allProfessionals]);
+  /** Convênios que atendem o serviço escolhido (vazio = só particular). */
+  const appConvenios = useMemo(() => {
+    const ids: string[] = selApp?.convenio_ids || [];
+    return convenios.filter(c => ids.includes(c.id));
+  }, [selApp, convenios]);
+
+  const profsForApp = (app: any, convenio: any) => {
+    const base = allProfessionals.filter(p => (app?.professionals || []).includes(p.id));
+    if (!convenio) return base;
+    const rooms: string[] = convenio.professional_ids || [];
+    return base.filter(p => rooms.includes(p.id));
+  };
+
+  const filteredProfs = useMemo(
+    () => (selApp ? profsForApp(selApp, selConvenio) : []),
+    [selApp, selConvenio, allProfessionals],
+  );
 
   useEffect(() => {
     if (!selDate || !selProf || !selApp || !params) return;
     const profId = managingApt ? managingApt.professional_id : selProf.id;
     const svcId = managingApt ? managingApt.service_id : selApp.id;
+    // Reagendamento herda o convênio do agendamento original.
+    const convId = managingApt ? (managingApt.convenio_id || null) : (selConvenio?.id || null);
     (async () => {
       setLoadingSlots(true); setSelTime("");
       try {
-        const data = await callApi({ action: "get_slots", user_id: params.user_id, professional_id: profId, service_id: svcId, date: format(selDate, "yyyy-MM-dd") });
+        const data = await callApi({ action: "get_slots", user_id: params.user_id, professional_id: profId, service_id: svcId, date: format(selDate, "yyyy-MM-dd"), convenio_id: convId });
         setSlots(data.slots || []);
       } catch { setSlots([]); }
       setLoadingSlots(false);
     })();
-  }, [selDate, selProf, selApp, params, managingApt]);
+  }, [selDate, selProf, selApp, selConvenio, params, managingApt]);
 
   const calDays = useMemo(() => {
     const start = startOfWeek(startOfMonth(calMonth), { weekStartsOn: 0 });
@@ -113,18 +132,32 @@ export default function PublicBooking() {
     return days;
   }, [calMonth]);
 
+  const goToProfessional = (app: any, convenio: any) => {
+    const profs = profsForApp(app, convenio);
+    if (profs.length === 1) { setSelProf(profs[0]); setStep("datetime"); }
+    else { setSelProf(null); setStep("professional"); }
+  };
+
   const handleSelectApp = (app: any) => {
     setSelApp(app);
-    const profs = allProfessionals.filter(p => (app.professionals || []).includes(p.id));
-    if (profs.length === 1) { setSelProf(profs[0]); setStep("datetime"); }
-    else setStep("professional");
+    setSelConvenio(null);
+    // Serviço apto a convênio: o paciente escolhe antes, porque a sala e o
+    // horário mudam conforme a janela dedicada.
+    const ids: string[] = app.convenio_ids || [];
+    if (convenios.some(c => ids.includes(c.id))) { setStep("convenio"); return; }
+    goToProfessional(app, null);
+  };
+
+  const handleSelectConvenio = (convenio: any) => {
+    setSelConvenio(convenio);
+    goToProfessional(selApp, convenio);
   };
 
   const handleConfirm = async () => {
     if (!params || !selApp || !selProf || !selDate || !selTime) return;
     setSubmitting(true); setError("");
     try {
-      await callApi({ action: "create_booking", user_id: params.user_id, contact_id: params.contact_id, instance_id: params.instance_id, service_id: selApp.id, professional_id: selProf.id, date: format(selDate, "yyyy-MM-dd"), time: selTime });
+      await callApi({ action: "create_booking", user_id: params.user_id, contact_id: params.contact_id, instance_id: params.instance_id, service_id: selApp.id, professional_id: selProf.id, date: format(selDate, "yyyy-MM-dd"), time: selTime, convenio_id: selConvenio?.id || null });
       setStep("done");
       loadData();
     } catch (err: any) { setError(err.message); }
@@ -162,7 +195,7 @@ export default function PublicBooking() {
   };
 
   const goHome = () => {
-    setStep("home"); setManagingApt(null); setSelApp(null); setSelProf(null); setSelDate(null); setSelTime(""); setConfirmCancel(false); setError("");
+    setStep("home"); setManagingApt(null); setSelApp(null); setSelConvenio(null); setSelProf(null); setSelDate(null); setSelTime(""); setConfirmCancel(false); setError("");
   };
 
   const fmtDate = (iso: string) => { try { return format(new Date(iso), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }); } catch { return iso; } };
@@ -268,11 +301,47 @@ export default function PublicBooking() {
           </div>
         )}
 
+        {/* ── STEP: Particular x Convênio ── */}
+        {step === "convenio" && (
+          <div className="space-y-4">
+            <button onClick={() => setStep("service")} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="w-4 h-4" /> Voltar</button>
+            <h2 className="text-sm font-semibold text-muted-foreground">Como você quer ser atendido?</h2>
+            <div className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-200">
+              <button onClick={() => handleSelectConvenio(null)}
+                className="w-full p-3 rounded-lg border border-border hover:border-primary/50 text-left transition-all">
+                <span className="text-sm font-medium">Particular</span>
+                <p className="text-xs text-muted-foreground mt-1">Sem convênio</p>
+              </button>
+              {appConvenios.map(c => (
+                <button key={c.id} onClick={() => handleSelectConvenio(c)}
+                  disabled={(c.professional_ids || []).length === 0}
+                  className={cn(
+                    "w-full p-3 rounded-lg border text-left transition-all",
+                    (c.professional_ids || []).length === 0
+                      ? "border-border opacity-50 cursor-not-allowed"
+                      : "border-border hover:border-primary/50",
+                  )}>
+                  <span className="text-sm font-medium">{c.nome}</span>
+                  {c.descricao && <p className="text-xs text-muted-foreground mt-1">{c.descricao}</p>}
+                  {(c.professional_ids || []).length === 0 && (
+                    <p className="text-xs text-muted-foreground mt-1">Sem horário disponível no momento</p>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* ── STEP: Professional ── */}
         {step === "professional" && (
           <div className="space-y-4">
-            <button onClick={() => setStep("service")} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="w-4 h-4" /> Voltar</button>
+            <button onClick={() => setStep(appConvenios.length > 0 ? "convenio" : "service")} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="w-4 h-4" /> Voltar</button>
             <h2 className="text-sm font-semibold text-muted-foreground">Escolha o profissional</h2>
+            {filteredProfs.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-6">
+                Nenhum profissional disponível para essa opção. Fale com a clínica.
+              </p>
+            )}
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
               {filteredProfs.map(p => (
                 <button key={p.id} onClick={() => { setSelProf(p); setStep("datetime"); }}
@@ -291,7 +360,7 @@ export default function PublicBooking() {
         {/* ── STEP: DateTime (new booking + reschedule) ── */}
         {(step === "datetime" || step === "reschedule") && (
           <div className="space-y-4">
-            <button onClick={() => step === "reschedule" ? goHome() : setStep(filteredProfs.length > 1 ? "professional" : "service")} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+            <button onClick={() => step === "reschedule" ? goHome() : setStep(filteredProfs.length > 1 ? "professional" : appConvenios.length > 0 ? "convenio" : "service")} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
               <ArrowLeft className="w-4 h-4" /> Voltar
             </button>
             {step === "reschedule" && managingApt && (
@@ -368,6 +437,9 @@ export default function PublicBooking() {
             <h2 className="text-sm font-semibold text-muted-foreground">Confirme seu agendamento</h2>
             <div className="border rounded-lg p-4 space-y-3">
               <div className="flex items-center justify-between"><span className="text-sm text-muted-foreground">Serviço</span><span className="text-sm font-medium">{selApp.name}</span></div>
+              {appConvenios.length > 0 && (
+                <div className="flex items-center justify-between"><span className="text-sm text-muted-foreground">Atendimento</span><span className="text-sm font-medium">{selConvenio ? selConvenio.nome : "Particular"}</span></div>
+              )}
               <div className="flex items-center justify-between"><span className="text-sm text-muted-foreground">Profissional</span><span className="text-sm font-medium">{selProf.name}</span></div>
               <div className="flex items-center justify-between"><span className="text-sm text-muted-foreground">Data</span><span className="text-sm font-medium capitalize">{format(selDate, "EEEE, dd/MM", { locale: ptBR })}</span></div>
               <div className="flex items-center justify-between"><span className="text-sm text-muted-foreground">Horário</span><span className="text-sm font-medium">{selTime}</span></div>

@@ -109,7 +109,7 @@ export function IaGuide() {
                 </p>
                 <StepByStep steps={[
                     { title: "Identidade", description: "Nome da assistente, nome da clínica, endereço, site, redes sociais — como ela se apresenta e o que informa quando pedem localização ou links." },
-                    { title: "Sobre a clínica", description: "Descrição, horário de funcionamento, formas de pagamento e convênios — as perguntas mais comuns do dia a dia." },
+                    { title: "Sobre a clínica", description: "Descrição, horário de funcionamento e formas de pagamento — as perguntas mais comuns do dia a dia. Os convênios atendidos não ficam aqui: são cadastrados em Equipe > Convênios e a IA os recebe automaticamente." },
                     { title: "Boas-vindas e restrições", description: "A mensagem de recepção e, principalmente, o que a IA NÃO deve fazer (ex.: não informar preços de cirurgias, não dar orientação médica)." },
                     { title: "Qualificação", description: "As perguntas que ela deve fazer para entender o interesse do cliente antes de oferecer agendamento." },
                 ]} />

@@ -201,9 +201,23 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
     "equipe-tour": [
         {
             element: '[data-tour="equipe-tabs"]',
-            title: "As quatro abas da Equipe",
+            title: "As cinco abas da Equipe",
             description:
-                "Equipe Comercial: membros do sistema e seus papéis (Admin, Supervisor ou Agente). Profissionais: quem atende na clínica — cada um ganha uma sala automaticamente. Salas: as agendas (as de profissional e as avulsas). Permissões: ajuste fino do que cada nível pode criar, editar e apagar.",
+                "Equipe Comercial: membros do sistema e seus papéis (Admin, Supervisor ou Agente). Profissionais: quem atende na clínica — cada um ganha uma sala automaticamente. Salas: as agendas (as de profissional e as avulsas). Convênios: os planos atendidos, com os serviços e as salas de cada um. Permissões: ajuste fino do que cada nível pode criar, editar e apagar.",
+        },
+    ],
+    "convenio-cadastrar": [
+        {
+            element: '[data-tour="convenios-todos"]',
+            title: "Habilitar todos os convênios",
+            description:
+                "Se a clínica aceita qualquer plano, ligue esta chave: a IA passa a responder 'Habilitado para todos os convênios' em vez de listar nomes. A lista abaixo continua guardada, mas não é usada.",
+        },
+        {
+            element: '[data-tour="convenios-lista"]',
+            title: "Cadastre um convênio",
+            description:
+                "Em Adicionar Convênio você informa o nome (e uma descrição opcional que vai junto para a IA), marca os serviços atendidos por categoria e escolhe as salas que recebem esse plano. Só aparecem salas com o Atendimento de Convênio ligado no cadastro delas.",
         },
     ],
     "conexoes-templates": [

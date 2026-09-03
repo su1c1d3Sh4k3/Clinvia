@@ -15,6 +15,7 @@ import { makeOpenAIRequest, trackTokenUsage } from "../_shared/token-tracker.ts"
 import { buildRecurrenceObjective, RECURRENCE_STAGE_PROMPTS } from "../_shared/recurrence-campaign.ts";
 import { buildBookingLink } from "../_shared/booking-link.ts";
 import { AC_FREE_TEXT_STATES, matchAcButtonId } from "../_shared/appointment-confirmation-buttons.ts";
+import { getConvenioCatalog } from "../_shared/convenio-schedule.ts";
 
 // EdgeRuntime.waitUntil mantém o processo vivo após o return 200 para que
 // tasks de background (persistir foto, download de mídia) terminem mesmo
@@ -1964,6 +1965,7 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                     let enrichedCrm = null;
                     let enrichedServicesCatalog: any[] = [];
                     let enrichedAvaliacoes: any[] = [];
+                    let enrichedConvenios: string[] = [];
                     let enrichedAppointments: any = {};
                     let enrichedLastSummary = null;
                     let enrichedUnscheduledPurchases: any = 'Nenhuma compra realizada no momento';
@@ -2071,11 +2073,36 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                         enrichedLastSummary = lastConv ? { ...lastConv, updated_at: toSaoPaulo(lastConv.updated_at) } : null;
                     }
 
+                    // 4b. Convênios da conta — bloco próprio no payload e marcação
+                    // "(apto para convênio)" nos serviços atrelados a algum convênio.
+                    const aptoServiceIds = new Set<string>();
+                    try {
+                        const { catchAll, list } = await getConvenioCatalog(supabase, userId);
+                        const convRows = catchAll ? [catchAll] : list;
+                        enrichedConvenios = convRows.map((c) => {
+                            const nome = catchAll ? 'Habilitado para todos os convênios' : c.nome;
+                            const desc = (c.descricao || '').trim();
+                            return desc ? `${nome} — ${desc}` : nome;
+                        });
+                        if (convRows.length > 0) {
+                            const { data: aptos, error: aptosErr } = await supabase
+                                .from('convenio_servicos')
+                                .select('service_client_id')
+                                .in('convenio_id', convRows.map((c) => c.id));
+                            if (aptosErr) {
+                                console.warn('[bd_data] convenio_servicos lookup failed:', aptosErr.message);
+                            }
+                            for (const r of aptos || []) aptoServiceIds.add(r.service_client_id);
+                        }
+                    } catch (convErr) {
+                        console.warn('[webhook-handle-message] convenios lookup failed:', convErr);
+                    }
+
                     // 5. Services catalog — service names + professionals
                     // Categoria "Avaliação" sai do catálogo e vai num objeto separado
                     const { data: catalogRaw } = await supabase
                         .from('services_client')
-                        .select('service_name_id, professionals, category_id, name, description, price')
+                        .select('id, service_name_id, professionals, category_id, name, description, price')
                         .eq('user_id', userId)
                         .eq('status', true);
 
@@ -2130,17 +2157,21 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                                 profissionais: profNames.length > 0 ? profNames.join(', ') : null,
                                 descricao: s.description || null,
                                 valor: price === 0 ? 'gratuito' : price,
+                                apto_convenio: aptoServiceIds.has(s.id),
                             };
                         });
 
                         // Group professionals by service_name_id (só serviços fora de Avaliação)
                         const snProfMap = new Map<string, Set<string>>();
+                        // Um nome de serviço é apto quando QUALQUER aplicação dele é apta
+                        const snAptoIds = new Set<string>();
                         for (const sc of regularRows) {
                             if (!snProfMap.has(sc.service_name_id)) snProfMap.set(sc.service_name_id, new Set());
                             for (const pid of (sc.professionals || [])) {
                                 const name = profMap.get(pid);
                                 if (name) snProfMap.get(sc.service_name_id)!.add(name);
                             }
+                            if (aptoServiceIds.has(sc.id)) snAptoIds.add(sc.service_name_id);
                         }
 
                         const snIds = [...new Set(regularRows.map((s: any) => s.service_name_id))];
@@ -2150,7 +2181,8 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                             enrichedServicesCatalog = (sns || []).map((s: any) => {
                                 const profs = snProfMap.get(s.id);
                                 const profNames = profs && profs.size > 0 ? [...profs].join(', ') : null;
-                                return profNames ? `${s.name} (${profNames})` : s.name;
+                                const label = profNames ? `${s.name} (${profNames})` : s.name;
+                                return snAptoIds.has(s.id) ? `${label} (apto para convênio)` : label;
                             });
                         }
                     }
@@ -2298,6 +2330,7 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                             crm: enrichedCrm,
                             services_catalog: enrichedServicesCatalog,
                             avaliacoes: enrichedAvaliacoes,
+                            convenios: enrichedConvenios,
                             appointments: enrichedAppointments,
                             unscheduled_purchases: enrichedUnscheduledPurchases,
                             last_summary: enrichedLastSummary,

@@ -157,6 +157,15 @@ export function AgendaGuide() {
                     <strong className="text-foreground">"Configurar horário individualmente"</strong>:
                 </p>
                 <DailyScheduleDemo />
+                <Callout type="dica" title="A faixa amarela é horário de convênio">
+                    No mesmo cadastro, abaixo dos dias de atendimento, existe a chave{" "}
+                    <strong>Atendimento de Convênio</strong>: ela reserva dias e uma faixa de horário para pacientes de
+                    convênio. Na grade, essa faixa aparece <strong>pintada de amarelo</strong> com a etiqueta "Convênio".
+                    A marcação é só informativa — <strong>você continua encaixando manualmente quem quiser</strong> ali.
+                    Quem respeita a reserva é a IA, o link público e as integrações: nas buscas de horário particular
+                    esses intervalos não são oferecidos, e nas buscas de convênio só aparecem eles. Quais planos
+                    e serviços entram é definido em <strong>Equipe &gt; Convênios</strong>.
+                </Callout>
             </TopicSection>
 
             {/* 6 */}

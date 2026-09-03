@@ -2,6 +2,19 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useOwnerId } from "@/hooks/useOwnerId";
 
+/** Colunas da janela de convênio da sala — o modal precisa delas para editar. */
+export const CONVENIO_SALA_COLUMNS =
+    "convenio_enabled, convenio_all, convenio_days, convenio_hours, convenio_use_daily, convenio_hours_daily";
+
+export interface ConvenioSalaFields {
+    convenio_enabled: boolean | null;
+    convenio_all: boolean | null;
+    convenio_days: number[] | null;
+    convenio_hours: any;
+    convenio_use_daily: boolean | null;
+    convenio_hours_daily: any;
+}
+
 export interface Responsavel {
     id: string;
     user_id: string;
@@ -16,10 +29,10 @@ export interface Responsavel {
         work_hours: any;
         use_daily_schedule: boolean | null;
         work_hours_daily: any;
-    } | null;
+    } & ConvenioSalaFields | null;
 }
 
-export interface Sala {
+export interface Sala extends ConvenioSalaFields {
     id: string;
     name: string;
     responsavel_id: string | null;
@@ -40,7 +53,7 @@ export function useResponsaveis() {
         queryFn: async (): Promise<Responsavel[]> => {
             const { data, error } = await supabase
                 .from("responsaveis" as any)
-                .select("id, user_id, name, role, photo_url, active, sala:professionals(id, name, work_days, work_hours, use_daily_schedule, work_hours_daily)")
+                .select(`id, user_id, name, role, photo_url, active, sala:professionals(id, name, work_days, work_hours, use_daily_schedule, work_hours_daily, ${CONVENIO_SALA_COLUMNS})`)
                 .eq("user_id", ownerId!)
                 .order("name");
             if (error) throw error;
@@ -62,7 +75,7 @@ export function useSalas() {
         queryFn: async (): Promise<Sala[]> => {
             const { data, error } = await supabase
                 .from("professionals" as any)
-                .select("id, name, responsavel_id, active, work_days, work_hours, use_daily_schedule, work_hours_daily, responsavel:responsaveis(id, name, role, photo_url)")
+                .select(`id, name, responsavel_id, active, work_days, work_hours, use_daily_schedule, work_hours_daily, ${CONVENIO_SALA_COLUMNS}, responsavel:responsaveis(id, name, role, photo_url)`)
                 .eq("user_id", ownerId!)
                 .order("name");
             if (error) throw error;

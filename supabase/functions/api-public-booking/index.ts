@@ -12,6 +12,17 @@ import {
     readJsonBody,
     unknownAction,
 } from "../_shared/api-errors.ts";
+import {
+    CONVENIO_PROF_COLUMNS,
+    convenioRanges,
+    type ConvenioSelection,
+    filterRoomsForConvenio,
+    getConvenioCatalog,
+    getConvenioRoomIds,
+    insideConvenio,
+    NO_CONVENIO,
+    overlapsConvenio,
+} from "../_shared/convenio-schedule.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -62,7 +73,7 @@ serve(async (req) => {
         const { body, response: bodyFail } = await readJsonBody(req, corsHeaders);
         if (bodyFail) return bodyFail;
 
-        const { action, user_id, contact_id, service_id, professional_id, date, time, appointment_id, instance_id } = body!;
+        const { action, user_id, contact_id, service_id, professional_id, date, time, appointment_id, instance_id, convenio_id } = body!;
 
         if (!user_id) {
             return patientError(400, "booking_link_invalid",
@@ -95,6 +106,38 @@ serve(async (req) => {
                     `O horário informado ("${time}") não está no formato esperado. Use HH:MM em 24 horas (ex.: 14:30).`);
             }
             return null;
+        };
+
+        /**
+         * Convênio escolhido na tela (Particular × Convênio). O paciente escolhe
+         * da lista devolvida por get_services, então aqui só validamos o id.
+         */
+        const resolveConvenio = async (): Promise<
+            { selection: ConvenioSelection; response: null } | { selection: null; response: Response }
+        > => {
+            if (!convenio_id) return { selection: NO_CONVENIO, response: null };
+            const { data, error } = await supabase.from("convenios")
+                .select("id, nome, descricao, is_catch_all")
+                .eq("id", convenio_id).eq("user_id", user_id).eq("active", true).maybeSingle();
+            if (error) {
+                return {
+                    selection: null,
+                    response: patientDbError("convenio_read_failed", "buscar o convênio escolhido", error,
+                        "Não conseguimos confirmar o convênio escolhido. Tente novamente em alguns instantes ou fale com a clínica."),
+                };
+            }
+            if (!data) {
+                return {
+                    selection: null,
+                    response: patientError(404, "convenio_not_found",
+                        "O convênio escolhido não está mais disponível na clínica. Volte e escolha outra opção.",
+                        `convenio_id=${convenio_id}`),
+                };
+            }
+            return {
+                selection: { requested: true, convenio: data, catchAll: !!data.is_catch_all },
+                response: null,
+            };
         };
 
         // Campanha ativa da instância do link onde o contato recebeu envio.
@@ -193,12 +236,60 @@ serve(async (req) => {
                     "Não conseguimos carregar a lista de serviços agora. Tente novamente em alguns instantes ou fale com a clínica.");
             }
 
+            // Convênios da conta + quais aplicações visíveis são aptas a cada um.
+            // "Habilitar todos os convênios" vira uma única opção na tela.
+            const { catchAll, list } = await getConvenioCatalog(supabase, user_id);
+            const convenioOptions = catchAll
+                ? [{ id: catchAll.id, nome: "Habilitado para todos os convênios", descricao: catchAll.descricao ?? null }]
+                : list.map((c) => ({ id: c.id, nome: c.nome, descricao: c.descricao ?? null }));
+
+            // Salas que atendem cada convênio — o paciente só vê profissional elegível.
+            const convenioRooms = new Map<string, string[]>();
+            if (convenioOptions.length > 0) {
+                const { data: convProfs, error: convProfErr } = await supabase.from("professionals")
+                    .select(`id, ${CONVENIO_PROF_COLUMNS}`)
+                    .eq("user_id", user_id).eq("active", true);
+                if (convProfErr) {
+                    return patientDbError("convenio_rooms_read_failed", "buscar as salas que atendem convênio", convProfErr,
+                        "Não conseguimos carregar a lista de serviços agora. Tente novamente em alguns instantes ou fale com a clínica.");
+                }
+                for (const opt of convenioOptions) {
+                    const roomIds = await getConvenioRoomIds(supabase, opt.id);
+                    convenioRooms.set(
+                        opt.id,
+                        filterRoomsForConvenio(convProfs || [], roomIds).map((p: any) => p.id),
+                    );
+                }
+            }
+
+            const aptoByService = new Map<string, string[]>();
+            if (convenioOptions.length > 0 && visibleApps.length > 0) {
+                const { data: aptos, error: aptosErr } = await supabase.from("convenio_servicos")
+                    .select("convenio_id, service_client_id")
+                    .in("convenio_id", convenioOptions.map((c) => c.id))
+                    .in("service_client_id", visibleApps.map((s: any) => s.id));
+                if (aptosErr) {
+                    return patientDbError("convenio_services_read_failed", "buscar os serviços aptos a convênio", aptosErr,
+                        "Não conseguimos carregar a lista de serviços agora. Tente novamente em alguns instantes ou fale com a clínica.");
+                }
+                for (const row of aptos || []) {
+                    const arr = aptoByService.get(row.service_client_id) || [];
+                    arr.push(row.convenio_id);
+                    aptoByService.set(row.service_client_id, arr);
+                }
+            }
+
             return new Response(JSON.stringify({
                 categories: cats,
                 service_names: sns || [],
+                convenios: convenioOptions.map((c) => ({
+                    ...c,
+                    professional_ids: convenioRooms.get(c.id) || [],
+                })),
                 applications: visibleApps.map((s: any) => ({
                     id: s.id, name: s.name, description: s.description, duration_minutes: s.duration_minutes,
                     category_id: s.category_id, service_name_id: s.service_name_id, professionals: s.professionals || [],
+                    convenio_ids: aptoByService.get(s.id) || [],
                 })),
             }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
@@ -253,9 +344,13 @@ serve(async (req) => {
             }
             const duration = svc.duration_minutes || 30;
 
+            const { selection: slotConvenio, response: slotConvenioFail } = await resolveConvenio();
+            if (slotConvenioFail) return slotConvenioFail;
+
             // Get professional work settings
             const { data: prof, error: profErr } = await supabase.from("professionals")
-                .select("work_hours, work_days, use_daily_schedule, work_hours_daily").eq("id", professional_id).eq("active", true).maybeSingle();
+                .select(`id, work_hours, work_days, use_daily_schedule, work_hours_daily, ${CONVENIO_PROF_COLUMNS}`)
+                .eq("id", professional_id).eq("active", true).maybeSingle();
             if (profErr) {
                 return patientDbError("professional_read_failed", "buscar os horários de trabalho do profissional", profErr,
                     "Não conseguimos consultar os horários agora. Tente novamente em alguns instantes ou fale com a clínica.");
@@ -291,6 +386,22 @@ serve(async (req) => {
             const brkStart = wh.break_start ? parseT(wh.break_start) : null;
             const brkEnd = wh.break_end ? parseT(wh.break_end) : null;
 
+            // Faixa dedicada a convênio: no modo particular ela some da grade;
+            // no modo convênio ela é a única grade oferecida.
+            const convRanges = convenioRanges(prof, reqDate.getDay(), {
+                start: whStart, end: whEnd, breakStart: brkStart, breakEnd: brkEnd,
+            });
+            if (slotConvenio.requested) {
+                const roomIds = slotConvenio.convenio
+                    ? await getConvenioRoomIds(supabase, slotConvenio.convenio.id)
+                    : new Set<string>();
+                const allowed = filterRoomsForConvenio([prof as any], roomIds).length > 0;
+                if (!allowed || convRanges.length === 0) {
+                    return new Response(JSON.stringify({ slots: [] }),
+                        { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+                }
+            }
+
             // Existing appointments
             const { data: apts, error: aptsErr } = await supabase.from("appointments")
                 .select("start_time, end_time").eq("professional_id", professional_id).neq("status", "canceled")
@@ -315,6 +426,11 @@ serve(async (req) => {
             const available: string[] = [];
             for (let m = whStart; m + duration <= whEnd; m += slotSettings.stepMinutes) {
                 if (brkStart !== null && brkEnd !== null && m < brkEnd && m + duration > brkStart) continue;
+                if (slotConvenio.requested) {
+                    if (!insideConvenio(m, duration, convRanges)) continue;
+                } else if (overlapsConvenio(m, duration, convRanges)) {
+                    continue;
+                }
                 let conflict = false;
                 for (const b of busy) { if (m < b.end && m + duration > b.start) { conflict = true; break; } }
                 if (!conflict) available.push(`${pad(Math.floor(m / 60))}:${pad(m % 60)}`);
@@ -343,7 +459,8 @@ serve(async (req) => {
 
             const [{ data: svc, error: svcErr }, { data: prof, error: profErr }] = await Promise.all([
                 supabase.from("services_client").select("name, price, duration_minutes, category_id, service_name_id").eq("id", service_id).maybeSingle(),
-                supabase.from("professionals").select("name").eq("id", professional_id).eq("active", true).maybeSingle(),
+                supabase.from("professionals").select(`id, name, ${CONVENIO_PROF_COLUMNS}`)
+                    .eq("id", professional_id).eq("active", true).maybeSingle(),
             ]);
             if (svcErr) {
                 return patientDbError("service_read_failed", "buscar o serviço escolhido", svcErr,
@@ -362,6 +479,29 @@ serve(async (req) => {
                 return patientError(404, "professional_not_found",
                     "O profissional escolhido não está mais cadastrado na clínica. Volte e escolha outro profissional.",
                     `professional_id=${professional_id}`);
+            }
+
+            const { selection: bookingConvenio, response: bookingConvenioFail } = await resolveConvenio();
+            if (bookingConvenioFail) return bookingConvenioFail;
+
+            if (bookingConvenio.requested && bookingConvenio.convenio) {
+                const { data: apto, error: aptoErr } = await supabase.from("convenio_servicos")
+                    .select("service_client_id")
+                    .eq("convenio_id", bookingConvenio.convenio.id)
+                    .eq("service_client_id", service_id).maybeSingle();
+                if (aptoErr) {
+                    return patientDbError("convenio_service_check_failed", "checar se o serviço é atendido pelo convênio", aptoErr,
+                        "Não conseguimos confirmar se esse serviço é atendido pelo convênio. Tente novamente em alguns instantes ou fale com a clínica.");
+                }
+                if (!apto) {
+                    return patientError(409, "service_not_convenio",
+                        `O serviço "${svc.name}" não é atendido por convênio nesta clínica. Volte e escolha a opção Particular ou outro serviço.`);
+                }
+                const roomIds = await getConvenioRoomIds(supabase, bookingConvenio.convenio.id);
+                if (filterRoomsForConvenio([prof as any], roomIds).length === 0) {
+                    return patientError(409, "professional_not_convenio",
+                        `${prof.name} não atende por convênio. Volte e escolha outro profissional ou a opção Particular.`);
+                }
             }
 
             const duration = svc.duration_minutes || 30;
@@ -420,6 +560,7 @@ serve(async (req) => {
                 price: finalPrice,
                 type: "appointment",
                 campaign_id: campaign?.id ?? null,
+                convenio_id: bookingConvenio.convenio?.id ?? null,
                 instance_id,
                 created_via: "public_link",
             }).select().single();
@@ -525,7 +666,7 @@ serve(async (req) => {
             }
 
             const { data: apts, error: aptsErr } = await supabase.from("appointments")
-                .select("id, service_name, professional_name, start_time, end_time, status, service_id, professional_id")
+                .select("id, service_name, professional_name, start_time, end_time, status, service_id, professional_id, convenio_id")
                 .eq("contact_id", contact_id).eq("type", "appointment")
                 .in("status", ["pending", "confirmed", "rescheduled"])
                 .gte("start_time", new Date().toISOString())

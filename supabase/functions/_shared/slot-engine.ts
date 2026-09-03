@@ -20,6 +20,11 @@ import {
 import { getWorkHoursForDay } from "./professional-schedule.ts";
 import { isProfessionalDayBlocked } from "./day-blocks.ts";
 import { getSlotSettings } from "./slot-settings.ts";
+import {
+    CONVENIO_PROF_COLUMNS,
+    convenioRanges,
+    overlapsConvenio,
+} from "./convenio-schedule.ts";
 
 export interface Slot {
     time: string;       // 'HH:MM' in Brasília wall clock
@@ -92,7 +97,7 @@ export async function computeAvailableSlots(
     // 1. Fetch professional
     const { data: professional, error: profErr } = await supabase
         .from("professionals")
-        .select("id, work_days, work_hours, use_daily_schedule, work_hours_daily")
+        .select(`id, work_days, work_hours, use_daily_schedule, work_hours_daily, ${CONVENIO_PROF_COLUMNS}`)
         .eq("id", professionalId)
         .eq("active", true)
         .maybeSingle();
@@ -134,6 +139,15 @@ export async function computeAvailableSlots(
     const breakEndMin = breakEnd ? hmToMinutes(breakEnd.hh, breakEnd.mm) : null;
 
     if (endMin <= startMin) return [];
+
+    // Automação de entrega nunca agenda convênio: as faixas dedicadas da sala
+    // ficam de fora, exatamente como no modo convenio="nao" das APIs.
+    const convRanges = convenioRanges(professional, weekday, {
+        start: startMin,
+        end: endMin,
+        breakStart: breakStartMin,
+        breakEnd: breakEndMin,
+    });
 
     // 5. Fetch existing appointments for this professional on this BRT date
     //    (comparing via UTC window covering the full BRT day).
@@ -188,6 +202,9 @@ export async function computeAvailableSlots(
             const overlapsBreak = slotStart < breakEndMin && breakStartMin < slotEnd;
             if (overlapsBreak) continue;
         }
+
+        // Faixa reservada para convênio
+        if (overlapsConvenio(slotStart, serviceDuration, convRanges)) continue;
 
         // Appointment / absence conflict
         const conflict = blocked.some(

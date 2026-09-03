@@ -14,12 +14,12 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Upload, X, CalendarDays, CheckCircle2, Unlink, RefreshCw } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import type { GoogleCalendarConnection, GoogleSyncMode } from "@/types/googleCalendar";
 import { useOwnerId } from "@/hooks/useOwnerId";
+import { ServiceCategoryPicker } from "@/components/services/ServiceCategoryPicker";
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 
@@ -55,6 +55,11 @@ const dayHoursSchema = z.object({
     break_end: z.string(),
 });
 
+const convenioHoursSchema = z.object({
+    start: z.string(),
+    end: z.string(),
+});
+
 const formSchema = z.object({
     name: z.string().min(1, "Nome é obrigatório"),
     role: z.string().optional(),
@@ -63,7 +68,15 @@ const formSchema = z.object({
     work_hours: dayHoursSchema,
     use_daily_schedule: z.boolean().default(false),
     work_hours_daily: z.record(z.string(), dayHoursSchema).nullable().default(null),
+    convenio_enabled: z.boolean().default(false),
+    convenio_all: z.boolean().default(true),
+    convenio_days: z.array(z.number()).default([]),
+    convenio_hours: convenioHoursSchema,
+    convenio_use_daily: z.boolean().default(false),
+    convenio_hours_daily: z.record(z.string(), convenioHoursSchema).nullable().default(null),
 });
+
+const DEFAULT_CONVENIO_HOURS = { start: "14:00", end: "16:00" };
 
 interface ProfessionalModalProps {
     open: boolean;
@@ -105,6 +118,7 @@ export function ProfessionalModal({
     const [photoFile, setPhotoFile] = useState<File | null>(null);
     const [existingPhoto, setExistingPhoto] = useState<string | null>(null);
     const [activeDayTab, setActiveDayTab] = useState<string>("1");
+    const [activeConvenioDayTab, setActiveConvenioDayTab] = useState<string>("1");
 
     const { data: services } = useQuery({
         queryKey: ["services-client-list", ownerId],
@@ -136,6 +150,12 @@ export function ProfessionalModal({
             },
             use_daily_schedule: false,
             work_hours_daily: null,
+            convenio_enabled: false,
+            convenio_all: true,
+            convenio_days: [],
+            convenio_hours: { ...DEFAULT_CONVENIO_HOURS },
+            convenio_use_daily: false,
+            convenio_hours_daily: null,
         },
     });
 
@@ -158,6 +178,12 @@ export function ProfessionalModal({
                 },
                 use_daily_schedule: professionalToEdit.use_daily_schedule || false,
                 work_hours_daily: professionalToEdit.work_hours_daily || null,
+                convenio_enabled: professionalToEdit.convenio_enabled || false,
+                convenio_all: professionalToEdit.convenio_all ?? true,
+                convenio_days: professionalToEdit.convenio_days || [],
+                convenio_hours: professionalToEdit.convenio_hours || { ...DEFAULT_CONVENIO_HOURS },
+                convenio_use_daily: professionalToEdit.convenio_use_daily || false,
+                convenio_hours_daily: professionalToEdit.convenio_hours_daily || null,
             });
             setExistingPhoto(responsavelToEdit?.photo_url ?? null);
             const firstDay = (professionalToEdit.work_days || [1])[0];
@@ -176,6 +202,12 @@ export function ProfessionalModal({
                 },
                 use_daily_schedule: false,
                 work_hours_daily: null,
+                convenio_enabled: false,
+                convenio_all: true,
+                convenio_days: [],
+                convenio_hours: { ...DEFAULT_CONVENIO_HOURS },
+                convenio_use_daily: false,
+                convenio_hours_daily: null,
             });
             setExistingPhoto(null);
             setPhotoFile(null);
@@ -186,15 +218,6 @@ export function ProfessionalModal({
     const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files?.[0]) {
             setPhotoFile(e.target.files[0]);
-        }
-    };
-
-    const toggleService = (serviceId: string) => {
-        const current = form.getValues("service_ids");
-        if (current.includes(serviceId)) {
-            form.setValue("service_ids", current.filter(id => id !== serviceId));
-        } else {
-            form.setValue("service_ids", [...current, serviceId]);
         }
     };
 
@@ -243,6 +266,51 @@ export function ProfessionalModal({
         const daily = { ...(form.getValues("work_hours_daily") || {}) };
         daily[day] = { ...(daily[day] || form.getValues("work_hours")), [field]: value };
         form.setValue("work_hours_daily", daily);
+    };
+
+    // A janela de convênio é um recorte do expediente: mesmos dias possíveis,
+    // só início e fim (o intervalo do expediente continua valendo).
+    const toggleConvenioDay = (dayId: number) => {
+        const current = form.getValues("convenio_days");
+        if (current.includes(dayId)) {
+            const next = current.filter(d => d !== dayId);
+            form.setValue("convenio_days", next);
+            if (activeConvenioDayTab === String(dayId) && next.length > 0) {
+                setActiveConvenioDayTab(String([...next].sort((a, b) => a - b)[0]));
+            }
+        } else {
+            form.setValue("convenio_days", [...current, dayId]);
+            if (form.getValues("convenio_use_daily")) {
+                const daily = { ...(form.getValues("convenio_hours_daily") || {}) };
+                if (!daily[String(dayId)]) {
+                    daily[String(dayId)] = { ...form.getValues("convenio_hours") };
+                    form.setValue("convenio_hours_daily", daily);
+                }
+            }
+        }
+    };
+
+    const handleToggleConvenioDaily = (checked: boolean) => {
+        form.setValue("convenio_use_daily", checked);
+        if (checked) {
+            const days = form.getValues("convenio_days");
+            const global = form.getValues("convenio_hours");
+            const daily = { ...(form.getValues("convenio_hours_daily") || {}) };
+            for (const d of days) {
+                if (!daily[String(d)]) daily[String(d)] = { ...global };
+            }
+            form.setValue("convenio_hours_daily", daily);
+            const sorted = [...days].sort((a, b) => a - b);
+            if (!days.includes(Number(activeConvenioDayTab))) {
+                setActiveConvenioDayTab(String(sorted[0] ?? 1));
+            }
+        }
+    };
+
+    const setConvenioDailyHour = (day: string, field: "start" | "end", value: string) => {
+        const daily = { ...(form.getValues("convenio_hours_daily") || {}) };
+        daily[day] = { ...(daily[day] || form.getValues("convenio_hours")), [field]: value };
+        form.setValue("convenio_hours_daily", daily);
     };
 
     const onSubmit = async (values: z.infer<typeof formSchema>) => {
@@ -305,6 +373,12 @@ export function ProfessionalModal({
                 work_hours: values.work_hours,
                 use_daily_schedule: values.use_daily_schedule,
                 work_hours_daily: values.work_hours_daily,
+                convenio_enabled: values.convenio_enabled,
+                convenio_all: values.convenio_all,
+                convenio_days: values.convenio_enabled ? values.convenio_days : [],
+                convenio_hours: values.convenio_hours,
+                convenio_use_daily: values.convenio_use_daily,
+                convenio_hours_daily: values.convenio_hours_daily,
             };
             if (isResponsavel) payload.responsavel_id = responsavelId;
 
@@ -467,22 +541,10 @@ export function ProfessionalModal({
 
                         <div className="space-y-2">
                             <FormLabel>Serviços</FormLabel>
-                            <div className="flex flex-wrap gap-2 border p-2 rounded-md min-h-[40px]">
-                                {services?.map((service) => {
-                                    const isSelected = form.watch("service_ids").includes(service.id);
-                                    return (
-                                        <Badge
-                                            key={service.id}
-                                            variant={isSelected ? "default" : "outline"}
-                                            className="cursor-pointer hover:bg-primary/20"
-                                            onClick={() => toggleService(service.id)}
-                                        >
-                                            {service.name}
-                                        </Badge>
-                                    );
-                                })}
-                                {services?.length === 0 && <span className="text-muted-foreground text-sm">Nenhum serviço cadastrado</span>}
-                            </div>
+                            <ServiceCategoryPicker
+                                value={form.watch("service_ids")}
+                                onChange={(ids) => form.setValue("service_ids", ids)}
+                            />
                         </div>
 
                         <div className="space-y-2">
@@ -641,6 +703,163 @@ export function ProfessionalModal({
                                 </div>
                             );
                         })()}
+
+                        {/* ─── Atendimento de Convênio ───────────────────────────── */}
+                        <Separator />
+
+                        <div className="space-y-3" data-tour="sala-convenio">
+                            <div className="flex items-center justify-between rounded-lg border p-3">
+                                <div className="space-y-0.5 pr-4">
+                                    <FormLabel className="cursor-pointer" onClick={() => form.setValue("convenio_enabled", !form.watch("convenio_enabled"))}>
+                                        Atendimento de Convênio
+                                    </FormLabel>
+                                    <p className="text-xs text-muted-foreground">
+                                        Quando ligado, esta sala recebe agendamentos de convênio no horário dedicado
+                                        definido abaixo. Esse horário sai das buscas de horário particular.
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={form.watch("convenio_enabled")}
+                                    onCheckedChange={(v) => form.setValue("convenio_enabled", v)}
+                                />
+                            </div>
+
+                            {form.watch("convenio_enabled") && (
+                                <>
+                                    <div className="flex items-center justify-between rounded-lg border p-3">
+                                        <div className="space-y-0.5 pr-4">
+                                            <FormLabel className="cursor-pointer" onClick={() => form.setValue("convenio_all", !form.watch("convenio_all"))}>
+                                                Atende todos os convênios
+                                            </FormLabel>
+                                            <p className="text-xs text-muted-foreground">
+                                                Desligue para escolher, no cadastro de cada convênio (Equipe &gt; Convênios),
+                                                quais deles esta sala atende.
+                                            </p>
+                                        </div>
+                                        <Switch
+                                            checked={form.watch("convenio_all")}
+                                            onCheckedChange={(v) => form.setValue("convenio_all", v)}
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <FormLabel>Dias com horário de convênio</FormLabel>
+                                        <div className="flex flex-wrap gap-2">
+                                            {DAYS.map((day) => (
+                                                <div key={day.id} className="flex items-center space-x-2">
+                                                    <Checkbox
+                                                        id={`conv-day-${day.id}`}
+                                                        checked={form.watch("convenio_days").includes(day.id)}
+                                                        onCheckedChange={() => toggleConvenioDay(day.id)}
+                                                    />
+                                                    <label
+                                                        htmlFor={`conv-day-${day.id}`}
+                                                        className="text-sm font-medium leading-none"
+                                                    >
+                                                        {day.label}
+                                                    </label>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <p className="text-xs text-muted-foreground">
+                                            O horário de convênio vale só dentro do expediente da sala — o que ficar
+                                            fora dos dias e horas de atendimento é ignorado.
+                                        </p>
+                                    </div>
+
+                                    <div className="flex items-center justify-between rounded-lg border p-3">
+                                        <div className="space-y-0.5 pr-4">
+                                            <FormLabel className="cursor-pointer" onClick={() => handleToggleConvenioDaily(!form.watch("convenio_use_daily"))}>
+                                                Configurar horário individualmente
+                                            </FormLabel>
+                                            <p className="text-xs text-muted-foreground">
+                                                Defina um horário de convênio diferente para cada dia
+                                            </p>
+                                        </div>
+                                        <Switch
+                                            checked={form.watch("convenio_use_daily")}
+                                            onCheckedChange={handleToggleConvenioDaily}
+                                        />
+                                    </div>
+
+                                    {!form.watch("convenio_use_daily") ? (
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <FormField
+                                                control={form.control}
+                                                name="convenio_hours.start"
+                                                render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel>Início</FormLabel>
+                                                        <FormControl>
+                                                            <Input type="time" {...field} />
+                                                        </FormControl>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )}
+                                            />
+                                            <FormField
+                                                control={form.control}
+                                                name="convenio_hours.end"
+                                                render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel>Fim</FormLabel>
+                                                        <FormControl>
+                                                            <Input type="time" {...field} />
+                                                        </FormControl>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )}
+                                            />
+                                        </div>
+                                    ) : (() => {
+                                        const convDays = [...form.watch("convenio_days")].sort((a, b) => a - b);
+                                        if (convDays.length === 0) {
+                                            return (
+                                                <p className="text-sm text-muted-foreground border rounded-md p-3">
+                                                    Selecione ao menos um dia com horário de convênio.
+                                                </p>
+                                            );
+                                        }
+                                        const currentDay = convDays.includes(Number(activeConvenioDayTab))
+                                            ? activeConvenioDayTab
+                                            : String(convDays[0]);
+                                        const daily = form.watch("convenio_hours_daily") || {};
+                                        const dayCfg = daily[currentDay] || form.getValues("convenio_hours");
+                                        return (
+                                            <div className="space-y-3">
+                                                <Tabs value={currentDay} onValueChange={setActiveConvenioDayTab}>
+                                                    <TabsList className="w-full justify-start overflow-x-auto flex-nowrap">
+                                                        {convDays.map((d) => (
+                                                            <TabsTrigger key={d} value={String(d)} className="shrink-0">
+                                                                {DAYS.find(day => day.id === d)?.label}
+                                                            </TabsTrigger>
+                                                        ))}
+                                                    </TabsList>
+                                                </Tabs>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="space-y-2">
+                                                        <FormLabel>Início</FormLabel>
+                                                        <Input
+                                                            type="time"
+                                                            value={String(dayCfg.start ?? "")}
+                                                            onChange={(e) => setConvenioDailyHour(currentDay, "start", e.target.value)}
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <FormLabel>Fim</FormLabel>
+                                                        <Input
+                                                            type="time"
+                                                            value={String(dayCfg.end ?? "")}
+                                                            onChange={(e) => setConvenioDailyHour(currentDay, "end", e.target.value)}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+                                </>
+                            )}
+                        </div>
 
                         {/* Google Calendar – só disponível ao editar profissional existente */}
                         {professionalToEdit && (

@@ -1,6 +1,6 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, ShieldCheck, Loader2, Stethoscope, DoorOpen } from "lucide-react";
+import { Users, ShieldCheck, Loader2, Stethoscope, DoorOpen, HeartHandshake } from "lucide-react";
 import { Navigate } from "react-router-dom";
 import { useUserRole } from "@/hooks/useUserRole";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -8,6 +8,7 @@ import { TeamSettings } from "@/components/settings/TeamSettings";
 import { PermissionsSettings } from "@/components/settings/PermissionsSettings";
 import { ProfissionaisTab } from "@/components/team/ProfissionaisTab";
 import { SalasTab } from "@/components/team/SalasTab";
+import { ConveniosTab } from "@/components/team/ConveniosTab";
 import { useUrlTab } from "@/hooks/useUrlTab";
 import { useSuporteTour } from "@/lib/suporteTours";
 
@@ -57,6 +58,11 @@ export default function TeamPage() {
                         <DoorOpen className="h-4 w-4" />
                         Salas
                     </TabsTrigger>
+                    <TabsTrigger value="convenios" className="flex-1 flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
+                        <HeartHandshake className="h-4 w-4" />
+                        <span className="hidden sm:inline">Convênios</span>
+                        <span className="sm:hidden">Conv.</span>
+                    </TabsTrigger>
                     {isAdmin && (
                         <TabsTrigger value="permissions" className="flex-1 flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
                             <ShieldCheck className="h-4 w-4" />
@@ -101,6 +107,24 @@ export default function TeamPage() {
                         </CardHeader>
                         <CardContent className="p-4 md:p-6 pt-0">
                             <SalasTab />
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                <TabsContent value="convenios">
+                    <Card>
+                        <CardHeader className="p-4 md:p-6">
+                            <CardTitle className="text-base md:text-lg flex items-center gap-2">
+                                <HeartHandshake className="h-5 w-5 text-primary" />
+                                Convênios
+                            </CardTitle>
+                            <CardDescription className="text-xs md:text-sm">
+                                Convênios atendidos pela clínica: serviços aptos, salas que recebem e o horário
+                                dedicado a cada um.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="p-4 md:p-6 pt-0">
+                            <ConveniosTab />
                         </CardContent>
                     </Card>
                 </TabsContent>

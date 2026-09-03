@@ -62,7 +62,6 @@ interface IAConfigData {
     followup_business_hours: boolean;
     voice: boolean;
     genre: string;
-    convenio: string;
     test_mode: boolean;
     test_numbers: string[];
     slot_minutes: number;
@@ -78,14 +77,6 @@ interface QualifyItem {
 interface RestrictionItem {
     id: string;
     text: string;
-}
-
-interface ConvenioItem {
-    id: string;
-    nome: string;
-    valorPrimeira: string;
-    valorDemais: string;
-    previsaoDias: number;
 }
 
 const defaultConfig: IAConfigData = {
@@ -120,7 +111,6 @@ const defaultConfig: IAConfigData = {
     followup_business_hours: false,
     voice: false,
     genre: "female",
-    convenio: "",
     test_mode: false,
     test_numbers: [],
     slot_minutes: 10,
@@ -150,7 +140,6 @@ export default function IAConfig() {
     const [restrictions, setRestrictions] = useState<RestrictionItem[]>([]);
     const [qualifyItems, setQualifyItems] = useState<QualifyItem[]>([]);
     const [companyFaq, setCompanyFaq] = useState<string>(""); // Dúvidas sobre a empresa
-    const [convenioItems, setConvenioItems] = useState<ConvenioItem[]>([]); // Convênios
     const [showCreateFunnelModal, setShowCreateFunnelModal] = useState(false); // Modal de criação do funil IA
     const [creatingFunnel, setCreatingFunnel] = useState(false); // Loading da criação do funil
     const [playingVoice, setPlayingVoice] = useState(false); // Loading do preview de voz
@@ -258,12 +247,6 @@ export default function IAConfig() {
                     setCompanyFaq(companyItem.text);
                 }
             }
-
-            // Parse convenios
-            if (existingConfig.convenio) {
-                const items = parseConvenioText(existingConfig.convenio);
-                setConvenioItems(items);
-            }
         }
     }, [existingConfig, productsServices]);
 
@@ -358,59 +341,6 @@ export default function IAConfig() {
         return allItems.join("\n\n");
     };
 
-    // Parser para convênios
-    // Formato: "1. Nome\n- Valor da Primeira Consulta: R$ X\n- Valor das Demais Consultas: R$ X\n- Previsão de agendamento para X dias"
-    const parseConvenioText = (text: string): ConvenioItem[] => {
-        if (!text?.trim()) return [];
-
-        const items: ConvenioItem[] = [];
-        const blocks = text.split(/\n\n+/);
-
-        for (const block of blocks) {
-            const lines = block.trim().split('\n');
-            if (lines.length < 1) continue;
-
-            // Primeira linha: "1. Nome do Convênio"
-            const nomeMatch = lines[0].match(/^\d+\.\s*(.+)$/);
-            if (!nomeMatch) continue;
-
-            const nome = nomeMatch[1].trim();
-            let valorPrimeira = "R$ 0,00";
-            let valorDemais = "R$ 0,00";
-            let previsaoDias = 0;
-
-            for (const line of lines.slice(1)) {
-                const valorPrimeiraMatch = line.match(/Valor da Primeira Consulta:\s*(R\$\s*[\d.,]+)/i);
-                const valorDemaisMatch = line.match(/Valor das Demais Consultas:\s*(R\$\s*[\d.,]+)/i);
-                const previsaoMatch = line.match(/Previsão de agendamento para\s*(\d+)\s*dias?/i);
-
-                if (valorPrimeiraMatch) valorPrimeira = valorPrimeiraMatch[1];
-                if (valorDemaisMatch) valorDemais = valorDemaisMatch[1];
-                if (previsaoMatch) previsaoDias = parseInt(previsaoMatch[1]) || 0;
-            }
-
-            items.push({
-                id: `convenio-${items.length}`,
-                nome,
-                valorPrimeira,
-                valorDemais,
-                previsaoDias,
-            });
-        }
-
-        return items;
-    };
-
-    // Formatar convênios para salvar
-    const formatConvenioItems = (): string => {
-        return convenioItems
-            .filter((c) => c.nome.trim())
-            .map((c, index) => {
-                return `${index + 1}. ${c.nome}\n- Valor da Primeira Consulta: ${c.valorPrimeira || "R$ 0,00"}\n- Valor das Demais Consultas: ${c.valorDemais || "R$ 0,00"}\n- Previsão de agendamento para ${c.previsaoDias || 0} dias`;
-            })
-            .join("\n\n");
-    };
-
     // Salvar configuração
     const saveMutation = useMutation({
         mutationFn: async (data: Partial<IAConfigData>) => {
@@ -477,43 +407,6 @@ export default function IAConfig() {
 
     const removeQualifyItem = (index: number) => {
         setQualifyItems(qualifyItems.filter((_, i) => i !== index));
-    };
-
-    // Handlers para Convênios
-    const addConvenioItem = () => {
-        setConvenioItems([...convenioItems, {
-            id: `convenio-${Date.now()}`,
-            nome: "",
-            valorPrimeira: "R$ 0,00",
-            valorDemais: "R$ 0,00",
-            previsaoDias: 0
-        }]);
-    };
-
-    const updateConvenioItem = (index: number, field: keyof ConvenioItem, value: string | number) => {
-        const updated = [...convenioItems];
-        updated[index] = { ...updated[index], [field]: value };
-        setConvenioItems(updated);
-    };
-
-    const removeConvenioItem = (index: number) => {
-        setConvenioItems(convenioItems.filter((_, i) => i !== index));
-    };
-
-    // Formatar valor como moeda brasileira
-    const formatCurrency = (value: string): string => {
-        // Remove tudo exceto números
-        const numbers = value.replace(/\D/g, "");
-        // Converte para centavos
-        const cents = parseInt(numbers || "0", 10);
-        // Formata como moeda
-        const reais = (cents / 100).toFixed(2);
-        return `R$ ${reais.replace(".", ",")}`;
-    };
-
-    const handleCurrencyChange = (index: number, field: "valorPrimeira" | "valorDemais", value: string) => {
-        const formatted = formatCurrency(value);
-        updateConvenioItem(index, field, formatted);
     };
 
     // Handlers para números de teste
