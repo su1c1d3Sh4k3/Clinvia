@@ -627,6 +627,8 @@ async function processConfirm24h(ctx: CronContext): Promise<{ sent: number; erro
 
             // Cliente permanece na etapa/fila atual (ex.: Agendado); o intercept
             // por sessão ativa já bloqueia a IA durante o fluxo de confirmação.
+            // Única exceção: card preso na pesquisa de um atendimento anterior.
+            await releaseStaleSurveyCard(ctx, contactId, conversationId);
 
             await supabase.from("appointment_confirmation_sessions").insert({
                 user_id: userId,
@@ -798,6 +800,9 @@ async function processReminder2h(ctx: CronContext): Promise<{ sent: number; erro
                     text: msgText,
                 });
             }
+
+            // Card preso na pesquisa de um atendimento anterior volta para 'Agendado'.
+            await releaseStaleSurveyCard(ctx, contactId, conversationId);
 
             // Create session as completed (no response expected)
             await supabase.from("appointment_confirmation_sessions").insert({
@@ -1281,6 +1286,65 @@ async function resolveDefaultQueueId(
         .maybeSingle();
     defaultQueueCache.set(cacheKey, queue?.id ?? null);
     return queue?.id ?? null;
+}
+
+// Card preso em 'Pesquisa de Satisfação' de uma pesquisa ANTERIOR, com um novo
+// agendamento a caminho: solta para 'Agendado' (decisão do usuário). Não é uma
+// sincronia de fila — se um humano assumiu a conversa, ele que conduz.
+async function releaseStaleSurveyCard(
+    ctx: CronContext,
+    contactId: string,
+    conversationId: string,
+): Promise<void> {
+    const { supabase, userId } = ctx;
+    try {
+        const { data: cards, error: cardsError } = await supabase
+            .from("crm_client")
+            .select("id, instance_id, instagram_instance_id")
+            .eq("contact_id", contactId)
+            .eq("user_id", userId)
+            .eq("is_active", true)
+            .eq("stage", "Pesquisa de Satisfação");
+        if (cardsError) throw cardsError;
+
+        const card = (cards || []).find((c: any) => c.instance_id === ctx.instance.id) ||
+            (cards || []).find((c: any) => !c.instance_id && !c.instagram_instance_id) ||
+            null;
+        if (!card) return;
+
+        // Pesquisa ainda viva: não atropela — a etapa é dela.
+        const { data: liveSurvey } = await supabase
+            .from("appointment_confirmation_sessions")
+            .select("id")
+            .eq("contact_id", contactId)
+            .eq("user_id", userId)
+            .eq("flow_type", "feedback_24h")
+            .not("state", "in", "(completed,transferred,failed)")
+            .limit(1)
+            .maybeSingle();
+        if (liveSurvey) return;
+
+        // Humano conduzindo a conversa: ele lida com a resposta do cliente.
+        const { data: conv } = await supabase
+            .from("conversations")
+            .select("status, assigned_agent_id")
+            .eq("id", conversationId)
+            .maybeSingle();
+        if (conv?.status === "open" || conv?.assigned_agent_id) return;
+
+        await supabase
+            .from("crm_client")
+            .update({
+                stage: "Agendado",
+                stage_changed_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+            })
+            .eq("id", card.id);
+        console.log(`[ac-cron] card ${card.id} liberado de 'Pesquisa de Satisfação' para 'Agendado'`);
+    } catch (err) {
+        // Nunca fatal: a mensagem automática já foi enviada.
+        console.error("[ac-cron] releaseStaleSurveyCard error:", err);
+    }
 }
 
 async function resolveConversation(
