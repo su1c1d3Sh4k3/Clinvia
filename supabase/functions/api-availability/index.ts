@@ -60,6 +60,29 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 interface Slot { time: string; professional: string; minuteOfDay: number; }
 
+/**
+ * Agrupa os horários pela sala que atende o serviço.
+ *
+ * A lista `slots` sai ordenada por horário, então as salas ficam intercaladas
+ * ("08:00 Sala 1, 08:10 Sala 2, 08:20 Sala 1"). Deixar o agrupamento a cargo do
+ * prompt do n8n é frágil: o modelo oferece dois horários como se fossem da
+ * mesma agenda e depois manda um `professional_name` que não bate com o horário
+ * escolhido — e o `create_appointment` só resolve a sala sozinho quando o
+ * serviço tem exatamente uma.
+ */
+function groupByProfessional(
+    slots: { time: string; professional: string }[],
+): { professional: string; times: string[] }[] {
+    const byProf = new Map<string, string[]>();
+    for (const s of slots) {
+        if (!byProf.has(s.professional)) byProf.set(s.professional, []);
+        byProf.get(s.professional)!.push(s.time);
+    }
+    return [...byProf.entries()]
+        .sort((a, b) => a[0].localeCompare(b[0], "pt-BR"))
+        .map(([professional, times]) => ({ professional, times }));
+}
+
 /** Get all free slots for a given date across all professionals */
 async function getSlotsForDate(
     supabase: any, professionals: any[], dateStr: string, dayOfWeek: number, duration: number,
@@ -334,13 +357,15 @@ serve(async (req) => {
             const filtered = allSlots.filter(filterFn);
 
             if (filtered.length > 0) {
+                const flat = filtered.map(s => ({ time: s.time, professional: s.professional }));
                 return new Response(JSON.stringify({
                     service: sc.name,
                     duration_minutes: duration,
                     date: dateStr,
                     day_label: DAY_NAMES[reqDate.getDay()],
                     period: periodLabel,
-                    slots: filtered.map(s => ({ time: s.time, professional: s.professional })),
+                    by_professional: groupByProfessional(flat),
+                    slots: flat,
                     ...campaignInfo,
                 }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
             }
@@ -355,6 +380,7 @@ serve(async (req) => {
                 const sFiltered = sSlots.filter(filterFn);
 
                 if (sFiltered.length > 0) {
+                    const sFlat = sFiltered.map(s => ({ time: s.time, professional: s.professional }));
                     return new Response(JSON.stringify({
                         service: sc.name,
                         duration_minutes: duration,
@@ -363,7 +389,8 @@ serve(async (req) => {
                         date: sDateStr,
                         day_label: DAY_NAMES[search.getDay()],
                         period: periodLabel,
-                        slots: sFiltered.map(s => ({ time: s.time, professional: s.professional })),
+                        by_professional: groupByProfessional(sFlat),
+                        slots: sFlat,
                         ...campaignInfo,
                     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
                 }
@@ -374,6 +401,7 @@ serve(async (req) => {
             return new Response(JSON.stringify({
                 service: sc.name,
                 message: `Nenhum horário disponível no período da ${periodLabel} nos próximos 30 dias`,
+                by_professional: [],
                 slots: [],
                 ...campaignInfo,
             }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -410,6 +438,7 @@ serve(async (req) => {
                     availability.push({
                         date: dateStr,
                         day_label: DAY_NAMES[searchDate.getDay()],
+                        by_professional: groupByProfessional(pickedSlots),
                         slots: pickedSlots,
                     });
                 }
