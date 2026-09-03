@@ -297,6 +297,7 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "Na confirmacao e na pesquisa, so o TOQUE NO BOTAO (ou o texto exato do botao) segue o fluxo automatico. Qualquer outra mensagem encerra a mensagem automatica na hora e entrega a conversa para a IA — ou para a fila humana, se a IA estiver desligada. A IA consegue confirmar o agendamento sozinha quando o cliente confirma escrevendo.",
             "Cliente que nao responde nada a mensagem automatica recebe em 24h um aviso de encerramento por falta de interacao e a conversa e resolvida. O agendamento NAO e cancelado, so o atendimento fecha. No numero oficial (Meta) o aviso nao e enviado quando o cliente nunca respondeu, porque a janela de 24h da Meta esta fechada; a conversa fecha em silencio.",
             "Confirmacao e lembrete NAO mudam a etapa do card no CRM nem a fila da conversa. Unica excecao: card parado em 'Pesquisa de Satisfacao' de um atendimento anterior volta para 'Agendado' quando o cliente tem agendamento novo chegando. Se a pesquisa ainda espera resposta, ou se um atendente ja esta conduzindo a conversa, nada e movido.",
+            "O follow-up da IA fica desligado para quem tem agendamento nas proximas 24h, ou card ativo nas etapas 'Agendado' e 'Pesquisa de Satisfacao'. E de proposito: nessa janela quem fala com o cliente sao a confirmacao e o lembrete, e o follow-up chegaria por cima delas.",
         ],
     },
     {

@@ -231,6 +231,13 @@ export function AgendaGuide() {
                     <strong className="text-foreground">Agendado</strong>. Se a pesquisa ainda estiver esperando resposta,
                     ou se um atendente já estiver conduzindo a conversa, nada é movido.
                 </Callout>
+                <Callout type="dica" title="O follow-up da IA fica em silêncio nessa janela">
+                    Cliente com agendamento nas próximas 24 horas, ou com card ativo em{" "}
+                    <strong className="text-foreground">Agendado</strong> ou{" "}
+                    <strong className="text-foreground">Pesquisa de Satisfação</strong>, não recebe follow-up. É de
+                    propósito: nesse período quem fala com ele são a confirmação e o lembrete, e o follow-up chegaria por
+                    cima delas.
+                </Callout>
             </TopicSection>
 
             {/* 9 */}
