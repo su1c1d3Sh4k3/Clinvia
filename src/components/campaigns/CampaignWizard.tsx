@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
     ChevronLeft, ChevronRight, Loader2, Megaphone, Clock, DollarSign, Users,
     FileSpreadsheet, FileCode2, Kanban, Tag as TagIcon, CalendarDays, ShoppingCart,
-    AlertTriangle, BadgePercent, Bell,
+    AlertTriangle, BadgePercent, Bell, ChevronDown,
 } from "lucide-react";
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -98,8 +98,10 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
     const [keepResendAudience, setKeepResendAudience] = useState(false);
     const [campaignType, setCampaignType] = useState<"promotion" | "notification">("promotion");
     const [selectedServices, setSelectedServices] = useState<CampaignService[]>([]);
-    // Profissionais habilitados: só contexto para a IA (limita com quem ela
-    // pode agendar). Vazio = campanha aberta a todos.
+    // Categorias abertas na lista de serviços (mesmo esquema da página de Serviços)
+    const [expandedCategories, setExpandedCategories] = useState<string[]>([]);
+    // Salas habilitadas: só contexto para a IA (limita com qual sala ela
+    // pode agendar). Vazio = campanha aberta a todas.
     const [selectedProfessionals, setSelectedProfessionals] = useState<CampaignProfessional[]>([]);
     const [discountPct, setDiscountPct] = useState<string>("");
     const [existingTemplateId, setExistingTemplateId] = useState("");
@@ -227,6 +229,33 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
         },
         enabled: open,
     });
+
+    const { data: serviceCategories } = useQuery({
+        queryKey: ["campaign-service-categories"],
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from("services_category")
+                .select("id, name")
+                .order("name");
+            if (error) throw error;
+            return (data || []) as { id: string; name: string }[];
+        },
+        enabled: open,
+    });
+
+    // Mesmo recorte da página de Serviços: categoria → serviços dentro dela
+    const servicesByCategory = useMemo(() => {
+        const byId = new Map((serviceCategories || []).map((c) => [c.id, c.name]));
+        const groups = new Map<string, { id: string; name: string; items: any[] }>();
+        for (const svc of services || []) {
+            const key = svc.category_id || "sem-categoria";
+            if (!groups.has(key)) {
+                groups.set(key, { id: key, name: byId.get(svc.category_id) || "Sem categoria", items: [] });
+            }
+            groups.get(key)!.items.push(svc);
+        }
+        return [...groups.values()].sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+    }, [services, serviceCategories]);
 
     const { data: professionals } = useQuery({
         queryKey: ["campaign-professionals"],
@@ -663,7 +692,8 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
 
     return (
         <Dialog open={open} onOpenChange={(o) => !saving && onOpenChange(o)}>
-            <DialogContent className="w-[95vw] sm:w-full sm:max-w-2xl max-h-[90vh] overflow-y-auto rounded-lg">
+            {/* sm:max-w-2xl (42rem) + 20% p/ cada lado = 58.8rem */}
+            <DialogContent className="w-[95vw] sm:w-full sm:max-w-[58.8rem] max-h-[90vh] overflow-y-auto rounded-lg">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <Megaphone className="w-5 h-5 text-primary" />
@@ -860,23 +890,58 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
                             <>
                                 <div>
                                     <p className="text-xs text-muted-foreground mb-2">Serviços atrelados à campanha</p>
-                                    <div className="max-h-56 overflow-y-auto border rounded-xl divide-y">
-                                        {(services || []).length === 0 && (
+                                    <div className="max-h-72 overflow-y-auto border rounded-xl divide-y">
+                                        {servicesByCategory.length === 0 && (
                                             <p className="text-sm text-muted-foreground p-3">Nenhum serviço ativo cadastrado.</p>
                                         )}
-                                        {(services || []).map((svc: any) => {
-                                            const checked = selectedServices.some((s) => s.id === svc.id);
+                                        {servicesByCategory.map((cat) => {
+                                            const isOpen = expandedCategories.includes(cat.id);
+                                            const selectedCount = cat.items.filter((svc: any) =>
+                                                selectedServices.some((s) => s.id === svc.id)
+                                            ).length;
                                             return (
-                                                <label
-                                                    key={svc.id}
-                                                    className="flex items-center gap-3 p-2.5 cursor-pointer hover:bg-muted/40"
-                                                >
-                                                    <Checkbox checked={checked} onCheckedChange={() => toggleService(svc)} />
-                                                    <span className="text-sm flex-1">{svc.name}</span>
-                                                    {svc.price != null && (
-                                                        <span className="text-xs text-muted-foreground">{formatCurrency(Number(svc.price))}</span>
+                                                <div key={cat.id}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            setExpandedCategories((prev) =>
+                                                                prev.includes(cat.id)
+                                                                    ? prev.filter((id) => id !== cat.id)
+                                                                    : [...prev, cat.id]
+                                                            )
+                                                        }
+                                                        className="w-full flex items-center gap-2 p-2.5 text-left hover:bg-muted/40"
+                                                    >
+                                                        <ChevronDown
+                                                            className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${isOpen ? "" : "-rotate-90"}`}
+                                                        />
+                                                        <span className="text-sm font-medium flex-1">{cat.name}</span>
+                                                        <span className="text-[10px] text-muted-foreground">
+                                                            {selectedCount > 0
+                                                                ? `${selectedCount} de ${cat.items.length}`
+                                                                : `${cat.items.length} serviço${cat.items.length === 1 ? "" : "s"}`}
+                                                        </span>
+                                                    </button>
+                                                    {isOpen && (
+                                                        <div className="divide-y border-t bg-muted/20">
+                                                            {cat.items.map((svc: any) => {
+                                                                const checked = selectedServices.some((s) => s.id === svc.id);
+                                                                return (
+                                                                    <label
+                                                                        key={svc.id}
+                                                                        className="flex items-center gap-3 p-2.5 pl-9 cursor-pointer hover:bg-muted/40"
+                                                                    >
+                                                                        <Checkbox checked={checked} onCheckedChange={() => toggleService(svc)} />
+                                                                        <span className="text-sm flex-1">{svc.name}</span>
+                                                                        {svc.price != null && (
+                                                                            <span className="text-xs text-muted-foreground">{formatCurrency(Number(svc.price))}</span>
+                                                                        )}
+                                                                    </label>
+                                                                );
+                                                            })}
+                                                        </div>
                                                     )}
-                                                </label>
+                                                </div>
                                             );
                                         })}
                                     </div>
@@ -884,7 +949,7 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
                                 <div>
                                     <div className="flex items-center justify-between mb-2">
                                         <p className="text-xs text-muted-foreground">
-                                            Profissionais habilitados — opcional
+                                            Salas habilitadas — opcional
                                         </p>
                                         {selectedProfessionals.length > 0 && (
                                             <button
@@ -898,7 +963,7 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
                                     </div>
                                     <div className="max-h-40 overflow-y-auto border rounded-xl divide-y">
                                         {(professionals || []).length === 0 && (
-                                            <p className="text-sm text-muted-foreground p-3">Nenhum profissional cadastrado.</p>
+                                            <p className="text-sm text-muted-foreground p-3">Nenhuma sala cadastrada.</p>
                                         )}
                                         {(professionals || []).map((prof) => (
                                             <label
@@ -915,8 +980,8 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
                                     </div>
                                     <p className="text-[10px] text-muted-foreground mt-1">
                                         {selectedProfessionals.length === 0
-                                            ? "Nenhum marcado: a IA poderá agendar com qualquer profissional."
-                                            : "A IA só oferecerá agendamento com os profissionais marcados."}
+                                            ? "Nenhuma marcada: a IA poderá agendar em qualquer sala."
+                                            : "A IA só oferecerá agendamento nas salas marcadas."}
                                     </p>
                                 </div>
                                 <div>
@@ -1149,10 +1214,10 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
                             )}
                             {campaignType === "promotion" && (
                                 <p>
-                                    <span className="text-muted-foreground">Profissionais:</span>{" "}
+                                    <span className="text-muted-foreground">Salas:</span>{" "}
                                     {selectedProfessionals.length > 0
                                         ? selectedProfessionals.map((p) => p.name).join(", ")
-                                        : "todos"}
+                                        : "todas"}
                                 </p>
                             )}
                             {useExistingTemplate && selectedTemplate && (

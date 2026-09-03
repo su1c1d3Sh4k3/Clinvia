@@ -160,11 +160,13 @@ export function CampaignsGuide() {
                         <AccordionContent className="text-sm text-muted-foreground">
                             <strong className="text-foreground">Promoção</strong> (divulga serviços com condição especial) ou{" "}
                             <strong className="text-foreground">Notificação</strong> (aviso sem oferta comercial). Na Promoção você
-                            marca os serviços da campanha, o desconto e — opcional — os{" "}
-                            <strong className="text-foreground">profissionais habilitados</strong>: marcando alguém, a IA passa a
-                            consultar a agenda só de quem está na lista — os horários dos demais nem chegam a ser oferecidos ao
-                            cliente enquanto a campanha estiver ativa. Sem ninguém marcado, vale a agenda de todos. A restrição
-                            não tranca nada para a equipe: pelo sistema você continua agendando com qualquer profissional.
+                            marca os serviços da campanha, o desconto e — opcional — as{" "}
+                            <strong className="text-foreground">salas habilitadas</strong>. Os serviços aparecem agrupados por
+                            categoria, igual à página de Serviços: clique na categoria para abrir a lista e marque só o que entra
+                            na campanha. Marcando alguma sala, a IA passa a consultar a agenda só das que estão na lista — os
+                            horários das demais nem chegam a ser oferecidos ao cliente enquanto a campanha estiver ativa. Sem
+                            nenhuma marcada, vale a agenda de todas. A restrição não tranca nada para a equipe: pelo sistema você
+                            continua agendando em qualquer sala.
                         </AccordionContent>
                     </AccordionItem>
                     <AccordionItem value="mensagem" className="border-b">

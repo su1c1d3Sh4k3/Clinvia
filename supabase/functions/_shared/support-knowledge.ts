@@ -338,6 +338,7 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
         steps: [
             "Abra Campanhas no menu lateral e clique em Nova campanha.",
             "O assistente tem 6 etapas: Dados, Audiencia, Tipo, Mensagem, Objetivo e Revisao.",
+            "Na etapa Tipo > Promocao os servicos aparecem agrupados por categoria (igual a pagina de Servicos): clique na categoria para abrir a lista e marque os servicos da campanha.",
             "No numero oficial da Meta a mensagem tem que ser um template ja APROVADO; na conexao nao oficial o texto e livre.",
             "Depois do disparo, expanda o card da campanha para ver os resultados e a tabela contato a contato.",
         ],
@@ -347,6 +348,7 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "Quem nao recebeu a mensagem perde a etiqueta da campanha.",
             "O quadro conta quem RESPONDEU a mensagem da campanha; o inbox filtrado por etiqueta mostra tambem quem so recebeu.",
             "Mensagens automaticas de agendamento tem prioridade sobre campanha no mesmo numero.",
+            "O campo opcional da etapa Tipo se chama 'Salas habilitadas' (nao 'profissionais'): marcando alguma, a IA so oferece horarios dessas salas enquanto a campanha estiver ativa; sem nenhuma marcada valem todas. A equipe continua agendando manualmente em qualquer sala.",
         ],
     },
     {
