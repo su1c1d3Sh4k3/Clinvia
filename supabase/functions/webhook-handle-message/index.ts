@@ -2099,14 +2099,19 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                         }
 
                         // Fetch professional names + roles
+                        // O cargo mora em `responsaveis` (professionals = sala) desde be0df58
                         const profMap = new Map<string, string>();
                         if (allProfIds.size > 0) {
-                            const { data: profs } = await supabase
+                            const { data: profs, error: profsError } = await supabase
                                 .from('professionals')
-                                .select('id, name, role')
+                                .select('id, name, responsavel:responsaveis(role)')
                                 .in('id', [...allProfIds]);
+                            if (profsError) {
+                                console.error('[bd_data] Erro ao buscar profissionais:', profsError);
+                            }
                             for (const p of profs || []) {
-                                const label = p.role ? `${p.name} - ${p.role}` : p.name;
+                                const role = (p as any).responsavel?.role;
+                                const label = role ? `${p.name} - ${role}` : p.name;
                                 profMap.set(p.id, label);
                             }
                         }

@@ -187,6 +187,15 @@ export async function lookupTeamMember(
 }
 
 /**
+ * O cargo mora em `responsaveis` (professionals = sala) desde be0df58 — o embed
+ * é achatado para manter o shape `{ id, name, role }` esperado pelas tools.
+ */
+function flattenProfessionalRole(p: any): Professional {
+    const { responsavel, ...rest } = p;
+    return { ...rest, role: responsavel?.role ?? undefined };
+}
+
+/**
  * Lookup professional by name
  */
 export async function lookupProfessional(
@@ -194,16 +203,17 @@ export async function lookupProfessional(
     name: string,
     ownerId: string
 ): Promise<LookupResult<Professional>> {
-    const { data, error } = await supabase
+    const { data: rows, error } = await supabase
         .from('professionals')
-        .select('id, name, role')
+        .select('id, name, responsavel:responsaveis(role)')
         .eq('user_id', ownerId)
         .ilike('name', `%${name}%`);
 
-    if (error || !data) {
+    if (error || !rows) {
         return { found: false, exact_match: false, single: false, items: [] };
     }
 
+    const data = rows.map(flattenProfessionalRole);
     const exactMatch = data.find((p: any) => p.name.toLowerCase() === name.toLowerCase());
 
     return {
@@ -372,11 +382,11 @@ export async function getAllTaskBoards(supabase: any, ownerId: string): Promise<
 export async function getAllProfessionals(supabase: any, ownerId: string): Promise<Professional[]> {
     const { data } = await supabase
         .from('professionals')
-        .select('id, name, role')
+        .select('id, name, responsavel:responsaveis(role)')
         .eq('user_id', ownerId)
         .order('name');
 
-    return data || [];
+    return (data || []).map(flattenProfessionalRole);
 }
 
 /**
