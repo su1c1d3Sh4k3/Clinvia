@@ -217,6 +217,13 @@ export function ConfiguracoesGuide() {
                     { title: "Relatório de consumo", description: "Todo dia 1º, com o consumo do mês anterior: tokens de IA, disparos de campanha e automáticos, templates da Meta e o custo estimado em reais." },
                     { title: "Encerramento e exclusão", description: "Se a conta for encerrada, você recebe o aviso na hora, outro 7 dias antes da exclusão definitiva dos dados, e um e-mail de boas-vindas de volta caso a conta seja reativada." },
                 ]} />
+                <Callout type="dica" title="Como reconhecer um e-mail legítimo da Clinbia">
+                    Todos seguem o mesmo layout: barra e cabeçalho azuis com a{" "}
+                    <strong>logo da Clinbia em branco</strong>, o conteúdo em um cartão branco e, no rodapé, a logo
+                    azul com a assinatura <em>Clinbia – Atendimento e Gestão de Leads com IA</em>. Os links de ação
+                    sempre apontam para <strong>app.clinbia.ai</strong>. Qualquer mensagem fora desse padrão, ou que
+                    peça sua senha por e-mail, não é da Clinbia — a gente nunca pede senha.
+                </Callout>
                 <Callout type="atencao" title="Mantenha o e-mail da conta atualizado">
                     Todos esses avisos vão para o e-mail de acesso (aba Segurança). Se ele estiver desatualizado, você
                     deixa de saber que uma conexão caiu ou que o consumo do mês subiu.

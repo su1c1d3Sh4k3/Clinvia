@@ -483,6 +483,7 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "A mensagem final e enviada no mesmo instante em que a conversa e arquivada; o aviso de entrega do WhatsApp chega segundos depois e o sistema aplica esse status no historico por ate 15 minutos apos o encerramento. Se o recibo demorar mais que isso, a mensagem fica marcada como 'Enviada' no historico mesmo tendo sido entregue.",
             "Grupos e Instagram ficam de fora do encerramento automatico.",
             "Cliente dentro do ciclo de confirmacao de agendamento e IGNORADO pelo encerramento automatico: da mensagem de confirmacao (vespera) ate a pesquisa de satisfacao (um dia depois do atendimento) o ticket nao recebe aviso nem e fechado. Quem fecha esse ticket e o proprio fluxo — na hora em que o cliente responde a pesquisa, ou 24h depois se ele nao responder.",
+            "Todo e-mail da Clinbia sai de nao-responda@clinbia.ai e segue o mesmo layout: barra e cabecalho azuis com a logo branca, conteudo em cartao branco e rodape cinza com a logo azul e a assinatura 'Clinbia – Atendimento e Gestao de Leads com IA'. Os links de acao sempre apontam para app.clinbia.ai. Se o cliente receber algo fora desse padrao, ou que peca a senha dele por e-mail, NAO e da Clinbia — a Clinbia nunca pede senha por e-mail.",
         ],
     },
     {
