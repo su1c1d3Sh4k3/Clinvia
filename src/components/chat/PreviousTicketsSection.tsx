@@ -1,10 +1,17 @@
-import { History, ChevronUp, ArrowLeft, Check } from "lucide-react";
+import { useMemo, useState } from "react";
+import { History, ChevronUp, ArrowLeft, Check, CalendarDays, X } from "lucide-react";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
-import { usePreviousTickets } from "@/hooks/usePreviousTickets";
+import { usePreviousTickets, type PreviousTicket } from "@/hooks/usePreviousTickets";
 import { chatDateTime } from "@/lib/chatDates";
+import { utcToBrasiliaParts } from "@/lib/timezone";
 
 interface PreviousTicketsSectionProps {
     conversationId?: string;
@@ -22,6 +29,15 @@ const STATUS_LABEL: Record<string, string> = {
     resolved: "Resolvido",
 };
 
+/** Campo de data do ticket usado pelo filtro do calendário. */
+type DateField = "closedAt" | "openedAt";
+
+/** Dia (fuso de Brasília) do campo escolhido — 'YYYY-MM-DD' ou null. */
+const ticketDay = (t: PreviousTicket, field: DateField): string | null => {
+    const iso = t[field];
+    return iso ? utcToBrasiliaParts(new Date(iso)).ymd : null;
+};
+
 /**
  * "Tickets anteriores" — lista os tickets do MESMO contato na MESMA conexão
  * (user rule: cada instância é um workflow separado). Clicar abre o recorte
@@ -37,6 +53,38 @@ export const PreviousTicketsSection = ({
 }: PreviousTicketsSectionProps) => {
     const { data: tickets, isLoading } = usePreviousTickets(conversationId);
 
+    // Filtro por data: fechamento é o padrão (é por ele que o time procura
+    // "o atendimento do dia tal"). Só os dias com ticket ficam clicáveis.
+    const [dateField, setDateField] = useState<DateField>("closedAt");
+    const [selectedDay, setSelectedDay] = useState<string | null>(null);
+    const [calendarOpen, setCalendarOpen] = useState(false);
+
+    const availableDays = useMemo(() => {
+        const days = new Set<string>();
+        for (const t of tickets || []) {
+            const d = ticketDay(t, dateField);
+            if (d) days.add(d);
+        }
+        return days;
+    }, [tickets, dateField]);
+
+    const visibleTickets = useMemo(() => {
+        if (!selectedDay) return tickets || [];
+        return (tickets || []).filter((t) => ticketDay(t, dateField) === selectedDay);
+    }, [tickets, dateField, selectedDay]);
+
+    /** Dia mais recente com ticket — abre o calendário já no mês certo. */
+    const latestDay = useMemo(() => {
+        const sorted = [...availableDays].sort();
+        return sorted[sorted.length - 1];
+    }, [availableDays]);
+
+    const changeField = (field: DateField) => {
+        setDateField(field);
+        // O dia escolhido pode não existir no outro campo — recomeça limpo.
+        setSelectedDay(null);
+    };
+
     return (
         <Collapsible open={open} onOpenChange={onToggle}>
             <Card className="border-[#1E2229]/20 dark:border-border">
@@ -46,7 +94,7 @@ export const PreviousTicketsSection = ({
                             <History className="w-3.5 h-3.5" /> Tickets anteriores
                             {tickets && tickets.length > 0 && (
                                 <span className="text-[10px] text-muted-foreground font-normal">
-                                    ({tickets.length})
+                                    ({selectedDay ? `${visibleTickets.length} de ${tickets.length}` : tickets.length})
                                 </span>
                             )}
                         </CardTitle>
@@ -71,6 +119,66 @@ export const PreviousTicketsSection = ({
                             </Button>
                         )}
 
+                        {!isLoading && (tickets?.length || 0) > 0 && (
+                            <div className="flex items-center gap-1.5">
+                                <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-8 flex-1 justify-start gap-1.5 px-2 text-[11px] font-normal"
+                                        >
+                                            <CalendarDays className="w-3.5 h-3.5 shrink-0" />
+                                            {selectedDay
+                                                ? format(new Date(`${selectedDay}T12:00:00`), "dd/MM/yyyy")
+                                                : "Filtrar por data"}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0" align="start">
+                                        <Calendar
+                                            mode="single"
+                                            locale={ptBR}
+                                            selected={selectedDay ? new Date(`${selectedDay}T12:00:00`) : undefined}
+                                            defaultMonth={
+                                                selectedDay || latestDay
+                                                    ? new Date(`${selectedDay || latestDay}T12:00:00`)
+                                                    : undefined
+                                            }
+                                            // Só dia com ticket é clicável (user rule)
+                                            disabled={(day) => !availableDays.has(format(day, "yyyy-MM-dd"))}
+                                            onSelect={(day) => {
+                                                setSelectedDay(day ? format(day, "yyyy-MM-dd") : null);
+                                                setCalendarOpen(false);
+                                            }}
+                                            className="rounded-md"
+                                        />
+                                    </PopoverContent>
+                                </Popover>
+
+                                <Select value={dateField} onValueChange={(v) => changeField(v as DateField)}>
+                                    <SelectTrigger className="h-8 w-[104px] shrink-0 text-[11px]">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="closedAt" className="text-xs">Fechamento</SelectItem>
+                                        <SelectItem value="openedAt" className="text-xs">Abertura</SelectItem>
+                                    </SelectContent>
+                                </Select>
+
+                                {selectedDay && (
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 w-8 shrink-0 p-0"
+                                        title="Limpar filtro de data"
+                                        onClick={() => setSelectedDay(null)}
+                                    >
+                                        <X className="w-3.5 h-3.5" />
+                                    </Button>
+                                )}
+                            </div>
+                        )}
+
                         {isLoading && (
                             <p className="text-[11px] text-muted-foreground">Carregando tickets...</p>
                         )}
@@ -81,7 +189,13 @@ export const PreviousTicketsSection = ({
                             </p>
                         )}
 
-                        {(tickets || []).map((t) => {
+                        {!isLoading && (tickets?.length || 0) > 0 && visibleTickets.length === 0 && (
+                            <p className="text-[11px] text-muted-foreground">
+                                Nenhum ticket nessa data.
+                            </p>
+                        )}
+
+                        {visibleTickets.map((t) => {
                             const isActive = activeSliceId
                                 ? t.id === activeSliceId
                                 : t.id === conversationId;
