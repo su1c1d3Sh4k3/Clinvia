@@ -224,6 +224,13 @@ export function AgendaGuide() {
                     número oficial (Meta) o aviso não é enviado quando o cliente nunca respondeu, porque a janela de 24 horas
                     da Meta já está fechada; a conversa fecha em silêncio.
                 </Callout>
+                <Callout type="dica" title="As mensagens automáticas não mexem no CRM">
+                    Confirmação e lembrete não mudam a etapa do card nem a fila da conversa. A única exceção é o card que
+                    ficou parado em <strong className="text-foreground">Pesquisa de Satisfação</strong> de um atendimento
+                    anterior: com um agendamento novo chegando, ele volta para{" "}
+                    <strong className="text-foreground">Agendado</strong>. Se a pesquisa ainda estiver esperando resposta,
+                    ou se um atendente já estiver conduzindo a conversa, nada é movido.
+                </Callout>
             </TopicSection>
 
             {/* 9 */}
