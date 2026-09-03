@@ -116,6 +116,13 @@ export function DashboardGuide() {
                     { title: "Só encerramentos humanos", description: "Resoluções automáticas — encerramento de campanhas, rotinas do sistema — não aparecem no quadro nem contam para os atendentes. Quem encerra um atendimento leva a atribuição dele, mesmo que a conversa não estivesse atribuída antes." },
                     { title: "Detalhamento por atendente", description: "Cada atendente mostra abertos, pendentes e resolvidos no período selecionado, além do status online/offline. Resolvidos = conversas que aquele usuário encerrou." },
                 ]} />
+                <Callout type="dica" title="O contorno do card responde de longe: já respondi?">
+                    <strong>Laranja</strong> = o cliente falou por último e ninguém respondeu.{" "}
+                    <strong>Verde</strong> = a última mensagem saiu da equipe ou da IA, a bola está com o cliente.
+                    Nos quadros Finalizados o contorno é a cor da etapa de conclusão. E a{" "}
+                    <strong>contagem da janela de 24h só aparece nos números oficiais</strong> (WhatsApp da Meta e
+                    Instagram) — na API não oficial esse prazo não existe, então o card não mostra contagem alguma.
+                </Callout>
                 <Callout type="pratica" title="Rotina de 3 minutos">
                     Duas vezes ao dia, varra os quadros procurando cards onde o <strong>cliente falou por último</strong> —
                     são vendas esfriando. O indicador de janela 24h diz quem precisa de resposta urgente no número oficial.

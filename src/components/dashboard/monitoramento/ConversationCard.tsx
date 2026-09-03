@@ -20,12 +20,14 @@ interface ConversationCardProps {
     showStageBadge?: boolean;
 }
 
+/**
+ * Contorno = respondida ou não. Laranja: o cliente falou por último e ninguém
+ * respondeu. Verde: a última mensagem saiu da equipe ou da IA.
+ * (O contorno antigo graduava a idade da última mensagem em 12h/24h — leitura de
+ * janela de 24h, que só existe na API oficial.)
+ */
 function borderClass(card: MonitorCard): string {
-    const ref = card.lastMessageAt || card.createdAt;
-    const hours = (Date.now() - new Date(ref).getTime()) / 36e5;
-    if (hours < 12) return "border-blue-500/70";
-    if (hours < 24) return "border-orange-500/70";
-    return "border-red-500/70";
+    return lastMsgFromClient(card) ? "border-orange-500/70" : "border-emerald-500/70";
 }
 
 export function ConversationCard({

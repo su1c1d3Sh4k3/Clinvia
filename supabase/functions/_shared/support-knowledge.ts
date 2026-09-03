@@ -49,6 +49,8 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "liberar abas do Dashboard para supervisor ou atendente",
             "o colaborador nao ve a aba Vendas / Monitoramento / Satisfacao do Dashboard",
             "os quadros do Monitoramento aparecem fechados / sumiram os cards",
+            "o que significa a cor do contorno do card no Monitoramento",
+            "o card do Monitoramento nao mostra a janela de 24h",
         ],
         steps: [
             "Abra Dashboard no menu lateral.",
@@ -65,6 +67,8 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "O custo da Meta e uma ESTIMATIVA por categoria de template, nao a fatura oficial da Meta.",
             "Na coluna Concluido do CRM o numero costuma ser baixo: encerrar a conversa remove o card do funil.",
             "No Monitoramento todos os quadros de fila (incluindo Finalizados) abrem FECHADOS. Nada sumiu: a contagem entre parenteses no titulo mostra quantas conversas tem em cada fila; clique no titulo para expandir.",
+            "Contorno do card no Monitoramento: LARANJA = o cliente falou por ultimo e ninguem respondeu; VERDE = a ultima mensagem saiu da equipe ou da IA. Nos cards do quadro Finalizados o contorno e a cor da etapa de conclusao.",
+            "A contagem da janela de 24h so aparece em conversa de numero oficial (WhatsApp da Meta e Instagram). Na API nao oficial (QR Code) esse prazo nao existe, entao o card nao mostra contagem — nao e erro.",
         ],
     },
     {

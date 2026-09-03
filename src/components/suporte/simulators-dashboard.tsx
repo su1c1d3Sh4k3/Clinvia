@@ -16,6 +16,7 @@ interface MonitorScenario {
         name: string;
         preview: string;
         lastSender: "cliente" | "equipe" | "ia";
+        /** Vazio = conexão sem janela de 24h (API não oficial): o selo some do card */
         window: string;
         windowTone: "ok" | "warn" | "closed";
     };
@@ -55,6 +56,14 @@ const SCENARIOS: MonitorScenario[] = [
         card: { name: "Carlos Reis", preview: "Vou pensar e te falo…", lastSender: "cliente", window: "1h restante", windowTone: "warn" },
         read: "No número oficial (Meta), você só pode mandar mensagem livre até 24h após a ÚLTIMA mensagem do cliente. Essa janela está quase fechando.",
         action: "Responda agora ou perderá o canal: depois que fecha, só é possível recontatar com template aprovado.",
+    },
+    {
+        key: "nao-oficial",
+        label: "Número não oficial",
+        icon: MessageCircle,
+        card: { name: "Rita Alves", preview: "Bom dia, ainda tem vaga hoje?", lastSender: "cliente", window: "", windowTone: "ok" },
+        read: "A conexão é a API não oficial (QR Code), que não tem janela de 24h — por isso o card não mostra contagem nenhuma. O contorno laranja é o que importa: ninguém respondeu.",
+        action: "Responda normalmente: aqui não existe prazo da Meta nem necessidade de template aprovado.",
     },
 ];
 
@@ -97,15 +106,23 @@ export function MiniMonitorSimulator() {
 
             <div ref={panelRef} className="space-y-3">
                 {/* Card do monitoramento */}
-                <div key={`card-${sel.key}`} className="rounded-xl border bg-background p-3.5 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
+                <div
+                    key={`card-${sel.key}`}
+                    className={cn(
+                        "rounded-xl border-2 bg-background p-3.5 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300",
+                        sel.card.lastSender === "cliente" ? "border-orange-500/70" : "border-emerald-500/70",
+                    )}
+                >
                     <div className="flex items-center justify-between gap-2">
                         <p className="flex items-center gap-1.5 text-sm font-medium">
                             <MessageCircle className="h-3.5 w-3.5 text-primary" />
                             {sel.card.name}
                         </p>
-                        <Badge variant="outline" className={cn("border-0 text-[10px]", windowCls)}>
-                            Janela: {sel.card.window}
-                        </Badge>
+                        {sel.card.window && (
+                            <Badge variant="outline" className={cn("border-0 text-[10px]", windowCls)}>
+                                Janela: {sel.card.window}
+                            </Badge>
+                        )}
                     </div>
                     <p className="mt-1 truncate text-xs text-muted-foreground">{sel.card.preview}</p>
                     <Badge variant="outline" className={cn("mt-2 border-0", senderBadge.cls)}>{senderBadge.label}</Badge>
