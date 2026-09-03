@@ -398,7 +398,9 @@ const Contacts = () => {
     return (
         <div className="flex h-screen w-full bg-background">
             <div className="flex-1 p-4 md:p-8 overflow-auto">
-                <div className="max-w-6xl mx-auto space-y-4 md:space-y-8">
+                {/* max-w-6xl (72rem) + 24% p/ cada lado = 106.56rem — dá folga entre
+                    as colunas estreitas da tabela (Categoria x IA ficavam coladas) */}
+                <div className="max-w-[106.56rem] mx-auto space-y-4 md:space-y-8">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div>
                             <h1 data-tour="clientes-title" className="text-2xl md:text-3xl font-bold">Contatos</h1>
