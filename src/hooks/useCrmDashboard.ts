@@ -39,3 +39,48 @@ export function useCrmStageMovement(range: CrmRange, channelId?: string | null) 
         refetchInterval: 60_000,
     });
 }
+
+export interface CrmStageDeal {
+    deal_id: string;
+    contact_id: string;
+    contact_name: string;
+    contact_number: string | null;
+    stage_changed_at: string;
+    deal_value: number;
+    services_count: number;
+    services_label: string | null;
+    conversation_id: string | null;
+    ticket_id: string | null;
+    conversation_started_at: string | null;
+    conversation_ended_at: string | null;
+    conversation_status: string | null;
+    agent_name: string | null;
+    sender_names: string | null;
+    is_ai_handled: boolean;
+    message_count: number;
+}
+
+/**
+ * Negociações por trás de um card da aba CRM: uma linha por negociação que
+ * entrou na etapa dentro do período, com os dados do ticket que estava em
+ * andamento na hora da mudança. `stage` nulo desliga a query.
+ */
+export function useCrmStageDeals(stage: string | null, range: CrmRange, channelId?: string | null) {
+    const startIso = range.start.toISOString();
+    const endIso = range.end.toISOString();
+
+    return useQuery({
+        queryKey: ["crm-stage-deals", stage, startIso, endIso, channelId ?? "todos"],
+        queryFn: async (): Promise<CrmStageDeal[]> => {
+            const { data, error } = await supabase.rpc("get_crm_stage_deals" as any, {
+                p_stage: stage,
+                p_start: startIso,
+                p_end: endIso,
+                p_channel: channelId || null,
+            });
+            if (error) throw error;
+            return (data || []) as CrmStageDeal[];
+        },
+        enabled: !!stage,
+    });
+}

@@ -54,6 +54,8 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "onde vejo Sem Contato e Sem Interesse na aba CRM",
             "como filtrar a aba CRM por hoje, 7 dias, 30 dias ou periodo personalizado",
             "os numeros da aba CRM estao menores do que o funil do CRM",
+            "quero ver QUEM sao os clientes que ficaram em Ganho, Perdido, Sem Contato ou Sem Interesse",
+            "como abrir o ticket (conversa) de uma negociacao a partir do Dashboard",
         ],
         steps: [
             "Abra Dashboard no menu lateral.",
@@ -71,6 +73,9 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "A aba CRM do Dashboard conta MOVIMENTACAO no periodo: quantas negociacoes ENTRARAM em cada etapa dentro do filtro. Nao e o total parado na etapa — para ver a foto atual do funil use a pagina CRM.",
             "Todas as secoes da aba CRM (Resultados, Monitoramento CRM, Filas e Negociacoes) tem o mesmo filtro: Hoje, Ultimos 7 dias, Ultimos 30 dias ou Personalizado (data inicial e final).",
             "Resultados mostra os 5 desfechos: Ganho, Perdido, Sem Contato, Sem Interesse e Finalizado.",
+            "Cada card de Resultados e clicavel: abre a lista das negociacoes daquele desfecho no periodo, com nome do cliente, quando entrou na etapa, inicio e fim do ticket, quem atendeu, quantas mensagens foram trocadas e a negociacao vinculada (valor e servicos).",
+            "Clicar em uma negociacao dessa lista abre o ticket no Inbox — a conversa que estava em andamento quando o card mudou de etapa. Conversa ja encerrada abre normalmente, com o historico completo.",
+            "Selo 'Sem ticket' na lista: nao existe conversa daquele contato naquela conexao (negociacao criada na mao no funil ou importada). Os demais dados valem; so nao ha chat para abrir.",
             "Uma negociacao conta uma vez so, na ULTIMA etapa em que entrou dentro do periodo. Se ela andou Qualificado > Agendado > Ganho no mesmo dia, aparece apenas em Ganho.",
             "Numeros de Hoje sao naturalmente baixos e mudam ao longo do dia; para comparar volume use 7 ou 30 dias.",
             "As tres linhas do card (Aberto, Pendente, Concluido) somam o total e mostram a situacao ATUAL da conversa do contato. Concluido costuma ser alto nos desfechos porque a etapa terminal encerra a conversa.",

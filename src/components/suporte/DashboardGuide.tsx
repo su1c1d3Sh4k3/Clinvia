@@ -150,6 +150,8 @@ export function DashboardGuide() {
                 <StepByStep steps={[
                     { title: "O filtro é o mesmo em todas as seções", description: "Hoje, Últimos 7 dias, Últimos 30 dias ou Personalizado (você escolhe as duas datas). Cada seção tem o seu próprio seletor, então dá para comparar: Resultados em 30 dias e Negociações em 7, lado a lado." },
                     { title: "Resultados = os 5 desfechos", description: "Ganho, Perdido, Sem Contato, Sem Interesse e Finalizado, com a quantidade e a soma dos valores de cada um no período. Todo desfecho possível de uma negociação está aqui." },
+                    { title: "Clique no card para ver quem são", description: "Cada card de Resultados abre a lista das negociações que caíram naquele desfecho no período. Cada linha traz o nome do cliente, quando entrou na etapa, início e fim do ticket, quem atendeu, quantas mensagens foram trocadas e se havia negociação vinculada (valor e serviços)." },
+                    { title: "Clique na negociação para abrir o ticket", description: "O clique leva direto para a conversa que estava em andamento quando o card mudou de etapa — mesmo já encerrada, o histórico completo abre no Inbox para você analisar o que aconteceu." },
                     { title: "Monitoramento CRM", description: "O gráfico mostra quantas negociações entraram em cada etapa em andamento no período — dá para ver por onde o funil está passando." },
                     { title: "Filas e Negociações", description: "Um card por etapa com o total do período e o desdobramento por situação da conversa: Aberto, Pendente e Concluído. As três linhas sempre somam o total." },
                     { title: "Filtre por conexão", description: "Com mais de um número (ou conta do Instagram), aparece o seletor de conexão: cada uma tem o seu próprio funil. 'Todas as conexões' soma tudo — e agora isso vale para qualquer período, inclusive datas passadas." },
@@ -158,6 +160,11 @@ export function DashboardGuide() {
                     O sistema guarda a etapa <strong>atual</strong> de cada negociação e a data em que ela chegou lá. Se um
                     cliente passou por Qualificado e depois foi para Ganho no mesmo dia, ele aparece só em Ganho. Por isso
                     os números não podem ser somados como "passagens pelo funil" — cada negociação está em um card só.
+                </Callout>
+                <Callout type="atencao" title="Negociação sem ticket na lista">
+                    Se a linha aparece com o selo <strong>Sem ticket</strong>, é porque não existe conversa daquele
+                    contato naquela conexão — normalmente negociação criada na mão pelo funil ou importada. Os demais
+                    dados continuam valendo; só não há chat para abrir.
                 </Callout>
                 <Callout type="dica" title="Números de hoje mudam o dia todo">
                     É normal o filtro "Hoje" oscilar: cada card que muda de etapa entra na conta na hora. Para comparar

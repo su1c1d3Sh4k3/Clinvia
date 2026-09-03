@@ -5,6 +5,7 @@ import { PeriodPicker, useCrmPeriod } from "./PeriodPicker";
 import { ChannelPicker } from "./ChannelPicker";
 import { useCrmStageMovement } from "@/hooks/useCrmDashboard";
 import { formatCurrency } from "@/hooks/useAppointmentsDashboard";
+import { StageDealsModal } from "./StageDealsModal";
 
 /** As 5 etapas terminais do funil — todo desfecho possível de uma negociação. */
 const CARDS = [
@@ -48,6 +49,7 @@ const CARDS = [
 export function ResultadosSection() {
     const periodState = useCrmPeriod();
     const [channelId, setChannelId] = useState<string | null>(null);
+    const [openStage, setOpenStage] = useState<string | null>(null);
     const { data, isLoading } = useCrmStageMovement(periodState.range, channelId);
 
     return (
@@ -65,7 +67,20 @@ export function ResultadosSection() {
                     const Icon = c.icon;
                     const row = data?.find((d) => d.stage === c.stage);
                     return (
-                        <Card key={c.stage} className="rounded-2xl border border-border/50 shadow-sm">
+                        <Card
+                            key={c.stage}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => setOpenStage(c.stage)}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    setOpenStage(c.stage);
+                                }
+                            }}
+                            title={`Ver quem está em ${c.stage}`}
+                            className="rounded-2xl border border-border/50 shadow-sm cursor-pointer transition-colors hover:border-primary/50 hover:bg-muted/40"
+                        >
                             <CardContent className="p-4 flex items-center gap-4">
                                 <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${c.bgClass}`}>
                                     <Icon className={`w-5 h-5 ${c.iconClass}`} />
@@ -84,6 +99,13 @@ export function ResultadosSection() {
                     );
                 })}
             </div>
+
+            <StageDealsModal
+                stage={openStage}
+                range={periodState.range}
+                channelId={channelId}
+                onClose={() => setOpenStage(null)}
+            />
         </div>
     );
 }
