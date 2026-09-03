@@ -143,8 +143,8 @@ function layout(opts: {
    <tr><td style="height:8px;line-height:8px;font-size:0;background-color:${C.brand};border-radius:10px 10px 0 0">&nbsp;</td></tr>
    <tr><td style="height:6px;line-height:6px;font-size:0">&nbsp;</td></tr>
 
-   <tr><td class="header-pad" align="left" style="background-color:${C.brand};padding:30px 32px">
-     <img src="${LOGO_BRANCA_URL}" width="235" height="50" alt="Clinbia" style="display:block;width:235px;height:50px;border:0;outline:none;text-decoration:none">
+   <tr><td class="header-pad" align="center" style="background-color:${C.brand};padding:30px 32px">
+     <img src="${LOGO_BRANCA_URL}" width="188" height="40" alt="Clinbia" style="display:block;margin:0 auto;width:188px;height:40px;border:0;outline:none;text-decoration:none">
    </td></tr>
 
    <tr><td class="card-pad" style="background-color:#FFFFFF;padding:36px 34px 44px 34px;border-radius:0 0 10px 10px">
