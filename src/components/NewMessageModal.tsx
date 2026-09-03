@@ -640,25 +640,32 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
                                         />
                                     </div>
                                 </div>
-                                {/* Template List */}
-                                <ScrollArea className="max-h-[150px]">
+                                {/* Template List — altura fixa (com max-h o ScrollArea corta
+                                    a lista sem rolar) e os itens embrulhados num flex-col: o
+                                    viewport do Radix é display:table, então botão solto vira
+                                    célula e encolhe até o texto (hover não cobria a linha). */}
+                                <ScrollArea className="h-[180px]">
                                     {loadingTemplates ? (
                                         <div className="flex items-center justify-center py-4">
                                             <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
                                         </div>
                                     ) : filteredTemplates.length === 0 ? (
-                                        <p className="text-xs text-muted-foreground text-center py-4">Nenhum template aprovado</p>
+                                        <p className="text-xs text-muted-foreground text-center py-4">
+                                            {templateSearch.trim() ? "Nenhum template encontrado" : "Nenhum template aprovado"}
+                                        </p>
                                     ) : (
-                                        filteredTemplates.map((tpl: any) => (
-                                            <button
-                                                key={tpl.id}
-                                                onClick={() => handleSelectTemplate(tpl)}
-                                                className={`w-full text-left p-2 border-b text-sm hover:bg-muted/50 transition-colors ${selectedTemplate?.id === tpl.id ? "bg-primary/5 border-l-2 border-l-primary" : ""}`}
-                                            >
-                                                <p className="font-medium text-xs truncate">{tpl.name}</p>
-                                                <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">{getBodyText(tpl)}</p>
-                                            </button>
-                                        ))
+                                        <div className="flex flex-col">
+                                            {filteredTemplates.map((tpl: any) => (
+                                                <button
+                                                    key={tpl.id}
+                                                    onClick={() => handleSelectTemplate(tpl)}
+                                                    className={`w-full text-left p-2 border-b text-sm transition-colors hover:bg-accent/50 ${selectedTemplate?.id === tpl.id ? "bg-primary/5 border-l-2 border-l-primary" : ""}`}
+                                                >
+                                                    <p className="font-medium text-xs truncate">{tpl.name}</p>
+                                                    <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">{getBodyText(tpl)}</p>
+                                                </button>
+                                            ))}
+                                        </div>
                                     )}
                                 </ScrollArea>
                                 {/* Preview + Variables */}

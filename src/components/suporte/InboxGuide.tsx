@@ -278,7 +278,9 @@ export function InboxGuide() {
                 <Callout type="atencao" title="Janela de 24h no WhatsApp Oficial">
                     No número oficial, você só pode mandar texto livre até <strong>24h após a última mensagem do cliente</strong>.
                     Passou disso, é preciso usar um template aprovado (ou esperar o cliente escrever). O sistema avisa quando a
-                    janela fecha.
+                    janela fecha. Na lista de templates (tanto no modal <strong>Enviar Template</strong> quanto no de{" "}
+                    <strong>nova mensagem</strong>) use as abas de tipo e o campo <strong>Buscar template…</strong> para achar
+                    pelo nome — a lista rola e destaca o item sob o mouse.
                 </Callout>
             </TopicSection>
 
