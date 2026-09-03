@@ -115,8 +115,6 @@ function layout(opts: {
     preheader: string;
     title: string;
     body: string;
-    /** Sem URL o rodapé não mostra "Descadastrar" (link morto é pior que nenhum). */
-    unsubscribe_url?: string;
 }): string {
     return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -132,8 +130,6 @@ function layout(opts: {
     .card-pad { padding:28px 22px 34px 22px !important; }
     .footer-pad { padding:26px 22px 10px 22px !important; }
     .h1 { font-size:20px !important; line-height:28px !important; }
-    .footer-row { display:block !important; width:100% !important; }
-    .footer-cell { display:block !important; width:100% !important; text-align:left !important; padding-top:6px !important; }
   }
 </style>
 </head>
@@ -165,14 +161,7 @@ function layout(opts: {
        Você recebeu esta mensagem porque possui um cadastro na plataforma Clinbia.<br>
        Em caso de dúvidas, fale com o seu consultor Clinbia.
      </p>
-     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:14px 0 0 0;border-collapse:collapse">
-       <tr class="footer-row">
-         <td class="footer-cell" align="left" style="font-family:${FF};font-size:12px;line-height:19px;color:${C.soft}">© ${new Date().getFullYear()} Clinbia. Todos os direitos reservados.</td>
-         ${opts.unsubscribe_url
-            ? `<td class="footer-cell" align="right" style="font-family:${FF};font-size:12px;line-height:19px;color:${C.soft}"><a href="${esc(opts.unsubscribe_url)}" target="_blank" style="color:${C.soft};text-decoration:underline">Descadastrar</a></td>`
-            : ""}
-       </tr>
-     </table>
+     <p style="margin:14px 0 0 0;font-family:${FF};font-size:12px;line-height:19px;color:${C.soft}">© ${new Date().getFullYear()} Clinbia. Todos os direitos reservados.</p>
    </td></tr>
 
   </table>
@@ -414,8 +403,6 @@ export function emailContaEncerrada(v: {
     company_name?: string;
     data_encerramento: string;
     dias_retencao?: number;
-    /** Sem URL o e-mail não mostra a chamada "Reativar minha conta". */
-    reativar_url?: string;
 }): BuiltEmail {
     const nome = v.full_name?.trim().split(/\s+/)[0] || "tudo bem";
     const dias = v.dias_retencao ?? 30;
@@ -433,7 +420,6 @@ export function emailContaEncerrada(v: {
             p(`Seus dados, incluindo conversas, contatos, agendamentos, informações do CRM e relatórios, serão mantidos por ${strong(`${dias} dias`)} a partir da data de encerramento.`) +
             p(`Durante esse período, sua conta poderá ser reativada com os dados preservados. Após o prazo de ${dias} dias, as informações serão excluídas de acordo com nossa política de retenção de dados.`) +
             p(`Caso queira reativar sua conta, entre em contato com a equipe Clinbia dentro desse período.`) +
-            (v.reativar_url ? cta("Reativar minha conta", v.reativar_url) : "") +
             p(`Se preferir, você também poderá solicitar uma cópia dos seus dados antes da exclusão.`) +
             p(`Se o encerramento não foi solicitado por você ou se tiver alguma dúvida, fale com seu consultor Clinbia o quanto antes.`) +
             p(`Agradecemos por ter escolhido a Clinbia.`),
@@ -448,7 +434,7 @@ Seus dados, incluindo conversas, contatos, agendamentos, informações do CRM e 
 
 Durante esse período, sua conta poderá ser reativada com os dados preservados. Após o prazo de ${dias} dias, as informações serão excluídas de acordo com nossa política de retenção de dados.
 
-Caso queira reativar sua conta, entre em contato com a equipe Clinbia dentro desse período.${v.reativar_url ? `\n\nReativar minha conta: ${v.reativar_url}` : ""}
+Caso queira reativar sua conta, entre em contato com a equipe Clinbia dentro desse período.
 
 Se preferir, você também poderá solicitar uma cópia dos seus dados antes da exclusão.
 
