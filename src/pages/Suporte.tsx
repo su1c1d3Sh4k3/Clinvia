@@ -54,7 +54,7 @@ const GUIDE_TABS: GuideTab[] = [
 export default function Suporte() {
     const [tab, setTab] = useUrlTab("dashboard");
     return (
-        <div className="mx-auto w-full max-w-7xl p-4 md:p-6">
+        <div className="w-full p-4 md:p-6">
             <div className="mb-4">
                 <h1 className="text-2xl font-bold">Suporte</h1>
                 <p className="text-sm text-muted-foreground">
@@ -63,8 +63,13 @@ export default function Suporte() {
             </div>
             <Tabs value={tab} onValueChange={setTab}>
                 <TabsList className="mb-4 flex w-full justify-start overflow-x-auto flex-nowrap">
+                    {/* hover igual ao das listas de serviços: accent suave, nunca branco */}
                     {GUIDE_TABS.map((t) => (
-                        <TabsTrigger key={t.value} value={t.value} className="shrink-0 gap-1.5">
+                        <TabsTrigger
+                            key={t.value}
+                            value={t.value}
+                            className="shrink-0 gap-1.5 transition-colors hover:bg-accent/50 data-[state=active]:hover:bg-background"
+                        >
                             <t.icon className="h-4 w-4" />
                             {t.label}
                         </TabsTrigger>
