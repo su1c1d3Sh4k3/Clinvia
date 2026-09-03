@@ -80,6 +80,8 @@ export interface ConversationFilters {
   instanceIds?: string[];
   /** Pode conter o valor especial "unassigned" (conversa sem responsável). */
   agentIds?: string[];
+  /** Etapas do funil (crm_client.stage) do card ATIVO do contato. */
+  crmStages?: string[];
   /** Só conversas em que a última mensagem é do cliente (bolinha laranja). */
   unansweredOnly?: boolean;
 }
@@ -130,12 +132,13 @@ export const useConversations = (options: UseConversationsOptions = {}) => {
   const tagIds = sortedIds(filters?.tagIds);
   const instanceIds = sortedIds(filters?.instanceIds);
   const agentIds = sortedIds(filters?.agentIds);
+  const crmStages = sortedIds(filters?.crmStages);
   const unansweredOnly = !!filters?.unansweredOnly;
   const hasFilters =
     queueIds.length > 0 || tagIds.length > 0 || instanceIds.length > 0 ||
-    agentIds.length > 0 || unansweredOnly;
+    agentIds.length > 0 || crmStages.length > 0 || unansweredOnly;
   const filterKey = hasFilters
-    ? JSON.stringify([queueIds, tagIds, instanceIds, agentIds, unansweredOnly])
+    ? JSON.stringify([queueIds, tagIds, instanceIds, agentIds, unansweredOnly, crmStages])
     : "";
 
   // Keep ref updated so subscription callbacks have latest value
@@ -158,9 +161,13 @@ export const useConversations = (options: UseConversationsOptions = {}) => {
       // embed extra com !inner filtra as conversas no servidor, e o alias
       // preserva o contact_tags completo que a lista usa para desenhar os
       // ícones de etiqueta.
-      const contactSelect = tagIds.length > 0
-        ? "contacts!inner ( *, contact_tags ( tags (*) ), ftags:contact_tags!inner (tag_id) )"
-        : "contacts ( *, contact_tags ( tags (*) ) )";
+      // A etapa do funil mora em crm_client (chaveada por contato) — o embed
+      // aninhado com !inner faz o corte no servidor. Grupos ficam de fora por
+      // construção (não têm contato nem card).
+      const contactEmbeds = ["*", "contact_tags ( tags (*) )"];
+      if (tagIds.length > 0) contactEmbeds.push("ftags:contact_tags!inner (tag_id)");
+      if (crmStages.length > 0) contactEmbeds.push("crm:crm_client!inner (stage)");
+      const contactSelect = `contacts${tagIds.length > 0 || crmStages.length > 0 ? "!inner" : ""} ( ${contactEmbeds.join(", ")} )`;
       // count exato só quando a barra de resultados vai aparecer (busca ou
       // filtro) — contar em toda abertura de aba seria custo puro.
       const wantsCount = isSearch || hasFilters;
@@ -220,6 +227,9 @@ export const useConversations = (options: UseConversationsOptions = {}) => {
       if (queueIds.length > 0) query = query.in("queue_id", queueIds);
       if (instanceIds.length > 0) query = query.in("instance_id", instanceIds);
       if (tagIds.length > 0) query = query.in("contacts.ftags.tag_id", tagIds);
+      if (crmStages.length > 0) {
+        query = query.eq("contacts.crm.is_active", true).in("contacts.crm.stage", crmStages);
+      }
       if (unansweredOnly) query = query.eq("awaiting_reply", true);
       if (agentIds.length > 0) {
         const wantsUnassigned = agentIds.includes("unassigned");

@@ -65,7 +65,7 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
             element: '[data-tour="inbox-filtros"]',
             title: "Filtros Avançados",
             description:
-                "Clique no funil para filtrar a lista por Filas, Tags, Conexões e Usuários (inclui 'sem atribuição'). Você pode marcar várias opções: dentro da mesma categoria vale OU; entre categorias vale E. Os balões de não lidas se adaptam ao filtro ativo.",
+                "Clique no funil para filtrar a lista por Filas, Tags, Etapas do CRM, Conexões e Usuários (inclui 'sem atribuição'). Você pode marcar várias opções: dentro da mesma categoria vale OU; entre categorias vale E. Os balões de não lidas se adaptam ao filtro ativo.",
         },
         {
             element: '[data-tour="inbox-list"]',

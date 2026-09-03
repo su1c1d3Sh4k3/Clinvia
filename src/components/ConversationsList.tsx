@@ -28,6 +28,7 @@ import { TagAssignment } from "@/components/TagAssignment";
 import { ClientProfileModal } from "@/components/contacts/ClientProfileModal";
 import { ContactModal } from "@/components/ContactModal";
 import { useFollowUpNotifications } from "@/hooks/useFollowUp";
+import { CRM_STAGES, STAGE_COLORS } from "@/types/crm-client";
 
 // Helper to mark follow up as seen on click (instant)
 const markFollowUpAsSeenOnClick = async (conversationId: string, queryClient: any) => {
@@ -137,7 +138,7 @@ export const ConversationsList = ({
     if (typeof window === "undefined") return {};
     try {
       return JSON.parse(localStorage.getItem(ADV_FILTERS_STORAGE_KEY) || "{}") as {
-        queues?: string[]; tags?: string[]; instances?: string[]; agents?: string[];
+        queues?: string[]; tags?: string[]; instances?: string[]; agents?: string[]; crmStages?: string[];
       };
     } catch {
       return {};
@@ -148,22 +149,25 @@ export const ConversationsList = ({
   const [selectedTagFilter, setSelectedTagFilter] = useState<string[]>(savedFiltersRef.current.tags || []);
   const [selectedInstanceFilter, setSelectedInstanceFilter] = useState<string[]>(savedFiltersRef.current.instances || []);
   const [selectedAgentFilter, setSelectedAgentFilter] = useState<string[]>(savedFiltersRef.current.agents || []);
+  const [selectedCrmStageFilter, setSelectedCrmStageFilter] = useState<string[]>(savedFiltersRef.current.crmStages || []);
   useEffect(() => {
     if (typeof window === "undefined") return;
     const hasAny =
       selectedQueueFilter.length || selectedTagFilter.length ||
-      selectedInstanceFilter.length || selectedAgentFilter.length;
+      selectedInstanceFilter.length || selectedAgentFilter.length ||
+      selectedCrmStageFilter.length;
     if (hasAny) {
       localStorage.setItem(ADV_FILTERS_STORAGE_KEY, JSON.stringify({
         queues: selectedQueueFilter,
         tags: selectedTagFilter,
         instances: selectedInstanceFilter,
         agents: selectedAgentFilter,
+        crmStages: selectedCrmStageFilter,
       }));
     } else {
       localStorage.removeItem(ADV_FILTERS_STORAGE_KEY);
     }
-  }, [selectedQueueFilter, selectedTagFilter, selectedInstanceFilter, selectedAgentFilter]);
+  }, [selectedQueueFilter, selectedTagFilter, selectedInstanceFilter, selectedAgentFilter, selectedCrmStageFilter]);
   const toggleFilterValue = (setter: React.Dispatch<React.SetStateAction<string[]>>, value: string) =>
     setter((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]));
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -218,9 +222,10 @@ export const ConversationsList = ({
       tagIds: selectedTagFilter,
       instanceIds: selectedInstanceFilter,
       agentIds: selectedAgentFilter,
+      crmStages: selectedCrmStageFilter,
       unansweredOnly,
     }),
-    [selectedQueueFilter, selectedTagFilter, selectedInstanceFilter, selectedAgentFilter, unansweredOnly]
+    [selectedQueueFilter, selectedTagFilter, selectedInstanceFilter, selectedAgentFilter, selectedCrmStageFilter, unansweredOnly]
   );
 
   // Scroll paginado: começa com 1 página; "Carregar mais" soma outra
@@ -365,12 +370,13 @@ export const ConversationsList = ({
         if (!matchesAgent) continue;
       }
       if (selectedTagFilter.length > 0 && !r.contacts?.contact_tags?.some((ct) => selectedTagFilter.includes(ct.tag_id))) continue;
+      if (selectedCrmStageFilter.length > 0 && !r.contacts?.crm?.some((c) => c.is_active && selectedCrmStageFilter.includes(c.stage))) continue;
       if (r.group_id) acc.groups += r.unread_count || 0;
       else if (r.status === "open") acc.open += r.unread_count || 0;
       else if (r.status === "pending") acc.pending += r.unread_count || 0;
     }
     return acc;
-  }, [unreadRows, selectedChannelFilter, selectedQueueFilter, selectedInstanceFilter, selectedAgentFilter, selectedTagFilter]);
+  }, [unreadRows, selectedChannelFilter, selectedQueueFilter, selectedInstanceFilter, selectedAgentFilter, selectedTagFilter, selectedCrmStageFilter]);
 
   // Fila, etiqueta, instância, responsável, "não respondidas" e Pessoas/Grupos
   // são resolvidos no banco (useConversations) — a lista aqui já vem filtrada.
@@ -432,7 +438,7 @@ export const ConversationsList = ({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-56 max-w-[90vw] max-h-[70vh] overflow-y-auto p-2 space-y-2">
-                {(selectedQueueFilter.length > 0 || selectedTagFilter.length > 0 || selectedInstanceFilter.length > 0 || selectedAgentFilter.length > 0) && (
+                {(selectedQueueFilter.length > 0 || selectedTagFilter.length > 0 || selectedInstanceFilter.length > 0 || selectedAgentFilter.length > 0 || selectedCrmStageFilter.length > 0) && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -442,6 +448,7 @@ export const ConversationsList = ({
                       setSelectedTagFilter([]);
                       setSelectedInstanceFilter([]);
                       setSelectedAgentFilter([]);
+                      setSelectedCrmStageFilter([]);
                     }}
                   >
                     Limpar Filtros
@@ -481,6 +488,26 @@ export const ConversationsList = ({
                           onChange={() => toggleFilterValue(setSelectedTagFilter, t.id)}
                         />
                         <span className="truncate">{t.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <span className="text-xs font-medium text-muted-foreground ml-2">
+                    Etapas do CRM{selectedCrmStageFilter.length > 0 && ` (${selectedCrmStageFilter.length})`}
+                  </span>
+                  <div className="max-h-32 overflow-y-auto border rounded p-1 space-y-0.5">
+                    {CRM_STAGES.map((stage) => (
+                      <label key={stage} className="flex items-center gap-2 px-1 py-0.5 rounded hover:bg-muted/50 cursor-pointer text-sm">
+                        <input
+                          type="checkbox"
+                          className="accent-primary shrink-0"
+                          checked={selectedCrmStageFilter.includes(stage)}
+                          onChange={() => toggleFilterValue(setSelectedCrmStageFilter, stage)}
+                        />
+                        <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: STAGE_COLORS[stage] }} />
+                        <span className="truncate">{stage}</span>
                       </label>
                     ))}
                   </div>

@@ -10,12 +10,16 @@ export interface UnreadConvRow {
     queue_id: string | null;
     instance_id: string | null;
     assigned_agent_id: string | null;
-    contacts: { id: string; contact_tags: { tag_id: string }[] } | null;
+    contacts: {
+        id: string;
+        contact_tags: { tag_id: string }[];
+        crm: { stage: string; is_active: boolean }[];
+    } | null;
 }
 
 /**
  * Linhas de conversas open/pending com unread_count > 0, com os campos usados
- * pelos Filtros Avançados do inbox (fila/tag/instância/usuário). Os balões de
+ * pelos Filtros Avançados do inbox (fila/tag/instância/usuário/etapa). Os balões de
  * notificação das abas Abertos/Pendentes/Grupos são calculados no consumidor
  * aplicando os MESMOS filtros da lista — regra do usuário: o balão sempre se
  * adapta ao filtro aplicado.
@@ -28,7 +32,7 @@ export const useUnreadCounts = (userId?: string) => {
         queryFn: async () => {
             const { data, error } = await supabase
                 .from("conversations")
-                .select("group_id, unread_count, status, channel, queue_id, instance_id, assigned_agent_id, contacts(id, contact_tags(tag_id))")
+                .select("group_id, unread_count, status, channel, queue_id, instance_id, assigned_agent_id, contacts(id, contact_tags(tag_id), crm:crm_client(stage, is_active))")
                 .gt("unread_count", 0)
                 .in("status", ["open", "pending"])
                 .limit(5000);
