@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Plus, Filter, ChevronLeft, ChevronRight, Search, Settings, FileText, RefreshCw, Upload, CalendarDays, UserPlus, Users, LayoutGrid, DoorOpen } from "lucide-react";
+import { Plus, Filter, ChevronLeft, ChevronRight, Search, FileText, RefreshCw, Upload, CalendarDays, UserPlus, Users, LayoutGrid, DoorOpen } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { SchedulingCalendar } from "@/components/scheduling/SchedulingCalendar";
 import { SchedulingMonthView } from "@/components/scheduling/SchedulingMonthView";
@@ -14,7 +14,6 @@ import { DayAppointmentsModal } from "@/components/scheduling/DayAppointmentsMod
 import { ProfessionalModal } from "@/components/scheduling/ProfessionalModal";
 import { AppointmentModal } from "@/components/scheduling/AppointmentModal";
 import { ViewAppointmentModal } from "@/components/scheduling/ViewAppointmentModal";
-import { SchedulingSettingsModal } from "@/components/scheduling/SchedulingSettingsModal";
 import { AppointmentImportWizard } from "@/components/scheduling/AppointmentImportWizard";
 import { format, addDays, subDays, isSameDay, addMonths, subMonths, startOfMonth, endOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -57,7 +56,6 @@ export default function Scheduling() {
     const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false);
     const [isViewModalOpen, setIsViewModalOpen] = useState(false);
     const [appointmentToView, setAppointmentToView] = useState<any>(null);
-    const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
     const [isImportWizardOpen, setIsImportWizardOpen] = useState(false);
     const [selectedSlot, setSelectedSlot] = useState<{ professionalId: string, date: Date } | undefined>(undefined);
     const [appointmentToEdit, setAppointmentToEdit] = useState<any>(null);
@@ -633,10 +631,6 @@ export default function Scheduling() {
                             <span className="hidden md:inline">Salas</span>
                         </Button>
                     </div>
-                    <Button variant="outline" size="icon" onClick={() => setIsSettingsModalOpen(true)} className="h-9 w-9 md:h-auto md:w-12 md:self-stretch">
-                        <Settings className="h-4 w-4" />
-                    </Button>
-
                     {/* Busca só na grade — na visão mês o profissional é escolhido pelo menu lateral */}
                     {!isMonthView && (
                         <div className="hidden md:block md:w-72 lg:w-96 xl:w-[40rem] self-stretch">
@@ -978,12 +972,6 @@ export default function Scheduling() {
                 defaultProfessionalId={selectedSlot?.professionalId}
                 appointmentToEdit={appointmentToEdit}
                 lockHour={!!selectedSlot}
-            />
-
-            <SchedulingSettingsModal
-                open={isSettingsModalOpen}
-                onOpenChange={setIsSettingsModalOpen}
-                currentSettings={settings}
             />
 
             <AppointmentImportWizard
