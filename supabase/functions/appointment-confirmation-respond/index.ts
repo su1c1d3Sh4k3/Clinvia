@@ -16,6 +16,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { sendText } from "../_shared/uazapi-menu.ts";
 import { isMetaInstance } from "../_shared/automation-instance.ts";
 import { sendMetaText } from "../_shared/system-templates.ts";
+import { buildBookingLink } from "../_shared/booking-link.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -205,13 +206,12 @@ async function handleAwaitingConfirmation(
 
     // Option 2: Reschedule
     if (buttonId === "ac_reschedule") {
-        const token = btoa(JSON.stringify({
+        const link = buildBookingLink({
             user_id: session.user_id,
             contact_id: session.contact_id,
             contact_name: firstName,
             instance_id: session.instance_id ?? null,
-        }));
-        const link = `https://app.clinbia.ai/agendar?d=${token}`;
+        });
 
         await send(ctx, `Te entendo ${firstName}, imprevistos acontecem, pra reagendar pro dia que fica melhor pra você, acesse esse link e escolha um novo dia e horario, é bem simples e não precisa confirmar nenhum dado: ${link}`);
         await markSession(supabase, session.id, {

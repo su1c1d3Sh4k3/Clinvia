@@ -9,6 +9,7 @@ import {
     requireApiKey,
     unexpectedErrorResponse,
 } from "../_shared/api-errors.ts";
+import { buildBookingLink } from "../_shared/booking-link.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -103,13 +104,14 @@ serve(async (req) => {
                 };
             }
 
-            const token = btoa(JSON.stringify({
-                user_id,
-                contact_id: conv.contact_id,
-                contact_name: (conv as any).contacts?.push_name || "",
-                instance_id: conv.instance_id,
-            }));
-            return { link: `https://app.clinbia.ai/agendar?d=${token}` };
+            return {
+                link: buildBookingLink({
+                    user_id,
+                    contact_id: conv.contact_id,
+                    contact_name: (conv as any).contacts?.push_name || "",
+                    instance_id: conv.instance_id,
+                }),
+            };
         };
 
         // If service_name provided: return applications for that service

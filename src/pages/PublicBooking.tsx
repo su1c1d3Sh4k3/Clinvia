@@ -54,7 +54,10 @@ export default function PublicBooking() {
     try {
       const d = searchParams.get("d");
       if (!d) { setError("Link inválido"); setLoading(false); return; }
-      const decoded = JSON.parse(atob(d));
+      // O nome do contato pode ter emoji, então o link vem em base64 de bytes
+      // UTF-8. Para nome ASCII o resultado é idêntico ao formato antigo.
+      const bytes = Uint8Array.from(atob(d), (ch) => ch.charCodeAt(0));
+      const decoded = JSON.parse(new TextDecoder().decode(bytes));
       if (!decoded.user_id || !decoded.contact_id) { setError("Link inválido"); setLoading(false); return; }
       // A conexão define em qual funil do CRM o agendamento entra — link antigo não serve
       if (!decoded.instance_id) {

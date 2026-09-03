@@ -13,6 +13,7 @@ import {
 } from "../_shared/utils.ts";
 import { makeOpenAIRequest, trackTokenUsage } from "../_shared/token-tracker.ts";
 import { buildRecurrenceObjective, RECURRENCE_STAGE_PROMPTS } from "../_shared/recurrence-campaign.ts";
+import { buildBookingLink } from "../_shared/booking-link.ts";
 
 // EdgeRuntime.waitUntil mantém o processo vivo após o return 200 para que
 // tasks de background (persistir foto, download de mídia) terminem mesmo
@@ -2129,13 +2130,12 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                     // Generate booking link for this contact
                     let bookingLink: string | null = null;
                     if (contactId && enrichedContact) {
-                        const token = btoa(JSON.stringify({
+                        bookingLink = buildBookingLink({
                             user_id: userId,
                             contact_id: contactId,
                             contact_name: enrichedContact.push_name || "",
                             instance_id: instance.id,
-                        }));
-                        bookingLink = `https://app.clinbia.ai/agendar?d=${token}`;
+                        });
                     }
 
                     // 6. Campanha ativa do contato NESTA instância (regra: 1 campanha ativa por contato por instância)
