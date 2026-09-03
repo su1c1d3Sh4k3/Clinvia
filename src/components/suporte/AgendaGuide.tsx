@@ -211,9 +211,18 @@ export function AgendaGuide() {
                     Todo agendamento ativa três mensagens automáticas no WhatsApp do cliente. Clique em cada etapa:
                 </p>
                 <ConfirmationFlowSimulator />
-                <Callout type="atencao" title="Enquanto o cliente responde botões, a IA espera">
-                    Durante uma confirmação ou pesquisa ativa, as respostas do cliente vão para o fluxo automático — a IA não
-                    interfere. Se ele pedir um atendente (ou fugir dos botões), a equipe é chamada.
+                <Callout type="atencao" title="Botão segue o fluxo automático, texto livre vai para a IA">
+                    Se o cliente <strong className="text-foreground">toca em um dos botões</strong>, quem responde é o fluxo
+                    automático e a IA não interfere. Se ele <strong className="text-foreground">escreve qualquer outra
+                    coisa</strong> ("posso levar meu filho?", "adorei o atendimento"), a mensagem automática sai de cena na
+                    hora e a conversa passa para a IA (ou para a fila humana, se a IA estiver desligada). A IA consegue
+                    confirmar o agendamento por conta própria quando o cliente confirma escrevendo.
+                </Callout>
+                <Callout type="atencao" title="Sem resposta em 24h, o contato é encerrado">
+                    Cliente que não responde nada à mensagem automática recebe um aviso de encerramento por falta de
+                    interação em 24h e a conversa é resolvida — o agendamento continua de pé, só o atendimento fecha. No
+                    número oficial (Meta) o aviso não é enviado quando o cliente nunca respondeu, porque a janela de 24 horas
+                    da Meta já está fechada; a conversa fecha em silêncio.
                 </Callout>
             </TopicSection>
 

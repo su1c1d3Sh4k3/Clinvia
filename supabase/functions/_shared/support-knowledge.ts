@@ -274,6 +274,8 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "como fechar a agenda em um dia",
             "por que todo agendamento gerou uma venda",
             "as mensagens automaticas de confirmacao e lembrete",
+            "por que a IA nao responde durante a confirmacao automatica",
+            "por que a conversa foi encerrada por falta de interacao",
             "como importar agendamentos por planilha",
             "por que um profissional nao aparece na grade",
             "como ver so as salas (laser, consultorio, equipamento) na agenda",
@@ -292,6 +294,8 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "Todo agendamento precisa de um cliente vinculado e cria/liga uma venda com pagamento pendente.",
             "Concluir o agendamento NAO cria venda nova — ela ja existe desde a criacao.",
             "As mensagens automaticas (confirmacao 24h, lembrete 2h e pesquisa 24h depois) funcionam independentemente da IA estar ligada.",
+            "Na confirmacao e na pesquisa, so o TOQUE NO BOTAO (ou o texto exato do botao) segue o fluxo automatico. Qualquer outra mensagem encerra a mensagem automatica na hora e entrega a conversa para a IA — ou para a fila humana, se a IA estiver desligada. A IA consegue confirmar o agendamento sozinha quando o cliente confirma escrevendo.",
+            "Cliente que nao responde nada a mensagem automatica recebe em 24h um aviso de encerramento por falta de interacao e a conversa e resolvida. O agendamento NAO e cancelado, so o atendimento fecha. No numero oficial (Meta) o aviso nao e enviado quando o cliente nunca respondeu, porque a janela de 24h da Meta esta fechada; a conversa fecha em silencio.",
         ],
     },
     {

@@ -14,6 +14,7 @@ import {
 import { makeOpenAIRequest, trackTokenUsage } from "../_shared/token-tracker.ts";
 import { buildRecurrenceObjective, RECURRENCE_STAGE_PROMPTS } from "../_shared/recurrence-campaign.ts";
 import { buildBookingLink } from "../_shared/booking-link.ts";
+import { AC_FREE_TEXT_STATES, matchAcButtonId } from "../_shared/appointment-confirmation-buttons.ts";
 
 // EdgeRuntime.waitUntil mantém o processo vivo após o return 200 para que
 // tasks de background (persistir foto, download de mídia) terminem mesmo
@@ -1751,6 +1752,11 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
 
         // ─── Appointment Confirmation intercept — BLOCK N8N ONLY ───
         // DB trigger trg_appointment_confirmation_on_inbound handles response.
+        //
+        // A sessão só toma a conversa quando o cliente toca no botão (ou digita o
+        // rótulo exato). Texto livre segue o caminho normal e chega na IA, que
+        // passa a conduzir o atendimento — o appointment-confirmation-respond
+        // encerra a sessão nesse mesmo inbound.
         const _da_fromMe = payload.message?.fromMe === true || payload.fromMe === true;
         if (!isGroup && contactId && !_da_fromMe && eventType === 'messages') {
             try {
@@ -1763,7 +1769,24 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                     .limit(1)
                     .maybeSingle();
 
-                if (activeAcSession) {
+                const _ac_buttonId = payload.message?.content?.selectedID ||
+                    payload.message?.content?.buttonOrListid || '';
+                const _ac_text = payload.message?.vote ||
+                    payload.message?.selectedDisplayText ||
+                    payload.message?.buttonsResponseMessage?.selectedDisplayText ||
+                    payload.message?.content?.buttonsResponseMessage?.selectedDisplayText ||
+                    payload.message?.text ||
+                    payload.message?.content?.text ||
+                    '';
+
+                // Em awaiting_cancel_reason/awaiting_feedback_detail o texto livre É
+                // a resposta esperada — a sessão continua dona da conversa.
+                const _ac_owns = !!activeAcSession && (
+                    AC_FREE_TEXT_STATES.has(activeAcSession.state) ||
+                    !!matchAcButtonId(_ac_buttonId, _ac_text)
+                );
+
+                if (activeAcSession && _ac_owns) {
                     console.log(
                         `[webhook-handle-message] Active appointment confirmation session ${activeAcSession.id} ` +
                         `(state=${activeAcSession.state}) — blocking N8N forward; DB trigger will drive the flow`

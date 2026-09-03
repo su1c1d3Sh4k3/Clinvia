@@ -17,6 +17,7 @@ import { sendText } from "../_shared/uazapi-menu.ts";
 import { isMetaInstance } from "../_shared/automation-instance.ts";
 import { sendMetaText } from "../_shared/system-templates.ts";
 import { buildBookingLink } from "../_shared/booking-link.ts";
+import { matchAcButtonId } from "../_shared/appointment-confirmation-buttons.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -33,37 +34,6 @@ interface RespondInput {
 }
 
 const TERMINAL = new Set(["completed", "transferred", "failed"]);
-
-// ---------------------------------------------------------------------------
-// Button ID inference from free text
-// ---------------------------------------------------------------------------
-
-function inferButtonId(raw: string | null): string {
-    if (!raw) return "";
-    const s = raw.trim().toLowerCase();
-    if (!s) return "";
-
-    // Flow 1: confirmation buttons
-    if ((s.includes("sim") && s.includes("confirmar")) || s === "sim") return "ac_confirm";
-    if (s.includes("reagendar")) return "ac_reschedule";
-    if (s.includes("não vou") || s.includes("nao vou")) return "ac_cancel";
-    if (s.includes("secretaria") || s.includes("secretária")) return "ac_human";
-
-    // Numeric options (from retry message)
-    if (/^(opção |opcao )?1$/.test(s)) return "ac_confirm";
-    if (/^(opção |opcao )?2$/.test(s)) return "ac_reschedule";
-    if (/^(opção |opcao )?3$/.test(s)) return "ac_cancel";
-    if (/^(opção |opcao )?4$/.test(s)) return "ac_human";
-
-    // Flow 3: feedback buttons
-    if (s.includes("excelente")) return "ac_fb_5";
-    if (s.includes("muito bom")) return "ac_fb_4";
-    if (s === "regular") return "ac_fb_3";
-    if (s.includes("precisa melhorar")) return "ac_fb_2";
-    if (s.includes("insatisfeito")) return "ac_fb_1";
-
-    return "";
-}
 
 serve(async (req) => {
     if (req.method === "OPTIONS") {
@@ -114,11 +84,9 @@ serve(async (req) => {
             return json({ success: false, error: "contact not found" }, 400);
         }
 
-        // Resolve buttonId
-        let buttonId = (body.buttonId || "").trim();
-        if (!buttonId) {
-            buttonId = inferButtonId(body.buttonText) || inferButtonId(body.rawMessage);
-        }
+        // Resolve buttonId — match EXATO no rótulo; qualquer outra coisa é ""
+        const buttonId = matchAcButtonId(body.buttonId, body.buttonText) ||
+            matchAcButtonId(null, body.rawMessage);
 
         console.log(`[ac-respond] session=${session.id} state=${session.state} buttonId='${buttonId}' raw='${(body.rawMessage || "").slice(0, 60)}'`);
 
@@ -242,18 +210,9 @@ async function handleAwaitingConfirmation(
         return { newState: "transferred", action: "transferred_to_human" };
     }
 
-    // Free text — send retry with 4 options
-    await send(ctx,
-        "Essa é uma mensagem automatica de confirmação, utilize uma das opções para dar continuidade:\n" +
-        "- Opção 1: Sim, pode confirmar\n" +
-        "- Opção 2: Vou precisar reagendar\n" +
-        "- Opção 3: Não vou poder ir\n" +
-        "- Opção 4: Preciso falar com a secretaria"
-    );
-    await markSession(supabase, session.id, {
-        invalid_response_count: (session.invalid_response_count || 0) + 1,
-    });
-    return { newState: "awaiting_confirmation", action: "retry_sent" };
+    // Qualquer outra coisa: a conversa passa a ser da IA (webhook-handle-message
+    // encaminha para o n8n). A sessão sai do ar para não voltar a interceptar.
+    return await handOffToAi(ctx);
 }
 
 // ---------------------------------------------------------------------------
@@ -312,12 +271,8 @@ async function handleAwaitingFeedbackRating(
     const rating = RATING_MAP[buttonId];
 
     if (!rating) {
-        // Free text — retry
-        await send(ctx, "Essa é uma mensagem automatica, por favor utilize uma das opções acima para dar seu feedback.");
-        await markSession(supabase, session.id, {
-            invalid_response_count: (session.invalid_response_count || 0) + 1,
-        });
-        return { newState: "awaiting_feedback_rating", action: "retry_sent" };
+        // Elogio/crítica em texto livre: a IA agradece e encerra melhor que o robô
+        return await handOffToAi(ctx);
     }
 
     // Save NPS
@@ -395,6 +350,40 @@ async function handleAwaitingFeedbackDetail(
         ended_at: new Date().toISOString(),
     });
     return { newState: "completed", action: "feedback_detail_saved" };
+}
+
+// ---------------------------------------------------------------------------
+// Handoff para a IA
+// ---------------------------------------------------------------------------
+
+/**
+ * O cliente respondeu fora dos botões: a sessão se encerra e a conversa volta a
+ * ser um atendimento normal.
+ *
+ * A fila precisa ser reposicionada porque o fluxo feedback_24h move o card para
+ * "Pesquisa de Satisfação" no envio, e o trigger de sincronia arrasta a conversa
+ * para Pós-Venda — nessa fila o webhook-handle-message NÃO encaminha para o n8n.
+ * Com a IA desligada a conversa vai para Atendimento Humano, que é o destino
+ * correto de qualquer forma.
+ */
+async function handOffToAi(ctx: SessionContext): Promise<{ newState: string; action: string }> {
+    const { supabase, session } = ctx;
+
+    const [iaCfgRes, instRes] = await Promise.all([
+        supabase.from("ia_config").select("ia_on").eq("user_id", session.user_id).maybeSingle(),
+        supabase.from("instances").select("ia_on_wpp").eq("id", session.instance_id).maybeSingle(),
+    ]);
+    const iaOn = iaCfgRes.data?.ia_on === true && instRes.data?.ia_on_wpp === true;
+
+    await moveConversationToQueue(ctx, iaOn ? "Atendimento IA" : "Atendimento Humano");
+
+    await markSession(supabase, session.id, {
+        state: "transferred",
+        ended_at: new Date().toISOString(),
+    });
+
+    console.log(`[ac-respond] session=${session.id} entregue para ${iaOn ? "a IA" : "o humano"} (resposta fora dos botões)`);
+    return { newState: "transferred", action: iaOn ? "handed_to_ai" : "handed_to_human" };
 }
 
 // ---------------------------------------------------------------------------

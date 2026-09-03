@@ -19,6 +19,7 @@ import {
     getSystemTemplateStatuses,
     getSystemTemplateVariableMaps,
     sendMetaTemplate,
+    sendMetaText,
     logTemplateSend,
     SYSTEM_TEMPLATE_NAMES,
     TPL_CONFIRM_MULTI,
@@ -167,7 +168,7 @@ serve(async (req) => {
                     const r1 = await processConfirm24h(ctx);
                     const r2 = await processReminder2h(ctx);
                     const r3 = await processFeedback24h(ctx);
-                    await processFeedbackTimeout(ctx);
+                    await processSessionTimeout(ctx);
 
                     totalSent += r1.sent + r2.sent + r3.sent;
                     totalErrors += r1.errors + r2.errors + r3.errors;
@@ -1075,62 +1076,113 @@ async function processFeedback24h(ctx: CronContext): Promise<{ sent: number; err
 // Flow 4: feedback timeout — 24h sem resposta → card vai para Finalizado
 // ---------------------------------------------------------------------------
 
-async function processFeedbackTimeout(ctx: CronContext): Promise<void> {
-    const { supabase, userId, now } = ctx;
+const NO_INTERACTION_MESSAGE =
+    "Por falta de interação estamos encerrando o contato, se tiver alguma dúvida estamos à disposição.";
+
+/**
+ * Sessão parada há 24h = cliente que nunca respondeu à mensagem automática.
+ * Encerra a sessão, avisa o cliente e resolve a conversa.
+ *
+ * Vale para os dois fluxos: quem responde fora dos botões é entregue à IA no
+ * mesmo inbound (appointment-confirmation-respond), então tudo que sobra aqui é
+ * silêncio ou um fluxo que travou no meio.
+ */
+async function processSessionTimeout(ctx: CronContext): Promise<void> {
+    const { supabase, userId, now, isMeta } = ctx;
     const cutoff = new Date(now.getTime() - 24 * 3600_000).toISOString();
 
     const { data: staleSessions } = await supabase
         .from("appointment_confirmation_sessions")
-        .select("id, contact_id, conversation_id, instance_id")
+        .select("id, flow_type, state, contact_id, conversation_id, instance_id")
         .eq("user_id", userId)
-        .eq("flow_type", "feedback_24h")
-        .in("state", ["awaiting_feedback_rating", "awaiting_feedback_detail"])
-        .lt("created_at", cutoff);
+        .not("state", "in", "(completed,transferred,failed)")
+        .lt("last_state_at", cutoff);
 
     for (const session of staleSessions || []) {
         try {
+            // Meta só aceita texto livre dentro de 24h da última mensagem DO CLIENTE.
+            // Quem nunca respondeu não tem janela aberta → encerra em silêncio.
+            const clientReplied = session.state === "awaiting_cancel_reason" ||
+                session.state === "awaiting_feedback_detail";
+            if (session.conversation_id && (!isMeta || clientReplied)) {
+                try {
+                    await sendTimeoutNotice(ctx, session);
+                } catch (sendErr) {
+                    console.warn(`[ac-cron] timeout notice failed for session ${session.id}:`, sendErr);
+                }
+            }
+
             await supabase
                 .from("appointment_confirmation_sessions")
-                .update({ state: "completed", ended_at: new Date().toISOString() })
+                .update({ state: "failed", ended_at: new Date().toISOString() })
                 .eq("id", session.id);
 
-            // Finaliza o card de Pesquisa de Satisfação sem resposta
-            const { data: cards } = await supabase
-                .from("crm_client")
-                .select("id, stage, instance_id, instagram_instance_id")
-                .eq("contact_id", session.contact_id)
-                .eq("user_id", userId)
-                .eq("is_active", true)
-                .eq("stage", "Pesquisa de Satisfação");
-            // Só o card do funil da conexão que fez a pesquisa
-            const card =
-                (cards || []).find((c: any) => c.instance_id === session.instance_id) ||
-                (cards || []).find((c: any) => !c.instance_id && !c.instagram_instance_id) ||
-                null;
-
-            if (card) {
-                // Resolve a conversa antes (trigger de fila só afeta pending/open)
+            // Resolve a conversa antes de mexer no CRM (trigger de fila só afeta pending/open)
+            if (session.conversation_id) {
                 await supabase
                     .from("conversations")
                     .update({ status: "resolved", updated_at: new Date().toISOString() })
                     .eq("id", session.conversation_id)
                     .in("status", ["pending", "open"]);
-
-                await supabase
-                    .from("crm_client")
-                    .update({
-                        stage: "Finalizado",
-                        is_active: false,
-                        stage_changed_at: new Date().toISOString(),
-                        updated_at: new Date().toISOString(),
-                    })
-                    .eq("id", card.id);
             }
-            console.log(`[ac-cron] feedback timeout: session ${session.id} finalized`);
+
+            // Pesquisa sem resposta: finaliza o card que ficou preso na etapa.
+            // O fluxo de confirmação NÃO mexe no funil — o agendamento continua de pé.
+            if (session.flow_type === "feedback_24h") {
+                const { data: cards } = await supabase
+                    .from("crm_client")
+                    .select("id, stage, instance_id, instagram_instance_id")
+                    .eq("contact_id", session.contact_id)
+                    .eq("user_id", userId)
+                    .eq("is_active", true)
+                    .eq("stage", "Pesquisa de Satisfação");
+                // Só o card do funil da conexão que fez a pesquisa
+                const card =
+                    (cards || []).find((c: any) => c.instance_id === session.instance_id) ||
+                    (cards || []).find((c: any) => !c.instance_id && !c.instagram_instance_id) ||
+                    null;
+
+                if (card) {
+                    await supabase
+                        .from("crm_client")
+                        .update({
+                            stage: "Finalizado",
+                            is_active: false,
+                            stage_changed_at: new Date().toISOString(),
+                            updated_at: new Date().toISOString(),
+                        })
+                        .eq("id", card.id);
+                }
+            }
+
+            console.log(`[ac-cron] timeout 24h: sessão ${session.id} (${session.flow_type}/${session.state}) encerrada`);
         } catch (err) {
-            console.error("[ac-cron] feedback timeout error:", err);
+            console.error("[ac-cron] session timeout error:", err);
         }
     }
+}
+
+async function sendTimeoutNotice(ctx: CronContext, session: any): Promise<void> {
+    if (ctx.isMeta) {
+        await sendMetaText({ conversationId: session.conversation_id, text: NO_INTERACTION_MESSAGE });
+        return;
+    }
+
+    const { data: contact } = await ctx.supabase
+        .from("contacts")
+        .select("number")
+        .eq("id", session.contact_id)
+        .maybeSingle();
+    if (!contact?.number || !ctx.instance.apikey) return;
+
+    await sendText({
+        supabase: ctx.supabase,
+        userId: ctx.userId,
+        conversationId: session.conversation_id,
+        instanceApikey: ctx.instance.apikey,
+        number: contact.number,
+        text: NO_INTERACTION_MESSAGE,
+    });
 }
 
 // ---------------------------------------------------------------------------

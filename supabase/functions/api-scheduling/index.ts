@@ -50,7 +50,8 @@ function parseWorkTime(t: any): number | null {
 const DAY_NAMES = ["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"];
 
 const VALID_ACTIONS = [
-    "fetch_appointments", "create_appointment", "reschedule_appointment", "cancel_appointment",
+    "fetch_appointments", "create_appointment", "confirm_appointment",
+    "reschedule_appointment", "cancel_appointment",
 ];
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -149,7 +150,8 @@ serve(async (req) => {
         // A conversa carrega contato + conexão. `fetch_appointments` e
         // `create_appointment` exigem conversation_id; reschedule/cancel derivam
         // a conexão do próprio agendamento (appointments.instance_id).
-        const conv = (action === "fetch_appointments" || action === "create_appointment")
+        const conv = (action === "fetch_appointments" || action === "create_appointment" ||
+                action === "confirm_appointment")
             ? await resolveConversation(supabase, body.conversation_id, user_id)
             : null;
 
@@ -296,6 +298,87 @@ serve(async (req) => {
                     status: a.status,
                     price: a.price,
                 })),
+            }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+
+        // ══════════════════════════════════════════════
+        // ACTION: confirm_appointment
+        // ══════════════════════════════════════════════
+        // Espelha o botão "Sim, pode confirmar": marca os agendamentos como
+        // confirmados e encerra a sessão de confirmação que ficou aberta. Sem
+        // appointment_ids, confirma todos os agendamentos futuros ainda pendentes
+        // do contato — é o mesmo lote que a mensagem automática apresentou.
+        if (action === "confirm_appointment") {
+            const contactId = conv!.contactId;
+            const ids: string[] = Array.isArray(body.appointment_ids)
+                ? body.appointment_ids
+                : (body.appointment_id ? [body.appointment_id] : []);
+
+            let query = supabase.from("appointments")
+                .select("id, user_id, status, service_name, professional_name, start_time")
+                .eq("user_id", user_id)
+                .eq("contact_id", contactId)
+                .eq("type", "appointment");
+
+            if (ids.length > 0) {
+                query = query.in("id", ids);
+            } else {
+                query = query
+                    .in("status", ["pending", "waiting", "rescheduled"])
+                    .gte("start_time", new Date().toISOString());
+            }
+
+            const { data: targets, error: targetsErr } = await query.order("start_time", { ascending: true });
+            if (targetsErr) {
+                return dbErrorResponse(corsHeaders, "appointments_read_failed",
+                    `buscar os agendamentos do contato ${contactId} para confirmar`, targetsErr);
+            }
+
+            if (!targets || targets.length === 0) {
+                return apiError(corsHeaders, {
+                    status: 404,
+                    code: "no_appointment_to_confirm",
+                    message: ids.length > 0
+                        ? `Nenhum agendamento deste contato corresponde aos ids enviados (${ids.join(", ")}). Use a ação fetch_appointments para obter os ids válidos.`
+                        : "Este contato não tem nenhum agendamento futuro aguardando confirmação.",
+                });
+            }
+
+            const confirmIds = targets.map((a: any) => a.id);
+            const { error: updErr } = await supabase.from("appointments")
+                .update({ status: "confirmed" })
+                .in("id", confirmIds);
+            if (updErr) {
+                return dbErrorResponse(corsHeaders, "appointment_confirm_failed",
+                    `confirmar o(s) agendamento(s) ${confirmIds.join(", ")}`, updErr);
+            }
+
+            // Sessão de confirmação aberta some: sem isso o próximo inbound cairia
+            // de novo no fluxo automático em vez de continuar com a IA.
+            let sessionWarning: string | null = null;
+            const { error: sessErr } = await supabase
+                .from("appointment_confirmation_sessions")
+                .update({ state: "completed", ended_at: new Date().toISOString() })
+                .eq("contact_id", contactId)
+                .eq("user_id", user_id)
+                .not("state", "in", "(completed,transferred,failed)");
+            if (sessErr) {
+                sessionWarning = describeDbError(
+                    `encerrar a sessão de confirmação automática do contato ${contactId}`, sessErr);
+                console.warn("[api-scheduling]", sessionWarning);
+            }
+
+            return new Response(JSON.stringify({
+                success: true,
+                confirmed_count: confirmIds.length,
+                appointments: targets.map((a: any) => ({
+                    id: a.id,
+                    service: a.service_name,
+                    professional: a.professional_name,
+                    start_time: toSaoPaulo(a.start_time),
+                    status: "confirmed",
+                })),
+                ...(sessionWarning ? { session_warning: sessionWarning } : {}),
             }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
