@@ -184,6 +184,14 @@ export function ConfiguracoesGuide() {
                     enviar mensagem, conversas em que o cliente nunca respondeu — após 48h, tempo configurável. Grupos
                     e Instagram ficam de fora do encerramento automático.
                 </Callout>
+                <Callout type="dica" title="Confirmação de agenda tem passe livre">
+                    Quem está no ciclo de confirmação de agendamento fica <strong>imune</strong> ao encerramento
+                    automático: da mensagem de confirmação (véspera) até a pesquisa de satisfação (um dia depois do
+                    atendimento), o ticket não recebe aviso nem é fechado — o cliente precisa poder responder
+                    "Confirmar", "Remarcar" ou dar a nota sem o ticket sumir no meio do caminho. Assim que a{" "}
+                    <strong>pesquisa de satisfação é respondida</strong>, o próprio fluxo encerra o ticket e finaliza o
+                    card do CRM. Se o cliente nunca responde a pesquisa, o ticket é encerrado 24h depois do envio.
+                </Callout>
                 <Callout type="atencao" title="Tique da mensagem final no histórico">
                     A mensagem de encerramento sai no mesmo instante em que o ticket é arquivado, e o aviso de entrega do
                     WhatsApp chega alguns segundos depois. O sistema aplica esse status no histórico por até{" "}

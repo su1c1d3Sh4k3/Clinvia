@@ -426,11 +426,13 @@ async function moveCrmToStage(ctx: SessionContext, stage: string, lossReason?: s
     await forceQueuePosVenda(ctx);
 }
 
-/** Pesquisa respondida → finaliza o card ativo na etapa Finalizado (vira histórico). */
+/**
+ * Pesquisa respondida → encerra o ticket e finaliza o card ativo na etapa
+ * Finalizado (vira histórico). O encerramento acontece mesmo sem card ativo:
+ * responder a pesquisa SEMPRE fecha a conversa.
+ */
 async function finalizeCrmCard(ctx: SessionContext) {
     const crmCard = await findActiveCard(ctx);
-
-    if (!crmCard) return;
 
     // Resolve conversation BEFORE moving CRM to terminal stage
     // (trigger only affects status IN pending/open, so resolved is safe)
@@ -438,6 +440,8 @@ async function finalizeCrmCard(ctx: SessionContext) {
         .from("conversations")
         .update({ status: "resolved", updated_at: new Date().toISOString() })
         .eq("id", ctx.session.conversation_id);
+
+    if (!crmCard) return;
 
     await ctx.supabase
         .from("crm_client")

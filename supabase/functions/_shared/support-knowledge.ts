@@ -301,6 +301,8 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "Cliente que nao responde nada a mensagem automatica recebe em 24h um aviso de encerramento por falta de interacao e a conversa e resolvida. O agendamento NAO e cancelado, so o atendimento fecha. No numero oficial (Meta) o aviso nao e enviado quando o cliente nunca respondeu, porque a janela de 24h da Meta esta fechada; a conversa fecha em silencio.",
             "Confirmacao e lembrete NAO mudam a etapa do card no CRM nem a fila da conversa. Unica excecao: card parado em 'Pesquisa de Satisfacao' de um atendimento anterior volta para 'Agendado' quando o cliente tem agendamento novo chegando. Se a pesquisa ainda espera resposta, ou se um atendente ja esta conduzindo a conversa, nada e movido.",
             "O follow-up da IA fica desligado para quem tem agendamento nas proximas 24h, ou card ativo nas etapas 'Agendado' e 'Pesquisa de Satisfacao'. E de proposito: nessa janela quem fala com o cliente sao a confirmacao e o lembrete, e o follow-up chegaria por cima delas.",
+            "Quem esta no ciclo de confirmacao fica IMUNE ao encerramento automatico de conversas: da mensagem de confirmacao (vespera) ate a pesquisa de satisfacao (um dia depois do atendimento) o ticket nao recebe aviso nem e fechado pela automacao de Configuracoes > Automacoes.",
+            "Responder a pesquisa de satisfacao encerra o ticket na hora e finaliza o card do CRM em 'Finalizado'. Quem nao responde a pesquisa tem o ticket encerrado 24h depois do envio.",
         ],
     },
     {
@@ -474,6 +476,8 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "O encerramento automatico so nasce ligado em contas novas; contas antigas precisam ligar manualmente.",
             "O prazo do encerramento conta sempre a partir da ultima mensagem DO CLIENTE — se ele responder, o ciclo zera.",
             "A mensagem final e enviada no mesmo instante em que a conversa e arquivada; o aviso de entrega do WhatsApp chega segundos depois e o sistema aplica esse status no historico por ate 15 minutos apos o encerramento. Se o recibo demorar mais que isso, a mensagem fica marcada como 'Enviada' no historico mesmo tendo sido entregue.",
+            "Grupos e Instagram ficam de fora do encerramento automatico.",
+            "Cliente dentro do ciclo de confirmacao de agendamento e IGNORADO pelo encerramento automatico: da mensagem de confirmacao (vespera) ate a pesquisa de satisfacao (um dia depois do atendimento) o ticket nao recebe aviso nem e fechado. Quem fecha esse ticket e o proprio fluxo — na hora em que o cliente responde a pesquisa, ou 24h depois se ele nao responder.",
         ],
     },
     {
