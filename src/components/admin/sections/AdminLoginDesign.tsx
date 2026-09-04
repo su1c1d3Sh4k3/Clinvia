@@ -123,9 +123,10 @@ export default function AdminLoginDesign({ canEdit }: { canEdit: boolean }) {
                         <Label className="text-gray-200">Imagem do banner</Label>
                         <p className="text-xs text-gray-400 mt-1">
                             Formato ideal: <strong className="text-gray-200">{LOGIN_BANNER_SIZE_LABEL}</strong>{" "}
-                            (retrato, proporção 3:4). PNG, JPG ou WebP de até 3 MB. A imagem é
-                            recortada para preencher a metade da tela — deixe o conteúdo
-                            importante no centro.
+                            (proporção 8:9 — a metade de uma tela Full HD). PNG, JPG ou WebP de
+                            até 3 MB. A imagem sempre preenche a metade da tela na altura exata
+                            da janela, sem rolagem: o que sobrar nas laterais ou no topo é
+                            recortado, então deixe o conteúdo importante no centro.
                         </p>
                     </div>
 

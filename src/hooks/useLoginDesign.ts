@@ -28,6 +28,11 @@ export function useLoginDesign() {
     });
 }
 
-/** Tamanho recomendado do banner — retrato, porque ele ocupa metade da tela. */
-export const LOGIN_BANNER_SIZE = { width: 1200, height: 1600 };
+/**
+ * Tamanho recomendado do banner: ele ocupa METADE da largura por 100% da altura
+ * da janela, o que da 960 x 1080 num monitor Full HD (proporcao 8:9). O 1200 x
+ * 1350 e esse mesmo formato com folga de resolucao. Retrato mais alto (3:4) so
+ * aumenta o corte em cima e embaixo — a tela de login nunca rola.
+ */
+export const LOGIN_BANNER_SIZE = { width: 1200, height: 1350 };
 export const LOGIN_BANNER_SIZE_LABEL = `${LOGIN_BANNER_SIZE.width} x ${LOGIN_BANNER_SIZE.height} px`;
