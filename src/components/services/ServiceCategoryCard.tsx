@@ -15,6 +15,11 @@ interface ServiceCategoryCardProps {
   categoryName: string;
   serviceNames: ServiceName[];
   applications: ServiceClient[];
+  /**
+   * Na aba Convênio a estrutura é só espelho: criar serviço/aplicação ali não
+   * teria como vincular ao convênio e excluir apagaria da categoria de origem.
+   */
+  readOnlyStructure?: boolean;
 }
 
 export const ServiceCategoryCard = ({
@@ -22,6 +27,7 @@ export const ServiceCategoryCard = ({
   categoryName,
   serviceNames,
   applications,
+  readOnlyStructure = false,
 }: ServiceCategoryCardProps) => {
   const [expanded, setExpanded] = useState(false);
   const [showAddService, setShowAddService] = useState(false);
@@ -97,15 +103,17 @@ export const ServiceCategoryCard = ({
                   </TabsTrigger>
                 ))}
               </TabsList>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1 text-xs shrink-0"
-                onClick={() => setShowAddService(true)}
-              >
-                <Plus className="w-3 h-3" />
-                Adicionar Serviço
-              </Button>
+              {!readOnlyStructure && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1 text-xs shrink-0"
+                  onClick={() => setShowAddService(true)}
+                >
+                  <Plus className="w-3 h-3" />
+                  Adicionar Serviço
+                </Button>
+              )}
             </div>
 
             {services.map((svc) => (
@@ -116,6 +124,7 @@ export const ServiceCategoryCard = ({
                   )}
                   categoryId={categoryId}
                   serviceNameId={svc.id}
+                  readOnlyStructure={readOnlyStructure}
                 />
               </TabsContent>
             ))}

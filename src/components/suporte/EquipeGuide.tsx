@@ -169,8 +169,8 @@ export function EquipeGuide() {
                 </Callout>
                 <Callout type="dica" title="O valor cobrado no convênio">
                     Assim que o serviço é marcado aqui, a página <strong>Serviços</strong> ganha a coluna{" "}
-                    <strong>Valor convênio</strong> (ao lado de Valor) e o container{" "}
-                    <strong>Contemplados pelo Convênio</strong>, que reagrupa as mesmas aplicações por convênio → serviço.
+                    <strong>Valor convênio</strong> (ao lado de Valor) e a aba <strong>Convênio</strong>, com a mesma
+                    estrutura de categorias, serviços e aplicações — só que exibindo apenas o que os planos cobrem.
                     Por padrão o valor de convênio acompanha o valor de venda; para cobrar diferente, edite a aplicação e
                     preencha "Valor de Convênio (R$)". O valor é <strong>um só</strong> — vale para todos os planos.
                 </Callout>

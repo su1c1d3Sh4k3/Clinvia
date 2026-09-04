@@ -1,9 +1,11 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Plus, Search, Package, Upload, FolderPlus, LayoutTemplate } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Loader2, Plus, Search, Package, Upload, FolderPlus, LayoutTemplate, ShieldCheck } from "lucide-react";
 import { ImportWizard } from "@/components/import/ImportWizard";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { ServiceClient, ServiceName, ServiceCategory } from "@/types/services";
@@ -12,12 +14,16 @@ import { DirectCategoryCard } from "@/components/services/DirectCategoryCard";
 import { AddByCategoryModal } from "@/components/services/AddByCategoryModal";
 import { AddCategoryModal } from "@/components/services/AddCategoryModal";
 import { ServiceTemplatesModal } from "@/components/services/ServiceTemplatesModal";
-import { ConvenioServicesCard } from "@/components/services/ConvenioServicesCard";
+import { useConvenios, useConvenioServiceIds } from "@/hooks/useConvenios";
+import { useUrlTab } from "@/hooks/useUrlTab";
+import { cn } from "@/lib/utils";
 import { useSuporteTour } from "@/lib/suporteTours";
 
 export default function ProductsServices() {
   const { data: ownerId } = useOwnerId();
+  const navigate = useNavigate();
   useSuporteTour();
+  const [tab, setTab] = useUrlTab("regulares");
   const [searchTerm, setSearchTerm] = useState("");
   const [importWizardOpen, setImportWizardOpen] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -90,12 +96,47 @@ export default function ProductsServices() {
     })
     .filter((group) => group.apps.length > 0);
 
+  // Aba Convênio: MESMA estrutura (categoria > serviços > tabela de aplicações),
+  // só que enxergando apenas as aplicações marcadas em /equipe?tab=convenios.
+  const { data: convenios } = useConvenios();
+  const convenioIds = useConvenioServiceIds();
+  const hasConvenios = (convenios || []).length > 0;
+  const convenioCategories = filteredCategories
+    .map((group) => ({ ...group, apps: group.apps.filter((a) => convenioIds.has(a.id)) }))
+    .filter((group) => group.apps.length > 0);
+  const onConvenioTab = hasConvenios && tab === "convenio";
+
   // Find default service_name_id for a direct category (template first, fallback to user-created)
   const getDirectServiceNameId = (categoryId: string) => {
     const inCategory = (serviceNames || []).filter((s) => s.category_id === categoryId);
     const svc = inCategory.find((s) => !s.user_id) || inCategory[0];
     return svc?.id || "";
   };
+
+  const renderCategories = (groups: typeof filteredCategories, readOnly: boolean) =>
+    groups.map(({ categoryId, categoryName, categoryType, apps }) =>
+      categoryType === "direct" ? (
+        <DirectCategoryCard
+          key={categoryId}
+          categoryId={categoryId}
+          categoryName={categoryName}
+          serviceNameId={getDirectServiceNameId(categoryId)}
+          entries={apps}
+          readOnlyStructure={readOnly}
+        />
+      ) : (
+        <ServiceCategoryCard
+          key={categoryId}
+          categoryId={categoryId}
+          categoryName={categoryName}
+          serviceNames={(serviceNames || []).filter((s) =>
+            apps.some((a) => a.service_name_id === s.id)
+          )}
+          applications={apps}
+          readOnlyStructure={readOnly}
+        />
+      )
+    );
 
   const totalApplications = (clientServices || []).length;
 
@@ -109,7 +150,11 @@ export default function ProductsServices() {
             Gerencie suas categorias, serviços e aplicações
           </p>
         </div>
-        <div data-tour="servicos-acoes" className="flex flex-wrap gap-2">
+        {/* A aba Convênio é espelho: cadastrar por ali não vincularia ao plano */}
+        <div
+          data-tour="servicos-acoes"
+          className={cn("flex flex-wrap gap-2", onConvenioTab && "hidden")}
+        >
           <Button
             data-tour="servicos-templates"
             onClick={() => setShowTemplatesModal(true)}
@@ -173,34 +218,9 @@ export default function ProductsServices() {
             </Button>
           </div>
         </div>
-      ) : (
+      ) : !hasConvenios ? (
         <div className="space-y-4">
-          {filteredCategories.map(({ categoryId, categoryName, categoryType, apps }) =>
-            categoryType === "direct" ? (
-              <DirectCategoryCard
-                key={categoryId}
-                categoryId={categoryId}
-                categoryName={categoryName}
-                serviceNameId={getDirectServiceNameId(categoryId)}
-                entries={apps}
-              />
-            ) : (
-              <ServiceCategoryCard
-                key={categoryId}
-                categoryId={categoryId}
-                categoryName={categoryName}
-                serviceNames={(serviceNames || []).filter((s) =>
-                  apps.some((a) => a.service_name_id === s.id)
-                )}
-                applications={apps}
-              />
-            )
-          )}
-
-          <ConvenioServicesCard
-            applications={filteredCategories.flatMap((g) => g.apps)}
-            serviceNames={serviceNames || []}
-          />
+          {renderCategories(filteredCategories, false)}
 
           {filteredCategories.length === 0 && searchTerm && (
             <div className="text-center py-12 text-muted-foreground text-sm">
@@ -208,6 +228,62 @@ export default function ProductsServices() {
             </div>
           )}
         </div>
+      ) : (
+        <Tabs value={tab} onValueChange={setTab} className="w-full">
+          <TabsList className="overflow-x-auto flex-nowrap max-w-full justify-start">
+            <TabsTrigger value="regulares" className="shrink-0">
+              Serviços regulares
+            </TabsTrigger>
+            <TabsTrigger value="convenio" data-tour="servicos-convenio" className="shrink-0 gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              Convênio
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="regulares" className="space-y-4 mt-4">
+            {renderCategories(filteredCategories, false)}
+
+            {filteredCategories.length === 0 && searchTerm && (
+              <div className="text-center py-12 text-muted-foreground text-sm">
+                Nenhuma aplicação encontrada para "{searchTerm}"
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="convenio" className="space-y-4 mt-4">
+            {convenioCategories.length > 0 ? (
+              renderCategories(convenioCategories, true)
+            ) : (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center mb-4">
+                  <ShieldCheck className="w-7 h-7 text-muted-foreground" />
+                </div>
+                <h3 className="text-base font-semibold mb-1">
+                  {searchTerm
+                    ? `Nenhuma aplicação de convênio encontrada para "${searchTerm}"`
+                    : "Nenhum serviço marcado para convênio"}
+                </h3>
+                {!searchTerm && (
+                  <>
+                    <p className="text-muted-foreground text-sm max-w-md mb-4">
+                      Marque quais serviços cada convênio atende em Equipe &gt; Convênios.
+                      Eles aparecem aqui com a mesma estrutura de categorias, serviços e
+                      aplicações.
+                    </p>
+                    <Button
+                      variant="outline"
+                      className="gap-2"
+                      onClick={() => navigate("/equipe?tab=convenios")}
+                    >
+                      <ShieldCheck className="w-4 h-4" />
+                      Abrir Convênios
+                    </Button>
+                  </>
+                )}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
       )}
 
       <AddByCategoryModal

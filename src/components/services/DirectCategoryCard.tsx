@@ -23,6 +23,11 @@ interface DirectCategoryCardProps {
   categoryName: string;
   serviceNameId: string;
   entries: ServiceClient[];
+  /**
+   * Na aba Convênio a estrutura é só espelho: criar registro ali não teria como
+   * vincular ao convênio e excluir apagaria da categoria de origem.
+   */
+  readOnlyStructure?: boolean;
 }
 
 export const DirectCategoryCard = ({
@@ -30,6 +35,7 @@ export const DirectCategoryCard = ({
   categoryName,
   serviceNameId,
   entries,
+  readOnlyStructure = false,
 }: DirectCategoryCardProps) => {
   const [expanded, setExpanded] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
@@ -98,15 +104,17 @@ export const DirectCategoryCard = ({
           {entries.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground text-sm space-y-3">
               <p>Nenhum registro cadastrado.</p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1"
-                onClick={() => setShowAdd(true)}
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Adicionar {categoryName === "Consultas" ? "Consulta" : "Avaliação"}
-              </Button>
+              {!readOnlyStructure && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1"
+                  onClick={() => setShowAdd(true)}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Adicionar {categoryName === "Consultas" ? "Consulta" : "Avaliação"}
+                </Button>
+              )}
             </div>
           ) : (
             <div className="rounded-md border overflow-x-auto">
@@ -124,15 +132,17 @@ export const DirectCategoryCard = ({
                     <TableHead className="w-[100px] text-center">Tempo</TableHead>
                     <TableHead className="w-[100px] text-center">Comissão</TableHead>
                     <TableHead className="w-[110px]">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 gap-1 text-xs"
-                        onClick={() => setShowAdd(true)}
-                      >
-                        <Plus className="h-3 w-3" />
-                        Adicionar
-                      </Button>
+                      {!readOnlyStructure && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 gap-1 text-xs"
+                          onClick={() => setShowAdd(true)}
+                        >
+                          <Plus className="h-3 w-3" />
+                          Adicionar
+                        </Button>
+                      )}
                     </TableHead>
                   </TableRow>
                 </TableHeader>
@@ -208,14 +218,16 @@ export const DirectCategoryCard = ({
                           >
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-destructive hover:text-destructive"
-                            onClick={() => handleDelete(item)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                          {!readOnlyStructure && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive hover:text-destructive"
+                              onClick={() => handleDelete(item)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

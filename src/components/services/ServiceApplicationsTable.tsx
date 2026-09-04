@@ -24,9 +24,9 @@ interface ServiceApplicationsTableProps {
   categoryId: string;
   serviceNameId: string;
   /**
-   * Dentro do container "Contemplados pelo Convênio" a tabela não cria nem
-   * apaga aplicação: criar ali não teria como vincular ao convênio, e apagar
-   * removeria o serviço da categoria de origem também.
+   * Na aba Convênio a tabela não cria nem apaga aplicação: criar ali não teria
+   * como vincular ao convênio, e apagar removeria o serviço da categoria de
+   * origem também.
    */
   readOnlyStructure?: boolean;
 }

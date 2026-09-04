@@ -22,7 +22,7 @@ const TOPICS = [
     { id: "categorias-proprias", label: "Categorias próprias" },
     { id: "profissionais", label: "Profissionais vinculados" },
     { id: "precos", label: "Preços" },
-    { id: "convenio", label: "Contemplados pelo Convênio" },
+    { id: "convenio", label: "Aba Convênio" },
     { id: "recorrencia", label: "Mensagens de recorrência" },
     { id: "faq", label: "FAQ" },
 ];
@@ -182,29 +182,29 @@ export function ServicosGuide() {
             </TopicSection>
 
             {/* 8 */}
-            <TopicSection id="convenio" index={8} icon={HeartHandshake} title="Contemplados pelo Convênio"
-                subtitle="O mesmo catálogo reagrupado — e o valor cobrado no convênio">
+            <TopicSection id="convenio" index={8} icon={HeartHandshake} title="Aba Convênio"
+                subtitle="O mesmo catálogo, só com o que o plano cobre — e o valor cobrado nele">
                 <p className="text-sm text-muted-foreground">
-                    Abaixo das categorias aparece o container{" "}
-                    <strong className="text-foreground">Contemplados pelo Convênio</strong>. Ele abre em{" "}
-                    <strong className="text-foreground">convênio → serviço → procedimentos</strong> e mostra{" "}
-                    <strong className="text-foreground">as mesmas aplicações</strong> das categorias — é só uma forma mais
-                    fácil de enxergar o que cada plano cobre. O container só existe se algum serviço estiver marcado em
-                    um convênio (isso é feito em <strong className="text-foreground">Equipe → Convênios</strong>).
+                    Quando a conta tem convênio cadastrado, a página ganha duas abas:{" "}
+                    <strong className="text-foreground">Serviços regulares</strong> e{" "}
+                    <strong className="text-foreground">Convênio</strong>. A aba Convênio tem exatamente a mesma cara da
+                    outra — <strong className="text-foreground">categorias, serviços e a tabela de aplicações</strong> —
+                    só que exibindo apenas o que está marcado em algum convênio. É a mesma tabela, não um cadastro
+                    separado: o que você editar ali muda o serviço de verdade.
                 </p>
                 <StepByStep steps={[
-                    { title: "Marque o serviço no convênio", description: "Equipe → Convênios → Configurar. Só depois disso a aplicação passa a ter valor de convênio." },
-                    { title: "A coluna Valor convênio aparece", description: "Ao lado da coluna Valor, tanto na tabela da categoria quanto dentro do container do convênio. Aplicação que não está em nenhum convênio mostra um traço." },
+                    { title: "Marque o serviço no convênio", description: "Equipe → Convênios → Configurar. Enquanto nada estiver marcado, a aba Convênio abre vazia com um atalho para lá." },
+                    { title: "A coluna Valor convênio aparece", description: "Ao lado da coluna Valor, nas duas abas. Aplicação que não está em nenhum convênio mostra um traço." },
                     { title: "Edite a aplicação para definir o valor", description: "Lápis da aplicação → campo Valor de Convênio (R$). Enquanto ficar em branco, o valor exibido é o de venda (em cinza) e acompanha qualquer reajuste que você fizer na tabela normal." },
                 ]} />
                 <Callout type="atencao" title="O valor de convênio é um só">
                     Mesmo que a clínica atenda dez planos, a aplicação tem <strong>um único</strong> valor de convênio —
                     não existe preço por plano. Ele vale para todos os convênios em que aquele serviço está marcado.
                 </Callout>
-                <Callout type="dica" title="Não dá para criar nem apagar por aqui">
-                    Dentro do container do convênio a tabela é de leitura estrutural: você edita a aplicação e liga/desliga
-                    o status, mas criar e excluir continua sendo feito na categoria de origem — é lá que a aplicação
-                    realmente mora.
+                <Callout type="dica" title="Não dá para criar nem apagar pela aba Convênio">
+                    Ali a estrutura é espelho: você edita a aplicação e liga/desliga o status, mas criar e excluir
+                    continua sendo feito na aba Serviços regulares — é lá que a aplicação realmente mora. Por isso os
+                    botões de adicionar somem enquanto a aba Convênio está aberta.
                 </Callout>
                 <Callout type="pratica" title="O que a IA passa a responder">
                     Perguntas de convênio recebem o valor de convênio; perguntas de particular recebem o valor de venda. A
@@ -291,7 +291,11 @@ export function ServicosGuide() {
                         },
                         {
                             q: "A coluna Valor convênio não aparece na tabela",
-                            a: "Ela só existe quando a conta tem pelo menos um serviço marcado em algum convênio. Vá em Equipe → Convênios → Configurar e marque os serviços atendidos — a coluna (e o container 'Contemplados pelo Convênio') aparecem em seguida.",
+                            a: "Ela só existe quando a conta tem pelo menos um serviço marcado em algum convênio. Vá em Equipe → Convênios → Configurar e marque os serviços atendidos — a coluna aparece em seguida nas duas abas.",
+                        },
+                        {
+                            q: "Não vejo as abas Serviços regulares e Convênio",
+                            a: "Elas só aparecem quando existe pelo menos um convênio cadastrado em Equipe → Convênios. Sem convênio, a página continua com a lista única de categorias, como antes.",
                         },
                         {
                             q: "O valor de convênio está cinza. Está errado?",
