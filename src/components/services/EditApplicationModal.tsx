@@ -16,6 +16,7 @@ import { ServiceClient } from "@/types/services";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { useConvenioServiceIds } from "@/hooks/useConvenios";
 
 interface EditApplicationModalProps {
   open: boolean;
@@ -31,12 +32,16 @@ export const EditApplicationModal = ({
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [applyProfToAll, setApplyProfToAll] = useState(false);
+  const convenioIds = useConvenioServiceIds();
+  const isConvenio = !!application && convenioIds.has(application.id);
 
   const [form, setForm] = useState({
     name: "",
     description: "",
     price: 0,
     min_price: 0,
+    // string para distinguir "vazio" (herda o valor de venda) de zero
+    convenio_price: "",
     status: true,
     expiry_months: 6,
     session_interval: null as number | null,
@@ -52,6 +57,8 @@ export const EditApplicationModal = ({
         description: application.description || "",
         price: application.price,
         min_price: application.min_price,
+        convenio_price:
+          application.convenio_price == null ? "" : String(application.convenio_price),
         status: application.status,
         expiry_months: application.expiry_months,
         session_interval: application.session_interval,
@@ -79,6 +86,11 @@ export const EditApplicationModal = ({
         professionals: form.professionals,
         commission_pct: form.commission_pct,
       };
+
+      if (isConvenio) {
+        const parsed = parseFloat(form.convenio_price);
+        updateData.convenio_price = Number.isFinite(parsed) ? parsed : null;
+      }
 
       const { error } = await supabase
         .from("services_client" as any)
@@ -166,6 +178,25 @@ export const EditApplicationModal = ({
               />
             </div>
           </div>
+
+          {/* Row 3b: Convênio — só para aplicação atrelada a algum convênio */}
+          {isConvenio && (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Valor de Convênio (R$)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  placeholder={String(form.price)}
+                  value={form.convenio_price}
+                  onChange={(e) => setField("convenio_price", e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Vale para todos os convênios. Em branco, acompanha o valor de venda.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Row 4: Status / Expiry */}
           <div className="grid grid-cols-2 gap-4">

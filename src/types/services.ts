@@ -51,6 +51,8 @@ export interface ServiceClient {
   description: string | null;
   price: number;
   min_price: number;
+  /** Valor por convênio. null = herda `price`. Só vale para aplicação apta. */
+  convenio_price: number | null;
   status: boolean;
   expiry_months: number;
   recurrence: boolean;

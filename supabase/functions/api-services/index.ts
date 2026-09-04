@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import {
+    ApiError,
     apiError,
     dbErrorResponse,
     describeDbError,
@@ -10,6 +11,7 @@ import {
     unexpectedErrorResponse,
 } from "../_shared/api-errors.ts";
 import { buildBookingLink } from "../_shared/booking-link.ts";
+import { ConvenioSelection, resolveConvenioSelection } from "../_shared/convenio-schedule.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -38,6 +40,31 @@ serve(async (req) => {
             Deno.env.get("SUPABASE_URL") ?? "",
             Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
         );
+
+        // convenio="sim" muda a listagem em dois pontos: só sobram as aplicações
+        // marcadas para o convênio e o `price` passa a ser o valor de convênio
+        // (o particular vai junto em `price_particular` para a IA comparar).
+        const convenioSel: ConvenioSelection = await resolveConvenioSelection(supabase, user_id, body!);
+
+        /** Ids das aplicações aptas ao convênio escolhido. null = sem filtro. */
+        const loadAptoIds = async (): Promise<Set<string> | null> => {
+            if (!convenioSel.requested || !convenioSel.convenio) return null;
+            const { data, error } = await supabase
+                .from("convenio_servicos")
+                .select("service_client_id")
+                .eq("convenio_id", convenioSel.convenio.id);
+            if (error) {
+                throw new ApiError({
+                    status: 500,
+                    code: "convenio_services_read_failed",
+                    message: describeDbError(
+                        `listar as aplicações liberadas para o convênio ${convenioSel.convenio.nome}`, error),
+                    details: String((error as any)?.message ?? error),
+                });
+            }
+            return new Set((data || []).map((r: any) => String(r.service_client_id)));
+        };
+        const aptoIds = await loadAptoIds();
 
         // Só é usado nas mensagens de "não encontrado", para o chamador saber
         // quais valores de service_name esta conta aceita.
@@ -154,7 +181,7 @@ serve(async (req) => {
             // Get all active applications for this service
             const { data: apps, error: appsError } = await supabase
                 .from("services_client")
-                .select("id, name, price, min_price, duration_minutes, description")
+                .select("id, name, price, min_price, convenio_price, duration_minutes, description")
                 .eq("user_id", user_id)
                 .eq("service_name_id", sn.id)
                 .eq("status", true)
@@ -165,6 +192,17 @@ serve(async (req) => {
                     `listar as aplicações ativas do serviço "${sn.name}" nesta conta`, appsError);
             }
 
+            const visibleApps = aptoIds ? (apps || []).filter((a: any) => aptoIds.has(a.id)) : (apps || []);
+
+            if (aptoIds && visibleApps.length === 0) {
+                return apiError(corsHeaders, {
+                    status: 409,
+                    code: "service_not_convenio",
+                    message: `Nenhuma aplicação do serviço "${sn.name}" está liberada para ${convenioSel.catchAll ? "convênio" : `o convênio ${convenioSel.convenio!.nome}`}. Ofereça este serviço como particular (convenio="nao") ou marque as aplicações em Equipe > Convênios.`,
+                    extra: { applications: [] },
+                });
+            }
+
             const booking = await generateBookingLink();
             if (booking.error) console.warn("[api-services]", booking.error);
 
@@ -172,10 +210,15 @@ serve(async (req) => {
                 JSON.stringify({
                     service: sn.name,
                     category: cat?.name || null,
-                    applications: (apps || []).map((a: any) => ({
+                    convenio: convenioSel.requested ? (convenioSel.convenio?.nome || null) : null,
+                    applications: visibleApps.map((a: any) => ({
                         id: a.id,
                         name: a.name,
-                        price: a.price,
+                        // No modo convênio o preço cobrado é o de convênio; NULL
+                        // significa que a clínica não digitou um valor próprio e
+                        // o serviço acompanha o particular.
+                        price: convenioSel.requested ? (a.convenio_price ?? a.price) : a.price,
+                        ...(convenioSel.requested ? { price_particular: a.price } : {}),
                         min_price: a.min_price,
                         duration_minutes: a.duration_minutes,
                         description: a.description,
@@ -190,7 +233,7 @@ serve(async (req) => {
         // No service_name: return all services (level 2 names only)
         const { data: allSc, error: scError } = await supabase
             .from("services_client")
-            .select("service_name_id")
+            .select("id, service_name_id")
             .eq("user_id", user_id)
             .eq("status", true);
 
@@ -199,7 +242,10 @@ serve(async (req) => {
                 `listar os serviços ativos da conta ${user_id}`, scError);
         }
 
-        const snIds = [...new Set((allSc || []).map((s: any) => s.service_name_id))];
+        // No modo convênio o serviço só aparece se pelo menos uma aplicação dele
+        // está liberada — senão a IA oferece um serviço que depois vem vazio.
+        const scRowsVisible = aptoIds ? (allSc || []).filter((s: any) => aptoIds.has(s.id)) : (allSc || []);
+        const snIds = [...new Set(scRowsVisible.map((s: any) => s.service_name_id))];
 
         if (snIds.length === 0) {
             return new Response(
@@ -240,6 +286,7 @@ serve(async (req) => {
 
         return new Response(
             JSON.stringify({
+                convenio: convenioSel.requested ? (convenioSel.convenio?.nome || null) : null,
                 services: (sns || []).map((s: any) => ({
                     id: s.id,
                     name: s.name,

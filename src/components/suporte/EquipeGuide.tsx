@@ -167,6 +167,13 @@ export function EquipeGuide() {
                     intervalos e só nas salas marcadas para aquele plano. É assim que você garante que o horário
                     reservado não seja ocupado por outro paciente.
                 </Callout>
+                <Callout type="dica" title="O valor cobrado no convênio">
+                    Assim que o serviço é marcado aqui, a página <strong>Serviços</strong> ganha a coluna{" "}
+                    <strong>Valor convênio</strong> (ao lado de Valor) e o container{" "}
+                    <strong>Contemplados pelo Convênio</strong>, que reagrupa as mesmas aplicações por convênio → serviço.
+                    Por padrão o valor de convênio acompanha o valor de venda; para cobrar diferente, edite a aplicação e
+                    preencha "Valor de Convênio (R$)". O valor é <strong>um só</strong> — vale para todos os planos.
+                </Callout>
                 <Callout type="dica" title="Habilitar todos os convênios">
                     Se a clínica aceita qualquer plano, ligue a chave{" "}
                     <strong>Habilitar todos os convênios</strong> no topo da aba. A IA passa a responder

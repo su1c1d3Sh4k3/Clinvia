@@ -16,6 +16,7 @@ import { DirectEntryModal } from "./DirectEntryModal";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { useConvenioServiceIds } from "@/hooks/useConvenios";
 
 interface DirectCategoryCardProps {
   categoryId: string;
@@ -34,6 +35,8 @@ export const DirectCategoryCard = ({
   const [showAdd, setShowAdd] = useState(false);
   const [editItem, setEditItem] = useState<ServiceClient | null>(null);
   const queryClient = useQueryClient();
+  const convenioIds = useConvenioServiceIds();
+  const showConvenio = convenioIds.size > 0;
 
   const formatCurrency = (value: number) => {
     if (value === 0) return "Gratuito";
@@ -112,6 +115,9 @@ export const DirectCategoryCard = ({
                   <TableRow>
                     <TableHead className="min-w-[200px]">Nome</TableHead>
                     <TableHead className="min-w-[120px]">Valor</TableHead>
+                    {showConvenio && (
+                      <TableHead className="min-w-[130px]">Valor convênio</TableHead>
+                    )}
                     <TableHead className="min-w-[120px]">Preço Mín.</TableHead>
                     <TableHead className="w-[80px] text-center">Status</TableHead>
                     <TableHead className="w-[100px] text-center">Retorno</TableHead>
@@ -152,6 +158,28 @@ export const DirectCategoryCard = ({
                       )}>
                         {formatCurrency(item.price)}
                       </TableCell>
+                      {showConvenio && (
+                        <TableCell className="text-sm">
+                          {convenioIds.has(item.id) ? (
+                            <span
+                              className={cn(
+                                "font-medium",
+                                item.convenio_price == null &&
+                                  "text-muted-foreground font-normal"
+                              )}
+                              title={
+                                item.convenio_price == null
+                                  ? "Herdado do valor de venda — edite o registro para definir um valor próprio"
+                                  : undefined
+                              }
+                            >
+                              {formatCurrency(item.convenio_price ?? item.price)}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                      )}
                       <TableCell className="text-sm text-muted-foreground">
                         {item.price === 0 ? "—" : formatCurrency(item.min_price)}
                       </TableCell>

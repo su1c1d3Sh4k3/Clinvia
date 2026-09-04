@@ -15,7 +15,7 @@ import { makeOpenAIRequest, trackTokenUsage } from "../_shared/token-tracker.ts"
 import { buildRecurrenceObjective, RECURRENCE_STAGE_PROMPTS } from "../_shared/recurrence-campaign.ts";
 import { buildBookingLink } from "../_shared/booking-link.ts";
 import { AC_FREE_TEXT_STATES, matchAcButtonId } from "../_shared/appointment-confirmation-buttons.ts";
-import { getConvenioCatalog } from "../_shared/convenio-schedule.ts";
+import { CONVENIO_PROF_COLUMNS, filterRoomsForConvenio, getConvenioCatalog } from "../_shared/convenio-schedule.ts";
 
 // EdgeRuntime.waitUntil mantém o processo vivo após o return 200 para que
 // tasks de background (persistir foto, download de mídia) terminem mesmo
@@ -2080,10 +2080,41 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                     try {
                         const { catchAll, list } = await getConvenioCatalog(supabase, userId);
                         const convRows = catchAll ? [catchAll] : list;
+
+                        // Nem toda sala que atende o serviço atende convênio: o
+                        // payload leva "<convênio> - <descrição> - <salas>".
+                        const salasPorConvenio = new Map<string, string>();
+                        if (convRows.length > 0) {
+                            const [{ data: rooms, error: roomsErr }, { data: vinculos, error: vincErr }] = await Promise.all([
+                                supabase.from('professionals')
+                                    .select(`id, name, ${CONVENIO_PROF_COLUMNS}`)
+                                    .eq('user_id', userId)
+                                    .eq('active', true)
+                                    .eq('convenio_enabled', true),
+                                supabase.from('convenio_salas')
+                                    .select('convenio_id, professional_id')
+                                    .in('convenio_id', convRows.map((c) => c.id)),
+                            ]);
+                            if (roomsErr) console.warn('[bd_data] convenio rooms lookup failed:', roomsErr.message);
+                            if (vincErr) console.warn('[bd_data] convenio_salas lookup failed:', vincErr.message);
+                            for (const c of convRows) {
+                                const ids = new Set(
+                                    (vinculos || [])
+                                        .filter((v: any) => v.convenio_id === c.id)
+                                        .map((v: any) => String(v.professional_id)),
+                                );
+                                const nomes = filterRoomsForConvenio((rooms || []) as any[], ids)
+                                    .map((p: any) => p.name)
+                                    .filter(Boolean);
+                                salasPorConvenio.set(c.id, nomes.join(', '));
+                            }
+                        }
+
                         enrichedConvenios = convRows.map((c) => {
                             const nome = catchAll ? 'Habilitado para todos os convênios' : c.nome;
-                            const desc = (c.descricao || '').trim();
-                            return desc ? `${nome} — ${desc}` : nome;
+                            const desc = (c.descricao || '').trim() || 'sem descrição';
+                            const salas = salasPorConvenio.get(c.id) || 'nenhum profissional habilitado';
+                            return `${nome} - ${desc} - ${salas}`;
                         });
                         if (convRows.length > 0) {
                             const { data: aptos, error: aptosErr } = await supabase

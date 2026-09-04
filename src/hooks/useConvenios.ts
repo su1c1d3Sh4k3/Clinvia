@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useOwnerId } from "@/hooks/useOwnerId";
@@ -50,6 +51,20 @@ export function useConvenios() {
             }));
         },
     });
+}
+
+/**
+ * Ids das aplicações cobertas por ALGUM convênio da conta.
+ * É o que libera a coluna/campo "Valor convênio" — sem convênio nenhum o valor
+ * não existe, e a coluna some da tabela em vez de virar uma fileira de traços.
+ */
+export function useConvenioServiceIds(): Set<string> {
+    const { data } = useConvenios();
+    return useMemo(() => {
+        const ids = new Set<string>();
+        for (const c of data || []) for (const id of c.service_ids) ids.add(id);
+        return ids;
+    }, [data]);
 }
 
 export interface SaveConvenioInput {

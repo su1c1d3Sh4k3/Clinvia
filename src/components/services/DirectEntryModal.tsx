@@ -17,6 +17,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { toast } from "sonner";
 import { ServiceClient } from "@/types/services";
+import { useConvenioServiceIds } from "@/hooks/useConvenios";
 
 interface DirectEntryModalProps {
   open: boolean;
@@ -40,14 +41,18 @@ export const DirectEntryModal = ({
   const { data: ownerId } = useOwnerId();
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
+  const convenioIds = useConvenioServiceIds();
 
   const isEdit = !!editItem;
+  const isConvenio = !!editItem && convenioIds.has(editItem.id);
 
   const defaultForm = {
     name: "",
     description: "",
     price: 0,
     min_price: 0,
+    // string para distinguir "vazio" (herda o valor de venda) de zero
+    convenio_price: "",
     status: true,
     expiry_months: 6,
     duration_minutes: null as number | null,
@@ -65,6 +70,8 @@ export const DirectEntryModal = ({
           description: editItem.description || "",
           price: editItem.price,
           min_price: editItem.min_price,
+          convenio_price:
+            editItem.convenio_price == null ? "" : String(editItem.convenio_price),
           status: editItem.status,
           expiry_months: editItem.expiry_months,
           duration_minutes: editItem.duration_minutes,
@@ -92,6 +99,11 @@ export const DirectEntryModal = ({
         professionals: form.professionals,
         commission_pct: form.commission_pct,
       };
+
+      if (isConvenio) {
+        const parsed = parseFloat(form.convenio_price);
+        data.convenio_price = Number.isFinite(parsed) ? parsed : null;
+      }
 
       if (isEdit) {
         const { error } = await supabase
@@ -186,6 +198,24 @@ export const DirectEntryModal = ({
               />
             </div>
           </div>
+
+          {isConvenio && (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Valor de Convênio (R$)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  placeholder={String(form.price)}
+                  value={form.convenio_price}
+                  onChange={(e) => setField("convenio_price", e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Vale para todos os convênios. Em branco, acompanha o valor de venda.
+                </p>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <div className="flex items-center justify-between rounded-md border px-3 py-2">

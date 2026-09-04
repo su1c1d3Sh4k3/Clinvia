@@ -16,20 +16,30 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { EditApplicationModal } from "./EditApplicationModal";
 import { AddApplicationModal } from "./AddApplicationModal";
+import { useConvenioServiceIds } from "@/hooks/useConvenios";
 import { cn } from "@/lib/utils";
 
 interface ServiceApplicationsTableProps {
   applications: ServiceClient[];
   categoryId: string;
   serviceNameId: string;
+  /**
+   * Dentro do container "Contemplados pelo Convênio" a tabela não cria nem
+   * apaga aplicação: criar ali não teria como vincular ao convênio, e apagar
+   * removeria o serviço da categoria de origem também.
+   */
+  readOnlyStructure?: boolean;
 }
 
 export const ServiceApplicationsTable = ({
   applications,
   categoryId,
   serviceNameId,
+  readOnlyStructure = false,
 }: ServiceApplicationsTableProps) => {
   const queryClient = useQueryClient();
+  const convenioIds = useConvenioServiceIds();
+  const showConvenio = convenioIds.size > 0;
   const [editApp, setEditApp] = useState<ServiceClient | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
 
@@ -69,6 +79,13 @@ export const ServiceApplicationsTable = ({
   };
 
   if (applications.length === 0) {
+    if (readOnlyStructure) {
+      return (
+        <div className="text-center py-6 text-muted-foreground text-sm">
+          Nenhuma aplicação deste serviço está marcada para o convênio.
+        </div>
+      );
+    }
     return (
       <>
         <div className="text-center py-8 text-muted-foreground text-sm space-y-3">
@@ -101,6 +118,9 @@ export const ServiceApplicationsTable = ({
             <TableRow>
               <TableHead className="min-w-[200px]">Nome</TableHead>
               <TableHead className="min-w-[120px]">Valor</TableHead>
+              {showConvenio && (
+                <TableHead className="min-w-[130px]">Valor convênio</TableHead>
+              )}
               <TableHead className="min-w-[120px]">Preço Mín.</TableHead>
               <TableHead className="w-[80px] text-center">Status</TableHead>
               <TableHead className="w-[100px] text-center">Vencimento</TableHead>
@@ -108,15 +128,17 @@ export const ServiceApplicationsTable = ({
               <TableHead className="w-[100px] text-center">Comissão</TableHead>
               <TableHead className="w-[90px] text-center">Tempo</TableHead>
               <TableHead className="w-[110px]">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 gap-1 text-xs"
-                  onClick={() => setShowAddModal(true)}
-                >
-                  <Plus className="h-3 w-3" />
-                  Adicionar
-                </Button>
+                {!readOnlyStructure && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 gap-1 text-xs"
+                    onClick={() => setShowAddModal(true)}
+                  >
+                    <Plus className="h-3 w-3" />
+                    Adicionar
+                  </Button>
+                )}
               </TableHead>
             </TableRow>
           </TableHeader>
@@ -141,6 +163,27 @@ export const ServiceApplicationsTable = ({
                 <TableCell className="text-sm font-medium">
                   {formatCurrency(app.price)}
                 </TableCell>
+                {showConvenio && (
+                  <TableCell className="text-sm">
+                    {convenioIds.has(app.id) ? (
+                      <span
+                        className={cn(
+                          "font-medium",
+                          app.convenio_price == null && "text-muted-foreground font-normal"
+                        )}
+                        title={
+                          app.convenio_price == null
+                            ? "Herdado do valor de venda — edite a aplicação para definir um valor próprio"
+                            : undefined
+                        }
+                      >
+                        {formatCurrency(app.convenio_price ?? app.price)}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+                )}
                 <TableCell className="text-sm text-muted-foreground">
                   {formatCurrency(app.min_price)}
                 </TableCell>
@@ -172,14 +215,16 @@ export const ServiceApplicationsTable = ({
                     >
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-destructive hover:text-destructive"
-                      onClick={() => handleDelete(app)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    {!readOnlyStructure && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-destructive hover:text-destructive"
+                        onClick={() => handleDelete(app)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                   </div>
                 </TableCell>
               </TableRow>

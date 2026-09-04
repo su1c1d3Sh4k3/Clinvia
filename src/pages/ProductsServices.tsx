@@ -12,6 +12,7 @@ import { DirectCategoryCard } from "@/components/services/DirectCategoryCard";
 import { AddByCategoryModal } from "@/components/services/AddByCategoryModal";
 import { AddCategoryModal } from "@/components/services/AddCategoryModal";
 import { ServiceTemplatesModal } from "@/components/services/ServiceTemplatesModal";
+import { ConvenioServicesCard } from "@/components/services/ConvenioServicesCard";
 import { useSuporteTour } from "@/lib/suporteTours";
 
 export default function ProductsServices() {
@@ -195,6 +196,11 @@ export default function ProductsServices() {
               />
             )
           )}
+
+          <ConvenioServicesCard
+            applications={filteredCategories.flatMap((g) => g.apps)}
+            serviceNames={serviceNames || []}
+          />
 
           {filteredCategories.length === 0 && searchTerm && (
             <div className="text-center py-12 text-muted-foreground text-sm">

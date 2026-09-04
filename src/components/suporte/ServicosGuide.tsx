@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import {
     Package, GitBranch, FolderPlus, PlusCircle, UserCheck, CircleDollarSign,
-    HelpCircle, ExternalLink, Repeat, LayoutTemplate,
+    HelpCircle, ExternalLink, Repeat, LayoutTemplate, HeartHandshake,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,6 +22,7 @@ const TOPICS = [
     { id: "categorias-proprias", label: "Categorias próprias" },
     { id: "profissionais", label: "Profissionais vinculados" },
     { id: "precos", label: "Preços" },
+    { id: "convenio", label: "Contemplados pelo Convênio" },
     { id: "recorrencia", label: "Mensagens de recorrência" },
     { id: "faq", label: "FAQ" },
 ];
@@ -54,6 +55,7 @@ export function ServicosGuide() {
                         <LearnChip topicId="adicionando">Montar o catálogo em minutos</LearnChip>
                         <LearnChip topicId="profissionais">Quem executa o quê</LearnChip>
                         <LearnChip topicId="precos">De onde a IA tira os preços</LearnChip>
+                        <LearnChip topicId="convenio">Valor de convênio</LearnChip>
                     </div>
                 </div>
             </div>
@@ -180,7 +182,45 @@ export function ServicosGuide() {
             </TopicSection>
 
             {/* 8 */}
-            <TopicSection id="recorrencia" index={8} icon={Repeat} title="Mensagens de recorrência"
+            <TopicSection id="convenio" index={8} icon={HeartHandshake} title="Contemplados pelo Convênio"
+                subtitle="O mesmo catálogo reagrupado — e o valor cobrado no convênio">
+                <p className="text-sm text-muted-foreground">
+                    Abaixo das categorias aparece o container{" "}
+                    <strong className="text-foreground">Contemplados pelo Convênio</strong>. Ele abre em{" "}
+                    <strong className="text-foreground">convênio → serviço → procedimentos</strong> e mostra{" "}
+                    <strong className="text-foreground">as mesmas aplicações</strong> das categorias — é só uma forma mais
+                    fácil de enxergar o que cada plano cobre. O container só existe se algum serviço estiver marcado em
+                    um convênio (isso é feito em <strong className="text-foreground">Equipe → Convênios</strong>).
+                </p>
+                <StepByStep steps={[
+                    { title: "Marque o serviço no convênio", description: "Equipe → Convênios → Configurar. Só depois disso a aplicação passa a ter valor de convênio." },
+                    { title: "A coluna Valor convênio aparece", description: "Ao lado da coluna Valor, tanto na tabela da categoria quanto dentro do container do convênio. Aplicação que não está em nenhum convênio mostra um traço." },
+                    { title: "Edite a aplicação para definir o valor", description: "Lápis da aplicação → campo Valor de Convênio (R$). Enquanto ficar em branco, o valor exibido é o de venda (em cinza) e acompanha qualquer reajuste que você fizer na tabela normal." },
+                ]} />
+                <Callout type="atencao" title="O valor de convênio é um só">
+                    Mesmo que a clínica atenda dez planos, a aplicação tem <strong>um único</strong> valor de convênio —
+                    não existe preço por plano. Ele vale para todos os convênios em que aquele serviço está marcado.
+                </Callout>
+                <Callout type="dica" title="Não dá para criar nem apagar por aqui">
+                    Dentro do container do convênio a tabela é de leitura estrutural: você edita a aplicação e liga/desliga
+                    o status, mas criar e excluir continua sendo feito na categoria de origem — é lá que a aplicação
+                    realmente mora.
+                </Callout>
+                <Callout type="pratica" title="O que a IA passa a responder">
+                    Perguntas de convênio recebem o valor de convênio; perguntas de particular recebem o valor de venda. A
+                    IA também só oferece, no modo convênio, os serviços marcados naquele plano — e cita quais
+                    profissionais atendem por ele.
+                </Callout>
+                <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" onClick={() => navigate("/equipe?tab=convenios")}>
+                        <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                        Abrir Convênios
+                    </Button>
+                </div>
+            </TopicSection>
+
+            {/* 9 */}
+            <TopicSection id="recorrencia" index={9} icon={Repeat} title="Mensagens de recorrência"
                 subtitle="Configuração por serviço + template padrão da conta">
                 <p className="text-sm text-muted-foreground">
                     A recorrência é configurada <strong className="text-foreground">no serviço</strong> (não em cada
@@ -221,8 +261,8 @@ export function ServicosGuide() {
                 </Callout>
             </TopicSection>
 
-            {/* 9 */}
-            <TopicSection id="faq" index={9} icon={HelpCircle} title="Perguntas frequentes">
+            {/* 10 */}
+            <TopicSection id="faq" index={10} icon={HelpCircle} title="Perguntas frequentes">
                 <Accordion type="single" collapsible className="rounded-xl border px-4">
                     {[
                         {
@@ -248,6 +288,14 @@ export function ServicosGuide() {
                         {
                             q: "Por que não consigo apagar a categoria Avaliação?",
                             a: "Ela é estrutural: define quem é Lead e alimenta o link público de agendamento. É protegida contra renomear/apagar de propósito.",
+                        },
+                        {
+                            q: "A coluna Valor convênio não aparece na tabela",
+                            a: "Ela só existe quando a conta tem pelo menos um serviço marcado em algum convênio. Vá em Equipe → Convênios → Configurar e marque os serviços atendidos — a coluna (e o container 'Contemplados pelo Convênio') aparecem em seguida.",
+                        },
+                        {
+                            q: "O valor de convênio está cinza. Está errado?",
+                            a: "Não. Cinza significa que você ainda não digitou um valor próprio, então a aplicação está cobrando o mesmo valor de venda. Se a tabela particular for reajustada, o convênio acompanha. Digite um valor no campo 'Valor de Convênio (R$)' para congelar um preço só do convênio.",
                         },
                         {
                             q: "Sumiu uma categoria da listagem!",
