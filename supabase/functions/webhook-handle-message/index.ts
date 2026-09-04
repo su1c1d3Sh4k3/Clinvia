@@ -2074,8 +2074,9 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                     }
 
                     // 4b. Convênios da conta — bloco próprio no payload e marcação
-                    // "(apto para convênio)" nos serviços atrelados a algum convênio.
-                    const aptoServiceIds = new Set<string>();
+                    // "(Convênio: Unimed)" nos serviços atrelados a algum convênio.
+                    // Um serviço pode estar em mais de um plano, então guardamos a lista.
+                    const convenioNamesByService = new Map<string, string[]>();
                     try {
                         const { catchAll, list } = await getConvenioCatalog(supabase, userId);
                         const convRows = catchAll ? [catchAll] : list;
@@ -2087,12 +2088,22 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                         if (convRows.length > 0) {
                             const { data: aptos, error: aptosErr } = await supabase
                                 .from('convenio_servicos')
-                                .select('service_client_id')
+                                .select('convenio_id, service_client_id')
                                 .in('convenio_id', convRows.map((c) => c.id));
                             if (aptosErr) {
                                 console.warn('[bd_data] convenio_servicos lookup failed:', aptosErr.message);
                             }
-                            for (const r of aptos || []) aptoServiceIds.add(r.service_client_id);
+                            // No catch-all o rótulo da linha é longo demais para virar sufixo.
+                            const convenioNameById = new Map<string, string>(
+                                convRows.map((c) => [c.id, catchAll ? 'todos os convênios' : c.nome]),
+                            );
+                            for (const r of aptos || []) {
+                                const nome = convenioNameById.get(r.convenio_id);
+                                if (!nome) continue;
+                                const arr = convenioNamesByService.get(r.service_client_id) || [];
+                                if (!arr.includes(nome)) arr.push(nome);
+                                convenioNamesByService.set(r.service_client_id, arr);
+                            }
                         }
                     } catch (convErr) {
                         console.warn('[webhook-handle-message] convenios lookup failed:', convErr);
@@ -2157,21 +2168,24 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                                 profissionais: profNames.length > 0 ? profNames.join(', ') : null,
                                 descricao: s.description || null,
                                 valor: price === 0 ? 'gratuito' : price,
-                                apto_convenio: aptoServiceIds.has(s.id),
+                                convenio: convenioNamesByService.get(s.id)?.join(', ') || null,
                             };
                         });
 
                         // Group professionals by service_name_id (só serviços fora de Avaliação)
                         const snProfMap = new Map<string, Set<string>>();
-                        // Um nome de serviço é apto quando QUALQUER aplicação dele é apta
-                        const snAptoIds = new Set<string>();
+                        // Um nome de serviço herda os convênios de QUALQUER aplicação dele
+                        const snConvenios = new Map<string, Set<string>>();
                         for (const sc of regularRows) {
                             if (!snProfMap.has(sc.service_name_id)) snProfMap.set(sc.service_name_id, new Set());
                             for (const pid of (sc.professionals || [])) {
                                 const name = profMap.get(pid);
                                 if (name) snProfMap.get(sc.service_name_id)!.add(name);
                             }
-                            if (aptoServiceIds.has(sc.id)) snAptoIds.add(sc.service_name_id);
+                            for (const conv of convenioNamesByService.get(sc.id) || []) {
+                                if (!snConvenios.has(sc.service_name_id)) snConvenios.set(sc.service_name_id, new Set());
+                                snConvenios.get(sc.service_name_id)!.add(conv);
+                            }
                         }
 
                         const snIds = [...new Set(regularRows.map((s: any) => s.service_name_id))];
@@ -2182,7 +2196,10 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                                 const profs = snProfMap.get(s.id);
                                 const profNames = profs && profs.size > 0 ? [...profs].join(', ') : null;
                                 const label = profNames ? `${s.name} (${profNames})` : s.name;
-                                return snAptoIds.has(s.id) ? `${label} (apto para convênio)` : label;
+                                const convs = snConvenios.get(s.id);
+                                return convs && convs.size > 0
+                                    ? `${label} (Convênio: ${[...convs].join(', ')})`
+                                    : label;
                             });
                         }
                     }
