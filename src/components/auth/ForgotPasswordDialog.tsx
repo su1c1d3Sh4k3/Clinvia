@@ -50,22 +50,22 @@ export function ForgotPasswordDialog() {
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button variant="link" type="button" className="px-0 font-normal text-white/70 hover:text-white h-auto p-0">
+                <Button variant="link" type="button" className="px-0 font-normal text-[#1668C1]/80 hover:text-[#1668C1] h-auto p-0">
                     Esqueci minha senha
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px] bg-[#1a1f2c] border-white/10 text-white">
+            <DialogContent className="sm:max-w-[425px] bg-white border-[#1668C1]/15 text-[#0B2545]">
                 <DialogHeader>
-                    <DialogTitle>Recuperar Senha</DialogTitle>
-                    <DialogDescription className="text-white/70">
+                    <DialogTitle className="text-[#1668C1]">Recuperar Senha</DialogTitle>
+                    <DialogDescription className="text-[#1668C1]/70">
                         Digite seu email cadastrado para receber o link de redefinição de senha.
                     </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4 py-4">
                     <div className="space-y-2">
-                        <Label htmlFor="reset-email" className="text-white/90">Email</Label>
+                        <Label htmlFor="reset-email" className="text-[#1668C1]">Email</Label>
                         <div className="relative">
-                            <Mail className="absolute left-3 top-3 h-4 w-4 text-white/50" />
+                            <Mail className="absolute left-3 top-3 h-4 w-4 text-[#1668C1]/60" />
                             <Input
                                 id="reset-email"
                                 type="email"
@@ -73,7 +73,7 @@ export function ForgotPasswordDialog() {
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 required
-                                className="pl-9 bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-primary/50 focus:ring-primary/50"
+                                className="pl-9 bg-white border-[#1668C1]/30 text-[#0B2545] placeholder:text-[#1668C1]/40 focus-visible:ring-[#1668C1]/30 focus-visible:border-[#1668C1]"
                                 autoComplete="off"
                             />
                         </div>
@@ -81,7 +81,7 @@ export function ForgotPasswordDialog() {
                     <DialogFooter>
                         <Button
                             type="submit"
-                            className="w-full bg-primary hover:bg-primary/90 text-white"
+                            className="w-full bg-[#1668C1] hover:bg-[#12539C] text-white"
                             disabled={isLoading}
                         >
                             {isLoading ? (

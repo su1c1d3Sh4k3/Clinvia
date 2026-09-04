@@ -7,17 +7,23 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Lock, Mail, User, Building, Phone, Instagram, MapPin, CheckCircle } from "lucide-react";
+import { Lock, Mail, User, Building, Phone, Instagram, MapPin, CheckCircle, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import TurnstileWidget, { TurnstileWidgetHandle } from "@/components/TurnstileWidget";
 import { sendClientSignupWebhook } from "@/utils/sendWebhook";
 import { ForgotPasswordDialog } from "@/components/auth/ForgotPasswordDialog";
+
+// Cores fixas (hex, nao tokens): a caixa de login e IDENTICA no claro e no escuro.
+const BRAND = "#1668C1";
+const INPUT_CLASS =
+  "bg-white border-[#1668C1]/30 text-[#0B2545] placeholder:text-[#1668C1]/40 focus-visible:ring-[#1668C1]/30 focus-visible:border-[#1668C1]";
 
 const Auth = () => {
   const navigate = useNavigate();
   const { signIn, user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [signupSuccess, setSignupSuccess] = useState(false);
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
 
   // Redirect if already logged in
   useEffect(() => {
@@ -233,24 +239,29 @@ const Auth = () => {
           <div className="absolute top-[40%] -right-[10%] w-[40%] h-[40%] rounded-full bg-tertiary/30 blur-[100px]" />
         </div>
 
-        <Card className="w-full max-w-md border-white/10 bg-[#0F172A]/95 backdrop-blur-xl shadow-2xl relative z-10">
-          <CardContent className="pt-8 pb-8 text-center">
-            <CheckCircle className="w-16 h-16 text-green-400 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-white mb-2">Cadastro Enviado!</h2>
-            <p className="text-white/70 mb-6">
-              Enviamos um e-mail para confirmar o seu endereço. Clique no link da
-              mensagem para validar o cadastro — depois disso nosso time de
-              implementação entra em contato para liberar o seu acesso.
-            </p>
-            <Button
-              onClick={() => setSignupSuccess(false)}
-              variant="outline"
-              className="border-white/20 text-white hover:bg-white/10"
-            >
-              Voltar ao Login
-            </Button>
-          </CardContent>
-        </Card>
+        <div className="relative z-10 w-full max-w-md">
+          <Card className="w-full border border-[#1668C1]/15 bg-white shadow-[0_25px_60px_-15px_rgba(11,45,90,0.45)]">
+            <CardContent className="pt-8 pb-8 text-center">
+              <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-[#1668C1] mb-2">Cadastro Enviado!</h2>
+              <p className="text-[#1668C1]/80 mb-6">
+                Enviamos um e-mail para confirmar o seu endereço. Clique no link da
+                mensagem para validar o cadastro — depois disso nosso time de
+                implementação entra em contato para liberar o seu acesso.
+              </p>
+              <Button
+                onClick={() => setSignupSuccess(false)}
+                variant="outline"
+                className="border-[#1668C1]/40 bg-white text-[#1668C1] hover:bg-[#1668C1]/10 hover:text-[#1668C1]"
+              >
+                Voltar ao Login
+              </Button>
+            </CardContent>
+          </Card>
+          <p className="mt-4 text-center text-xs font-light text-[#1668C1]">
+            2026 Clinbia | Todos os direitos reservados.
+          </p>
+        </div>
       </div>
     );
   }
@@ -264,31 +275,32 @@ const Auth = () => {
         <div className="absolute -bottom-[10%] left-[20%] w-[30%] h-[30%] rounded-full bg-white/10 blur-[80px]" />
       </div>
 
-      <Card className="w-full max-w-md border-white/10 bg-[#0F172A]/95 backdrop-blur-xl shadow-2xl relative z-10">
+      <div className="relative z-10 w-full max-w-md">
+      <Card className="w-full border border-[#1668C1]/15 bg-white shadow-[0_25px_60px_-15px_rgba(11,45,90,0.45)]">
         <CardHeader className="text-center space-y-2 pb-6">
           <div className="mx-auto mb-2">
             <img
-              src="/clinvia-logo-full.png"
+              src="/logo-light.png"
               alt="Clinbia"
-              className="h-10 w-auto object-contain"
+              className="h-11 w-auto object-contain"
             />
           </div>
-          <CardDescription className="text-white/70 text-base">
+          <CardDescription className="text-[#1668C1] text-base">
             Atendimento e Gestão de Leads com IA
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="login" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 bg-white/10 border border-white/10 mb-6">
+            <TabsList className="grid w-full grid-cols-2 bg-[#1668C1]/10 border border-[#1668C1]/20 mb-6">
               <TabsTrigger
                 value="login"
-                className="data-[state=active]:bg-white data-[state=active]:text-[#005AA8] text-white/70 hover:text-white transition-all"
+                className="data-[state=active]:bg-[#1668C1] data-[state=active]:text-white text-[#1668C1] transition-all"
               >
                 Login
               </TabsTrigger>
               <TabsTrigger
                 value="signup"
-                className="data-[state=active]:bg-white data-[state=active]:text-[#005AA8] text-white/70 hover:text-white transition-all"
+                className="data-[state=active]:bg-[#1668C1] data-[state=active]:text-white text-[#1668C1] transition-all"
               >
                 Cadastro
               </TabsTrigger>
@@ -297,9 +309,9 @@ const Auth = () => {
             <TabsContent value="login">
               <form onSubmit={handleLogin} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="login-email" className="text-white/90">Email</Label>
+                  <Label htmlFor="login-email" className="text-[#1668C1]">Email</Label>
                   <div className="relative">
-                    <Mail className="absolute left-3 top-3 h-4 w-4 text-white/50" />
+                    <Mail className="absolute left-3 top-3 h-4 w-4 text-[#1668C1]/60" />
                     <Input
                       id="login-email"
                       type="email"
@@ -307,23 +319,31 @@ const Auth = () => {
                       value={loginEmail}
                       onChange={(e) => setLoginEmail(e.target.value)}
                       required
-                      className="pl-9 bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-primary/50 focus:ring-primary/50"
+                      className={`pl-9 ${INPUT_CLASS}`}
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="login-password" className="text-white/90">Senha</Label>
+                  <Label htmlFor="login-password" className="text-[#1668C1]">Senha</Label>
                   <div className="relative">
-                    <Lock className="absolute left-3 top-3 h-4 w-4 text-white/50" />
+                    <Lock className="absolute left-3 top-3 h-4 w-4 text-[#1668C1]/60" />
                     <Input
                       id="login-password"
-                      type="password"
+                      type={showLoginPassword ? "text" : "password"}
                       placeholder="••••••••"
                       value={loginPassword}
                       onChange={(e) => setLoginPassword(e.target.value)}
                       required
-                      className="pl-9 bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-primary/50 focus:ring-primary/50"
+                      className={`pl-9 pr-10 ${INPUT_CLASS}`}
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowLoginPassword((v) => !v)}
+                      aria-label={showLoginPassword ? "Ocultar senha" : "Mostrar senha"}
+                      className="absolute right-1 top-1/2 -translate-y-1/2 rounded-md p-2 text-[#1668C1]/60 transition-colors hover:text-[#1668C1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1668C1]/40"
+                    >
+                      {showLoginPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
                   </div>
                 </div>
                 <div className="flex justify-end">
@@ -332,12 +352,13 @@ const Auth = () => {
                 <div className="flex justify-center">
                   <TurnstileWidget ref={loginCaptchaRef} onVerify={setLoginCaptchaToken} onExpire={() => setLoginCaptchaToken(null)} />
                 </div>
+                {/* +30% na fonte e +10% no padding vertical do botao (h-auto libera o py) */}
                 <Button
                   type="submit"
-                  className="w-full bg-primary hover:bg-primary/90 text-white font-semibold shadow-lg shadow-primary/20 transition-all hover:scale-[1.02]"
+                  className="w-full h-auto py-[0.55rem] text-[1.1375rem] bg-[#1668C1] hover:bg-[#12539C] text-white font-semibold shadow-lg shadow-[#1668C1]/25 transition-all hover:scale-[1.02]"
                   disabled={isLoading}
                 >
-                  {isLoading ? "Entrando..." : "Entrar"}
+                  {isLoading ? "Entrando..." : "Avançar"}
                 </Button>
               </form>
             </TabsContent>
@@ -346,9 +367,9 @@ const Auth = () => {
               <form onSubmit={handleSignup} className="space-y-2 md:space-y-3">
                 {/* Nome */}
                 <div className="space-y-1">
-                  <Label htmlFor="signup-name" className="text-white/90 text-sm">Nome completo *</Label>
+                  <Label htmlFor="signup-name" className="text-[#1668C1] text-sm">Nome completo *</Label>
                   <div className="relative">
-                    <User className="absolute left-3 top-2.5 h-4 w-4 text-white/50" />
+                    <User className="absolute left-3 top-2.5 h-4 w-4 text-[#1668C1]/60" />
                     <Input
                       id="signup-name"
                       type="text"
@@ -356,16 +377,16 @@ const Auth = () => {
                       value={signupFullName}
                       onChange={(e) => setSignupFullName(e.target.value)}
                       required
-                      className="pl-9 h-9 bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-primary/50"
+                      className={`pl-9 h-9 ${INPUT_CLASS}`}
                     />
                   </div>
                 </div>
 
                 {/* Nome da Empresa */}
                 <div className="space-y-1">
-                  <Label htmlFor="signup-company" className="text-white/90 text-sm">Nome da Empresa *</Label>
+                  <Label htmlFor="signup-company" className="text-[#1668C1] text-sm">Nome da Empresa *</Label>
                   <div className="relative">
-                    <Building className="absolute left-3 top-2.5 h-4 w-4 text-white/50" />
+                    <Building className="absolute left-3 top-2.5 h-4 w-4 text-[#1668C1]/60" />
                     <Input
                       id="signup-company"
                       type="text"
@@ -373,16 +394,16 @@ const Auth = () => {
                       value={signupCompanyName}
                       onChange={(e) => setSignupCompanyName(e.target.value)}
                       required
-                      className="pl-9 h-9 bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-primary/50"
+                      className={`pl-9 h-9 ${INPUT_CLASS}`}
                     />
                   </div>
                 </div>
 
                 {/* Email */}
                 <div className="space-y-1">
-                  <Label htmlFor="signup-email" className="text-white/90 text-sm">Email *</Label>
+                  <Label htmlFor="signup-email" className="text-[#1668C1] text-sm">Email *</Label>
                   <div className="relative">
-                    <Mail className="absolute left-3 top-2.5 h-4 w-4 text-white/50" />
+                    <Mail className="absolute left-3 top-2.5 h-4 w-4 text-[#1668C1]/60" />
                     <Input
                       id="signup-email"
                       type="email"
@@ -390,16 +411,16 @@ const Auth = () => {
                       value={signupEmail}
                       onChange={(e) => setSignupEmail(e.target.value)}
                       required
-                      className="pl-9 h-9 bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-primary/50"
+                      className={`pl-9 h-9 ${INPUT_CLASS}`}
                     />
                   </div>
                 </div>
 
                 {/* Telefone */}
                 <div className="space-y-1">
-                  <Label htmlFor="signup-phone" className="text-white/90 text-sm">Telefone *</Label>
+                  <Label htmlFor="signup-phone" className="text-[#1668C1] text-sm">Telefone *</Label>
                   <div className="relative">
-                    <Phone className="absolute left-3 top-2.5 h-4 w-4 text-white/50" />
+                    <Phone className="absolute left-3 top-2.5 h-4 w-4 text-[#1668C1]/60" />
                     <Input
                       id="signup-phone"
                       type="tel"
@@ -407,33 +428,33 @@ const Auth = () => {
                       value={signupPhone}
                       onChange={handlePhoneChange}
                       required
-                      className={`pl-9 h-9 bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-primary/50 ${signupPhone && !phoneValid ? "border-red-500/50" : ""
-                        } ${phoneValid ? "border-green-500/50" : ""}`}
+                      className={`pl-9 h-9 ${INPUT_CLASS} ${signupPhone && !phoneValid ? "border-red-500" : ""
+                        } ${phoneValid ? "border-green-500" : ""}`}
                     />
                   </div>
                 </div>
 
                 {/* Instagram */}
                 <div className="space-y-1">
-                  <Label htmlFor="signup-instagram" className="text-white/90 text-sm">Instagram</Label>
+                  <Label htmlFor="signup-instagram" className="text-[#1668C1] text-sm">Instagram</Label>
                   <div className="relative">
-                    <Instagram className="absolute left-3 top-2.5 h-4 w-4 text-white/50" />
+                    <Instagram className="absolute left-3 top-2.5 h-4 w-4 text-[#1668C1]/60" />
                     <Input
                       id="signup-instagram"
                       type="text"
                       placeholder="@seuinstagram"
                       value={signupInstagram}
                       onChange={(e) => setSignupInstagram(e.target.value)}
-                      className="pl-9 h-9 bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-primary/50"
+                      className={`pl-9 h-9 ${INPUT_CLASS}`}
                     />
                   </div>
                 </div>
 
                 {/* Endereço */}
                 <div className="space-y-1">
-                  <Label htmlFor="signup-address" className="text-white/90 text-sm">Endereço *</Label>
+                  <Label htmlFor="signup-address" className="text-[#1668C1] text-sm">Endereço *</Label>
                   <div className="relative">
-                    <MapPin className="absolute left-3 top-2.5 h-4 w-4 text-white/50" />
+                    <MapPin className="absolute left-3 top-2.5 h-4 w-4 text-[#1668C1]/60" />
                     <Input
                       id="signup-address"
                       type="text"
@@ -441,14 +462,14 @@ const Auth = () => {
                       value={signupAddress}
                       onChange={(e) => setSignupAddress(e.target.value)}
                       required
-                      className="pl-9 h-9 bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-primary/50"
+                      className={`pl-9 h-9 ${INPUT_CLASS}`}
                     />
                   </div>
                 </div>
 
                 {/* CEP */}
                 <div className="space-y-1">
-                  <Label htmlFor="signup-cep" className="text-white/90 text-sm">CEP *</Label>
+                  <Label htmlFor="signup-cep" className="text-[#1668C1] text-sm">CEP *</Label>
                   <Input
                     id="signup-cep"
                     type="text"
@@ -457,8 +478,8 @@ const Auth = () => {
                     onChange={handleCepChange}
                     required
                     maxLength={9}
-                    className={`h-9 bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-primary/50 ${signupCep && !cepValid ? "border-red-500/50" : ""
-                      } ${cepValid ? "border-green-500/50" : ""}`}
+                    className={`h-9 ${INPUT_CLASS} ${signupCep && !cepValid ? "border-red-500" : ""
+                      } ${cepValid ? "border-green-500" : ""}`}
                   />
                 </div>
 
@@ -468,13 +489,13 @@ const Auth = () => {
 
                 <Button
                   type="submit"
-                  className="w-full bg-primary hover:bg-primary/90 text-white font-semibold shadow-lg shadow-primary/20 transition-all hover:scale-[1.02] mt-4"
+                  className="w-full h-auto py-[0.55rem] text-[1.1375rem] bg-[#1668C1] hover:bg-[#12539C] text-white font-semibold shadow-lg shadow-[#1668C1]/25 transition-all hover:scale-[1.02] mt-4"
                   disabled={isLoading || !isSignupValid()}
                 >
                   {isLoading ? "Enviando..." : "Enviar Cadastro"}
                 </Button>
 
-                <p className="text-white/50 text-xs text-center mt-2">
+                <p className="text-[#1668C1]/70 text-xs text-center mt-2">
                   Seu cadastro será analisado e você receberá as credenciais por email.
                 </p>
               </form>
@@ -483,8 +504,9 @@ const Auth = () => {
         </CardContent>
       </Card>
 
-      <div className="absolute bottom-4 text-white/40 text-xs">
-        © 2026 Clinbia. Todos os direitos reservados.
+      <p className="mt-4 text-center text-xs font-light text-[#1668C1]">
+        2026 Clinbia | Todos os direitos reservados.
+      </p>
       </div>
     </div>
   );
