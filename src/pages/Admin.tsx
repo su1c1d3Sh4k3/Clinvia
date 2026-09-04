@@ -15,6 +15,7 @@ import AdminMonitoring from "@/components/admin/sections/AdminMonitoring";
 import AdminTeam from "@/components/admin/sections/AdminTeam";
 import AdminSupport from "@/components/admin/sections/AdminSupport";
 import AdminUpdates from "@/components/admin/sections/AdminUpdates";
+import AdminLoginDesign from "@/components/admin/sections/AdminLoginDesign";
 
 export default function Admin() {
     const navigate = useNavigate();
@@ -95,6 +96,8 @@ export default function Admin() {
                 );
             case "atualizacoes":
                 return <AdminUpdates canEdit={can("atualizacoes", "edit")} />;
+            case "design-login":
+                return <AdminLoginDesign canEdit={can("design-login", "edit")} />;
             default:
                 return null;
         }

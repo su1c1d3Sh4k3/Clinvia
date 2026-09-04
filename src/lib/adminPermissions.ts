@@ -8,6 +8,7 @@ import {
     ShieldCheck,
     Headphones,
     Megaphone,
+    Image,
     type LucideIcon,
 } from "lucide-react";
 
@@ -17,7 +18,8 @@ export type AdminPage =
     | "monitoramento"
     | "equipe"
     | "suporte"
-    | "atualizacoes";
+    | "atualizacoes"
+    | "design-login";
 
 export type AdminPermissionLevel = "none" | "view" | "edit";
 
@@ -35,6 +37,7 @@ export const ADMIN_PAGES: AdminPageDef[] = [
     { value: "equipe", label: "Equipe", icon: ShieldCheck, description: "Usuários do painel e permissões" },
     { value: "suporte", label: "Suporte", icon: Headphones, description: "Chamados dos clientes" },
     { value: "atualizacoes", label: "Atualizações", icon: Megaphone, description: "Notificações publicadas" },
+    { value: "design-login", label: "Design de Login", icon: Image, description: "Banner da tela de acesso" },
 ];
 
 export const ADMIN_PERMISSION_LEVELS: { value: AdminPermissionLevel; label: string }[] = [
@@ -52,6 +55,7 @@ export const DEFAULT_ADMIN_PERMISSIONS: AdminPermissions = {
     equipe: "none",
     suporte: "edit",
     atualizacoes: "none",
+    "design-login": "none",
 };
 
 /** Espelho em TS de public.admin_can — o servidor continua sendo a autoridade. */

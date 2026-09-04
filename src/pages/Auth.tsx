@@ -12,9 +12,9 @@ import { toast } from "sonner";
 import TurnstileWidget, { TurnstileWidgetHandle } from "@/components/TurnstileWidget";
 import { sendClientSignupWebhook } from "@/utils/sendWebhook";
 import { ForgotPasswordDialog } from "@/components/auth/ForgotPasswordDialog";
+import { AuthShell } from "@/components/auth/AuthShell";
 
 // Cores fixas (hex, nao tokens): a caixa de login e IDENTICA no claro e no escuro.
-const BRAND = "#1668C1";
 const INPUT_CLASS =
   "bg-white border-[#1668C1]/30 text-[#0B2545] placeholder:text-[#1668C1]/40 focus-visible:ring-[#1668C1]/30 focus-visible:border-[#1668C1]";
 
@@ -233,13 +233,8 @@ const Auth = () => {
   // Success state after signup
   if (signupSuccess) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-secondary via-secondary/90 to-tertiary p-4 relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-          <div className="absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-primary/20 blur-[100px]" />
-          <div className="absolute top-[40%] -right-[10%] w-[40%] h-[40%] rounded-full bg-tertiary/30 blur-[100px]" />
-        </div>
-
-        <div className="relative z-10 w-full max-w-md">
+      <AuthShell>
+        <div className="w-full max-w-md">
           <Card className="w-full border border-[#1668C1]/15 bg-white shadow-[0_25px_60px_-15px_rgba(11,45,90,0.45)]">
             <CardContent className="pt-8 pb-8 text-center">
               <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
@@ -262,20 +257,13 @@ const Auth = () => {
             2026 Clinbia | Todos os direitos reservados.
           </p>
         </div>
-      </div>
+      </AuthShell>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-secondary via-secondary/90 to-tertiary p-4 relative overflow-hidden">
-      {/* Decorative background elements */}
-      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-        <div className="absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-primary/20 blur-[100px]" />
-        <div className="absolute top-[40%] -right-[10%] w-[40%] h-[40%] rounded-full bg-tertiary/30 blur-[100px]" />
-        <div className="absolute -bottom-[10%] left-[20%] w-[30%] h-[30%] rounded-full bg-white/10 blur-[80px]" />
-      </div>
-
-      <div className="relative z-10 w-full max-w-md">
+    <AuthShell>
+      <div className="w-full max-w-md">
       <Card className="w-full border border-[#1668C1]/15 bg-white shadow-[0_25px_60px_-15px_rgba(11,45,90,0.45)]">
         <CardHeader className="text-center space-y-2 pb-6">
           <div className="mx-auto mb-2">
@@ -508,7 +496,7 @@ const Auth = () => {
         2026 Clinbia | Todos os direitos reservados.
       </p>
       </div>
-    </div>
+    </AuthShell>
   );
 };
 
