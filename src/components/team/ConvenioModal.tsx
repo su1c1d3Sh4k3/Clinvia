@@ -13,7 +13,7 @@ import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { ServiceCategoryPicker } from "@/components/services/ServiceCategoryPicker";
-import { useSaveConvenio, type Convenio } from "@/hooks/useConvenios";
+import { useAvaliacaoServiceIds, useSaveConvenio, type Convenio } from "@/hooks/useConvenios";
 
 interface ConvenioModalProps {
     open: boolean;
@@ -25,6 +25,9 @@ export function ConvenioModal({ open, onOpenChange, convenio }: ConvenioModalPro
     const { toast } = useToast();
     const { data: ownerId } = useOwnerId();
     const save = useSaveConvenio();
+    // Avaliação é coberta por todo convênio (trigger no banco): fica travada aqui
+    // para o salvar, que troca a lista inteira de vínculos, não desfazer o padrão.
+    const { data: avaliacaoIds } = useAvaliacaoServiceIds();
 
     const [nome, setNome] = useState("");
     const [descricao, setDescricao] = useState("");
@@ -67,7 +70,7 @@ export function ConvenioModal({ open, onOpenChange, convenio }: ConvenioModalPro
                 id: convenio?.id,
                 nome: isCatchAll ? convenio!.nome : nome.trim(),
                 descricao: descricao.trim() || null,
-                service_ids: serviceIds,
+                service_ids: [...new Set([...serviceIds, ...(avaliacaoIds || [])])],
                 sala_ids: salaIds,
             },
             {
@@ -125,7 +128,14 @@ export function ConvenioModal({ open, onOpenChange, convenio }: ConvenioModalPro
 
                     <div className="space-y-1.5">
                         <Label>Serviços aptos ao convênio</Label>
-                        <ServiceCategoryPicker value={serviceIds} onChange={setServiceIds} />
+                        <ServiceCategoryPicker
+                            value={serviceIds}
+                            onChange={setServiceIds}
+                            lockedIds={avaliacaoIds || []}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                            As avaliações entram em todo convênio automaticamente e não podem ser desmarcadas.
+                        </p>
                     </div>
 
                     <div className="space-y-1.5">

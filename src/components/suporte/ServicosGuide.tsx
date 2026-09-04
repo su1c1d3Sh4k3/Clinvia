@@ -193,10 +193,15 @@ export function ServicosGuide() {
                     separado: o que você editar ali muda o serviço de verdade.
                 </p>
                 <StepByStep steps={[
-                    { title: "Marque o serviço no convênio", description: "Equipe → Convênios → Configurar. Enquanto nada estiver marcado, a aba Convênio abre vazia com um atalho para lá." },
+                    { title: "Marque o serviço no convênio", description: "Equipe → Convênios → Configurar. A categoria Avaliação já entra sozinha em todo convênio — os demais serviços você marca ali." },
                     { title: "A coluna Valor convênio aparece", description: "Ao lado da coluna Valor, nas duas abas. Aplicação que não está em nenhum convênio mostra um traço." },
                     { title: "Edite a aplicação para definir o valor", description: "Lápis da aplicação → campo Valor de Convênio (R$). Enquanto ficar em branco, o valor exibido é o de venda (em cinza) e acompanha qualquer reajuste que você fizer na tabela normal." },
                 ]} />
+                <Callout type="atencao" title="A Avaliação sempre aparece nesta aba">
+                    Todo convênio cadastrado cobre automaticamente os serviços da categoria <strong>Avaliação</strong> —
+                    por isso ela aparece na aba Convênio mesmo que você não tenha marcado nada. Aproveite para conferir o
+                    valor cobrado nela pelo plano.
+                </Callout>
                 <Callout type="atencao" title="O valor de convênio é um só">
                     Mesmo que a clínica atenda dez planos, a aplicação tem <strong>um único</strong> valor de convênio —
                     não existe preço por plano. Ele vale para todos os convênios em que aquele serviço está marcado.

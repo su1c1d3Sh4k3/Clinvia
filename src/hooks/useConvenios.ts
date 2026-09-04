@@ -67,6 +67,41 @@ export function useConvenioServiceIds(): Set<string> {
     }, [data]);
 }
 
+const normalizeTxt = (v: string) =>
+    v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+
+/**
+ * Aplicações da categoria Avaliação da conta.
+ * USER RULE: todo convênio cobre a avaliação — o vínculo é criado por trigger no
+ * banco (`zz_convenios_link_avaliacoes`), e a tela mostra essas aplicações
+ * marcadas e travadas para o cadastro não desfazer o padrão ao salvar.
+ */
+export function useAvaliacaoServiceIds() {
+    const { data: ownerId } = useOwnerId();
+    return useQuery({
+        queryKey: ["avaliacao-service-ids", ownerId],
+        enabled: !!ownerId,
+        queryFn: async (): Promise<string[]> => {
+            const { data: cats, error: catErr } = await supabase
+                .from("services_category")
+                .select("id, name");
+            if (catErr) throw catErr;
+            const catIds = (cats || [])
+                .filter((c: any) => normalizeTxt(c.name || "") === "avaliacao")
+                .map((c: any) => c.id);
+            if (catIds.length === 0) return [];
+
+            const { data, error } = await supabase
+                .from("services_client")
+                .select("id")
+                .eq("user_id", ownerId!)
+                .in("category_id", catIds);
+            if (error) throw error;
+            return (data || []).map((r: any) => r.id);
+        },
+    });
+}
+
 export interface SaveConvenioInput {
     id?: string;
     nome: string;

@@ -18,6 +18,10 @@ interface ServiceCategoryPickerProps {
     /** Altura máxima da lista (classe Tailwind) */
     maxHeightClass?: string;
     emptyLabel?: string;
+    /** Ids sempre marcados e não desmarcáveis (ex.: avaliações no convênio) */
+    lockedIds?: string[];
+    /** Texto do selo ao lado de um item travado */
+    lockedLabel?: string;
 }
 
 /**
@@ -29,6 +33,8 @@ export function ServiceCategoryPicker({
     onChange,
     maxHeightClass = "max-h-72",
     emptyLabel = "Nenhum serviço ativo cadastrado.",
+    lockedIds,
+    lockedLabel = "sempre incluído",
 }: ServiceCategoryPickerProps) {
     const { data: ownerId } = useOwnerId();
     const [expanded, setExpanded] = useState<string[]>([]);
@@ -64,6 +70,7 @@ export function ServiceCategoryPicker({
         return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
     }, [data]);
 
+    const locked = useMemo(() => new Set(lockedIds || []), [lockedIds]);
     const selected = new Set(value);
 
     const toggleService = (id: string) => {
@@ -71,7 +78,7 @@ export function ServiceCategoryPicker({
     };
 
     const toggleCategory = (items: ServiceRow[], allSelected: boolean) => {
-        const ids = items.map((i) => i.id);
+        const ids = items.filter((i) => !locked.has(i.id)).map((i) => i.id);
         onChange(allSelected
             ? value.filter((v) => !ids.includes(v))
             : [...new Set([...value, ...ids])]);
@@ -90,13 +97,15 @@ export function ServiceCategoryPicker({
             {groups.length === 0 && <p className="text-sm text-muted-foreground p-3">{emptyLabel}</p>}
             {groups.map((cat) => {
                 const isOpen = expanded.includes(cat.id);
-                const selectedCount = cat.items.filter((s) => selected.has(s.id)).length;
+                const selectedCount = cat.items.filter((s) => selected.has(s.id) || locked.has(s.id)).length;
                 const allSelected = selectedCount === cat.items.length && cat.items.length > 0;
+                const allLocked = cat.items.every((s) => locked.has(s.id));
                 return (
                     <div key={cat.id}>
                         <div className="w-full flex items-center gap-2 p-2.5 hover:bg-muted/40">
                             <Checkbox
                                 checked={allSelected ? true : selectedCount > 0 ? "indeterminate" : false}
+                                disabled={allLocked}
                                 onCheckedChange={() => toggleCategory(cat.items, allSelected)}
                                 aria-label={`Selecionar todos os serviços de ${cat.name}`}
                             />
@@ -119,18 +128,25 @@ export function ServiceCategoryPicker({
                         </div>
                         {isOpen && (
                             <div className="divide-y border-t bg-muted/20">
-                                {cat.items.map((svc) => (
-                                    <label
-                                        key={svc.id}
-                                        className="flex items-center gap-3 p-2.5 pl-9 cursor-pointer hover:bg-muted/40"
-                                    >
-                                        <Checkbox
-                                            checked={selected.has(svc.id)}
-                                            onCheckedChange={() => toggleService(svc.id)}
-                                        />
-                                        <span className="text-sm flex-1">{svc.name}</span>
-                                    </label>
-                                ))}
+                                {cat.items.map((svc) => {
+                                    const isLocked = locked.has(svc.id);
+                                    return (
+                                        <label
+                                            key={svc.id}
+                                            className="flex items-center gap-3 p-2.5 pl-9 cursor-pointer hover:bg-muted/40"
+                                        >
+                                            <Checkbox
+                                                checked={isLocked || selected.has(svc.id)}
+                                                disabled={isLocked}
+                                                onCheckedChange={() => toggleService(svc.id)}
+                                            />
+                                            <span className="text-sm flex-1">{svc.name}</span>
+                                            {isLocked && (
+                                                <span className="text-[10px] text-muted-foreground">{lockedLabel}</span>
+                                            )}
+                                        </label>
+                                    );
+                                })}
                             </div>
                         )}
                     </div>

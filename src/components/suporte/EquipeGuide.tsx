@@ -157,7 +157,7 @@ export function EquipeGuide() {
                 </p>
                 <StepByStep steps={[
                     { title: "Crie o convênio", description: "Aba Convênios > Adicionar Convênio. Informe o nome (ex.: Unimed) e, se quiser, uma descrição — ela é enviada junto para a IA (útil para regras do tipo 'somente titular' ou 'consulta com coparticipação')." },
-                    { title: "Marque os serviços atendidos", description: "No mesmo modal, um seletor por categoria: expanda a pasta e marque os serviços. Marcar a categoria seleciona todos de uma vez. Esses serviços passam a ser apresentados à IA com a observação (apto para convênio)." },
+                    { title: "Marque os serviços atendidos", description: "No mesmo modal, um seletor por categoria: expanda a pasta e marque os serviços. Marcar a categoria seleciona todos de uma vez. Esses serviços passam a ser apresentados à IA com o nome do plano. As avaliações já vêm marcadas e travadas — todo convênio atende avaliação." },
                     { title: "Marque as salas que atendem", description: "Ainda no modal, escolha quais salas recebem esse convênio. Uma sala só aparece na lista se estiver com o Atendimento de Convênio ligado no cadastro dela." },
                     { title: "Defina os dias e horários dedicados", description: "No cadastro da sala (aba Salas ou Profissionais), logo abaixo dos Dias de Atendimento, ligue Atendimento de Convênio e escolha os dias e a faixa de início e fim reservada para convênio. Dá para configurar horário individual por dia." },
                 ]} />
@@ -166,6 +166,12 @@ export function EquipeGuide() {
                     procuram horário comum, esses intervalos são pulados; quando a busca é de convênio, só aparecem esses
                     intervalos e só nas salas marcadas para aquele plano. É assim que você garante que o horário
                     reservado não seja ocupado por outro paciente.
+                </Callout>
+                <Callout type="atencao" title="Avaliação entra sozinha em todo convênio">
+                    Os serviços da categoria <strong>Avaliação</strong> são vinculados automaticamente a cada convênio
+                    cadastrado — aparecem marcados e travados no seletor. É a triagem que abre a porta do plano, então
+                    ela nunca fica de fora por esquecimento. Vale também no sentido inverso: avaliação cadastrada depois
+                    entra sozinha nos convênios que já existiam.
                 </Callout>
                 <Callout type="dica" title="O valor cobrado no convênio">
                     Assim que o serviço é marcado aqui, a página <strong>Serviços</strong> ganha a coluna{" "}
@@ -329,6 +335,10 @@ export function EquipeGuide() {
                         {
                             q: "A sala não aparece na lista de salas do convênio.",
                             a: "Só aparecem salas com o Atendimento de Convênio ligado. Abra o cadastro da sala (ou do profissional dono dela), ligue a chave Atendimento de Convênio, marque os dias e a faixa de horário e salve — ela passa a aparecer no modal do convênio.",
+                        },
+                        {
+                            q: "Não consigo desmarcar a avaliação do convênio.",
+                            a: "É de propósito: a avaliação é a porta de entrada do plano, então todo convênio cadastrado atende as avaliações automaticamente. Elas aparecem marcadas e travadas no seletor de serviços, e uma avaliação criada depois entra sozinha nos convênios já cadastrados.",
                         },
                         {
                             q: "A IA não está oferecendo o horário de convênio.",
