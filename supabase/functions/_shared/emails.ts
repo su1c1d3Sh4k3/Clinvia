@@ -15,7 +15,7 @@ const APP_URL = Deno.env.get("APP_PUBLIC_URL") ?? "https://app.clinbia.ai";
 /** Logo padrão (escrita branca) — vai sobre o azul do cabeçalho. */
 const LOGO_BRANCA_URL = `${APP_URL}/clinvia-logo-full.png`;
 /** Logo alternativa (escrita azul) — vai sobre o cinza do rodapé. */
-const LOGO_AZUL_URL = `${APP_URL}/logo-light.png`;
+const LOGO_AZUL_URL = `${APP_URL}/clinbia-logo-cor.png`;
 
 const C = {
     /** barra superior e fundo do cabeçalho */
@@ -154,7 +154,7 @@ function layout(opts: {
    </td></tr>
 
    <tr><td class="footer-pad" style="background-color:${C.page};padding:30px 34px 10px 34px">
-     <img src="${LOGO_AZUL_URL}" width="135" height="28" alt="Clinbia" style="display:block;width:135px;height:28px;border:0;outline:none;text-decoration:none">
+     <img src="${LOGO_AZUL_URL}" width="110" height="28" alt="Clinbia" style="display:block;width:110px;height:28px;border:0;outline:none;text-decoration:none">
      <p style="margin:14px 0 0 0;font-family:${FF};font-size:13px;line-height:20px;color:${C.body}">Clinbia – Atendimento e Gestão de Leads com IA</p>
      <p style="margin:10px 0 0 0;font-family:${FF};font-size:12px;line-height:19px;color:${C.soft}">
        Este é um e-mail automático enviado por nao-responda@clinbia.ai.<br>

@@ -268,7 +268,7 @@ const Auth = () => {
         <CardHeader className="text-center space-y-2 pb-6">
           <div className="mx-auto mb-2">
             <img
-              src="/logo-light.png"
+              src="/clinbia-logo-cor.png"
               alt="Clinbia"
               className="h-11 w-auto object-contain"
             />
