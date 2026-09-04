@@ -338,7 +338,7 @@ const Auth = () => {
                   <ForgotPasswordDialog />
                 </div>
                 <div className="flex justify-center">
-                  <TurnstileWidget ref={loginCaptchaRef} onVerify={setLoginCaptchaToken} onExpire={() => setLoginCaptchaToken(null)} />
+                  <TurnstileWidget ref={loginCaptchaRef} theme="light" onVerify={setLoginCaptchaToken} onExpire={() => setLoginCaptchaToken(null)} />
                 </div>
                 {/* +30% na fonte e +10% no padding vertical do botao (h-auto libera o py) */}
                 <Button
@@ -472,7 +472,7 @@ const Auth = () => {
                 </div>
 
                 <div className="flex justify-center">
-                  <TurnstileWidget ref={signupCaptchaRef} onVerify={setSignupCaptchaToken} onExpire={() => setSignupCaptchaToken(null)} />
+                  <TurnstileWidget ref={signupCaptchaRef} theme="light" onVerify={setSignupCaptchaToken} onExpire={() => setSignupCaptchaToken(null)} />
                 </div>
 
                 <Button

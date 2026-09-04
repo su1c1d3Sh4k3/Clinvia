@@ -5,6 +5,11 @@ interface TurnstileWidgetProps {
     /** Chamado quando o token expira (5 min) — limpar o token salvo */
     onExpire?: () => void;
     siteKey?: string;
+    /**
+     * 'auto' segue o tema do sistema do visitante. Em tela de fundo fixo use
+     * 'light'/'dark' — o Cloudflare não permite cor livre, só esses temas.
+     */
+    theme?: 'auto' | 'light' | 'dark';
 }
 
 export interface TurnstileWidgetHandle {
@@ -18,7 +23,7 @@ declare global {
     }
 }
 
-const TurnstileWidget = forwardRef<TurnstileWidgetHandle, TurnstileWidgetProps>(({ onVerify, onExpire, siteKey }, ref) => {
+const TurnstileWidget = forwardRef<TurnstileWidgetHandle, TurnstileWidgetProps>(({ onVerify, onExpire, siteKey, theme = 'auto' }, ref) => {
     // Use Test Key only on localhost to avoid "Invalid Domain". On production (even dev build), use Real Key.
     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     const activeSiteKey = siteKey || (isLocalhost ? "1x00000000000000000000AA" : "0x4AAAAAACOK66PvxkZuZTup");
@@ -61,7 +66,7 @@ const TurnstileWidget = forwardRef<TurnstileWidgetHandle, TurnstileWidgetProps>(
             if (!widgetId.current && window.turnstile) {
                 widgetId.current = window.turnstile.render(containerRef.current, {
                     sitekey: activeSiteKey,
-                    theme: 'auto',
+                    theme,
                     // Renova o token automaticamente quando expira (evita
                     // "timeout-or-duplicate" quando o usuário demora a enviar o form)
                     'refresh-expired': 'auto',
