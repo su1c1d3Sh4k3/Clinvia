@@ -140,6 +140,23 @@ export function AgendaGuide() {
                     O sistema bloqueia sobreposição de horários do mesmo profissional e não deixa agendar fora do horário de
                     trabalho dele — inclusive quando é a IA ou o link público agendando.
                 </Callout>
+                <Callout type="dica" title="Quem marcou e quando: o bloco “Agendado por”">
+                    Clique num agendamento já marcado para abrir os <strong>Detalhes do Agendamento</strong>. No fim do
+                    modal fica o bloco <strong>Agendado por</strong>, com o autor, por onde ele entrou e a data e hora em
+                    que foi marcado:
+                    <ul className="mt-2 list-disc space-y-1 pl-5">
+                        <li><strong>Nome do colaborador</strong> — "Pela agenda" quando foi marcado aqui no painel.</li>
+                        <li><strong>Nome de quem subiu a planilha</strong> — "Por planilha importada".</li>
+                        <li><strong>IA</strong> — tudo que a IA ou o link público de agendamento marcaram. A linha de
+                            baixo mostra se veio "Via API" ou "Via link de agendamento".</li>
+                    </ul>
+                    <p className="mt-2">
+                        Remarcar, confirmar ou concluir <strong>não muda esse campo</strong>: ele guarda quem
+                        <strong> criou</strong> o agendamento, não quem mexeu depois. Agendamentos antigos, feitos antes de
+                        o sistema registrar a autoria, aparecem como <strong>"Não informado"</strong> — mas a data em que
+                        foram marcados continua lá.
+                    </p>
+                </Callout>
             </TopicSection>
 
             {/* 5 */}

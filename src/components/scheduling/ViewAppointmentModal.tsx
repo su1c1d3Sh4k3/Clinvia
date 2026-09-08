@@ -21,12 +21,24 @@ import { toZonedTime } from "date-fns-tz";
 import { ptBR } from "date-fns/locale";
 import {
     Pencil, Calendar, Clock, User, DollarSign, FileText, Briefcase,
-    CheckCircle2, CalendarClock, XCircle, Check, UserX,
+    CheckCircle2, CalendarClock, XCircle, Check, UserX, Bot, UserCheck,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
+import { useStaff } from "@/hooks/useStaff";
 
 const TIMEZONE = "America/Sao_Paulo";
+
+/** Agendamento nascido de API do n8n ou do link público = autoria da IA (regra do usuário). */
+const IA_ORIGINS = new Set(["ia", "public_link"]);
+
+/** Como o agendamento entrou no sistema (appointments.created_via). */
+const ORIGIN_LABELS: Record<string, string> = {
+    manual: "Pela agenda",
+    import: "Por planilha importada",
+    ia: "Via API",
+    public_link: "Via link de agendamento",
+};
 
 interface ViewAppointmentModalProps {
     appointment: any;
@@ -43,6 +55,7 @@ interface ViewAppointmentModalProps {
 
 export function ViewAppointmentModal({ appointment, open, onOpenChange, onEdit, onStatusChange, canEdit = true }: ViewAppointmentModalProps) {
     const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+    const { data: staff } = useStaff();
 
     if (!appointment) return null;
 
@@ -66,6 +79,26 @@ export function ViewAppointmentModal({ appointment, open, onOpenChange, onEdit, 
 
     const hasContact = !!appointment.contacts && !!appointment.contact_id;
     const isAppointment = appointment.type !== 'absence';
+
+    // Autoria: quem CRIOU o agendamento e quando. Tudo que nasce de API
+    // (n8n ou link público) é da IA; o resto vem de appointments.created_by.
+    const createdVia: string | null = appointment.created_via || null;
+    const isIaAuthor = IA_ORIGINS.has(createdVia || "");
+    const authorMember = appointment.created_by
+        ? staff?.find((m) => m.id === appointment.created_by)
+        : undefined;
+    // "—" cobre o instante em que a equipe ainda não carregou (ou membro removido);
+    // "Não informado" é o legado que nunca gravou autoria.
+    const authorName = isIaAuthor
+        ? "IA"
+        : authorMember?.name || (appointment.created_by ? "—" : "Não informado");
+    const createdAtLabel = appointment.created_at
+        ? format(toZoned(appointment.created_at), "dd/MM/yyyy 'às' HH:mm")
+        : null;
+    const originLabel = createdVia ? ORIGIN_LABELS[createdVia] : null;
+    const authorSubtitle = originLabel
+        ? [originLabel, createdAtLabel].filter(Boolean).join(" · ")
+        : createdAtLabel && `Registrado em ${createdAtLabel}`;
 
     return (
         <>
@@ -219,6 +252,33 @@ export function ViewAppointmentModal({ appointment, open, onOpenChange, onEdit, 
                         </div>
                         <div className="text-sm leading-relaxed text-[#1E2229] dark:text-white p-3 bg-muted/20 rounded-md min-h-[60px]">
                             {appointment.description || <span className="text-muted-foreground italic">Sem observações.</span>}
+                        </div>
+                    </div>
+
+                    {/* Autoria — quem criou o agendamento e quando */}
+                    <div className="space-y-1 pt-2 border-t">
+                        <div className="flex items-center gap-2 text-muted-foreground text-xs uppercase font-bold tracking-wider mb-2">
+                            <UserCheck className="h-3 w-3" />
+                            Agendado por
+                        </div>
+                        <div className="flex items-center gap-3 p-2 bg-muted/30 rounded-md">
+                            {isIaAuthor ? (
+                                <div className="w-8 h-8 shrink-0 rounded-full bg-violet-100 dark:bg-violet-900/40 flex items-center justify-center text-violet-700 dark:text-violet-300">
+                                    <Bot className="h-4 w-4" />
+                                </div>
+                            ) : authorMember?.avatar_url ? (
+                                <img src={authorMember.avatar_url} className="w-8 h-8 shrink-0 rounded-full object-cover" />
+                            ) : (
+                                <div className="w-8 h-8 shrink-0 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                                    <User className="h-4 w-4" />
+                                </div>
+                            )}
+                            <div className="min-w-0">
+                                <p className="font-medium text-sm truncate">{authorName}</p>
+                                {authorSubtitle && (
+                                    <p className="text-xs text-muted-foreground">{authorSubtitle}</p>
+                                )}
+                            </div>
                         </div>
                     </div>
 
