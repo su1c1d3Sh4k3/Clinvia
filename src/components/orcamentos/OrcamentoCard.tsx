@@ -23,6 +23,7 @@ import {
 } from "@/hooks/useOrcamentos";
 import { OrcamentoModal } from "./OrcamentoModal";
 import { LancarVendaWizard } from "./LancarVendaWizard";
+import { ExportOrcamentoButton } from "./ExportOrcamentoButton";
 import { toast } from "sonner";
 
 const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -46,9 +47,12 @@ interface OrcamentoCardProps {
     orcamento: Orcamento;
     /** Esconde os botões (ex.: orçamento expirado ou recorte só-leitura) */
     readOnly?: boolean;
+    /** Dados do cliente impressos no PDF exportado. */
+    clienteNome?: string;
+    clienteTelefone?: string | null;
 }
 
-export function OrcamentoCard({ orcamento, readOnly }: OrcamentoCardProps) {
+export function OrcamentoCard({ orcamento, readOnly, clienteNome, clienteTelefone }: OrcamentoCardProps) {
     const [editOpen, setEditOpen] = useState(false);
     const [wizardOpen, setWizardOpen] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
@@ -112,8 +116,17 @@ export function OrcamentoCard({ orcamento, readOnly }: OrcamentoCardProps) {
                     </div>
                 )}
 
-                {(podeVender || podeEditar || podeExcluir) && (
+                {(pendentes || podeVender || podeEditar || podeExcluir) && (
                     <div className="flex flex-wrap gap-2 pt-1">
+                        {/* Exportar não depende de permissão nem da validade: o
+                            documento pode ser reenviado ao paciente sempre. */}
+                        {pendentes && (
+                            <ExportOrcamentoButton
+                                orcamento={orcamento}
+                                clienteNome={clienteNome}
+                                clienteTelefone={clienteTelefone}
+                            />
+                        )}
                         {podeVender && (
                             <Button size="sm" className="h-7 text-xs gap-1" onClick={() => setWizardOpen(true)}>
                                 <ShoppingCart className="w-3 h-3" /> Lançar venda

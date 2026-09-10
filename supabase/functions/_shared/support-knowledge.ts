@@ -203,6 +203,9 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "por que nao consigo excluir ou editar um orcamento",
             "por que o servico de avaliacao nao aparece no orcamento",
             "onde vejo tudo o que o cliente ja comprou e o valor movimentado",
+            "como exportar o orcamento em pdf para enviar ao paciente",
+            "como personalizar o cabecalho e o rodape do orcamento em pdf",
+            "qual o tamanho certo da imagem do cabecalho do orcamento",
         ],
         steps: [
             "O orcamento nasce na conversa: abra o Inbox, entre na conversa do cliente e clique no menu Orcamento na barra lateral direita.",
@@ -211,6 +214,8 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "Se responder 'nao' para agendar, ligue o switch 'Agendamento pela IA' e informe em quantos dias a IA deve procurar o cliente.",
             "Todos os orcamentos do cliente (abertos e resolvidos) ficam no perfil dele: Clientes > clique no nome > aba Orcamentos. As vendas ficam na aba Vendas e a soma de tudo aparece como 'Valor movimentado' na lateral do perfil.",
             "Para ver os numeros de TODOS os orcamentos (valores totais, aprovados, rejeitados e pendentes, ranking por profissional e por servico), abra a pagina Financeiro > aba Orcamentos. Da para criar orcamento por la tambem, escolhendo o cliente na busca.",
+            "Para exportar em PDF: no perfil do cliente (Clientes > nome > aba Orcamentos) cada card tem o botao 'Exportar PDF'; no Financeiro > aba Orcamentos o icone de download fica na ultima coluna da tabela. O arquivo baixa como Orcamento_Nome_Do_Cliente_dd-mm-aaaa.pdf.",
+            "Para personalizar o PDF: Configuracoes > aba Empresa > bloco 'Orcamento em PDF'. Ali voce envia o cabecalho em PNG (botao 'Enviar imagem'), baixa um modelo pronto no tamanho certo (botao 'Baixar modelo') e escreve o rodape (texto livre com condicoes de pagamento, CNPJ, endereco, politica de validade).",
         ],
         gotchas: [
             "Toda venda passa por orcamento. A unica excecao e a categoria Avaliacao, que nao e vendida — so agendada (ela nem aparece no seletor do orcamento).",
@@ -223,6 +228,11 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "Orcamento nao movimenta o CRM e nao existe em conversa de grupo.",
             "Por padrao o atendente pode criar e editar orcamento mas nao pode excluir nem lancar venda — o gestor libera em Equipe > Permissoes (modulos Orcamentos e Vendas).",
             "Orcamento vencido vira somente leitura automaticamente (rotina diaria de madrugada): nao da para editar, excluir nem lancar venda.",
+            "O PDF exportado lista SOMENTE os itens pendentes — e o documento que vai para a mao do paciente, entao o que ja foi vendido ou recusado nao aparece. Orcamento com tudo decidido nao tem botao de exportar.",
+            "Exportar PDF nao depende de permissao de venda nem da validade: mesmo orcamento expirado ou so-leitura pode ser exportado, desde que tenha item pendente.",
+            "Cabecalho do PDF: arquivo PNG de ate 2 MB, tamanho ideal 2400x400 pixels (proporcao 6:1, equivale a faixa de 210x35 mm no topo da folha A4). Deixe ~40 pixels de margem nas bordas e evite texto branco (o PDF e impresso em branco). Fundo transparente e aceito.",
+            "Enquanto a conta nao envia nenhum cabecalho, o PDF sai com uma faixa azul contendo o nome e o telefone da empresa (cadastrados em Configuracoes) — o botao Exportar funciona desde o primeiro dia.",
+            "O cabecalho e o rodape valem para a CONTA inteira, nao por colaborador. So quem tem permissao em 'Dados da empresa' consegue alterar.",
         ],
     },
     {
@@ -517,6 +527,7 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
         steps: [
             "Abra Configuracoes no menu lateral.",
             "Abas: Perfil, Empresa, Seguranca, Sistema (menu agrupado e notificacoes), Tags e Automacoes.",
+            "Na aba Empresa ficam o nome da empresa e o bloco 'Orcamento em PDF' (cabecalho em PNG 2400x400 com modelo para baixar + rodape em texto livre). Detalhes na aba Orcamentos do manual.",
             "Em Automacoes ficam o encerramento automatico, a mensagem de aviso e a instancia padrao dos disparos.",
         ],
         gotchas: [

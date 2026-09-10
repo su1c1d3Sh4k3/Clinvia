@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { User, Building2, Lock, Camera, Loader2, Bell, BellRing, Users, Volume2, DollarSign, Settings as SettingsIcon, Pen, Download, Smartphone, Monitor, CheckCircle2, Calendar, ListTodo, TrendingUp, Lightbulb, ChevronDown, ChevronUp, AlertCircle, Zap, Tag as TagIcon, PanelLeft } from "lucide-react";
 import { AutomationSettings } from "@/components/settings/AutomationSettings";
 import { TagsSettings } from "@/components/settings/TagsSettings";
+import { OrcamentoBrandingCard } from "@/components/settings/OrcamentoBrandingCard";
 import { FaInstagram } from "react-icons/fa";
 import { Switch } from "@/components/ui/switch";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -679,7 +680,7 @@ export default function Settings() {
                 </TabsContent>
 
                 {/* Company Tab */}
-                <TabsContent value="company">
+                <TabsContent value="company" className="space-y-4">
                     <Card>
                         <CardHeader className="p-4 md:p-6">
                             <CardTitle className="text-base md:text-lg">Informações da Empresa</CardTitle>
@@ -708,6 +709,8 @@ export default function Settings() {
                             )}
                         </CardFooter>
                     </Card>
+
+                    <OrcamentoBrandingCard canEdit={canEditCompany} />
                 </TabsContent>
 
                 {/* Security Tab */}

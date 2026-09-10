@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import {
-    FileText, PlusCircle, ListChecks, CalendarX2, ShoppingCart, DoorOpen, Ban, ShieldCheck,
+    FileText, FileDown, PlusCircle, ListChecks, CalendarX2, ShoppingCart, DoorOpen, Ban, ShieldCheck,
     HelpCircle, ExternalLink, Clock, CheckCircle2, XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ const TOPICS = [
     { id: "criar", label: "Criar orçamento" },
     { id: "status", label: "Status dos itens" },
     { id: "validade", label: "Validade" },
+    { id: "pdf", label: "Exportar em PDF" },
     { id: "lancar-venda", label: "Lançar venda" },
     { id: "sala", label: "Sala obrigatória" },
     { id: "avaliacao", label: "Avaliação" },
@@ -51,6 +52,7 @@ export function OrcamentosGuide() {
                         <LearnChip topicId="criar">Montar um orçamento pela lateral do Inbox</LearnChip>
                         <LearnChip topicId="lancar-venda">Lançar a venda em 4 passos</LearnChip>
                         <LearnChip topicId="status">Entender os status de cada item</LearnChip>
+                        <LearnChip topicId="pdf">Exportar o orçamento em PDF com a sua marca</LearnChip>
                     </div>
                 </div>
             </div>
@@ -166,7 +168,47 @@ export function OrcamentosGuide() {
             </TopicSection>
 
             {/* 5 */}
-            <TopicSection id="lancar-venda" index={5} icon={ShoppingCart} title="Lançar venda em 4 passos"
+            <TopicSection id="pdf" index={5} icon={FileDown} title="Exportar o orçamento em PDF"
+                subtitle="O documento que vai para a mão do paciente">
+                <p className="text-sm text-muted-foreground">
+                    Todo orçamento com item pendente tem o botão{" "}
+                    <strong className="text-foreground">Exportar PDF</strong>. Ele gera uma folha A4 pronta para
+                    enviar ou imprimir, com o cabeçalho da sua clínica, os dados do cliente, o profissional
+                    responsável, a lista de procedimentos com os valores e o total.
+                </p>
+                <StepByStep steps={[
+                    { title: "Pelo perfil do cliente", description: "Clientes > nome do cliente > aba Orçamentos: cada card tem o botão Exportar PDF." },
+                    { title: "Pelo Financeiro", description: "Financeiro > aba Orçamentos: a última coluna da tabela tem o ícone de download em cada linha com item pendente." },
+                    { title: "O arquivo baixa direto", description: "O nome sai no formato Orcamento_Nome_Do_Cliente_dd-mm-aaaa.pdf." },
+                ]} />
+                <Callout type="atencao" title="O PDF lista só o que está pendente">
+                    Itens já vendidos ou recusados não aparecem: o documento é a proposta em aberto, não o
+                    histórico da negociação. Orçamento com tudo decidido não tem botão de exportar.
+                </Callout>
+
+                <p className="text-sm text-muted-foreground">
+                    <strong className="text-foreground">Personalizando o cabeçalho:</strong> em{" "}
+                    Configurações &gt; Empresa você envia um PNG que ocupa a faixa do topo da folha. Enquanto
+                    nenhuma imagem for enviada, o PDF sai com uma faixa azul contendo o nome e o telefone da
+                    empresa — o botão funciona desde o primeiro dia.
+                </p>
+                <StepByStep steps={[
+                    { title: "Tamanho ideal: 2400 × 400 pixels", description: "Proporção 6:1, arquivo PNG de até 2 MB. É a faixa que ocupa a largura inteira do topo da folha A4 (210 × 35 mm)." },
+                    { title: "Baixe o modelo", description: "O botão Baixar modelo entrega um exemplo pronto no tamanho certo: logo de um lado, CNPJ, endereço, telefone e e-mail do outro. Substitua pelos dados da sua clínica." },
+                    { title: "Deixe respiro nas bordas", description: "Cerca de 40 pixels de margem e nada de texto muito pequeno — o PDF pode ser impresso." },
+                    { title: "Cuidado com fundo transparente", description: "É aceito, mas o documento é impresso em branco: texto branco desaparece." },
+                    { title: "Rodapé", description: "No mesmo lugar existe um campo de texto livre impresso no fim do PDF — condições de pagamento, política de validade, CNPJ, endereço. Deixe em branco para não imprimir nada." },
+                ]} />
+                <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" onClick={() => navigate("/settings?tab=company")}>
+                        <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                        Abrir Configurações &gt; Empresa
+                    </Button>
+                </div>
+            </TopicSection>
+
+            {/* 6 */}
+            <TopicSection id="lancar-venda" index={6} icon={ShoppingCart} title="Lançar venda em 4 passos"
                 subtitle="Do aceite do cliente até o horário na agenda">
                 <StepByStep steps={[
                     { title: "Passo 1 — O que o cliente levou", description: "Cada item pendente vira um card com o valor editável (dá para aplicar o desconto fechado na conversa) e dois botões: Vender ou Remover. Quem for marcado como Remover vira recusado e sai do orçamento." },
@@ -185,8 +227,8 @@ export function OrcamentosGuide() {
                 </Callout>
             </TopicSection>
 
-            {/* 6 */}
-            <TopicSection id="sala" index={6} icon={DoorOpen} title="Sala obrigatória para agendar"
+            {/* 7 */}
+            <TopicSection id="sala" index={7} icon={DoorOpen} title="Sala obrigatória para agendar"
                 subtitle="O procedimento precisa estar atrelado a uma sala">
                 <p className="text-sm text-muted-foreground">
                     No passo 2, a lista de salas mostra apenas as salas{" "}
@@ -206,8 +248,8 @@ export function OrcamentosGuide() {
                 </div>
             </TopicSection>
 
-            {/* 7 */}
-            <TopicSection id="avaliacao" index={7} icon={Ban} title="Avaliação não entra em orçamento"
+            {/* 8 */}
+            <TopicSection id="avaliacao" index={8} icon={Ban} title="Avaliação não entra em orçamento"
                 subtitle="Ela é agendada, nunca vendida">
                 <p className="text-sm text-muted-foreground">
                     Serviços da categoria <strong className="text-foreground">Avaliação</strong> não aparecem no
@@ -221,8 +263,8 @@ export function OrcamentosGuide() {
                 </Callout>
             </TopicSection>
 
-            {/* 8 */}
-            <TopicSection id="permissoes" index={8} icon={ShieldCheck} title="Permissões"
+            {/* 9 */}
+            <TopicSection id="permissoes" index={9} icon={ShieldCheck} title="Permissões"
                 subtitle="Quem cria a proposta nem sempre é quem fecha a venda">
                 <StepByStep steps={[
                     { title: "Módulo Orçamentos", description: "Controla criar, editar e excluir orçamento. Por padrão, o atendente pode criar e editar, mas não excluir." },
@@ -237,8 +279,8 @@ export function OrcamentosGuide() {
                 </div>
             </TopicSection>
 
-            {/* 9 */}
-            <TopicSection id="faq" index={9} icon={HelpCircle} title="Perguntas frequentes">
+            {/* 10 */}
+            <TopicSection id="faq" index={10} icon={HelpCircle} title="Perguntas frequentes">
                 <Accordion type="single" collapsible className="w-full">
                     <AccordionItem value="f1">
                         <AccordionTrigger>Onde vejo tudo o que o cliente já comprou?</AccordionTrigger>
@@ -270,6 +312,14 @@ export function OrcamentosGuide() {
                         <AccordionContent>
                             O item já vendido não volta para pendente. Ajuste a venda pelo financeiro/lista de
                             vendas — o orçamento é o registro da proposta, não da cobrança.
+                        </AccordionContent>
+                    </AccordionItem>
+                    <AccordionItem value="f6">
+                        <AccordionTrigger>Exportei o PDF e o cabeçalho não apareceu. Por quê?</AccordionTrigger>
+                        <AccordionContent>
+                            Confira em <strong>Configurações &gt; Empresa</strong> se a imagem aparece no preview.
+                            Se aparecer lá e não no PDF, o arquivo provavelmente não é um PNG de verdade (foi só
+                            renomeado) — exporte de novo como PNG e reenvie.
                         </AccordionContent>
                     </AccordionItem>
                     <AccordionItem value="f5">

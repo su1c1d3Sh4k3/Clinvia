@@ -5,6 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { FileText } from "lucide-react";
 import { format } from "date-fns";
 import { useOrcamentosTable } from "@/hooks/useFinanceiro";
+import { ExportOrcamentoButton } from "@/components/orcamentos/ExportOrcamentoButton";
 
 const fmt = (v: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(v || 0));
@@ -53,6 +54,7 @@ export function OrcamentosTable({ onOpenContact }: Props) {
                                         <TableHead className="whitespace-nowrap">Indicação</TableHead>
                                         <TableHead className="whitespace-nowrap">Validade</TableHead>
                                         <TableHead className="whitespace-nowrap">Criado por</TableHead>
+                                        <TableHead className="whitespace-nowrap text-center">PDF</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -114,6 +116,18 @@ export function OrcamentosTable({ onOpenContact }: Props) {
                                             </TableCell>
                                             <TableCell className="truncate max-w-[130px] text-xs text-muted-foreground">
                                                 {o.criado_por || "—"}
+                                            </TableCell>
+                                            <TableCell className="text-center">
+                                                {o.pendentes > 0 ? (
+                                                    <ExportOrcamentoButton
+                                                        orcamentoId={o.id}
+                                                        clienteNome={o.contact_name || ""}
+                                                        className="h-7 w-7 p-0"
+                                                        iconOnly
+                                                    />
+                                                ) : (
+                                                    <span className="text-muted-foreground text-xs">—</span>
+                                                )}
                                             </TableCell>
                                         </TableRow>
                                     ))}

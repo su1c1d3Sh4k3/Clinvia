@@ -97,7 +97,7 @@ export const ClientProfileModal = ({
 
               <ScrollArea className="flex-1 px-3 sm:px-5 py-4 [&_[data-radix-scroll-area-viewport]>div]:!block">
                 <TabsContent value="cadastro" className="mt-0"><CadastroTab contact={effectiveContact} /></TabsContent>
-                <TabsContent value="orcamentos" className="mt-0"><OrcamentosTab contactId={effectiveContact.id} /></TabsContent>
+                <TabsContent value="orcamentos" className="mt-0"><OrcamentosTab contactId={effectiveContact.id} clienteNome={effectiveContact.push_name || ""} clienteTelefone={effectiveContact.number ?? null} /></TabsContent>
                 <TabsContent value="vendas" className="mt-0"><VendasTab contactId={effectiveContact.id} /></TabsContent>
                 <TabsContent value="agendamentos" className="mt-0"><AgendamentosTab contactId={effectiveContact.id} /></TabsContent>
                 <TabsContent value="atendimentos" className="mt-0"><AtendimentosTab contactId={effectiveContact.id} contactIds={contactIds} /></TabsContent>

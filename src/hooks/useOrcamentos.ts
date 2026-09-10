@@ -81,6 +81,32 @@ export function useOrcamentos(contactId?: string | null) {
     });
 }
 
+/**
+ * Orçamento completo + dados do cliente, por id.
+ * O Financeiro lista pela RPC `get_orcamentos_table`, que devolve só agregados —
+ * para exportar o PDF de lá é preciso buscar os itens.
+ */
+export async function fetchOrcamentoParaPdf(id: string): Promise<{
+    orcamento: Orcamento;
+    clienteNome: string;
+    clienteTelefone: string | null;
+}> {
+    const { data, error } = await supabase
+        .from("orcamentos" as any)
+        .select(`${SELECT}, contato:contacts(push_name, number)`)
+        .eq("id", id)
+        .single();
+    if (error) throw error;
+
+    const row = data as any;
+    const contato = Array.isArray(row.contato) ? row.contato[0] : row.contato;
+    return {
+        orcamento: normalize([row])[0],
+        clienteNome: contato?.push_name || "",
+        clienteTelefone: contato?.number ?? null,
+    };
+}
+
 export interface OrcamentoItemInput {
     service_client_id: string;
     service_name: string;

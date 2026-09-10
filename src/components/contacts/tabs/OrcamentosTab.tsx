@@ -8,9 +8,12 @@ import { OrcamentoModal } from "@/components/orcamentos/OrcamentoModal";
 
 interface OrcamentosTabProps {
     contactId: string;
+    /** Impressos no cabeçalho do PDF exportado. */
+    clienteNome?: string;
+    clienteTelefone?: string | null;
 }
 
-export const OrcamentosTab = ({ contactId }: OrcamentosTabProps) => {
+export const OrcamentosTab = ({ contactId, clienteNome, clienteTelefone }: OrcamentosTabProps) => {
     const [modalOpen, setModalOpen] = useState(false);
     const { data: orcamentos, isLoading } = useOrcamentos(contactId);
     const { canCreate } = usePermissions();
@@ -32,7 +35,13 @@ export const OrcamentosTab = ({ contactId }: OrcamentosTabProps) => {
                 </div>
             ) : (
                 orcamentos.map((o) => (
-                    <OrcamentoCard key={o.id} orcamento={o} readOnly={isOrcamentoExpirado(o)} />
+                    <OrcamentoCard
+                        key={o.id}
+                        orcamento={o}
+                        readOnly={isOrcamentoExpirado(o)}
+                        clienteNome={clienteNome}
+                        clienteTelefone={clienteTelefone}
+                    />
                 ))
             )}
 
