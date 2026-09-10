@@ -10,6 +10,7 @@ import { Star, Users, UserRound, Bot } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useStaff } from "@/hooks/useStaff";
 import { useOwnerId } from "@/hooks/useOwnerId";
+import { useServiceDisplayNames } from "@/hooks/useServiceDisplayNames";
 import { useTeamOnlineStatus } from "@/hooks/useMonitoramento";
 import { useAgentTicketCounts, useSatisfactionAgents } from "@/hooks/useMinhaConta";
 import {
@@ -82,6 +83,7 @@ export function ColaboradoresSection() {
         (satAgents || []).find((a) => a.id === teamMemberId);
     const iaAgent = (satAgents || []).find((a) => a.is_ai || a.id === "ia");
     const npsOf = (id: string) => (profNps || []).find((n) => n.professional_id === id);
+    const { resolveServiceName } = useServiceDisplayNames();
 
     // ── Ranking de profissionais (mesma agregação do RankingsSection) ──
     const topProfessionals = useMemo(() => {
@@ -98,7 +100,7 @@ export function ColaboradoresSection() {
             };
             existing.count += 1;
             existing.total += Number(a.price) || 0;
-            const procLabel = a.service?.name || a.service_name || "—";
+            const procLabel = resolveServiceName(a.service_id, a.service?.name || a.service_name) || "—";
             existing.procedures.set(procLabel, (existing.procedures.get(procLabel) || 0) + 1);
             profMap.set(a.professional_id, existing);
         });
@@ -108,7 +110,7 @@ export function ColaboradoresSection() {
                 topProcedure: Array.from(p.procedures.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] || "—",
             }))
             .sort((a, b) => b.count - a.count);
-    }, [appointments]);
+    }, [appointments, resolveServiceName]);
 
     // ── Ocupação por período: minutos agendados / minutos de expediente ──
     const occupancyOf = useMemo(() => {

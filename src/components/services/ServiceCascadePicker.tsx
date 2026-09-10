@@ -12,6 +12,10 @@ export interface CascadeApplication {
     name: string;
     price: number;
     min_price: number;
+    /** service_name.name do serviço escolhido — usado para exibir "Serviço - Aplicação" */
+    serviceName: string;
+    /** services_category.category_type ('standard' | 'direct') */
+    categoryType: string | null;
 }
 
 interface ServiceCascadePickerProps {
@@ -52,10 +56,13 @@ export function ServiceCascadePicker({ onAdd, showQuantity, disabled, excludeAva
         },
     });
 
+    const selServiceName = (serviceNames || []).find((s) => s.id === selServiceNameId)?.name || "";
+    const selCategoryType = (categories || []).find((c) => c.id === selCategoryId)?.category_type ?? null;
+
     const { data: applications } = useQuery({
         queryKey: ["deal-applications", selServiceNameId],
         enabled: !!selServiceNameId,
-        queryFn: async (): Promise<CascadeApplication[]> => {
+        queryFn: async (): Promise<Omit<CascadeApplication, "serviceName" | "categoryType">[]> => {
             const { data: clientApps } = await supabase
                 .from("services_client" as any).select("*")
                 .eq("service_name_id", selServiceNameId).eq("status", true).order("name");
@@ -81,7 +88,7 @@ export function ServiceCascadePicker({ onAdd, showQuantity, disabled, excludeAva
         if (!selApplicationId || !applications) return;
         const app = applications.find((a) => a.id === selApplicationId);
         if (!app) return;
-        onAdd(app, showQuantity ? Math.max(1, quantity) : 1);
+        onAdd({ ...app, serviceName: selServiceName, categoryType: selCategoryType }, showQuantity ? Math.max(1, quantity) : 1);
         setSelApplicationId("");
         setQuantity(1);
     };

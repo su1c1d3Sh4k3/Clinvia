@@ -18,6 +18,7 @@ import { STAGE_COLORS, TERMINAL_STAGES, CrmStage, CRM_STAGES, channelKeyOf } fro
 import { useCrmChannels } from "@/hooks/useCrmChannels";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { useStaff } from "@/hooks/useStaff";
+import { useServiceDisplayNames } from "@/hooks/useServiceDisplayNames";
 import { ServiceCategory, ServiceName } from "@/types/services";
 
 interface NegociacoesTabProps {
@@ -28,6 +29,7 @@ export const NegociacoesTab = ({ contactId }: NegociacoesTabProps) => {
   const { data: ownerId } = useOwnerId();
   const { data: staffMembers } = useStaff();
   const { data: channels } = useCrmChannels();
+  const { resolveServiceName } = useServiceDisplayNames();
   const queryClient = useQueryClient();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [newNote, setNewNote] = useState("");
@@ -319,7 +321,7 @@ export const NegociacoesTab = ({ contactId }: NegociacoesTabProps) => {
                       {dealServices.map((svc: any) => (
                         <div key={svc.id} className="p-2.5 border rounded-md bg-background space-y-2">
                           <div className="flex items-center justify-between">
-                            <span className="text-xs font-medium truncate flex-1">{svc.service_name}</span>
+                            <span className="text-xs font-medium truncate flex-1">{resolveServiceName(svc.service_client_id, svc.service_name)}</span>
                             {!isReadOnly && (
                               <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive shrink-0" onClick={() => deleteService(svc.id, deal.id)}>
                                 <Trash2 className="h-3 w-3" />

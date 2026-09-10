@@ -26,6 +26,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
 import { useStaff } from "@/hooks/useStaff";
+import { useServiceDisplayNames } from "@/hooks/useServiceDisplayNames";
 
 const TIMEZONE = "America/Sao_Paulo";
 
@@ -56,6 +57,7 @@ interface ViewAppointmentModalProps {
 export function ViewAppointmentModal({ appointment, open, onOpenChange, onEdit, onStatusChange, canEdit = true }: ViewAppointmentModalProps) {
     const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
     const { data: staff } = useStaff();
+    const { resolveServiceName } = useServiceDisplayNames();
 
     if (!appointment) return null;
 
@@ -214,7 +216,7 @@ export function ViewAppointmentModal({ appointment, open, onOpenChange, onEdit, 
                                 Serviço
                             </div>
                             <p className="font-medium p-2 bg-muted/30 rounded-md">
-                                {appointment.service_name}
+                                {resolveServiceName(appointment.service_id, appointment.service_name)}
                             </p>
                         </div>
                     )}

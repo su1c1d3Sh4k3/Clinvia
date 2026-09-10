@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { useProfessionalNps } from "@/hooks/useAppointmentsDashboard";
+import { useServiceDisplayNames } from "@/hooks/useServiceDisplayNames";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { getWorkHoursForDay } from "@/lib/professionalSchedule";
 import { convenioRanges, parseTimeToMinutes } from "@/lib/convenioSchedule";
@@ -60,6 +61,7 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
     const { data: ownerId } = useOwnerId();
     const { data: profNps } = useProfessionalNps(ownerId);
     const npsOf = (professionalId: string) => (profNps || []).find((n) => n.professional_id === professionalId);
+    const { resolveServiceName } = useServiceDisplayNames();
 
     // Agenda fechada no dia: o cadeado só aparece se o profissional não tiver
     // NENHUM agendamento na data (cancelados/no-show não contam) — ou se o dia
@@ -491,7 +493,7 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                                                 {String(apt.contacts?.number || apt.contact_phone).replace("@s.whatsapp.net", "")}
                                                             </p>
                                                         )}
-                                                        <p><span className="text-muted-foreground">Serviço: </span>{apt.service_name || "Serviço"}</p>
+                                                        <p><span className="text-muted-foreground">Serviço: </span>{resolveServiceName(apt.service_id, apt.service_name) || "Serviço"}</p>
                                                         <p><span className="text-muted-foreground">Sala: </span>{professional.name}</p>
                                                         <p><span className="text-muted-foreground">Horário: </span>{format(aptStart, "HH:mm")} - {format(aptEnd, "HH:mm")} ({aptDuration} min)</p>
                                                         <p><span className="text-muted-foreground">Status: </span><span className="font-medium">{getStatusLabel(displayStatus)}</span></p>
@@ -565,7 +567,7 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                                     <span className="font-semibold truncate">
                                                         {apt.contacts?.push_name || apt.contact_name || 'Cliente'}
                                                     </span>
-                                                    <span className="opacity-60 truncate">· {apt.service_name || 'Serviço'}</span>
+                                                    <span className="opacity-60 truncate">· {resolveServiceName(apt.service_id, apt.service_name) || 'Serviço'}</span>
                                                     <span className="opacity-50 shrink-0">{format(new Date(apt.start_time), 'HH:mm')}</span>
                                                 </div>
                                             ) : (() => {
@@ -583,7 +585,7 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                                     ? apt.description.replace(/^Bloqueio importado do Google Calendar:\s*/i, "").trim() || "Bloqueio GCal"
                                                     : null;
                                                 const fullName = gcalTitle ?? (apt.type === "absence" ? "Ausência" : (apt.contacts?.push_name || apt.contact_name || "Cliente"));
-                                                const serviceName = apt.service_name || "Serviço";
+                                                const serviceName = resolveServiceName(apt.service_id, apt.service_name) || "Serviço";
 
                                                 return (
                                                     <div

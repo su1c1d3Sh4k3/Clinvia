@@ -4,12 +4,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Briefcase, Package, ShoppingCart, Trophy } from "lucide-react";
 import { useTopSellers } from "@/hooks/useSales";
+import { useServiceDisplayNames } from "@/hooks/useServiceDisplayNames";
 
 const formatCurrency = (value: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(value || 0));
 
 export function TopSellersTable({ month, year }: { month: number; year: number }) {
     const { data: topSellers = [], isLoading } = useTopSellers(month, year);
+    const { resolveServiceName } = useServiceDisplayNames();
 
     if (isLoading) {
         return <Skeleton className="h-96 w-full" />;
@@ -94,7 +96,7 @@ export function TopSellersTable({ month, year }: { month: number; year: number }
                                                     </Badge>
                                                 </TableCell>
                                                 <TableCell className="font-semibold">
-                                                    {item.product_name}
+                                                    {resolveServiceName(item.product_id, item.product_name)}
                                                 </TableCell>
                                                 <TableCell className="text-center">
                                                     <span className={`font-bold text-lg ${isTop3 ? "text-emerald-500" : ""}`}>

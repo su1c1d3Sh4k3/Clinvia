@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { getWorkHoursForDay } from "../_shared/professional-schedule.ts";
 import { getBlockedProfessionalIds } from "../_shared/day-blocks.ts";
 import { getSlotSettings, padBusyRange, type SlotSettings } from "../_shared/slot-settings.ts";
+import { findServiceByDisplayName } from "../_shared/service-label.ts";
 import {
     CONVENIO_PROF_COLUMNS,
     assertServiceAptoConvenio,
@@ -206,9 +207,10 @@ serve(async (req) => {
         const slotSettings = await getSlotSettings(supabase, user_id);
 
         // Find the service
-        const { data: sc, error: scError } = await supabase
+        const SERVICE_COLUMNS = "id, name, duration_minutes, professionals";
+        const { data: scExact, error: scError } = await supabase
             .from("services_client")
-            .select("id, name, duration_minutes, professionals")
+            .select(SERVICE_COLUMNS)
             .eq("user_id", user_id)
             .ilike("name", service_name)
             .eq("status", true)
@@ -219,6 +221,11 @@ serve(async (req) => {
             return dbErrorResponse(corsHeaders, "service_lookup_failed",
                 `buscar a aplicação "${service_name}" no catálogo desta conta`, scError);
         }
+
+        // A IA às vezes repete o nome composto que leu ("Hifu Hipro - Face -
+        // 1 sessão"); aceita também essa forma antes de reclamar
+        const sc = scExact
+            || await findServiceByDisplayName(supabase, user_id, service_name, SERVICE_COLUMNS);
 
         if (!sc) {
             // Listar as aplicações válidas é barato e evita o n8n ficar tentando nomes no escuro

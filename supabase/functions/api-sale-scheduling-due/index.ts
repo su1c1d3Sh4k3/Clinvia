@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { resolveConversationsForContacts } from "../_shared/resolve-conversation.ts";
+import { createServiceLabelResolver } from "../_shared/service-label.ts";
 import {
     apiError,
     dbErrorResponse,
@@ -135,11 +136,13 @@ serve(async (req) => {
             (sales || []).map((s: any) => s.contact?.id).filter(Boolean),
         );
 
+        const label = await createServiceLabelResolver(supabase, (sales || []).map((s: any) => s.service_client_id));
+
         const rows = (sales || []).map((s: any) => {
             const conv = s.contact?.id ? convByContact.get(s.contact.id) : undefined;
             return {
                 sale_id: s.id,
-                service_name: s.product_name,
+                service_name: label(s.service_client_id, s.product_name),
                 service_client_id: s.service_client_id,
                 sale_date: s.sale_date,
                 ia_contact_days: s.ia_contact_days,

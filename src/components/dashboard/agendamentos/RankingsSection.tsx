@@ -11,6 +11,7 @@ import {
     useProfessionalNps,
     formatCurrency,
 } from "@/hooks/useAppointmentsDashboard";
+import { useServiceDisplayNames } from "@/hooks/useServiceDisplayNames";
 
 export function RankingsSection() {
     const now = new Date();
@@ -38,6 +39,7 @@ export function RankingsSection() {
     const { data: profNps } = useProfessionalNps(ownerId, startISO, endISO);
 
     const npsOf = (id: string) => (profNps || []).find((n) => n.professional_id === id);
+    const { resolveServiceName } = useServiceDisplayNames();
 
     const { topServices, topProfessionals } = useMemo(() => {
         const completed = (appointments || []).filter((a) => a.status === "completed");
@@ -82,7 +84,7 @@ export function RankingsSection() {
             };
             existing.count += 1;
             existing.total += Number(a.price) || 0;
-            const procLabel = a.service?.name || a.service_name || "—";
+            const procLabel = resolveServiceName(a.service_id, a.service?.name || a.service_name) || "—";
             existing.procedures.set(procLabel, (existing.procedures.get(procLabel) || 0) + 1);
             profMap.set(a.professional_id, existing);
         });
@@ -95,7 +97,7 @@ export function RankingsSection() {
             .sort((a, b) => b.count - a.count);
 
         return { topServices: services, topProfessionals: profs };
-    }, [appointments]);
+    }, [appointments, resolveServiceName]);
 
     const photoOf = (id: string) => (professionals || []).find((p) => p.id === id)?.photo_url || undefined;
 

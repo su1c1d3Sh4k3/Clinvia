@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { createServiceLabelResolver } from "../_shared/service-label.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -130,7 +131,7 @@ serve(async (req) => {
       .from("appointments")
       .select(`
         id, start_time, end_time, description, status, price,
-        google_event_id, professional_id,
+        google_event_id, professional_id, service_id, service_name,
         professionals(id, name),
         contacts(push_name),
         products_services(name)
@@ -148,7 +149,12 @@ serve(async (req) => {
 
     const professionalName = (appointment as Record<string, unknown> & { professionals?: { name?: string } }).professionals?.name || "Profissional";
     const contactName = (appointment as Record<string, unknown> & { contacts?: { push_name?: string } }).contacts?.push_name || "Paciente";
-    const serviceName = (appointment as Record<string, unknown> & { products_services?: { name?: string } }).products_services?.name || "Consulta";
+    // O evento mostra "Serviço - Aplicação": o snapshot guarda só a aplicação
+    // ("Face - 1 sessão"), que sozinha não diz de qual procedimento se trata.
+    const label = await createServiceLabelResolver(supabase, [appointment.service_id]);
+    const serviceName = label(appointment.service_id, appointment.service_name)
+      || (appointment as Record<string, unknown> & { products_services?: { name?: string } }).products_services?.name
+      || "Consulta";
 
     // Buscar conexões Google Calendar ativas:
     // 1) Conexão individual do profissional

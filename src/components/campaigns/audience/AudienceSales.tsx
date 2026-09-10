@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { formatCurrency } from "@/lib/utils";
+import { useServiceDisplayNames } from "@/hooks/useServiceDisplayNames";
 import { AudienceSelection, AudienceEntry } from "../audienceTypes";
 
 interface AudienceSalesProps {
@@ -15,10 +16,15 @@ export function AudienceSales({ value, onChange, onLoadingChange }: AudienceSale
     const [from, setFrom] = useState<string>(value.config?.from || "");
     const [to, setTo] = useState<string>(value.config?.to || "");
 
+    // "Serviço - Aplicação" precisa do mapa carregado antes de montar as
+    // variáveis, senão a lista fica cacheada só com o nome da aplicação
+    const { resolveServiceName, isLoading: loadingNames } = useServiceDisplayNames();
+
     // 1 entrada POR CONTATO — se o contato tem várias vendas no período,
     // usa a mais recente para as variáveis
     const { data: entries, isLoading } = useQuery({
         queryKey: ["audience-sales", from, to],
+        enabled: !loadingNames,
         queryFn: async (): Promise<AudienceEntry[]> => {
             // Paginação: PostgREST corta em 1000 linhas por requisição
             // (o .limit(10000) antigo não passava do cap do servidor)
@@ -27,7 +33,7 @@ export function AudienceSales({ value, onChange, onLoadingChange }: AudienceSale
             for (let off = 0; off < 20000; off += PAGE) {
                 let query = supabase
                     .from("sales" as any)
-                    .select("id, contact_id, sale_date, product_name, total_amount")
+                    .select("id, contact_id, sale_date, service_client_id, product_name, total_amount")
                     .not("contact_id", "is", null)
                     .order("sale_date", { ascending: true })
                     .order("id", { ascending: true })
@@ -47,7 +53,7 @@ export function AudienceSales({ value, onChange, onLoadingChange }: AudienceSale
                 contactId: r.contact_id,
                 vars: {
                     data_venda: r.sale_date ? new Date(r.sale_date + "T12:00:00").toLocaleDateString("pt-BR") : "",
-                    servico_vendido: r.product_name || "",
+                    servico_vendido: resolveServiceName(r.service_client_id, r.product_name),
                     valor_venda: r.total_amount != null ? formatCurrency(Number(r.total_amount)) : "",
                 },
             }));
@@ -56,10 +62,10 @@ export function AudienceSales({ value, onChange, onLoadingChange }: AudienceSale
 
     // Informa o wizard que a audiência está carregando (bloqueia o "Próximo")
     useEffect(() => {
-        onLoadingChange?.(isLoading);
+        onLoadingChange?.(isLoading || loadingNames);
         return () => onLoadingChange?.(false);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isLoading]);
+    }, [isLoading, loadingNames]);
 
     useEffect(() => {
         // undefined = query em andamento; não sobrescrever com lista vazia

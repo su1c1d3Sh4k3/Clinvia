@@ -22,6 +22,7 @@ import {
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useServiceDisplayNames } from "@/hooks/useServiceDisplayNames";
 import {
     useActiveGroupMonitoring, useGroupMonitoringMutations, useMonitoringLeadCount,
     type MonitoringService,
@@ -54,6 +55,7 @@ interface ServiceRow {
 export const GroupMonitoringSection = ({ groupId, open, onToggle }: GroupMonitoringSectionProps) => {
     const { data: role } = useUserRole();
     const canManage = role === "admin" || role === "supervisor";
+    const { resolveServiceName } = useServiceDisplayNames();
 
     const { data: monitoring, isLoading } = useActiveGroupMonitoring(groupId);
     const { data: leadCount } = useMonitoringLeadCount(monitoring?.id);
@@ -424,7 +426,7 @@ export const GroupMonitoringSection = ({ groupId, open, onToggle }: GroupMonitor
                                                             className="inline-flex items-center gap-1 text-[10px] bg-muted border rounded-full pl-2 pr-1 py-0.5"
                                                         >
                                                             <span className="truncate max-w-[140px]">
-                                                                {s.full_service ? (s.service_name || s.name) : s.name}
+                                                                {s.full_service ? (s.service_name || s.name) : resolveServiceName(s.id, s.name)}
                                                             </span>
                                                             {s.full_service && (
                                                                 <span className="text-[8px] text-primary font-semibold uppercase">todo</span>

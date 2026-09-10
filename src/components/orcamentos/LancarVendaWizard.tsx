@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { useSalas } from "@/hooks/useResponsaveis";
 import { useCrmAppointmentSync } from "@/hooks/useCrmAppointmentSync";
+import { useServiceDisplayNames } from "@/hooks/useServiceDisplayNames";
 import { AppointmentDraft, AppointmentModal, commitAppointmentDraft } from "@/components/scheduling/AppointmentModal";
 import { Orcamento, OrcamentoItem, lancarVendaDoOrcamento } from "@/hooks/useOrcamentos";
 import { AlertTriangle, ArrowLeft, ArrowRight, CalendarCheck, Check, Loader2, X } from "lucide-react";
@@ -68,6 +69,9 @@ export function LancarVendaWizard({ open, onOpenChange, orcamento, onDone }: Lan
     const { data: salas = [] } = useSalas();
     const queryClient = useQueryClient();
     const { onAppointmentCreated: syncCrmOnCreate } = useCrmAppointmentSync();
+    const { resolveServiceName } = useServiceDisplayNames();
+    const label = (item: { service_client_id: string | null; service_name: string }) =>
+        resolveServiceName(item.service_client_id, item.service_name);
 
     const { data: me } = useQuery({
         queryKey: ["my-team-member"],
@@ -137,15 +141,15 @@ export function LancarVendaWizard({ open, onOpenChange, orcamento, onDone }: Lan
         for (const item of vendidos) {
             const cfg = configs[item.id];
             if (salasDoItem(item).length === 0) {
-                toast.error(`O serviço "${item.service_name}" não tem nenhuma sala atrelada. Atrele uma sala ao serviço antes de continuar.`);
+                toast.error(`O serviço "${label(item)}" não tem nenhuma sala atrelada. Atrele uma sala ao serviço antes de continuar.`);
                 return;
             }
             if (cfg.agendar && !cfg.salaId) {
-                toast.error(`Selecione a sala de "${item.service_name}" para agendar.`);
+                toast.error(`Selecione a sala de "${label(item)}" para agendar.`);
                 return;
             }
             if (cfg.paymentType === "mixed" && (cfg.cashAmount <= 0 || cfg.cashAmount >= cfg.price)) {
-                toast.error(`Valor à vista inválido em "${item.service_name}".`);
+                toast.error(`Valor à vista inválido em "${label(item)}".`);
                 return;
             }
         }
@@ -203,7 +207,7 @@ export function LancarVendaWizard({ open, onOpenChange, orcamento, onDone }: Lan
                     });
                 } catch (err) {
                     console.error("Erro ao criar agendamento do orçamento:", err);
-                    toast.error(`Venda lançada, mas o agendamento de "${r.service_name}" falhou. Crie pela agenda.`);
+                    toast.error(`Venda lançada, mas o agendamento de "${resolveServiceName(r.service_client_id, r.service_name)}" falhou. Crie pela agenda.`);
                 }
             }
 
@@ -245,7 +249,7 @@ export function LancarVendaWizard({ open, onOpenChange, orcamento, onDone }: Lan
                                         className={`p-3 border rounded-lg space-y-2 ${decision === "vender" ? "border-green-500/50 bg-green-500/5" : decision === "recusar" ? "border-destructive/40 bg-destructive/5 opacity-70" : "bg-muted/20"}`}
                                     >
                                         <div className="flex items-center justify-between gap-2">
-                                            <span className="text-sm font-medium truncate">{item.service_name}</span>
+                                            <span className="text-sm font-medium truncate">{label(item)}</span>
                                             <div className="flex gap-1 shrink-0">
                                                 <Button
                                                     type="button"
@@ -292,7 +296,7 @@ export function LancarVendaWizard({ open, onOpenChange, orcamento, onDone }: Lan
                         return (
                             <div key={item.id} className="p-3 border rounded-lg space-y-3 bg-muted/20">
                                 <div className="flex items-center justify-between gap-2">
-                                    <span className="text-sm font-medium truncate">{item.service_name}</span>
+                                    <span className="text-sm font-medium truncate">{label(item)}</span>
                                     <span className="text-sm font-medium text-green-600 shrink-0">{fmt(cfg.price)}</span>
                                 </div>
 
@@ -421,7 +425,7 @@ export function LancarVendaWizard({ open, onOpenChange, orcamento, onDone }: Lan
                         <div className="space-y-2">
                             <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                 <CalendarCheck className="w-4 h-4" />
-                                Agendamento {apptIndex + 1} de {paraAgendar.length} — {currentAppt.service_name}
+                                Agendamento {apptIndex + 1} de {paraAgendar.length} — {label(currentAppt)}
                             </div>
                             <AppointmentModal
                                 key={currentAppt.id}
@@ -449,7 +453,7 @@ export function LancarVendaWizard({ open, onOpenChange, orcamento, onDone }: Lan
                                 return (
                                     <div key={item.id} className="p-3 border rounded-lg bg-muted/20 text-xs space-y-1">
                                         <div className="flex items-center justify-between gap-2">
-                                            <span className="text-sm font-medium truncate">{item.service_name}</span>
+                                            <span className="text-sm font-medium truncate">{label(item)}</span>
                                             <span className="text-sm font-medium text-green-600">{fmt(cfg.price)}</span>
                                         </div>
                                         <p className="text-muted-foreground">
@@ -473,7 +477,7 @@ export function LancarVendaWizard({ open, onOpenChange, orcamento, onDone }: Lan
                             {recusados.length > 0 && (
                                 <div className="p-3 border rounded-lg border-destructive/30 bg-destructive/5 text-xs">
                                     <p className="font-medium mb-1">Serão marcados como recusados:</p>
-                                    {recusados.map((i) => <p key={i.id} className="text-muted-foreground">{i.service_name}</p>)}
+                                    {recusados.map((i) => <p key={i.id} className="text-muted-foreground">{label(i)}</p>)}
                                 </div>
                             )}
                             <div className="p-3 rounded-lg bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/30 flex justify-between items-center">

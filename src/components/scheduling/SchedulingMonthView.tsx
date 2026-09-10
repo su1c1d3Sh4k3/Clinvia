@@ -13,6 +13,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { getWorkHoursForDay } from "@/lib/professionalSchedule";
+import { useServiceDisplayNames } from "@/hooks/useServiceDisplayNames";
 
 interface SchedulingMonthViewProps {
     /** Qualquer dia do mês exibido (também marca o dia selecionado) */
@@ -40,6 +41,7 @@ export function SchedulingMonthView({
 }: SchedulingMonthViewProps) {
     const isMobile = useIsMobile();
     const MAX_VISIBLE = isMobile ? 2 : 4;
+    const { resolveServiceName } = useServiceDisplayNames();
 
     const days = useMemo(() => {
         const start = startOfMonth(date);
@@ -91,7 +93,7 @@ export function SchedulingMonthView({
         return name.trim().split(/\s+/)[0];
     };
 
-    const serviceName = (apt: any) => apt.service_name || "";
+    const serviceName = (apt: any) => resolveServiceName(apt.service_id, apt.service_name);
 
     return (
         <div className="flex flex-col h-full border rounded-lg overflow-hidden bg-background">

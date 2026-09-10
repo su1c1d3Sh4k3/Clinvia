@@ -13,6 +13,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { useStaff, useCurrentTeamMember } from "@/hooks/useStaff";
+import { useServiceDisplayNames } from "@/hooks/useServiceDisplayNames";
 import { toast } from "sonner";
 import { CRM_STAGES, TERMINAL_STAGES } from "@/types/crm-client";
 import { ServiceCascadePicker, CascadeApplication } from "@/components/services/ServiceCascadePicker";
@@ -44,6 +45,7 @@ export const NegotiationQuickModal = ({ open, onOpenChange, contactId, deal, ins
   const { data: ownerId } = useOwnerId();
   const { data: staffMembers } = useStaff();
   const { data: currentTeamMember } = useCurrentTeamMember();
+  const { resolveServiceName } = useServiceDisplayNames();
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
 
@@ -228,7 +230,7 @@ export const NegotiationQuickModal = ({ open, onOpenChange, contactId, deal, ins
                 {services.map((svc, idx) => (
                   <div key={svc.id || svc.serviceClientId} className="p-2.5 border rounded-md bg-background space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium truncate flex-1">{svc.name}</span>
+                      <span className="text-sm font-medium truncate flex-1">{resolveServiceName(svc.serviceClientId, svc.name)}</span>
                       <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive shrink-0" onClick={() => removeService(idx)}>
                         <Trash2 className="h-3 w-3" />
                       </Button>

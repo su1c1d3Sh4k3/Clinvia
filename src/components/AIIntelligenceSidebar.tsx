@@ -26,6 +26,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Session } from "@supabase/supabase-js";
 import { useOwnerId } from "@/hooks/useOwnerId";
+import { useServiceDisplayNames } from "@/hooks/useServiceDisplayNames";
 import { cn } from "@/lib/utils";
 import { CRM_STAGES, STAGE_COLORS, TERMINAL_STAGES, type CrmStage } from "@/types/crm-client";
 
@@ -61,6 +62,7 @@ export const AIIntelligenceSidebar = ({
   const { analysis } = useAIAnalysis(conversationId);
   const { mutate: generateSummary, isPending: isGeneratingSummary } = useGenerateSummary();
   const { data: ownerId } = useOwnerId();
+  const { resolveServiceName } = useServiceDisplayNames();
   const [session, setSession] = useState<Session | null>(null);
   const [isHovered, setIsHovered] = useState(false);
   // Pin: uma vez que o usuário abriu um submenu ou digitou algo, o painel se
@@ -371,7 +373,7 @@ export const AIIntelligenceSidebar = ({
                               <span className="text-[10px] text-muted-foreground font-medium">Serviços:</span>
                               {crmClient.crm_client_services.map((svc: any) => (
                                 <div key={svc.id} className="text-[11px] flex justify-between bg-muted/30 rounded px-2 py-1">
-                                  <span className="truncate">{svc.service_name || "Serviço"}</span>
+                                  <span className="truncate">{resolveServiceName(svc.service_client_id, svc.service_name) || "Serviço"}</span>
                                   {svc.price > 0 && <span className="text-green-600 flex-shrink-0 ml-1">R${Number(svc.price).toFixed(0)}</span>}
                                 </div>
                               ))}
@@ -466,7 +468,7 @@ export const AIIntelligenceSidebar = ({
                         <div className="space-y-1">
                           <span className="text-[10px] text-muted-foreground font-medium">Último realizado:</span>
                           <div className="text-[11px] bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded p-2">
-                            <div className="font-medium">{lastCompleted.service_name || "Consulta"}</div>
+                            <div className="font-medium">{resolveServiceName(lastCompleted.service_id, lastCompleted.service_name) || "Consulta"}</div>
                             <div className="text-muted-foreground">
                               {format(new Date(lastCompleted.start_time), "dd/MM/yy HH:mm", { locale: ptBR })}
                               {lastCompleted.professionals?.name && ` · ${lastCompleted.professionals.name}`}
@@ -481,7 +483,7 @@ export const AIIntelligenceSidebar = ({
                           <span className="text-[10px] text-muted-foreground font-medium">Pendentes ({pendingAppointments.length}):</span>
                           {pendingAppointments.map((apt: any) => (
                             <div key={apt.id} className="text-[11px] bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded p-2">
-                              <div className="font-medium">{apt.service_name || "Consulta"}</div>
+                              <div className="font-medium">{resolveServiceName(apt.service_id, apt.service_name) || "Consulta"}</div>
                               <div className="text-muted-foreground">
                                 {format(new Date(apt.start_time), "dd/MM/yy HH:mm", { locale: ptBR })}
                                 {apt.professionals?.name && ` · ${apt.professionals.name}`}

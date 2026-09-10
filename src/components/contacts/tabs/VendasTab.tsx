@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, ShoppingCart } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useServiceDisplayNames } from "@/hooks/useServiceDisplayNames";
 
 interface VendasTabProps {
   contactId: string;
@@ -25,13 +26,14 @@ function paymentStatus(sale: any): { label: string; className: string } {
 }
 
 export const VendasTab = ({ contactId }: VendasTabProps) => {
+  const { resolveServiceName } = useServiceDisplayNames();
   const { data: sales, isLoading } = useQuery({
     queryKey: ["client-sales", contactId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("sales" as any)
         .select(`
-          id, product_name, total_amount, sale_date, payment_type, installments,
+          id, product_name, service_client_id, total_amount, sale_date, payment_type, installments,
           team_member:team_members!sales_team_member_id_fkey(name),
           sala:professionals!sales_professional_id_fkey(name),
           profissional:responsaveis!sales_responsavel_id_fkey(name, role),
@@ -65,7 +67,7 @@ export const VendasTab = ({ contactId }: VendasTabProps) => {
           <div key={sale.id} className="border rounded-lg p-3 space-y-2 bg-card">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <p className="text-sm font-medium truncate">{sale.product_name || "—"}</p>
+                <p className="text-sm font-medium truncate">{resolveServiceName(sale.service_client_id, sale.product_name) || "—"}</p>
                 <p className="text-[11px] text-muted-foreground">
                   {sale.sale_date ? format(new Date(`${sale.sale_date}T00:00:00`), "dd/MM/yyyy", { locale: ptBR }) : "—"}
                 </p>

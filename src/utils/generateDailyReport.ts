@@ -27,6 +27,7 @@ interface Appointment {
     name?: string;
   };
   service_name?: string;
+  service_id?: string | null;
 }
 
 const getStatusInfo = (status: string): { label: string; color: string; borderColor: string; textColor: string } => {
@@ -94,7 +95,9 @@ const formatCurrency = (value: number): string => {
 export const generateDailyReport = async (
   date: Date,
   professionals: Professional[],
-  appointments: Appointment[]
+  appointments: Appointment[],
+  /** Compõe "Serviço - Aplicação" a partir do FK (useServiceDisplayNames) */
+  resolveServiceName: (serviceClientId?: string | null, fallback?: string | null) => string = (_id, fallback) => (fallback || "").trim()
 ) => {
   // Filter appointments: only type='appointment' (no absences)
   const validAppointments = appointments.filter(apt => apt.type !== 'absence');
@@ -295,7 +298,7 @@ export const generateDailyReport = async (
       const statusInfo = getStatusInfo(apt.status);
       const clientName = apt.contacts?.push_name || apt.contact_name || 'Cliente não identificado';
       const clientPhone = apt.contacts?.number || apt.contact_phone || 'Não informado';
-      const serviceName = apt.products_services?.name || apt.service_name || 'Serviço não especificado';
+      const serviceName = resolveServiceName(apt.service_id, apt.products_services?.name || apt.service_name) || 'Serviço não especificado';
       const startTime = format(new Date(apt.start_time), 'HH:mm');
       const endTime = format(new Date(apt.end_time), 'HH:mm');
       const price = formatCurrency(apt.price || 0);

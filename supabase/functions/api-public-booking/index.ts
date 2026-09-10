@@ -6,6 +6,8 @@ import { TERMINAL_STAGES } from "../_shared/crm-stages.ts";
 import { applyCampaignDiscount, type CampaignDiscountInfo } from "../_shared/campaign-discount.ts";
 import { findActiveCardForChannel } from "../_shared/resolve-conversation.ts";
 import { bufferedOverlapWindow, getSlotSettings, padBusyRange } from "../_shared/slot-settings.ts";
+import { serviceDisplayName } from "../_shared/service-display-name.ts";
+import { createServiceLabelResolver } from "../_shared/service-label.ts";
 import {
     apiError,
     describeDbError,
@@ -279,6 +281,11 @@ serve(async (req) => {
                 }
             }
 
+            // A tela do paciente lista as aplicações numa lista PLANA (sem o nível
+            // do serviço), então o nome já sai composto: "Serviço - Aplicação"
+            const snById = new Map((sns || []).map((s: any) => [s.id, s.name]));
+            const catTypeById = new Map((allCats || []).map((c: any) => [c.id, c.category_type]));
+
             return new Response(JSON.stringify({
                 categories: cats,
                 service_names: sns || [],
@@ -287,7 +294,13 @@ serve(async (req) => {
                     professional_ids: convenioRooms.get(c.id) || [],
                 })),
                 applications: visibleApps.map((s: any) => ({
-                    id: s.id, name: s.name, description: s.description, duration_minutes: s.duration_minutes,
+                    id: s.id,
+                    name: serviceDisplayName({
+                        serviceName: snById.get(s.service_name_id),
+                        applicationName: s.name,
+                        categoryType: catTypeById.get(s.category_id),
+                    }),
+                    description: s.description, duration_minutes: s.duration_minutes,
                     category_id: s.category_id, service_name_id: s.service_name_id, professionals: s.professionals || [],
                     convenio_ids: aptoByService.get(s.id) || [],
                 })),
@@ -676,8 +689,14 @@ serve(async (req) => {
                     "Não conseguimos carregar os seus agendamentos agora. Tente novamente em alguns instantes ou fale com a clínica.");
             }
 
-            return new Response(JSON.stringify({ appointments: apts || [] }),
-                { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+            const label = await createServiceLabelResolver(supabase, (apts || []).map((a: any) => a.service_id));
+
+            return new Response(JSON.stringify({
+                appointments: (apts || []).map((a: any) => ({
+                    ...a,
+                    service_name: label(a.service_id, a.service_name),
+                })),
+            }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
         // ── cancel_booking ──

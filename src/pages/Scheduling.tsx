@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { generateDailyReport } from "@/utils/generateDailyReport";
 import { useOwnerId } from "@/hooks/useOwnerId";
+import { useServiceDisplayNames } from "@/hooks/useServiceDisplayNames";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useCrmAppointmentSync } from "@/hooks/useCrmAppointmentSync";
 import { useProfessionalDayBlocks, useProfessionalMonthBlocks } from "@/hooks/useProfessionalDayBlocks";
@@ -37,6 +38,7 @@ export default function Scheduling() {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const { data: ownerId } = useOwnerId();
+    const { resolveServiceName } = useServiceDisplayNames();
     const { onAppointmentCompleted, onAppointmentLost } = useCrmAppointmentSync();
     const [date, setDate] = useState<Date | undefined>(new Date());
     const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
@@ -547,7 +549,8 @@ export default function Scheduling() {
             await generateDailyReport(
                 date,
                 filteredProfessionals,
-                appointments || []
+                appointments || [],
+                resolveServiceName
             );
 
             toast({

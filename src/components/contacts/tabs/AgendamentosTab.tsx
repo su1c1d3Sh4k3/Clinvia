@@ -5,12 +5,14 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, Calendar } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useServiceDisplayNames } from "@/hooks/useServiceDisplayNames";
 
 interface AgendamentosTabProps {
   contactId: string;
 }
 
 export const AgendamentosTab = ({ contactId }: AgendamentosTabProps) => {
+  const { resolveServiceName } = useServiceDisplayNames();
   const { data: appointments, isLoading } = useQuery({
     queryKey: ["client-appointments", contactId],
     queryFn: async () => {
@@ -81,7 +83,7 @@ export const AgendamentosTab = ({ contactId }: AgendamentosTabProps) => {
                 {apt.end_time && ` - ${format(new Date(apt.end_time), "HH:mm")}`}
               </TableCell>
               <TableCell className="text-sm">{apt.professional?.name || "—"}</TableCell>
-              <TableCell className="text-sm">{apt.service_name || "—"}</TableCell>
+              <TableCell className="text-sm">{resolveServiceName(apt.service_id, apt.service_name) || "—"}</TableCell>
               <TableCell className="text-center">
                 {(() => { const ds = getDisplayStatus(apt); return (
                   <Badge variant={statusColor(ds)} className="text-[10px]">

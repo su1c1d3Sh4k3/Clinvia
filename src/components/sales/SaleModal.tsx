@@ -27,6 +27,7 @@ import { useTeamMembers, useProfessionals } from "@/hooks/useFinancial";
 import type { Sale, PaymentType } from "@/types/sales";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { ServiceCascadePicker } from "@/components/services/ServiceCascadePicker";
+import { useServiceDisplayNames } from "@/hooks/useServiceDisplayNames";
 import { AppointmentModal } from "@/components/scheduling/AppointmentModal";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -95,6 +96,7 @@ export function SaleModal({ open, onOpenChange, fixedContactId, sale }: SaleModa
         },
     });
 
+    const { resolveServiceName } = useServiceDisplayNames();
     const createSale = useCreateSale();
     const updateSale = useUpdateSale();
 
@@ -348,7 +350,7 @@ export function SaleModal({ open, onOpenChange, fixedContactId, sale }: SaleModa
                         {lines.map((line) => (
                             <div key={line.id} className="p-3 border rounded-lg bg-muted/30 space-y-3">
                                 <div className="flex items-center justify-between gap-2">
-                                    <span className="text-sm font-medium truncate flex-1">{line.name}</span>
+                                    <span className="text-sm font-medium truncate flex-1">{resolveServiceName(line.serviceClientId, line.name)}</span>
                                     <span className="text-sm font-medium text-green-600">
                                         {formatCurrency(line.quantity * line.unitPrice)}
                                     </span>
@@ -418,7 +420,7 @@ export function SaleModal({ open, onOpenChange, fixedContactId, sale }: SaleModa
                                                     {futureAppointments.map((apt) => (
                                                         <SelectItem key={apt.id} value={apt.id}>
                                                             {format(new Date(apt.start_time), "dd/MM/yyyy HH:mm", { locale: ptBR })}
-                                                            {apt.service_name ? ` — ${apt.service_name}` : ""}
+                                                            {apt.service_name ? ` — ${resolveServiceName(apt.service_id, apt.service_name)}` : ""}
                                                         </SelectItem>
                                                     ))}
                                                     <SelectItem value={CREATE_APPOINTMENT}>

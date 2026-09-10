@@ -14,6 +14,7 @@ import {
     unexpectedErrorResponse,
     unknownAction,
 } from "../_shared/api-errors.ts";
+import { createServiceLabelResolver } from "../_shared/service-label.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -85,7 +86,7 @@ serve(async (req) => {
 
             const { data: svcs, error: svcsError } = await supabase
                 .from("crm_client_services")
-                .select("id, service_name, quantity, unit_price")
+                .select("id, service_client_id, service_name, quantity, unit_price")
                 .eq("crm_client_id", card.id);
 
             if (svcsError) {
@@ -93,8 +94,19 @@ serve(async (req) => {
                     "listar os serviços da negociação", svcsError);
             }
 
+            const label = await createServiceLabelResolver(supabase, (svcs || []).map((s: any) => s.service_client_id));
+
             return new Response(
-                JSON.stringify({ deal: { ...card, created_at: toSaoPaulo(card.created_at), services: svcs || [] } }),
+                JSON.stringify({
+                    deal: {
+                        ...card,
+                        created_at: toSaoPaulo(card.created_at),
+                        services: (svcs || []).map((s: any) => ({
+                            ...s,
+                            service_name: label(s.service_client_id, s.service_name),
+                        })),
+                    },
+                }),
                 { headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
         }

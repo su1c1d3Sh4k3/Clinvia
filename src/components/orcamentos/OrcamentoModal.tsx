@@ -9,6 +9,7 @@ import { CurrencyInput } from "@/components/ui/currency-input";
 import { ServiceCascadePicker } from "@/components/services/ServiceCascadePicker";
 import { ContactPicker } from "@/components/ui/contact-picker";
 import { useResponsaveis } from "@/hooks/useResponsaveis";
+import { useServiceDisplayNames } from "@/hooks/useServiceDisplayNames";
 import {
     Orcamento,
     OrcamentoItemInput,
@@ -50,6 +51,7 @@ export function OrcamentoModal({ open, onOpenChange, contactId, orcamento }: Orc
     const effectiveContactId = contactId || orcamento?.contact_id || pickedContactId;
 
     const { data: responsaveis = [] } = useResponsaveis();
+    const { resolveServiceName } = useServiceDisplayNames();
     const { data: indicacoes = [] } = useIndicacoes(indicacao);
     const createOrcamento = useCreateOrcamento();
     const updateOrcamento = useUpdateOrcamento();
@@ -180,7 +182,7 @@ export function OrcamentoModal({ open, onOpenChange, contactId, orcamento }: Orc
                                 <Label className="text-xs text-muted-foreground">Itens já decididos (não editáveis)</Label>
                                 {decididos.map((i) => (
                                     <div key={i.id} className="flex items-center justify-between gap-2 text-xs px-3 py-2 border rounded-md bg-muted/30">
-                                        <span className="truncate">{i.service_name}</span>
+                                        <span className="truncate">{resolveServiceName(i.service_client_id, i.service_name)}</span>
                                         <span className="shrink-0 text-muted-foreground">
                                             {fmt(Number(i.unit_price))} · {i.status === "vendido" ? "Vendido" : i.status === "recusado" ? "Recusado" : "Expirado"}
                                         </span>
@@ -192,7 +194,7 @@ export function OrcamentoModal({ open, onOpenChange, contactId, orcamento }: Orc
                         {lines.map((line) => (
                             <div key={line.key} className="p-3 border rounded-lg bg-muted/30 space-y-2">
                                 <div className="flex items-center justify-between gap-2">
-                                    <span className="text-sm font-medium truncate flex-1">{line.name}</span>
+                                    <span className="text-sm font-medium truncate flex-1">{resolveServiceName(line.service_client_id, line.name)}</span>
                                     <Button
                                         type="button"
                                         variant="ghost"

@@ -12,6 +12,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { useStaff } from "@/hooks/useStaff";
+import { useServiceDisplayNames } from "@/hooks/useServiceDisplayNames";
 import { ConversationChatModal } from "@/components/queues/ConversationChatModal";
 
 type PeriodKey = "hoje" | "7d" | "30d" | "custom";
@@ -59,6 +60,7 @@ interface Row {
     contactId: string | null;
     clientName: string;
     clientPhone: string;
+    serviceId: string | null;
     service: string;
     professional: string;
     startTime: string | null;
@@ -98,6 +100,7 @@ function sheetName(label: string, used: Set<string>): string {
 export function AgendamentosColaboradorSection() {
     const { data: ownerId } = useOwnerId();
     const { data: staff } = useStaff();
+    const { resolveServiceName } = useServiceDisplayNames();
 
     const [period, setPeriod] = useState<PeriodKey>("30d");
     const [customStart, setCustomStart] = useState("");
@@ -134,7 +137,7 @@ export function AgendamentosColaboradorSection() {
             for (let from = 0; ; from += PAGE) {
                 const { data, error } = await supabase
                     .from("appointments")
-                    .select("id, start_time, status, price, created_at, created_by, created_via, service_name, professional_name, contact_id, contacts(push_name, number)")
+                    .select("id, start_time, status, price, created_at, created_by, created_via, service_id, service_name, professional_name, contact_id, contacts(push_name, number)")
                     .eq("user_id", ownerId!)
                     .eq("type", "appointment")
                     .gte("created_at", range.start.toISOString())
@@ -162,7 +165,8 @@ export function AgendamentosColaboradorSection() {
                     contactId: a.contact_id,
                     clientName: a.contacts?.push_name || "—",
                     clientPhone: a.contacts?.number || "—",
-                    service: a.service_name || "—",
+                    serviceId: a.service_id || null,
+                    service: a.service_name || "",
                     professional: a.professional_name || "—",
                     startTime: a.start_time,
                     status: a.status,
@@ -215,7 +219,7 @@ export function AgendamentosColaboradorSection() {
                 tab.rows.map((r) => ({
                     Cliente: r.clientName,
                     Telefone: r.clientPhone,
-                    Serviço: r.service,
+                    Serviço: resolveServiceName(r.serviceId, r.service) || "—",
                     Profissional: r.professional,
                     "Data do atendimento": dateTime(r.startTime),
                     Status: STATUS_LABELS[r.status || ""] || r.status || "—",
@@ -332,7 +336,7 @@ export function AgendamentosColaboradorSection() {
                                                 ) : r.clientName}
                                             </td>
                                             <td className="px-3 py-1.5 text-muted-foreground whitespace-nowrap">{r.clientPhone}</td>
-                                            <td className="px-3 py-1.5 truncate max-w-[180px]" title={r.service}>{r.service}</td>
+                                            <td className="px-3 py-1.5 truncate max-w-[180px]" title={resolveServiceName(r.serviceId, r.service) || "—"}>{resolveServiceName(r.serviceId, r.service) || "—"}</td>
                                             <td className="px-3 py-1.5 truncate max-w-[150px]" title={r.professional}>{r.professional}</td>
                                             <td className="px-3 py-1.5 text-xs whitespace-nowrap">{dateTime(r.startTime)}</td>
                                             <td className="px-3 py-1.5">

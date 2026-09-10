@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Lock, Plus, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getWorkHoursForDay } from "@/lib/professionalSchedule";
+import { useServiceDisplayNames } from "@/hooks/useServiceDisplayNames";
 
 /** Passo fixo exibido no front — a duração real vem do procedimento escolhido. */
 const SLOT_STEP_MINUTES = 30;
@@ -57,6 +58,7 @@ export function DayAppointmentsModal({
     onSelectAppointment,
     onSelectSlot,
 }: DayAppointmentsModalProps) {
+    const { resolveServiceName } = useServiceDisplayNames();
     const sorted = useMemo(
         () => [...appointments].sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()),
         [appointments]
@@ -134,7 +136,7 @@ export function DayAppointmentsModal({
                                         {apt.contacts?.push_name || apt.contact_name || "Sem cliente"}
                                     </span>
                                     <span className="block text-xs text-muted-foreground truncate">
-                                        {apt.service_name || apt.title || "Sem serviço"}
+                                        {resolveServiceName(apt.service_id, apt.service_name) || apt.title || "Sem serviço"}
                                     </span>
                                 </span>
                                 <Badge variant="outline" className={cn("shrink-0", STATUS_CLASS[apt.status] || STATUS_CLASS.pending)}>

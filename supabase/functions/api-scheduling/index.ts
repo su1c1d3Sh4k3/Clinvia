@@ -34,6 +34,7 @@ import {
     unexpectedErrorResponse,
     unknownAction,
 } from "../_shared/api-errors.ts";
+import { createServiceLabelResolver, findServiceByDisplayName } from "../_shared/service-label.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -186,10 +187,12 @@ serve(async (req) => {
             ? await resolveConversation(supabase, body.conversation_id, user_id)
             : null;
 
+        const SERVICE_COLUMNS = "id, name, price, min_price, duration_minutes, category_id, service_name_id, professionals";
+
         // Helper: resolve service_client by application name
         const resolveService = async (serviceName: string) => {
             const { data, error } = await supabase.from("services_client")
-                .select("id, name, price, min_price, duration_minutes, category_id, service_name_id, professionals")
+                .select(SERVICE_COLUMNS)
                 .eq("user_id", user_id).ilike("name", serviceName).eq("status", true)
                 .limit(1).maybeSingle();
             if (error) {
@@ -198,6 +201,12 @@ serve(async (req) => {
                     message: describeDbError(`buscar a aplicação "${serviceName}" no catálogo desta conta`, error),
                     details: String((error as any)?.message ?? error),
                 });
+            }
+            // A IA às vezes repete o nome composto que leu ("Hifu Hipro - Face -
+            // 1 sessão"); aceita também essa forma antes de reclamar
+            if (!data) {
+                const composedMatch = await findServiceByDisplayName(supabase, user_id, serviceName, SERVICE_COLUMNS);
+                if (composedMatch) return composedMatch;
             }
             if (!data) {
                 throw new ApiError({
@@ -331,12 +340,14 @@ serve(async (req) => {
                     `listar os agendamentos do contato ${contactId}`, error);
             }
 
+            const label = await createServiceLabelResolver(supabase, (data || []).map((a: any) => a.service_id));
+
             return new Response(JSON.stringify({
                 conversation_id: conv!.conversationId,
                 contact_id: contactId,
                 appointments: (data || []).map((a: any) => ({
                     id: a.id,
-                    service: a.service_name,
+                    service: label(a.service_id, a.service_name),
                     professional: a.professional_name,
                     date: toSaoPaulo(a.start_time)?.split("T")[0],
                     start_time: toSaoPaulo(a.start_time),
@@ -361,7 +372,7 @@ serve(async (req) => {
                 : (body.appointment_id ? [body.appointment_id] : []);
 
             let query = supabase.from("appointments")
-                .select("id, user_id, status, service_name, professional_name, start_time")
+                .select("id, user_id, status, service_id, service_name, professional_name, start_time")
                 .eq("user_id", user_id)
                 .eq("contact_id", contactId)
                 .eq("type", "appointment");
@@ -414,12 +425,14 @@ serve(async (req) => {
                 console.warn("[api-scheduling]", sessionWarning);
             }
 
+            const confirmLabel = await createServiceLabelResolver(supabase, targets.map((a: any) => a.service_id));
+
             return new Response(JSON.stringify({
                 success: true,
                 confirmed_count: confirmIds.length,
                 appointments: targets.map((a: any) => ({
                     id: a.id,
-                    service: a.service_name,
+                    service: confirmLabel(a.service_id, a.service_name),
                     professional: a.professional_name,
                     start_time: toSaoPaulo(a.start_time),
                     status: "confirmed",
@@ -637,7 +650,7 @@ serve(async (req) => {
                 success: true,
                 appointment: {
                     id: created.id,
-                    service: created.service_name,
+                    service: (await createServiceLabelResolver(supabase, [sc.id]))(sc.id, created.service_name),
                     professional: prof.name,
                     date,
                     start_time: toSaoPaulo(created.start_time),
@@ -812,7 +825,7 @@ serve(async (req) => {
                 success: true,
                 appointment: {
                     id: updated.id,
-                    service: updated.service_name,
+                    service: (await createServiceLabelResolver(supabase, [updated.service_id]))(updated.service_id, updated.service_name),
                     professional: updated.professional_name,
                     date: new_date,
                     start_time: toSaoPaulo(updated.start_time),

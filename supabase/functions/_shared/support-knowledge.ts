@@ -161,6 +161,8 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "onde configuro as mensagens de recorrencia do servico",
             "onde coloco o valor cobrado no convenio",
             "para que serve a aba Convenio da pagina Servicos",
+            "como nomear a aplicacao sem repetir o nome do servico",
+            "por que o nome aparece como 'Servico - Aplicacao' em vendas, agenda e mensagens",
         ],
         steps: [
             "Abra Servicos no menu lateral.",
@@ -171,6 +173,9 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "Com convenio cadastrado, a pagina ganha duas abas no topo: 'Servicos regulares' e 'Convenio'. A aba Convenio tem a MESMA estrutura (categorias, servicos e tabela de aplicacoes), so que exibindo apenas o que esta marcado em algum plano.",
         ],
         gotchas: [
+            "O nome da aplicacao NAO repete o nome do servico: na aplicacao entra so o que varia (area e numero de sessoes, ex.: 'Face - 1 sessao'). O sistema junta os dois na exibicao e mostra 'Servico - Aplicacao' em vendas, orcamentos, agenda, relatorios, link publico de agendamento e nas mensagens automaticas. Repetir o nome produz textos como 'Hifu Ultraformer - Hifu Ultraformer Face 1 sessao'.",
+            "O nome composto e montado na HORA DE EXIBIR, a partir do cadastro atual: corrigir o nome no catalogo corrige a apresentacao em toda a plataforma, inclusive em vendas e agendamentos antigos.",
+            "Categoria do tipo direto (Consultas/Avaliacao) nao tem o nivel do servico — nesses casos aparece so o nome da aplicacao, sem prefixo.",
             "O preco cadastrado no servico e a fonte unica: valor digitado em planilha de importacao nao altera o cadastro.",
             "As abas 'Servicos regulares' e 'Convenio' so aparecem quando existe pelo menos um convenio cadastrado em Equipe > Convenios; a coluna 'Valor convenio' (ao lado de Valor) so aparece quando existe pelo menos um servico marcado em algum plano (Equipe > Convenios > Configurar).",
             "Todo convenio cadastrado cobre AUTOMATICAMENTE os servicos da categoria 'Avaliacao' — por isso a Avaliacao aparece na aba Convenio mesmo sem ninguem ter marcado nada, e a coluna 'Valor convenio' ja fica visivel.",

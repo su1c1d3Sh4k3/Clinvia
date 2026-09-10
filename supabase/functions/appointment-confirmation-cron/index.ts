@@ -33,6 +33,7 @@ import {
     renderUazapiMessage,
     type UazapiAutomationMessage,
 } from "../_shared/uazapi-automation-messages.ts";
+import { createServiceLabelResolver } from "../_shared/service-label.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -40,6 +41,21 @@ const corsHeaders = {
 };
 
 const STAGGER_MS = 200; // delay between sends to avoid rate limiting
+
+/**
+ * O paciente recebe "Serviço - Aplicação" (o snapshot guarda só a aplicação,
+ * que sozinha não diz qual procedimento é: "Face - 1 sessão" de quê?).
+ */
+async function withServiceLabel(supabase: any, appointments: any[] | null, dateBR: string): Promise<any[]> {
+    const list = appointments || [];
+    if (!list.length) return [];
+    const label = await createServiceLabelResolver(supabase, list.map((a: any) => a.service_id));
+    return list.map((a: any) => ({
+        ...a,
+        service_name: label(a.service_id, a.service_name),
+        _dateBR: dateBR,
+    }));
+}
 
 serve(async (req) => {
     if (req.method === "OPTIONS") {
@@ -513,7 +529,7 @@ async function processConfirm24h(ctx: CronContext): Promise<{ sent: number; erro
                 .from("appointments")
                 // professional_name só é usado por WABAs antigas, cujo template
                 // aprovado ainda tem a variável do profissional (LEGACY_VARIABLE_MAPS)
-                .select("id, contact_id, start_time, service_name, professional_name")
+                .select("id, contact_id, start_time, service_id, service_name, professional_name")
                 .eq("user_id", userId)
                 .eq("contact_id", contactId)
                 .eq("type", "appointment")
@@ -522,7 +538,7 @@ async function processConfirm24h(ctx: CronContext): Promise<{ sent: number; erro
                 .lte("start_time", dayEnd)
                 .order("start_time", { ascending: true });
 
-            const group = (allDayAppointments || []).map((a: any) => ({ ...a, _dateBR: dateBR }));
+            const group = await withServiceLabel(supabase, allDayAppointments, dateBR);
             if (!group.length) {
                 if (row) await updateQueueRow(supabase, row.id, { status: "canceled", last_error: "agendamento cancelado antes do envio" });
                 continue;
@@ -727,7 +743,7 @@ async function processReminder2h(ctx: CronContext): Promise<{ sent: number; erro
             const dayEnd = `${dateBR}T23:59:59-03:00`;
             const { data: allDayAppointments } = await supabase
                 .from("appointments")
-                .select("id, contact_id, start_time, service_name")
+                .select("id, contact_id, start_time, service_id, service_name")
                 .eq("user_id", userId)
                 .eq("contact_id", contactId)
                 .eq("type", "appointment")
@@ -736,7 +752,7 @@ async function processReminder2h(ctx: CronContext): Promise<{ sent: number; erro
                 .lte("start_time", dayEnd)
                 .order("start_time", { ascending: true });
 
-            const group = (allDayAppointments || []).map((a: any) => ({ ...a, _dateBR: dateBR }));
+            const group = await withServiceLabel(supabase, allDayAppointments, dateBR);
             if (!group.length) {
                 if (row) await updateQueueRow(supabase, row.id, { status: "canceled", last_error: "agendamento cancelado antes do envio" });
                 continue;
@@ -918,7 +934,7 @@ async function processFeedback24h(ctx: CronContext): Promise<{ sent: number; err
             const dayEnd = `${dateBR}T23:59:59-03:00`;
             const { data: allDayAppointments } = await supabase
                 .from("appointments")
-                .select("id, contact_id, start_time, end_time, status, service_name")
+                .select("id, contact_id, start_time, end_time, status, service_id, service_name")
                 .eq("user_id", userId)
                 .eq("contact_id", contactId)
                 .eq("type", "appointment")
@@ -927,7 +943,7 @@ async function processFeedback24h(ctx: CronContext): Promise<{ sent: number; err
                 .lte("start_time", dayEnd)
                 .order("start_time", { ascending: true });
 
-            const group = (allDayAppointments || []).map((a: any) => ({ ...a, _dateBR: dateBR }));
+            const group = await withServiceLabel(supabase, allDayAppointments, dateBR);
             if (!group.length) {
                 if (row) await updateQueueRow(supabase, row.id, { status: "canceled", last_error: "agendamento cancelado antes do envio" });
                 continue;

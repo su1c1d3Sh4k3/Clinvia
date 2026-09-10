@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { CheckCircle2, Clock, Pencil, ShoppingCart, Trash2, XCircle } from "lucide-react";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useServiceDisplayNames } from "@/hooks/useServiceDisplayNames";
 import {
     Orcamento,
     OrcamentoItemStatus,
@@ -54,6 +55,7 @@ export function OrcamentoCard({ orcamento, readOnly }: OrcamentoCardProps) {
 
     const { canCreate, canEdit, canDelete } = usePermissions();
     const deleteOrcamento = useDeleteOrcamento();
+    const { resolveServiceName } = useServiceDisplayNames();
 
     const expirado = isOrcamentoExpirado(orcamento);
     const pendentes = hasPendentes(orcamento);
@@ -91,7 +93,7 @@ export function OrcamentoCard({ orcamento, readOnly }: OrcamentoCardProps) {
                     {orcamento.itens.map((i) => (
                         <div key={i.id} className="flex items-center gap-2 text-xs">
                             <StatusIcon status={i.status} />
-                            <span className="truncate flex-1">{i.service_name}</span>
+                            <span className="truncate flex-1">{resolveServiceName(i.service_client_id, i.service_name)}</span>
                             <span className="text-muted-foreground shrink-0">{fmt(Number(i.unit_price))}</span>
                             <span className="text-[10px] text-muted-foreground shrink-0 w-16 text-right">{STATUS_LABEL[i.status]}</span>
                         </div>

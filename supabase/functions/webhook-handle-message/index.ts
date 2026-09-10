@@ -16,6 +16,7 @@ import { buildRecurrenceObjective, RECURRENCE_STAGE_PROMPTS } from "../_shared/r
 import { buildBookingLink } from "../_shared/booking-link.ts";
 import { AC_FREE_TEXT_STATES, matchAcButtonId } from "../_shared/appointment-confirmation-buttons.ts";
 import { CONVENIO_PROF_COLUMNS, filterRoomsForConvenio, getConvenioCatalog } from "../_shared/convenio-schedule.ts";
+import { createServiceLabelResolver } from "../_shared/service-label.ts";
 
 // EdgeRuntime.waitUntil mantém o processo vivo após o return 200 para que
 // tasks de background (persistir foto, download de mídia) terminem mesmo
@@ -2006,15 +2007,25 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                         if (crmCard) {
                             const { data: crmSvcs } = await supabase
                                 .from('crm_client_services')
-                                .select('service_name, quantity, unit_price')
+                                .select('service_client_id, service_name, quantity, unit_price')
                                 .eq('crm_client_id', crmCard.id);
-                            enrichedCrm = { stage: crmCard.stage, value: crmCard.value, priority: crmCard.priority, is_active: crmCard.is_active, services: crmSvcs || [] };
+                            const crmLabel = await createServiceLabelResolver(supabase, (crmSvcs || []).map((s: any) => s.service_client_id));
+                            enrichedCrm = {
+                                stage: crmCard.stage,
+                                value: crmCard.value,
+                                priority: crmCard.priority,
+                                is_active: crmCard.is_active,
+                                services: (crmSvcs || []).map((s: any) => ({
+                                    ...s,
+                                    service_name: crmLabel(s.service_client_id, s.service_name),
+                                })),
+                            };
                         }
 
                         // 3. Appointments: last completed + next pending
                         const { data: lastApt } = await supabase
                             .from('appointments')
-                            .select('service_name, professional_name, start_time, end_time, status, price')
+                            .select('service_id, service_name, professional_name, start_time, end_time, status, price')
                             .eq('contact_id', contactId)
                             .eq('type', 'appointment')
                             .in('status', ['completed'])
@@ -2024,7 +2035,7 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
 
                         const { data: nextApt } = await supabase
                             .from('appointments')
-                            .select('service_name, professional_name, start_time, end_time, status, price')
+                            .select('service_id, service_name, professional_name, start_time, end_time, status, price')
                             .eq('contact_id', contactId)
                             .eq('type', 'appointment')
                             .in('status', ['pending', 'confirmed', 'rescheduled'])
@@ -2033,7 +2044,13 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                             .limit(1)
                             .maybeSingle();
 
-                        const aptToSP = (a: any) => ({ ...a, start_time: toSaoPaulo(a.start_time), end_time: toSaoPaulo(a.end_time) });
+                        const aptLabel = await createServiceLabelResolver(supabase, [lastApt?.service_id, nextApt?.service_id]);
+                        const aptToSP = (a: any) => ({
+                            ...a,
+                            service_name: aptLabel(a.service_id, a.service_name),
+                            start_time: toSaoPaulo(a.start_time),
+                            end_time: toSaoPaulo(a.end_time),
+                        });
                         enrichedAppointments = {
                             last_completed: lastApt ? aptToSP(lastApt) : 'Nenhum agendamento concluído',
                             next_pending: nextApt ? aptToSP(nextApt) : 'Nenhum agendamento pendente',
@@ -2042,15 +2059,16 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                         // 3b. Compras (vendas) ainda sem agendamento vinculado
                         const { data: unscheduledSales } = await supabase
                             .from('sales')
-                            .select('product_name, quantity, unit_price, total_amount, sale_date, ia_scheduling, ia_contact_days, ia_scheduling_status')
+                            .select('service_client_id, product_name, quantity, unit_price, total_amount, sale_date, ia_scheduling, ia_contact_days, ia_scheduling_status')
                             .eq('contact_id', contactId)
                             .is('appointment_id', null)
                             .order('sale_date', { ascending: false })
                             .limit(20);
 
                         if (unscheduledSales && unscheduledSales.length > 0) {
+                            const saleLabel = await createServiceLabelResolver(supabase, unscheduledSales.map((s: any) => s.service_client_id));
                             enrichedUnscheduledPurchases = unscheduledSales.map((s: any) => ({
-                                service: s.product_name,
+                                service: saleLabel(s.service_client_id, s.product_name),
                                 quantity: s.quantity,
                                 unit_price: s.unit_price,
                                 total_amount: s.total_amount,

@@ -84,6 +84,13 @@ export function ServicosGuide() {
             <TopicSection id="hierarquia" index={2} icon={GitBranch} title="A hierarquia em 3 níveis"
                 subtitle="Categoria → Serviço → Aplicação (a sua versão)">
                 <HierarchyExplorer />
+                <Callout type="dica" title="O nome da aplicação não repete o do serviço">
+                    Na aplicação entra só o que <strong>varia</strong>: a área e o número de sessões ("Face — 1 sessão"),
+                    nunca o nome do equipamento ou do procedimento, que já está no serviço. O sistema junta os dois na
+                    hora de exibir e mostra <strong className="text-foreground">"Serviço - Aplicação"</strong> em vendas,
+                    orçamentos, agenda, relatórios, link público e nas mensagens automáticas. Repetir o nome no campo da
+                    aplicação só produz textos como "Hifu Ultraformer - Hifu Ultraformer Face 1 sessão".
+                </Callout>
                 <Callout type="atencao" title="A categoria Avaliação é especial">
                     Compras só de Avaliação classificam o contato como <strong>Lead</strong> (não Cliente), e o link público
                     de agendamento sempre oferece as avaliações. Por isso essa categoria é protegida — não renomeie nem
@@ -273,6 +280,14 @@ export function ServicosGuide() {
                         {
                             q: "Qual a diferença entre serviço e aplicação?",
                             a: "O serviço é o nome genérico ('Botox Full Face'); a aplicação é a SUA versão dele, com preço, duração e profissionais. O sistema inteiro (agenda, IA, vendas) trabalha com as aplicações.",
+                        },
+                        {
+                            q: "Por que o nome aparece como 'Serviço - Aplicação' em vendas e na agenda?",
+                            a: "Porque a aplicação sozinha não identifica o procedimento: 'Face — 1 sessão' pode ser de qualquer equipamento. O sistema monta o nome completo na hora de exibir, sem alterar o que está gravado. Por isso o campo da aplicação deve conter só a área e as sessões — o nome do serviço já é acrescentado automaticamente.",
+                        },
+                        {
+                            q: "Renomeei a aplicação. As vendas e agendamentos antigos mudam de nome?",
+                            a: "Sim, na exibição. O nome é montado a partir do cadastro atual do serviço, então corrigir o nome no catálogo corrige a apresentação em toda a plataforma, inclusive nos registros antigos.",
                         },
                         {
                             q: "Usei os templates e uma categoria minha já existia. Perdi algo?",
