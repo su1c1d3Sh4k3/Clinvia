@@ -1,4 +1,5 @@
 import { useMemo, useRef, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { format, addMinutes, startOfDay, differenceInMinutes, parseISO, isSameDay } from "date-fns";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -18,6 +19,8 @@ import { useOwnerId } from "@/hooks/useOwnerId";
 import { useProfessionalNps } from "@/hooks/useAppointmentsDashboard";
 import { useServiceDisplayNames } from "@/hooks/useServiceDisplayNames";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useSlotMinutes } from "@/hooks/useSlotMinutes";
+import { useStaff } from "@/hooks/useStaff";
 import { getWorkHoursForDay } from "@/lib/professionalSchedule";
 import { convenioRanges, parseTimeToMinutes } from "@/lib/convenioSchedule";
 
@@ -46,6 +49,13 @@ const END_HOUR = 22;
 // Alturas por hora: mobile mais compacto (tudo deriva de pxPerMin no componente)
 const HOUR_HEIGHT_DESKTOP = 120;
 const HOUR_HEIGHT_MOBILE = 80;
+/** Agenda única: slot de 5 min ficava estreito demais, então a hora dobra de altura. */
+const SOLO_HEIGHT_FACTOR = 2;
+/** Largura do card flutuante de hover (px) — posicionado por portal, em coordenadas de tela. */
+const HOVER_CARD_WIDTH = 256;
+
+/** Agendamento nascido de API do n8n ou do link público = autoria da IA (regra do usuário). */
+const IA_ORIGINS = new Set(["ia", "public_link"]);
 
 export function SchedulingCalendar({ date, professionals, appointments, settings, onSlotClick, onEventClick, onStatusChange, onEditProfessional, canCreateAppointment = true, canEditAppointment = true, canEditProfessional = true, blockedProfessionalIds = [], onToggleDayBlock, soloProfessionalId, onSoloProfessionalChange }: SchedulingCalendarProps) {
     const startHour = settings?.start_hour ?? 8;
@@ -53,9 +63,29 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
     const workDays = settings?.work_days ?? [0, 1, 2, 3, 4, 5, 6];
     const isDayBlocked = !workDays.includes(date.getDay());
 
+    // Solo view: clique no nome do profissional (ou na lista da barra lateral)
+    // exibe apenas a agenda dele — com a grade dobrada e cards detalhados.
+    const soloId = soloProfessionalId;
+    const setSoloId = onSoloProfessionalChange;
+    const soloProfessional = soloId ? professionals.find((p) => p.id === soloId) : undefined;
+    const isSolo = !!soloProfessional;
+
     const isMobile = useIsMobile();
-    const HOUR_HEIGHT = isMobile ? HOUR_HEIGHT_MOBILE : HOUR_HEIGHT_DESKTOP;
+    const HOUR_HEIGHT = (isMobile ? HOUR_HEIGHT_MOBILE : HOUR_HEIGHT_DESKTOP) * (isSolo ? SOLO_HEIGHT_FACTOR : 1);
     const PX_PER_MIN = HOUR_HEIGHT / 60;
+
+    // Tamanho do slot da conta: na agenda única a coluna de horário é marcada
+    // de slot em slot (8:10 | 8:20 | 8:30) em vez de só de hora em hora.
+    const { data: accountSlotMinutes } = useSlotMinutes();
+    const slotMinutes = isSolo ? Math.min(60, Math.max(5, accountSlotMinutes ?? 10)) : 60;
+
+    // Autoria do agendamento (mesma regra do ViewAppointmentModal)
+    const { data: staff } = useStaff();
+    const authorName = (apt: any): string => {
+        if (IA_ORIGINS.has(apt.created_via || "")) return "IA";
+        const member = apt.created_by ? staff?.find((m) => m.id === apt.created_by) : undefined;
+        return member?.name || "Não informado";
+    };
 
     // Média NPS por profissional (todo o histórico)
     const { data: ownerId } = useOwnerId();
@@ -81,12 +111,6 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
             onToggleDayBlock?.(professional.id, true);
         }
     };
-
-    // Solo view: clique no nome do profissional (ou na lista da barra lateral)
-    // exibe apenas a agenda dele
-    const soloId = soloProfessionalId;
-    const setSoloId = onSoloProfessionalChange;
-    const soloProfessional = soloId ? professionals.find((p) => p.id === soloId) : undefined;
 
     // Pagination state for 5+ professionals
     const [startIndex, setStartIndex] = useState(0);
@@ -122,6 +146,8 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
     };
 
     const handleBodyScroll = () => {
+        // A janela flutuante é posicionada em coordenadas de tela: rolar invalida
+        setHovered(null);
         if (isSyncing.current) return;
         isSyncing.current = true;
         if (headerRef.current && bodyRef.current) {
@@ -130,13 +156,79 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
         requestAnimationFrame(() => { isSyncing.current = false; });
     };
 
-    const timeSlots = useMemo(() => {
-        const slots = [];
-        for (let i = startHour; i <= endHour; i++) {
-            slots.push(i);
+    // Linhas da grade + coluna de horário. Fora da agenda única são as horas
+    // cheias (8:00, 9:00...); na agenda única, o slot da conta (8:10, 8:20...).
+    const gridSlots = useMemo(() => {
+        const slots: { minutes: number; label: string; isHour: boolean }[] = [];
+        for (let m = startHour * 60; m <= endHour * 60; m += slotMinutes) {
+            const h = Math.floor(m / 60);
+            const mm = m % 60;
+            slots.push({ minutes: m, label: `${h}:${String(mm).padStart(2, "0")}`, isHour: mm === 0 });
         }
         return slots;
-    }, [startHour, endHour]);
+    }, [startHour, endHour, slotMinutes]);
+
+    // Card flutuante do hover: renderizado por portal no <body> para nunca ser
+    // cortado pelo scroll da grade nem ficar atrás de outro agendamento (cada
+    // coluna cria um contexto de empilhamento por causa do zoom-in da animação).
+    const [hovered, setHovered] = useState<{ apt: any; professionalName: string; rect: DOMRect } | null>(null);
+    const hoverTimer = useRef<number | null>(null);
+    const cancelHoverClose = () => {
+        if (hoverTimer.current) {
+            window.clearTimeout(hoverTimer.current);
+            hoverTimer.current = null;
+        }
+    };
+    const openHover = (apt: any, professionalName: string, el: HTMLElement) => {
+        cancelHoverClose();
+        setHovered({ apt, professionalName, rect: el.getBoundingClientRect() });
+    };
+    // Pequena folga para o mouse atravessar do card para a janela flutuante
+    const scheduleHoverClose = () => {
+        cancelHoverClose();
+        hoverTimer.current = window.setTimeout(() => setHovered(null), 140);
+    };
+    useEffect(() => () => cancelHoverClose(), []);
+
+    /**
+     * Distribui em colunas (lanes) os agendamentos que se sobrepõem — um
+     * cancelado e o novo agendamento do mesmo horário ficam lado a lado.
+     * A sobreposição é medida em PIXELS (o cancelado é uma faixa de 24px,
+     * não a duração cheia).
+     */
+    const layoutLanes = (items: { id: string; topPx: number; heightPx: number }[]) => {
+        const result = new Map<string, { lane: number; lanes: number }>();
+        const sorted = [...items].sort((a, b) => a.topPx - b.topPx || a.heightPx - b.heightPx);
+
+        let cluster: typeof sorted = [];
+        let clusterEnd = -Infinity;
+        const flush = () => {
+            const laneEnds: number[] = [];
+            const laneOf = new Map<string, number>();
+            for (const it of cluster) {
+                let lane = laneEnds.findIndex((end) => end <= it.topPx + 0.5);
+                if (lane === -1) {
+                    lane = laneEnds.length;
+                    laneEnds.push(0);
+                }
+                laneEnds[lane] = it.topPx + it.heightPx;
+                laneOf.set(it.id, lane);
+            }
+            for (const it of cluster) {
+                result.set(it.id, { lane: laneOf.get(it.id) ?? 0, lanes: laneEnds.length });
+            }
+            cluster = [];
+            clusterEnd = -Infinity;
+        };
+
+        for (const it of sorted) {
+            if (cluster.length && it.topPx >= clusterEnd - 0.5) flush();
+            cluster.push(it);
+            clusterEnd = Math.max(clusterEnd, it.topPx + it.heightPx);
+        }
+        if (cluster.length) flush();
+        return result;
+    };
 
     const getEventStyle = (event: any) => {
         const start = new Date(event.start_time);
@@ -342,9 +434,16 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                 <div className="flex" style={{ height: (endHour - startHour + 1) * HOUR_HEIGHT }}>
                     {/* Time Labels */}
                     <div className="w-12 md:w-16 shrink-0 border-r bg-muted/10 flex flex-col relative">
-                        {timeSlots.map((hour) => (
-                            <div key={hour} className="absolute w-full text-right pr-1 md:pr-2 text-xs md:text-sm text-muted-foreground border-t" style={{ top: (hour - startHour) * HOUR_HEIGHT, height: HOUR_HEIGHT }}>
-                                {hour}:00
+                        {gridSlots.map((slot) => (
+                            <div
+                                key={slot.minutes}
+                                className={cn(
+                                    "absolute w-full text-right pr-1 md:pr-2 text-xs md:text-sm border-t",
+                                    slot.isHour ? "text-muted-foreground" : "text-muted-foreground/60 border-dashed"
+                                )}
+                                style={{ top: (slot.minutes - startHour * 60) * PX_PER_MIN, height: slotMinutes * PX_PER_MIN }}
+                            >
+                                {slot.label}
                             </div>
                         ))}
                     </div>
@@ -353,32 +452,36 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                     {visibleProfessionals.map((professional) => (
                         <div key={`${soloId ?? "all"}-${professional.id}`} className="flex-1 border-r last:border-r-0 relative min-w-[120px] md:min-w-[150px] group animate-in fade-in zoom-in-95 duration-300">
                             {/* Grid Lines */}
-                            {timeSlots.map((hour) => {
+                            {gridSlots.map((slot) => {
                                 const slotDate = new Date(date);
-                                slotDate.setHours(hour, 0, 0, 0);
-
+                                slotDate.setHours(Math.floor(slot.minutes / 60), slot.minutes % 60, 0, 0);
 
                                 // Parse professional settings (horário do dia exibido, se individual)
                                 const workDays = professional.work_days || settings?.work_days || [0, 1, 2, 3, 4, 5, 6];
                                 const workHours: any = { start: "08:00", end: "22:00", break_start: null, break_end: null, ...getWorkHoursForDay(professional, date.getDay()) };
 
-                                const startH = parseInt(workHours.start?.split(':')[0] || "8");
-                                const endH = parseInt(workHours.end?.split(':')[0] || "22");
-                                const breakStartH = workHours.break_start ? parseInt(workHours.break_start.split(':')[0]) : -1;
-                                const breakEndH = workHours.break_end ? parseInt(workHours.break_end.split(':')[0]) : -1;
+                                // O meio do slot decide se ele está dentro do expediente — assim a
+                                // linha de hora cheia continua se comportando como antes e o slot
+                                // curto da agenda única também cai no lugar certo.
+                                const slotMid = slot.minutes + slotMinutes / 2;
+                                const startMin = parseTimeToMinutes(workHours.start) ?? 8 * 60;
+                                const endMin = parseTimeToMinutes(workHours.end) ?? 22 * 60;
+                                const breakStartMin = parseTimeToMinutes(workHours.break_start);
+                                const breakEndMin = parseTimeToMinutes(workHours.break_end);
 
                                 const isDayOff = !workDays.includes(date.getDay());
-                                const isBeforeStart = hour < startH;
-                                const isAfterEnd = hour >= endH;
+                                const isBeforeStart = slotMid < startMin;
+                                const isAfterEnd = slotMid >= endMin;
                                 // Agenda fechada no dia: a coluna inteira vira intervalo
-                                const isBreak = isDayClosed(professional.id) || (hour >= breakStartH && hour < breakEndH);
+                                const isBreak = isDayClosed(professional.id) ||
+                                    (breakStartMin != null && breakEndMin != null && slotMid >= breakStartMin && slotMid < breakEndMin);
 
                                 const isBlocked = isDayOff || isBeforeStart || isAfterEnd || isBreak;
                                 const isPast = slotDate < new Date();
 
                                 return (
                                     <div
-                                        key={hour}
+                                        key={slot.minutes}
                                         className={cn(
                                             "absolute w-full border-t border-dashed border-muted/50 transition-colors",
                                             !isPast && !isBlocked && canCreateAppointment && "bg-white dark:bg-transparent hover:bg-accent/50 dark:hover:bg-[#353A44] cursor-pointer",
@@ -387,8 +490,8 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                             isPast && "bg-[#C6C8CA] dark:bg-[#22262E]"
                                         )}
                                         style={{
-                                            top: (hour - startHour) * HOUR_HEIGHT,
-                                            height: HOUR_HEIGHT,
+                                            top: (slot.minutes - startHour * 60) * PX_PER_MIN,
+                                            height: slotMinutes * PX_PER_MIN,
                                             backgroundColor: isBlocked && !isPast ? "rgba(0,0,0,0.2)" : undefined,
                                             backgroundImage: isBlocked && !isPast ? "repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.05) 10px, rgba(0,0,0,0.05) 20px)" : undefined
                                         }}
@@ -398,7 +501,7 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                             }
                                         }}
                                     >
-                                        {isBreak && !isPast && (
+                                        {isBreak && !isPast && slot.isHour && (
                                             <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground font-medium opacity-50 select-none">
                                                 Intervalo
                                             </div>
@@ -437,129 +540,70 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                             })()}
 
                             {/* Events */}
-                            {appointments
+                            {(() => {
+                            const dayEvents = appointments
                                 .filter((apt) => {
                                     const sameDay = isSameDay(new Date(apt.start_time), date);
                                     if (!sameDay) return false;
                                     // Absences imported from Google Calendar (clinic-wide, no specific professional) appear in ALL columns
                                     if (apt.type === "absence" && apt.professional_id === null && apt.google_event_id) return true;
                                     return apt.professional_id === professional.id;
-                                })
+                                });
+
+                            // Sobreposições viram colunas lado a lado (ex.: cancelado + novo agendamento no mesmo horário)
+                            const laneMap = layoutLanes(dayEvents.map((apt) => {
+                                const s = new Date(apt.start_time);
+                                const e = new Date(apt.end_time);
+                                const collapsed = ['canceled', 'no-show'].includes(getDisplayStatus(apt));
+                                return {
+                                    id: apt.id,
+                                    topPx: (s.getHours() * 60 + s.getMinutes() - startHour * 60) * PX_PER_MIN,
+                                    heightPx: collapsed ? 24 : Math.max(1, differenceInMinutes(e, s) * PX_PER_MIN),
+                                };
+                            }));
+
+                            return dayEvents
                                 .map((apt) => {
                                     const displayStatus = getDisplayStatus(apt);
-                                    const isFinalStatus = ['completed', 'canceled', 'no-show'].includes(displayStatus);
                                     const isCollapsed = displayStatus === 'canceled' || displayStatus === 'no-show';
-                                    const isWaiting = displayStatus === 'waiting';
 
                                     const aptStart = new Date(apt.start_time);
                                     const aptEnd = new Date(apt.end_time);
                                     const aptDuration = differenceInMinutes(aptEnd, aptStart);
-                                    // Card flutuante abre abaixo quando o evento está no topo da grade
-                                    const topPx = (aptStart.getHours() * 60 + aptStart.getMinutes() - startHour * 60) * PX_PER_MIN;
-                                    const cardBelow = topPx < 200;
 
                                     // Cancelados e no-show: faixa fina no topo
                                     const baseStyle = getEventStyle(apt);
-                                    const eventStyle = isCollapsed
-                                        ? { ...baseStyle, height: '24px', opacity: 0.55 }
-                                        : baseStyle;
+                                    // Lado a lado quando há sobreposição (1 lane = largura cheia, como antes)
+                                    const { lane, lanes } = laneMap.get(apt.id) ?? { lane: 0, lanes: 1 };
+                                    const laneWidth = 100 / lanes;
+                                    const eventStyle = {
+                                        ...baseStyle,
+                                        left: `calc(${lane * laneWidth}% + 4px)`,
+                                        width: `calc(${laneWidth}% - 8px)`,
+                                        ...(isCollapsed ? { height: '24px', opacity: 0.55 } : {}),
+                                    };
 
                                     return (
                                         <div
                                             key={apt.id}
                                             className={cn(
-                                                "absolute left-1 right-1 rounded-md px-1.5 py-0.5 cursor-pointer border shadow-sm transition-all z-10 group/card",
+                                                "absolute rounded-md px-1.5 py-0.5 cursor-pointer border shadow-sm transition-all z-10 hover:z-20",
                                                 apt.type === "absence" ? "bg-muted text-muted-foreground border-border" : getStatusColor(displayStatus),
                                                 isCollapsed && "border-dashed"
                                             )}
                                             style={eventStyle}
                                             onClick={(e) => {
                                                 e.stopPropagation();
+                                                setHovered(null);
                                                 onEventClick(apt);
                                             }}
+                                            onMouseEnter={(e) => {
+                                                if (!isMobile && apt.type !== "absence") openHover(apt, professional.name, e.currentTarget);
+                                            }}
+                                            onMouseLeave={() => {
+                                                if (!isMobile && apt.type !== "absence") scheduleHoverClose();
+                                            }}
                                         >
-                                            {/* Janela flutuante (hover): informações completas + ações de status. Clique fora dos botões abre o modal (bubbling) */}
-                                            {apt.type !== "absence" && (
-                                                <div
-                                                    className={cn(
-                                                        "absolute right-0 w-64 max-w-[80vw] hidden md:block invisible opacity-0 group-hover/card:visible group-hover/card:opacity-100 transition-all duration-200 bg-background/95 backdrop-blur-sm border shadow-lg rounded-lg p-3 z-50 text-foreground cursor-pointer",
-                                                        cardBelow ? "top-full mt-1" : "bottom-full mb-1"
-                                                    )}
-                                                >
-                                                    <div className="space-y-1 text-xs">
-                                                        <p className="font-bold text-sm truncate">{apt.contacts?.push_name || apt.contact_name || "Cliente"}</p>
-                                                        {(apt.contacts?.number || apt.contact_phone) && (
-                                                            <p className="text-muted-foreground truncate">
-                                                                {String(apt.contacts?.number || apt.contact_phone).replace("@s.whatsapp.net", "")}
-                                                            </p>
-                                                        )}
-                                                        <p><span className="text-muted-foreground">Serviço: </span>{resolveServiceName(apt.service_id, apt.service_name) || "Serviço"}</p>
-                                                        <p><span className="text-muted-foreground">Sala: </span>{professional.name}</p>
-                                                        <p><span className="text-muted-foreground">Horário: </span>{format(aptStart, "HH:mm")} - {format(aptEnd, "HH:mm")} ({aptDuration} min)</p>
-                                                        <p><span className="text-muted-foreground">Status: </span><span className="font-medium">{getStatusLabel(displayStatus)}</span></p>
-                                                    </div>
-
-                                                    <div className="flex items-center gap-1 pt-2 mt-2 border-t">
-                                                        {/* Ações para status waiting: Concluir, Cancelar, No-show */}
-                                                        {isWaiting && canEditAppointment && (
-                                                            <>
-                                                                <Button
-                                                                    variant="ghost" size="icon" title="Concluir" className="h-7 w-7 rounded-full hover:bg-green-100 hover:text-green-600 transition-colors"
-                                                                    onClick={(e) => { e.stopPropagation(); onStatusChange(apt.id, 'completed', apt); }}
-                                                                >
-                                                                    <Check className="h-4 w-4" strokeWidth={2} />
-                                                                </Button>
-                                                                <Button
-                                                                    variant="ghost" size="icon" title="Cancelar" className="h-7 w-7 rounded-full hover:bg-red-100 hover:text-red-600 transition-colors"
-                                                                    onClick={(e) => { e.stopPropagation(); onStatusChange(apt.id, 'canceled'); }}
-                                                                >
-                                                                    <X className="h-4 w-4" strokeWidth={2} />
-                                                                </Button>
-                                                                <Button
-                                                                    variant="ghost" size="icon" title="Não compareceu" className="h-7 w-7 rounded-full hover:bg-orange-100 hover:text-orange-600 transition-colors"
-                                                                    onClick={(e) => { e.stopPropagation(); onStatusChange(apt.id, 'no-show'); }}
-                                                                >
-                                                                    <UserX className="h-4 w-4" strokeWidth={2} />
-                                                                </Button>
-                                                            </>
-                                                        )}
-                                                        {/* Ações para status normal (não-waiting, não-final) */}
-                                                        {!isFinalStatus && !isWaiting && canEditAppointment && (
-                                                            <>
-                                                                <Button
-                                                                    variant="ghost" size="icon" title="Confirmar" className="h-7 w-7 rounded-full hover:bg-purple-100 hover:text-purple-600 transition-colors"
-                                                                    onClick={(e) => { e.stopPropagation(); onStatusChange(apt.id, 'confirmed'); }}
-                                                                >
-                                                                    <ThumbsUp className="h-4 w-4" strokeWidth={2} />
-                                                                </Button>
-                                                                <Button
-                                                                    variant="ghost" size="icon" title="Reagendar" className="h-7 w-7 rounded-full hover:bg-yellow-100 hover:text-yellow-600 transition-colors"
-                                                                    onClick={(e) => { e.stopPropagation(); onStatusChange(apt.id, 'rescheduled', apt); }}
-                                                                >
-                                                                    <Clock className="h-4 w-4" strokeWidth={2} />
-                                                                </Button>
-                                                                <Button
-                                                                    variant="ghost" size="icon" title="Cancelar" className="h-7 w-7 rounded-full hover:bg-red-100 hover:text-red-600 transition-colors"
-                                                                    onClick={(e) => { e.stopPropagation(); onStatusChange(apt.id, 'canceled'); }}
-                                                                >
-                                                                    <X className="h-4 w-4" strokeWidth={2} />
-                                                                </Button>
-                                                                <Button
-                                                                    variant="ghost" size="icon" title="Concluir" className="h-7 w-7 rounded-full hover:bg-green-100 hover:text-green-600 transition-colors"
-                                                                    onClick={(e) => { e.stopPropagation(); onStatusChange(apt.id, 'completed', apt); }}
-                                                                >
-                                                                    <Check className="h-4 w-4" strokeWidth={2} />
-                                                                </Button>
-                                                            </>
-                                                        )}
-                                                        {/* Labels para status terminais */}
-                                                        {displayStatus === 'completed' && <div className="flex items-center gap-1 text-green-600 font-medium text-[11px]"><Check className="h-3.5 w-3.5" /> Concluído</div>}
-                                                        {displayStatus === 'canceled' && <div className="flex items-center gap-1 text-red-600 font-medium text-[11px]"><X className="h-3.5 w-3.5" /> Cancelado</div>}
-                                                        {displayStatus === 'no-show' && <div className="flex items-center gap-1 text-orange-600 font-medium text-[11px]"><UserX className="h-3.5 w-3.5" /> Não compareceu</div>}
-                                                    </div>
-                                                </div>
-                                            )}
-
                                             {isCollapsed ? (
                                                 // Cancelado/No-show: faixa fina com nome
                                                 <div className="flex items-center gap-1 truncate h-full" style={{ fontSize: '11px', lineHeight: 1 }}>
@@ -574,7 +618,9 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                                 const start = aptStart;
                                                 const end = aptEnd;
                                                 const durationInMinutes = aptDuration;
-                                                const isCompact = durationInMinutes < 20;
+                                                // Compacto é questão de ALTURA, não de duração: na agenda
+                                                // única a grade dobra e o mesmo evento comporta 2 linhas
+                                                const isCompact = durationInMinutes * PX_PER_MIN < 44;
 
                                                 // Adaptive font size: min 11px, max 15px (35min+)
                                                 const fontSize = Math.max(11, Math.min(15, Math.floor(durationInMinutes / 5) + 8));
@@ -619,7 +665,8 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                                             // Normal mode (>= 40 min): two lines
                                                             <div className="flex flex-col justify-center h-full">
                                                                 <div className="font-bold truncate flex items-center gap-1">
-                                                                    <span className="truncate">{fullName} {apt.type === "appointment" && `| ${serviceName}`}</span>
+                                                                    {/* Agenda única: o nome fica sozinho em negrito e o resto desce para a linha de baixo */}
+                                                                    <span className="truncate">{fullName}{!isSolo && apt.type === "appointment" && ` | ${serviceName}`}</span>
                                                                     {apt.google_event_id && (
                                                                         <svg className="w-3 h-3 shrink-0 opacity-70" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                                                                             <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -629,8 +676,11 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                                                         </svg>
                                                                     )}
                                                                 </div>
-                                                                <div className="opacity-70">
+                                                                <div className="opacity-70 truncate" style={isSolo ? { fontSize: `${Math.max(10, fontSize - 2)}px`, lineHeight: 1.3 } : undefined}>
                                                                     {format(start, "HH:mm")} - {format(end, "HH:mm")}
+                                                                    {isSolo && apt.type === "appointment" && (
+                                                                        <> | {serviceName} | {apt.created_at ? format(new Date(apt.created_at), "dd/MM/yyyy") : "Data não informada"} | {authorName(apt)}</>
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                         )}
@@ -639,7 +689,8 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                             })()}
                                         </div>
                                     )
-                                })}
+                                });
+                            })()}
                         </div>
                     ))}
                 </div>
@@ -691,6 +742,112 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            {/* Janela flutuante do hover: vive no <body> para nunca ser cortada
+                pelo scroll da grade nem ficar atrás de outro agendamento. */}
+            {hovered && createPortal((() => {
+                const apt = hovered.apt;
+                const displayStatus = getDisplayStatus(apt);
+                const isFinalStatus = ['completed', 'canceled', 'no-show'].includes(displayStatus);
+                const isWaiting = displayStatus === 'waiting';
+                const aptStart = new Date(apt.start_time);
+                const aptEnd = new Date(apt.end_time);
+                const aptDuration = differenceInMinutes(aptEnd, aptStart);
+                const rect = hovered.rect;
+
+                // Abre abaixo quando o card está na parte de cima da tela; a
+                // horizontal é presa à janela para nunca sair pela lateral.
+                const openBelow = rect.top < 300;
+                const left = Math.max(8, Math.min(rect.right - HOVER_CARD_WIDTH, window.innerWidth - HOVER_CARD_WIDTH - 8));
+
+                return (
+                    <div
+                        className="fixed z-[100] w-64 bg-background/95 backdrop-blur-sm border shadow-lg rounded-lg p-3 text-foreground cursor-pointer animate-in fade-in duration-150"
+                        style={{
+                            left,
+                            ...(openBelow
+                                ? { top: rect.bottom + 6 }
+                                : { bottom: window.innerHeight - rect.top + 6 }),
+                        }}
+                        onMouseEnter={cancelHoverClose}
+                        onMouseLeave={scheduleHoverClose}
+                        onClick={() => { setHovered(null); onEventClick(apt); }}
+                    >
+                        <div className="space-y-1 text-xs">
+                            <p className="font-bold text-sm truncate">{apt.contacts?.push_name || apt.contact_name || "Cliente"}</p>
+                            {(apt.contacts?.number || apt.contact_phone) && (
+                                <p className="text-muted-foreground truncate">
+                                    {String(apt.contacts?.number || apt.contact_phone).replace("@s.whatsapp.net", "")}
+                                </p>
+                            )}
+                            <p><span className="text-muted-foreground">Serviço: </span>{resolveServiceName(apt.service_id, apt.service_name) || "Serviço"}</p>
+                            <p><span className="text-muted-foreground">Sala: </span>{hovered.professionalName}</p>
+                            <p><span className="text-muted-foreground">Horário: </span>{format(aptStart, "HH:mm")} - {format(aptEnd, "HH:mm")} ({aptDuration} min)</p>
+                            <p><span className="text-muted-foreground">Status: </span><span className="font-medium">{getStatusLabel(displayStatus)}</span></p>
+                            <p><span className="text-muted-foreground">Agendado por: </span>{authorName(apt)}{apt.created_at ? ` · ${format(new Date(apt.created_at), "dd/MM/yyyy")}` : ""}</p>
+                        </div>
+
+                        <div className="flex items-center gap-1 pt-2 mt-2 border-t">
+                            {/* Ações para status waiting: Concluir, Cancelar, No-show */}
+                            {isWaiting && canEditAppointment && (
+                                <>
+                                    <Button
+                                        variant="ghost" size="icon" title="Concluir" className="h-7 w-7 rounded-full hover:bg-green-100 hover:text-green-600 transition-colors"
+                                        onClick={(e) => { e.stopPropagation(); setHovered(null); onStatusChange(apt.id, 'completed', apt); }}
+                                    >
+                                        <Check className="h-4 w-4" strokeWidth={2} />
+                                    </Button>
+                                    <Button
+                                        variant="ghost" size="icon" title="Cancelar" className="h-7 w-7 rounded-full hover:bg-red-100 hover:text-red-600 transition-colors"
+                                        onClick={(e) => { e.stopPropagation(); setHovered(null); onStatusChange(apt.id, 'canceled'); }}
+                                    >
+                                        <X className="h-4 w-4" strokeWidth={2} />
+                                    </Button>
+                                    <Button
+                                        variant="ghost" size="icon" title="Não compareceu" className="h-7 w-7 rounded-full hover:bg-orange-100 hover:text-orange-600 transition-colors"
+                                        onClick={(e) => { e.stopPropagation(); setHovered(null); onStatusChange(apt.id, 'no-show'); }}
+                                    >
+                                        <UserX className="h-4 w-4" strokeWidth={2} />
+                                    </Button>
+                                </>
+                            )}
+                            {/* Ações para status normal (não-waiting, não-final) */}
+                            {!isFinalStatus && !isWaiting && canEditAppointment && (
+                                <>
+                                    <Button
+                                        variant="ghost" size="icon" title="Confirmar" className="h-7 w-7 rounded-full hover:bg-purple-100 hover:text-purple-600 transition-colors"
+                                        onClick={(e) => { e.stopPropagation(); setHovered(null); onStatusChange(apt.id, 'confirmed'); }}
+                                    >
+                                        <ThumbsUp className="h-4 w-4" strokeWidth={2} />
+                                    </Button>
+                                    <Button
+                                        variant="ghost" size="icon" title="Reagendar" className="h-7 w-7 rounded-full hover:bg-yellow-100 hover:text-yellow-600 transition-colors"
+                                        onClick={(e) => { e.stopPropagation(); setHovered(null); onStatusChange(apt.id, 'rescheduled', apt); }}
+                                    >
+                                        <Clock className="h-4 w-4" strokeWidth={2} />
+                                    </Button>
+                                    <Button
+                                        variant="ghost" size="icon" title="Cancelar" className="h-7 w-7 rounded-full hover:bg-red-100 hover:text-red-600 transition-colors"
+                                        onClick={(e) => { e.stopPropagation(); setHovered(null); onStatusChange(apt.id, 'canceled'); }}
+                                    >
+                                        <X className="h-4 w-4" strokeWidth={2} />
+                                    </Button>
+                                    <Button
+                                        variant="ghost" size="icon" title="Concluir" className="h-7 w-7 rounded-full hover:bg-green-100 hover:text-green-600 transition-colors"
+                                        onClick={(e) => { e.stopPropagation(); setHovered(null); onStatusChange(apt.id, 'completed', apt); }}
+                                    >
+                                        <Check className="h-4 w-4" strokeWidth={2} />
+                                    </Button>
+                                </>
+                            )}
+                            {/* Labels para status terminais */}
+                            {displayStatus === 'completed' && <div className="flex items-center gap-1 text-green-600 font-medium text-[11px]"><Check className="h-3.5 w-3.5" /> Concluído</div>}
+                            {displayStatus === 'canceled' && <div className="flex items-center gap-1 text-red-600 font-medium text-[11px]"><X className="h-3.5 w-3.5" /> Cancelado</div>}
+                            {displayStatus === 'no-show' && <div className="flex items-center gap-1 text-orange-600 font-medium text-[11px]"><UserX className="h-3.5 w-3.5" /> Não compareceu</div>}
+                        </div>
+                    </div>
+                );
+            })(), document.body)}
         </div>
     );
 }

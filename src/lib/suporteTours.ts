@@ -353,7 +353,7 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
             element: '[data-tour="agenda-grade"]',
             title: "A grade",
             description:
-                "Uma coluna por profissional. Passe o mouse num evento para ver detalhes e mudar o status; clique no nome do profissional para a visão solo.",
+                "Uma coluna por profissional. Passe o mouse num evento para ver detalhes e mudar o status — o card flutuante aparece sempre por cima de tudo. Dois agendamentos no mesmo horário (o cancelado e o remarcado, por exemplo) ficam lado a lado. Clique no nome do profissional para a visão solo: a grade dobra de altura, a coluna da esquerda marca de slot em slot e cada card mostra horário, serviço, data do agendamento e quem agendou.",
         },
     ],
     "recorrencia-config": [
