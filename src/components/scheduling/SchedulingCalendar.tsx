@@ -51,6 +51,8 @@ const HOUR_HEIGHT_DESKTOP = 120;
 const HOUR_HEIGHT_MOBILE = 80;
 /** Agenda única: slot de 5 min ficava estreito demais, então a hora dobra de altura. */
 const SOLO_HEIGHT_FACTOR = 2;
+/** Piso de leitura do slot na grade: nunca fica menor do que 15 min ocupa hoje. */
+const MIN_SLOT_MINUTES = 15;
 /** Largura do card flutuante de hover (px) — posicionado por portal, em coordenadas de tela. */
 const HOVER_CARD_WIDTH = 256;
 
@@ -71,13 +73,22 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
     const isSolo = !!soloProfessional;
 
     const isMobile = useIsMobile();
-    const HOUR_HEIGHT = (isMobile ? HOUR_HEIGHT_MOBILE : HOUR_HEIGHT_DESKTOP) * (isSolo ? SOLO_HEIGHT_FACTOR : 1);
-    const PX_PER_MIN = HOUR_HEIGHT / 60;
+    const baseHourHeight = isMobile ? HOUR_HEIGHT_MOBILE : HOUR_HEIGHT_DESKTOP;
 
-    // Tamanho do slot da conta: na agenda única a coluna de horário é marcada
-    // de slot em slot (8:10 | 8:20 | 8:30) em vez de só de hora em hora.
+    // Tamanho do slot da conta: a grade é desenhada de slot em slot. Na agenda
+    // única a coluna de horário também é marcada assim (8:10 | 8:20 | 8:30);
+    // na grade com várias salas ela continua só nas horas cheias.
     const { data: accountSlotMinutes } = useSlotMinutes();
-    const slotMinutes = isSolo ? Math.min(60, Math.max(5, accountSlotMinutes ?? 10)) : 60;
+    const slotMinutes = Math.min(60, Math.max(5, accountSlotMinutes ?? 10));
+
+    // Slot abaixo de 15 min viraria uma tirinha: ele trava na altura que 15 min
+    // ocupa hoje (30px no desktop, 20px no mobile) e quem estica é a HORA —
+    // 8:00→9:00 fica mais alto. De 15 min para cima a hora fica no padrão, para
+    // que conta com slot grande não ganhe uma grade desproporcional.
+    const HOUR_HEIGHT = isSolo
+        ? baseHourHeight * SOLO_HEIGHT_FACTOR
+        : Math.max(baseHourHeight, (60 / slotMinutes) * baseHourHeight * (MIN_SLOT_MINUTES / 60));
+    const PX_PER_MIN = HOUR_HEIGHT / 60;
 
     // Autoria do agendamento (mesma regra do ViewAppointmentModal)
     const { data: staff } = useStaff();
@@ -156,8 +167,8 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
         requestAnimationFrame(() => { isSyncing.current = false; });
     };
 
-    // Linhas da grade + coluna de horário. Fora da agenda única são as horas
-    // cheias (8:00, 9:00...); na agenda única, o slot da conta (8:10, 8:20...).
+    // Linhas da grade (sempre de slot em slot) e rótulos da coluna de horário —
+    // estes só nas horas cheias, exceto na agenda única (8:10, 8:20...).
     const gridSlots = useMemo(() => {
         const slots: { minutes: number; label: string; isHour: boolean }[] = [];
         for (let m = startHour * 60; m <= endHour * 60; m += slotMinutes) {
@@ -434,14 +445,17 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                 <div className="flex" style={{ height: (endHour - startHour + 1) * HOUR_HEIGHT }}>
                     {/* Time Labels */}
                     <div className="w-12 md:w-16 shrink-0 border-r bg-muted/10 flex flex-col relative">
-                        {gridSlots.map((slot) => (
+                        {gridSlots.filter((slot) => isSolo || slot.isHour).map((slot) => (
                             <div
                                 key={slot.minutes}
                                 className={cn(
                                     "absolute w-full text-right pr-1 md:pr-2 text-xs md:text-sm border-t",
                                     slot.isHour ? "text-muted-foreground" : "text-muted-foreground/60 border-dashed"
                                 )}
-                                style={{ top: (slot.minutes - startHour * 60) * PX_PER_MIN, height: slotMinutes * PX_PER_MIN }}
+                                style={{
+                                    top: (slot.minutes - startHour * 60) * PX_PER_MIN,
+                                    height: (isSolo ? slotMinutes : 60) * PX_PER_MIN,
+                                }}
                             >
                                 {slot.label}
                             </div>
