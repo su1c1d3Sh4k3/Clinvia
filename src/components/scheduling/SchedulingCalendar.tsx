@@ -53,6 +53,8 @@ const HOUR_HEIGHT_MOBILE = 80;
 const SOLO_HEIGHT_FACTOR = 2;
 /** Piso de leitura do slot na grade: nunca fica menor do que 15 min ocupa hoje. */
 const MIN_SLOT_MINUTES = 15;
+/** Teto da dilatação da hora, para um agendamento de 1 min não criar uma grade infinita. */
+const MAX_HOUR_SCALE = 4;
 /** Largura do card flutuante de hover (px) — posicionado por portal, em coordenadas de tela. */
 const HOVER_CARD_WIDTH = 256;
 
@@ -81,14 +83,47 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
     const { data: accountSlotMinutes } = useSlotMinutes();
     const slotMinutes = Math.min(60, Math.max(5, accountSlotMinutes ?? 10));
 
-    // Slot abaixo de 15 min viraria uma tirinha: ele trava na altura que 15 min
-    // ocupa hoje (30px no desktop, 20px no mobile) e quem estica é a HORA —
-    // 8:00→9:00 fica mais alto. De 15 min para cima a hora fica no padrão, para
-    // que conta com slot grande não ganhe uma grade desproporcional.
-    const HOUR_HEIGHT = isSolo
-        ? baseHourHeight * SOLO_HEIGHT_FACTOR
-        : Math.max(baseHourHeight, (60 / slotMinutes) * baseHourHeight * (MIN_SLOT_MINUTES / 60));
-    const PX_PER_MIN = HOUR_HEIGHT / 60;
+    // Escala da grade HORA A HORA. Quem manda é a DURAÇÃO DO ATENDIMENTO (o
+    // serviço/aplicação agendado), não o slot da conta: nenhum card pode ficar
+    // menor do que 15 min ocupa hoje (30px no desktop, 20px no mobile), então a
+    // HORA dilata para caber (uma faixa com atendimentos de 5 min fica 3x mais
+    // alta). Hora sem atendimento curto continua no padrão — o dia não infla todo.
+    const { hourScales, hourTops, totalHeight } = useMemo(() => {
+        const shortest: number[] = [];
+        for (let h = startHour; h <= endHour; h++) shortest[h] = MIN_SLOT_MINUTES;
+
+        for (const apt of appointments) {
+            const s = new Date(apt.start_time);
+            if (!isSameDay(s, date)) continue;
+            const duration = Math.max(1, differenceInMinutes(new Date(apt.end_time), s));
+            if (duration >= MIN_SLOT_MINUTES) continue;
+            const e = new Date(apt.end_time);
+            const from = Math.max(startHour, s.getHours());
+            const to = Math.min(endHour, e.getHours());
+            for (let h = from; h <= to; h++) shortest[h] = Math.min(shortest[h], duration);
+        }
+
+        const scales: number[] = [];
+        const tops: number[] = [];
+        let acc = 0;
+        for (let h = startHour; h <= endHour; h++) {
+            const needed = MIN_SLOT_MINUTES / shortest[h];
+            scales[h] = Math.min(MAX_HOUR_SCALE, Math.max(isSolo ? SOLO_HEIGHT_FACTOR : 1, needed));
+            tops[h] = acc;
+            acc += baseHourHeight * scales[h];
+        }
+        return { hourScales: scales, hourTops: tops, totalHeight: acc };
+    }, [appointments, date, startHour, endHour, isSolo, baseHourHeight]);
+
+    /** Minuto do dia → posição Y na grade (cada hora tem a sua altura). */
+    const minutesToPx = (absMinutes: number) => {
+        const clamped = Math.min(Math.max(absMinutes, startHour * 60), (endHour + 1) * 60);
+        const h = Math.min(endHour, Math.floor(clamped / 60));
+        return hourTops[h] + (clamped - h * 60) * ((baseHourHeight * hourScales[h]) / 60);
+    };
+    /** Altura em px de um intervalo do dia (pode cruzar horas de escalas diferentes). */
+    const spanPx = (fromMinutes: number, toMinutes: number) =>
+        Math.max(0, minutesToPx(toMinutes) - minutesToPx(fromMinutes));
 
     // Autoria do agendamento (mesma regra do ViewAppointmentModal)
     const { data: staff } = useStaff();
@@ -246,14 +281,10 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
         const end = new Date(event.end_time);
         const startMinutes = start.getHours() * 60 + start.getMinutes();
         const endMinutes = end.getHours() * 60 + end.getMinutes();
-        const duration = endMinutes - startMinutes;
-
-        // Offset from startHour
-        const top = (startMinutes - startHour * 60) * PX_PER_MIN;
 
         return {
-            top: `${top}px`,
-            height: `${duration * PX_PER_MIN}px`,
+            top: `${minutesToPx(startMinutes)}px`,
+            height: `${spanPx(startMinutes, endMinutes)}px`,
         };
     };
 
@@ -442,7 +473,7 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                 style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
                 onScroll={handleBodyScroll}
             >
-                <div className="flex" style={{ height: (endHour - startHour + 1) * HOUR_HEIGHT }}>
+                <div className="flex" style={{ height: totalHeight }}>
                     {/* Time Labels */}
                     <div className="w-12 md:w-16 shrink-0 border-r bg-muted/10 flex flex-col relative">
                         {gridSlots.filter((slot) => isSolo || slot.isHour).map((slot) => (
@@ -453,8 +484,8 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                     slot.isHour ? "text-muted-foreground" : "text-muted-foreground/60 border-dashed"
                                 )}
                                 style={{
-                                    top: (slot.minutes - startHour * 60) * PX_PER_MIN,
-                                    height: (isSolo ? slotMinutes : 60) * PX_PER_MIN,
+                                    top: minutesToPx(slot.minutes),
+                                    height: spanPx(slot.minutes, slot.minutes + (isSolo ? slotMinutes : 60)),
                                 }}
                             >
                                 {slot.label}
@@ -504,8 +535,8 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                             isPast && "bg-[#C6C8CA] dark:bg-[#22262E]"
                                         )}
                                         style={{
-                                            top: (slot.minutes - startHour * 60) * PX_PER_MIN,
-                                            height: slotMinutes * PX_PER_MIN,
+                                            top: minutesToPx(slot.minutes),
+                                            height: spanPx(slot.minutes, slot.minutes + slotMinutes),
                                             backgroundColor: isBlocked && !isPast ? "rgba(0,0,0,0.2)" : undefined,
                                             backgroundImage: isBlocked && !isPast ? "repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.05) 10px, rgba(0,0,0,0.05) 20px)" : undefined
                                         }}
@@ -542,8 +573,8 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                         key={`conv-${r.start}`}
                                         className="absolute inset-x-0 pointer-events-none bg-amber-300/25 dark:bg-amber-400/15 border-y border-amber-400/60"
                                         style={{
-                                            top: (r.start - startHour * 60) * PX_PER_MIN,
-                                            height: (r.end - r.start) * PX_PER_MIN,
+                                            top: minutesToPx(r.start),
+                                            height: spanPx(r.start, r.end),
                                         }}
                                     >
                                         <span className="absolute top-0.5 left-1 text-[10px] font-medium text-amber-700 dark:text-amber-300 select-none">
@@ -569,10 +600,11 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                 const s = new Date(apt.start_time);
                                 const e = new Date(apt.end_time);
                                 const collapsed = ['canceled', 'no-show'].includes(getDisplayStatus(apt));
+                                const startMin = s.getHours() * 60 + s.getMinutes();
                                 return {
                                     id: apt.id,
-                                    topPx: (s.getHours() * 60 + s.getMinutes() - startHour * 60) * PX_PER_MIN,
-                                    heightPx: collapsed ? 24 : Math.max(1, differenceInMinutes(e, s) * PX_PER_MIN),
+                                    topPx: minutesToPx(startMin),
+                                    heightPx: collapsed ? 24 : Math.max(1, spanPx(startMin, startMin + differenceInMinutes(e, s))),
                                 };
                             }));
 
@@ -632,9 +664,10 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                                 const start = aptStart;
                                                 const end = aptEnd;
                                                 const durationInMinutes = aptDuration;
-                                                // Compacto é questão de ALTURA, não de duração: na agenda
-                                                // única a grade dobra e o mesmo evento comporta 2 linhas
-                                                const isCompact = durationInMinutes * PX_PER_MIN < 44;
+                                                // Compacto é questão de ALTURA, não de duração: a hora dilata
+                                                // quando tem atendimento curto, e aí o card comporta 2 linhas
+                                                const startMin = start.getHours() * 60 + start.getMinutes();
+                                                const isCompact = spanPx(startMin, startMin + durationInMinutes) < 44;
 
                                                 // Adaptive font size: min 11px, max 15px (35min+)
                                                 const fontSize = Math.max(11, Math.min(15, Math.floor(durationInMinutes / 5) + 8));
