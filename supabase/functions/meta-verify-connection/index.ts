@@ -72,7 +72,7 @@ serve(async (req) => {
 
         // ── Check 1: token + phone status + Cloud API registration ──
         const fetchPhone = () =>
-            fetch(`${GRAPH_API}/${phoneId}?fields=status,platform_type,throughput,verified_name,name_status,new_name_status`, {
+            fetch(`${GRAPH_API}/${phoneId}?fields=status,platform_type,throughput,verified_name,name_status,new_name_status,is_on_biz_app`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
 
@@ -92,8 +92,12 @@ serve(async (req) => {
             checks.new_name_status = phoneData.new_name_status || null;
             checks.verified_name = phoneData.verified_name || null;
 
-            // Auto-reparo: tentar registrar o número no Cloud API
-            if (!checks.registered) {
+            // Auto-reparo: tentar registrar o número no Cloud API.
+            // Número de coexistência (app WhatsApp Business) não aceita /register —
+            // a Meta responde "Register endpoint is not available for SMB businesses".
+            if (!checks.registered && phoneData.is_on_biz_app === true) {
+                reason = "Número de coexistência (app WhatsApp Business) ainda não ativo no Cloud API — refaça o cadastro pelo Embedded Signup";
+            } else if (!checks.registered) {
                 console.log("[meta-verify-connection] Not registered on Cloud API, attempting register...");
                 const pin = Math.floor(100000 + Math.random() * 900000).toString();
                 const regResp = await fetch(`${GRAPH_API}/${phoneId}/register`, {

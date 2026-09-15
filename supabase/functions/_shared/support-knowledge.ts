@@ -474,6 +474,7 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "o que e qualidade e limite diario da Meta",
             "meu numero foi restringido pela Meta, e agora",
             "a conexao caiu / QR code",
+            "erro Register endpoint is not available for SMB businesses ao conectar o numero oficial",
         ],
         steps: [
             "Abra Conexoes no menu lateral (aba Conexoes).",
@@ -485,6 +486,7 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "No numero oficial so da para iniciar conversa com template aprovado; texto livre so dentro da janela de 24h apos a ultima mensagem do cliente.",
             "Qualidade baixa ou limite de nivel baixo derruba disparos grandes — confira o painel de qualidade antes da campanha.",
             "Nome de exibicao recusado pela Meta bloqueia envios: aparece um aviso ambar no card da conexao com os passos.",
+            "Erro 'Register endpoint is not available for SMB businesses' no cadastro do numero oficial: e um numero de coexistencia (continua ativo no app WhatsApp Business). A Meta ja registra esse numero sozinha e bloqueia a etapa de registro — o sistema passou a pular essa etapa. Se reaparecer, peca para o cliente atualizar o app WhatsApp Business (minimo 2.24.17) e refazer o cadastro ate o fim sem fechar a janela da Meta.",
             "A mensagem de Confirmacao 24h nao cita mais o nome do profissional (agora usa nome do cliente, horario, clinica e servico). Motivo: o sistema so guarda o nome da SALA do agendamento, e em sala avulsa (Sala 2, Consultorio 1) o paciente recebia 'procedimento de Botox com Sala 2'. No WhatsApp nao oficial a mudanca ja vale para todos. No oficial vale para os templates enviados a aprovacao a partir de agora: numeros ja conectados seguem com o template aprovado pela Meta e, para tirar o profissional, e preciso editar o template na aba Templates de Conexoes (o template volta para revisao da Meta e a confirmacao fica parada ate reaprovar).",
         ],
     },

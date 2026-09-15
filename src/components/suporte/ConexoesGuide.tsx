@@ -218,6 +218,10 @@ export function ConexoesGuide() {
                             a: "Não — o cadastro na API oficial desliga o número do app comum (exceto no modo coexistência). Trate como caminhos distintos: um número por provedor.",
                         },
                         {
+                            q: "Apareceu 'Register endpoint is not available for SMB businesses' ao conectar o número oficial.",
+                            a: "Esse aviso vem da Meta quando o número escolhido é de coexistência (continua ativo no app WhatsApp Business). Nesses casos a própria Meta já registra o número e bloqueia a etapa de registro — o sistema agora pula essa etapa sozinho. Se o erro reaparecer, atualize o app WhatsApp Business (mínimo 2.24.17) e refaça o cadastro até o fim, sem fechar a janela da Meta.",
+                        },
+                        {
                             q: "Meu template está 'Pendente' há horas. É normal?",
                             a: "Sim, a aprovação leva de minutos a algumas horas (raramente mais). Campanhas com número oficial só disparam com template Aprovado — o sistema segura e avisa.",
                         },

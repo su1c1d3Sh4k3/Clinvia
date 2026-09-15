@@ -138,43 +138,64 @@ async function processSignup(
 
     // ── Step 3: Get phone number details ──
     const phoneResp = await fetch(
-        `${GRAPH_API}/${phoneNumberId}?fields=display_phone_number,verified_name,quality_rating`,
+        `${GRAPH_API}/${phoneNumberId}?fields=display_phone_number,verified_name,quality_rating,is_on_biz_app,platform_type`,
         { headers: { Authorization: `Bearer ${accessToken}` } }
     );
 
     let displayPhoneNumber = "";
     let verifiedName = "";
+    let isOnBizApp = false;
 
     if (phoneResp.ok) {
         const phoneData = await phoneResp.json();
         displayPhoneNumber = phoneData.display_phone_number || "";
         verifiedName = phoneData.verified_name || "";
-        console.log("[meta-embedded-signup] Phone:", displayPhoneNumber, "Name:", verifiedName);
+        isOnBizApp = phoneData.is_on_biz_app === true;
+        console.log("[meta-embedded-signup] Phone:", displayPhoneNumber, "Name:", verifiedName,
+            "is_on_biz_app:", isOnBizApp, "platform_type:", phoneData.platform_type);
     }
 
     // ── Step 4: Register phone number for Cloud API ──
-    console.log("[meta-embedded-signup] Registering phone number...");
-    const pin = Math.floor(100000 + Math.random() * 900000).toString();
+    // Coexistência (o front pede featureType 'whatsapp_business_app_onboarding'):
+    // o número continua no app WhatsApp Business e a própria Meta o registra durante
+    // o Embedded Signup. Nesses casos ela BLOQUEIA /register com
+    // "Register endpoint is not available for SMB businesses." (code 100) e a doc
+    // manda pular a etapa de registro:
+    // developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/onboarding-business-app-users
+    if (isOnBizApp) {
+        console.log("[meta-embedded-signup] Coexistence number (is_on_biz_app=true) — skipping /register");
+    } else {
+        console.log("[meta-embedded-signup] Registering phone number...");
+        const pin = Math.floor(100000 + Math.random() * 900000).toString();
 
-    const registerResp = await fetch(
-        `${GRAPH_API}/${phoneNumberId}/register`,
-        {
-            method: "POST",
-            headers: {
-                Authorization: `Bearer ${accessToken}`,
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ messaging_product: "whatsapp", pin }),
+        const registerResp = await fetch(
+            `${GRAPH_API}/${phoneNumberId}/register`,
+            {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ messaging_product: "whatsapp", pin }),
+            }
+        );
+
+        if (!registerResp.ok && registerResp.status !== 412) {
+            // 412 = já registrado. Qualquer outro erro é fatal: sem registro no Cloud API
+            // o número não envia nem recebe mensagens (falso positivo de "connected").
+            const regErrBody = await registerResp.json().catch(() => ({} as any));
+            const regMsg = regErrBody?.error?.error_user_msg || regErrBody?.error?.message || `HTTP ${registerResp.status}`;
+            const isSmbBlocked = /not available for SMB/i.test(regErrBody?.error?.message || "");
+
+            if (isSmbBlocked) {
+                // is_on_biz_app veio falso/ausente mas o número é de coexistência:
+                // não é falha de onboarding. O gate real é o platform_type logo abaixo.
+                console.warn("[meta-embedded-signup] /register blocked for SMB number — continuing:", regMsg);
+            } else {
+                console.error("[meta-embedded-signup] Registration FAILED:", registerResp.status, JSON.stringify(regErrBody));
+                throw new Error(`Falha ao registrar o número no Cloud API: ${regMsg}`);
+            }
         }
-    );
-
-    if (!registerResp.ok && registerResp.status !== 412) {
-        // 412 = já registrado. Qualquer outro erro é fatal: sem registro no Cloud API
-        // o número não envia nem recebe mensagens (falso positivo de "connected").
-        const regErrBody = await registerResp.json().catch(() => ({} as any));
-        const regMsg = regErrBody?.error?.error_user_msg || regErrBody?.error?.message || `HTTP ${registerResp.status}`;
-        console.error("[meta-embedded-signup] Registration FAILED:", registerResp.status, JSON.stringify(regErrBody));
-        throw new Error(`Falha ao registrar o número no Cloud API: ${regMsg}`);
     }
 
     // Confirma que o registro realmente efetivou (platform_type deve ser CLOUD_API)
@@ -188,7 +209,10 @@ async function processSignup(
         if (verifyData.platform_type !== "CLOUD_API") {
             throw new Error(
                 `Número não foi registrado no Cloud API (platform_type: ${verifyData.platform_type}). ` +
-                `Verifique se o número não está ativo no app WhatsApp Business e tente reconectar.`
+                (isOnBizApp
+                    ? `O número está no app WhatsApp Business e a conexão com o Cloud API não foi concluída — ` +
+                      `atualize o app (mínimo 2.24.17) e refaça o cadastro até o fim.`
+                    : `Refaça o cadastro e conclua todas as etapas na janela da Meta.`)
             );
         }
     }
