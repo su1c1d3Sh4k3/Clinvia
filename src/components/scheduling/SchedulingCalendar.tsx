@@ -355,17 +355,20 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                 {visibleProfessionals.map((professional) => (
                     <div
                         key={`${soloId ?? "all"}-${professional.id}`}
-                        className="flex-1 p-2 md:p-4 flex flex-row items-center justify-center gap-2 md:gap-3 border-r last:border-r-0 bg-muted/20 min-w-[120px] md:min-w-[150px] relative group/header cursor-pointer animate-in fade-in zoom-in-95 duration-300"
+                        className="flex-1 p-2 lg:p-4 flex flex-row items-center justify-center gap-2 lg:gap-3 border-r last:border-r-0 bg-muted/20 min-w-[120px] md:min-w-[150px] overflow-hidden relative group/header cursor-pointer animate-in fade-in zoom-in-95 duration-300"
                         title={soloId ? undefined : "Ver apenas a agenda deste profissional"}
                         onClick={() => setSoloId(soloId ? null : professional.id)}
                     >
-                        <Avatar className="w-8 h-8 md:w-12 md:h-12">
+                        <Avatar className="w-8 h-8 lg:w-12 lg:h-12">
                             <AvatarImage src={professional.photo_url} />
-                            <AvatarFallback className="text-xs md:text-base">{professional.name[0]}</AvatarFallback>
+                            <AvatarFallback className="text-xs lg:text-base">{professional.name[0]}</AvatarFallback>
                         </Avatar>
-                        <div className="flex flex-col items-start">
-                            <div className="flex items-center gap-1">
-                                <span className="font-medium text-xs md:text-sm truncate max-w-[80px] sm:max-w-[120px] md:max-w-none">{professional.name}</span>
+                        {/* min-w-0 + truncate: o nome encolhe junto com a coluna. Sem
+                            isso o bloco de texto usa a largura do CONTEÚDO e vaza
+                            por cima da coluna vizinha em tela estreita. */}
+                        <div className="flex flex-col items-start min-w-0 flex-1">
+                            <div className="flex items-center gap-1 min-w-0 max-w-full">
+                                <span className="font-medium text-xs lg:text-sm truncate" title={professional.name}>{professional.name}</span>
                                 {onToggleDayBlock && (isDayClosed(professional.id) || !hasAppointmentsToday(professional.id)) && (
                                     <button
                                         type="button"
@@ -384,9 +387,9 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                     </button>
                                 )}
                             </div>
-                            <span className="text-[10px] md:text-xs text-muted-foreground hidden sm:block">{professional.role}</span>
+                            <span className="text-[10px] lg:text-xs text-muted-foreground hidden sm:block max-w-full truncate">{professional.role}</span>
                             {professional.commission > 0 && (
-                                <span className="text-[10px] md:text-xs text-orange-500 font-medium hidden md:block">
+                                <span className="text-[10px] lg:text-xs text-orange-500 font-medium hidden lg:block max-w-full truncate">
                                     {professional.commission}% comissão
                                 </span>
                             )}
@@ -394,7 +397,7 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                         {(() => {
                             const occupancy = getOccupancy(professional);
                             return (
-                                <div className="relative w-8 h-8 md:w-12 md:h-12 shrink-0" title={`Ocupação da agenda: ${occupancy}%`}>
+                                <div className="relative w-8 h-8 lg:w-12 lg:h-12 shrink-0" title={`Ocupação da agenda: ${occupancy}%`}>
                                     <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
                                         <circle cx="18" cy="18" r="15" fill="none" strokeWidth="5" className="stroke-muted" />
                                         <circle
@@ -405,7 +408,7 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                             className="stroke-primary transition-all duration-500"
                                         />
                                     </svg>
-                                    <span className="absolute inset-0 flex items-center justify-center text-[8px] md:text-[10px] font-semibold">
+                                    <span className="absolute inset-0 flex items-center justify-center text-[8px] lg:text-[10px] font-semibold">
                                         {occupancy}%
                                     </span>
                                 </div>
@@ -417,7 +420,7 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                             const pct = value != null ? Math.min(100, Math.round((value / 5) * 100)) : 0;
                             return (
                                 <div
-                                    className="relative w-8 h-8 md:w-12 md:h-12 shrink-0"
+                                    className="relative w-8 h-8 lg:w-12 lg:h-12 shrink-0"
                                     title={value != null
                                         ? `Média NPS: ${value} / 5 (${nps!.nps_count} avaliações)`
                                         : "Sem avaliações NPS"}
@@ -433,8 +436,8 @@ export function SchedulingCalendar({ date, professionals, appointments, settings
                                         />
                                     </svg>
                                     <span className="absolute inset-0 flex flex-col items-center justify-center leading-none">
-                                        <Star className="w-2 h-2 md:w-2.5 md:h-2.5 text-amber-500 fill-amber-500" />
-                                        <span className="text-[8px] md:text-[10px] font-semibold">
+                                        <Star className="w-2 h-2 lg:w-2.5 lg:h-2.5 text-amber-500 fill-amber-500" />
+                                        <span className="text-[8px] lg:text-[10px] font-semibold">
                                             {value != null ? value : "—"}
                                         </span>
                                     </span>
