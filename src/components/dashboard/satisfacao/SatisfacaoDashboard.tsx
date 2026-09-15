@@ -9,9 +9,10 @@ import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-    Star, Brain, MessageSquareHeart, Bot, User, ChevronLeft, ChevronRight,
+    Star, Brain, MessageSquareHeart, MessageSquare, Bot, User, ChevronLeft, ChevronRight,
     Clock, Timer, Headphones, FileText, Loader2,
 } from "lucide-react";
+import { ConversationChatModal } from "@/components/queues/ConversationChatModal";
 import {
     startOfDay, startOfWeek, startOfMonth, startOfYear,
     addDays, addWeeks, addMonths, addYears, format,
@@ -31,6 +32,8 @@ const GRANULARITY_LABELS: Record<Granularity, string> = {
 interface SatisfactionData {
     cards: { avg_sentiment: number | null; avg_nps: number | null; nps_count: number | null };
     last_reviews: Array<{
+        contact_id: string | null;
+        conversation_id: string | null;
         contact_name: string | null;
         phone: string | null;
         data: string;
@@ -130,6 +133,10 @@ export const SatisfacaoDashboard = () => {
     const { data: ownerId } = useOwnerId();
     const [granularity, setGranularity] = useState<Granularity>("month");
     const [offset, setOffset] = useState(0);
+    // Conversa aberta a partir de uma avaliação (contexto da nota)
+    const [chatContext, setChatContext] = useState<
+        { contactId: string; contactName: string; conversationId: string | null } | null
+    >(null);
 
     const { start, end } = useMemo(() => periodRange(granularity, offset), [granularity, offset]);
 
@@ -255,7 +262,25 @@ export const SatisfacaoDashboard = () => {
                                     <TableBody>
                                         {reviews.map((r, i) => (
                                             <TableRow key={i}>
-                                                <TableCell className="font-medium">{r.contact_name || "Sem nome"}</TableCell>
+                                                <TableCell className="font-medium">
+                                                    {r.contact_id ? (
+                                                        <button
+                                                            type="button"
+                                                            className="flex items-center gap-1.5 text-left text-primary hover:underline"
+                                                            onClick={() => setChatContext({
+                                                                contactId: r.contact_id!,
+                                                                contactName: r.contact_name || "Sem nome",
+                                                                conversationId: r.conversation_id,
+                                                            })}
+                                                            title="Ver a conversa que gerou esta avaliação"
+                                                        >
+                                                            <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+                                                            {r.contact_name || "Sem nome"}
+                                                        </button>
+                                                    ) : (
+                                                        r.contact_name || "Sem nome"
+                                                    )}
+                                                </TableCell>
                                                 <TableCell className="text-muted-foreground">{r.phone || "—"}</TableCell>
                                                 <TableCell className="max-w-[180px] truncate" title={r.application || undefined}>
                                                     {r.application || "—"}
@@ -390,6 +415,16 @@ export const SatisfacaoDashboard = () => {
                         </CardContent>
                     </Card>
                 </>
+            )}
+
+            {chatContext && (
+                <ConversationChatModal
+                    open
+                    onOpenChange={(o) => { if (!o) setChatContext(null); }}
+                    contactId={chatContext.contactId}
+                    contactName={chatContext.contactName}
+                    conversationId={chatContext.conversationId}
+                />
             )}
         </div>
     );

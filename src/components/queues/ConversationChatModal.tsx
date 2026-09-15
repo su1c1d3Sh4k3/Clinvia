@@ -36,6 +36,12 @@ interface ConversationChatModalProps {
     onOpenChange: (open: boolean) => void;
     contactId: string;
     contactName: string;
+    /**
+     * Conversa específica a exibir. Quando informada, vence a busca por contato
+     * (ex.: a avaliação de NPS aponta o ticket exato que gerou a nota). Sem ela,
+     * o modal resolve a conversa ativa e, na falta, a mais recente.
+     */
+    conversationId?: string | null;
 }
 
 /**
@@ -46,6 +52,7 @@ export function ConversationChatModal({
     onOpenChange,
     contactId,
     contactName,
+    conversationId,
 }: ConversationChatModalProps) {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
@@ -85,9 +92,23 @@ export function ConversationChatModal({
     // Get conversation: prefer active (open/pending), fallback to the most recent
     // resolved one — the history must still be visible after the ticket is closed
     const { data: convInfo, isPending: isConvPending } = useQuery({
-        queryKey: ["chat-modal-conversation", contactId, ownerId],
+        queryKey: ["chat-modal-conversation", contactId, ownerId, conversationId ?? null],
         queryFn: async () => {
             if (!ownerId) return null;
+
+            // Conversa explícita vence tudo (o chamador sabe qual ticket quer)
+            if (conversationId) {
+                const { data, error } = await supabase
+                    .from("conversations")
+                    .select("id, status")
+                    .eq("id", conversationId)
+                    .eq("user_id", ownerId)
+                    .maybeSingle();
+                if (error) throw error;
+                if (data) {
+                    return { id: data.id, isActive: data.status === "open" || data.status === "pending" };
+                }
+            }
 
             // Ordena por última atividade (não por created_at): campanhas que
             // falham deixam convs pending VAZIAS (last_message_at null) — elas

@@ -56,6 +56,8 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "os numeros da aba CRM estao menores do que o funil do CRM",
             "quero ver QUEM sao os clientes que ficaram em Ganho, Perdido, Sem Contato ou Sem Interesse",
             "como abrir o ticket (conversa) de uma negociacao a partir do Dashboard",
+            "quero entender o motivo de uma nota baixa na aba Satisfacao",
+            "como ver a conversa do cliente que deu a nota de NPS",
         ],
         steps: [
             "Abra Dashboard no menu lateral.",
@@ -82,6 +84,8 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "No Monitoramento todos os quadros de fila (incluindo Finalizados) abrem FECHADOS. Nada sumiu: a contagem entre parenteses no titulo mostra quantas conversas tem em cada fila; clique no titulo para expandir.",
             "Contorno do card no Monitoramento: LARANJA = o cliente falou por ultimo e ninguem respondeu; VERDE = a ultima mensagem saiu da equipe ou da IA. Nos cards do quadro Finalizados o contorno e a cor da etapa de conclusao.",
             "A contagem da janela de 24h so aparece em conversa de numero oficial (WhatsApp da Meta e Instagram). Na API nao oficial (QR Code) esse prazo nao existe, entao o card nao mostra contagem — nao e erro.",
+            "Na aba Satisfacao, em 'Ultimas Avaliacoes NPS', o nome do cliente e um link: clicando nele abre a conversa daquele atendimento (com o historico anterior do contato) para entender o contexto da nota.",
+            "Avaliacao de contato apagado nao vira link — o nome aparece como texto simples, sem chat para abrir.",
         ],
     },
     {

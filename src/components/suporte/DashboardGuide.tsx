@@ -275,7 +275,7 @@ export function DashboardGuide() {
                 subtitle="NPS, últimas avaliações e desempenho do atendimento">
                 <StepByStep steps={[
                     { title: "De onde vêm as notas", description: "Da pesquisa automática enviada 24h após o atendimento (nota 1 a 5 por botões). A nota é atribuída ao profissional do agendamento." },
-                    { title: "Últimas avaliações", description: "Lista com cliente, nota, serviço aplicado e profissional — ótima para agir rápido numa nota baixa." },
+                    { title: "Últimas avaliações", description: "Lista com cliente, nota, serviço aplicado e profissional — ótima para agir rápido numa nota baixa. O nome do cliente é um link: clique nele para abrir a conversa daquele atendimento (com todo o histórico anterior) e entender o contexto da nota." },
                     { title: "Tempos de atendimento", description: "Duração média dos atendimentos e tempo médio de resposta da equipe, por período navegável (dia/semana/mês/ano)." },
                 ]} />
                 <Callout type="atencao" title="NPS ≠ Sentimento">
