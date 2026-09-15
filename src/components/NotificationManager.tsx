@@ -169,7 +169,7 @@ export function NotificationManager() {
                         >
                             {/* Close Button */}
                             <button
-                                className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center rounded-full bg-red-500 hover:bg-red-600 text-white transition-colors z-10"
+                                className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center text-red-500 dark:text-white hover:opacity-70 transition-opacity z-10"
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     toast.dismiss(t);
