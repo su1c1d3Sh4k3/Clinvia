@@ -204,7 +204,15 @@ export function NotificationManager() {
                         </div>
                     ), {
                         duration: 5000,
-                        position: "top-right"
+                        position: "top-right",
+                        // O balão já desenha o próprio fundo/borda arredondada. Sem isto
+                        // o sonner ainda pinta o container padrão atrás dele (o shadcn
+                        // aplica bg-background/border/shadow em todo toast) e sobra um
+                        // retângulo visível nos cantos.
+                        unstyled: true,
+                        classNames: {
+                            toast: "!bg-transparent !border-0 !p-0 !shadow-none"
+                        }
                     });
                 }
             )
