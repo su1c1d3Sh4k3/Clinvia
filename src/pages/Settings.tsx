@@ -512,7 +512,7 @@ export default function Settings() {
     };
 
     return (
-        <div className="container mx-auto py-4 md:py-10 px-3 md:px-6 max-w-5xl animate-in fade-in duration-500">
+        <div className="container mx-auto py-4 md:py-10 px-3 md:px-6 animate-in fade-in duration-500">
             <h1 className="text-2xl md:text-3xl font-bold mb-4 md:mb-8 text-foreground">Configurações do Sistema</h1>
 
             <Tabs value={tab} onValueChange={setTab} className="w-full">

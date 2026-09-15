@@ -671,7 +671,7 @@ export default function IAConfig() {
     }
 
     return (
-        <div className="container mx-auto py-4 md:py-10 px-3 md:px-6 max-w-4xl animate-in fade-in duration-500">
+        <div className="container mx-auto py-4 md:py-10 px-3 md:px-6 animate-in fade-in duration-500">
             <div className="flex items-center justify-between mb-4 md:mb-8">
                 <h1 className="text-2xl md:text-3xl font-bold text-foreground">Definições de IA</h1>
             </div>
