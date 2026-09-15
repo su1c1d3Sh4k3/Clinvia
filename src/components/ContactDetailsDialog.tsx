@@ -149,7 +149,10 @@ export const ContactDetailsDialog = ({ open, onOpenChange, contact, conversation
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[420px] bg-white dark:bg-card border-border/50 shadow-xl overflow-hidden p-0">
+            {/* sem overflow-hidden: o conteúdo é longo e não tem rolagem interna —
+                deixa o overflow-y-auto padrão do DialogContent agir (ele também
+                recorta os cantos arredondados). */}
+            <DialogContent className="sm:max-w-[420px] bg-white dark:bg-card border-border/50 shadow-xl p-0">
                 <DialogHeader className="pt-6 pb-4 px-6 border-b border-border/50 bg-muted/20">
                     <DialogTitle className="text-center text-lg font-semibold bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary">
                         Detalhes do Contato
