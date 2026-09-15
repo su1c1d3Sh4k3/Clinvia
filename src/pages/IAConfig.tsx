@@ -490,14 +490,10 @@ export default function IAConfig() {
 
         toast.success(checked ? "IA ativada! Agora ative as instâncias desejadas." : "IA desativada com sucesso!");
 
-        // Notifica o n8n p/ criar (ligar) ou remover (desligar) o workflow da
-        // conta — server-side, fire-and-forget (user rule 2026-08-25: dispara
-        // SEMPRE que o switch muda)
-        supabase.functions
-            .invoke("ia-create-workflow", { body: { action: checked ? "create" : "delete" } })
-            .catch((err) => {
-                console.error("ia-create-workflow:", err);
-            });
+        // NÃO cria/remove workflow no n8n aqui (user rule 2026-09-15): o fluxo é
+        // POR CONEXÃO e só pode ser provisionado pelo switch de IA da instância
+        // (handleWhatsappInstanceToggle / handleInstagramInstanceToggle). Este
+        // interruptor é só o disjuntor geral da conta.
     };
 
     // Verificar se pode desligar a IA (nenhuma instância ativa)
