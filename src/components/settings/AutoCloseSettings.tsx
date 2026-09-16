@@ -11,10 +11,12 @@ import { Label } from "@/components/ui/label";
 import { TimerOff } from "lucide-react";
 import { toast } from "sonner";
 
-// Encerramento Automático de Mensagens (user rules, 2026-08-25):
+// Encerramento Automático de Mensagens (user rules, 2026-08-25 / 2026-09-16):
 // timer sempre da última msg do CLIENTE; Meta = 22h30/23h30 fixos (dentro da
-// janela de 24h); UAZAPI = tempos editáveis; 2 mensagens editáveis; sub-chave
-// "Fechar conversas sem interação" (default 48h, encerra sem mensagem).
+// janela de 24h); UAZAPI = tempos editáveis; 2 mensagens editáveis.
+// Sub-chave "Fechar conversas sem interação" (default 48h, encerra sem mensagem)
+// é INDEPENDENTE da chave mestra e vale para toda conversa parada — por padrão
+// só quando a última mensagem foi da empresa (IA ou operador).
 
 const DEFAULTS = {
     auto_close_enabled: true,
@@ -26,6 +28,7 @@ const DEFAULTS = {
         "Estamos encerrando seu atendimento por falta de contato, esperamos nos falar novamente",
     auto_close_no_interaction_enabled: true,
     auto_close_no_interaction_hours: 48,
+    auto_close_no_interaction_include_customer: false,
 };
 
 type AutoCloseConfig = typeof DEFAULTS;
@@ -49,7 +52,7 @@ export function AutoCloseSettings() {
             const { data, error } = await supabase
                 .from("profiles")
                 .select(
-                    "auto_close_enabled, auto_close_warning_minutes, auto_close_final_minutes, auto_close_warning_message, auto_close_final_message, auto_close_no_interaction_enabled, auto_close_no_interaction_hours",
+                    "auto_close_enabled, auto_close_warning_minutes, auto_close_final_minutes, auto_close_warning_message, auto_close_final_message, auto_close_no_interaction_enabled, auto_close_no_interaction_hours, auto_close_no_interaction_include_customer",
                 )
                 .eq("id", ownerId!)
                 .single();
@@ -184,8 +187,11 @@ export function AutoCloseSettings() {
                     <div className="space-y-1">
                         <Label>Fechar conversas sem interação</Label>
                         <p className="text-xs text-muted-foreground">
-                            Conversas em que o cliente nunca respondeu são encerradas sem mensagem
-                            (o card também vai para Sem Contato).
+                            Conversa parada há mais tempo que o limite abaixo é encerrada{" "}
+                            <strong>sem mensagem nenhuma</strong> e o card vai para Sem Contato. Funciona
+                            mesmo com a chave acima desligada. O tempo conta a partir da última mensagem da
+                            conversa — e as pílulas cinzas (transferência, "fulano visualizou") não reiniciam
+                            a contagem.
                         </p>
                     </div>
                     <Switch
@@ -195,18 +201,38 @@ export function AutoCloseSettings() {
                     />
                 </div>
                 {form.auto_close_no_interaction_enabled && (
-                    <div className="space-y-2 max-w-xs">
-                        <Label htmlFor="ac-noint-hours">Encerrar após (horas sem interação)</Label>
-                        <Input
-                            id="ac-noint-hours"
-                            type="number"
-                            min={1}
-                            value={form.auto_close_no_interaction_hours}
-                            onChange={(e) =>
-                                setForm((f) => ({ ...f, auto_close_no_interaction_hours: Number(e.target.value) }))
-                            }
-                        />
-                    </div>
+                    <>
+                        <div className="space-y-2 max-w-xs">
+                            <Label htmlFor="ac-noint-hours">Encerrar após (horas sem interação)</Label>
+                            <Input
+                                id="ac-noint-hours"
+                                type="number"
+                                min={1}
+                                value={form.auto_close_no_interaction_hours}
+                                onChange={(e) =>
+                                    setForm((f) => ({ ...f, auto_close_no_interaction_hours: Number(e.target.value) }))
+                                }
+                            />
+                        </div>
+                        <div className="flex items-start justify-between gap-4 rounded-md border p-3">
+                            <div className="space-y-1">
+                                <Label>Encerrar também quando a última mensagem foi do cliente</Label>
+                                <p className="text-xs text-muted-foreground">
+                                    Desligado (padrão), só encerra quando quem falou por último foi a empresa —
+                                    IA ou operador. Ligado, encerra também o cliente que escreveu e nunca foi
+                                    respondido. <strong>Cuidado:</strong> são justamente as conversas que ainda
+                                    esperam resposta.
+                                </p>
+                            </div>
+                            <Switch
+                                checked={form.auto_close_no_interaction_include_customer}
+                                onCheckedChange={(v) =>
+                                    setForm((f) => ({ ...f, auto_close_no_interaction_include_customer: v }))
+                                }
+                                disabled={isLoading}
+                            />
+                        </div>
+                    </>
                 )}
 
                 <div className="flex justify-end">

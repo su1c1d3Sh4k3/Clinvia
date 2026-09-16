@@ -558,6 +558,8 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "como ativar o menu agrupado e as notificacoes",
             "como criar e organizar tags",
             "como configurar o encerramento automatico de conversas",
+            "por que conversas antigas continuam pendentes mesmo com o encerramento ligado",
+            "o que faz a opcao fechar conversas sem interacao",
             "quais e-mails o sistema envia",
         ],
         steps: [
@@ -565,8 +567,13 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "Abas: Perfil, Empresa, Seguranca, Sistema (menu agrupado e notificacoes), Tags e Automacoes.",
             "Na aba Empresa ficam o nome da empresa e o bloco 'Orcamento em PDF' (cabecalho em PNG 2400x400 com modelo para baixar + rodape em texto livre). Detalhes na aba Orcamentos do manual.",
             "Em Automacoes ficam o encerramento automatico, a mensagem de aviso e a instancia padrao dos disparos.",
+            "O cartao de encerramento tem DUAS chaves independentes: a chave do titulo (aviso + mensagem final, conta a partir da ultima mensagem DO CLIENTE) e a chavinha 'Fechar conversas sem interacao' (encerra em silencio, conta a partir da ultima mensagem da conversa).",
         ],
         gotchas: [
+            "SAO DUAS REGRAS DIFERENTES. A chave do titulo (Encerramento Automatico de Mensagens) avisa e depois encerra com mensagem. A chavinha 'Fechar conversas sem interacao' encerra SEM MENSAGEM nenhuma e funciona mesmo com a chave do titulo desligada. Se o cliente diz que tem conversa parada ha dias ainda pendente, quase sempre a chave do titulo esta DESLIGADA.",
+            "'Fechar conversas sem interacao' vale para toda conversa parada alem do limite (padrao 48h, configuravel). Por padrao so encerra quando a ULTIMA MENSAGEM FOI DA EMPRESA (IA ou operador). Se foi o cliente quem falou por ultimo, o ticket continua aberto de proposito — a resposta ainda e nossa. Para encerrar esses tambem existe a opcao 'Encerrar tambem quando a ultima mensagem foi do cliente', desligada por padrao.",
+            "O relogio de 'sem interacao' e a ultima mensagem da conversa, de qualquer lado; o relogio da chave do titulo e a ultima mensagem do cliente. Nos dois casos as pilulas cinzas (transferencia de fila, 'fulano visualizou essa conversa', entrou/saiu do grupo) NAO reiniciam a contagem.",
+            "Ao ligar qualquer das duas chaves numa conta com backlog, o sistema encerra as conversas atrasadas em lote nas varreduras seguintes (a cada 5 minutos, ate 200 por vez) e cada card ativo do CRM vai para Sem Contato. Avise o cliente antes de ligar.",
             "O encerramento automatico so nasce ligado em contas novas; contas antigas precisam ligar manualmente.",
             "O prazo do encerramento conta sempre a partir da ultima mensagem DO CLIENTE — se ele responder, o ciclo zera.",
             "A mensagem final e enviada no mesmo instante em que a conversa e arquivada; o aviso de entrega do WhatsApp chega segundos depois e o sistema aplica esse status no historico por ate 15 minutos apos o encerramento. Se o recibo demorar mais que isso, a mensagem fica marcada como 'Enviada' no historico mesmo tendo sido entregue.",

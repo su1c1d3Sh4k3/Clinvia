@@ -179,10 +179,19 @@ export function ConfiguracoesGuide() {
                 <Callout type="dica" title="Tempos: Meta fixo, não oficial configurável">
                     Na API Oficial (Meta) o aviso sai às <strong>22h30</strong> e o encerramento às{" "}
                     <strong>23h30</strong> após a última mensagem do cliente — fixos, para nunca estourar a janela de
-                    24h. Nas conexões não oficiais (QR code) os dois tempos podem ser aumentados ou diminuídos. A
-                    chavinha <strong>Fechar conversas sem interação</strong> (também ligada por padrão) encerra, sem
-                    enviar mensagem, conversas em que o cliente nunca respondeu — após 48h, tempo configurável. Grupos
+                    24h. Nas conexões não oficiais (QR code) os dois tempos podem ser aumentados ou diminuídos. Grupos
                     e Instagram ficam de fora do encerramento automático.
+                </Callout>
+                <Callout type="dica" title="Fechar conversas sem interação é uma chave à parte">
+                    Essa chavinha (ligada por padrão, 48h configuráveis) funciona <strong>mesmo com o encerramento
+                    automático desligado</strong> e faz outra coisa: conversa parada há mais tempo que o limite é
+                    encerrada <strong>sem enviar mensagem nenhuma</strong>, e o card também vai para Sem Contato. O
+                    relógio aqui é a <strong>última mensagem da conversa</strong>, de qualquer lado — e as pílulas
+                    cinzas (transferência de fila, "fulano visualizou essa conversa") não reiniciam a contagem. Por
+                    padrão só encerra quando quem falou por último foi a <strong>empresa</strong> (IA ou operador): se
+                    o cliente escreveu e ninguém respondeu, o ticket continua aberto de propósito. Para encerrar esses
+                    também, ligue <strong>Encerrar também quando a última mensagem foi do cliente</strong> — mas saiba
+                    que são exatamente as conversas que ainda devem resposta.
                 </Callout>
                 <Callout type="dica" title="Confirmação de agenda tem passe livre">
                     Quem está no ciclo de confirmação de agendamento fica <strong>imune</strong> ao encerramento

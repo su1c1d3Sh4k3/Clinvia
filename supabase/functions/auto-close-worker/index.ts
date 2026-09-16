@@ -10,7 +10,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
  *                    conversations.auto_close_warning_at
  *   'close'        → envia a mensagem final (editável) e encerra o ticket
  *   'close_silent' → encerra sem mensagem (backlog além do limite — janela
- *                    Meta fechada — ou conversa em que o cliente nunca falou)
+ *                    Meta fechada — ou conversa parada além do limite de
+ *                    inatividade: por padrão só quando a última mensagem foi
+ *                    da empresa; o switch include_customer estende ao cliente)
  * - Encerrar = card ativo do contato vai para 'Sem Contato' (terminal; trigger
  *   resolve as conversas do contato) + resolve defensivo da conversa.
  * - Envio via evolution-send-message (roteia Meta/UAZAPI e persiste a msg).
