@@ -174,6 +174,14 @@ export function InboxGuide() {
                     acabou de transferir para você o cliente X que estava com outro usuário". O aviso só aparece para quem
                     está <strong>com o sistema aberto naquele momento</strong> — não fica pendente para depois.
                 </Callout>
+                <Callout type="dica" title="O chat registra quem transferiu">
+                    Toda troca de fila deixa uma <strong>pílula azul no meio da conversa</strong> com a hora, a fila de
+                    origem, a de destino e <strong>o nome de quem transferiu</strong> — por exemplo{" "}
+                    <em>"14:32 Conversa transferida de Comercial para Financeiro por João Silva"</em>. Quando a troca é
+                    automática (a IA devolvendo o atendimento, encerramento automático, campanha ou API), o texto termina
+                    em <strong>"pelo sistema"</strong>. É um aviso interno: o cliente não recebe nada e ele não vira a
+                    última mensagem da conversa na lista.
+                </Callout>
                 <Callout type="atencao" title="Por que nem todo colega aparece na lista?">
                     Atendentes podem ter <strong>escopo de visão</strong> (definido em Equipe): conexões liberadas, filas
                     atribuídas e tags visíveis. Se a fila escolhida, a conexão da conversa ou as tags do contato estiverem fora
