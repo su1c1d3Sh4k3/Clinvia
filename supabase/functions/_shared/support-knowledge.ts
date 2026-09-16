@@ -458,6 +458,8 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "como mudar o tamanho do slot dos horarios que a IA oferece",
             "como deixar um intervalo entre um atendimento e o proximo",
             "por que a IA oferece horarios de 10 em 10 minutos",
+            "a partir de quando conta o tempo do follow-up da IA",
+            "por que o cliente nao recebeu o follow-up",
         ],
         steps: [
             "Abra IA no menu lateral: aba Empresa (dados e horarios), F.A.Q (perguntas frequentes) e Configuracoes (switch geral, delay, voz, follow-up).",
@@ -473,6 +475,10 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "O tamanho do slot e o intervalo valem para a IA, para o link publico de agendamento e para as automacoes que oferecem horarios. O encaixe MANUAL feito pelo atendente na agenda continua livre.",
             "O tamanho do slot nao muda a duracao do procedimento: a duracao continua vindo do cadastro da aplicacao em Servicos. O slot so define de quanto em quanto tempo os horarios sao oferecidos.",
             "Intervalo alto derruba muito a oferta de horarios: com 30 min de folga, um atendimento das 10h as 11h bloqueia das 9h30 as 11h30.",
+            "O tempo do follow-up e contado SEMPRE a partir da ultima mensagem enviada pelo CLIENTE, e de mais nada. Pilula de sistema no chat (transferencia de fila, 'fulano visualizou essa conversa', entrou/saiu do grupo, reacao) e resposta da propria IA nao reiniciam a contagem. Abrir a conversa para dar uma olhada nao atrasa o follow-up.",
+            "Conversa em que o cliente nunca escreveu (disparo de campanha sem resposta) nao entra no follow-up: sem mensagem do cliente nao ha relogio para contar.",
+            "Follow-up so sai se a ULTIMA fala tiver sido nossa. Se quem falou por ultimo foi o cliente, quem deve resposta somos nos e nenhum follow-up e disparado.",
+            "Outros motivos de o follow-up nao sair: conversa nao esta pendente na fila 'Atendimento IA', IA desligada no contato ou naquela conexao, card ativo em Agendado / Sem Interesse / Sem Contato / Pesquisa de Satisfacao, ou agendamento do cliente nas proximas 24h.",
         ],
     },
     {
