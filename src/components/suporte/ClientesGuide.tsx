@@ -120,7 +120,7 @@ export function ClientesGuide() {
                         ["Atendimentos", "conversas anteriores"],
                         ["Histórico", "documentos e arquivos (5 categorias); em Notas ficam também as Notas de Conversa do inbox (com autor e data — não podem ser apagadas)"],
                         ["Avaliação", "notas NPS dadas"],
-                        ["Resumos", "resumos de conversa gerados pela IA"],
+                        ["Resumos", "um resumo por atendimento encerrado, gerado automaticamente pela IA, com a nota de sentimento"],
                         ["Negociações", "cards do CRM, ativos e encerrados"],
                     ].map(([t, d]) => (
                         <div key={t} className="rounded-xl border p-3">

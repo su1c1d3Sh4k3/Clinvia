@@ -14,6 +14,7 @@ import { useAutoAnalysis } from "@/hooks/useAutoAnalysis";
 import { useGenerateSummary } from "@/hooks/useGenerateSummary";
 import { supabase } from "@/integrations/supabase/client";
 import { CopilotSettingsModal } from "./CopilotSettingsModal";
+import { SummaryMarkdown } from "./SummaryMarkdown";
 import { NegotiationQuickModal } from "@/components/crm/NegotiationQuickModal";
 import { GroupMonitoringSection } from "@/components/chat/GroupMonitoringSection";
 import { PreviousTicketsSection } from "@/components/chat/PreviousTicketsSection";
@@ -598,8 +599,8 @@ export const AIIntelligenceSidebar = ({
                         {isGeneratingSummary ? "Gerando..." : "Gerar Resumo"}
                       </Button>
                       <ScrollArea className="max-h-[300px] w-full rounded-md border">
-                        <div className="text-xs p-3 whitespace-pre-wrap">
-                          {summary}
+                        <div className="text-xs p-3">
+                          <SummaryMarkdown>{summary}</SummaryMarkdown>
                         </div>
                       </ScrollArea>
                     </div>

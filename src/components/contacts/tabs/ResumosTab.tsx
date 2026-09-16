@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, Brain } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { SummaryMarkdown } from "@/components/SummaryMarkdown";
 
 interface ResumosTabProps {
   contact: any;
@@ -33,19 +34,28 @@ export const ResumosTab = ({ contact, contactIds }: ResumosTabProps) => {
 
   if (isLoading) return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin" /></div>;
 
+  const convItems = (convSummaries || []).map((c) => ({
+    type: "conversation" as const,
+    date: c.updated_at,
+    content: c.summary,
+    score: c.sentiment_score,
+  }));
+
+  // contacts.analysis é legado: o resolve-ticket antigo gravava o MESMO texto
+  // aqui e em conversations.summary, o que duplicava o card. Hoje só o resumo da
+  // conversa é escrito — os itens legados repetidos ficam de fora.
+  const convContents = new Set(convItems.map((c) => (c.content || "").trim()));
+
   const allItems = [
-    ...analysisArray.map((a) => ({
-      type: "analysis" as const,
-      date: a.data,
-      content: a.resumo,
-      score: null,
-    })),
-    ...(convSummaries || []).map((c) => ({
-      type: "conversation" as const,
-      date: c.updated_at,
-      content: c.summary,
-      score: c.sentiment_score,
-    })),
+    ...analysisArray
+      .filter((a) => !convContents.has((a.resumo || "").trim()))
+      .map((a) => ({
+        type: "analysis" as const,
+        date: a.data,
+        content: a.resumo,
+        score: null,
+      })),
+    ...convItems,
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   if (allItems.length === 0) {
@@ -83,7 +93,7 @@ export const ResumosTab = ({ contact, contactIds }: ResumosTabProps) => {
               {item.date ? format(new Date(item.date), "dd/MM/yyyy HH:mm", { locale: ptBR }) : "—"}
             </span>
           </div>
-          <p className="text-sm whitespace-pre-wrap">{item.content}</p>
+          <div className="text-sm"><SummaryMarkdown>{item.content || ""}</SummaryMarkdown></div>
         </div>
       ))}
     </div>

@@ -30,6 +30,10 @@ verify_jwt = false
 [functions.ai-sentiment-analysis]
 verify_jwt = false
 
+# Resumo automático de conversa encerrada (pg_cron)
+[functions.conversation-summary-worker]
+verify_jwt = false
+
 # API Functions (external access)
 [functions.api-contacts]
 verify_jwt = false

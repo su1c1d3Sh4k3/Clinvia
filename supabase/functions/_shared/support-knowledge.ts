@@ -107,6 +107,8 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "onde vejo os atendimentos antigos do mesmo cliente",
             "como mandar audio, imagem, responder, reagir ou apagar mensagem",
             "como deixar uma nota interna que o cliente nao ve",
+            "onde vejo o resumo da conversa feito pela IA",
+            "por que a conversa encerrada nao tem resumo",
         ],
         steps: [
             "Abra Inbox (pagina inicial). A lista da esquerda traz as conversas; o funil abre os Filtros Avancados.",
@@ -115,6 +117,7 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "Para passar adiante use o botao de transferencia no topo do chat: primeiro a fila, depois o responsavel. A troca de fila deixa no meio da conversa uma pill azul com a hora, a fila de origem, a de destino e o nome de quem transferiu.",
             "O painel da direita (passe o mouse para expandir) traz dados do cliente, etapa do CRM, negociacao rapida e os tickets anteriores.",
             "O botao roxo de nota (icone de bloco) grava uma observacao interna na conversa — o cliente nunca ve.",
+            "Assim que a conversa e encerrada, a IA le o historico daquele atendimento e grava um resumo com a nota de sentimento. Ele aparece na secao 'Resumo' do painel da direita e na aba 'Resumos' do perfil do cliente.",
         ],
         gotchas: [
             "Atendente com escopo configurado so enxerga as conexoes, filas e tags liberadas para ele; conversa ja atribuida a outro colega tambem fica invisivel.",
@@ -128,6 +131,8 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "Conversa de grupo nunca fica atribuida a um colaborador e e visivel para todos, salvo se o grupo for restrito.",
             "O filtro 'Etapas do CRM' olha a etapa do card ATIVO do cliente no funil. Cliente sem card ativo e conversa de grupo (que nao tem card) ficam de fora enquanto o filtro estiver marcado — por isso a aba Grupos aparece vazia com ele ligado.",
             "Os filtros avancados ficam salvos no navegador: continuam ligados depois de atualizar a pagina ou sair e voltar. Se 'sumiram conversas', confira o funil antes de suspeitar de escopo ou permissao.",
+            "O resumo automatico vale para QUALQUER forma de encerramento: botao Resolver, encerramento automatico por inatividade, etapa final do CRM, campanha ou API. O resumo e por atendimento (cada ticket tem o seu, so com o que foi falado ali) — nao e um resumo geral do cliente.",
+            "O resumo nao sai na hora: ele entra numa fila e leva alguns minutos depois do encerramento. Conversa encerrada sem nenhuma mensagem nao gera resumo. Resumos de atendimentos antigos foram gerados em lote e foram aparecendo aos poucos.",
         ],
     },
     {
@@ -251,14 +256,17 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "como ver o perfil completo, historico e documentos",
             "como desligar a IA para um cliente especifico",
             "como usar tags (etiquetas)",
+            "onde ficam os resumos das conversas do cliente",
         ],
         steps: [
             "Abra Clientes no menu lateral.",
             "Clique no nome do cliente para abrir o perfil completo (cadastro, orcamentos, vendas, agendamentos, atendimentos, historico, avaliacao, resumos e negociacoes).",
             "O switch de IA na linha do cliente e o UNICO lugar que desliga a IA para aquele contato.",
+            "A aba 'Resumos' do perfil lista um resumo por atendimento encerrado, do mais recente para o mais antigo, com a data e a nota de sentimento (0 a 10).",
         ],
         gotchas: [
             "A categoria (Contato/Lead/Cliente) e automatica pelas vendas: so avaliacao = Lead, qualquer outro servico = Cliente.",
+            "Os resumos da aba 'Resumos' sao gerados sozinhos quando a conversa e encerrada — um por atendimento, so com o que foi falado naquele ticket. Se o cliente teve 5 atendimentos, aparecem 5 resumos. Nao existe resumo unico juntando tudo.",
             "Nada no sistema desliga a IA de um contato sozinho — se a IA parou, verifique a fila da conversa, a IA da conexao e o switch geral.",
             "Etiqueta de campanha e removida quando a campanha e encerrada ou quando o cliente nao recebeu a mensagem.",
         ],

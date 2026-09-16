@@ -141,6 +141,14 @@ export function InboxGuide() {
                     Conversa encerrada = fila limpa, métricas corretas (tempo de atendimento) e IA liberada para o próximo
                     contato do cliente. Conversa esquecida aberta trava a IA para aquele cliente.
                 </Callout>
+                <Callout type="dica" title="Todo atendimento encerrado ganha um resumo automático">
+                    Não importa <strong>como</strong> a conversa foi encerrada (botão Resolver, encerramento automático por
+                    inatividade, etapa final do CRM, campanha ou API): assim que ela vira <strong>resolvida</strong>, a IA lê
+                    o histórico <strong>daquele atendimento</strong> e grava um resumo próprio, com a nota de sentimento do
+                    cliente. O resumo aparece no painel lateral do chat e na aba <strong>Resumos</strong> do perfil do
+                    cliente. São resumos <strong>individuais</strong>: 5 atendimentos no histórico = 5 resumos, cada um só
+                    com o que foi falado ali. Ele leva alguns minutos para ficar pronto depois do encerramento.
+                </Callout>
             </TopicSection>
 
             {/* 4 */}
@@ -230,7 +238,7 @@ export function InboxGuide() {
                         { t: "Dados e etapa do CRM", d: "Nome, telefone, etiquetas, categoria (contato/lead/cliente) e a etapa atual no funil desta conexão." },
                         { t: "Negociação rápida", d: "Crie ou edite a negociação (serviços + valores) sem abrir o CRM — o card nasce no funil da conexão desta conversa." },
                         { t: "Tickets anteriores", d: "Todos os atendimentos já encerrados deste cliente nesta conexão, em cartões. Clique em um deles para ver aquele trecho isolado." },
-                        { t: "Resumo e sentimento", d: "Resumo da conversa gerado pela IA e o termômetro do humor do cliente." },
+                        { t: "Resumo e sentimento", d: "Resumo daquele atendimento, gerado pela IA assim que a conversa é encerrada, mais o termômetro do humor do cliente." },
                         { t: "Atalhos", d: "Registrar venda, criar agendamento e abrir o perfil completo em um clique." },
                     ].map((x) => (
                         <div key={x.t} className="rounded-xl border p-3.5">
