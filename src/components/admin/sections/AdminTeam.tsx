@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, ShieldCheck, KeyRound, Pencil } from "lucide-react";
+import { Plus, ShieldCheck, KeyRound, MailCheck, Pencil } from "lucide-react";
 import {
     ADMIN_PAGES,
     ADMIN_PERMISSION_LEVELS,
@@ -27,6 +27,8 @@ interface AdminUserRow {
     email: string;
     is_active: boolean;
     permissions: AdminPermissions;
+    /** e-mail que recebe o código de 2 etapas; vazio = lista padrão do sistema */
+    two_factor_email: string | null;
     created_at: string | null;
 }
 
@@ -44,6 +46,7 @@ export default function AdminTeam({ canEdit }: { canEdit: boolean }) {
     const [form, setForm] = useState({
         name: "",
         email: "",
+        two_factor_email: "",
         password: "",
         is_active: true,
         permissions: { ...DEFAULT_ADMIN_PERMISSIONS } as AdminPermissions,
@@ -66,6 +69,7 @@ export default function AdminTeam({ canEdit }: { canEdit: boolean }) {
         setForm({
             name: "",
             email: "",
+            two_factor_email: "",
             password: "",
             is_active: true,
             permissions: { ...DEFAULT_ADMIN_PERMISSIONS },
@@ -78,6 +82,7 @@ export default function AdminTeam({ canEdit }: { canEdit: boolean }) {
         setForm({
             name: row.name,
             email: row.email,
+            two_factor_email: row.two_factor_email || "",
             password: "",
             is_active: row.is_active,
             permissions: { ...DEFAULT_ADMIN_PERMISSIONS, ...(row.permissions || {}) },
@@ -119,6 +124,7 @@ export default function AdminTeam({ canEdit }: { canEdit: boolean }) {
                     name: form.name.trim(),
                     is_active: form.is_active,
                     permissions: form.permissions,
+                    two_factor_email: form.two_factor_email.trim().toLowerCase(),
                 });
                 if (form.password.trim()) {
                     await callFunction({
@@ -135,6 +141,7 @@ export default function AdminTeam({ canEdit }: { canEdit: boolean }) {
                     email: form.email.trim().toLowerCase(),
                     password: form.password.trim(),
                     permissions: form.permissions,
+                    two_factor_email: form.two_factor_email.trim().toLowerCase(),
                 });
                 toast.success("Usuário criado — já pode entrar em /admin-oath");
             }
@@ -204,7 +211,14 @@ export default function AdminTeam({ canEdit }: { canEdit: boolean }) {
                                     users.map((u) => (
                                         <TableRow key={u.id} className="border-gray-700 hover:bg-gray-700/40">
                                             <TableCell className="text-white font-medium">{u.name}</TableCell>
-                                            <TableCell className="text-gray-400">{u.email}</TableCell>
+                                            <TableCell className="text-gray-400">
+                                                {u.email}
+                                                {u.two_factor_email && u.two_factor_email !== u.email && (
+                                                    <span className="block text-xs text-gray-600">
+                                                        código 2 etapas: {u.two_factor_email}
+                                                    </span>
+                                                )}
+                                            </TableCell>
                                             <TableCell>
                                                 <div className="flex flex-wrap gap-1">
                                                     {ADMIN_PAGES.filter((p) => (u.permissions?.[p.value] ?? "none") !== "none").map((p) => (
@@ -290,6 +304,24 @@ export default function AdminTeam({ canEdit }: { canEdit: boolean }) {
                                 className="bg-gray-900 border-gray-700 text-white disabled:opacity-60"
                                 placeholder="atendente@clinvia.com.br"
                             />
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label className="text-gray-300 flex items-center gap-1.5">
+                                <MailCheck className="w-3.5 h-3.5" />
+                                E-mail da verificação em duas etapas
+                            </Label>
+                            <Input
+                                type="email"
+                                value={form.two_factor_email}
+                                onChange={(e) => setForm((f) => ({ ...f, two_factor_email: e.target.value }))}
+                                className="bg-gray-900 border-gray-700 text-white"
+                                placeholder="Mesmo e-mail do login, se deixar vazio"
+                            />
+                            <p className="text-xs text-gray-500">
+                                Recebe o código de 6 caracteres pedido depois do login. Em branco, o código vai
+                                para os e-mails padrão do sistema.
+                            </p>
                         </div>
 
                         <div className="space-y-1.5">

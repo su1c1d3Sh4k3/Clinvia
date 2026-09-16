@@ -743,6 +743,61 @@ Equipe Clinbia`;
     return { subject, html, text };
 }
 
+/* ===================================================================
+   13. Código de acesso do painel administrativo (2 etapas)
+   =================================================================== */
+
+export function emailCodigoAdmin(v: {
+    /** nome de quem está tentando entrar */
+    full_name?: string;
+    /** e-mail usado no login */
+    login_email: string;
+    /** código de 6 caracteres */
+    code: string;
+    /** ex.: "5 minutos" */
+    validade?: string;
+}): BuiltEmail {
+    const nome = v.full_name?.trim().split(/\s+/)[0];
+    const validade = v.validade || "5 minutos";
+    const subject = `Código de acesso ao painel: ${v.code}`;
+    // Bloco do código: tabela de uma célula. Fonte monoespaçada e letter-spacing
+    // para não confundir caracteres parecidos na hora de digitar.
+    const codeBox = `
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 22px 0;border-collapse:collapse">
+  <tr><td align="center" style="background-color:${C.box};padding:22px 18px;border:1px solid ${C.line}">
+    <span style="font-family:Consolas,'Courier New',monospace;font-size:34px;line-height:42px;font-weight:700;letter-spacing:10px;color:${C.dark}">${esc(v.code)}</span>
+  </td></tr>
+</table>`;
+    const html = layout({
+        preheader: `Seu código de acesso ao painel administrativo é ${v.code}.`,
+        title: "Código de acesso ao painel",
+        body:
+            greeting(nome ? `Olá, ${esc(nome)}!` : "Olá!") +
+            p(`Alguém acabou de entrar no painel administrativo da Clinbia com a conta ${strong(esc(v.login_email))}. Para concluir o acesso, informe o código abaixo na tela de verificação em duas etapas.`) +
+            codeBox +
+            p(`O código é de uso único e vale por ${strong(esc(validade))}. A tela de verificação expira em ${strong("1 minuto")} — se isso acontecer, basta fazer login de novo para receber um código novo.`) +
+            callout(
+                `<strong>Não foi você?</strong> Alguém tem a senha desta conta. Troque a senha do painel imediatamente e avise o responsável pela plataforma. Sem este código, o acesso não é liberado.`,
+                "red",
+            ) +
+            p(`Nunca compartilhe este código com ninguém. A equipe Clinbia jamais pede o código por telefone, WhatsApp ou e-mail.`, `font-size:13px;line-height:21px;color:${C.soft}`),
+    });
+    const text = `${nome ? `Olá, ${nome}!` : "Olá!"}
+
+Alguém acabou de entrar no painel administrativo da Clinbia com a conta ${v.login_email}. Para concluir o acesso, informe o código abaixo na tela de verificação em duas etapas.
+
+CÓDIGO: ${v.code}
+
+O código é de uso único e vale por ${validade}. A tela de verificação expira em 1 minuto — se isso acontecer, basta fazer login de novo para receber um código novo.
+
+Não foi você? Alguém tem a senha desta conta. Troque a senha do painel imediatamente e avise o responsável pela plataforma. Sem este código, o acesso não é liberado.
+
+Nunca compartilhe este código com ninguém. A equipe Clinbia jamais pede o código por telefone, WhatsApp ou e-mail.
+
+Equipe Clinbia`;
+    return { subject, html, text };
+}
+
 /* ------------------------------------------------------------------- envio */
 
 /** Envia pelo HTTP da Resend. Erro da API vira exceção com o corpo real. */

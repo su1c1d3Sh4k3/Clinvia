@@ -22,14 +22,34 @@ export default function Admin() {
     const [tab, setTab] = useUrlTab("dashboard");
     const { identity, can, isLoading } = useAdminUser();
 
-    // guard: super-admin OU admin_users ativo
+    // Verificação em duas etapas: a linha só existe se o código enviado por
+    // e-mail foi conferido pela edge fn admin-2fa nesta mesma sessão.
+    const { data: twoFactorOk, isLoading: is2faLoading } = useQuery({
+        queryKey: ["admin-2fa-verified"],
+        retry: false,
+        staleTime: 60_000,
+        queryFn: async () => {
+            const { data, error } = await supabase.rpc("admin_2fa_is_verified", {
+                p_session_id: getOrCreateSessionId(),
+            });
+            if (error) throw error;
+            return !!data;
+        },
+    });
+
+    // guard: super-admin OU admin_users ativo, e sempre com o código confirmado
     useEffect(() => {
-        if (isLoading) return;
+        if (isLoading || is2faLoading) return;
         if (!identity) {
             toast.error("Acesso negado");
             supabase.auth.signOut().finally(() => navigate("/admin-oath"));
+            return;
         }
-    }, [identity, isLoading, navigate]);
+        if (twoFactorOk === false) {
+            toast.error("Confirme o código de acesso enviado por e-mail.");
+            supabase.auth.signOut().finally(() => navigate("/admin-oath"));
+        }
+    }, [identity, isLoading, twoFactorOk, is2faLoading, navigate]);
 
     const visiblePages = useMemo<AdminPage[]>(
         () => ADMIN_PAGES.map((p) => p.value).filter((p) => can(p, "view")),
@@ -59,11 +79,17 @@ export default function Admin() {
         } catch (e) {
             console.warn("[Admin] release_session failed:", e);
         }
+        // Apaga a verificação em duas etapas: o próximo login pede código novo.
+        try {
+            await supabase.rpc("admin_2fa_clear", { p_session_id: getOrCreateSessionId() });
+        } catch (e) {
+            console.warn("[Admin] admin_2fa_clear failed:", e);
+        }
         await supabase.auth.signOut();
         navigate("/admin-oath");
     };
 
-    if (isLoading || !identity) {
+    if (isLoading || is2faLoading || !identity || !twoFactorOk) {
         return (
             <div className="min-h-screen bg-gray-900 flex items-center justify-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-500" />

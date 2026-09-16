@@ -122,6 +122,8 @@ serve(async (req) => {
                     email,
                     is_active: body!.is_active !== false,
                     permissions: body!.permissions ?? {},
+                    // Vazio = a edge fn admin-2fa manda o código para a lista padrão.
+                    two_factor_email: String(body!.two_factor_email ?? "").trim().toLowerCase() || null,
                     created_by: caller.user.id,
                 })
                 .select("*")
@@ -191,6 +193,9 @@ serve(async (req) => {
             if (body!.name !== undefined) updates.name = body!.name;
             if (body!.permissions !== undefined) updates.permissions = body!.permissions;
             if (body!.is_active !== undefined) updates.is_active = body!.is_active;
+            if (body!.two_factor_email !== undefined) {
+                updates.two_factor_email = String(body!.two_factor_email).trim().toLowerCase() || null;
+            }
         }
 
         const { data: updated, error: updateError } = await supabaseAdmin
