@@ -176,7 +176,9 @@ export function CampaignsGuide() {
                         <AccordionContent className="text-sm text-muted-foreground">
                             Preencha as variáveis do template (ou escreva o texto). Use variáveis como{" "}
                             <code className="rounded bg-muted px-1">nome</code> para personalizar — cada pessoa recebe a mensagem
-                            com os próprios dados. A pré-visualização mostra exatamente como vai chegar.
+                            com os próprios dados. Se algum campo do template não vem da sua lista (ex.: o nome da promoção),
+                            escolha <strong>Personalizado (valor fixo)</strong> e digite o texto: todo mundo recebe igual. A
+                            pré-visualização mostra exatamente como vai chegar.
                         </AccordionContent>
                     </AccordionItem>
                     <AccordionItem value="objetivo" className="border-b">
@@ -222,7 +224,8 @@ export function CampaignsGuide() {
                         <p className="flex items-center gap-1.5 text-sm font-semibold"><Sparkles className="h-4 w-4 text-primary" />Variáveis</p>
                         <p className="mt-0.5 text-sm text-muted-foreground">
                             Colunas da planilha e dados do contato viram variáveis na mensagem. "Olá <em>nome</em>, seu{" "}
-                            <em>servico</em> vence em <em>data</em>" → cada pessoa recebe com os próprios dados.
+                            <em>servico</em> vence em <em>data</em>" → cada pessoa recebe com os próprios dados. Ou escolha{" "}
+                            <strong>Personalizado</strong> e digite um valor fixo, igual para todos.
                         </p>
                     </div>
                 </div>

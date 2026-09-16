@@ -26,6 +26,7 @@ import { useMetaQuality } from "@/hooks/useMetaQuality";
 import { useUsdBrlRate } from "@/hooks/useUsdBrlRate";
 import {
     AudienceSelection, EMPTY_AUDIENCE, SOURCE_VAR_KEYS, BASE_VAR_KEYS, slugVarKey,
+    FIXED_VAR_PREFIX, isFixedVar, fixedVarValue,
 } from "./audienceTypes";
 import { AudienceFileUpload } from "./audience/AudienceFileUpload";
 import { AudienceCrm } from "./audience/AudienceCrm";
@@ -50,6 +51,10 @@ const SOURCE_OPTIONS = [
 type SourceType = (typeof SOURCE_OPTIONS)[number]["value"];
 
 const STEPS = ["Dados", "Audiência", "Tipo", "Mensagem", "Objetivo", "Revisão"];
+
+// Valor do <SelectItem> "Personalizado" — slugVarKey() nunca gera este texto,
+// então não colide com nenhuma chave de variável real.
+const FIXED_VAR_OPTION = "__personalizado__";
 
 interface CampaignWizardProps {
     open: boolean;
@@ -444,6 +449,8 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
         if (!useExistingTemplate || !selectedTemplate) return "";
         return String(selectedTemplate.body).replace(/\{\{(\d+)\}\}/g, (_m, n) => {
             const key = varMapping[Number(n)];
+            // Valor fixo já entra literal na mensagem — é igual para todo mundo.
+            if (isFixedVar(key)) return fixedVarValue(key) || `{{${n}}}`;
             return key ? `<${key}>` : `{{${n}}}`;
         });
     }, [useExistingTemplate, selectedTemplate, varMapping]);
@@ -494,6 +501,12 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
                 const missing = templateVarNums.filter((n) => !varMapping[n]);
                 if (missing.length > 0) {
                     return `Mapeie a variável {{${missing[0]}}} do template`;
+                }
+                const emptyFixed = templateVarNums.filter(
+                    (n) => isFixedVar(varMapping[n]) && !fixedVarValue(varMapping[n]).trim()
+                );
+                if (emptyFixed.length > 0) {
+                    return `Informe o valor personalizado da variável {{${emptyFixed[0]}}}`;
                 }
             } else if (!message.trim()) {
                 return "Escreva a mensagem inicial";
@@ -1047,24 +1060,46 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
                                         {templateVarNums.length > 0 && (
                                             <div className="space-y-2">
                                                 <p className="text-xs text-muted-foreground">Mapeie cada variável do template:</p>
-                                                {templateVarNums.map((n) => (
-                                                    <div key={n} className="flex items-center gap-2">
-                                                        <Badge variant="outline" className="shrink-0 font-mono">{`{{${n}}}`}</Badge>
-                                                        <Select
-                                                            value={varMapping[n] || ""}
-                                                            onValueChange={(v) => setVarMapping((prev) => ({ ...prev, [n]: v }))}
-                                                        >
-                                                            <SelectTrigger className="h-8">
-                                                                <SelectValue placeholder="Escolha o dado" />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                {availableVars.map((k) => (
-                                                                    <SelectItem key={k} value={slugVarKey(k)}>{k}</SelectItem>
-                                                                ))}
-                                                            </SelectContent>
-                                                        </Select>
-                                                    </div>
-                                                ))}
+                                                {templateVarNums.map((n) => {
+                                                    const fixed = isFixedVar(varMapping[n]);
+                                                    return (
+                                                        <div key={n} className="flex items-center gap-2">
+                                                            <Badge variant="outline" className="shrink-0 font-mono">{`{{${n}}}`}</Badge>
+                                                            <Select
+                                                                value={fixed ? FIXED_VAR_OPTION : (varMapping[n] || "")}
+                                                                onValueChange={(v) => setVarMapping((prev) => ({
+                                                                    ...prev,
+                                                                    [n]: v === FIXED_VAR_OPTION ? FIXED_VAR_PREFIX : v,
+                                                                }))}
+                                                            >
+                                                                <SelectTrigger className="h-8">
+                                                                    <SelectValue placeholder="Escolha o dado" />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    {availableVars.map((k) => (
+                                                                        <SelectItem key={k} value={slugVarKey(k)}>{k}</SelectItem>
+                                                                    ))}
+                                                                    <SelectItem value={FIXED_VAR_OPTION}>Personalizado (valor fixo)</SelectItem>
+                                                                </SelectContent>
+                                                            </Select>
+                                                            {fixed && (
+                                                                <Input
+                                                                    className="h-8 flex-1"
+                                                                    value={fixedVarValue(varMapping[n])}
+                                                                    onChange={(e) => setVarMapping((prev) => ({
+                                                                        ...prev,
+                                                                        [n]: FIXED_VAR_PREFIX + e.target.value,
+                                                                    }))}
+                                                                    placeholder="Valor enviado para todos os contatos"
+                                                                />
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                                <p className="text-[10px] text-muted-foreground">
+                                                    Escolha <strong>Personalizado</strong> para enviar sempre o mesmo texto,
+                                                    em vez de puxar o dado da fonte selecionada.
+                                                </p>
                                             </div>
                                         )}
                                     </>

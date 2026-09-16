@@ -67,10 +67,18 @@ function slugVarKey(raw: string): string {
 }
 
 /**
+ * Prefixo de valor FIXO no variable_map (gêmeo de src/components/campaigns/audienceTypes.ts).
+ * Slug de variável nunca contém ":", então não colide com as chaves dinâmicas.
+ */
+const FIXED_VAR_PREFIX = "fixo:";
+
+/**
  * Resolve o valor de uma variável para uma entrada da campanha.
- * Prioridade: raw_data (snapshot da fonte de dados) → contato → legado servico/data.
+ * Prioridade: valor fixo → raw_data (snapshot da fonte) → contato → legado servico/data.
  */
 function resolveVariable(key: string, campaign: any, contact: any, rawData: any): string {
+    // Personalizado: mesmo texto para todos os contatos, sem olhar a fonte.
+    if (key.startsWith(FIXED_VAR_PREFIX)) return key.slice(FIXED_VAR_PREFIX.length).trim();
     const rd = rawData || {};
     if (rd[key] != null && String(rd[key]).trim() !== "") return String(rd[key]).trim();
     switch (key) {

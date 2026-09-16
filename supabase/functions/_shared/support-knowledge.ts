@@ -409,6 +409,7 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
         resolves: [
             "como criar e disparar uma campanha",
             "como montar o publico e usar variaveis",
+            "como colocar um valor fixo numa variavel do template",
             "por que um contato nao recebeu",
             "o que significa cada card do quadro de resultados",
             "como reenviar uma campanha",
@@ -419,6 +420,7 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "O assistente tem 6 etapas: Dados, Audiencia, Tipo, Mensagem, Objetivo e Revisao.",
             "Na etapa Tipo > Promocao os servicos aparecem agrupados por categoria (igual a pagina de Servicos): clique na categoria para abrir a lista e marque os servicos da campanha.",
             "No numero oficial da Meta a mensagem tem que ser um template ja APROVADO; na conexao nao oficial o texto e livre.",
+            "Na etapa Mensagem, cada variavel do template ({{1}}, {{2}}...) e ligada a um dado da fonte (nome, telefone, coluna da planilha...) ou a opcao 'Personalizado (valor fixo)', que abre um campo de texto e envia o mesmo valor para todos os contatos.",
             "Depois do disparo, expanda o card da campanha para ver os resultados e a tabela contato a contato.",
         ],
         gotchas: [
@@ -428,6 +430,7 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "O quadro conta quem RESPONDEU a mensagem da campanha; o inbox filtrado por etiqueta mostra tambem quem so recebeu.",
             "Mensagens automaticas de agendamento tem prioridade sobre campanha no mesmo numero.",
             "O campo opcional da etapa Tipo se chama 'Salas habilitadas' (nao 'profissionais'): marcando alguma, a IA so oferece horarios dessas salas enquanto a campanha estiver ativa; sem nenhuma marcada valem todas. A equipe continua agendando manualmente em qualquer sala.",
+            "Variavel 'Personalizado' escolhida mas com o campo em branco impede avancar a etapa Mensagem — digite o texto ou volte para um dado da fonte.",
         ],
     },
     {

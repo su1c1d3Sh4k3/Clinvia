@@ -34,6 +34,20 @@ export const SOURCE_VAR_KEYS: Record<string, string[]> = {
 /** Variáveis sempre disponíveis (resolvidas a partir do contato). */
 export const BASE_VAR_KEYS = ["nome", "telefone"];
 
+/**
+ * Prefixo usado em `campaigns.variable_map` para um valor FIXO digitado pelo
+ * cliente (em vez de puxar o dado da fonte). Slug de variável nunca contém ":",
+ * então não há colisão com as chaves dinâmicas.
+ * Gêmeo em `supabase/functions/campaign-dispatch/index.ts`.
+ */
+export const FIXED_VAR_PREFIX = "fixo:";
+
+export const isFixedVar = (key?: string | null): boolean =>
+    typeof key === "string" && key.startsWith(FIXED_VAR_PREFIX);
+
+export const fixedVarValue = (key?: string | null): string =>
+    isFixedVar(key) ? key!.slice(FIXED_VAR_PREFIX.length) : "";
+
 /** Normaliza um cabeçalho de coluna para chave de variável (sem acento, snake_case). */
 export function slugVarKey(header: string): string {
     return header
