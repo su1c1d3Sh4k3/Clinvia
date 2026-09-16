@@ -98,6 +98,14 @@ export function IaGuide() {
                     Em 9 de cada 10 casos, alguém da equipe <strong>assumiu a conversa</strong> (ela deixou de ser pendente) ou
                     a conversa foi <strong>movida de fila</strong>. Verifique esses dois primeiro.
                 </Callout>
+                <Callout type="dica" title="O relógio do follow-up é a última mensagem do CLIENTE">
+                    Quando o cliente some no meio da conversa, a IA espera e manda o follow-up. O tempo é contado{" "}
+                    <strong>sempre a partir da última mensagem que o cliente enviou</strong> — e de mais nada. As pílulas
+                    cinzas do chat (transferência de fila, "fulano visualizou essa conversa", entrou/saiu do grupo) e as
+                    respostas da própria IA <strong>não reiniciam essa contagem</strong>. Ou seja: abrir a conversa para
+                    dar uma olhada não atrasa o follow-up de ninguém. Conversa em que o cliente nunca escreveu (disparo de
+                    campanha sem resposta) não entra no follow-up — não há o que contar.
+                </Callout>
             </TopicSection>
 
             {/* 3 */}
