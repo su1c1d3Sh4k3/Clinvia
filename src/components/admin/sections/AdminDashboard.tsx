@@ -48,7 +48,9 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
     return <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">{children}</h3>;
 }
 
-export default function AdminDashboard() {
+// Cadastros pendentes e inativados são exclusivos do super-admin: a RPC já devolve
+// NULL nesses campos para o restante da equipe, aqui os cards somem junto.
+export default function AdminDashboard({ isSuperAdmin }: { isSuperAdmin: boolean }) {
     const [, setSearchParams] = useSearchParams();
 
     const { data, isLoading, error, refetch, isFetching } = useQuery({
@@ -146,9 +148,13 @@ export default function AdminDashboard() {
             <div className="space-y-2">
                 <SectionTitle>Crescimento</SectionTitle>
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                    <MetricCard icon={Clock} label="Cadastros pendentes" value={num(data.pending_signups)} hint="Aguardando aprovação" tone={data.pending_signups > 0 ? "warn" : "good"} onClick={() => setSearchParams({ tab: "clientes" })} />
+                    {isSuperAdmin && (
+                        <MetricCard icon={Clock} label="Cadastros pendentes" value={num(data.pending_signups)} hint="Aguardando aprovação" tone={data.pending_signups > 0 ? "warn" : "good"} onClick={() => setSearchParams({ tab: "clientes" })} />
+                    )}
                     <MetricCard icon={UserPlus} label="Novos no mês" value={num(clients.new_this_month)} hint="Contas aprovadas" tone="good" />
-                    <MetricCard icon={UserX} label="Inativados" value={num(clients.deactivated)} hint="Em janela de retenção" tone={clients.deactivated > 0 ? "warn" : "good"} onClick={() => setSearchParams({ tab: "clientes" })} />
+                    {isSuperAdmin && (
+                        <MetricCard icon={UserX} label="Inativados" value={num(clients.deactivated)} hint="Em janela de retenção" tone={clients.deactivated > 0 ? "warn" : "good"} onClick={() => setSearchParams({ tab: "clientes" })} />
+                    )}
                     <MetricCard icon={Calendar} label="Agendamentos hoje" value={num(usage.appointments_today)} hint="Criados hoje" />
                 </div>
             </div>

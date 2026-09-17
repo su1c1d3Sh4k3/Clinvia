@@ -84,7 +84,9 @@ interface PendingProfile {
 
 const ITEMS_PER_PAGE = 10;
 
-export default function AdminClients({ canEdit }: { canEdit: boolean }) {
+// Cadastros pendentes e clientes inativos são EXCLUSIVOS do super-admin (regra do
+// dono do painel) — as RPCs correspondentes também recusam qualquer outro cargo.
+export default function AdminClients({ canEdit, isSuperAdmin }: { canEdit: boolean; isSuperAdmin: boolean }) {
     const [searchParams, setSearchParams] = useSearchParams();
     const [profiles, setProfiles] = useState<Profile[]>([]);
     const [totalCount, setTotalCount] = useState(0);
@@ -181,6 +183,7 @@ export default function AdminClients({ canEdit }: { canEdit: boolean }) {
 
     // Fetch based on active tab
     useEffect(() => {
+        if (!isSuperAdmin) return;
         if (activeTab === "pendentes") {
             fetchPendingProfiles();
         } else if (activeTab === "inativos") {
@@ -418,25 +421,27 @@ export default function AdminClients({ canEdit }: { canEdit: boolean }) {
 
     return (
         <div>
-            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full mb-6">
-                <TabsList className="grid w-full max-w-2xl grid-cols-3 bg-gray-800 border border-gray-700">
-                    <TabsTrigger value="ativos" className="flex items-center gap-2 data-[state=active]:bg-green-600 data-[state=active]:text-white">
-                        <UserCheck className="h-4 w-4" />
-                        <span className="hidden sm:inline">Clientes Ativos</span>
-                        <span className="sm:hidden">Ativos</span>
-                    </TabsTrigger>
-                    <TabsTrigger value="pendentes" className="flex items-center gap-2 data-[state=active]:bg-yellow-600 data-[state=active]:text-white">
-                        <Clock className="h-4 w-4" />
-                        <span className="hidden sm:inline">Clientes Pendentes</span>
-                        <span className="sm:hidden">Pendentes</span>
-                    </TabsTrigger>
-                    <TabsTrigger value="inativos" className="flex items-center gap-2 data-[state=active]:bg-red-600 data-[state=active]:text-white">
-                        <UserX className="h-4 w-4" />
-                        <span className="hidden sm:inline">Clientes Inativos</span>
-                        <span className="sm:hidden">Inativos</span>
-                    </TabsTrigger>
-                </TabsList>
-            </Tabs>
+            {isSuperAdmin && (
+                <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full mb-6">
+                    <TabsList className="grid w-full max-w-2xl grid-cols-3 bg-gray-800 border border-gray-700">
+                        <TabsTrigger value="ativos" className="flex items-center gap-2 data-[state=active]:bg-green-600 data-[state=active]:text-white">
+                            <UserCheck className="h-4 w-4" />
+                            <span className="hidden sm:inline">Clientes Ativos</span>
+                            <span className="sm:hidden">Ativos</span>
+                        </TabsTrigger>
+                        <TabsTrigger value="pendentes" className="flex items-center gap-2 data-[state=active]:bg-yellow-600 data-[state=active]:text-white">
+                            <Clock className="h-4 w-4" />
+                            <span className="hidden sm:inline">Clientes Pendentes</span>
+                            <span className="sm:hidden">Pendentes</span>
+                        </TabsTrigger>
+                        <TabsTrigger value="inativos" className="flex items-center gap-2 data-[state=active]:bg-red-600 data-[state=active]:text-white">
+                            <UserX className="h-4 w-4" />
+                            <span className="hidden sm:inline">Clientes Inativos</span>
+                            <span className="sm:hidden">Inativos</span>
+                        </TabsTrigger>
+                    </TabsList>
+                </Tabs>
+            )}
 
             {activeTab === "ativos" && (
                 <>
@@ -518,22 +523,24 @@ export default function AdminClients({ canEdit }: { canEdit: boolean }) {
                                                             </Badge>
                                                         )}
 
+                                                        {/* Acessar já no nível "Visualizar": dentro da conta
+                                                            do cliente o usuário tem todos os acessos. */}
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="border-orange-500/50 text-orange-400 hover:bg-orange-500/20 hover:text-orange-300"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                impersonate(profile.id);
+                                                            }}
+                                                            disabled={impersonateLoading}
+                                                        >
+                                                            <Eye className="w-4 h-4 mr-2" />
+                                                            Acessar
+                                                        </Button>
+
                                                         {canEdit && (
                                                             <>
-                                                                <Button
-                                                                    variant="outline"
-                                                                    size="sm"
-                                                                    className="border-orange-500/50 text-orange-400 hover:bg-orange-500/20 hover:text-orange-300"
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        impersonate(profile.id);
-                                                                    }}
-                                                                    disabled={impersonateLoading}
-                                                                >
-                                                                    <Eye className="w-4 h-4 mr-2" />
-                                                                    Acessar
-                                                                </Button>
-
                                                                 {isDeactivated ? (
                                                                     <Button
                                                                         variant="outline"
@@ -564,18 +571,21 @@ export default function AdminClients({ canEdit }: { canEdit: boolean }) {
                                                                     </Button>
                                                                 )}
 
-                                                                <Button
-                                                                    variant="outline"
-                                                                    size="sm"
-                                                                    className="border-red-500/50 text-red-400 hover:bg-red-500/20 hover:text-red-300"
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        setProfileToDelete(profile);
-                                                                    }}
-                                                                >
-                                                                    <Trash2 className="w-4 h-4 mr-2" />
-                                                                    Excluir
-                                                                </Button>
+                                                                {/* Excluir conta permanece exclusivo do super-admin */}
+                                                                {isSuperAdmin && (
+                                                                    <Button
+                                                                        variant="outline"
+                                                                        size="sm"
+                                                                        className="border-red-500/50 text-red-400 hover:bg-red-500/20 hover:text-red-300"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setProfileToDelete(profile);
+                                                                        }}
+                                                                    >
+                                                                        <Trash2 className="w-4 h-4 mr-2" />
+                                                                        Excluir
+                                                                    </Button>
+                                                                )}
                                                             </>
                                                         )}
                                                     </>
@@ -609,12 +619,14 @@ export default function AdminClients({ canEdit }: { canEdit: boolean }) {
                                                     <TokenUsageCharts profileId={profile.id} />
                                                 </div>
 
-                                                <OpenAITokenManager
-                                                    profileId={profile.id}
-                                                    currentToken={expandedProfileData?.openai_token || null}
-                                                    tokenInvalid={expandedProfileData?.openai_token_invalid || false}
-                                                    onTokenUpdated={() => handleExpand(profile.id)}
-                                                />
+                                                {canEdit && (
+                                                    <OpenAITokenManager
+                                                        profileId={profile.id}
+                                                        currentToken={expandedProfileData?.openai_token || null}
+                                                        tokenInvalid={expandedProfileData?.openai_token_invalid || false}
+                                                        onTokenUpdated={() => handleExpand(profile.id)}
+                                                    />
+                                                )}
 
                                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                                     <div>
@@ -786,7 +798,7 @@ export default function AdminClients({ canEdit }: { canEdit: boolean }) {
                 </>
             )}
 
-            {activeTab === "pendentes" && (
+            {isSuperAdmin && activeTab === "pendentes" && (
                 <div className="space-y-4">
                     <h3 className="text-lg font-semibold text-yellow-400 flex items-center gap-2">
                         <Clock className="w-5 h-5" />
@@ -873,7 +885,7 @@ export default function AdminClients({ canEdit }: { canEdit: boolean }) {
                 </div>
             )}
 
-            {activeTab === "inativos" && (
+            {isSuperAdmin && activeTab === "inativos" && (
                 <div className="space-y-4">
                     <h3 className="text-lg font-semibold text-red-400 flex items-center gap-2">
                         <UserX className="w-5 h-5" />

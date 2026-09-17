@@ -1,5 +1,5 @@
 // @ts-nocheck - admin_users fora dos types gerados
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -12,11 +12,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, ShieldCheck, KeyRound, MailCheck, Pencil } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Plus, ShieldCheck, KeyRound, MailCheck, Pencil, Search, Building2 } from "lucide-react";
 import {
     ADMIN_PAGES,
     ADMIN_PERMISSION_LEVELS,
+    DEFAULT_ADMIN_CLIENT_SCOPE,
     DEFAULT_ADMIN_PERMISSIONS,
+    type AdminClientScope,
     type AdminPermissions,
 } from "@/lib/adminPermissions";
 
@@ -27,9 +31,20 @@ interface AdminUserRow {
     email: string;
     is_active: boolean;
     permissions: AdminPermissions;
+    /** 'all' = todas as contas; 'selected' = só as de allowed_client_ids */
+    client_scope: AdminClientScope;
+    allowed_client_ids: string[] | null;
     /** e-mail que recebe o código de 2 etapas; vazio = lista padrão do sistema */
     two_factor_email: string | null;
     created_at: string | null;
+}
+
+interface ClientOption {
+    id: string;
+    company_name: string | null;
+    full_name: string | null;
+    email: string | null;
+    deactivated: boolean;
 }
 
 const LEVEL_BADGE: Record<string, string> = {
@@ -43,6 +58,7 @@ export default function AdminTeam({ canEdit }: { canEdit: boolean }) {
     const [modalOpen, setModalOpen] = useState(false);
     const [editing, setEditing] = useState<AdminUserRow | null>(null);
     const [saving, setSaving] = useState(false);
+    const [clientSearch, setClientSearch] = useState("");
     const [form, setForm] = useState({
         name: "",
         email: "",
@@ -50,6 +66,8 @@ export default function AdminTeam({ canEdit }: { canEdit: boolean }) {
         password: "",
         is_active: true,
         permissions: { ...DEFAULT_ADMIN_PERMISSIONS } as AdminPermissions,
+        client_scope: DEFAULT_ADMIN_CLIENT_SCOPE as AdminClientScope,
+        allowed_client_ids: [] as string[],
     });
 
     const { data: users = [], isLoading } = useQuery({
@@ -64,8 +82,29 @@ export default function AdminTeam({ canEdit }: { canEdit: boolean }) {
         },
     });
 
+    // Lista de contas para o recorte — a RPC só responde para super-admin.
+    const { data: clientOptions = [] } = useQuery({
+        queryKey: ["admin-client-options"],
+        enabled: canEdit,
+        staleTime: 60_000,
+        queryFn: async () => {
+            const { data, error } = await supabase.rpc("admin_list_client_options");
+            if (error) throw error;
+            return (data || []) as ClientOption[];
+        },
+    });
+
+    const filteredClients = useMemo(() => {
+        const term = clientSearch.trim().toLowerCase();
+        if (!term) return clientOptions;
+        return clientOptions.filter((c) =>
+            [c.company_name, c.full_name, c.email].some((v) => (v || "").toLowerCase().includes(term))
+        );
+    }, [clientOptions, clientSearch]);
+
     const openCreate = () => {
         setEditing(null);
+        setClientSearch("");
         setForm({
             name: "",
             email: "",
@@ -73,12 +112,15 @@ export default function AdminTeam({ canEdit }: { canEdit: boolean }) {
             password: "",
             is_active: true,
             permissions: { ...DEFAULT_ADMIN_PERMISSIONS },
+            client_scope: DEFAULT_ADMIN_CLIENT_SCOPE,
+            allowed_client_ids: [],
         });
         setModalOpen(true);
     };
 
     const openEdit = (row: AdminUserRow) => {
         setEditing(row);
+        setClientSearch("");
         setForm({
             name: row.name,
             email: row.email,
@@ -86,8 +128,19 @@ export default function AdminTeam({ canEdit }: { canEdit: boolean }) {
             password: "",
             is_active: row.is_active,
             permissions: { ...DEFAULT_ADMIN_PERMISSIONS, ...(row.permissions || {}) },
+            client_scope: (row.client_scope || DEFAULT_ADMIN_CLIENT_SCOPE) as AdminClientScope,
+            allowed_client_ids: row.allowed_client_ids || [],
         });
         setModalOpen(true);
+    };
+
+    const toggleClient = (id: string) => {
+        setForm((f) => ({
+            ...f,
+            allowed_client_ids: f.allowed_client_ids.includes(id)
+                ? f.allowed_client_ids.filter((x) => x !== id)
+                : [...f.allowed_client_ids, id],
+        }));
     };
 
     const callFunction = async (body: Record<string, unknown>) => {
@@ -115,6 +168,12 @@ export default function AdminTeam({ canEdit }: { canEdit: boolean }) {
             return;
         }
 
+        // Sem acesso à página de clientes o recorte não faz sentido — grava vazio
+        // para que uma permissão concedida depois não herde uma lista esquecida.
+        const scopePayload = (form.permissions.clientes ?? "none") === "none"
+            ? { client_scope: DEFAULT_ADMIN_CLIENT_SCOPE, allowed_client_ids: [] }
+            : { client_scope: form.client_scope, allowed_client_ids: form.allowed_client_ids };
+
         setSaving(true);
         try {
             if (editing) {
@@ -125,6 +184,7 @@ export default function AdminTeam({ canEdit }: { canEdit: boolean }) {
                     is_active: form.is_active,
                     permissions: form.permissions,
                     two_factor_email: form.two_factor_email.trim().toLowerCase(),
+                    ...scopePayload,
                 });
                 if (form.password.trim()) {
                     await callFunction({
@@ -142,6 +202,7 @@ export default function AdminTeam({ canEdit }: { canEdit: boolean }) {
                     password: form.password.trim(),
                     permissions: form.permissions,
                     two_factor_email: form.two_factor_email.trim().toLowerCase(),
+                    ...scopePayload,
                 });
                 toast.success("Usuário criado — já pode entrar em /admin-oath");
             }
@@ -235,6 +296,13 @@ export default function AdminTeam({ canEdit }: { canEdit: boolean }) {
                                                         <span className="text-xs text-gray-600">Sem acesso</span>
                                                     )}
                                                 </div>
+                                                {(u.permissions?.clientes ?? "none") !== "none" && (
+                                                    <span className="block text-xs text-gray-500 mt-1">
+                                                        {u.client_scope === "all"
+                                                            ? "Contas: todas"
+                                                            : `Contas: ${(u.allowed_client_ids || []).length} selecionada(s)`}
+                                                    </span>
+                                                )}
                                             </TableCell>
                                             <TableCell>
                                                 <Badge variant="outline" className={u.is_active ? "border-green-500/40 text-green-300" : "border-gray-600 text-gray-500"}>
@@ -379,6 +447,90 @@ export default function AdminTeam({ canEdit }: { canEdit: boolean }) {
                                 ))}
                             </div>
                         </div>
+
+                        {/* Recorte de contas — só faz sentido para quem enxerga a página de clientes.
+                            O servidor repete a checagem (admin_can_access_client), aqui é só a escolha. */}
+                        {(form.permissions.clientes ?? "none") !== "none" && (
+                            <div className="space-y-2 rounded-lg border border-purple-500/30 bg-purple-500/5 p-3">
+                                <Label className="text-gray-300 flex items-center gap-1.5">
+                                    <Building2 className="w-3.5 h-3.5" />
+                                    Contas que este usuário pode acessar
+                                </Label>
+                                <p className="text-xs text-gray-500">
+                                    Cadastros pendentes, contas inativas e exclusão de conta continuam exclusivos do
+                                    super-admin. Dentro da conta liberada, o usuário entra com acesso total.
+                                </p>
+
+                                <RadioGroup
+                                    value={form.client_scope}
+                                    onValueChange={(v) => setForm((f) => ({ ...f, client_scope: v as AdminClientScope }))}
+                                    className="gap-2 pt-1"
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <RadioGroupItem value="all" id="scope-all" className="border-gray-600 text-purple-400" />
+                                        <Label htmlFor="scope-all" className="text-sm text-white font-normal cursor-pointer">
+                                            Todas as contas ativas
+                                        </Label>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <RadioGroupItem value="selected" id="scope-selected" className="border-gray-600 text-purple-400" />
+                                        <Label htmlFor="scope-selected" className="text-sm text-white font-normal cursor-pointer">
+                                            Somente as contas selecionadas ({form.allowed_client_ids.length})
+                                        </Label>
+                                    </div>
+                                </RadioGroup>
+
+                                {form.client_scope === "selected" && (
+                                    <div className="space-y-2 pt-1">
+                                        <div className="relative">
+                                            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
+                                            <Input
+                                                value={clientSearch}
+                                                onChange={(e) => setClientSearch(e.target.value)}
+                                                className="bg-gray-900 border-gray-700 text-white pl-8 h-9"
+                                                placeholder="Buscar conta por empresa, nome ou e-mail"
+                                            />
+                                        </div>
+                                        <div className="max-h-52 overflow-y-auto rounded-md border border-gray-700 divide-y divide-gray-700/60">
+                                            {filteredClients.length === 0 ? (
+                                                <p className="text-xs text-gray-500 p-3 text-center">
+                                                    Nenhuma conta encontrada.
+                                                </p>
+                                            ) : (
+                                                filteredClients.map((c) => (
+                                                    <label
+                                                        key={c.id}
+                                                        className="flex items-center gap-2.5 p-2 cursor-pointer hover:bg-gray-700/40"
+                                                    >
+                                                        <Checkbox
+                                                            checked={form.allowed_client_ids.includes(c.id)}
+                                                            onCheckedChange={() => toggleClient(c.id)}
+                                                            className="border-gray-600 shrink-0"
+                                                        />
+                                                        <div className="min-w-0 flex-1">
+                                                            <p className="text-sm text-white truncate">
+                                                                {c.company_name || c.full_name || c.email || "Sem nome"}
+                                                            </p>
+                                                            <p className="text-xs text-gray-500 truncate">{c.email}</p>
+                                                        </div>
+                                                        {c.deactivated && (
+                                                            <Badge variant="outline" className="border-gray-600 text-gray-500 shrink-0">
+                                                                Inativa
+                                                            </Badge>
+                                                        )}
+                                                    </label>
+                                                ))
+                                            )}
+                                        </div>
+                                        {form.allowed_client_ids.length === 0 && (
+                                            <p className="text-xs text-amber-400">
+                                                Nenhuma conta marcada — a página de clientes vai aparecer vazia.
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     <DialogFooter>

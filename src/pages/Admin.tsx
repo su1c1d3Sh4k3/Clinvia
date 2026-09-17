@@ -105,9 +105,14 @@ export default function Admin() {
     const renderSection = () => {
         switch (activePage) {
             case "dashboard":
-                return <AdminDashboard />;
+                return <AdminDashboard isSuperAdmin={identity.isSuperAdmin} />;
             case "clientes":
-                return <AdminClients canEdit={can("clientes", "edit")} />;
+                return (
+                    <AdminClients
+                        canEdit={can("clientes", "edit")}
+                        isSuperAdmin={identity.isSuperAdmin}
+                    />
+                );
             case "monitoramento":
                 return <AdminMonitoring canEdit={can("monitoramento", "edit")} />;
             case "equipe":

@@ -3,6 +3,7 @@
 // Returns a magic link that the frontend will use to authenticate
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { adminCan, adminCanAccessClient, adminForbidden, resolveAdminCaller } from '../_shared/admin-guard.ts';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -46,20 +47,22 @@ Deno.serve(async (req) => {
 
         console.log('[admin-impersonate] Request from user:', user.id);
 
-        // Verify caller is super-admin
-        const { data: profile, error: profileError } = await supabaseAdmin
-            .from('profiles')
-            .select('role')
-            .eq('id', user.id)
-            .single();
+        // Caller = super-admin OU usuário do painel com acesso à página de clientes.
+        // O usuário do painel entra na conta com poderes totais DENTRO do tenant,
+        // mas só nas contas que o super-admin liberou para ele.
+        const caller = await resolveAdminCaller(supabaseAdmin, req);
 
-        if (profileError || profile?.role !== 'super-admin') {
-            console.log('[admin-impersonate] Access denied. Role:', profile?.role);
-            return new Response(
-                JSON.stringify({ success: false, error: 'Access denied. Super-admin only.' }),
-                { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
+        if (!caller || !adminCan(caller, 'clientes', 'view')) {
+            console.log('[admin-impersonate] Access denied for', user.id);
+            return adminForbidden(corsHeaders, 'Acesso negado. Apenas a equipe do painel com acesso a clientes pode entrar em uma conta.');
         }
+
+        // Barreira de escopo: valida o perfil alvo ANTES de gerar o magic link.
+        const assertTargetAllowed = async (profileId: string | null): Promise<Response | null> => {
+            if (await adminCanAccessClient(supabaseAdmin, caller, profileId)) return null;
+            console.log('[admin-impersonate] Out of scope target:', profileId);
+            return adminForbidden(corsHeaders);
+        };
 
         // Get target from request body: tenant owner (target_user_id) OR a
         // specific team member of a tenant (target_team_member_id — used by the
@@ -93,6 +96,9 @@ Deno.serve(async (req) => {
                 );
             }
 
+            const memberDenied = await assertTargetAllowed(member.user_id);
+            if (memberDenied) return memberDenied;
+
             // Email confiável = do auth user (team_members.email pode divergir)
             const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(member.auth_user_id);
             if (!authUser?.user?.email) {
@@ -114,6 +120,9 @@ Deno.serve(async (req) => {
             targetCompanyName = ownerProfile?.company_name || null;
         } else {
             console.log('[admin-impersonate] Impersonating user:', target_user_id);
+
+            const ownerDenied = await assertTargetAllowed(target_user_id);
+            if (ownerDenied) return ownerDenied;
 
             // Get target user info from profiles
             const { data: targetProfile } = await supabaseAdmin

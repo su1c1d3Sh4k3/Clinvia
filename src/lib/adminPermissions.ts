@@ -32,7 +32,7 @@ export interface AdminPageDef {
 
 export const ADMIN_PAGES: AdminPageDef[] = [
     { value: "dashboard", label: "Dashboard", icon: LayoutDashboard, description: "Visão geral do sistema" },
-    { value: "clientes", label: "Clientes", icon: Users, description: "Contas ativas, pendentes e inativas" },
+    { value: "clientes", label: "Clientes", icon: Users, description: "Contas ativas (pendentes e inativas são exclusivas do super-admin)" },
     { value: "monitoramento", label: "Monitoramento", icon: Activity, description: "Saúde da infraestrutura" },
     { value: "equipe", label: "Equipe", icon: ShieldCheck, description: "Usuários do painel e permissões" },
     { value: "suporte", label: "Suporte", icon: Headphones, description: "Chamados dos clientes" },
@@ -57,6 +57,25 @@ export const DEFAULT_ADMIN_PERMISSIONS: AdminPermissions = {
     atualizacoes: "none",
     "design-login": "none",
 };
+
+/**
+ * Escopo de contas de um usuário do painel (admin_users.client_scope /
+ * allowed_client_ids). Espelha public.admin_can_access_client — o servidor
+ * continua sendo a autoridade; aqui é só para a interface não oferecer o que
+ * seria recusado.
+ */
+export type AdminClientScope = "all" | "selected";
+
+export const DEFAULT_ADMIN_CLIENT_SCOPE: AdminClientScope = "selected";
+
+export function clientInScope(
+    scope: AdminClientScope | null | undefined,
+    allowedIds: string[] | null | undefined,
+    profileId: string,
+): boolean {
+    if (scope === "all") return true;
+    return (allowedIds ?? []).includes(profileId);
+}
 
 /** Espelho em TS de public.admin_can — o servidor continua sendo a autoridade. */
 export function permissionAllows(

@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { encryptToken } from "../_shared/token-tracker.ts";
+import { adminCan, adminCanAccessClient, adminForbidden, resolveAdminCaller } from "../_shared/admin-guard.ts";
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -27,6 +28,17 @@ serve(async (req) => {
         const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
         const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
         const supabase = createClient(supabaseUrl, supabaseKey);
+
+        // Roda com service role: sem este guard qualquer usuário autenticado
+        // reescreveria o token OpenAI de qualquer tenant.
+        const caller = await resolveAdminCaller(supabase, req);
+        if (
+            !caller ||
+            !adminCan(caller, 'clientes', 'edit') ||
+            !(await adminCanAccessClient(supabase, caller, profileId))
+        ) {
+            return adminForbidden(corsHeaders);
+        }
 
         // Only allow specific fields to be updated
         const allowedFields = ['openai_token', 'openai_token_invalid'];

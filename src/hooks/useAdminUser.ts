@@ -1,7 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
+    clientInScope,
     permissionAllows,
+    type AdminClientScope,
     type AdminPage,
     type AdminPermissionLevel,
     type AdminPermissions,
@@ -14,6 +16,8 @@ export interface AdminUserRow {
     email: string;
     is_active: boolean;
     permissions: AdminPermissions;
+    client_scope: AdminClientScope;
+    allowed_client_ids: string[] | null;
     created_at: string | null;
 }
 
@@ -81,5 +85,17 @@ export function useAdminUser() {
         return permissionAllows(identity.adminUser?.permissions, page, level);
     };
 
-    return { identity, can, isLoading: query.isLoading, refetch: query.refetch };
+    /** Espelho de public.admin_can_access_client — só para esconder o que o servidor recusaria. */
+    const canAccessClient = (profileId: string) => {
+        if (!identity) return false;
+        if (identity.isSuperAdmin) return true;
+        if (!can("clientes")) return false;
+        return clientInScope(
+            identity.adminUser?.client_scope,
+            identity.adminUser?.allowed_client_ids,
+            profileId,
+        );
+    };
+
+    return { identity, can, canAccessClient, isLoading: query.isLoading, refetch: query.refetch };
 }

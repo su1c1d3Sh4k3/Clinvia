@@ -22,6 +22,96 @@ const corsHeaders = {
 
 const VALID_ACTIONS = ["create", "update", "deactivate", "reset_password"];
 
+// Espelha src/lib/adminPermissions.ts — página fora da lista é descartada em vez
+// de gravada, senão um payload forjado plantaria uma chave que o front não sabe
+// exibir (e ninguém revogaria pela interface).
+const ADMIN_PAGES = [
+    "dashboard",
+    "clientes",
+    "monitoramento",
+    "equipe",
+    "suporte",
+    "atualizacoes",
+    "design-login",
+];
+const PERMISSION_LEVELS = ["none", "view", "edit"];
+
+function sanitizePermissions(raw: unknown): Record<string, string> {
+    const out: Record<string, string> = {};
+    if (!raw || typeof raw !== "object") return out;
+    for (const page of ADMIN_PAGES) {
+        const level = String((raw as Record<string, unknown>)[page] ?? "none");
+        out[page] = PERMISSION_LEVELS.includes(level) ? level : "none";
+    }
+    return out;
+}
+
+// Escopo de contas: só entram ids de perfis que existem e que NÃO são
+// super-admin — nenhum usuário do painel pode ser apontado para a conta de um
+// super-admin nem para um id inventado.
+async function sanitizeScope(
+    supabaseAdmin: ReturnType<typeof createClient>,
+    body: Record<string, unknown>,
+): Promise<{ values?: Record<string, unknown>; response?: Response }> {
+    const values: Record<string, unknown> = {};
+
+    if (body.client_scope !== undefined) {
+        const scope = String(body.client_scope);
+        if (!["all", "selected"].includes(scope)) {
+            return {
+                response: apiError(corsHeaders, {
+                    status: 400,
+                    code: "invalid_client_scope",
+                    message: 'O escopo de contas precisa ser "all" ou "selected".',
+                }),
+            };
+        }
+        values.client_scope = scope;
+    }
+
+    if (body.allowed_client_ids !== undefined) {
+        const raw = Array.isArray(body.allowed_client_ids) ? body.allowed_client_ids : [];
+        const ids = [...new Set(raw.map((id) => String(id)).filter(Boolean))];
+
+        if (ids.length === 0) {
+            values.allowed_client_ids = [];
+        } else {
+            const { data: valid, error } = await supabaseAdmin
+                .from("profiles")
+                .select("id, role")
+                .in("id", ids);
+
+            if (error) {
+                return {
+                    response: dbErrorResponse(
+                        corsHeaders,
+                        "client_scope_lookup_failed",
+                        "validar as contas selecionadas",
+                        error,
+                    ),
+                };
+            }
+
+            const allowed = (valid ?? [])
+                .filter((p: { role: string | null }) => p.role !== "super-admin")
+                .map((p: { id: string }) => p.id);
+
+            if (allowed.length !== ids.length) {
+                return {
+                    response: apiError(corsHeaders, {
+                        status: 400,
+                        code: "invalid_client_ids",
+                        message: "Uma ou mais contas selecionadas não existem ou não podem ser liberadas.",
+                    }),
+                };
+            }
+            values.allowed_client_ids = allowed;
+        }
+    }
+
+    return { values };
+}
+
 serve(async (req) => {
     if (req.method === "OPTIONS") {
         return new Response(null, { headers: corsHeaders });
@@ -114,6 +204,12 @@ serve(async (req) => {
                 });
             }
 
+            const { values: scopeValues, response: scopeError } = await sanitizeScope(supabaseAdmin, body!);
+            if (scopeError) {
+                await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+                return scopeError;
+            }
+
             const { data: inserted, error: insertError } = await supabaseAdmin
                 .from("admin_users")
                 .insert({
@@ -121,7 +217,11 @@ serve(async (req) => {
                     name: body!.name,
                     email,
                     is_active: body!.is_active !== false,
-                    permissions: body!.permissions ?? {},
+                    permissions: sanitizePermissions(body!.permissions),
+                    // Default seguro: nenhuma conta liberada até o super-admin escolher.
+                    client_scope: "selected",
+                    allowed_client_ids: [],
+                    ...scopeValues,
                     // Vazio = a edge fn admin-2fa manda o código para a lista padrão.
                     two_factor_email: String(body!.two_factor_email ?? "").trim().toLowerCase() || null,
                     created_by: caller.user.id,
@@ -191,11 +291,15 @@ serve(async (req) => {
             updates.is_active = false;
         } else {
             if (body!.name !== undefined) updates.name = body!.name;
-            if (body!.permissions !== undefined) updates.permissions = body!.permissions;
+            if (body!.permissions !== undefined) updates.permissions = sanitizePermissions(body!.permissions);
             if (body!.is_active !== undefined) updates.is_active = body!.is_active;
             if (body!.two_factor_email !== undefined) {
                 updates.two_factor_email = String(body!.two_factor_email).trim().toLowerCase() || null;
             }
+
+            const { values: scopeValues, response: scopeError } = await sanitizeScope(supabaseAdmin, body!);
+            if (scopeError) return scopeError;
+            Object.assign(updates, scopeValues);
         }
 
         const { data: updated, error: updateError } = await supabaseAdmin

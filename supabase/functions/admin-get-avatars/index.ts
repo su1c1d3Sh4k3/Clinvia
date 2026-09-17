@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { adminCan, adminForbidden, resolveAdminCaller } from "../_shared/admin-guard.ts";
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -21,17 +22,36 @@ serve(async (req) => {
             );
         }
 
-        console.log('[admin-get-avatars] Fetching avatars for', profileIds.length, 'profiles');
-
         const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
         const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
         const supabase = createClient(supabaseUrl, supabaseKey);
+
+        // Roda com service role: sem este guard qualquer usuário autenticado
+        // leria avatares de qualquer tenant informando os ids.
+        const caller = await resolveAdminCaller(supabase, req);
+        if (!caller || !adminCan(caller, 'clientes', 'view')) {
+            return adminForbidden(corsHeaders);
+        }
+
+        // Só os ids dentro do escopo do chamador
+        const scopedIds = caller.scopeAll
+            ? profileIds
+            : profileIds.filter((id: string) => caller.allowedClientIds.includes(id));
+
+        console.log('[admin-get-avatars] Fetching avatars for', scopedIds.length, 'profiles');
+
+        if (scopedIds.length === 0) {
+            return new Response(
+                JSON.stringify({ success: true, avatars: {} }),
+                { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
 
         // Fetch avatars from team_members where role = 'admin' for each profile
         const { data: teamMembers, error } = await supabase
             .from('team_members')
             .select('user_id, avatar_url')
-            .in('user_id', profileIds)
+            .in('user_id', scopedIds)
             .eq('role', 'admin');
 
         if (error) {
