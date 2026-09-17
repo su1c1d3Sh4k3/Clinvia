@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getTemplateKind, TEMPLATE_KINDS, TEMPLATE_KIND_LABELS, type TemplateKind } from "@/lib/templateKind";
+import { withHeaderImage } from "@/lib/templateHeaderImage";
 
 const SUPABASE_URL = "https://swfshqvvbohnahdyndch.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN3ZnNocXZ2Ym9obmFoZHluZGNoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1OTAyMzIsImV4cCI6MjA3OTE2NjIzMn0.rUja2PsYj9kWODdizhJNS6HjfA9Tg7DrJJylUH8RTnY";
@@ -279,6 +280,8 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
                 if (sendParams.length > 0 && sendParams.some(p => p.trim())) {
                     templateComponents = [{ type: "body", parameters: sendParams.filter(p => p.trim()).map(p => ({ type: "text", text: p })) }];
                 }
+                // Template com cabeçalho de imagem SEMPRE exige o parâmetro de header.
+                templateComponents = withHeaderImage(selectedTemplate, templateComponents);
                 const result = await callTemplateApi({
                     action: "send",
                     user_id: user?.id,
@@ -672,6 +675,9 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
                                 {selectedTemplate && (
                                     <div className="border-t p-3 space-y-2 bg-muted/20">
                                         <div className="bg-[#e7fed6] dark:bg-[#025c4c] rounded-lg p-2.5 text-sm max-w-[280px] shadow-sm">
+                                            {selectedTemplate.header_media_url && (
+                                                <img src={selectedTemplate.header_media_url} alt="Cabecalho do template" className="rounded mb-2 max-h-32 w-full object-cover" />
+                                            )}
                                             {getHeaderText(selectedTemplate) && <p className="font-bold text-xs mb-1">{getHeaderText(selectedTemplate)}</p>}
                                             <p className="text-xs whitespace-pre-wrap">{getPreviewText(selectedTemplate)}</p>
                                             {getFooterText(selectedTemplate) && <p className="text-[10px] text-muted-foreground mt-1">{getFooterText(selectedTemplate)}</p>}

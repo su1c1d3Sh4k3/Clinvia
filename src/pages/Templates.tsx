@@ -14,7 +14,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import {
     Loader2, Plus, Trash2, RefreshCw, FileText, CheckCircle2,
-    XCircle, Clock, AlertTriangle, Send, ChevronDown, ChevronUp, Pencil, Bot
+    XCircle, Clock, AlertTriangle, Send, ChevronDown, ChevronUp, Pencil, Bot, Image as ImageIcon
 } from "lucide-react";
 import {
     Dialog, DialogContent, DialogDescription, DialogFooter,
@@ -22,6 +22,9 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getTemplateKind, TEMPLATE_KINDS, TEMPLATE_KIND_LABELS, type TemplateKind } from "@/lib/templateKind";
+import {
+    fileToBase64, uploadHeaderImageToBucket, validateHeaderImage, withHeaderImage,
+} from "@/lib/templateHeaderImage";
 import { RecurrenceDefaultTemplateCard } from "@/components/templates/RecurrenceDefaultTemplateCard";
 
 const SUPABASE_URL = "https://swfshqvvbohnahdyndch.supabase.co";
@@ -111,6 +114,8 @@ function buildButtonsComponent(buttons: string[]): any | null {
     };
 }
 
+type HeaderType = "none" | "text" | "image";
+
 // Helper to call meta-template-manage edge function
 async function callTemplateApi(body: any): Promise<any> {
     let token = SUPABASE_ANON_KEY;
@@ -156,6 +161,9 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
     const [editTemplate, setEditTemplate] = useState<any>(null);
     const [editBodyText, setEditBodyText] = useState("");
     const [editHeaderText, setEditHeaderText] = useState("");
+    const [editHeaderType, setEditHeaderType] = useState<HeaderType>("none");
+    const [editHeaderImage, setEditHeaderImage] = useState<File | null>(null);
+    const [editHeaderImageUrl, setEditHeaderImageUrl] = useState<string>("");
     const [editFooterText, setEditFooterText] = useState("");
     const [editButtons, setEditButtons] = useState<string[]>([]);
     const editBodyRef = useRef<HTMLTextAreaElement>(null);
@@ -166,6 +174,8 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
     const [newLanguage, setNewLanguage] = useState("pt_BR");
     const [newBodyText, setNewBodyText] = useState("");
     const [newHeaderText, setNewHeaderText] = useState("");
+    const [newHeaderType, setNewHeaderType] = useState<HeaderType>("none");
+    const [newHeaderImage, setNewHeaderImage] = useState<File | null>(null);
     const [newFooterText, setNewFooterText] = useState("");
     const [newButtons, setNewButtons] = useState<string[]>([]);
 
@@ -304,8 +314,29 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
                 }
             }
             const components: any[] = [];
-            if (newHeaderText.trim()) {
+            let headerMediaUrl: string | null = null;
+            if (newHeaderType === "text" && newHeaderText.trim()) {
                 components.push({ type: "HEADER", format: "TEXT", text: newHeaderText.trim() });
+            } else if (newHeaderType === "image") {
+                if (!newHeaderImage) throw new Error("Escolha a imagem do cabeçalho.");
+                const invalid = validateHeaderImage(newHeaderImage);
+                if (invalid) throw new Error(invalid);
+                if (!ownerId) throw new Error("Sem usuário");
+                // A URL é o que vai em TODO envio; o handle só serve para a aprovação.
+                headerMediaUrl = await uploadHeaderImageToBucket(newHeaderImage, ownerId);
+                const { handle } = await callTemplateApi({
+                    action: 'upload_header_handle',
+                    user_id: user.id,
+                    instance_id: activeInstance.id,
+                    file_base64: await fileToBase64(newHeaderImage),
+                    file_name: newHeaderImage.name,
+                    file_type: newHeaderImage.type,
+                });
+                components.push({
+                    type: "HEADER",
+                    format: "IMAGE",
+                    example: { header_handle: [handle] },
+                });
             }
             components.push({ type: "BODY", text: bodyText });
             if (newFooterText.trim()) {
@@ -321,6 +352,7 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
                 category: newCategory,
                 language: newLanguage,
                 components,
+                header_media_url: headerMediaUrl,
             });
         },
         onSuccess: () => {
@@ -329,6 +361,7 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
             setCreateDialogOpen(false);
             setNewName(""); setNewCategory("UTILITY"); setNewLanguage("pt_BR");
             setNewBodyText(""); setNewHeaderText(""); setNewFooterText("");
+            setNewHeaderType("none"); setNewHeaderImage(null);
             setNewButtons([]);
         },
         onError: (err: any) => {
@@ -367,8 +400,41 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
                     (sysMeta || c.type !== "BUTTONS")
             );
             const components: any[] = [];
-            if (!sysMeta && editHeaderText.trim()) {
+            let headerMediaUrl: string | null | undefined;
+            if (!sysMeta && editHeaderType === "text" && editHeaderText.trim()) {
                 components.push({ type: "HEADER", format: "TEXT", text: editHeaderText.trim() });
+                headerMediaUrl = null;
+            } else if (!sysMeta && editHeaderType === "image") {
+                if (!editHeaderImage && !editHeaderImageUrl) {
+                    throw new Error("Escolha a imagem do cabeçalho.");
+                }
+                // Sem arquivo novo a imagem atual permanece — mas a Meta exige um
+                // handle a cada edição, então reenviamos a partir da URL salva.
+                let file = editHeaderImage;
+                if (!file) {
+                    const blob = await (await fetch(editHeaderImageUrl)).blob();
+                    file = new File([blob], "header.jpg", { type: blob.type });
+                } else {
+                    const invalid = validateHeaderImage(file);
+                    if (invalid) throw new Error(invalid);
+                    if (!ownerId) throw new Error("Sem usuário");
+                    headerMediaUrl = await uploadHeaderImageToBucket(file, ownerId);
+                }
+                const { handle } = await callTemplateApi({
+                    action: 'upload_header_handle',
+                    user_id: user.id,
+                    instance_id: activeInstance.id,
+                    file_base64: await fileToBase64(file),
+                    file_name: file.name,
+                    file_type: file.type,
+                });
+                components.push({
+                    type: "HEADER",
+                    format: "IMAGE",
+                    example: { header_handle: [handle] },
+                });
+            } else if (!sysMeta) {
+                headerMediaUrl = null;
             }
             components.push({ type: "BODY", text: bodyText });
             if (!sysMeta && editFooterText.trim()) {
@@ -387,6 +453,7 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
                 name: editTemplate.name,
                 components,
                 variable_map: variableMap,
+                header_media_url: headerMediaUrl,
             });
         },
         onSuccess: () => {
@@ -411,7 +478,12 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
         }
         setEditTemplate(tpl);
         setEditBodyText(body);
-        setEditHeaderText(tpl.components?.find((c: any) => c.type === 'HEADER')?.text || "");
+        const headerComp = tpl.components?.find((c: any) => c.type === 'HEADER');
+        const headerFmt = String(tpl.header_format || headerComp?.format || "").toUpperCase();
+        setEditHeaderText(headerComp?.text || "");
+        setEditHeaderType(headerFmt === "IMAGE" ? "image" : headerComp ? "text" : "none");
+        setEditHeaderImage(null);
+        setEditHeaderImageUrl(tpl.header_media_url || "");
         setEditFooterText(tpl.components?.find((c: any) => c.type === 'FOOTER')?.text || "");
         const buttonsComponent = tpl.components?.find((c: any) => c.type === 'BUTTONS');
         setEditButtons(
@@ -472,6 +544,8 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
                     parameters: sendParams.filter(p => p.trim()).map(p => ({ type: "text", text: p })),
                 }];
             }
+            // Template com cabeçalho de imagem SEMPRE exige o parâmetro de header.
+            templateComponents = withHeaderImage(selectedTemplate, templateComponents);
 
             const result = await callTemplateApi({
                 action: 'send',
@@ -659,11 +733,40 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
                                     </div>
                                     <div className="space-y-2">
                                         <Label>Cabecalho (opcional)</Label>
-                                        <Input
-                                            placeholder="Titulo do template"
-                                            value={newHeaderText}
-                                            onChange={(e) => setNewHeaderText(e.target.value)}
-                                        />
+                                        <Select value={newHeaderType} onValueChange={(v) => setNewHeaderType(v as HeaderType)}>
+                                            <SelectTrigger><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="none">Sem cabecalho</SelectItem>
+                                                <SelectItem value="text">Texto</SelectItem>
+                                                <SelectItem value="image">Imagem</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                        {newHeaderType === "text" && (
+                                            <Input
+                                                placeholder="Titulo do template"
+                                                value={newHeaderText}
+                                                onChange={(e) => setNewHeaderText(e.target.value)}
+                                            />
+                                        )}
+                                        {newHeaderType === "image" && (
+                                            <div className="space-y-2">
+                                                <Input
+                                                    type="file"
+                                                    accept="image/jpeg,image/png"
+                                                    onChange={(e) => setNewHeaderImage(e.target.files?.[0] || null)}
+                                                />
+                                                {newHeaderImage && (
+                                                    <img
+                                                        src={URL.createObjectURL(newHeaderImage)}
+                                                        alt="Previa do cabecalho"
+                                                        className="max-h-32 rounded border object-contain"
+                                                    />
+                                                )}
+                                                <p className="text-[11px] text-muted-foreground">
+                                                    JPG ou PNG, ate 5 MB. Esta mesma imagem sera enviada em todos os disparos deste template.
+                                                </p>
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="space-y-2">
                                         <Label>Corpo da mensagem</Label>
@@ -791,6 +894,11 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
                                                                 </Badge>
                                                             )}
                                                             {getStatusBadge(tpl.status)}
+                                                            {String(tpl.header_format || "").toUpperCase() === "IMAGE" && (
+                                                                <Badge variant="outline" className="text-[10px]">
+                                                                    <ImageIcon className="h-3 w-3 mr-1" /> Com imagem
+                                                                </Badge>
+                                                            )}
                                                             <Badge variant="outline" className="text-[10px]">{tpl.category}</Badge>
                                                         </div>
                                                         <p className="text-xs text-muted-foreground truncate mt-0.5">
@@ -839,7 +947,22 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
                                                     {headerComponent && (
                                                         <div>
                                                             <span className="font-medium text-xs text-muted-foreground">CABECALHO:</span>
-                                                            <p>{headerComponent.text}</p>
+                                                            {String(tpl.header_format || headerComponent.format || "TEXT").toUpperCase() === "IMAGE" ? (
+                                                                tpl.header_media_url ? (
+                                                                    <img
+                                                                        src={tpl.header_media_url}
+                                                                        alt="Cabecalho do template"
+                                                                        className="max-h-32 rounded border object-contain mt-1"
+                                                                    />
+                                                                ) : (
+                                                                    <p className="text-amber-600 dark:text-amber-400 text-xs flex items-center gap-1">
+                                                                        <AlertTriangle className="h-3 w-3" />
+                                                                        Cabecalho de imagem sem arquivo salvo — edite o template e escolha a imagem.
+                                                                    </p>
+                                                                )
+                                                            ) : (
+                                                                <p>{headerComponent.text}</p>
+                                                            )}
                                                         </div>
                                                     )}
                                                     {bodyComponent && (
@@ -977,11 +1100,47 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
                         {editTemplate && !SYS_TEMPLATE_META[editTemplate.name] && (
                             <div className="space-y-2">
                                 <Label>Cabecalho (opcional)</Label>
-                                <Input
-                                    placeholder="Titulo do template"
-                                    value={editHeaderText}
-                                    onChange={(e) => setEditHeaderText(e.target.value)}
-                                />
+                                <Select value={editHeaderType} onValueChange={(v) => setEditHeaderType(v as HeaderType)}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="none">Sem cabecalho</SelectItem>
+                                        <SelectItem value="text">Texto</SelectItem>
+                                        <SelectItem value="image">Imagem</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                {editHeaderType === "text" && (
+                                    <Input
+                                        placeholder="Titulo do template"
+                                        value={editHeaderText}
+                                        onChange={(e) => setEditHeaderText(e.target.value)}
+                                    />
+                                )}
+                                {editHeaderType === "image" && (
+                                    <div className="space-y-2">
+                                        {!editHeaderImage && editHeaderImageUrl && (
+                                            <img
+                                                src={editHeaderImageUrl}
+                                                alt="Imagem atual do cabecalho"
+                                                className="max-h-32 rounded border object-contain"
+                                            />
+                                        )}
+                                        <Input
+                                            type="file"
+                                            accept="image/jpeg,image/png"
+                                            onChange={(e) => setEditHeaderImage(e.target.files?.[0] || null)}
+                                        />
+                                        {editHeaderImage && (
+                                            <img
+                                                src={URL.createObjectURL(editHeaderImage)}
+                                                alt="Previa do cabecalho"
+                                                className="max-h-32 rounded border object-contain"
+                                            />
+                                        )}
+                                        <p className="text-[11px] text-muted-foreground">
+                                            JPG ou PNG, ate 5 MB. Deixe em branco para manter a imagem atual.
+                                        </p>
+                                    </div>
+                                )}
                             </div>
                         )}
                         <div className="space-y-2">

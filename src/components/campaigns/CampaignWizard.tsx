@@ -278,13 +278,14 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
 
     // Templates Meta aprovados para "usar template existente".
     // Aceita qualquer componente que não exija parâmetro dinâmico no envio:
-    // BODY/FOOTER sempre; HEADER de texto fixo (sem {{n}}); botões QUICK_REPLY.
+    // BODY/FOOTER sempre; HEADER de texto fixo (sem {{n}}) ou de imagem fixa
+    // (o disparo anexa o header_media_url salvo); botões QUICK_REPLY.
     const { data: approvedTemplates } = useQuery({
         queryKey: ["campaign-approved-templates", instanceId],
         queryFn: async () => {
             const { data, error } = await supabase
                 .from("message_templates" as any)
-                .select("id, name, language, status, components")
+                .select("id, name, language, status, components, header_format, header_media_url")
                 .eq("instance_id", instanceId)
                 .eq("status", "APPROVED")
                 .order("name");
@@ -296,7 +297,11 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
                         const type = String(c?.type || "").toUpperCase();
                         if (["BODY", "FOOTER"].includes(type)) return true;
                         if (type === "HEADER") {
-                            return String(c?.format || "TEXT").toUpperCase() === "TEXT"
+                            const fmt = String(c?.format || "TEXT").toUpperCase();
+                            // Imagem só entra se a URL fixa estiver salva — sem ela
+                            // a Meta recusa o envio (#132000).
+                            if (fmt === "IMAGE") return !!t.header_media_url;
+                            return fmt === "TEXT"
                                 && !/\{\{\s*\d+\s*\}\}/.test(String(c?.text || ""));
                         }
                         if (type === "BUTTONS") {
@@ -1054,6 +1059,16 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
                                 {selectedTemplate && (
                                     <>
                                         <div className="border rounded-xl p-3 bg-muted/30">
+                                            {selectedTemplate.header_media_url && (
+                                                <>
+                                                    <p className="text-[10px] text-muted-foreground mb-1">Imagem do cabeçalho</p>
+                                                    <img
+                                                        src={selectedTemplate.header_media_url}
+                                                        alt="Cabeçalho do template"
+                                                        className="rounded-lg mb-3 max-h-32 w-full object-cover"
+                                                    />
+                                                </>
+                                            )}
                                             <p className="text-[10px] text-muted-foreground mb-1">Corpo do template</p>
                                             <p className="text-sm whitespace-pre-wrap">{selectedTemplate.body}</p>
                                         </div>

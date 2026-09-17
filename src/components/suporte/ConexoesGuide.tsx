@@ -136,6 +136,7 @@ export function ConexoesGuide() {
                 <StepByStep steps={[
                     { title: "Três abas por tipo", description: "A lista é dividida em Templates Personalizados (criados por você), Automáticos (confirmação/lembrete/pesquisa) e Recorrência (mensagens de recorrência dos serviços). As mesmas abas aparecem nos modais de envio de template (nova mensagem e chat)." },
                     { title: "Crie com variáveis", description: "Use {{1}}, {{2}} para os campos dinâmicos (nome, data...). A Meta avalia em minutos a algumas horas." },
+                    { title: "Cabeçalho: texto ou imagem", description: "No campo Cabeçalho escolha Sem cabeçalho, Texto ou Imagem. Em Imagem você sobe um JPG ou PNG de até 5 MB — essa mesma imagem vai em TODOS os envios daquele template (não dá para trocar no disparo). Para usar outra imagem, edite o template e envie o novo arquivo (volta para revisão da Meta)." },
                     { title: "Templates do sistema", description: "Confirmação, lembrete e pesquisa de satisfação são criados automaticamente (badge azul 'Template Automatizado'). Você pode editar o texto — os botões de resposta, não." },
                     { title: "Ligue/desligue por template", description: "Cada template automatizado tem um switch — desligado, aquela mensagem automática não é enviada." },
                 ]} />

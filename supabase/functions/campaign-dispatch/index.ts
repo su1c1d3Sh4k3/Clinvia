@@ -409,6 +409,8 @@ async function dispatchBatch(supabase: any) {
     console.log(`[campaign-dispatch] Picked ${picked.length} contacts`);
 
     const campaignCache = new Map<string, any>();
+    // Cabeçalho de imagem do template (fixo por template) — 1 consulta por campanha.
+    const headerUrlCache = new Map<string, string | null>();
     let nextSpacingMs = META_SPACING_MS;
 
     for (let i = 0; i < picked.length; i++) {
@@ -527,12 +529,40 @@ async function dispatchBatch(supabase: any) {
                     text: resolveVariable(key, campaign, contact, rawData) || "-",
                 }));
 
+                // Template com cabeçalho de imagem exige o parâmetro de header em
+                // TODO envio (senão a Meta recusa com #132000). A imagem é fixa.
+                if (!headerUrlCache.has(row.campaign_id)) {
+                    const { data: tplRow } = await supabase
+                        .from("message_templates")
+                        .select("header_format, header_media_url")
+                        .eq("instance_id", campaign.instance_id)
+                        .eq("name", campaign.template_name)
+                        .maybeSingle();
+                    headerUrlCache.set(
+                        row.campaign_id,
+                        String(tplRow?.header_format || "").toUpperCase() === "IMAGE"
+                            ? tplRow?.header_media_url || null
+                            : null,
+                    );
+                }
+                const headerMediaUrl = headerUrlCache.get(row.campaign_id);
+
                 const templateData: any = {
                     name: campaign.template_name,
                     language: { code: "pt_BR" },
                 };
+                const templateComponents: any[] = [];
+                if (headerMediaUrl) {
+                    templateComponents.push({
+                        type: "header",
+                        parameters: [{ type: "image", image: { link: headerMediaUrl } }],
+                    });
+                }
                 if (parameters.length > 0) {
-                    templateData.components = [{ type: "body", parameters }];
+                    templateComponents.push({ type: "body", parameters });
+                }
+                if (templateComponents.length > 0) {
+                    templateData.components = templateComponents;
                 }
 
                 const renderedBody = `*Template enviado: ${campaign.template_name}*\n${renderMessage(campaign, contact, rawData)}`;

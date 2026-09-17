@@ -13,6 +13,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
  *             approved templates go back to PENDING review)
  *   - delete: Delete a template on Meta
  *   - sync:   Force sync templates from Meta to DB
+ *   - upload_header_handle: Sobe uma imagem pela Resumable Upload API e devolve
+ *             o handle exigido em example.header_handle na criação do template
  */
 
 const corsHeaders = {
@@ -22,6 +24,69 @@ const corsHeaders = {
 };
 
 const GRAPH_API = "https://graph.facebook.com/v22.0";
+
+// A Meta só aceita estes tipos no cabeçalho de imagem do template.
+const HEADER_IMAGE_TYPES = ["image/jpeg", "image/png"];
+const HEADER_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+
+/**
+ * Resumable Upload API (2 passos) — é a ÚNICA forma de obter o handle que a
+ * Meta exige para aprovar um template com cabeçalho de mídia. Não confundir
+ * com /media (esse serve para enviar mensagem avulsa, e o id expira).
+ *
+ * O handle vale só para a aprovação: no envio a imagem vai como parâmetro de
+ * header apontando para uma URL pública.
+ */
+async function uploadHeaderHandle(
+    appId: string,
+    accessToken: string,
+    bytes: Uint8Array,
+    fileName: string,
+    fileType: string,
+): Promise<string> {
+    const sessionResp = await fetch(
+        `${GRAPH_API}/${appId}/uploads?file_name=${encodeURIComponent(fileName)}` +
+        `&file_length=${bytes.length}&file_type=${encodeURIComponent(fileType)}`,
+        { method: "POST", headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    const sessionResult = await sessionResp.json();
+    if (!sessionResp.ok || !sessionResult?.id) {
+        throw new Error(
+            sessionResult?.error?.error_user_msg ||
+            sessionResult?.error?.message ||
+            "Não foi possível iniciar o envio da imagem para a Meta.",
+        );
+    }
+
+    // O id já vem no formato "upload:<SESSION_ID>" — o POST vai nele direto.
+    const uploadResp = await fetch(`${GRAPH_API}/${sessionResult.id}`, {
+        method: "POST",
+        headers: {
+            // Este passo NÃO aceita "Bearer": a Meta exige o esquema OAuth.
+            Authorization: `OAuth ${accessToken}`,
+            file_offset: "0",
+            "Content-Type": "application/octet-stream",
+        },
+        body: bytes,
+    });
+    const uploadResult = await uploadResp.json();
+    if (!uploadResp.ok || !uploadResult?.h) {
+        throw new Error(
+            uploadResult?.error?.error_user_msg ||
+            uploadResult?.error?.message ||
+            "Não foi possível enviar a imagem para a Meta.",
+        );
+    }
+    return uploadResult.h as string;
+}
+
+/** Lê o formato do cabeçalho de um array de components da Meta. */
+function readHeaderFormat(components: any): string | null {
+    if (!Array.isArray(components)) return null;
+    const header = components.find((c: any) => String(c?.type || "").toUpperCase() === "HEADER");
+    if (!header) return null;
+    return String(header.format || "TEXT").toUpperCase();
+}
 
 serve(async (req) => {
     if (req.method === "OPTIONS") {
@@ -90,6 +155,9 @@ serve(async (req) => {
                             language: tpl.language,
                             status: tpl.status,
                             components: tpl.components || [],
+                            // header_media_url NÃO entra aqui: a Meta não devolve a
+                            // URL pública da imagem, só o handle da aprovação.
+                            header_format: readHeaderFormat(tpl.components),
                             meta_template_id: tpl.id,
                             rejection_reason: tpl.rejected_reason || null,
                             updated_at: new Date().toISOString(),
@@ -119,9 +187,47 @@ serve(async (req) => {
             );
         }
 
+        // ── ACTION: upload_header_handle ──
+        // Recebe a imagem em base64 e devolve o handle que a Meta exige em
+        // example.header_handle para aprovar um template com cabeçalho de imagem.
+        if (action === "upload_header_handle") {
+            const { file_base64, file_name, file_type } = body;
+
+            if (!file_base64) throw new Error("Missing field: file_base64");
+            if (!file_type) throw new Error("Missing field: file_type");
+
+            if (!HEADER_IMAGE_TYPES.includes(String(file_type).toLowerCase())) {
+                throw new Error("A imagem do cabeçalho precisa ser JPG ou PNG.");
+            }
+
+            const appId = Deno.env.get("META_APP_ID");
+            if (!appId) throw new Error("META_APP_ID não configurado no ambiente da função");
+
+            const binary = atob(String(file_base64).replace(/^data:[^,]+,/, ""));
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+            if (bytes.length > HEADER_IMAGE_MAX_BYTES) {
+                throw new Error("A imagem do cabeçalho precisa ter no máximo 5 MB.");
+            }
+
+            const handle = await uploadHeaderHandle(
+                appId,
+                accessToken,
+                bytes,
+                file_name || "header.jpg",
+                String(file_type).toLowerCase(),
+            );
+
+            return new Response(
+                JSON.stringify({ success: true, handle }),
+                { headers: corsHeaders }
+            );
+        }
+
         // ── ACTION: create ──
         if (action === "create") {
-            const { name, category, language, components } = body;
+            const { name, category, language, components, header_media_url } = body;
 
             if (!name) throw new Error("Missing field: name");
             if (!category) throw new Error("Missing field: category");
@@ -183,6 +289,8 @@ serve(async (req) => {
                     language: language || "pt_BR",
                     status: metaResult.status || "PENDING",
                     components,
+                    header_format: readHeaderFormat(components),
+                    header_media_url: header_media_url || null,
                     meta_template_id: metaResult.id,
                 })
                 .select()
@@ -203,7 +311,7 @@ serve(async (req) => {
 
         // ── ACTION: edit ──
         if (action === "edit") {
-            const { name, components, variable_map } = body;
+            const { name, components, variable_map, header_media_url } = body;
 
             if (!name) throw new Error("Missing field: name");
             if (!components) throw new Error("Missing field: components");
@@ -263,11 +371,13 @@ serve(async (req) => {
             // Atualiza local: volta para PENDING (Meta revisa de novo)
             const updates: Record<string, unknown> = {
                 components,
+                header_format: readHeaderFormat(components),
                 status: "PENDING",
                 rejection_reason: null,
                 updated_at: new Date().toISOString(),
             };
             if (variable_map !== undefined) updates.variable_map = variable_map;
+            if (header_media_url !== undefined) updates.header_media_url = header_media_url || null;
 
             const { error: updError } = await supabase
                 .from("message_templates")
@@ -378,7 +488,7 @@ serve(async (req) => {
             );
         }
 
-        throw new Error(`Invalid action: "${action}". Valid: list, create, edit, delete, sync, send`);
+        throw new Error(`Invalid action: "${action}". Valid: list, create, edit, delete, sync, send, upload_header_handle`);
     } catch (error: any) {
         console.error("[meta-template-manage] Error:", error);
         return new Response(
