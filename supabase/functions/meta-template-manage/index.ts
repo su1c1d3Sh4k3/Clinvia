@@ -13,8 +13,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
  *             approved templates go back to PENDING review)
  *   - delete: Delete a template on Meta
  *   - sync:   Force sync templates from Meta to DB
- *   - upload_header_handle: Sobe uma imagem pela Resumable Upload API e devolve
- *             o handle exigido em example.header_handle na criação do template
+ *   - upload_header_handle: Sobe a mídia do cabeçalho (imagem, vídeo ou PDF) pela
+ *             Resumable Upload API e devolve o handle exigido em
+ *             example.header_handle na criação do template
  */
 
 const corsHeaders = {
@@ -25,9 +26,20 @@ const corsHeaders = {
 
 const GRAPH_API = "https://graph.facebook.com/v22.0";
 
-// A Meta só aceita estes tipos no cabeçalho de imagem do template.
-const HEADER_IMAGE_TYPES = ["image/jpeg", "image/png"];
-const HEADER_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+// Limites da Meta por formato de cabeçalho de mídia.
+const HEADER_MEDIA_RULES: Record<string, { mimes: string[]; maxBytes: number; label: string }> = {
+    IMAGE: { mimes: ["image/jpeg", "image/png"], maxBytes: 5 * 1024 * 1024, label: "JPG ou PNG de até 5 MB" },
+    VIDEO: { mimes: ["video/mp4"], maxBytes: 16 * 1024 * 1024, label: "MP4 de até 16 MB" },
+    DOCUMENT: { mimes: ["application/pdf"], maxBytes: 100 * 1024 * 1024, label: "PDF de até 100 MB" },
+};
+
+/** Descobre o formato do cabeçalho pelo mimetype do arquivo enviado. */
+function headerFormatForMime(mime: string): string | null {
+    for (const [format, rule] of Object.entries(HEADER_MEDIA_RULES)) {
+        if (rule.mimes.includes(mime)) return format;
+    }
+    return null;
+}
 
 /**
  * Resumable Upload API (2 passos) — é a ÚNICA forma de obter o handle que a
@@ -196,9 +208,12 @@ serve(async (req) => {
             if (!file_base64) throw new Error("Missing field: file_base64");
             if (!file_type) throw new Error("Missing field: file_type");
 
-            if (!HEADER_IMAGE_TYPES.includes(String(file_type).toLowerCase())) {
-                throw new Error("A imagem do cabeçalho precisa ser JPG ou PNG.");
+            const mime = String(file_type).toLowerCase();
+            const headerFormat = headerFormatForMime(mime);
+            if (!headerFormat) {
+                throw new Error("O cabeçalho aceita JPG/PNG (imagem), MP4 (vídeo) ou PDF (documento).");
             }
+            const mediaRule = HEADER_MEDIA_RULES[headerFormat];
 
             const appId = Deno.env.get("META_APP_ID");
             if (!appId) throw new Error("META_APP_ID não configurado no ambiente da função");
@@ -207,27 +222,30 @@ serve(async (req) => {
             const bytes = new Uint8Array(binary.length);
             for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
 
-            if (bytes.length > HEADER_IMAGE_MAX_BYTES) {
-                throw new Error("A imagem do cabeçalho precisa ter no máximo 5 MB.");
+            if (bytes.length > mediaRule.maxBytes) {
+                throw new Error(`O arquivo do cabeçalho passou do limite: ${mediaRule.label}.`);
             }
 
             const handle = await uploadHeaderHandle(
                 appId,
                 accessToken,
                 bytes,
-                file_name || "header.jpg",
-                String(file_type).toLowerCase(),
+                file_name || "header",
+                mime,
             );
 
             return new Response(
-                JSON.stringify({ success: true, handle }),
+                JSON.stringify({ success: true, handle, header_format: headerFormat }),
                 { headers: corsHeaders }
             );
         }
 
         // ── ACTION: create ──
         if (action === "create") {
-            const { name, category, language, components, header_media_url } = body;
+            const {
+                name, category, language, components,
+                header_media_url, header_media_name, header_location, button_coupon_code,
+            } = body;
 
             if (!name) throw new Error("Missing field: name");
             if (!category) throw new Error("Missing field: category");
@@ -291,6 +309,9 @@ serve(async (req) => {
                     components,
                     header_format: readHeaderFormat(components),
                     header_media_url: header_media_url || null,
+                    header_media_name: header_media_name || null,
+                    header_location: header_location || null,
+                    button_coupon_code: button_coupon_code || null,
                     meta_template_id: metaResult.id,
                 })
                 .select()
@@ -311,7 +332,10 @@ serve(async (req) => {
 
         // ── ACTION: edit ──
         if (action === "edit") {
-            const { name, components, variable_map, header_media_url } = body;
+            const {
+                name, components, variable_map,
+                header_media_url, header_media_name, header_location, button_coupon_code,
+            } = body;
 
             if (!name) throw new Error("Missing field: name");
             if (!components) throw new Error("Missing field: components");
@@ -378,6 +402,9 @@ serve(async (req) => {
             };
             if (variable_map !== undefined) updates.variable_map = variable_map;
             if (header_media_url !== undefined) updates.header_media_url = header_media_url || null;
+            if (header_media_name !== undefined) updates.header_media_name = header_media_name || null;
+            if (header_location !== undefined) updates.header_location = header_location || null;
+            if (button_coupon_code !== undefined) updates.button_coupon_code = button_coupon_code || null;
 
             const { error: updError } = await supabase
                 .from("message_templates")

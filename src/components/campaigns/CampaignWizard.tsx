@@ -28,6 +28,7 @@ import {
     AudienceSelection, EMPTY_AUDIENCE, SOURCE_VAR_KEYS, BASE_VAR_KEYS, slugVarKey,
     FIXED_VAR_PREFIX, isFixedVar, fixedVarValue,
 } from "./audienceTypes";
+import { TemplateHeaderPreview } from "@/components/templates/TemplateHeaderPreview";
 import { AudienceFileUpload } from "./audience/AudienceFileUpload";
 import { AudienceCrm } from "./audience/AudienceCrm";
 import { AudienceTag } from "./audience/AudienceTag";
@@ -278,14 +279,14 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
 
     // Templates Meta aprovados para "usar template existente".
     // Aceita qualquer componente que não exija parâmetro dinâmico no envio:
-    // BODY/FOOTER sempre; HEADER de texto fixo (sem {{n}}) ou de imagem fixa
-    // (o disparo anexa o header_media_url salvo); botões QUICK_REPLY.
+    // BODY/FOOTER sempre; HEADER de texto fixo (sem {{n}}) ou de mídia/localização
+    // fixa (o disparo anexa o que está salvo no template); botões sem variável.
     const { data: approvedTemplates } = useQuery({
         queryKey: ["campaign-approved-templates", instanceId],
         queryFn: async () => {
             const { data, error } = await supabase
                 .from("message_templates" as any)
-                .select("id, name, language, status, components, header_format, header_media_url")
+                .select("id, name, language, status, components, header_format, header_media_url, header_media_name, header_location, button_coupon_code")
                 .eq("instance_id", instanceId)
                 .eq("status", "APPROVED")
                 .order("name");
@@ -298,16 +299,22 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
                         if (["BODY", "FOOTER"].includes(type)) return true;
                         if (type === "HEADER") {
                             const fmt = String(c?.format || "TEXT").toUpperCase();
-                            // Imagem só entra se a URL fixa estiver salva — sem ela
-                            // a Meta recusa o envio (#132000).
-                            if (fmt === "IMAGE") return !!t.header_media_url;
+                            // Mídia/localização só entram se o valor fixo estiver salvo —
+                            // sem ele a Meta recusa o envio (#132000).
+                            if (["IMAGE", "VIDEO", "DOCUMENT"].includes(fmt)) return !!t.header_media_url;
+                            if (fmt === "LOCATION") return !!t.header_location;
                             return fmt === "TEXT"
                                 && !/\{\{\s*\d+\s*\}\}/.test(String(c?.text || ""));
                         }
                         if (type === "BUTTONS") {
-                            return (c?.buttons || []).every(
-                                (b: any) => String(b?.type || "").toUpperCase() === "QUICK_REPLY"
-                            );
+                            return (c?.buttons || []).every((b: any) => {
+                                const bt = String(b?.type || "").toUpperCase();
+                                // COPY_CODE exige o cupom fixo salvo; URL com {{1}} exigiria
+                                // parâmetro por contato, que a campanha não coleta.
+                                if (bt === "COPY_CODE") return !!t.button_coupon_code;
+                                if (bt === "URL") return !/\{\{\s*\d+\s*\}\}/.test(String(b?.url || ""));
+                                return ["QUICK_REPLY", "PHONE_NUMBER"].includes(bt);
+                            });
                         }
                         return false;
                     });
@@ -1059,14 +1066,10 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
                                 {selectedTemplate && (
                                     <>
                                         <div className="border rounded-xl p-3 bg-muted/30">
-                                            {selectedTemplate.header_media_url && (
+                                            {(selectedTemplate.header_media_url || selectedTemplate.header_location) && (
                                                 <>
-                                                    <p className="text-[10px] text-muted-foreground mb-1">Imagem do cabeçalho</p>
-                                                    <img
-                                                        src={selectedTemplate.header_media_url}
-                                                        alt="Cabeçalho do template"
-                                                        className="rounded-lg mb-3 max-h-32 w-full object-cover"
-                                                    />
+                                                    <p className="text-[10px] text-muted-foreground mb-1">Cabeçalho do template</p>
+                                                    <TemplateHeaderPreview tpl={selectedTemplate} className="mb-3" />
                                                 </>
                                             )}
                                             <p className="text-[10px] text-muted-foreground mb-1">Corpo do template</p>

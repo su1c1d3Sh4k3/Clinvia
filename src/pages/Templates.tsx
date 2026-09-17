@@ -23,8 +23,9 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getTemplateKind, TEMPLATE_KINDS, TEMPLATE_KIND_LABELS, type TemplateKind } from "@/lib/templateKind";
 import {
-    fileToBase64, uploadHeaderImageToBucket, validateHeaderImage, withHeaderImage,
-} from "@/lib/templateHeaderImage";
+    fileToBase64, uploadHeaderMediaToBucket, validateHeaderMedia, withTemplateParams,
+    HEADER_MEDIA_RULES, type HeaderMediaFormat,
+} from "@/lib/templateComponents";
 import { RecurrenceDefaultTemplateCard } from "@/components/templates/RecurrenceDefaultTemplateCard";
 
 const SUPABASE_URL = "https://swfshqvvbohnahdyndch.supabase.co";
@@ -97,24 +98,288 @@ function namedToNumbered(body: string, validKeys: string[]): { text: string; map
     return { text, map };
 }
 
-// Botões de resposta rápida → componente BUTTONS da Meta (ou null se vazio)
-function buildButtonsComponent(buttons: string[]): any | null {
-    const texts = buttons.map((b) => b.trim()).filter(Boolean);
-    if (texts.length === 0) return null;
-    if (texts.some((t) => t.length > 25)) {
-        throw new Error("Cada botão pode ter no máximo 25 caracteres.");
-    }
-    const unique = new Set(texts.map((t) => t.toLowerCase()));
-    if (unique.size !== texts.length) {
+// ── Botões ──────────────────────────────────────────────────────────────────
+type ButtonType = "QUICK_REPLY" | "URL" | "PHONE_NUMBER" | "COPY_CODE";
+
+type TemplateButton = {
+    type: ButtonType;
+    text: string;
+    url?: string;
+    phone_number?: string;
+    /** Código fixo do botão "Copiar código" (a Meta chama de example). */
+    example?: string;
+};
+
+const BUTTON_TYPE_LABELS: Record<ButtonType, string> = {
+    QUICK_REPLY: "Resposta rápida",
+    URL: "Abrir link",
+    PHONE_NUMBER: "Ligar",
+    COPY_CODE: "Copiar código",
+};
+
+/**
+ * Botões → componente BUTTONS da Meta, aplicando os limites dela.
+ * Devolve também o código do cupom, que precisa ser reenviado em todo disparo
+ * (a Meta exige o parâmetro coupon_code mesmo com o código fixo).
+ */
+function buildButtonsComponent(buttons: TemplateButton[]): { component: any | null; couponCode: string | null } {
+    const list = buttons.filter((b) => (b.type === "COPY_CODE" ? !!b.example?.trim() : !!b.text.trim()));
+    if (list.length === 0) return { component: null, couponCode: null };
+    if (list.length > 10) throw new Error("Um template aceita no máximo 10 botões.");
+
+    const count = (t: ButtonType) => list.filter((b) => b.type === t).length;
+    if (count("URL") > 2) throw new Error("A Meta aceita no máximo 2 botões de link.");
+    if (count("PHONE_NUMBER") > 1) throw new Error("A Meta aceita no máximo 1 botão de ligação.");
+    if (count("COPY_CODE") > 1) throw new Error("A Meta aceita no máximo 1 botão de copiar código.");
+
+    const labels = list.filter((b) => b.type !== "COPY_CODE").map((b) => b.text.trim());
+    if (labels.some((t) => t.length > 25)) throw new Error("Cada botão pode ter no máximo 25 caracteres.");
+    if (new Set(labels.map((t) => t.toLowerCase())).size !== labels.length) {
         throw new Error("Os textos dos botões devem ser diferentes entre si.");
     }
+
+    // A Meta exige que as respostas rápidas fiquem agrupadas — mandamos por último.
+    const ordered = [...list].sort(
+        (a, b) => (a.type === "QUICK_REPLY" ? 1 : 0) - (b.type === "QUICK_REPLY" ? 1 : 0),
+    );
+
+    const metaButtons = ordered.map((b) => {
+        const text = b.text.trim();
+        if (b.type === "URL") {
+            const url = (b.url || "").trim();
+            if (!/^https?:\/\/\S+$/.test(url)) {
+                throw new Error(`Informe um link começando com http:// ou https:// no botão "${text}".`);
+            }
+            return { type: "URL", text, url };
+        }
+        if (b.type === "PHONE_NUMBER") {
+            const digits = (b.phone_number || "").replace(/\D/g, "");
+            if (digits.length < 10) {
+                throw new Error(`Informe o telefone com DDI e DDD no botão "${text}".`);
+            }
+            return { type: "PHONE_NUMBER", text, phone_number: `+${digits}` };
+        }
+        if (b.type === "COPY_CODE") {
+            const code = (b.example || "").trim();
+            if (code.length > 15) throw new Error("O código do cupom pode ter no máximo 15 caracteres.");
+            return { type: "COPY_CODE", example: code };
+        }
+        return { type: "QUICK_REPLY", text };
+    });
+
     return {
-        type: "BUTTONS",
-        buttons: texts.map((text) => ({ type: "QUICK_REPLY", text })),
+        component: { type: "BUTTONS", buttons: metaButtons },
+        couponCode: ordered.find((b) => b.type === "COPY_CODE")?.example?.trim() || null,
     };
 }
 
-type HeaderType = "none" | "text" | "image";
+// ── Cabeçalho ───────────────────────────────────────────────────────────────
+type HeaderType = "none" | "text" | "image" | "video" | "document" | "location";
+
+const HEADER_TYPE_FORMAT: Record<HeaderType, string | null> = {
+    none: null, text: "TEXT", image: "IMAGE", video: "VIDEO", document: "DOCUMENT", location: "LOCATION",
+};
+
+type HeaderState = {
+    type: HeaderType;
+    text: string;
+    /** Arquivo novo escolhido agora (null = mantém o que já está salvo). */
+    file: File | null;
+    /** Mídia já salva (edição). */
+    fileUrl: string;
+    fileName: string;
+    latitude: string;
+    longitude: string;
+    locName: string;
+    locAddress: string;
+};
+
+/** Selo mostrado na lista para cabeçalhos que não são texto. */
+const HEADER_BADGE: Record<string, string> = {
+    IMAGE: "Com imagem", VIDEO: "Com video", DOCUMENT: "Com documento", LOCATION: "Com localizacao",
+};
+
+const EMPTY_HEADER: HeaderState = {
+    type: "none", text: "", file: null, fileUrl: "", fileName: "",
+    latitude: "", longitude: "", locName: "", locAddress: "",
+};
+
+/** Campos do cabeçalho — compartilhado pelos diálogos de criar e editar. */
+function TemplateHeaderFields({
+    value, onChange,
+}: { value: HeaderState; onChange: (v: HeaderState) => void }) {
+    const patch = (p: Partial<HeaderState>) => onChange({ ...value, ...p });
+    const format = HEADER_TYPE_FORMAT[value.type];
+    const mediaRule = format && format !== "TEXT" && format !== "LOCATION"
+        ? HEADER_MEDIA_RULES[format as HeaderMediaFormat]
+        : null;
+
+    return (
+        <div className="space-y-2">
+            <Label>Cabecalho (opcional)</Label>
+            <Select value={value.type} onValueChange={(v) => patch({ type: v as HeaderType, file: null })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="none">Sem cabecalho</SelectItem>
+                    <SelectItem value="text">Texto</SelectItem>
+                    <SelectItem value="image">Imagem</SelectItem>
+                    <SelectItem value="video">Video</SelectItem>
+                    <SelectItem value="document">Documento (PDF)</SelectItem>
+                    <SelectItem value="location">Localizacao</SelectItem>
+                </SelectContent>
+            </Select>
+
+            {value.type === "text" && (
+                <Input
+                    placeholder="Titulo do template"
+                    value={value.text}
+                    onChange={(e) => patch({ text: e.target.value })}
+                />
+            )}
+
+            {mediaRule && (
+                <div className="space-y-2">
+                    {!value.file && value.fileUrl && (
+                        value.type === "image" ? (
+                            <img src={value.fileUrl} alt="Cabecalho atual" className="max-h-32 rounded border object-contain" />
+                        ) : value.type === "video" ? (
+                            <video src={value.fileUrl} controls className="max-h-32 rounded border" />
+                        ) : (
+                            <a href={value.fileUrl} target="_blank" rel="noreferrer" className="text-xs text-primary underline">
+                                {value.fileName || "Documento atual"}
+                            </a>
+                        )
+                    )}
+                    <Input
+                        type="file"
+                        accept={mediaRule.accept}
+                        onChange={(e) => {
+                            const file = e.target.files?.[0] || null;
+                            patch({ file, fileName: file?.name || value.fileName });
+                        }}
+                    />
+                    {value.file && value.type === "image" && (
+                        <img src={URL.createObjectURL(value.file)} alt="Previa do cabecalho" className="max-h-32 rounded border object-contain" />
+                    )}
+                    {value.file && value.type === "video" && (
+                        <video src={URL.createObjectURL(value.file)} controls className="max-h-32 rounded border" />
+                    )}
+                    <p className="text-[11px] text-muted-foreground">
+                        {mediaRule.label}. Este mesmo arquivo sera enviado em todos os disparos deste template.
+                        {value.fileUrl ? " Deixe em branco para manter o arquivo atual." : ""}
+                    </p>
+                </div>
+            )}
+
+            {value.type === "location" && (
+                <div className="space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                        <Input
+                            placeholder="Latitude (ex: -23.5617)"
+                            value={value.latitude}
+                            onChange={(e) => patch({ latitude: e.target.value })}
+                        />
+                        <Input
+                            placeholder="Longitude (ex: -46.6560)"
+                            value={value.longitude}
+                            onChange={(e) => patch({ longitude: e.target.value })}
+                        />
+                    </div>
+                    <Input
+                        placeholder="Nome do local (ex: Clinica Central)"
+                        value={value.locName}
+                        onChange={(e) => patch({ locName: e.target.value })}
+                    />
+                    <Input
+                        placeholder="Endereco completo"
+                        value={value.locAddress}
+                        onChange={(e) => patch({ locAddress: e.target.value })}
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                        O mapa e fixo: todos os disparos deste template mostram este endereco.
+                    </p>
+                </div>
+            )}
+        </div>
+    );
+}
+
+/** Lista de botões — compartilhada pelos diálogos de criar e editar. */
+function TemplateButtonsEditor({
+    value, onChange,
+}: { value: TemplateButton[]; onChange: (v: TemplateButton[]) => void }) {
+    const patch = (idx: number, p: Partial<TemplateButton>) =>
+        onChange(value.map((b, i) => (i === idx ? { ...b, ...p } : b)));
+
+    return (
+        <div className="space-y-2">
+            <Label>Botoes (opcional)</Label>
+            {value.map((btn, idx) => (
+                <div key={idx} className="rounded-md border p-2 space-y-2">
+                    <div className="flex items-center gap-2">
+                        <Select value={btn.type} onValueChange={(v) => patch(idx, { type: v as ButtonType })}>
+                            <SelectTrigger className="h-8 w-[170px] shrink-0 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                {Object.entries(BUTTON_TYPE_LABELS).map(([k, label]) => (
+                                    <SelectItem key={k} value={k}>{label}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        {btn.type !== "COPY_CODE" && (
+                            <Input
+                                placeholder={`Texto do botao ${idx + 1}`}
+                                value={btn.text}
+                                maxLength={25}
+                                onChange={(e) => patch(idx, { text: e.target.value })}
+                            />
+                        )}
+                        {btn.type === "COPY_CODE" && (
+                            <Input
+                                placeholder="Codigo a copiar (ex: PROMO10)"
+                                value={btn.example || ""}
+                                maxLength={15}
+                                onChange={(e) => patch(idx, { example: e.target.value })}
+                            />
+                        )}
+                        <Button
+                            type="button" size="sm" variant="ghost"
+                            className="h-8 w-8 p-0 shrink-0 text-destructive hover:text-destructive"
+                            onClick={() => onChange(value.filter((_, i) => i !== idx))}
+                        >
+                            <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                    </div>
+                    {btn.type === "URL" && (
+                        <Input
+                            placeholder="https://sua-clinica.com.br/agendar"
+                            value={btn.url || ""}
+                            onChange={(e) => patch(idx, { url: e.target.value })}
+                        />
+                    )}
+                    {btn.type === "PHONE_NUMBER" && (
+                        <Input
+                            placeholder="+55 11 99999-9999"
+                            value={btn.phone_number || ""}
+                            onChange={(e) => patch(idx, { phone_number: e.target.value })}
+                        />
+                    )}
+                </div>
+            ))}
+            {value.length < 10 && (
+                <Button
+                    type="button" size="sm" variant="outline" className="h-7 text-xs"
+                    onClick={() => onChange([...value, { type: "QUICK_REPLY", text: "" }])}
+                >
+                    <Plus className="h-3 w-3 mr-1" /> Adicionar botao
+                </Button>
+            )}
+            <p className="text-xs text-muted-foreground">
+                Max. 25 caracteres por botao. Limites da Meta: ate 2 links, 1 ligacao e 1 copiar codigo;
+                com mais de 3 botoes, o WhatsApp exibe "Ver todas as opcoes".
+            </p>
+        </div>
+    );
+}
 
 // Helper to call meta-template-manage edge function
 async function callTemplateApi(body: any): Promise<any> {
@@ -160,12 +425,9 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
     const [editDialogOpen, setEditDialogOpen] = useState(false);
     const [editTemplate, setEditTemplate] = useState<any>(null);
     const [editBodyText, setEditBodyText] = useState("");
-    const [editHeaderText, setEditHeaderText] = useState("");
-    const [editHeaderType, setEditHeaderType] = useState<HeaderType>("none");
-    const [editHeaderImage, setEditHeaderImage] = useState<File | null>(null);
-    const [editHeaderImageUrl, setEditHeaderImageUrl] = useState<string>("");
+    const [editHeader, setEditHeader] = useState<HeaderState>(EMPTY_HEADER);
     const [editFooterText, setEditFooterText] = useState("");
-    const [editButtons, setEditButtons] = useState<string[]>([]);
+    const [editButtons, setEditButtons] = useState<TemplateButton[]>([]);
     const editBodyRef = useRef<HTMLTextAreaElement>(null);
 
     // Form state
@@ -173,11 +435,9 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
     const [newCategory, setNewCategory] = useState("UTILITY");
     const [newLanguage, setNewLanguage] = useState("pt_BR");
     const [newBodyText, setNewBodyText] = useState("");
-    const [newHeaderText, setNewHeaderText] = useState("");
-    const [newHeaderType, setNewHeaderType] = useState<HeaderType>("none");
-    const [newHeaderImage, setNewHeaderImage] = useState<File | null>(null);
+    const [newHeader, setNewHeader] = useState<HeaderState>(EMPTY_HEADER);
     const [newFooterText, setNewFooterText] = useState("");
-    const [newButtons, setNewButtons] = useState<string[]>([]);
+    const [newButtons, setNewButtons] = useState<TemplateButton[]>([]);
 
     // Send state
     const [sendTo, setSendTo] = useState("");
@@ -301,6 +561,70 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
         },
     });
 
+    /**
+     * Monta o componente HEADER para a Meta e devolve o que precisa ser gravado
+     * em coluna própria (a action `sync` sobrescreve `components`).
+     * `media_url`/`media_name` ficam `undefined` quando o arquivo não mudou, para
+     * a edge function não apagar o que já está salvo.
+     */
+    const resolveHeader = async (header: HeaderState) => {
+        const format = HEADER_TYPE_FORMAT[header.type];
+        const empty = { component: null as any, media_url: null as any, media_name: null as any, location: null as any };
+        if (!format) return empty;
+
+        if (format === "TEXT") {
+            if (!header.text.trim()) throw new Error("Escreva o texto do cabecalho.");
+            return { ...empty, component: { type: "HEADER", format: "TEXT", text: header.text.trim() } };
+        }
+
+        if (format === "LOCATION") {
+            const lat = Number(header.latitude.replace(",", "."));
+            const lng = Number(header.longitude.replace(",", "."));
+            if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+                throw new Error("Informe latitude e longitude do cabecalho de localizacao.");
+            }
+            if (!header.locName.trim() || !header.locAddress.trim()) {
+                throw new Error("Informe o nome e o endereco do local.");
+            }
+            return {
+                ...empty,
+                component: { type: "HEADER", format: "LOCATION" },
+                location: { latitude: lat, longitude: lng, name: header.locName.trim(), address: header.locAddress.trim() },
+            };
+        }
+
+        // Mídia: a URL pública é o que vai em TODO envio; o handle só aprova.
+        let file = header.file;
+        let mediaUrl: string | null | undefined;
+        let mediaName: string | null | undefined;
+        if (!file) {
+            if (!header.fileUrl) throw new Error("Escolha o arquivo do cabecalho.");
+            // A Meta exige um handle novo a cada edição: reenvia o arquivo salvo.
+            const blob = await (await fetch(header.fileUrl)).blob();
+            file = new File([blob], header.fileName || "header", { type: blob.type });
+        } else {
+            const invalid = validateHeaderMedia(file, format as HeaderMediaFormat);
+            if (invalid) throw new Error(invalid);
+            if (!ownerId) throw new Error("Sem usuario");
+            mediaUrl = await uploadHeaderMediaToBucket(file, ownerId);
+            mediaName = format === "DOCUMENT" ? file.name : null;
+        }
+        const { handle } = await callTemplateApi({
+            action: 'upload_header_handle',
+            user_id: user!.id,
+            instance_id: activeInstance!.id,
+            file_base64: await fileToBase64(file),
+            file_name: file.name,
+            file_type: file.type,
+        });
+        return {
+            component: { type: "HEADER", format, example: { header_handle: [handle] } },
+            media_url: mediaUrl,
+            media_name: mediaName,
+            location: null,
+        };
+    };
+
     // Create mutation
     const createMutation = useMutation({
         mutationFn: async () => {
@@ -314,35 +638,13 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
                 }
             }
             const components: any[] = [];
-            let headerMediaUrl: string | null = null;
-            if (newHeaderType === "text" && newHeaderText.trim()) {
-                components.push({ type: "HEADER", format: "TEXT", text: newHeaderText.trim() });
-            } else if (newHeaderType === "image") {
-                if (!newHeaderImage) throw new Error("Escolha a imagem do cabeçalho.");
-                const invalid = validateHeaderImage(newHeaderImage);
-                if (invalid) throw new Error(invalid);
-                if (!ownerId) throw new Error("Sem usuário");
-                // A URL é o que vai em TODO envio; o handle só serve para a aprovação.
-                headerMediaUrl = await uploadHeaderImageToBucket(newHeaderImage, ownerId);
-                const { handle } = await callTemplateApi({
-                    action: 'upload_header_handle',
-                    user_id: user.id,
-                    instance_id: activeInstance.id,
-                    file_base64: await fileToBase64(newHeaderImage),
-                    file_name: newHeaderImage.name,
-                    file_type: newHeaderImage.type,
-                });
-                components.push({
-                    type: "HEADER",
-                    format: "IMAGE",
-                    example: { header_handle: [handle] },
-                });
-            }
+            const header = await resolveHeader(newHeader);
+            if (header.component) components.push(header.component);
             components.push({ type: "BODY", text: bodyText });
             if (newFooterText.trim()) {
                 components.push({ type: "FOOTER", text: newFooterText.trim() });
             }
-            const buttonsComponent = buildButtonsComponent(newButtons);
+            const { component: buttonsComponent, couponCode } = buildButtonsComponent(newButtons);
             if (buttonsComponent) components.push(buttonsComponent);
             return await callTemplateApi({
                 action: 'create',
@@ -352,7 +654,10 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
                 category: newCategory,
                 language: newLanguage,
                 components,
-                header_media_url: headerMediaUrl,
+                header_media_url: header.media_url ?? null,
+                header_media_name: header.media_name ?? null,
+                header_location: header.location,
+                button_coupon_code: couponCode,
             });
         },
         onSuccess: () => {
@@ -360,8 +665,8 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
             toast({ title: "Template criado!", description: "Aguardando aprovacao da Meta." });
             setCreateDialogOpen(false);
             setNewName(""); setNewCategory("UTILITY"); setNewLanguage("pt_BR");
-            setNewBodyText(""); setNewHeaderText(""); setNewFooterText("");
-            setNewHeaderType("none"); setNewHeaderImage(null);
+            setNewBodyText(""); setNewFooterText("");
+            setNewHeader(EMPTY_HEADER);
             setNewButtons([]);
         },
         onError: (err: any) => {
@@ -400,49 +705,19 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
                     (sysMeta || c.type !== "BUTTONS")
             );
             const components: any[] = [];
-            let headerMediaUrl: string | null | undefined;
-            if (!sysMeta && editHeaderType === "text" && editHeaderText.trim()) {
-                components.push({ type: "HEADER", format: "TEXT", text: editHeaderText.trim() });
-                headerMediaUrl = null;
-            } else if (!sysMeta && editHeaderType === "image") {
-                if (!editHeaderImage && !editHeaderImageUrl) {
-                    throw new Error("Escolha a imagem do cabeçalho.");
-                }
-                // Sem arquivo novo a imagem atual permanece — mas a Meta exige um
-                // handle a cada edição, então reenviamos a partir da URL salva.
-                let file = editHeaderImage;
-                if (!file) {
-                    const blob = await (await fetch(editHeaderImageUrl)).blob();
-                    file = new File([blob], "header.jpg", { type: blob.type });
-                } else {
-                    const invalid = validateHeaderImage(file);
-                    if (invalid) throw new Error(invalid);
-                    if (!ownerId) throw new Error("Sem usuário");
-                    headerMediaUrl = await uploadHeaderImageToBucket(file, ownerId);
-                }
-                const { handle } = await callTemplateApi({
-                    action: 'upload_header_handle',
-                    user_id: user.id,
-                    instance_id: activeInstance.id,
-                    file_base64: await fileToBase64(file),
-                    file_name: file.name,
-                    file_type: file.type,
-                });
-                components.push({
-                    type: "HEADER",
-                    format: "IMAGE",
-                    example: { header_handle: [handle] },
-                });
-            } else if (!sysMeta) {
-                headerMediaUrl = null;
-            }
+            const header = sysMeta
+                ? null
+                : await resolveHeader(editHeader);
+            if (header?.component) components.push(header.component);
             components.push({ type: "BODY", text: bodyText });
             if (!sysMeta && editFooterText.trim()) {
                 components.push({ type: "FOOTER", text: editFooterText.trim() });
             }
+            let couponCode: string | null | undefined;
             if (!sysMeta) {
-                const buttonsComponent = buildButtonsComponent(editButtons);
-                if (buttonsComponent) components.push(buttonsComponent);
+                const built = buildButtonsComponent(editButtons);
+                if (built.component) components.push(built.component);
+                couponCode = built.couponCode;
             }
             components.push(...otherComponents);
 
@@ -453,7 +728,10 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
                 name: editTemplate.name,
                 components,
                 variable_map: variableMap,
-                header_media_url: headerMediaUrl,
+                header_media_url: header?.media_url,
+                header_media_name: header?.media_name,
+                header_location: header ? header.location : undefined,
+                button_coupon_code: couponCode,
             });
         },
         onSuccess: () => {
@@ -480,16 +758,37 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
         setEditBodyText(body);
         const headerComp = tpl.components?.find((c: any) => c.type === 'HEADER');
         const headerFmt = String(tpl.header_format || headerComp?.format || "").toUpperCase();
-        setEditHeaderText(headerComp?.text || "");
-        setEditHeaderType(headerFmt === "IMAGE" ? "image" : headerComp ? "text" : "none");
-        setEditHeaderImage(null);
-        setEditHeaderImageUrl(tpl.header_media_url || "");
+        const headerType = (Object.entries(HEADER_TYPE_FORMAT)
+            .find(([, fmt]) => fmt === headerFmt)?.[0] as HeaderType) || (headerComp ? "text" : "none");
+        const loc = tpl.header_location || {};
+        setEditHeader({
+            type: headerType,
+            text: headerComp?.text || "",
+            file: null,
+            fileUrl: tpl.header_media_url || "",
+            fileName: tpl.header_media_name || "",
+            latitude: loc.latitude !== undefined && loc.latitude !== null ? String(loc.latitude) : "",
+            longitude: loc.longitude !== undefined && loc.longitude !== null ? String(loc.longitude) : "",
+            locName: loc.name || "",
+            locAddress: loc.address || "",
+        });
         setEditFooterText(tpl.components?.find((c: any) => c.type === 'FOOTER')?.text || "");
         const buttonsComponent = tpl.components?.find((c: any) => c.type === 'BUTTONS');
         setEditButtons(
-            (buttonsComponent?.buttons || [])
-                .filter((b: any) => b.type === 'QUICK_REPLY')
-                .map((b: any) => b.text || "")
+            (buttonsComponent?.buttons || []).map((b: any) => {
+                const type = String(b.type || "").toUpperCase();
+                const isKnown = ["URL", "PHONE_NUMBER", "COPY_CODE"].includes(type);
+                return {
+                    type: (isKnown ? type : "QUICK_REPLY") as ButtonType,
+                    text: b.text || "",
+                    url: b.url || "",
+                    phone_number: b.phone_number || "",
+                    // A Meta devolve example ora como string, ora como array.
+                    example: type === "COPY_CODE"
+                        ? tpl.button_coupon_code || (Array.isArray(b.example) ? b.example[0] : b.example) || ""
+                        : "",
+                };
+            })
         );
         setEditDialogOpen(true);
     };
@@ -544,8 +843,9 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
                     parameters: sendParams.filter(p => p.trim()).map(p => ({ type: "text", text: p })),
                 }];
             }
-            // Template com cabeçalho de imagem SEMPRE exige o parâmetro de header.
-            templateComponents = withHeaderImage(selectedTemplate, templateComponents);
+            // Cabeçalho de mídia/localização e botão de cupom são fixos no template,
+            // mas a Meta exige os parâmetros em TODO disparo.
+            templateComponents = withTemplateParams(selectedTemplate, templateComponents);
 
             const result = await callTemplateApi({
                 action: 'send',
@@ -731,43 +1031,7 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
                                             </Select>
                                         </div>
                                     </div>
-                                    <div className="space-y-2">
-                                        <Label>Cabecalho (opcional)</Label>
-                                        <Select value={newHeaderType} onValueChange={(v) => setNewHeaderType(v as HeaderType)}>
-                                            <SelectTrigger><SelectValue /></SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="none">Sem cabecalho</SelectItem>
-                                                <SelectItem value="text">Texto</SelectItem>
-                                                <SelectItem value="image">Imagem</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                        {newHeaderType === "text" && (
-                                            <Input
-                                                placeholder="Titulo do template"
-                                                value={newHeaderText}
-                                                onChange={(e) => setNewHeaderText(e.target.value)}
-                                            />
-                                        )}
-                                        {newHeaderType === "image" && (
-                                            <div className="space-y-2">
-                                                <Input
-                                                    type="file"
-                                                    accept="image/jpeg,image/png"
-                                                    onChange={(e) => setNewHeaderImage(e.target.files?.[0] || null)}
-                                                />
-                                                {newHeaderImage && (
-                                                    <img
-                                                        src={URL.createObjectURL(newHeaderImage)}
-                                                        alt="Previa do cabecalho"
-                                                        className="max-h-32 rounded border object-contain"
-                                                    />
-                                                )}
-                                                <p className="text-[11px] text-muted-foreground">
-                                                    JPG ou PNG, ate 5 MB. Esta mesma imagem sera enviada em todos os disparos deste template.
-                                                </p>
-                                            </div>
-                                        )}
-                                    </div>
+                                    <TemplateHeaderFields value={newHeader} onChange={setNewHeader} />
                                     <div className="space-y-2">
                                         <Label>Corpo da mensagem</Label>
                                         <Textarea
@@ -788,41 +1052,7 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
                                             onChange={(e) => setNewFooterText(e.target.value)}
                                         />
                                     </div>
-                                    <div className="space-y-2">
-                                        <Label>Botoes de resposta rapida (opcional)</Label>
-                                        {newButtons.map((btn, idx) => (
-                                            <div key={idx} className="flex items-center gap-2">
-                                                <Input
-                                                    placeholder={`Botao ${idx + 1} (ex: Confirmar)`}
-                                                    value={btn}
-                                                    maxLength={25}
-                                                    onChange={(e) => {
-                                                        const arr = [...newButtons];
-                                                        arr[idx] = e.target.value;
-                                                        setNewButtons(arr);
-                                                    }}
-                                                />
-                                                <Button
-                                                    type="button" size="sm" variant="ghost"
-                                                    className="h-8 w-8 p-0 shrink-0 text-destructive hover:text-destructive"
-                                                    onClick={() => setNewButtons(newButtons.filter((_, i) => i !== idx))}
-                                                >
-                                                    <Trash2 className="h-3.5 w-3.5" />
-                                                </Button>
-                                            </div>
-                                        ))}
-                                        {newButtons.length < 10 && (
-                                            <Button
-                                                type="button" size="sm" variant="outline" className="h-7 text-xs"
-                                                onClick={() => setNewButtons([...newButtons, ""])}
-                                            >
-                                                <Plus className="h-3 w-3 mr-1" /> Adicionar botao
-                                            </Button>
-                                        )}
-                                        <p className="text-xs text-muted-foreground">
-                                            O cliente responde tocando no botao. Max. 25 caracteres por botao; com mais de 3, o WhatsApp exibe "Ver todas as opcoes".
-                                        </p>
-                                    </div>
+                                    <TemplateButtonsEditor value={newButtons} onChange={setNewButtons} />
                                 </div>
                                 <DialogFooter>
                                     <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
@@ -894,9 +1124,10 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
                                                                 </Badge>
                                                             )}
                                                             {getStatusBadge(tpl.status)}
-                                                            {String(tpl.header_format || "").toUpperCase() === "IMAGE" && (
+                                                            {HEADER_BADGE[String(tpl.header_format || "").toUpperCase()] && (
                                                                 <Badge variant="outline" className="text-[10px]">
-                                                                    <ImageIcon className="h-3 w-3 mr-1" /> Com imagem
+                                                                    <ImageIcon className="h-3 w-3 mr-1" />
+                                                                    {HEADER_BADGE[String(tpl.header_format).toUpperCase()]}
                                                                 </Badge>
                                                             )}
                                                             <Badge variant="outline" className="text-[10px]">{tpl.category}</Badge>
@@ -947,22 +1178,40 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
                                                     {headerComponent && (
                                                         <div>
                                                             <span className="font-medium text-xs text-muted-foreground">CABECALHO:</span>
-                                                            {String(tpl.header_format || headerComponent.format || "TEXT").toUpperCase() === "IMAGE" ? (
-                                                                tpl.header_media_url ? (
-                                                                    <img
-                                                                        src={tpl.header_media_url}
-                                                                        alt="Cabecalho do template"
-                                                                        className="max-h-32 rounded border object-contain mt-1"
-                                                                    />
-                                                                ) : (
-                                                                    <p className="text-amber-600 dark:text-amber-400 text-xs flex items-center gap-1">
-                                                                        <AlertTriangle className="h-3 w-3" />
-                                                                        Cabecalho de imagem sem arquivo salvo — edite o template e escolha a imagem.
-                                                                    </p>
-                                                                )
-                                                            ) : (
-                                                                <p>{headerComponent.text}</p>
-                                                            )}
+                                                            {(() => {
+                                                                const fmt = String(tpl.header_format || headerComponent.format || "TEXT").toUpperCase();
+                                                                if (fmt === "TEXT") return <p>{headerComponent.text}</p>;
+                                                                if (fmt === "LOCATION") {
+                                                                    const loc = tpl.header_location;
+                                                                    return loc?.address ? (
+                                                                        <p className="text-xs">{loc.name} — {loc.address}</p>
+                                                                    ) : (
+                                                                        <p className="text-amber-600 dark:text-amber-400 text-xs flex items-center gap-1">
+                                                                            <AlertTriangle className="h-3 w-3" />
+                                                                            Cabecalho de localizacao sem endereco salvo — edite o template e informe o local.
+                                                                        </p>
+                                                                    );
+                                                                }
+                                                                if (!tpl.header_media_url) {
+                                                                    return (
+                                                                        <p className="text-amber-600 dark:text-amber-400 text-xs flex items-center gap-1">
+                                                                            <AlertTriangle className="h-3 w-3" />
+                                                                            Cabecalho de midia sem arquivo salvo — edite o template e escolha o arquivo.
+                                                                        </p>
+                                                                    );
+                                                                }
+                                                                if (fmt === "IMAGE") {
+                                                                    return <img src={tpl.header_media_url} alt="Cabecalho do template" className="max-h-32 rounded border object-contain mt-1" />;
+                                                                }
+                                                                if (fmt === "VIDEO") {
+                                                                    return <video src={tpl.header_media_url} controls className="max-h-32 rounded border mt-1" />;
+                                                                }
+                                                                return (
+                                                                    <a href={tpl.header_media_url} target="_blank" rel="noreferrer" className="text-xs text-primary underline block mt-1">
+                                                                        {tpl.header_media_name || "Documento do cabecalho"}
+                                                                    </a>
+                                                                );
+                                                            })()}
                                                         </div>
                                                     )}
                                                     {bodyComponent && (
@@ -983,7 +1232,12 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
                                                             <div className="flex flex-wrap gap-1.5 mt-1">
                                                                 {buttonsComponent.buttons.map((b: any, i: number) => (
                                                                     <Badge key={i} variant="outline" className="text-xs font-normal">
-                                                                        {b.text}
+                                                                        {b.text || "Copiar codigo"}
+                                                                        {b.type && b.type !== "QUICK_REPLY" && (
+                                                                            <span className="text-muted-foreground ml-1">
+                                                                                ({BUTTON_TYPE_LABELS[b.type as ButtonType] || b.type})
+                                                                            </span>
+                                                                        )}
                                                                     </Badge>
                                                                 ))}
                                                             </div>
@@ -1098,50 +1352,7 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
                             </div>
                         )}
                         {editTemplate && !SYS_TEMPLATE_META[editTemplate.name] && (
-                            <div className="space-y-2">
-                                <Label>Cabecalho (opcional)</Label>
-                                <Select value={editHeaderType} onValueChange={(v) => setEditHeaderType(v as HeaderType)}>
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="none">Sem cabecalho</SelectItem>
-                                        <SelectItem value="text">Texto</SelectItem>
-                                        <SelectItem value="image">Imagem</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                {editHeaderType === "text" && (
-                                    <Input
-                                        placeholder="Titulo do template"
-                                        value={editHeaderText}
-                                        onChange={(e) => setEditHeaderText(e.target.value)}
-                                    />
-                                )}
-                                {editHeaderType === "image" && (
-                                    <div className="space-y-2">
-                                        {!editHeaderImage && editHeaderImageUrl && (
-                                            <img
-                                                src={editHeaderImageUrl}
-                                                alt="Imagem atual do cabecalho"
-                                                className="max-h-32 rounded border object-contain"
-                                            />
-                                        )}
-                                        <Input
-                                            type="file"
-                                            accept="image/jpeg,image/png"
-                                            onChange={(e) => setEditHeaderImage(e.target.files?.[0] || null)}
-                                        />
-                                        {editHeaderImage && (
-                                            <img
-                                                src={URL.createObjectURL(editHeaderImage)}
-                                                alt="Previa do cabecalho"
-                                                className="max-h-32 rounded border object-contain"
-                                            />
-                                        )}
-                                        <p className="text-[11px] text-muted-foreground">
-                                            JPG ou PNG, ate 5 MB. Deixe em branco para manter a imagem atual.
-                                        </p>
-                                    </div>
-                                )}
-                            </div>
+                            <TemplateHeaderFields value={editHeader} onChange={setEditHeader} />
                         )}
                         <div className="space-y-2">
                             <Label>Corpo da mensagem</Label>
@@ -1190,41 +1401,7 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
                             </div>
                         )}
                         {editTemplate && !SYS_TEMPLATE_META[editTemplate.name] && (
-                            <div className="space-y-2">
-                                <Label>Botoes de resposta rapida (opcional)</Label>
-                                {editButtons.map((btn, idx) => (
-                                    <div key={idx} className="flex items-center gap-2">
-                                        <Input
-                                            placeholder={`Botao ${idx + 1} (ex: Confirmar)`}
-                                            value={btn}
-                                            maxLength={25}
-                                            onChange={(e) => {
-                                                const arr = [...editButtons];
-                                                arr[idx] = e.target.value;
-                                                setEditButtons(arr);
-                                            }}
-                                        />
-                                        <Button
-                                            type="button" size="sm" variant="ghost"
-                                            className="h-8 w-8 p-0 shrink-0 text-destructive hover:text-destructive"
-                                            onClick={() => setEditButtons(editButtons.filter((_, i) => i !== idx))}
-                                        >
-                                            <Trash2 className="h-3.5 w-3.5" />
-                                        </Button>
-                                    </div>
-                                ))}
-                                {editButtons.length < 10 && (
-                                    <Button
-                                        type="button" size="sm" variant="outline" className="h-7 text-xs"
-                                        onClick={() => setEditButtons([...editButtons, ""])}
-                                    >
-                                        <Plus className="h-3 w-3 mr-1" /> Adicionar botao
-                                    </Button>
-                                )}
-                                <p className="text-xs text-muted-foreground">
-                                    Max. 25 caracteres por botao; com mais de 3, o WhatsApp exibe "Ver todas as opcoes".
-                                </p>
-                            </div>
+                            <TemplateButtonsEditor value={editButtons} onChange={setEditButtons} />
                         )}
                     </div>
                     <DialogFooter>

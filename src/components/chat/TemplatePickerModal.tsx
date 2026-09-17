@@ -14,7 +14,8 @@ import { toast } from "sonner";
 import { Search, Send, FileText, Loader2 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getTemplateKind, TEMPLATE_KINDS, TEMPLATE_KIND_LABELS, type TemplateKind } from "@/lib/templateKind";
-import { withHeaderImage } from "@/lib/templateHeaderImage";
+import { withTemplateParams } from "@/lib/templateComponents";
+import { TemplateHeaderPreview } from "@/components/templates/TemplateHeaderPreview";
 
 const SUPABASE_URL = "https://swfshqvvbohnahdyndch.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN3ZnNocXZ2Ym9obmFoZHluZGNoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1OTAyMzIsImV4cCI6MjA3OTE2NjIzMn0.rUja2PsYj9kWODdizhJNS6HjfA9Tg7DrJJylUH8RTnY";
@@ -156,8 +157,9 @@ export function TemplatePickerModal({ open, onOpenChange, instanceId, contactNum
                 ];
             }
 
-            // Template com cabeçalho de imagem SEMPRE exige o parâmetro de header.
-            templateComponents = withHeaderImage(selectedTemplate, templateComponents);
+            // Cabeçalho de mídia/localização e botão de cupom são fixos no template,
+            // mas a Meta exige os parâmetros em TODO disparo.
+            templateComponents = withTemplateParams(selectedTemplate, templateComponents);
 
             const result = await callTemplateApi({
                 action: "send",
@@ -308,13 +310,7 @@ export function TemplatePickerModal({ open, onOpenChange, instanceId, contactNum
                                             Preview
                                         </h3>
                                         <div className="bg-[#e7fed6] dark:bg-[#025c4c] rounded-lg p-3 max-w-[320px] shadow-sm">
-                                            {selectedTemplate.header_media_url && (
-                                                <img
-                                                    src={selectedTemplate.header_media_url}
-                                                    alt="Cabecalho do template"
-                                                    className="rounded mb-2 max-h-40 w-full object-cover"
-                                                />
-                                            )}
+                                            <TemplateHeaderPreview tpl={selectedTemplate} />
                                             {getHeaderText(selectedTemplate) && (
                                                 <p className="text-sm font-bold mb-1">
                                                     {getHeaderText(selectedTemplate)}

@@ -136,10 +136,16 @@ export function ConexoesGuide() {
                 <StepByStep steps={[
                     { title: "Três abas por tipo", description: "A lista é dividida em Templates Personalizados (criados por você), Automáticos (confirmação/lembrete/pesquisa) e Recorrência (mensagens de recorrência dos serviços). As mesmas abas aparecem nos modais de envio de template (nova mensagem e chat)." },
                     { title: "Crie com variáveis", description: "Use {{1}}, {{2}} para os campos dinâmicos (nome, data...). A Meta avalia em minutos a algumas horas." },
-                    { title: "Cabeçalho: texto ou imagem", description: "No campo Cabeçalho escolha Sem cabeçalho, Texto ou Imagem. Em Imagem você sobe um JPG ou PNG de até 5 MB — essa mesma imagem vai em TODOS os envios daquele template (não dá para trocar no disparo). Para usar outra imagem, edite o template e envie o novo arquivo (volta para revisão da Meta)." },
+                    { title: "Cabeçalho: 5 formatos", description: "No campo Cabeçalho escolha Sem cabeçalho, Texto, Imagem (JPG/PNG até 5 MB), Vídeo (MP4 até 16 MB), Documento (PDF até 100 MB) ou Localização (latitude, longitude, nome e endereço). O arquivo ou o ponto do mapa é FIXO: vai igual em TODOS os envios daquele template — para trocar, edite o template e envie o novo arquivo (volta para revisão da Meta)." },
+                    { title: "Botões: 4 tipos", description: "Até 10 botões por template: Resposta rápida (o cliente responde com um toque), Abrir link (URL fixa), Ligar (telefone fixo) e Copiar código (um cupom fixo que o cliente copia com um toque). A Meta permite no máximo 2 de link, 1 de telefone e 1 de cupom; cada texto tem até 25 caracteres e não pode repetir." },
                     { title: "Templates do sistema", description: "Confirmação, lembrete e pesquisa de satisfação são criados automaticamente (badge azul 'Template Automatizado'). Você pode editar o texto — os botões de resposta, não." },
                     { title: "Ligue/desligue por template", description: "Cada template automatizado tem um switch — desligado, aquela mensagem automática não é enviada." },
                 ]} />
+                <Callout type="atencao" title="Cabeçalho de mídia some da campanha se o arquivo não estiver salvo">
+                    O arquivo que a Meta aprova serve só para a aprovação — em cada disparo o sistema reenvia a mídia salva
+                    no template. Se o arquivo (ou a localização, ou o cupom) não estiver gravado, o template nem aparece na
+                    lista de campanhas, porque a Meta recusaria o envio.
+                </Callout>
                 <Callout type="evite" title="Rejeitado? Não insista igual">
                     A Meta rejeita textos com cara de spam, promessas exageradas ou categoria errada. Ajuste o texto antes de
                     reenviar — rejeições repetidas pesam contra o número. Limites da Meta: 1 edição/24h, 10 edições/30 dias.
