@@ -423,6 +423,67 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
                 "Aqui você define de quanto em quanto tempo a IA e o link público oferecem horários, e quanta folga exigir antes e depois de cada agendamento já marcado. Depois de escolher, clique em Salvar. O encaixe manual pela agenda continua livre.",
         },
     ],
+    "ia-sandbox": [
+        {
+            element: '[data-tour="sandbox-tokens"]',
+            title: "Quanto o teste já custou",
+            description:
+                "Tokens lidos, tokens escritos e o custo em reais desta sessão de teste. Esse valor é contado à parte: não entra no Relatório do Consumo nem na fatura da conta.",
+        },
+        {
+            element: '[data-tour="sandbox-tom"]',
+            title: "Tom de voz em rascunho",
+            description:
+                "Os mesmos controles da aba Tom de voz. Salvar no teste faz a próxima mensagem do chat já sair no tom novo, sem mexer no atendimento real. Salvar em produção publica para valer.",
+        },
+        {
+            element: '[data-tour="sandbox-chat"]',
+            title: "A conversa",
+            description:
+                "Escreva como o paciente falaria e aguarde: a sua IA responde de verdade, com o mesmo cérebro de produção. Nada sai por WhatsApp. O botão Limpar memória faz a IA esquecer tudo e recomeçar do zero.",
+        },
+        {
+            element: '[data-tour="sandbox-agenda"]',
+            title: "Agenda Real ou Liberada",
+            description:
+                "Agenda Real faz a IA respeitar a agenda de verdade da clínica. Agenda Liberada finge que está tudo vazio, para você testar o agendamento sem depender de ter horário livre hoje.",
+        },
+        {
+            element: '[data-tour="sandbox-paciente"]',
+            title: "Paciente fictício",
+            description:
+                "Quem está do outro lado da conversa. Edite nome, e-mail, CPF, Instagram e convênios: a IA passa a enxergar esses dados na mensagem seguinte.",
+        },
+        {
+            element: '[data-tour="sandbox-logs"]',
+            title: "O que a IA fez",
+            description:
+                "Cada consulta que a IA fez ao sistema, em português: buscou horário, criou agendamento, moveu o card, anotou algo. É aqui que você entende por que ela respondeu daquele jeito.",
+        },
+        {
+            element: '[data-tour="sandbox-crm"]',
+            title: "O funil do teste",
+            description:
+                "Em que etapa o card do paciente está e todo o caminho que ele percorreu durante a conversa. Nada disso aparece no seu CRM de verdade.",
+        },
+        {
+            element: '[data-tour="sandbox-agenda-card"]',
+            title: "Agendamentos e vendas",
+            description:
+                "O que a IA marcou e o que você lançou pelos simuladores. Venda sem agendamento vira compra pendente — exatamente como na conta real, e é isso que a IA oferece para remarcar.",
+        },
+        {
+            element: '[data-tour="sandbox-simuladores"]',
+            title: "Simuladores",
+            description:
+                "Provoque as situações que normalmente dependem de esperar: campanha chegando, mensagem de recorrência, confirmação de agendamento, venda avulsa ou convênio no cadastro. A IA recebe como receberia na vida real.",
+        },
+        {
+            title: "Terminou? Resete",
+            description:
+                "O botão Resetar ambiente, no topo da página, apaga do banco a conversa, o paciente, os agendamentos, as vendas, o CRM e o consumo deste teste. Ele confirma antes de apagar, e não tem volta.",
+        },
+    ],
     "suporte-chat": [
         {
             element: '[data-tour="support-widget"]',

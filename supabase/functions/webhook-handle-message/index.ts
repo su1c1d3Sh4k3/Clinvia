@@ -2335,6 +2335,10 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                                     ia_function: camp.ia_function ?? null,
                                     campaign_prompt: aiPromptText,
                                     service_description: null as string | null,
+                                    // Explícito para o n8n: recorrência não precisa ser
+                                    // deduzida do texto do objetivo.
+                                    is_recurrence: isRecurrenceCamp,
+                                    recurrence_msg_number: isRecurrenceCamp ? recMsg : null,
                                 };
                                 // Serviço(s) atrelado(s) à campanha → descrição por item do array
                                 // services (services_client.description); service_description no

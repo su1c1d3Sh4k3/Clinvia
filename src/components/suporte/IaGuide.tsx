@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import {
     Bot, ShieldCheck, Building2, HelpCircle, Workflow, Timer, KanbanSquare,
-    PowerOff, ExternalLink, Mic, CalendarClock, MessageCircle,
+    PowerOff, ExternalLink, Mic, CalendarClock, MessageCircle, FlaskConical,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,6 +24,7 @@ const TOPICS = [
     { id: "horarios", label: "Horários de agendamento" },
     { id: "ia-e-crm", label: "IA e CRM" },
     { id: "desligando", label: "Desligando" },
+    { id: "sandbox", label: "Ambiente de teste" },
     { id: "faq", label: "FAQ" },
 ];
 
@@ -278,7 +279,53 @@ export function IaGuide() {
             </TopicSection>
 
             {/* 10 */}
-            <TopicSection id="faq" index={10} icon={HelpCircle} title="Perguntas frequentes">
+            <TopicSection id="sandbox" index={10} icon={FlaskConical} title="Ambiente de teste da IA"
+                subtitle="Converse com a sua IA sem mandar nada para cliente nenhum">
+                <p className="text-sm text-muted-foreground">
+                    O <strong className="text-foreground">Ambiente de teste</strong> é uma cópia de brincadeira do
+                    atendimento: você digita como se fosse um paciente e a sua IA responde de verdade — usando o mesmo
+                    cérebro, o mesmo catálogo de serviços e as mesmas salas de produção. A diferença é que{" "}
+                    <strong className="text-foreground">nada sai por WhatsApp</strong> e nada é gravado na sua conta de
+                    verdade: as mensagens, os agendamentos, as vendas e o CRM do teste vivem num espaço separado.
+                </p>
+                <p className="text-sm text-muted-foreground">
+                    Você chega nele pelo botão <strong className="text-foreground">Testar IA no ambiente Sandbox</strong>,
+                    na aba Config desta página. Não precisa ligar a IA para ninguém: basta ter os serviços e as salas
+                    cadastrados.
+                </p>
+                <StepByStep steps={[
+                    { title: "Contador de consumo", description: "No topo, quanto o teste já custou em tokens e em reais. Esse valor NÃO entra no relatório de consumo nem na fatura da sua conta — é só para você ter noção do custo de cada conversa." },
+                    { title: "Tom de voz do teste", description: "Os mesmos controles da aba Tom de voz, só que em rascunho. Salvar no teste faz a PRÓXIMA mensagem do chat já sair no tom novo, sem mexer no atendimento real. Quando gostar do resultado, Salvar em produção publica para valer." },
+                    { title: "A conversa", description: "Escreva como o paciente falaria e aguarde. A IA responde em alguns segundos. O botão Limpar memória faz a IA esquecer tudo o que foi conversado e recomeçar do zero — útil para testar o mesmo roteiro várias vezes." },
+                    { title: "Agenda Real ou Agenda Liberada", description: "Agenda Real faz a IA respeitar a agenda de verdade da clínica (só oferece o que está livre mesmo). Agenda Liberada finge que está tudo vazio, para você conseguir testar o agendamento sem depender de ter horário disponível hoje." },
+                    { title: "Paciente fictício", description: "O paciente do teste é editável: nome, e-mail, CPF, Instagram e convênios. Conforme a IA vai agendando e você vai lançando vendas, o cartão dele se atualiza sozinho." },
+                    { title: "Os três painéis", description: "Ao lado do chat: O que a IA fez (cada consulta que ela fez ao sistema, em português), o CRM (em que etapa o card está e todo o caminho que ele percorreu) e a Agenda (agendamentos criados e vendas lançadas no teste)." },
+                    { title: "Simuladores", description: "Embaixo, você provoca as situações que normalmente dependem de esperar: uma campanha chegando, uma mensagem de recorrência, uma confirmação de agendamento, uma venda avulsa ou um convênio no cadastro do paciente. A IA recebe exatamente como receberia na vida real." },
+                ]} />
+                <Callout type="atencao" title="Resetar apaga tudo e não tem volta">
+                    O botão <strong>Resetar ambiente</strong> limpa do banco a conversa, o paciente, os agendamentos, as
+                    vendas, o CRM e o histórico de consumo do teste, e cria um ambiente novo e vazio. Ele pergunta antes
+                    de apagar. Use quando terminar um teste — assim você não fica consumindo à toa.
+                </Callout>
+                <Callout type="dica" title="O template de confirmação chega sem os botões">
+                    No WhatsApp de verdade, a confirmação de agendamento chega com os botões Confirmar/Cancelar. No teste
+                    ela chega só como texto, de propósito: a graça aqui é ver <strong>a IA reagindo à sua resposta
+                    escrita</strong>, não clicar em botão.
+                </Callout>
+                <Callout type="dica" title="O catálogo é o de verdade">
+                    Serviços, salas e convênios que aparecem nos simuladores são os que estão cadastrados na sua conta —
+                    é justamente o que você quer ver a IA usando. O que é de mentira são os dados gerados pelo teste.
+                </Callout>
+                <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" onClick={() => navigate("/ia-sandbox?tour=ia-sandbox")}>
+                        <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                        Me mostre na prática
+                    </Button>
+                </div>
+            </TopicSection>
+
+            {/* 11 */}
+            <TopicSection id="faq" index={11} icon={HelpCircle} title="Perguntas frequentes">
                 <Accordion type="single" collapsible className="rounded-xl border px-4">
                     {[
                         {
@@ -316,6 +363,22 @@ export function IaGuide() {
                         {
                             q: "Posso ter IA em um número e não em outro?",
                             a: "Pode. Em IA > Config, cada conexão tem seu próprio botão. O interruptor geral precisa estar ligado, e aí você escolhe conexão por conexão.",
+                        },
+                        {
+                            q: "Preciso ligar a IA para testar no ambiente de teste?",
+                            a: "Não. O ambiente de teste ignora todos os portões: não importa se a IA geral está desligada, se a conexão está sem IA ou em que fila a conversa estaria. Basta ter os serviços e as salas cadastrados. É justamente para você conseguir ajustar tudo antes de soltar a IA para os clientes.",
+                        },
+                        {
+                            q: "O que eu gastar no ambiente de teste aparece na minha fatura?",
+                            a: "O consumo do teste é contado separado e mostrado no topo da própria página do ambiente de teste. Ele não entra no Relatório do Consumo da conta. Mesmo assim, quando terminar, use Resetar ambiente: o teste continua consumindo enquanto você conversa.",
+                        },
+                        {
+                            q: "Testei um tom novo no ambiente de teste. Meus clientes já estão recebendo assim?",
+                            a: "Não, enquanto você só clicar em Salvar no teste. Esse botão guarda o tom como rascunho e só o chat do teste usa. Para o atendimento real passar a falar assim, clique em Salvar em produção — é o mesmo salvar da aba Tom de voz.",
+                        },
+                        {
+                            q: "Os agendamentos que a IA criou no teste apareceram na minha agenda?",
+                            a: "Não. Agendamento, venda, card de CRM e anotação criados no teste ficam só no ambiente de teste — a agenda, o financeiro e o funil da sua conta não são tocados. E o link de agendamento gerado lá também é de teste: ele abre com um aviso amarelo no topo.",
                         },
                     ].map((f, i, arr) => (
                         <AccordionItem key={i} value={`faq-${i}`} className={i === arr.length - 1 ? "border-b-0" : ""}>

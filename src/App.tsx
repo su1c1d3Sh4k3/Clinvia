@@ -40,6 +40,7 @@ const Scheduling = React.lazy(() => import("./pages/Scheduling"));
 const Recurrence = React.lazy(() => import("./pages/Recurrence"));
 const Campaigns = React.lazy(() => import("./pages/Campaigns"));
 const IAConfig = React.lazy(() => import("./pages/IAConfig"));
+const IASandbox = React.lazy(() => import("./pages/IASandbox"));
 const Settings = React.lazy(() => import("./pages/Settings"));
 const Financial = React.lazy(() => import("./pages/Financial"));
 const Sales = React.lazy(() => import("./pages/Sales"));
@@ -182,6 +183,7 @@ const App = () => (
                   <Route path="/recurrence" element={<Recurrence />} />
                   <Route path="/campanhas" element={<Campaigns />} />
                   <Route path="/ia-config" element={<IAConfig />} />
+                  <Route path="/ia-sandbox" element={<IASandbox />} />
                   <Route path="/financial" element={<Financial />} />
                   <Route path="/sales" element={<Sales />} />
                   <Route path="/follow-up" element={<FollowUp />} />

@@ -6,11 +6,15 @@ import { cn } from "@/lib/utils";
 import { format, addDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameMonth, isSameDay, isBefore } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
-const API_BASE = "https://swfshqvvbohnahdyndch.supabase.co/functions/v1/api-public-booking";
+const FUNCTIONS_BASE = "https://swfshqvvbohnahdyndch.supabase.co/functions/v1/";
 const ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN3ZnNocXZ2Ym9obmFoZHluZGNoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzMxNjI4NjgsImV4cCI6MjA0ODczODg2OH0.MbOhXXnaJFAcZKoSWRj3V9cDBdfBpqH4V0iyasUVef0";
 
+/** `?sb=1` = link gerado pelo ambiente de teste: só enxerga as tabelas sandbox. */
+const isSandboxLink = () => new URLSearchParams(window.location.search).get("sb") === "1";
+
 async function callApi(body: any) {
-  const res = await fetch(API_BASE, {
+  const endpoint = isSandboxLink() ? "api-public-booking-sandbox" : "api-public-booking";
+  const res = await fetch(FUNCTIONS_BASE + endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${ANON_KEY}` },
     body: JSON.stringify(body),
@@ -62,8 +66,9 @@ export default function PublicBooking() {
       const bytes = Uint8Array.from(atob(d), (ch) => ch.charCodeAt(0));
       const decoded = JSON.parse(new TextDecoder().decode(bytes));
       if (!decoded.user_id || !decoded.contact_id) { setError("Link inválido"); setLoading(false); return; }
-      // A conexão define em qual funil do CRM o agendamento entra — link antigo não serve
-      if (!decoded.instance_id) {
+      // A conexão define em qual funil do CRM o agendamento entra — link antigo não serve.
+      // O ambiente de teste não tem conexão nenhuma, então fica de fora da regra.
+      if (!decoded.instance_id && !isSandboxLink()) {
         setError("Este link de agendamento é antigo e não identifica a conexão. Peça um link novo à clínica.");
         setLoading(false); return;
       }
@@ -206,6 +211,11 @@ export default function PublicBooking() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="max-w-md mx-auto px-4 py-6 space-y-6">
+        {isSandboxLink() && (
+          <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-center text-xs font-medium text-amber-700 dark:text-amber-400">
+            AMBIENTE DE TESTE — nenhum agendamento feito aqui vai para a agenda de verdade.
+          </div>
+        )}
         <div className="text-center space-y-1">
           <h1 className="text-xl font-bold">
             {step === "reschedule" ? "Reagendar" : step === "canceled" ? "Cancelado" : "Agendar Atendimento"}

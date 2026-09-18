@@ -895,6 +895,30 @@ export default function IAConfig() {
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="p-4 md:p-6 pt-0 md:pt-0 space-y-3 md:space-y-6">
+                            {/* Ambiente de teste: conversa com a IA sem ligar nada em produção */}
+                            <div
+                                data-tour="ia-sandbox"
+                                className="flex flex-wrap items-center justify-between gap-3 p-3 md:p-4 border rounded-lg bg-muted/40"
+                            >
+                                <div className="space-y-0.5">
+                                    <h4 className="font-medium text-sm md:text-base flex items-center gap-2">
+                                        <FlaskConical className="h-4 w-4 text-primary" />
+                                        Ambiente de teste
+                                    </h4>
+                                    <p className="text-xs md:text-sm text-muted-foreground">
+                                        Converse com a sua IA sem enviar nada por WhatsApp e sem precisar ligá-la para os clientes.
+                                    </p>
+                                </div>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => navigate("/ia-sandbox")}
+                                    className="shrink-0"
+                                >
+                                    Testar IA no ambiente Sandbox
+                                </Button>
+                            </div>
+
                             {/* Ligar IA */}
                             <div data-tour="ia-toggle" className="p-3 md:p-4 border rounded-lg space-y-4">
                                 <div className="flex items-center justify-between gap-3">
