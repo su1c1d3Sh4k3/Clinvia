@@ -1896,7 +1896,7 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
             let iaConfigOn = false;
             const { data: iaConfig } = await supabase
                 .from('ia_config')
-                .select('ia_on, test_mode, test_numbers')
+                .select('ia_on, test_mode, test_numbers, tone_inject')
                 .eq('user_id', userId)
                 .single();
             iaConfigOn = iaConfig?.ia_on === true;
@@ -2403,6 +2403,9 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                             booking_link: bookingLink,
                             campaign_prompt: campaignPrompt,
                             campaign: campaignBlock,
+                            // Tom de voz da conta (aba Tom de voz em /ia-config).
+                            // Texto pronto, gerado pelo compositor — o n8n só injeta.
+                            tone_inject: (iaConfig as any)?.tone_inject ?? null,
                         }
                     };
 

@@ -380,13 +380,39 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
             element: '[data-tour="ia-tabs"]',
             title: "Definições de IA",
             description:
-                "Três abas: Empresa (o que a IA sabe da clínica), F.A.Q (respostas prontas) e Config (ligar/desligar, delay, voz).",
+                "Quatro abas: Empresa (o que a IA sabe da clínica), F.A.Q (respostas prontas), Tom de voz (como ela escreve) e Config (ligar/desligar, delay, voz).",
         },
         {
             element: '[data-tour="ia-toggle"]',
             title: "Ligar IA",
             description:
                 "O interruptor geral. Com ele ligado, aparecem abaixo os botões de cada conexão — você escolhe quais números têm IA.",
+        },
+    ],
+    "ia-tom-de-voz": [
+        {
+            element: '[data-tour="tom-voz"]',
+            title: "Como a IA fala",
+            description:
+                "Sete controles mudam só o jeito de escrever: proximidade, formalidade, elaboração, expressividade, assertividade, tecnicidade e o tratamento (você ou senhor) com a frequência de emoji.",
+        },
+        {
+            element: '[data-tour="tom-comercial"]',
+            title: "Abordagem comercial",
+            description:
+                "O único controle que muda comportamento: quantas vezes a IA tenta depois que o cliente recua. Da esquerda (aceita na hora) até a direita (sonda o motivo e tenta até três vezes).",
+        },
+        {
+            element: '[data-tour="tom-preview"]',
+            title: "Conversa de referência",
+            description:
+                "Um exemplo real de como a IA escreve com a configuração atual. Muda na hora, sem precisar salvar.",
+        },
+        {
+            element: '[data-tour="tom-marca"]',
+            title: "Sobre a clínica",
+            description:
+                "Descrição curta para dar contexto. Não é instrução: a IA não promete nem oferece nada com base neste campo. Depois de ajustar tudo, clique em Salvar.",
         },
     ],
     "ia-horarios": [

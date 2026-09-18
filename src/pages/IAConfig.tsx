@@ -25,8 +25,9 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Building2, HelpCircle, Settings, Plus, Trash2, Loader2, Play, FlaskConical, X, Phone, CalendarClock } from "lucide-react";
+import { Building2, HelpCircle, Settings, Plus, Trash2, Loader2, Play, FlaskConical, X, Phone, CalendarClock, MessageCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { ToneTab } from "@/components/ia/ToneTab";
 
 interface IAConfigData {
     id?: string;
@@ -344,8 +345,12 @@ export default function IAConfig() {
     // Salvar configuração
     const saveMutation = useMutation({
         mutationFn: async (data: Partial<IAConfigData>) => {
+            // O tom de voz tem save próprio (aba Tom de voz). Salvar as outras abas
+            // não pode reescrever uma cópia velha dessas colunas.
+            const { tone_settings, tone_inject, tone_inject_generated_at, ...rest } = data as any;
+
             const payload = {
-                ...data,
+                ...rest,
                 user_id: ownerId,
                 frequent_questions: formatProductItems([], companyFaq),
             };
@@ -677,7 +682,7 @@ export default function IAConfig() {
             </div>
 
             <Tabs value={tab} onValueChange={setTab} className="w-full">
-                <TabsList data-tour="ia-tabs" className="grid w-full grid-cols-3 mb-4 md:mb-8 h-auto">
+                <TabsList data-tour="ia-tabs" className="grid w-full grid-cols-4 mb-4 md:mb-8 h-auto">
                     <TabsTrigger value="company" className="flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
                         <Building2 className="h-4 w-4" />
                         <span className="hidden sm:inline">Empresa</span>
@@ -685,6 +690,10 @@ export default function IAConfig() {
                     <TabsTrigger value="faq" className="flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
                         <HelpCircle className="h-4 w-4" />
                         <span className="hidden sm:inline">F.A.Q</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="tone" className="flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
+                        <MessageCircle className="h-4 w-4" />
+                        <span className="hidden sm:inline">Tom de voz</span>
                     </TabsTrigger>
                     <TabsTrigger value="settings" className="flex items-center justify-center gap-1 md:gap-2 py-2 md:py-2.5 text-xs md:text-sm">
                         <Settings className="h-4 w-4" />
@@ -866,6 +875,14 @@ export default function IAConfig() {
                             </div>
                         </CardContent>
                     </Card>
+                </TabsContent>
+
+                {/* Aba: Tom de voz */}
+                <TabsContent value="tone">
+                    <ToneTab
+                        ownerId={ownerId}
+                        savedSettings={(existingConfig as any)?.tone_settings}
+                    />
                 </TabsContent>
 
                 {/* Aba: Configurações */}

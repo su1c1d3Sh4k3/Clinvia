@@ -448,6 +448,7 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
         tours: [
             { label: "Configurar a IA", url: "/ia-config?tab=settings&tour=ia-config" },
             { label: "Horarios de agendamento da IA", url: "/ia-config?tab=settings&tour=ia-horarios" },
+            { label: "Tom de voz da IA", url: "/ia-config?tab=tone&tour=ia-tom-de-voz" },
         ],
         resolves: [
             "por que a IA nao esta respondendo",
@@ -460,11 +461,17 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "por que a IA oferece horarios de 10 em 10 minutos",
             "a partir de quando conta o tempo do follow-up da IA",
             "por que o cliente nao recebeu o follow-up",
+            "como mudar o jeito de a IA falar (tom de voz)",
+            "como deixar a IA mais formal, mais proxima ou mais direta",
+            "como tratar o cliente por senhor ou por voce",
+            "como controlar o uso de emoji pela IA",
+            "como fazer a IA insistir mais (ou menos) quando o cliente recua",
         ],
         steps: [
             "Abra IA no menu lateral: aba Empresa (dados e horarios), F.A.Q (perguntas frequentes) e Configuracoes (switch geral, delay, voz, follow-up).",
             "O switch por conexao fica em Conexoes, no card da instancia.",
             "O switch por cliente fica na pagina Clientes.",
+            "Em IA > Tom de voz voce ajusta como a IA escreve: seis controles de estilo (proximidade, formalidade, elaboracao, expressividade, assertividade, tecnicidade), o tratamento (voce ou senhor/senhora), a frequencia de emoji (nunca, raro, natural), a Abordagem comercial e um campo opcional 'Sobre a clinica'. A conversa de exemplo ao lado muda na hora. Essa aba tem o Salvar dela.",
             "Em IA > Configuracoes, no bloco 'Horarios de agendamento', escolha o Tamanho do slot (de quantos em quantos minutos os horarios sao oferecidos, padrao 10 min) e o Intervalo entre atendimentos (folga exigida antes e depois de cada agendamento ja marcado, padrao sem intervalo). Clique em Salvar.",
         ],
         gotchas: [
@@ -478,6 +485,12 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "O tempo do follow-up e contado SEMPRE a partir da ultima mensagem enviada pelo CLIENTE, e de mais nada. Pilula de sistema no chat (transferencia de fila, 'fulano visualizou essa conversa', entrou/saiu do grupo, reacao) e resposta da propria IA nao reiniciam a contagem. Abrir a conversa para dar uma olhada nao atrasa o follow-up.",
             "Conversa em que o cliente nunca escreveu (disparo de campanha sem resposta) nao entra no follow-up: sem mensagem do cliente nao ha relogio para contar.",
             "Follow-up so sai se a ULTIMA fala tiver sido nossa. Se quem falou por ultimo foi o cliente, quem deve resposta somos nos e nenhum follow-up e disparado.",
+            "O tom de voz e UNICO por conta: vale para todas as conexoes, WhatsApp e Instagram. Nao existe tom diferente por numero.",
+            "O tom muda so o jeito de escrever. O formato das mensagens, as travas de compliance, o fluxo do atendimento e o que esta escrito em Restricoes continuam iguais em qualquer tom. Recusa direta e pedido de descadastro encerram na hora, inclusive na abordagem mais comercial.",
+            "A unica excecao e a Abordagem comercial: ela muda comportamento, definindo quantas vezes a IA tenta depois de um recuo do cliente (do aceitar na hora ate sondar o motivo real e tentar tres vezes).",
+            "Algumas combinacoes se ajustam sozinhas na tela: formalidade alta com emoji 'natural' volta para 'raro', e abordagem consultiva com assertividade no maximo desce um ponto. O controle se move sozinho e aparece um aviso amarelo embaixo dele. Nao e erro.",
+            "O campo 'Sobre a clinica' e descricao, nao ordem: a IA nao promete nem oferece nada com base nele. Texto que tenta instruir a IA ('sempre diga que...', 'insista') e bloqueado no salvar.",
+            "Mudanca de tom vale para as PROXIMAS mensagens; o que ja foi respondido nao muda. Se a conversa de exemplo da tela mudou, o tom mudou.",
             "Outros motivos de o follow-up nao sair: conversa nao esta pendente na fila 'Atendimento IA', IA desligada no contato ou naquela conexao, card ativo em Agendado / Sem Interesse / Sem Contato / Pesquisa de Satisfacao, ou agendamento do cliente nas proximas 24h.",
         ],
     },

@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import {
     Bot, ShieldCheck, Building2, HelpCircle, Workflow, Timer, KanbanSquare,
-    PowerOff, ExternalLink, Mic, CalendarClock,
+    PowerOff, ExternalLink, Mic, CalendarClock, MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +19,7 @@ const TOPICS = [
     { id: "quando-responde", label: "Quando responde" },
     { id: "empresa", label: "Empresa" },
     { id: "faq-da-ia", label: "F.A.Q da IA" },
+    { id: "tom-de-voz", label: "Tom de voz" },
     { id: "ajustes", label: "Delay, voz e workflow" },
     { id: "horarios", label: "Horários de agendamento" },
     { id: "ia-e-crm", label: "IA e CRM" },
@@ -147,7 +148,41 @@ export function IaGuide() {
             </TopicSection>
 
             {/* 5 */}
-            <TopicSection id="ajustes" index={5} icon={Timer} title="Delay, voz e conexão com o cérebro da IA"
+            <TopicSection id="tom-de-voz" index={5} icon={MessageCircle} title="Tom de voz"
+                subtitle="Aba Tom de voz — como a IA escreve">
+                <p className="text-sm text-muted-foreground">
+                    A aba <strong className="text-foreground">Tom de voz</strong> define o jeito de escrever da sua
+                    assistente. São controles que você arrasta e uma{" "}
+                    <strong className="text-foreground">conversa de exemplo que muda na hora</strong>, ao lado, mostrando
+                    exatamente como ela vai falar. Nada é escrito por IA: cada posição tem um texto pronto.
+                </p>
+                <StepByStep steps={[
+                    { title: "Como a IA fala", description: "Seis controles de estilo: proximidade (distante ou próxima), formalidade (coloquial ou formal), elaboração (direta ou detalhada), expressividade (contida ou entusiasmada), assertividade (consultiva ou diretiva) e tecnicidade (nome popular ou termo técnico)." },
+                    { title: "Tratamento e emoji", description: 'Você ou senhor/senhora — vale para a conversa inteira, sem misturar. E a frequência de emoji: nunca, raro (só em despedida ou confirmação) ou natural.' },
+                    { title: "Abordagem comercial", description: "O único controle que muda comportamento, não só escrita: quantas vezes a IA tenta depois que o cliente recua. Da esquerda (aceita na hora, não insiste) até a direita (pergunta o motivo real e tenta até três vezes)." },
+                    { title: "Sobre a clínica", description: "Uma descrição curta e opcional para dar contexto (ex.: \"clínica de dermatologia com 15 anos, público 40+\"). É descrição, não ordem: a IA não promete nem oferece nada com base neste campo." },
+                    { title: "Salvar", description: "Esta aba tem o Salvar dela. A partir daí, todas as conexões da conta passam a falar nesse tom — o tom é único por conta." },
+                ]} />
+                <Callout type="atencao" title="Algumas combinações se ajustam sozinhas">
+                    Formalidade alta com emoji natural, por exemplo, não combina. Quando isso acontece, o próprio controle
+                    se move para o valor possível e aparece um aviso em amarelo embaixo dele explicando o porquê. Não é
+                    erro: é o sistema evitando um tom incoerente.
+                </Callout>
+                <Callout type="dica" title="O tom não muda as regras">
+                    Formato das mensagens, travas de compliance, fluxo do atendimento e o que está escrito em{" "}
+                    <strong>Restrições</strong> continuam valendo igual em qualquer tom. Recusa direta e pedido de
+                    descadastro sempre encerram na hora, inclusive na abordagem mais comercial.
+                </Callout>
+                <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" onClick={() => navigate("/ia-config?tab=tone&tour=ia-tom-de-voz")}>
+                        <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                        Me mostre na prática
+                    </Button>
+                </div>
+            </TopicSection>
+
+            {/* 6 */}
+            <TopicSection id="ajustes" index={6} icon={Timer} title="Delay, voz e conexão com o cérebro da IA"
                 subtitle="Aba Config — o comportamento da assistente">
                 <div className="grid gap-3 sm:grid-cols-3">
                     <div className="rounded-xl border p-3.5">
@@ -174,8 +209,8 @@ export function IaGuide() {
                 </div>
             </TopicSection>
 
-            {/* 6 */}
-            <TopicSection id="horarios" index={6} icon={CalendarClock} title="Horários de agendamento"
+            {/* 7 */}
+            <TopicSection id="horarios" index={7} icon={CalendarClock} title="Horários de agendamento"
                 subtitle="Aba Config — de quanto em quanto tempo a IA oferece horários">
                 <StepByStep steps={[
                     {
@@ -208,8 +243,8 @@ export function IaGuide() {
                 </div>
             </TopicSection>
 
-            {/* 7 */}
-            <TopicSection id="ia-e-crm" index={7} icon={KanbanSquare} title="IA e CRM andam juntos"
+            {/* 8 */}
+            <TopicSection id="ia-e-crm" index={8} icon={KanbanSquare} title="IA e CRM andam juntos"
                 subtitle="Fila de atendimento e etapa do funil se movem em par">
                 <StepByStep steps={[
                     { title: "Cliente novo chega", description: <>Com a IA ligada, a conversa nasce na fila <strong>Atendimento IA</strong> e um card é criado no CRM em "Em Atendimento IA".</>, },
@@ -222,8 +257,8 @@ export function IaGuide() {
                 </Callout>
             </TopicSection>
 
-            {/* 8 */}
-            <TopicSection id="desligando" index={8} icon={PowerOff} title="Desligando a IA"
+            {/* 9 */}
+            <TopicSection id="desligando" index={9} icon={PowerOff} title="Desligando a IA"
                 subtitle="Do bisturi ao disjuntor: 3 níveis de controle">
                 <StepByStep steps={[
                     { title: "Por cliente (bisturi)", description: <>Na página <strong>Clientes</strong>, cada contato tem um botão de IA. Perfeito para aquele paciente que só quer falar com a Dra.</>, },
@@ -242,8 +277,8 @@ export function IaGuide() {
                 </div>
             </TopicSection>
 
-            {/* 9 */}
-            <TopicSection id="faq" index={9} icon={HelpCircle} title="Perguntas frequentes">
+            {/* 10 */}
+            <TopicSection id="faq" index={10} icon={HelpCircle} title="Perguntas frequentes">
                 <Accordion type="single" collapsible className="rounded-xl border px-4">
                     {[
                         {
@@ -269,6 +304,14 @@ export function IaGuide() {
                         {
                             q: "Por que a IA demora alguns segundos para responder?",
                             a: "É o delay proposital (aba Config): ela espera o cliente terminar de digitar as mensagens picadas para responder tudo de uma vez, como uma pessoa faria.",
+                        },
+                        {
+                            q: "Posso ter um tom de voz diferente em cada número?",
+                            a: "Não. O tom de voz é único da conta: todas as conexões, WhatsApp e Instagram, falam do mesmo jeito. O que muda por conexão é só se a IA está ligada ou não.",
+                        },
+                        {
+                            q: "Mudei o tom de voz e a IA parece a mesma. Por quê?",
+                            a: "Confira se clicou no Salvar da própria aba Tom de voz (ela tem o botão dela) e lembre que o tom vale para as PRÓXIMAS mensagens — o que já foi respondido não muda. Também vale olhar a conversa de exemplo da tela: se ela mudou, o tom mudou. Controles no meio da régua produzem diferenças sutis de propósito.",
                         },
                         {
                             q: "Posso ter IA em um número e não em outro?",
