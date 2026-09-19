@@ -74,6 +74,10 @@ verify_jwt = false
 [functions.api-sale-scheduling-due]
 verify_jwt = false
 
+# System prompts da plataforma lidos pelos fluxos do n8n (x-api-key)
+[functions.get-system-prompt]
+verify_jwt = false
+
 # API Functions do ambiente Sandbox (mesmas tools, chamadas pelo n8n com x-api-key)
 [functions.api-contacts-sandbox]
 verify_jwt = false

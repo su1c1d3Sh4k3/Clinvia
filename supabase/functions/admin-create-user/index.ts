@@ -31,6 +31,7 @@ const ADMIN_PAGES = [
     "monitoramento",
     "equipe",
     "suporte",
+    "system-prompt",
     "atualizacoes",
     "design-login",
 ];

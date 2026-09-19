@@ -9,6 +9,7 @@ import {
     Headphones,
     Megaphone,
     Image,
+    FileCode2,
     type LucideIcon,
 } from "lucide-react";
 
@@ -18,6 +19,7 @@ export type AdminPage =
     | "monitoramento"
     | "equipe"
     | "suporte"
+    | "system-prompt"
     | "atualizacoes"
     | "design-login";
 
@@ -36,6 +38,7 @@ export const ADMIN_PAGES: AdminPageDef[] = [
     { value: "monitoramento", label: "Monitoramento", icon: Activity, description: "Saúde da infraestrutura" },
     { value: "equipe", label: "Equipe", icon: ShieldCheck, description: "Usuários do painel e permissões" },
     { value: "suporte", label: "Suporte", icon: Headphones, description: "Chamados dos clientes" },
+    { value: "system-prompt", label: "System Prompt", icon: FileCode2, description: "Prompts usados pelos fluxos do n8n" },
     { value: "atualizacoes", label: "Atualizações", icon: Megaphone, description: "Notificações publicadas" },
     { value: "design-login", label: "Design de Login", icon: Image, description: "Banner da tela de acesso" },
 ];
@@ -54,6 +57,7 @@ export const DEFAULT_ADMIN_PERMISSIONS: AdminPermissions = {
     monitoramento: "none",
     equipe: "none",
     suporte: "edit",
+    "system-prompt": "none",
     atualizacoes: "none",
     "design-login": "none",
 };

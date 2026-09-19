@@ -16,6 +16,7 @@ import AdminTeam from "@/components/admin/sections/AdminTeam";
 import AdminSupport from "@/components/admin/sections/AdminSupport";
 import AdminUpdates from "@/components/admin/sections/AdminUpdates";
 import AdminLoginDesign from "@/components/admin/sections/AdminLoginDesign";
+import AdminSystemPrompt from "@/components/admin/sections/AdminSystemPrompt";
 
 export default function Admin() {
     const navigate = useNavigate();
@@ -125,6 +126,8 @@ export default function Admin() {
                         adminUserId={identity.adminUser?.id ?? null}
                     />
                 );
+            case "system-prompt":
+                return <AdminSystemPrompt canEdit={can("system-prompt", "edit")} />;
             case "atualizacoes":
                 return <AdminUpdates canEdit={can("atualizacoes", "edit")} />;
             case "design-login":
