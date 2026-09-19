@@ -1,5 +1,7 @@
-# Use Node.js 20 LTS
-FROM node:20-alpine AS builder
+# Node.js 20 LTS pelo mirror do Google: a VPS de producao perdeu a rota ate o
+# registry-1.docker.io (timeout de TCP no 443) e o build parava no primeiro FROM.
+# Mesma imagem oficial, outra rede.
+FROM mirror.gcr.io/library/node:20-alpine AS builder
 
 # Set working directory
 WORKDIR /app
@@ -17,7 +19,7 @@ COPY . .
 RUN npm run build
 
 # Production stage
-FROM node:20-alpine AS runner
+FROM mirror.gcr.io/library/node:20-alpine AS runner
 
 WORKDIR /app
 
