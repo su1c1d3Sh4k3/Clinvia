@@ -74,6 +74,37 @@ verify_jwt = false
 [functions.api-sale-scheduling-due]
 verify_jwt = false
 
+# API Functions do ambiente Sandbox (mesmas tools, chamadas pelo n8n com x-api-key)
+[functions.api-contacts-sandbox]
+verify_jwt = false
+
+[functions.api-send-message-sandbox]
+verify_jwt = false
+
+[functions.api-add-note-sandbox]
+verify_jwt = false
+
+[functions.api-reset-context-sandbox]
+verify_jwt = false
+
+[functions.api-token-usage-sandbox]
+verify_jwt = false
+
+[functions.api-crm-sandbox]
+verify_jwt = false
+
+[functions.api-scheduling-sandbox]
+verify_jwt = false
+
+[functions.api-services-sandbox]
+verify_jwt = false
+
+[functions.api-availability-sandbox]
+verify_jwt = false
+
+[functions.api-public-booking-sandbox]
+verify_jwt = false
+
 # Evolution/WhatsApp Functions
 
 
