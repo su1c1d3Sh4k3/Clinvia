@@ -209,7 +209,7 @@ export function CampaignsGuide() {
                 subtitle="5 formas de escolher quem recebe — e como personalizar a mensagem">
                 <div className="grid gap-3 sm:grid-cols-2">
                     {[
-                        { t: "Planilha (CSV/Excel)", d: "Envie um arquivo com telefone + colunas extras (nome, serviço, data...). O sistema encontra o contato pelo telefone e cria os que não existem." },
+                        { t: "Planilha (CSV/Excel)", d: "Envie um arquivo com telefone + colunas extras (nome, serviço, data...). O sistema encontra o contato pelo telefone; quem ainda não está cadastrado só é criado quando você criar a campanha." },
                         { t: "CRM", d: "Selecione etapas do funil (ex.: todos em \"Sem Contato\") e a campanha pega os contatos dessas colunas." },
                         { t: "Tags", d: "Todos os contatos que têm determinada etiqueta — inclusive tags de campanhas anteriores (que marcam apenas quem recebeu a mensagem daquela campanha)." },
                         { t: "Agendamentos", d: "Filtre por período, profissional, serviço e status (ex.: quem fez botox há mais de 5 meses)." },
@@ -230,8 +230,15 @@ export function CampaignsGuide() {
                     </div>
                 </div>
                 <Callout type="dica" title="Planilha: como o telefone é encontrado">
-                    A busca usa os últimos 8 dígitos do número — funciona com ou sem DDI/9º dígito. Se o contato não existir, ele é
-                    criado automaticamente com o nome da planilha.
+                    A busca usa os últimos 8 dígitos do número — funciona com ou sem DDI/9º dígito. Subir o arquivo <strong>não
+                    cadastra ninguém</strong>: quem ainda não está nos Contatos só é criado no momento em que você clica em criar a
+                    campanha. Se você desistir no meio do assistente, seu cadastro continua intacto.
+                </Callout>
+                <Callout type="evite" title="A planilha não troca o nome de quem já está cadastrado">
+                    Quem manda no nome do contato é você. Se a pessoa já tem nome no cadastro (digitado por alguém da equipe ou
+                    ajustado na ficha), a coluna de nome da planilha é <strong>ignorada</strong> para ela — a planilha só preenche
+                    nome de contato novo ou de quem ainda estava sem nome definido. Assim uma coluna preenchida errado no Excel não
+                    renomeia a sua base inteira.
                 </Callout>
                 <Callout type="evite" title="Um contato, uma entrada">
                     Não precisa se preocupar com duplicados: mesmo que a pessoa apareça na planilha e no CRM ao mesmo tempo, ela

@@ -426,6 +426,9 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "o que significa cada card do quadro de resultados",
             "como reenviar uma campanha",
             "como ativar a IA na campanha",
+            "quando os contatos da planilha entram no cadastro",
+            "por que a planilha nao trocou o nome dos contatos",
+            "planilha de campanha renomeou meus clientes",
         ],
         steps: [
             "Abra Campanhas no menu lateral e clique em Nova campanha.",
@@ -443,6 +446,8 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "Mensagens automaticas de agendamento tem prioridade sobre campanha no mesmo numero.",
             "O campo opcional da etapa Tipo se chama 'Salas habilitadas' (nao 'profissionais'): marcando alguma, a IA so oferece horarios dessas salas enquanto a campanha estiver ativa; sem nenhuma marcada valem todas. A equipe continua agendando manualmente em qualquer sala.",
             "Variavel 'Personalizado' escolhida mas com o campo em branco impede avancar a etapa Mensagem — digite o texto ou volte para um dado da fonte.",
+            "Subir a planilha na etapa Audiencia NAO cadastra contato nenhum: o sistema so procura os numeros (pelos ultimos 8 digitos) para mostrar quantos ja existem. Os que faltam sao criados no instante em que voce cria a campanha. Se desistir no meio do assistente, nada e gravado nos Contatos.",
+            "A coluna de nome da planilha nunca sobrescreve o nome de um contato que ja tem nome definido no cadastro — quem manda no nome do cliente e a clinica. A planilha so preenche o nome de contato novo ou de quem ainda estava sem nome. Se uma planilha antiga renomeou seus contatos, os nomes anteriores nao podem ser recuperados: corrija na ficha do cliente.",
         ],
     },
     {

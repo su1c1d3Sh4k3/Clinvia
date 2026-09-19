@@ -690,17 +690,26 @@ export function CampaignWizard({ open, onOpenChange, campaign, resendFrom }: Cam
             };
             payload.variable_map = templateVarNums.map((n) => varMapping[n]);
         }
+        // Entrada sem contact_id = número de planilha ainda sem cadastro; o
+        // contato é criado pelo campaign-manage junto com a campanha
+        const serializeEntries = () =>
+            entriesToSend.map((e) => ({
+                contact_id: e.contactId,
+                vars: e.vars,
+                number: e.number,
+                push_name: e.pushName,
+            }));
         try {
             if (isEdit) {
                 // Só envia audiência se o usuário mexeu nela
                 if (entriesToSend.length > 0) {
-                    payload.entries = entriesToSend.map((e) => ({ contact_id: e.contactId, vars: e.vars }));
+                    payload.entries = serializeEntries();
                     payload.invalid_rows = audience.invalidRows;
                 }
                 await updateCampaign.mutateAsync({ campaignId: campaign!.id, ...payload });
                 toast.success("Campanha atualizada!");
             } else {
-                payload.entries = entriesToSend.map((e) => ({ contact_id: e.contactId, vars: e.vars }));
+                payload.entries = serializeEntries();
                 payload.invalid_rows = audience.invalidRows;
                 // Reenvio: a campanha mãe é encerrada pelo campaign-manage (rotina de expiração)
                 if (isResend && resendFrom?.id) payload.resend_from_campaign_id = resendFrom.id;

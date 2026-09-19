@@ -136,12 +136,15 @@ export function AudienceFileUpload({ fileType, value, onChange }: AudienceFileUp
             if (numbers.length > 0) {
                 // Match pelos ÚLTIMOS 8 DÍGITOS: carrega os contatos do dono
                 // (mais recentes primeiro — em colisão de sufixo, vale o mais recente)
-                const bySuffix = new Map<string, { id: string; push_name: string | null }>();
+                const bySuffix = new Map<
+                    string,
+                    { id: string; push_name: string | null; edited: boolean | null }
+                >();
                 const PAGE = 1000;
                 for (let page = 0; ; page++) {
                     const { data: batch, error } = await supabase
                         .from("contacts")
-                        .select("id, number, push_name")
+                        .select("id, number, push_name, edited")
                         .eq("user_id", ownerId)
                         .order("created_at", { ascending: false })
                         .range(page * PAGE, page * PAGE + PAGE - 1);
@@ -149,24 +152,31 @@ export function AudienceFileUpload({ fileType, value, onChange }: AudienceFileUp
                     for (const c of batch || []) {
                         const key = suffix8(c.number || "");
                         if (key.length === 8 && !bySuffix.has(key)) {
-                            bySuffix.set(key, { id: c.id, push_name: c.push_name });
+                            bySuffix.set(key, { id: c.id, push_name: c.push_name, edited: c.edited });
                         }
                     }
                     if (!batch || batch.length < PAGE) break;
                 }
 
-                // Existentes: atualiza o nome com o do arquivo (demais campos preservados)
-                const matchedByNumber = new Map<string, string>();
+                // Existentes: só completa o nome de quem ainda não tem um definido.
+                // USER RULE 2026-09-19: quem manda no nome do contato é o cliente —
+                // planilha NUNCA sobrescreve nome já cadastrado (contacts.edited).
                 const nameUpdates: { id: string; push_name: string }[] = [];
                 for (const n of numbers) {
                     const match = bySuffix.get(suffix8(n));
                     if (!match) continue;
-                    matchedByNumber.set(n, match.id);
                     const fileName2 = validByNumber.get(n)!.push_name;
-                    if (fileName2 && fileName2 !== "Cliente" && fileName2 !== match.push_name) {
+                    if (
+                        fileName2 &&
+                        fileName2 !== "Cliente" &&
+                        fileName2 !== match.push_name &&
+                        !match.edited
+                    ) {
                         nameUpdates.push({ id: match.id, push_name: fileName2 });
                     }
                 }
+                // Não marca `edited`: o nome da planilha é só um preenchimento
+                // provisório e o WhatsApp ainda pode corrigi-lo com o nome real
                 for (const upd of nameUpdates) {
                     await supabase
                         .from("contacts")
@@ -174,29 +184,18 @@ export function AudienceFileUpload({ fileType, value, onChange }: AudienceFileUp
                         .eq("id", upd.id);
                 }
 
-                // Cria os que faltam
-                const toInsert = numbers
-                    .filter((n) => !matchedByNumber.has(n))
-                    .map((n) => ({
-                        user_id: ownerId,
-                        number: n,
-                        push_name: validByNumber.get(n)!.push_name,
-                        phone: n.replace(/@.*$/, ""),
-                        channel: "whatsapp",
-                    }));
-                for (let i = 0; i < toInsert.length; i += 100) {
-                    const chunk = toInsert.slice(i, i + 100);
-                    const { data: inserted, error } = await supabase
-                        .from("contacts")
-                        .insert(chunk as any)
-                        .select("id, number");
-                    if (error) throw error;
-                    for (const c of inserted || []) matchedByNumber.set(c.number, c.id);
-                }
-
+                // USER RULE 2026-09-19: o upload NÃO cria contato. Número sem cadastro
+                // viaja como entrada sem contactId e só vira contato quando a campanha
+                // for criada (campaign-manage.materializeEntries) — planilha abandonada
+                // no wizard não suja mais o cadastro.
                 for (const n of numbers) {
-                    const id = matchedByNumber.get(n);
-                    if (id) entries.push({ contactId: id, vars: validByNumber.get(n)!.vars });
+                    const src = validByNumber.get(n)!;
+                    const match = bySuffix.get(suffix8(n));
+                    entries.push(
+                        match
+                            ? { contactId: match.id, vars: src.vars }
+                            : { contactId: null, vars: src.vars, number: n, pushName: src.push_name }
+                    );
                 }
             }
 

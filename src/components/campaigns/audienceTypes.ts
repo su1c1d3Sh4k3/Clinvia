@@ -1,9 +1,14 @@
 /** Uma entrada de disparo — um contato pode aparecer mais de uma vez
  *  (ex.: fonte Agendamentos gera 1 entrada por agendamento). */
 export interface AudienceEntry {
-    contactId: string;
+    /** null = número da planilha que ainda não está no cadastro. O contato só é
+     *  criado quando a campanha for salva (campaign-manage.materializeEntries). */
+    contactId: string | null;
     /** Snapshot das variáveis da fonte para esta entrada (chave → valor). */
     vars: Record<string, string>;
+    /** Só quando contactId é null: número e nome lidos do arquivo. */
+    number?: string;
+    pushName?: string;
 }
 
 /** Seleção de audiência produzida por qualquer builder de origem. */

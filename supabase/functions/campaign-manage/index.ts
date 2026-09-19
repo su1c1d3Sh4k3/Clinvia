@@ -158,24 +158,38 @@ function validateDates(scheduledAt: string, validUntil: string) {
 }
 
 interface EntryPayload {
-    contact_id: string;
+    /** null = contato ainda não existe no cadastro; será criado por materializeEntries. */
+    contact_id: string | null;
     vars?: Record<string, string>;
+    /** Só em entrada de planilha sem contato: número e nome vindos do arquivo. */
+    number?: string;
+    push_name?: string;
 }
+
+const last8 = (n: string) => String(n || "").replace(/\D/g, "").slice(-8);
 
 /** Normaliza entries (novo formato) ou contact_ids (legado) em EntryPayload[].
  *  Regra: cada contato só pode ter UMA entrada por campanha — dedupe mantendo a
- *  primeira ocorrência (o frontend já envia a entrada mais relevante primeiro). */
+ *  primeira ocorrência (o frontend já envia a entrada mais relevante primeiro).
+ *  Entrada de planilha pode chegar sem contact_id (contato ainda não cadastrado):
+ *  nesse caso o dedupe é pelos últimos 8 dígitos do número. */
 function normalizeEntries(body: any): EntryPayload[] | undefined {
     if (body.entries !== undefined) {
         const seen = new Set<string>();
         return ((body.entries || []) as any[])
-            .filter((e) => e?.contact_id)
+            .filter((e) => e?.contact_id || last8(e?.number).length === 8)
             .filter((e) => {
-                if (seen.has(e.contact_id)) return false;
-                seen.add(e.contact_id);
+                const key = e.contact_id || `n:${last8(e.number)}`;
+                if (seen.has(key)) return false;
+                seen.add(key);
                 return true;
             })
-            .map((e) => ({ contact_id: e.contact_id, vars: e.vars || {} }));
+            .map((e) => ({
+                contact_id: e.contact_id || null,
+                vars: e.vars || {},
+                number: e.number ? String(e.number).trim() : undefined,
+                push_name: e.push_name ? String(e.push_name).trim() : undefined,
+            }));
     }
     if (body.contact_ids !== undefined) {
         return [...new Set((body.contact_ids || []) as string[])].map((cid) => ({
@@ -184,6 +198,67 @@ function normalizeEntries(body: any): EntryPayload[] | undefined {
         }));
     }
     return undefined;
+}
+
+/**
+ * Cria no cadastro os contatos da planilha que ainda não existem.
+ *
+ * USER RULE 2026-09-19: a planilha de audiência NÃO mexe em `contacts` na hora
+ * do upload — o contato só nasce quando a campanha é de fato criada. Antes a
+ * tela gravava no upload, e uma lista abandonada no wizard deixava centenas de
+ * contatos órfãos no cadastro (incidente "Tudo Bem", PELE 18/09).
+ *
+ * Reconfere o número pelos últimos 8 dígitos DENTRO do dono antes de inserir:
+ * o contato pode ter nascido entre o upload e a criação da campanha. Nome de
+ * contato já existente nunca é tocado aqui — quem manda no nome é o cliente.
+ */
+async function materializeEntries(
+    supabase: any,
+    ownerId: string,
+    entries: EntryPayload[]
+): Promise<EntryPayload[]> {
+    const pending = entries.filter((e) => !e.contact_id && last8(e.number || "").length === 8);
+    if (pending.length === 0) return entries.filter((e) => e.contact_id) as EntryPayload[];
+
+    // Cadastro do dono indexado pelo sufixo (mais recente vence em colisão)
+    const bySuffix = new Map<string, string>();
+    const PAGE = 1000;
+    for (let page = 0; ; page++) {
+        const { data: batch, error } = await supabase
+            .from("contacts")
+            .select("id, number")
+            .eq("user_id", ownerId)
+            .order("created_at", { ascending: false })
+            .range(page * PAGE, page * PAGE + PAGE - 1);
+        if (error) throw new Error(`Falha ao consultar os contatos: ${error.message}`);
+        for (const c of batch || []) {
+            const key = last8(c.number || "");
+            if (key.length === 8 && !bySuffix.has(key)) bySuffix.set(key, c.id);
+        }
+        if (!batch || batch.length < PAGE) break;
+    }
+
+    const toInsert = pending
+        .filter((e) => !bySuffix.has(last8(e.number!)))
+        .map((e) => ({
+            user_id: ownerId,
+            number: e.number!,
+            push_name: e.push_name || "Cliente",
+            phone: e.number!.replace(/@.*$/, ""),
+            channel: "whatsapp",
+        }));
+    for (let i = 0; i < toInsert.length; i += 200) {
+        const { data: inserted, error } = await supabase
+            .from("contacts")
+            .insert(toInsert.slice(i, i + 200))
+            .select("id, number");
+        if (error) throw new Error(`Falha ao criar os contatos da planilha: ${error.message}`);
+        for (const c of inserted || []) bySuffix.set(last8(c.number || ""), c.id);
+    }
+
+    return entries
+        .map((e) => (e.contact_id ? e : { ...e, contact_id: bySuffix.get(last8(e.number || "")) || null }))
+        .filter((e) => e.contact_id);
 }
 
 /**
@@ -511,7 +586,6 @@ serve(async (req) => {
             if (entries.length === 0 && !(invalid_rows || []).length) {
                 throw new Error("A campanha precisa de pelo menos um contato");
             }
-            const uniqueContactIds = [...new Set(entries.map((e) => e.contact_id))];
 
             // Template existente: valida ANTES de criar a campanha
             let existingTpl: any = null;
@@ -603,8 +677,11 @@ serve(async (req) => {
                 }
             }
 
+            // Só agora os contatos da planilha nascem no cadastro (a campanha já existe)
+            const readyEntries = await materializeEntries(supabase, ownerId, entries);
+
             // campaign_contacts (válidos com vars + inválidos)
-            await insertCampaignContacts(supabase, campaign.id, ownerId, entries, invalid_rows || []);
+            await insertCampaignContacts(supabase, campaign.id, ownerId, readyEntries, invalid_rows || []);
 
             // Tag NÃO é aplicada na criação — USER RULE 2026-08-18: a tag é
             // atribuída aos contatos 1h antes do disparo (campaign_takeover_sweep)
@@ -805,8 +882,10 @@ serve(async (req) => {
             }
 
             // Audiência: substituição das linhas pendentes (1 entrada por contato)
-            const entries = normalizeEntries(body);
-            if (entries !== undefined) {
+            const rawEntries = normalizeEntries(body);
+            if (rawEntries !== undefined) {
+                // Contatos novos da planilha nascem aqui, ao salvar a edição
+                const entries = await materializeEntries(supabase, ownerId, rawEntries);
                 const { data: existing } = await supabase
                     .from("campaign_contacts")
                     .select("contact_id, status")
