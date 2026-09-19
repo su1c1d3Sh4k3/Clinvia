@@ -350,6 +350,8 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "agendamento curto (5 ou 10 minutos) aparecendo espremido na grade",
             "dois agendamentos no mesmo horario ficando sobrepostos",
             "como ver a agenda de um profissional so (visao solo)",
+            "por que o cliente nao escolhe a sala no link de agendamento",
+            "quais salas aparecem para o cliente escolher no link de agendamento",
         ],
         steps: [
             "Abra Agenda no menu lateral. O botao no cabecalho alterna entre grade (dia) e calendario (mes).",
@@ -365,6 +367,8 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
         gotchas: [
             "Primeira coisa a conferir quando 'sumiu uma agenda': o alternador Profissionais | Salas mostra um grupo por vez. Sala avulsa so aparece no modo Salas; profissional so no modo Profissionais.",
             "Profissional ou sala inativa some da grade, do modal de agendamento e do link publico.",
+            "No link publico de agendamento so a AVALIACAO deixa o cliente escolher o profissional, e a tela lista apenas as salas que tem um profissional vinculado, mostrando nome e cargo dele. Sala sem profissional vinculado (Equipe > Salas) nao aparece nessa escolha.",
+            "Nos servicos ja comprados o link publico NAO mostra a escolha de sala: o cliente vai direto para o calendario, que junta os horarios livres de todas as salas aptas ao servico, e o sistema encaixa sozinho na sala que estiver livre. A sala nao e escolha do paciente. Reagendar pelo link mantem a sala do agendamento original.",
             "O card flutuante do mouse aparece sempre por cima de tudo, mesmo com o agendamento no pe da tela ou colado na borda: ele abre para baixo quando o evento esta no topo e para cima quando esta embaixo. Se ele nao aparecer, verifique se a pagina esta atualizada (Ctrl+F5) — a versao antiga cortava o card dentro da rolagem da grade.",
             "Dois agendamentos que ocupam o mesmo horario ficam LADO A LADO na coluna, com metade da largura cada um. E o caso classico do cancelado com um novo agendamento remarcado para a mesma hora: os dois continuam visiveis, nenhum fica escondido atras do outro. Cancelado e falta aparecem como uma tira fina e apagada.",
             "As linhas da grade seguem o Tamanho do slot de IA > Configuracoes e a coluna da esquerda marca as horas cheias (8:00, 9:00...).",

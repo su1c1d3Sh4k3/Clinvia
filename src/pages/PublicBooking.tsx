@@ -101,8 +101,14 @@ export default function PublicBooking() {
     return convenios.filter(c => ids.includes(c.id));
   }, [selApp, convenios]);
 
+  /** Só a Avaliação deixa o paciente escolher o profissional (regra do user). */
+  const isAvaliacao = (app: any) => !!app?.is_avaliacao;
+
   const profsForApp = (app: any, convenio: any) => {
-    const base = allProfessionals.filter(p => (app?.professionals || []).includes(p.id));
+    // Na Avaliação aparecem só as salas que têm um profissional por trás — é o
+    // nome e o cargo dele que o paciente escolhe, não a sala.
+    const base = allProfessionals.filter(p =>
+      (app?.professionals || []).includes(p.id) && p.has_responsavel);
     if (!convenio) return base;
     const rooms: string[] = convenio.professional_ids || [];
     return base.filter(p => rooms.includes(p.id));
@@ -114,8 +120,10 @@ export default function PublicBooking() {
   );
 
   useEffect(() => {
-    if (!selDate || !selProf || !selApp || !params) return;
-    const profId = managingApt ? managingApt.professional_id : selProf.id;
+    if (!selDate || !selApp || !params) return;
+    // Sem sala escolhida (serviço pago) a API devolve a união dos horários de
+    // todas as salas aptas.
+    const profId = managingApt ? managingApt.professional_id : (selProf?.id || null);
     const svcId = managingApt ? managingApt.service_id : selApp.id;
     // Reagendamento herda o convênio do agendamento original.
     const convId = managingApt ? (managingApt.convenio_id || null) : (selConvenio?.id || null);
@@ -138,6 +146,9 @@ export default function PublicBooking() {
   }, [calMonth]);
 
   const goToProfessional = (app: any, convenio: any) => {
+    // Serviço pago: a sala não é escolha do paciente — o sistema encaixa na que
+    // estiver livre (regra do user). Só a Avaliação passa pela escolha.
+    if (!isAvaliacao(app)) { setSelProf(null); setStep("datetime"); return; }
     const profs = profsForApp(app, convenio);
     if (profs.length === 1) { setSelProf(profs[0]); setStep("datetime"); }
     else { setSelProf(null); setStep("professional"); }
@@ -159,10 +170,10 @@ export default function PublicBooking() {
   };
 
   const handleConfirm = async () => {
-    if (!params || !selApp || !selProf || !selDate || !selTime) return;
+    if (!params || !selApp || !selDate || !selTime) return;
     setSubmitting(true); setError("");
     try {
-      await callApi({ action: "create_booking", user_id: params.user_id, contact_id: params.contact_id, instance_id: params.instance_id, service_id: selApp.id, professional_id: selProf.id, date: format(selDate, "yyyy-MM-dd"), time: selTime, convenio_id: selConvenio?.id || null });
+      await callApi({ action: "create_booking", user_id: params.user_id, contact_id: params.contact_id, instance_id: params.instance_id, service_id: selApp.id, professional_id: selProf?.id || null, date: format(selDate, "yyyy-MM-dd"), time: selTime, convenio_id: selConvenio?.id || null });
       setStep("done");
       loadData();
     } catch (err: any) { setError(err.message); }
@@ -370,7 +381,7 @@ export default function PublicBooking() {
         {/* ── STEP: DateTime (new booking + reschedule) ── */}
         {(step === "datetime" || step === "reschedule") && (
           <div className="space-y-4">
-            <button onClick={() => step === "reschedule" ? goHome() : setStep(filteredProfs.length > 1 ? "professional" : appConvenios.length > 0 ? "convenio" : "service")} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+            <button onClick={() => step === "reschedule" ? goHome() : setStep(isAvaliacao(selApp) && filteredProfs.length > 1 ? "professional" : appConvenios.length > 0 ? "convenio" : "service")} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
               <ArrowLeft className="w-4 h-4" /> Voltar
             </button>
             {step === "reschedule" && managingApt && (
@@ -441,7 +452,7 @@ export default function PublicBooking() {
         )}
 
         {/* ── STEP: Confirm (new booking) ── */}
-        {step === "confirm" && selApp && selProf && selDate && selTime && (
+        {step === "confirm" && selApp && selDate && selTime && (
           <div className="space-y-4">
             <button onClick={() => setStep("datetime")} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="w-4 h-4" /> Voltar</button>
             <h2 className="text-sm font-semibold text-muted-foreground">Confirme seu agendamento</h2>
@@ -450,7 +461,10 @@ export default function PublicBooking() {
               {appConvenios.length > 0 && (
                 <div className="flex items-center justify-between"><span className="text-sm text-muted-foreground">Atendimento</span><span className="text-sm font-medium">{selConvenio ? selConvenio.nome : "Particular"}</span></div>
               )}
-              <div className="flex items-center justify-between"><span className="text-sm text-muted-foreground">Profissional</span><span className="text-sm font-medium">{selProf.name}</span></div>
+              {/* Serviço pago não mostra sala: quem encaixa é o sistema. */}
+              {selProf && (
+                <div className="flex items-center justify-between"><span className="text-sm text-muted-foreground">Profissional</span><span className="text-sm font-medium">{selProf.name}</span></div>
+              )}
               <div className="flex items-center justify-between"><span className="text-sm text-muted-foreground">Data</span><span className="text-sm font-medium capitalize">{format(selDate, "EEEE, dd/MM", { locale: ptBR })}</span></div>
               <div className="flex items-center justify-between"><span className="text-sm text-muted-foreground">Horário</span><span className="text-sm font-medium">{selTime}</span></div>
               <div className="flex items-center justify-between"><span className="text-sm text-muted-foreground">Duração</span><span className="text-sm font-medium">{selApp.duration_minutes} min</span></div>

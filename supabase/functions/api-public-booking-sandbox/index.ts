@@ -48,6 +48,30 @@ const VALID_ACTIONS = [
 
 function pad(n: number): string { return String(n).padStart(2, "0"); }
 
+/** "08:30" (ou 8.5 legado) → minutos desde a meia-noite. */
+function parseT(t: any): number {
+    if (!t) return 0;
+    if (typeof t === "string" && t.includes(":")) { const [h, m] = t.split(":").map(Number); return h * 60 + (m || 0); }
+    return parseFloat(t) * 60 || 0;
+}
+
+/** Agenda da sala num dia: expediente, intervalo e faixas de convênio. */
+type RoomDayWindow = {
+    start: number;
+    end: number;
+    breakStart: number | null;
+    breakEnd: number | null;
+    convRanges: ReturnType<typeof convenioRanges>;
+};
+
+/** O atendimento cabe no expediente da sala? (não checa agenda ocupada) */
+function windowAccepts(w: RoomDayWindow, m: number, duration: number, convenioRequested: boolean): boolean {
+    if (m < w.start || m + duration > w.end) return false;
+    if (w.breakStart !== null && w.breakEnd !== null && m < w.breakEnd && m + duration > w.breakStart) return false;
+    if (convenioRequested) return insideConvenio(m, duration, w.convRanges);
+    return !overlapsConvenio(m, duration, w.convRanges);
+}
+
 /** Quem lê esta resposta é um PACIENTE (tela do link): texto humano em `error`. */
 function patientError(status: number, code: string, message: string, technicalDetail?: unknown): Response {
     return apiError(corsHeaders, {
@@ -169,6 +193,124 @@ serve(async (req) => {
             return Math.round(precoBase * (1 - pct / 100) * 100) / 100;
         };
 
+        const ROOM_SCHEDULE_COLUMNS =
+            `id, name, work_hours, work_days, use_daily_schedule, work_hours_daily, ${CONVENIO_PROF_COLUMNS}`;
+
+        /**
+         * Salas aptas a realizar o serviço, já cortadas pelo convênio escolhido.
+         * Em serviço pago o paciente NÃO escolhe sala (regra do user).
+         */
+        const resolveCandidateRooms = async (
+            serviceId: string,
+            convenio: ConvenioSelection,
+        ): Promise<{ rooms: any[]; response: null } | { rooms: null; response: Response }> => {
+            const { data: svcRooms, error: svcRoomsErr } = await supabase.from("services_client")
+                .select("professionals").eq("id", serviceId).eq("user_id", userId).maybeSingle();
+            if (svcRoomsErr) {
+                return {
+                    rooms: null,
+                    response: patientDbError("service_rooms_read_failed", "buscar as salas que realizam o serviço", svcRoomsErr,
+                        "Não conseguimos consultar os horários agora. Tente novamente em alguns instantes."),
+                };
+            }
+            const allowed: string[] = svcRooms?.professionals || [];
+            if (allowed.length === 0) return { rooms: [], response: null };
+
+            const { data: profs, error: profsErr } = await supabase.from("professionals")
+                .select(ROOM_SCHEDULE_COLUMNS)
+                .eq("user_id", userId).eq("active", true).in("id", allowed);
+            if (profsErr) {
+                return {
+                    rooms: null,
+                    response: patientDbError("professionals_read_failed", "buscar as salas disponíveis para o serviço", profsErr,
+                        "Não conseguimos consultar os horários agora. Tente novamente em alguns instantes."),
+                };
+            }
+            let rooms = profs || [];
+            if (convenio.requested) {
+                const roomIds = convenio.convenio
+                    ? await getConvenioRoomIds(supabase, convenio.convenio.id)
+                    : new Set<string>();
+                rooms = filterRoomsForConvenio(rooms, roomIds);
+            }
+            return { rooms, response: null };
+        };
+
+        /** Agenda da sala no dia; `null` = fechada. O cadeado só vale em Agenda Real. */
+        const roomDayWindow = async (
+            prof: any,
+            dateStr: string,
+            convenio: ConvenioSelection,
+        ): Promise<RoomDayWindow | null> => {
+            if (agendaReal && await isProfessionalDayBlocked(supabase, prof.id, dateStr)) return null;
+
+            const reqDate = new Date(dateStr + "T12:00:00");
+            const workDays: number[] = prof.work_days || [1, 2, 3, 4, 5];
+            if (!workDays.includes(reqDate.getDay())) return null;
+
+            const wh = getWorkHoursForDay(prof, reqDate.getDay());
+            const start = parseT(wh.start) || 8 * 60;
+            const end = parseT(wh.end) || 20 * 60;
+            const breakStart = wh.break_start ? parseT(wh.break_start) : null;
+            const breakEnd = wh.break_end ? parseT(wh.break_end) : null;
+
+            const convRanges = convenioRanges(prof, reqDate.getDay(), { start, end, breakStart, breakEnd });
+            if (convenio.requested) {
+                const roomIds = convenio.convenio
+                    ? await getConvenioRoomIds(supabase, convenio.convenio.id)
+                    : new Set<string>();
+                if (filterRoomsForConvenio([prof], roomIds).length === 0) return null;
+                if (convRanges.length === 0) return null;
+            }
+            return { start, end, breakStart, breakEnd, convRanges };
+        };
+
+        /**
+         * Minutos ocupados da sala no dia: sempre os agendamentos do teste; a agenda
+         * real só entra quando a sessão está em 'Agenda Real'.
+         */
+        const roomBusyRanges = async (
+            professionalId: string,
+            dateStr: string,
+            bufferMinutes: number,
+        ): Promise<{ busy: { start: number; end: number }[]; response: null } | { busy: null; response: Response }> => {
+            const { data: sandboxApts, error: sbErr } = await supabase.from("sandbox_appointments")
+                .select("start_time, end_time")
+                .eq("session_id", ctx.session.id).eq("professional_id", professionalId)
+                .neq("status", "canceled")
+                .gte("start_time", `${dateStr}T00:00:00-03:00`).lte("start_time", `${dateStr}T23:59:59-03:00`);
+            if (sbErr) {
+                return {
+                    busy: null,
+                    response: patientDbError("sandbox_appointments_read_failed",
+                        "buscar os agendamentos já marcados no ambiente de teste", sbErr,
+                        "Não conseguimos consultar os horários agora. Tente novamente em alguns instantes."),
+                };
+            }
+            const ocupados: any[] = [...(sandboxApts || [])];
+
+            if (agendaReal) {
+                const { data: apts, error: aptsErr } = await supabase.from("appointments")
+                    .select("start_time, end_time").eq("professional_id", professionalId).neq("status", "canceled")
+                    .gte("start_time", `${dateStr}T00:00:00-03:00`).lte("start_time", `${dateStr}T23:59:59-03:00`);
+                if (aptsErr) {
+                    return {
+                        busy: null,
+                        response: patientDbError("appointments_read_failed",
+                            "buscar os agendamentos reais do profissional nesta data", aptsErr,
+                            "Não conseguimos consultar os horários agora. Tente novamente em alguns instantes."),
+                    };
+                }
+                ocupados.push(...(apts || []));
+            }
+
+            const busy = ocupados.map((a: any) => padBusyRange(
+                { start: spMinuteOfDay(a.start_time), end: spMinuteOfDay(a.end_time) },
+                bufferMinutes,
+            ));
+            return { busy, response: null };
+        };
+
         // ── get_services ──────────────────────────────────────────────────────
         if (action === "get_services") {
             const { data: sc, error: scErr } = await supabase.from("services_client")
@@ -285,6 +427,9 @@ serve(async (req) => {
                     category_id: s.category_id, service_name_id: s.service_name_id,
                     professionals: s.professionals || [],
                     convenio_ids: aptoByService.get(s.id) || [],
+                    // Só a Avaliação deixa o paciente escolher o profissional; serviço
+                    // pago vai para a primeira sala livre (regra do user).
+                    is_avaliacao: avaliacaoCatIds.has(s.category_id),
                 })),
             }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
@@ -300,19 +445,23 @@ serve(async (req) => {
             }
             return new Response(JSON.stringify({
                 sandbox: true,
+                // `has_responsavel` deixa a tela mostrar só as salas de profissionais
+                // na escolha da Avaliação (regra do user).
                 professionals: (profs || []).map((p: any) => ({
                     id: p.id,
                     name: p.name,
                     photo_url: p.responsavel?.photo_url ?? null,
                     role: p.responsavel?.role ?? null,
+                    has_responsavel: !!p.responsavel,
                 })),
             }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
         // ── get_slots ─────────────────────────────────────────────────────────
+        // Com `professional_id` = agenda daquela sala (fluxo da Avaliação).
+        // Sem `professional_id` = união das salas aptas ao serviço (serviço pago).
         if (action === "get_slots") {
             const missingSlots = [
-                [professional_id, "o profissional", "professional_id"],
                 [service_id, "o serviço", "service_id"],
                 [date, "a data", "date"],
             ].filter(([v]) => !v);
@@ -340,101 +489,51 @@ serve(async (req) => {
             const { selection: slotConvenio, response: slotConvenioFail } = await resolveConvenio();
             if (slotConvenioFail) return slotConvenioFail;
 
-            const { data: prof, error: profErr } = await supabase.from("professionals")
-                .select(`id, work_hours, work_days, use_daily_schedule, work_hours_daily, ${CONVENIO_PROF_COLUMNS}`)
-                .eq("id", professional_id).eq("active", true).maybeSingle();
-            if (profErr) {
-                return patientDbError("professional_read_failed", "buscar os horários de trabalho do profissional", profErr,
-                    "Não conseguimos consultar os horários agora. Tente novamente em alguns instantes.");
-            }
-            if (!prof) {
-                return patientError(404, "professional_not_found",
-                    "O profissional escolhido não está mais cadastrado na clínica. Volte e escolha outro profissional.",
-                    `professional_id=${professional_id}`);
-            }
-
-            const semHorario = () => new Response(JSON.stringify({ sandbox: true, slots: [] }),
-                { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-
-            // Cadeado do dia só vale quando o teste segue a agenda real
-            if (agendaReal && await isProfessionalDayBlocked(supabase, professional_id, date)) return semHorario();
-
-            const workDays: number[] = prof.work_days || [1, 2, 3, 4, 5];
-            const reqDate = new Date(date + "T12:00:00");
-            const wh = getWorkHoursForDay(prof, reqDate.getDay());
-            if (!workDays.includes(reqDate.getDay())) return semHorario();
-
-            const parseT = (t: any): number => {
-                if (!t) return 0;
-                if (typeof t === "string" && t.includes(":")) { const [h, m] = t.split(":").map(Number); return h * 60 + (m || 0); }
-                return parseFloat(t) * 60 || 0;
-            };
-
-            const whStart = parseT(wh.start) || 8 * 60;
-            const whEnd = parseT(wh.end) || 20 * 60;
-            const brkStart = wh.break_start ? parseT(wh.break_start) : null;
-            const brkEnd = wh.break_end ? parseT(wh.break_end) : null;
-
-            const convRanges = convenioRanges(prof, reqDate.getDay(), {
-                start: whStart, end: whEnd, breakStart: brkStart, breakEnd: brkEnd,
-            });
-            if (slotConvenio.requested) {
-                const roomIds = slotConvenio.convenio
-                    ? await getConvenioRoomIds(supabase, slotConvenio.convenio.id)
-                    : new Set<string>();
-                const allowed = filterRoomsForConvenio([prof as any], roomIds).length > 0;
-                if (!allowed || convRanges.length === 0) return semHorario();
-            }
-
-            // Ocupação: sempre os agendamentos do teste; a agenda real só entra
-            // quando a sessão está em 'Agenda Real'.
-            const { data: sandboxApts, error: sbErr } = await supabase.from("sandbox_appointments")
-                .select("start_time, end_time")
-                .eq("session_id", ctx.session.id).eq("professional_id", professional_id)
-                .neq("status", "canceled")
-                .gte("start_time", `${date}T00:00:00-03:00`).lte("start_time", `${date}T23:59:59-03:00`);
-            if (sbErr) {
-                return patientDbError("sandbox_appointments_read_failed",
-                    "buscar os agendamentos já marcados no ambiente de teste", sbErr,
-                    "Não conseguimos consultar os horários agora. Tente novamente em alguns instantes.");
-            }
-            const ocupados: any[] = [...(sandboxApts || [])];
-
-            if (agendaReal) {
-                const { data: apts, error: aptsErr } = await supabase.from("appointments")
-                    .select("start_time, end_time").eq("professional_id", professional_id).neq("status", "canceled")
-                    .gte("start_time", `${date}T00:00:00-03:00`).lte("start_time", `${date}T23:59:59-03:00`);
-                if (aptsErr) {
-                    return patientDbError("appointments_read_failed",
-                        "buscar os agendamentos reais do profissional nesta data", aptsErr,
+            // Salas a considerar: a escolhida pelo paciente ou todas as aptas ao serviço
+            let rooms: any[];
+            if (professional_id) {
+                const { data: prof, error: profErr } = await supabase.from("professionals")
+                    .select(ROOM_SCHEDULE_COLUMNS)
+                    .eq("id", professional_id).eq("active", true).maybeSingle();
+                if (profErr) {
+                    return patientDbError("professional_read_failed", "buscar os horários de trabalho do profissional", profErr,
                         "Não conseguimos consultar os horários agora. Tente novamente em alguns instantes.");
                 }
-                ocupados.push(...(apts || []));
+                if (!prof) {
+                    return patientError(404, "professional_not_found",
+                        "O profissional escolhido não está mais cadastrado na clínica. Volte e escolha outro profissional.",
+                        `professional_id=${professional_id}`);
+                }
+                rooms = [prof];
+            } else {
+                const { rooms: candidates, response: roomsFail } = await resolveCandidateRooms(service_id, slotConvenio);
+                if (roomsFail) return roomsFail;
+                rooms = candidates;
             }
 
             const slotSettings = await getSlotSettings(supabase, userId);
-            const busy = ocupados.map((a: any) => padBusyRange(
-                { start: spMinuteOfDay(a.start_time), end: spMinuteOfDay(a.end_time) },
-                slotSettings.bufferMinutes,
-            ));
 
-            const available: string[] = [];
-            for (let m = whStart; m + duration <= whEnd; m += slotSettings.stepMinutes) {
-                if (brkStart !== null && brkEnd !== null && m < brkEnd && m + duration > brkStart) continue;
-                if (slotConvenio.requested) {
-                    if (!insideConvenio(m, duration, convRanges)) continue;
-                } else if (overlapsConvenio(m, duration, convRanges)) {
-                    continue;
+            // União dos horários: basta UMA sala estar livre para o horário aparecer.
+            const merged = new Set<string>();
+            for (const room of rooms) {
+                const window = await roomDayWindow(room, date, slotConvenio);
+                if (!window) continue;
+
+                const { busy, response: busyFail } = await roomBusyRanges(room.id, date, slotSettings.bufferMinutes);
+                if (busyFail) return busyFail;
+
+                for (let m = window.start; m + duration <= window.end; m += slotSettings.stepMinutes) {
+                    if (!windowAccepts(window, m, duration, slotConvenio.requested)) continue;
+                    let conflict = false;
+                    for (const b of busy!) { if (m < b.end && m + duration > b.start) { conflict = true; break; } }
+                    if (!conflict) merged.add(`${pad(Math.floor(m / 60))}:${pad(m % 60)}`);
                 }
-                let conflict = false;
-                for (const b of busy) { if (m < b.end && m + duration > b.start) { conflict = true; break; } }
-                if (!conflict) available.push(`${pad(Math.floor(m / 60))}:${pad(m % 60)}`);
             }
 
             return new Response(JSON.stringify({
                 sandbox: true,
                 agenda_mode: agendaReal ? "real" : "livre",
-                slots: available,
+                slots: [...merged].sort(),
             }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
@@ -442,7 +541,6 @@ serve(async (req) => {
         if (action === "create_booking") {
             const missingBooking = [
                 [service_id, "o serviço", "service_id"],
-                [professional_id, "o profissional", "professional_id"],
                 [date, "a data", "date"],
                 [time, "o horário", "time"],
             ].filter(([v]) => !v);
@@ -454,30 +552,17 @@ serve(async (req) => {
             const badBookingDateTime = checkDateTime();
             if (badBookingDateTime) return badBookingDateTime;
 
-            const [{ data: svc, error: svcErr }, { data: prof, error: profErr }] = await Promise.all([
-                supabase.from("services_client")
-                    .select("id, name, price, duration_minutes, category_id, service_name_id")
-                    .eq("id", service_id).maybeSingle(),
-                supabase.from("professionals").select(`id, name, ${CONVENIO_PROF_COLUMNS}`)
-                    .eq("id", professional_id).eq("active", true).maybeSingle(),
-            ]);
+            const { data: svc, error: svcErr } = await supabase.from("services_client")
+                .select("id, name, price, duration_minutes, category_id, service_name_id")
+                .eq("id", service_id).maybeSingle();
             if (svcErr) {
                 return patientDbError("service_read_failed", "buscar o serviço escolhido", svcErr,
-                    "Não conseguimos concluir o agendamento agora. Tente novamente em alguns instantes.");
-            }
-            if (profErr) {
-                return patientDbError("professional_read_failed", "buscar o profissional escolhido", profErr,
                     "Não conseguimos concluir o agendamento agora. Tente novamente em alguns instantes.");
             }
             if (!svc) {
                 return patientError(404, "service_not_found",
                     "O serviço escolhido não está mais cadastrado na clínica. Volte e escolha outro serviço.",
                     `service_id=${service_id}`);
-            }
-            if (!prof) {
-                return patientError(404, "professional_not_found",
-                    "O profissional escolhido não está mais cadastrado na clínica. Volte e escolha outro profissional.",
-                    `professional_id=${professional_id}`);
             }
 
             const { selection: bookingConvenio, response: bookingConvenioFail } = await resolveConvenio();
@@ -496,11 +581,6 @@ serve(async (req) => {
                     return patientError(409, "service_not_convenio",
                         `O serviço "${svc.name}" não é atendido por convênio nesta clínica. Volte e escolha a opção Particular ou outro serviço.`);
                 }
-                const roomIds = await getConvenioRoomIds(supabase, bookingConvenio.convenio.id);
-                if (filterRoomsForConvenio([prof as any], roomIds).length === 0) {
-                    return patientError(409, "professional_not_convenio",
-                        `${prof.name} não atende por convênio. Volte e escolha outro profissional ou a opção Particular.`);
-                }
             }
 
             const duration = svc.duration_minutes || 30;
@@ -513,33 +593,27 @@ serve(async (req) => {
                     `Agora em Brasília: ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}`);
             }
 
-            if (agendaReal && await isProfessionalDayBlocked(supabase, professional_id, date)) {
-                return patientError(409, "agenda_closed",
-                    `${prof.name} não está atendendo no dia ${date}. Escolha outra data ou outro profissional.`);
-            }
-
             const { bufferMinutes } = await getSlotSettings(supabase, userId);
             const win = bufferedOverlapWindow(startDate, endDate, bufferMinutes);
 
-            const { data: sbConflict, error: sbConflictErr } = await supabase.from("sandbox_appointments")
-                .select("id")
-                .eq("session_id", ctx.session.id).eq("professional_id", professional_id)
-                .neq("status", "canceled")
-                .lt("start_time", win.end).gt("end_time", win.start)
-                .limit(1);
-            if (sbConflictErr) {
-                return patientDbError("overlap_check_failed", "verificar se o horário está livre no ambiente de teste", sbConflictErr,
-                    "Não conseguimos confirmar se esse horário está livre. Tente novamente em alguns instantes.");
-            }
-            if ((sbConflict || []).length > 0) {
-                return patientError(409, "slot_taken",
-                    `O horário de ${time} do dia ${date} com ${prof.name} já foi ocupado neste teste. Escolha outro horário.`,
-                    `Duração do serviço: ${duration} min; folga entre atendimentos: ${bufferMinutes} min`);
-            }
+            /** `true` = livre, `false` = ocupada, `Response` = falha ao checar. */
+            const roomIsFree = async (roomId: string): Promise<boolean | Response> => {
+                const { data: sbConflict, error: sbConflictErr } = await supabase.from("sandbox_appointments")
+                    .select("id")
+                    .eq("session_id", ctx.session.id).eq("professional_id", roomId)
+                    .neq("status", "canceled")
+                    .lt("start_time", win.end).gt("end_time", win.start)
+                    .limit(1);
+                if (sbConflictErr) {
+                    return patientDbError("overlap_check_failed", "verificar se o horário está livre no ambiente de teste", sbConflictErr,
+                        "Não conseguimos confirmar se esse horário está livre. Tente novamente em alguns instantes.");
+                }
+                if ((sbConflict || []).length > 0) return false;
 
-            if (agendaReal) {
+                if (!agendaReal) return true;
+
                 const { data: overlap, error: overlapErr } = await supabase.rpc("check_appointment_overlap", {
-                    p_professional_id: professional_id,
+                    p_professional_id: roomId,
                     p_start_time: win.start,
                     p_end_time: win.end,
                     p_exclude_id: null,
@@ -548,12 +622,69 @@ serve(async (req) => {
                     return patientDbError("overlap_check_failed", "verificar se o horário escolhido está livre na agenda real", overlapErr,
                         "Não conseguimos confirmar se esse horário está livre. Tente novamente em alguns instantes.");
                 }
-                if (overlap) {
+                return !overlap;
+            };
+
+            let prof: any;
+            if (professional_id) {
+                // Avaliação: o paciente escolheu o profissional
+                const { data: chosen, error: profErr } = await supabase.from("professionals")
+                    .select(ROOM_SCHEDULE_COLUMNS)
+                    .eq("id", professional_id).eq("active", true).maybeSingle();
+                if (profErr) {
+                    return patientDbError("professional_read_failed", "buscar o profissional escolhido", profErr,
+                        "Não conseguimos concluir o agendamento agora. Tente novamente em alguns instantes.");
+                }
+                if (!chosen) {
+                    return patientError(404, "professional_not_found",
+                        "O profissional escolhido não está mais cadastrado na clínica. Volte e escolha outro profissional.",
+                        `professional_id=${professional_id}`);
+                }
+                if (bookingConvenio.requested && bookingConvenio.convenio) {
+                    const roomIds = await getConvenioRoomIds(supabase, bookingConvenio.convenio.id);
+                    if (filterRoomsForConvenio([chosen], roomIds).length === 0) {
+                        return patientError(409, "professional_not_convenio",
+                            `${chosen.name} não atende por convênio. Volte e escolha outro profissional ou a opção Particular.`);
+                    }
+                }
+                if (agendaReal && await isProfessionalDayBlocked(supabase, professional_id, date)) {
+                    return patientError(409, "agenda_closed",
+                        `${chosen.name} não está atendendo no dia ${date}. Escolha outra data ou outro profissional.`);
+                }
+                const free = await roomIsFree(professional_id);
+                if (free instanceof Response) return free;
+                if (!free) {
                     return patientError(409, "slot_taken",
-                        `O horário de ${time} do dia ${date} com ${prof.name} está ocupado na agenda real. Escolha outro horário.`,
+                        `O horário de ${time} do dia ${date} com ${chosen.name} já está ocupado. Escolha outro horário.`,
+                        `Duração do serviço: ${duration} min; folga entre atendimentos: ${bufferMinutes} min`);
+                }
+                prof = chosen;
+            } else {
+                // Serviço pago: a sala não é escolha do paciente (regra do user)
+                const { rooms: candidates, response: roomsFail } = await resolveCandidateRooms(service_id, bookingConvenio);
+                if (roomsFail) return roomsFail;
+                if (candidates!.length === 0) {
+                    return patientError(409, "service_without_room",
+                        `O serviço "${svc.name}" não tem nenhuma sala disponível para atendimento. Cadastre a sala do serviço para testar.`,
+                        `service_id=${service_id}`);
+                }
+
+                const startMinutes = parseT(time);
+                for (const cand of candidates!) {
+                    const dayWindow = await roomDayWindow(cand, date, bookingConvenio);
+                    if (!dayWindow) continue;
+                    if (!windowAccepts(dayWindow, startMinutes, duration, bookingConvenio.requested)) continue;
+                    const free = await roomIsFree(cand.id);
+                    if (free instanceof Response) return free;
+                    if (free) { prof = cand; break; }
+                }
+                if (!prof) {
+                    return patientError(409, "slot_taken",
+                        `O horário de ${time} do dia ${date} já está ocupado. Escolha outro horário.`,
                         `Duração do serviço: ${duration} min; folga entre atendimentos: ${bufferMinutes} min`);
                 }
             }
+            const bookedProfessionalId = prof.id;
 
             const campanha = await campanhaAtiva();
             const finalPrice = descontoDaCampanha(campanha, Number(svc.price) || 0, svc.name);
@@ -562,7 +693,7 @@ serve(async (req) => {
                 session_id: ctx.session.id,
                 user_id: userId,
                 contact_id: contactId,
-                professional_id,
+                professional_id: bookedProfessionalId,
                 service_id,
                 title: svc.name,
                 start_time: startDate.toISOString(),
@@ -630,7 +761,7 @@ serve(async (req) => {
             await logSandboxCall(supabase, ctx, {
                 function_name: "api-public-booking-sandbox",
                 label: `Agendou "${svc.name}" com ${prof.name} em ${date} às ${time} pelo link de agendamento`,
-                request: { action, service_id, professional_id, date, time },
+                request: { action, service_id, professional_id: bookedProfessionalId, date, time },
             });
 
             return new Response(JSON.stringify({

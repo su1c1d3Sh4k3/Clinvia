@@ -282,13 +282,25 @@ export function AgendaGuide() {
                 subtitle="O cliente marca sozinho, sem falar com ninguém">
                 <p className="text-sm text-muted-foreground">
                     O sistema gera um <strong className="text-foreground">link exclusivo por cliente</strong> onde ele mesmo
-                    escolhe serviço, profissional e horário — vendo apenas horários realmente livres. O link mostra só{" "}
+                    escolhe serviço e horário — vendo apenas horários realmente livres. O link mostra só{" "}
                     <strong className="text-foreground">avaliações e serviços que ele já comprou</strong> e ainda não marcou,
                     sem exibir preços.
                 </p>
+                <Callout type="atencao" title="Escolher o profissional só acontece na Avaliação">
+                    Na <strong className="text-foreground">Avaliação</strong> o cliente escolhe com quem quer ser atendido: a
+                    tela lista <strong className="text-foreground">só as salas que têm um profissional vinculado</strong>,
+                    mostrando o nome e o cargo dele (foto, quando houver). Sala sem profissional vinculado em{" "}
+                    <strong className="text-foreground">Equipe &gt; Salas</strong> não aparece nessa escolha.
+                    <br /><br />
+                    Nos <strong className="text-foreground">serviços já comprados</strong> essa etapa não existe: o cliente vai
+                    direto para o calendário, que mostra a união dos horários livres de{" "}
+                    <strong className="text-foreground">todas as salas aptas ao serviço</strong>. Ele escolhe dia e hora e o
+                    sistema encaixa sozinho na sala que estiver livre — sala não é escolha do paciente.
+                </Callout>
                 <Callout type="pratica" title="Onde usar">
                     A IA envia esse link quando o cliente prefere escolher com calma, e ele também aparece nas mensagens de
-                    reagendamento. Agendou pelo link? Cai na Agenda e no CRM igual a qualquer outro.
+                    reagendamento. Agendou pelo link? Cai na Agenda e no CRM igual a qualquer outro. O{" "}
+                    <strong className="text-foreground">reagendamento continua na mesma sala</strong> do agendamento original.
                 </Callout>
                 <Callout type="evite" title="Link antigo não abre mais">
                     Cada link carrega a <strong className="text-foreground">conexão</strong> pela qual ele foi enviado — é ela
