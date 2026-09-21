@@ -14,7 +14,8 @@
 //     "prompts": {
 //       "base": "...",
 //       "campanhas_qualificacao": "...",
-//       "campanhas_agendamento": "..."
+//       "campanhas_agendamento": "...",
+//       "instagram": "..."
 //     },
 //     "updated_at": "2026-09-19T12:00:00.000Z"
 //   }
@@ -57,7 +58,7 @@ Deno.serve(async (req) => {
 
         const { data, error } = await supabase
             .from("system_prompts")
-            .select("base_prompt, qualificacao_prompt, agendamento_prompt, updated_at")
+            .select("base_prompt, qualificacao_prompt, agendamento_prompt, instagram_prompt, updated_at")
             .eq("id", true)
             .maybeSingle();
 
@@ -79,6 +80,7 @@ Deno.serve(async (req) => {
                     base: data.base_prompt || "",
                     campanhas_qualificacao: data.qualificacao_prompt || "",
                     campanhas_agendamento: data.agendamento_prompt || "",
+                    instagram: data.instagram_prompt || "",
                 },
                 updated_at: data.updated_at,
             }),

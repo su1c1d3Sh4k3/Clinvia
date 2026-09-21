@@ -32,9 +32,20 @@ const SLOTS = [
         label: "Campanhas de Agendamento",
         hint: "Prompt do fluxo que leva o contato de campanha até o agendamento.",
     },
+    {
+        column: "instagram_prompt",
+        apiKey: "instagram",
+        label: "Prompt Instagram",
+        hint: "Prompt do fluxo que atende as conversas do Instagram Direct — onde o contato não tem telefone e o link de agendamento pede identificação.",
+    },
 ] as const;
 
-const EMPTY = { base_prompt: "", qualificacao_prompt: "", agendamento_prompt: "" };
+const EMPTY = {
+    base_prompt: "",
+    qualificacao_prompt: "",
+    agendamento_prompt: "",
+    instagram_prompt: "",
+};
 
 export default function AdminSystemPrompt({ canEdit }: { canEdit: boolean }) {
     const queryClient = useQueryClient();
@@ -47,7 +58,7 @@ export default function AdminSystemPrompt({ canEdit }: { canEdit: boolean }) {
         queryFn: async () => {
             const { data, error } = await supabase
                 .from("system_prompts" as any)
-                .select("base_prompt, qualificacao_prompt, agendamento_prompt, updated_at")
+                .select("base_prompt, qualificacao_prompt, agendamento_prompt, instagram_prompt, updated_at")
                 .eq("id", true)
                 .maybeSingle();
             if (error) throw error;
@@ -61,6 +72,7 @@ export default function AdminSystemPrompt({ canEdit }: { canEdit: boolean }) {
             base_prompt: data.base_prompt || "",
             qualificacao_prompt: data.qualificacao_prompt || "",
             agendamento_prompt: data.agendamento_prompt || "",
+            instagram_prompt: data.instagram_prompt || "",
         });
     }, [data]);
 
@@ -153,8 +165,9 @@ export default function AdminSystemPrompt({ canEdit }: { canEdit: boolean }) {
                     Envie o header <code className="text-gray-200">x-api-key</code> com a chave da API
                     de agendamento (a mesma das outras chamadas do n8n). A resposta traz{" "}
                     <code className="text-gray-200">prompts.base</code>,{" "}
-                    <code className="text-gray-200">prompts.campanhas_qualificacao</code> e{" "}
-                    <code className="text-gray-200">prompts.campanhas_agendamento</code>.
+                    <code className="text-gray-200">prompts.campanhas_qualificacao</code>,{" "}
+                    <code className="text-gray-200">prompts.campanhas_agendamento</code> e{" "}
+                    <code className="text-gray-200">prompts.instagram</code>.
                 </p>
                 {data?.updated_at && (
                     <p className="text-xs text-gray-500">
@@ -166,7 +179,7 @@ export default function AdminSystemPrompt({ canEdit }: { canEdit: boolean }) {
                 )}
             </div>
 
-            {/* Os 3 slots */}
+            {/* Um bloco por prompt */}
             <div className="space-y-4">
                 {SLOTS.map((slot) => (
                     <div
