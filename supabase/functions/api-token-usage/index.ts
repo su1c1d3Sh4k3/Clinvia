@@ -1,23 +1,30 @@
 // API de consumo de tokens do n8n (x-api-key = SCHEDULING_API_KEY)
 //
 // O n8n chama esta função a cada requisição da IA com o JSON de usage:
-// [{ id: "<workflow_id>", name, execution_id,
+// [{ id: "<workflow_id>", name, execution_id, usage_key,
 //    tokenUsage: { model, tokenUsage: { completionTokens, promptTokens, totalTokens,
 //                                       promptTokensDetails: { cachedTokens } } } }]
 //
 // Fluxo por item:
 //   1. Resolve o tenant pelo workflow_id (cada user tem workflow próprio):
-//      instances.workflow_id → ia_config.workflow_id
+//      instances.workflow_code → instances.workflow_id → ia_config.workflow_id
 //   2. Preço USD por modelo via tabela llm_model_prices (editável no banco).
 //      O input CACHEADO tem preço próprio (cached_input_usd_per_1m, ~10% do
 //      input normal): o agente do n8n reenvia o prompt inteiro a cada passo de
-//      tool-call, e é o cache que torna isso barato na fatura real. Sem separar
-//      os dois, o custo calculado fica muito acima do cobrado pelo provedor.
-//   3. Converte para BRL com cotação real (AwesomeAPI USD-BRL; fallback última
+//      tool-call, e é o cache que torna isso barato na fatura real. Como o n8n
+//      NUNCA informa os tokens cacheados, eles são estimados por cache_ratio
+//      (llm_cache_calibration, medido na Usage API; fallback default_cache_ratio).
+//   3. Aplica a margem de revenda: cost_usd = provider_cost_usd * (1 + markup).
+//      markup = profiles.markup ?? llm_model_prices.markup (0 se a conta usa
+//      chave própria do provedor: registra consumo, não cobra margem).
+//   4. Converte para BRL com cotação real (AwesomeAPI USD-BRL; fallback última
 //      cotação usada no log; fallback final 5.50)
-//   4. Insere token_usage_log (source 'n8n', function_name 'n8n', cost_usd +
-//      cost_brl + exchange_rate + workflow_id + execution_id) e soma nos
+//   5. Insere token_usage_log (source 'n8n', function_name 'n8n') e soma nos
 //      acumuladores do tenant (profiles.tokens_total/monthly + custos)
+//
+// Idempotência: quando o item traz `usage_key` (montado pelo Code node do n8n
+// sobre o payload já agregado), uma chave repetida NÃO grava nem soma de novo —
+// o item volta com duplicate: true. Payloads sem usage_key gravam como antes.
 //
 // Resposta inclui o consumo do mês corrente do tenant separado por origem
 // (n8n vs sistema) para monitoramento.
@@ -30,6 +37,14 @@ import {
     requireApiKey,
     unexpectedErrorResponse,
 } from '../_shared/api-errors.ts';
+import {
+    computeTokenCost,
+    DEFAULT_CACHE_RATIO,
+    DEFAULT_MARKUP,
+    type ModelPrice,
+    normalizeModelName,
+    readReportedCachedTokens,
+} from '../_shared/token-cost.ts';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -44,12 +59,17 @@ const json = (body: unknown, status = 200) =>
 
 const FALLBACK_RATE = 5.50;
 const FALLBACK_MODEL = 'gpt-5.4-mini';
+const UNIQUE_VIOLATION = '23505';
 
 interface UsageItem {
     id?: string;                 // workflow_id
     workflow_id?: string;        // alternativa explícita
     name?: string;
     execution_id?: number | string;
+    /** Chave de idempotência montada pelo n8n. Texto cru, NUNCA normalizado. */
+    usage_key?: string;
+    /** Quantas chamadas ao provedor o item agrega (n8n agrega o loop do agente). */
+    calls?: number | string;
     tokenUsage?: {
         model?: string;
         tokenUsage?: Record<string, any>;
@@ -59,27 +79,6 @@ interface UsageItem {
         totalTokens?: number;
     };
     model?: string;              // tolerância: model na raiz
-}
-
-// Tokens de prompt servidos pelo cache do provedor. Cada SDK batiza esse campo
-// de um jeito (OpenAI: prompt_tokens_details.cached_tokens; LangChain:
-// promptTokensDetails.cachedTokens; Gemini: cachedContentTokenCount), e o n8n
-// repassa o objeto cru — então varremos todos os apelidos conhecidos.
-function readCachedTokens(usage: Record<string, any>): number {
-    const candidates = [
-        usage?.cachedTokens,
-        usage?.cached_tokens,
-        usage?.cachedContentTokenCount,
-        usage?.promptTokensDetails?.cachedTokens,
-        usage?.prompt_tokens_details?.cached_tokens,
-        usage?.inputTokensDetails?.cachedTokens,
-        usage?.input_tokens_details?.cached_tokens,
-    ];
-    for (const value of candidates) {
-        const n = Number(value);
-        if (Number.isFinite(n) && n > 0) return Math.floor(n);
-    }
-    return 0;
 }
 
 async function getUsdBrlRate(supabase: any): Promise<{ rate: number; source: string }> {
@@ -164,22 +163,43 @@ Deno.serve(async (req) => {
         // Tabela de preços (uma leitura por chamada)
         const { data: priceRows, error: priceErr } = await supabase
             .from('llm_model_prices')
-            .select('model, input_usd_per_1m, output_usd_per_1m, cached_input_usd_per_1m');
+            .select('model, input_usd_per_1m, output_usd_per_1m, cached_input_usd_per_1m, markup, default_cache_ratio');
         if (priceErr) {
             return dbErrorResponse(corsHeaders, 'llm_model_prices_read_failed',
                 'carregar a tabela de preços llm_model_prices, necessária para calcular o custo dos tokens', priceErr);
         }
-        const prices = new Map<string, { input: number; output: number; cachedInput: number }>();
+        const prices = new Map<string, ModelPrice>();
         for (const p of priceRows ?? []) {
-            const input = Number(p.input_usd_per_1m);
             const cached = Number(p.cached_input_usd_per_1m);
-            prices.set(String(p.model).toLowerCase(), {
-                input,
+            const markup = Number(p.markup);
+            const ratio = Number(p.default_cache_ratio);
+            const key = normalizeModelName(p.model);
+            prices.set(key, {
+                model: key,
+                input: Number(p.input_usd_per_1m),
                 output: Number(p.output_usd_per_1m),
-                // Sem preço de cache cadastrado, o token cacheado é cobrado como
-                // input normal (não inventa desconto que o provedor pode não dar).
-                cachedInput: Number.isFinite(cached) && cached >= 0 ? cached : input,
+                // Sem preço de cache cadastrado o cache_ratio é forçado a 0: o token
+                // cacheado é cobrado como input normal (não inventa desconto que o
+                // provedor pode não dar).
+                cachedInput: Number.isFinite(cached) && cached >= 0 ? cached : null,
+                markup: Number.isFinite(markup) ? markup : DEFAULT_MARKUP,
+                defaultCacheRatio: Number.isFinite(ratio) ? ratio : DEFAULT_CACHE_RATIO,
             });
+        }
+
+        // Cache ratio real por modelo (edge fn calibrate-cache-ratio, diária).
+        // Sem calibração vale o default_cache_ratio do preço — nunca zera o cache
+        // por falta de medição.
+        const calibration = new Map<string, number>();
+        const { data: calRows, error: calErr } = await supabase
+            .from('llm_cache_calibration')
+            .select('model, cache_ratio');
+        if (calErr) {
+            console.warn('[api-token-usage]', describeDbError('ler a calibração de cache (llm_cache_calibration)', calErr));
+        }
+        for (const c of calRows ?? []) {
+            const ratio = Number(c.cache_ratio);
+            if (Number.isFinite(ratio)) calibration.set(normalizeModelName(c.model), ratio);
         }
 
         const { rate, source: rateSource } = await getUsdBrlRate(supabase);
@@ -189,7 +209,8 @@ Deno.serve(async (req) => {
         // foi registrado, então a resposta segue 200 — mas o motivo aparece aqui.
         const warnings: string[] = [];
         const ownerCache = new Map<string, string | null>();
-        let totalTokens = 0, totalUsd = 0, totalBrl = 0;
+        const billingCache = new Map<string, { markup: number | null; billable: boolean }>();
+        let totalTokens = 0, totalUsd = 0, totalBrl = 0, totalProviderUsd = 0;
         let lastOwnerId: string | null = null;
 
         for (const item of items) {
@@ -200,7 +221,13 @@ Deno.serve(async (req) => {
             const completionTokens = Number((usage as any).completionTokens) || 0;
             const itemTokens = Number((usage as any).totalTokens) || (promptTokens + completionTokens);
             // promptTokens já INCLUI os cacheados; o cache nunca pode passar do total.
-            const cachedTokens = Math.min(readCachedTokens(usage as any), promptTokens);
+            const reportedCached = Math.min(readReportedCachedTokens(usage as any), promptTokens);
+            const calls = Math.max(1, Math.round(Number(item.calls) || 1));
+            // Chave de idempotência: texto CRU do n8n, sem normalizar (a normalização
+            // vale só para achar o preço do modelo).
+            const usageKey = typeof item.usage_key === 'string' && item.usage_key.trim()
+                ? item.usage_key.trim()
+                : null;
 
             if (!workflowId) {
                 results.push({
@@ -277,8 +304,34 @@ Deno.serve(async (req) => {
                 continue;
             }
 
-            // Preço do modelo (fallback: modelo padrão)
-            const modelKey = model.toLowerCase();
+            // Margem da conta: markup próprio (profiles.markup) e se a conta é
+            // cobrável. Conta com chave própria do provedor paga direto ao
+            // provedor, então registra consumo com markup 0.
+            let billing = billingCache.get(ownerId);
+            if (!billing) {
+                const { data: prof, error: profErr } = await supabase
+                    .from('profiles')
+                    .select('markup, openai_token')
+                    .eq('id', ownerId)
+                    .maybeSingle();
+                if (profErr) {
+                    const profWarning = describeDbError(
+                        `ler a margem da conta ${ownerId} (profiles.markup) — foi aplicada a margem padrão do modelo`,
+                        profErr,
+                    );
+                    console.warn('[api-token-usage]', profWarning);
+                    if (!warnings.includes(profWarning)) warnings.push(profWarning);
+                }
+                const ownMarkup = Number(prof?.markup);
+                billing = {
+                    markup: Number.isFinite(ownMarkup) ? ownMarkup : null,
+                    billable: !(typeof prof?.openai_token === 'string' && prof.openai_token.trim()),
+                };
+                billingCache.set(ownerId, billing);
+            }
+
+            // Preço do modelo (fallback: modelo padrão). A normalização vale só aqui.
+            const modelKey = normalizeModelName(model);
             const price = prices.get(modelKey) ?? prices.get(FALLBACK_MODEL);
             const priceFallback = !prices.has(modelKey);
             if (priceFallback) {
@@ -301,13 +354,22 @@ Deno.serve(async (req) => {
                 continue;
             }
 
-            const freshPromptTokens = promptTokens - cachedTokens;
-            const costUsd = (
-                freshPromptTokens * price.input
-                + cachedTokens * price.cachedInput
-                + completionTokens * price.output
-            ) / 1_000_000;
-            const costBrl = costUsd * rate;
+            const cost = computeTokenCost({
+                promptTokens,
+                completionTokens,
+                reportedCachedTokens: reportedCached,
+                price,
+                calibratedCacheRatio: calibration.get(priceFallback ? FALLBACK_MODEL : modelKey) ?? null,
+                markupOverride: billing.markup,
+                billable: billing.billable,
+                calls,
+            });
+            const costBrl = cost.costUsd * rate;
+            for (const w of cost.warnings) {
+                const scoped = `Conta ${ownerId}: ${w}`;
+                console.warn('[api-token-usage]', scoped);
+                if (!warnings.includes(scoped)) warnings.push(scoped);
+            }
 
             const { error: insErr } = await supabase.from('token_usage_log').insert({
                 owner_id: ownerId,
@@ -316,16 +378,38 @@ Deno.serve(async (req) => {
                 source: 'n8n',
                 model: model || 'unknown',
                 prompt_tokens: promptTokens,
-                cached_prompt_tokens: cachedTokens,
+                cached_prompt_tokens: cost.cachedTokens,
                 completion_tokens: completionTokens,
                 total_tokens: itemTokens,
-                cost_usd: costUsd,
+                provider_cost_usd: cost.providerCostUsd,
+                cost_usd: cost.costUsd,
                 cost_brl: costBrl,
+                markup_applied: cost.markupApplied,
+                cache_ratio_applied: cost.cacheRatioApplied,
+                cached_tokens_source: cost.cachedTokensSource,
+                tokens_estimated: cost.tokensEstimated,
+                price_fallback: priceFallback,
+                billable: billing.billable,
+                calls,
+                usage_key: usageKey,
                 exchange_rate: rate,
                 workflow_id: workflowId,
                 execution_id: item.execution_id != null ? Number(item.execution_id) : null,
             });
             if (insErr) {
+                // usage_key repetido = o n8n reenviou o mesmo consumo. Não grava nem
+                // soma de novo; o item volta como duplicata para o workflow saber.
+                if ((insErr as any)?.code === UNIQUE_VIOLATION && usageKey) {
+                    results.push({
+                        ok: true,
+                        duplicate: true,
+                        workflow_id: workflowId,
+                        owner_id: ownerId,
+                        usage_key: usageKey,
+                        message: `Consumo com usage_key "${usageKey}" já registrado: nada foi gravado nem somado novamente.`,
+                    });
+                    continue;
+                }
                 results.push({
                     ok: false,
                     code: 'token_usage_log_insert_failed',
@@ -342,7 +426,7 @@ Deno.serve(async (req) => {
             const { error: accErr } = await supabase.rpc('increment_profile_token_usage', {
                 p_owner_id: ownerId,
                 p_tokens: itemTokens,
-                p_cost_usd: costUsd,
+                p_cost_usd: cost.costUsd,
             });
             let accWarning: string | null = null;
             if (accErr) {
@@ -355,8 +439,9 @@ Deno.serve(async (req) => {
             }
 
             totalTokens += itemTokens;
-            totalUsd += costUsd;
+            totalUsd += cost.costUsd;
             totalBrl += costBrl;
+            totalProviderUsd += cost.providerCostUsd;
             lastOwnerId = ownerId;
 
             results.push({
@@ -367,45 +452,52 @@ Deno.serve(async (req) => {
                 price_fallback: priceFallback,
                 tokens: {
                     prompt: promptTokens,
-                    prompt_cached: cachedTokens,
+                    prompt_cached: cost.cachedTokens,
                     completion: completionTokens,
                     total: itemTokens,
                 },
-                cost_usd: Number(costUsd.toFixed(6)),
+                cost_usd: Number(cost.costUsd.toFixed(6)),
                 cost_brl: Number(costBrl.toFixed(6)),
+                provider_cost_usd: Number(cost.providerCostUsd.toFixed(6)),
+                markup_applied: cost.markupApplied,
+                cache: {
+                    ratio: Number(cost.cacheRatioApplied.toFixed(4)),
+                    source: cost.cachedTokensSource,
+                    estimated: cost.tokensEstimated,
+                },
+                ...(usageKey ? { usage_key: usageKey } : {}),
+                ...(cost.warnings.length ? { warnings: cost.warnings } : {}),
                 ...(accWarning ? { warning: accWarning } : {}),
             });
         }
 
-        // Consumo do mês corrente do tenant, separado por origem (monitoramento)
+        // Consumo do mês corrente do tenant, separado por origem (monitoramento).
+        // Via RPC: o SELECT direto batia no teto de 1000 linhas do PostgREST e o
+        // total do mês vinha truncado em contas de volume alto.
         let monthly: any = null;
         if (lastOwnerId) {
-            const monthStart = new Date();
-            monthStart.setUTCDate(1);
-            monthStart.setUTCHours(0, 0, 0, 0);
             const { data: monthRows, error: monthErr } = await supabase
-                .from('token_usage_log')
-                .select('source, total_tokens, cost_usd, cost_brl')
-                .eq('owner_id', lastOwnerId)
-                .gte('created_at', monthStart.toISOString());
+                .rpc('token_usage_month_summary', { p_owner_id: lastOwnerId });
             // Bloco de monitoramento: falhar aqui não afeta o que foi registrado,
             // então `current_month` volta null com o motivo em `warnings`.
             if (monthErr) {
                 const monthWarning = describeDbError(
-                    `calcular o consumo do mês corrente da conta ${lastOwnerId} (campo current_month da resposta)`,
+                    `calcular o consumo do mês corrente da conta ${lastOwnerId} (campo current_month da resposta, RPC token_usage_month_summary)`,
                     monthErr,
                 );
                 console.warn('[api-token-usage]', monthWarning);
                 warnings.push(monthWarning);
             }
             if (monthRows) {
-                const agg = (src: string) => {
-                    const rows = monthRows.filter((r: any) =>
+                const agg = (src: 'n8n' | 'system') => {
+                    const rows = (monthRows as any[]).filter((r) =>
                         src === 'n8n' ? r.source === 'n8n' : r.source !== 'n8n');
+                    const sum = (f: string) => rows.reduce((s: number, r: any) => s + Number(r[f] || 0), 0);
                     return {
-                        tokens: rows.reduce((s: number, r: any) => s + (r.total_tokens || 0), 0),
-                        cost_usd: Number(rows.reduce((s: number, r: any) => s + Number(r.cost_usd || 0), 0).toFixed(6)),
-                        cost_brl: Number(rows.reduce((s: number, r: any) => s + Number(r.cost_brl || 0), 0).toFixed(6)),
+                        tokens: sum('total_tokens'),
+                        cost_usd: Number(sum('cost_usd').toFixed(6)),
+                        cost_brl: Number(sum('cost_brl').toFixed(6)),
+                        provider_cost_usd: Number(sum('provider_cost_usd').toFixed(6)),
                     };
                 };
                 monthly = { owner_id: lastOwnerId, ia_n8n: agg('n8n'), ia_sistema: agg('system') };
@@ -420,6 +512,7 @@ Deno.serve(async (req) => {
                 tokens: totalTokens,
                 cost_usd: Number(totalUsd.toFixed(6)),
                 cost_brl: Number(totalBrl.toFixed(6)),
+                provider_cost_usd: Number(totalProviderUsd.toFixed(6)),
             },
             current_month: monthly,
             ...(warnings.length ? { warnings } : {}),

@@ -19,6 +19,14 @@ import {
     unexpectedErrorResponse,
 } from "../_shared/api-errors.ts";
 import { loadSandboxContext, logSandboxCall, SandboxContext } from "../_shared/sandbox.ts";
+import {
+    computeTokenCost,
+    DEFAULT_CACHE_RATIO,
+    DEFAULT_MARKUP,
+    type ModelPrice,
+    normalizeModelName,
+    readReportedCachedTokens,
+} from "../_shared/token-cost.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -149,18 +157,52 @@ Deno.serve(async (req) => {
 
         const { data: priceRows, error: priceErr } = await supabase
             .from("llm_model_prices")
-            .select("model, input_usd_per_1m, output_usd_per_1m");
+            .select("model, input_usd_per_1m, output_usd_per_1m, cached_input_usd_per_1m, markup, default_cache_ratio");
         if (priceErr) {
             return dbErrorResponse(corsHeaders, "llm_model_prices_read_failed",
                 "carregar a tabela de preços llm_model_prices, necessária para calcular o custo dos tokens", priceErr);
         }
-        const prices = new Map<string, { input: number; output: number }>();
+        const prices = new Map<string, ModelPrice>();
         for (const p of priceRows ?? []) {
-            prices.set(String(p.model).toLowerCase(), {
+            const cached = Number(p.cached_input_usd_per_1m);
+            const markup = Number(p.markup);
+            const ratio = Number(p.default_cache_ratio);
+            const key = normalizeModelName(p.model);
+            prices.set(key, {
+                model: key,
                 input: Number(p.input_usd_per_1m),
                 output: Number(p.output_usd_per_1m),
+                cachedInput: Number.isFinite(cached) && cached >= 0 ? cached : null,
+                markup: Number.isFinite(markup) ? markup : DEFAULT_MARKUP,
+                defaultCacheRatio: Number.isFinite(ratio) ? ratio : DEFAULT_CACHE_RATIO,
             });
         }
+
+        // Mesma estimativa de cache da produção: o teste tem que mostrar o mesmo
+        // custo que a conversa real mostraria.
+        const calibration = new Map<string, number>();
+        const { data: calRows, error: calErr } = await supabase
+            .from("llm_cache_calibration")
+            .select("model, cache_ratio");
+        if (calErr) {
+            console.warn("[api-token-usage-sandbox]", describeDbError("ler a calibração de cache (llm_cache_calibration)", calErr));
+        }
+        for (const c of calRows ?? []) {
+            const ratio = Number(c.cache_ratio);
+            if (Number.isFinite(ratio)) calibration.set(normalizeModelName(c.model), ratio);
+        }
+
+        const { data: prof, error: profErr } = await supabase
+            .from("profiles")
+            .select("markup, openai_token")
+            .eq("id", ctx.userId)
+            .maybeSingle();
+        if (profErr) {
+            console.warn("[api-token-usage-sandbox]", describeDbError(`ler a margem da conta ${ctx.userId} (profiles.markup)`, profErr));
+        }
+        const ownMarkup = Number(prof?.markup);
+        const markupOverride = Number.isFinite(ownMarkup) ? ownMarkup : null;
+        const billable = !(typeof prof?.openai_token === "string" && prof.openai_token.trim());
 
         const { rate, source: rateSource } = await getUsdBrlRate(supabase);
 
@@ -183,7 +225,7 @@ Deno.serve(async (req) => {
                 continue;
             }
 
-            const modelKey = model.toLowerCase();
+            const modelKey = normalizeModelName(model);
             const price = prices.get(modelKey) ?? prices.get(FALLBACK_MODEL);
             const priceFallback = !prices.has(modelKey);
             if (!price) {
@@ -195,7 +237,18 @@ Deno.serve(async (req) => {
                 continue;
             }
 
-            const costUsd = (promptTokens * price.input + completionTokens * price.output) / 1_000_000;
+            // Mesma fórmula da produção (cache estimado + margem de revenda),
+            // gravada nas colunas que sandbox_token_usage já tem.
+            const cost = computeTokenCost({
+                promptTokens,
+                completionTokens,
+                reportedCachedTokens: readReportedCachedTokens(usage as any),
+                price,
+                calibratedCacheRatio: calibration.get(priceFallback ? FALLBACK_MODEL : modelKey) ?? null,
+                markupOverride,
+                billable,
+            });
+            const costUsd = cost.costUsd;
             const costBrl = costUsd * rate;
 
             const { error: insErr } = await supabase.from("sandbox_token_usage").insert({
