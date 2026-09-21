@@ -707,8 +707,48 @@ serve(async (req) => {
                                 // =============================================
                                 // 5. Forward to IA Webhook (if enabled)
                                 // =============================================
-                                // Step 1: Check if ia_on_insta is TRUE for this Instagram instance
-                                if (instagramInstance.ia_on_insta === true) {
+                                // Step 1: os MESMOS 5 portões do WhatsApp
+                                // (webhook-handle-message): conversa pendente, contato com
+                                // IA ligada, IA geral ligada, IA ligada NESTA conta de
+                                // Instagram e conversa na fila 'Atendimento IA'.
+                                // Antes só ia_on_insta era conferido — conversa em
+                                // atendimento humano (ou já assumida por um atendente)
+                                // continuava sendo respondida pela IA.
+                                const conversationIsPending = conversation?.status === 'pending';
+                                const contactIaOn = contact?.ia_on !== false;
+                                const instanceIaOn = instagramInstance.ia_on_insta === true;
+
+                                const { data: iaCfgGate } = await supabase
+                                    .from('ia_config')
+                                    .select('ia_on')
+                                    .eq('user_id', userId)
+                                    .maybeSingle();
+                                const iaConfigOn = (iaCfgGate as any)?.ia_on === true;
+
+                                let queueIsIa = false;
+                                if (conversation?.queue_id) {
+                                    const { data: queueData } = await supabase
+                                        .from('queues')
+                                        .select('name, user_id')
+                                        .eq('id', conversation.queue_id)
+                                        .maybeSingle();
+                                    queueIsIa = queueData?.name === 'Atendimento IA'
+                                        && queueData?.user_id === userId;
+                                }
+
+                                if (!(conversationIsPending && contactIaOn && iaConfigOn && instanceIaOn && queueIsIa)) {
+                                    console.log('[INSTAGRAM WEBHOOK] IA nao encaminhada — portoes:',
+                                        JSON.stringify({
+                                            conversation_id: conversation?.id,
+                                            pending: conversationIsPending,
+                                            contact_ia_on: contactIaOn,
+                                            ia_config_on: iaConfigOn,
+                                            ia_on_insta: instanceIaOn,
+                                            queue_is_ia: queueIsIa,
+                                        }));
+                                }
+
+                                if (conversationIsPending && contactIaOn && iaConfigOn && instanceIaOn && queueIsIa) {
 
                                     // Step 2: destino do fluxo no n8n. O Instagram tem o workflow
                                     // dele (instagram_instances.workflow_code, gravado pelo n8n);
