@@ -3,9 +3,33 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import {
     validateMetaWebhookSignature,
     checkRateLimit,
-    validateInstagramPayload
+    validateInstagramPayload,
+    mapMessageType
 } from "../_shared/utils.ts";
 import { buildBdData } from "../_shared/bd-data.ts";
+
+/**
+ * Tipo do anexo do Direct → vocabulário UAZAPI, o mesmo que o WhatsApp manda
+ * em `message.messageType` (o meta-webhook faz a tradução equivalente para a
+ * Cloud API). Passar por `mapMessageType` depois devolve o valor final que vai
+ * para `messages.message_type` — assim os dois canais gravam e enviam a mesma
+ * palavra para a mesma coisa.
+ */
+function mapInstagramTypeToUzapi(igType: string): string {
+    const map: Record<string, string> = {
+        text: "conversation",
+        image: "imagemessage",
+        // Figurinha, reel e menção em story chegam como anexo de mídia;
+        // o que importa para a IA é ser imagem ou vídeo.
+        share: "imagemessage",
+        story_mention: "imagemessage",
+        ig_reel: "videomessage",
+        video: "videomessage",
+        audio: "audiomessage",
+        file: "documentmessage",
+    };
+    return map[igType] || "conversation";
+}
 
 // =============================================
 // Instagram Webhook Handler
@@ -201,7 +225,7 @@ serve(async (req) => {
 
                         const { data: foundInstance } = await supabase
                             .from('instagram_instances')
-                            .select('id, user_id, access_token, instagram_account_id, ia_on_insta, default_queue_id')
+                            .select('id, user_id, access_token, instagram_account_id, account_name, ia_on_insta, default_queue_id')
                             .eq('instagram_account_id', tryId)
                             .single();
 
@@ -215,7 +239,7 @@ serve(async (req) => {
                     if (!instagramInstance) {
                         const { data: allInstances } = await supabase
                             .from('instagram_instances')
-                            .select('id, user_id, instagram_account_id, account_name, access_token, default_queue_id')
+                            .select('id, user_id, instagram_account_id, account_name, access_token, ia_on_insta, default_queue_id')
                             .eq('status', 'connected');
 
                         console.log('[INSTAGRAM WEBHOOK] No match found. Entry ID:', entryId);
@@ -265,7 +289,7 @@ serve(async (req) => {
                             if (!instagramInstance) {
                                 const { data: recentInstances } = await supabase
                                     .from('instagram_instances')
-                                    .select('id, user_id, access_token, instagram_account_id, created_at, updated_at, default_queue_id')
+                                    .select('id, user_id, access_token, instagram_account_id, account_name, ia_on_insta, created_at, updated_at, default_queue_id')
                                     .eq('status', 'connected')
                                     .order('updated_at', { ascending: false })
                                     .limit(1);
@@ -567,14 +591,21 @@ serve(async (req) => {
                             // 3. Save Message
                             // =============================================
                             let mediaUrl = null;
-                            let messageType = 'text';
+                            // Tipo cru do Direct (image, video, audio, file, share,
+                            // story_mention, ig_reel) — guardado só para o payload.
+                            let igAttachmentType = 'text';
 
                             // Handle attachments
                             if (attachments.length > 0) {
                                 const attachment = attachments[0];
-                                messageType = attachment.type || 'text';
+                                igAttachmentType = attachment.type || 'text';
                                 mediaUrl = attachment.payload?.url || null;
                             }
+
+                            // Mesmo vocabulário do WhatsApp: UAZAPI no payload
+                            // (message.messageType) e o mapeado no banco.
+                            const uzapiMessageType = mapInstagramTypeToUzapi(igAttachmentType);
+                            const messageType = mapMessageType(uzapiMessageType);
 
                             const { data: savedMessage, error: msgError } = await supabase
                                 .from('messages')
@@ -782,7 +813,55 @@ serve(async (req) => {
                                                 },
                                             });
 
-                                            const forwardedPayload = { ...payload, bd_data: bdData };
+                                            // Envelope no formato UAZAPI, igual ao que o n8n já
+                                            // recebe do WhatsApp (o meta-webhook normaliza a Cloud
+                                            // API do mesmo jeito): o fluxo lê message.text,
+                                            // message.messageType, message.pushName e chat.wa_chatid
+                                            // sem saber de que canal veio. O evento cru do Direct
+                                            // continua disponível em `_instagram.raw`.
+                                            const forwardedPayload = {
+                                                instanceName: instagramInstance.account_name || null,
+                                                EventType: 'messages',
+                                                message: {
+                                                    messageid: messageId,
+                                                    // Não existe telefone no Direct: o identificador
+                                                    // do remetente é o IGSID nos três campos.
+                                                    sender: senderId,
+                                                    sender_pn: senderId,
+                                                    pushName: contact.push_name || '',
+                                                    messageType: uzapiMessageType,
+                                                    text: messageText,
+                                                    fromMe: false,
+                                                    timestamp: timestamp
+                                                        ? Math.floor(Number(timestamp) / 1000)
+                                                        : Math.floor(Date.now() / 1000),
+                                                    isGroup: false,
+                                                    chatid: senderId,
+                                                    content: {
+                                                        text: messageText,
+                                                        ...(mediaUrl ? { url: mediaUrl } : {}),
+                                                    },
+                                                    vote: '',
+                                                    selectedDisplayText: '',
+                                                },
+                                                chat: {
+                                                    wa_chatid: senderId,
+                                                    wa_name: contact.push_name || '',
+                                                    name: contact.push_name || '',
+                                                },
+                                                _instagram: {
+                                                    instagram_instance_id: instagramInstance.id,
+                                                    instagram_account_id: instagramInstance.instagram_account_id || null,
+                                                    sender_igsid: senderId,
+                                                    recipient_igsid: recipientId || null,
+                                                    // Tipo cru do anexo, que o vocabulário do
+                                                    // WhatsApp não distingue (story_mention, ig_reel).
+                                                    attachment_type: igAttachmentType,
+                                                    media_url: mediaUrl,
+                                                    raw: event,
+                                                },
+                                                bd_data: bdData,
+                                            };
 
                                             try {
                                                 const forwardResponse = await fetch(webhookUrl, {
