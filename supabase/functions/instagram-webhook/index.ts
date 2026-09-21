@@ -31,6 +31,68 @@ function mapInstagramTypeToUzapi(igType: string): string {
     return map[igType] || "conversation";
 }
 
+/**
+ * Garante o card do CRM para (contato, conexão de Instagram) — espelha o que o
+ * webhook-handle-message faz no WhatsApp. O card é por conexão; cards legados
+ * sem conexão nenhuma (sentinela) são adotados em vez de duplicados.
+ */
+async function ensureCrmCard(
+    supabase: any,
+    userId: string,
+    contactId: string,
+    instagramInstanceId: string,
+    queueId: string | null
+): Promise<void> {
+    try {
+        const { data: activeCrm, error: crmSelectError } = await supabase
+            .from('crm_client')
+            .select('id, instance_id, instagram_instance_id')
+            .eq('contact_id', contactId)
+            .eq('user_id', userId)
+            .eq('is_active', true);
+
+        if (crmSelectError) {
+            console.warn('[INSTAGRAM WEBHOOK] crm_client select falhou:', crmSelectError);
+            return;
+        }
+
+        const existingCrm = (activeCrm || []).find((c: any) =>
+            c.instagram_instance_id === instagramInstanceId || (!c.instance_id && !c.instagram_instance_id));
+
+        if (existingCrm) return;
+
+        let crmStage = 'Em Atendimento Humano';
+        if (queueId) {
+            const { data: queueData } = await supabase
+                .from('queues')
+                .select('name, user_id')
+                .eq('id', queueId)
+                .maybeSingle();
+            if (queueData?.name === 'Atendimento IA' && queueData?.user_id === userId) {
+                crmStage = 'Em Atendimento IA';
+            }
+        }
+
+        const { error: crmInsertError } = await supabase
+            .from('crm_client')
+            .insert({
+                user_id: userId,
+                contact_id: contactId,
+                stage: crmStage,
+                is_active: true,
+                instagram_instance_id: instagramInstanceId
+            });
+
+        if (crmInsertError) {
+            console.warn('[INSTAGRAM WEBHOOK] crm_client insert falhou:', crmInsertError);
+        } else {
+            console.log('[INSTAGRAM WEBHOOK] Card CRM criado para o contato', contactId, '→', crmStage);
+        }
+    } catch (crmErr) {
+        console.warn('[INSTAGRAM WEBHOOK] ensureCrmCard erro:', crmErr);
+    }
+}
+
 // =============================================
 // Instagram Webhook Handler
 // Handles Facebook/Instagram Messaging API webhooks
@@ -538,17 +600,47 @@ serve(async (req) => {
                             // 2. Find or Create Conversation
                             // =============================================
                             let conversation;
+                            // Igual ao WhatsApp: a conversa é por (contato, CONEXÃO).
                             const { data: existingConversations } = await supabase
                                 .from('conversations')
                                 .select('*')
                                 .eq('contact_id', contact.id)
                                 .eq('user_id', userId)
+                                .eq('instagram_instance_id', instagramInstance.id)
                                 .in('status', ['open', 'pending'])
                                 .order('created_at', { ascending: false })
                                 .limit(1);
 
-                            if (existingConversations && existingConversations.length > 0) {
-                                conversation = existingConversations[0];
+                            let conversationRow = existingConversations?.[0] || null;
+
+                            // Adoção de conversa órfã (espelha o FIX #4 do webhook-handle-message):
+                            // conversas antigas do Direct nasceram sem instagram_instance_id.
+                            // Sem isso, cada legada viraria uma conversa duplicada.
+                            if (!conversationRow) {
+                                const { data: orphanConversations } = await supabase
+                                    .from('conversations')
+                                    .select('*')
+                                    .eq('contact_id', contact.id)
+                                    .eq('user_id', userId)
+                                    .is('instagram_instance_id', null)
+                                    .is('instance_id', null)
+                                    .in('status', ['open', 'pending'])
+                                    .order('created_at', { ascending: false })
+                                    .limit(1);
+
+                                if (orphanConversations && orphanConversations.length > 0) {
+                                    const orphan = orphanConversations[0];
+                                    await supabase
+                                        .from('conversations')
+                                        .update({ instagram_instance_id: instagramInstance.id, channel: 'instagram' })
+                                        .eq('id', orphan.id);
+                                    conversationRow = { ...orphan, instagram_instance_id: instagramInstance.id, channel: 'instagram' };
+                                    console.log('[INSTAGRAM WEBHOOK] Conversa órfã adotada pela conexão:', orphan.id);
+                                }
+                            }
+
+                            if (conversationRow) {
+                                conversation = conversationRow;
                                 console.log('[INSTAGRAM WEBHOOK] Found existing conversation:', conversation.id);
 
                                 // Update conversation
@@ -561,6 +653,20 @@ serve(async (req) => {
                                         last_message_at: new Date().toISOString()
                                     })
                                     .eq('id', conversation.id);
+
+                                // Rastreamento do contato (igual ao WhatsApp): mensagem do
+                                // cliente zera o follow_number para o follow-up recomeçar.
+                                await supabase
+                                    .from('contacts')
+                                    .update({
+                                        last_message: 'recebida',
+                                        last_message_time: new Date().toISOString(),
+                                        updated_at: new Date().toISOString(),
+                                        follow_number: 0
+                                    })
+                                    .eq('id', contact.id);
+
+                                await ensureCrmCard(supabase, userId, contact.id, instagramInstance.id, conversation.queue_id);
                             } else {
                                 // Padrão único (user rule, igual ao WhatsApp): IA desligada →
                                 // fila "Atendimento Humano"; IA ligada (ia_config.ia_on +
@@ -624,6 +730,18 @@ serve(async (req) => {
                                 }
                                 conversation = newConv;
                                 console.log('[INSTAGRAM WEBHOOK] Created new conversation:', conversation.id);
+
+                                await supabase
+                                    .from('contacts')
+                                    .update({
+                                        last_message: 'recebida',
+                                        last_message_time: new Date().toISOString(),
+                                        updated_at: new Date().toISOString(),
+                                        follow_number: 0
+                                    })
+                                    .eq('id', contact.id);
+
+                                await ensureCrmCard(supabase, userId, contact.id, instagramInstance.id, newConvQueueId);
                             }
 
                             // =============================================
@@ -645,6 +763,23 @@ serve(async (req) => {
                             // (message.messageType) e o mapeado no banco.
                             const uzapiMessageType = mapInstagramTypeToUzapi(igAttachmentType);
                             const messageType = mapMessageType(uzapiMessageType);
+
+                            // Deduplicação (igual ao WhatsApp): a Meta reenvia o webhook
+                            // quando não recebe 200 a tempo — sem isso a mesma mensagem
+                            // entra duas vezes e a IA responde em dobro.
+                            if (messageId) {
+                                const { data: dupMessage } = await supabase
+                                    .from('messages')
+                                    .select('id')
+                                    .eq('evolution_id', messageId)
+                                    .eq('conversation_id', conversation.id)
+                                    .maybeSingle();
+
+                                if (dupMessage) {
+                                    console.log('[INSTAGRAM WEBHOOK] Mensagem duplicada ignorada:', messageId);
+                                    continue;
+                                }
+                            }
 
                             const { data: savedMessage, error: msgError } = await supabase
                                 .from('messages')
@@ -720,10 +855,37 @@ serve(async (req) => {
 
                                 const { data: iaCfgGate } = await supabase
                                     .from('ia_config')
-                                    .select('ia_on')
+                                    .select('ia_on, test_mode, test_numbers')
                                     .eq('user_id', userId)
                                     .maybeSingle();
-                                const iaConfigOn = (iaCfgGate as any)?.ia_on === true;
+                                let iaConfigOn = (iaCfgGate as any)?.ia_on === true;
+
+                                // ─── Modo de Testes (igual ao WhatsApp) ───
+                                // No Direct não há telefone: o teste só libera o perfil de
+                                // Instagram vinculado (contacts.linked_contact_id) a um
+                                // número da whitelist. Sem vínculo, a IA não responde.
+                                if (iaConfigOn && (iaCfgGate as any)?.test_mode === true) {
+                                    const testNumbers: string[] = (iaCfgGate as any)?.test_numbers ?? [];
+                                    const last8 = (d: string) => d.replace(/\D/g, '').slice(-8);
+                                    const allowed = testNumbers.map(last8).filter(Boolean);
+
+                                    let senderLast8 = '';
+                                    if (contact?.linked_contact_id) {
+                                        const { data: masterContact } = await supabase
+                                            .from('contacts')
+                                            .select('number')
+                                            .eq('id', contact.linked_contact_id)
+                                            .maybeSingle();
+                                        senderLast8 = last8((masterContact as any)?.number || '');
+                                    }
+
+                                    const isAllowed = senderLast8 !== '' && allowed.includes(senderLast8);
+                                    console.log(`[INSTAGRAM WEBHOOK][test_mode] last8=${senderLast8 || '(sem vínculo WhatsApp)'} allowed=${JSON.stringify(allowed)} isAllowed=${isAllowed}`);
+
+                                    if (!isAllowed) {
+                                        iaConfigOn = false;
+                                    }
+                                }
 
                                 let queueIsIa = false;
                                 if (conversation?.queue_id) {
