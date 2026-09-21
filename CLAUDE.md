@@ -42,7 +42,7 @@ Python integration tests live in `tests/` (test_*.py, grouped by domain: appoint
 - `src/contexts/`, `src/types/`, `src/utils/` — React contexts, shared TS types, misc helpers
 - `src/integrations/supabase/client.ts` — Supabase client (`import { supabase } from "@/integrations/supabase/client"`). NOTE: `types.ts` is intentionally EMPTY — there are no generated DB types; check real columns via `information_schema` before assuming a schema
 - `src/lib/` — domain helpers (`utils.ts` = `cn()`, `timezone.ts`, `nps.ts`, `chatDates.ts`, `messageSender.ts`, `suporteTours.ts`, import\* parsers, ...)
-- `supabase/functions/` — ~115 Deno edge functions; shared code in `supabase/functions/_shared/`
+- `supabase/functions/` — ~127 Deno edge functions; shared code in `supabase/functions/_shared/`
 - `supabase/migrations/` — SQL migrations
 - `docs/diagnostics/` and `docs/reports/` — incident post-mortems and client reports (write new diagnostics here)
 - `feegow/` — PRD for planned Feegow Clinic API integration (IA scheduling), not yet implemented
