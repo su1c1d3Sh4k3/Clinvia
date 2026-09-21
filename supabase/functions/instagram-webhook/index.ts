@@ -5,7 +5,7 @@ import {
     checkRateLimit,
     validateInstagramPayload
 } from "../_shared/utils.ts";
-import { buildBookingLink } from "../_shared/booking-link.ts";
+import { buildBdData } from "../_shared/bd-data.ts";
 
 // =============================================
 // Instagram Webhook Handler
@@ -722,29 +722,49 @@ serve(async (req) => {
                                             // IGSID (sem telefone), então o token vai marcado com
                                             // origin=instagram e a tela exige nome + WhatsApp antes de
                                             // agendar, trocando este contato pelo de WhatsApp.
-                                            let bookingLink: string | null = null;
                                             let bookingLinkError: string | null = null;
                                             if (!contactInstance) {
                                                 bookingLinkError = 'Link de agendamento não gerado: esta conta de Instagram está sem "Número informado pela IA para contato". Defina a conexão de WhatsApp em Conexões > Instagram.';
+                                            }
+
+                                            // Tom de voz da conta (aba Tom de voz em /ia-config):
+                                            // é da conta, não da conexão, então vale no Direct também.
+                                            let toneInject: string | null = null;
+                                            const { data: iaCfg, error: iaCfgError } = await supabase
+                                                .from('ia_config')
+                                                .select('tone_inject')
+                                                .eq('user_id', userId)
+                                                .maybeSingle();
+                                            if (iaCfgError) {
+                                                console.warn('[INSTAGRAM WEBHOOK] Error reading tone_inject:', iaCfgError.message);
                                             } else {
-                                                bookingLink = buildBookingLink({
-                                                    user_id: userId,
-                                                    contact_id: contact.id,
-                                                    contact_name: contact.push_name || '',
-                                                    instance_id: contactInstance.id,
-                                                    origin: 'instagram',
-                                                });
+                                                toneInject = (iaCfg as any)?.tone_inject ?? null;
                                             }
 
                                             // Step 3: Build payload with bd_data
-                                            const forwardedPayload = {
-                                                ...payload,
-                                                bd_data: {
-                                                    user_id: userId,
-                                                    contact_id: contact.id,
-                                                    conversation_id: conversation.id,
-                                                    instance_id: whatsappInstance.id,
-                                                    ia_funnel_id: iaFunnelId,
+                                            // Mesmas chaves, na mesma ordem do WhatsApp
+                                            // (_shared/bd-data.ts) — o que o Instagram não tem vai
+                                            // com o mesmo valor neutro, nada é removido. As chaves
+                                            // exclusivas do canal entram no fim.
+                                            const bdData = await buildBdData(supabase, {
+                                                userId,
+                                                contactId: contact.id,
+                                                conversationId: conversation.id,
+                                                // Direct não tem grupo.
+                                                groupId: null,
+                                                // Conexão de WhatsApp usada pelas tools do n8n.
+                                                instanceId: whatsappInstance.id,
+                                                iaFunnelId,
+                                                toneInject,
+                                                // O card do funil deste contato é o da conta de Instagram.
+                                                crmInstagramInstanceId: instagramInstance.id,
+                                                // Campanha é por conexão de WhatsApp: no Direct o bloco
+                                                // fica em 'sem campanha ativa'.
+                                                campaignInstanceId: null,
+                                                bookingInstanceId: contactInstance?.id ?? null,
+                                                bookingOrigin: 'instagram',
+                                                logPrefix: '[INSTAGRAM WEBHOOK]',
+                                                extra: {
                                                     // Canal de origem: o n8n precisa saber que este
                                                     // contato não tem telefone.
                                                     channel: 'instagram',
@@ -758,10 +778,11 @@ serve(async (req) => {
                                                             link: contactNumber ? `https://wa.me/${contactNumber}` : null,
                                                         }
                                                         : null,
-                                                    booking_link: bookingLink,
                                                     ...(bookingLinkError ? { booking_link_error: bookingLinkError } : {}),
-                                                }
-                                            };
+                                                },
+                                            });
+
+                                            const forwardedPayload = { ...payload, bd_data: bdData };
 
                                             try {
                                                 const forwardResponse = await fetch(webhookUrl, {
