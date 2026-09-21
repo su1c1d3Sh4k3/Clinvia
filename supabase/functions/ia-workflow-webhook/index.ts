@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -23,8 +24,32 @@ serve(async (req) => {
 
         // Canal da conexão que ligou/desligou a IA. O n8n precisa disso para saber
         // se o fluxo atende WhatsApp ou Instagram (no Instagram não há phone/token).
-        const platform: 'whatsapp' | 'instagram' =
+        // Quem chama informa; sem isso, resolve pelo instance_id no banco — assim o
+        // Instagram não é rotulado como WhatsApp quando o front está desatualizado.
+        let platform: 'whatsapp' | 'instagram' =
             body.platform === 'instagram' ? 'instagram' : 'whatsapp';
+
+        if (body.platform !== 'instagram' && body.platform !== 'whatsapp' && instance_id) {
+            try {
+                const supabase = createClient(
+                    Deno.env.get('SUPABASE_URL')!,
+                    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+                );
+                const { data: igRow, error: igError } = await supabase
+                    .from('instagram_instances')
+                    .select('id')
+                    .eq('id', instance_id)
+                    .maybeSingle();
+
+                if (igError) {
+                    console.warn('[ia-workflow-webhook] Error resolving platform:', igError.message);
+                } else if (igRow) {
+                    platform = 'instagram';
+                }
+            } catch (resolveError) {
+                console.error('[ia-workflow-webhook] Exception resolving platform:', resolveError);
+            }
+        }
 
         console.log('[ia-workflow-webhook] Action:', action);
         console.log('[ia-workflow-webhook] Payload:', { user_id, instance_id, instance_name, platform, phone, token: token ? '***' : '' });
