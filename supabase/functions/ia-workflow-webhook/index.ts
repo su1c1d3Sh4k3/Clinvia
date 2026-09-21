@@ -19,10 +19,15 @@ serve(async (req) => {
 
     try {
         const body = await req.json();
-        const { action, user_id, instance_name, phone, token } = body;
+        const { action, user_id, instance_id, instance_name, phone, token } = body;
+
+        // Canal da conexão que ligou/desligou a IA. O n8n precisa disso para saber
+        // se o fluxo atende WhatsApp ou Instagram (no Instagram não há phone/token).
+        const platform: 'whatsapp' | 'instagram' =
+            body.platform === 'instagram' ? 'instagram' : 'whatsapp';
 
         console.log('[ia-workflow-webhook] Action:', action);
-        console.log('[ia-workflow-webhook] Payload:', { user_id, instance_name, phone, token: token ? '***' : '' });
+        console.log('[ia-workflow-webhook] Payload:', { user_id, instance_id, instance_name, platform, phone, token: token ? '***' : '' });
 
         // Validate action
         if (!action || !['create', 'delete'].includes(action)) {
@@ -52,7 +57,9 @@ serve(async (req) => {
                 },
                 body: JSON.stringify({
                     user_id,
+                    instance_id,
                     instance_name,
+                    platform,
                     phone,
                     token,
                 }),

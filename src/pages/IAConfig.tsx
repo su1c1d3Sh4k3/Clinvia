@@ -533,6 +533,7 @@ export default function IAConfig() {
                         instance_name: instance.instance_name || "",
                         phone: instance.client_number || "",
                         token: instance.apikey || "",
+                        platform: "whatsapp",
                     },
                 }
             );
