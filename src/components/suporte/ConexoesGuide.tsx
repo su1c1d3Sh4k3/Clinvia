@@ -112,8 +112,15 @@ export function ConexoesGuide() {
                 <StepByStep steps={[
                     { title: "WhatsApp não oficial", description: "Nova conexão > escaneie o QR code com o celular (Aparelhos conectados). Se o card ficar 'desconectado', basta reconectar pelo mesmo botão." },
                     { title: "WhatsApp oficial (Meta)", description: "Botão de conexão Meta > login no Facebook da empresa > escolha/crie o número. O sistema registra e verifica tudo sozinho — e AVISA no card se algo ficou pendente." },
-                    { title: "Instagram", description: "Conecte a conta profissional via login Meta. As DMs caem no inbox como um canal próprio, com fila padrão e número informado pela IA para contato configuráveis no card.", icon: Instagram },
+                    { title: "Instagram", description: "Conecte a conta profissional via login Meta. As DMs caem no inbox como um canal próprio, com o número informado pela IA para contato configurável no card.", icon: Instagram },
                 ]} />
+                <Callout type="dica" title="A fila do Instagram é automática (igual à do WhatsApp)">
+                    A conta do Instagram <strong>não escolhe fila</strong>. Um Direct novo cai em{" "}
+                    <strong>Atendimento IA</strong> quando o switch geral da IA <em>e</em> o switch da IA{" "}
+                    <strong>daquela conta</strong> estão ligados; se qualquer um dos dois estiver desligado, cai em{" "}
+                    <strong>Atendimento Humano</strong>. Desligar a IA da conta devolve na hora as conversas abertas dela
+                    para a fila humana.
+                </Callout>
                 <Callout type="atencao" title="Instagram: escolha o “Número informado pela IA para contato”">
                     No card de cada conta do Instagram há o campo <strong>Número informado pela IA para contato</strong>, onde você aponta uma
                     das suas conexões de WhatsApp. Ele serve para duas coisas:

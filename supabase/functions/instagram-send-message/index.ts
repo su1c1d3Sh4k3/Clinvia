@@ -400,11 +400,11 @@ serve(async (req) => {
                 resolvedConversationId = conversation.id;
             } else if (authenticatedAgentId && instagramInstanceId) {
                 // Atendente iniciando conversa pelo painel (paridade com
-                // evolution-send-message:101-122). Cria com status='open' +
-                // assigned_agent_id + queue_id default.
+                // evolution-send-message): cria com status='open' +
+                // assigned_agent_id e SEM fila, igual ao WhatsApp.
                 const { data: igInst } = await supabase
                     .from('instagram_instances')
-                    .select('user_id, default_queue_id')
+                    .select('user_id')
                     .eq('id', instagramInstanceId)
                     .single();
 
@@ -417,7 +417,6 @@ serve(async (req) => {
                             instagram_instance_id: instagramInstanceId,
                             user_id: igInst.user_id,
                             status: 'open',
-                            queue_id: igInst.default_queue_id || null,
                             assigned_agent_id: authenticatedAgentId,
                             unread_count: 0,
                             last_message_at: new Date().toISOString()

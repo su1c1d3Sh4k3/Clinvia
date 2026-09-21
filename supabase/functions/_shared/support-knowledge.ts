@@ -552,7 +552,7 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "A aba Templates lista os modelos aprovados, com o status de cada um.",
             "Cabecalho do template: aba Templates > Novo template > campo Cabecalho. Opcoes: Sem cabecalho, Texto, Imagem (JPG/PNG ate 5 MB), Video (MP4 ate 16 MB), Documento (PDF ate 100 MB) ou Localizacao (latitude, longitude, nome e endereco).",
             "Botoes do template: no bloco Botoes clique em 'Adicionar botao' e escolha o tipo — Resposta rapida, Abrir link (URL fixa), Ligar (telefone fixo) ou Copiar codigo (cupom fixo). Ate 10 botoes no total.",
-            "Instagram: no card da conta, alem da Fila, ha o campo 'Numero informado pela IA para contato'. Escolha ali qual conexao de WhatsApp a IA divulga para quem chama no Direct e em qual conexao o agendamento pelo link sera registrado.",
+            "Instagram: no card da conta ha o campo 'Numero informado pela IA para contato'. Escolha ali qual conexao de WhatsApp a IA divulga para quem chama no Direct e em qual conexao o agendamento pelo link sera registrado.",
         ],
         gotchas: [
             "No numero oficial so da para iniciar conversa com template aprovado; texto livre so dentro da janela de 24h apos a ultima mensagem do cliente.",
@@ -567,6 +567,7 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "Sem o campo 'Numero informado pela IA para contato' preenchido no card da conta do Instagram, a IA NAO consegue gerar link de agendamento para conversas do Direct (o Instagram nao informa o telefone do cliente, entao o link nao sabe em qual conexao registrar).",
             "O link de agendamento aberto por um cliente do Instagram pede nome completo e telefone (mascara 55 (DDD) 9 XXXX-XXXX) antes de mostrar servicos ou agendamentos. Com o telefone, o sistema acha o contato de WhatsApp pelos ultimos 8 digitos, cria se nao existir, atualiza o nome com o que o cliente digitou e vincula o perfil do Instagram a ele. O agendamento fica SEMPRE no contato de WhatsApp, nunca no do Instagram.",
             "A lista 'Conexoes' no rodape do menu lateral mostra somente as conexoes ONLINE (WhatsApp e Instagram). Conexao que sumiu de la esta desconectada — reconecte pela pagina Conexoes, que e onde aparece o status completo.",
+            "O card da conta do Instagram NAO escolhe mais a fila (o campo foi removido): a fila segue a mesma regra do WhatsApp. Direct novo entra em 'Atendimento IA' quando o switch geral da IA e o switch da IA daquela conta estao ligados, e em 'Atendimento Humano' quando qualquer um dos dois esta desligado. Desligar a IA da conta devolve as conversas abertas dela para a fila humana na hora.",
         ],
     },
     {

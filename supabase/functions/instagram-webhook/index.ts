@@ -225,7 +225,7 @@ serve(async (req) => {
 
                         const { data: foundInstance } = await supabase
                             .from('instagram_instances')
-                            .select('id, user_id, access_token, instagram_account_id, account_name, ia_on_insta, default_queue_id')
+                            .select('id, user_id, access_token, instagram_account_id, account_name, ia_on_insta')
                             .eq('instagram_account_id', tryId)
                             .single();
 
@@ -239,7 +239,7 @@ serve(async (req) => {
                     if (!instagramInstance) {
                         const { data: allInstances } = await supabase
                             .from('instagram_instances')
-                            .select('id, user_id, instagram_account_id, account_name, access_token, ia_on_insta, default_queue_id')
+                            .select('id, user_id, instagram_account_id, account_name, access_token, ia_on_insta')
                             .eq('status', 'connected');
 
                         console.log('[INSTAGRAM WEBHOOK] No match found. Entry ID:', entryId);
@@ -289,7 +289,7 @@ serve(async (req) => {
                             if (!instagramInstance) {
                                 const { data: recentInstances } = await supabase
                                     .from('instagram_instances')
-                                    .select('id, user_id, access_token, instagram_account_id, account_name, ia_on_insta, created_at, updated_at, default_queue_id')
+                                    .select('id, user_id, access_token, instagram_account_id, account_name, ia_on_insta, created_at, updated_at')
                                     .eq('status', 'connected')
                                     .order('updated_at', { ascending: false })
                                     .limit(1);
@@ -562,6 +562,45 @@ serve(async (req) => {
                                     })
                                     .eq('id', conversation.id);
                             } else {
+                                // Padrão único (user rule, igual ao WhatsApp): IA desligada →
+                                // fila "Atendimento Humano"; IA ligada (ia_config.ia_on +
+                                // ia_on_insta DESTA conta) → fila "Atendimento IA".
+                                // instagram_instances.default_queue_id foi removida.
+                                let newConvQueueId: string | null = null;
+                                try {
+                                    const { data: iaCfgQueue } = await supabase
+                                        .from('ia_config')
+                                        .select('ia_on')
+                                        .eq('user_id', userId)
+                                        .maybeSingle();
+
+                                    const iaEffective = (iaCfgQueue as any)?.ia_on === true
+                                        && instagramInstance.ia_on_insta === true;
+                                    const targetQueueName = iaEffective ? 'Atendimento IA' : 'Atendimento Humano';
+
+                                    const { data: targetQueue } = await supabase
+                                        .from('queues')
+                                        .select('id')
+                                        .eq('user_id', userId)
+                                        .eq('name', targetQueueName)
+                                        .maybeSingle();
+
+                                    if (targetQueue?.id) {
+                                        newConvQueueId = targetQueue.id;
+                                    } else if (iaEffective) {
+                                        // Fila IA inexistente → cai na Humano
+                                        const { data: humanQueue } = await supabase
+                                            .from('queues')
+                                            .select('id')
+                                            .eq('user_id', userId)
+                                            .eq('name', 'Atendimento Humano')
+                                            .maybeSingle();
+                                        newConvQueueId = humanQueue?.id || null;
+                                    }
+                                } catch (queueErr) {
+                                    console.warn('[INSTAGRAM WEBHOOK] queue lookup failed:', queueErr);
+                                }
+
                                 // Create new conversation
                                 const { data: newConv, error: convError } = await supabase
                                     .from('conversations')
@@ -572,7 +611,7 @@ serve(async (req) => {
                                         user_id: userId,
                                         status: 'pending',
                                         unread_count: 1,
-                                        queue_id: instagramInstance.default_queue_id || null,
+                                        queue_id: newConvQueueId,
                                         last_message: messageText || 'Mídia',
                                         last_message_at: new Date().toISOString()
                                     })

@@ -140,19 +140,6 @@ const Connections = () => {
         },
     });
 
-    // Queues Query — usado pelos selects de fila default (WhatsApp e Instagram)
-    const { data: queues } = useQuery({
-        queryKey: ["queues"],
-        queryFn: async () => {
-            const { data, error } = await supabase
-                .from("queues")
-                .select("*")
-                .eq("is_active", true);
-            if (error) throw error;
-            return data;
-        },
-    });
-
     // Handle Instagram OAuth callback
     useEffect(() => {
         const code = searchParams.get('code');
@@ -607,31 +594,6 @@ const Connections = () => {
             toast({
                 title: "Erro ao atualizar token",
                 description: error.message || "Não foi possível atualizar o token.",
-                variant: "destructive",
-            });
-        }
-    });
-
-    // Atualiza a fila default da instância Instagram (paridade com InstanceRow do WhatsApp)
-    const updateInstagramQueueMutation = useMutation({
-        mutationFn: async ({ instanceId, queueId }: { instanceId: string, queueId: string | null }) => {
-            const { error } = await supabase
-                .from("instagram_instances" as any)
-                .update({ default_queue_id: queueId === "none" ? null : queueId })
-                .eq("id", instanceId);
-
-            if (error) throw error;
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["instagram-instances"] });
-            toast({
-                title: "Fila padrão atualizada",
-            });
-        },
-        onError: (error: any) => {
-            toast({
-                title: "Erro ao atualizar fila",
-                description: error.message,
                 variant: "destructive",
             });
         }
@@ -1099,27 +1061,6 @@ const Connections = () => {
                                                                     {allInstances?.map((wa: any) => (
                                                                         <SelectItem key={wa.id} value={wa.id}>
                                                                             {wa.name || wa.instance_name}{wa.client_number ? ` — ${wa.client_number}` : ""}
-                                                                        </SelectItem>
-                                                                    ))}
-                                                                </SelectContent>
-                                                            </Select>
-                                                        </div>
-                                                    )}
-                                                    {canEdit('connections') && (
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="text-xs md:text-sm text-muted-foreground whitespace-nowrap">Fila:</span>
-                                                            <Select
-                                                                value={instance.default_queue_id || "none"}
-                                                                onValueChange={(value) => updateInstagramQueueMutation.mutate({ instanceId: instance.id, queueId: value })}
-                                                            >
-                                                                <SelectTrigger className="w-full sm:w-[140px] md:w-[180px] h-8 md:h-9 text-xs md:text-sm">
-                                                                    <SelectValue placeholder="Selecione" />
-                                                                </SelectTrigger>
-                                                                <SelectContent>
-                                                                    <SelectItem value="none">Nenhuma</SelectItem>
-                                                                    {queues?.map((queue) => (
-                                                                        <SelectItem key={queue.id} value={queue.id}>
-                                                                            {queue.name}
                                                                         </SelectItem>
                                                                     ))}
                                                                 </SelectContent>
