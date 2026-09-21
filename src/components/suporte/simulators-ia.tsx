@@ -34,8 +34,8 @@ const GATES = [
         key: "instance",
         icon: Plug,
         label: "IA ligada na conexão",
-        detail: "Cada número de WhatsApp conectado tem seu próprio botão de IA. Dá para ter um número com IA e outro só humano.",
-        fix: "Em IA > Config, ative a IA na instância por onde essa conversa chega.",
+        detail: "Cada conexão tem seu próprio botão de IA — número de WhatsApp e conta de Instagram seguem a mesma regra. Dá para ter uma conexão com IA e outra só humana.",
+        fix: "Em IA > Config, ative a IA na conexão (número ou conta de Instagram) por onde essa conversa chega.",
     },
     {
         key: "queue",

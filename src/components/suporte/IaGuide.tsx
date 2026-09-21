@@ -108,6 +108,12 @@ export function IaGuide() {
                     dar uma olhada não atrasa o follow-up de ninguém. Conversa em que o cliente nunca escreveu (disparo de
                     campanha sem resposta) não entra no follow-up — não há o que contar.
                 </Callout>
+                <Callout type="dica" title="O Direct do Instagram segue as mesmas regras">
+                    As 5 condições acima e o follow-up valem igual no <strong>Instagram</strong>: a conversa precisa estar
+                    na fila Atendimento IA e a IA precisa estar ligada <strong>naquela conta de Instagram</strong> (não
+                    adianta estar ligada num número de WhatsApp). Desligou a IA da conta, o follow-up dela para na hora —
+                    exatamente como acontece ao desligar a IA de um número.
+                </Callout>
             </TopicSection>
 
             {/* 3 */}

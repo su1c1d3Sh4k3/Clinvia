@@ -17,13 +17,20 @@ const corsHeaders = {
  * api-followup-pending
  *
  * Retorna CONVERSAS pendentes de follow-up da IA (uma linha por conversa).
- * Filtros: conversa pending na fila 'Atendimento IA', instância da conversa com
- * a IA ligada (ia_on_wpp), contato com ia_on = true, última mensagem da conversa
- * enviada por nós e mais antiga que X minutos.
+ * Filtros: conversa pending na fila 'Atendimento IA', conexão da conversa com a
+ * IA ligada (WhatsApp: instances.ia_on_wpp; Instagram:
+ * instagram_instances.ia_on_insta), contato com ia_on = true, última mensagem da
+ * conversa enviada por nós e mais antiga que X minutos.
  *
- * Contato com conversa em 2 instâncias, ambas com IA ligada => 2 linhas, cada uma
- * com seu conversation_id, sua instance_id e seu próprio last_message_time.
- * Só uma instância com IA => só a conversa dela.
+ * WhatsApp e Instagram seguem as MESMAS regras. Cada linha traz channel
+ * ('whatsapp' | 'instagram') e a conexão correspondente: no WhatsApp vem
+ * instance_id (instagram_instance_id NULL) e number é o telefone; no Instagram
+ * vem instagram_instance_id (instance_id NULL) e number é 'instagram:<IGSID>',
+ * nunca um telefone — responda pelo Direct, não por WhatsApp.
+ *
+ * Contato com conversa em 2 conexões, ambas com IA ligada => 2 linhas, cada uma
+ * com seu conversation_id, sua conexão e seu próprio last_message_time.
+ * Só uma conexão com IA => só a conversa dela.
  *
  * ENTREGA ÚNICA POR ETAPA: a RPC reserva a conversa
  * (conversations.followup_claimed_number) de forma atômica, então chamadas
