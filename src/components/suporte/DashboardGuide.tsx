@@ -301,6 +301,11 @@ export function DashboardGuide() {
                     No filtro Total, o gauge de ocupação considera os últimos 12 meses (senão anos sem agenda zerariam a
                     taxa); procedimentos e faturamento seguem o histórico completo.
                 </Callout>
+                <Callout type="atencao" title="O custo da IA também é uma estimativa">
+                    A cada resposta a IA reenvia a conversa inteira para poder lembrar do contexto, e o provedor cobra
+                    essa parte repetida bem mais barato (cache). O sistema já aplica esse desconto no cálculo, mas o
+                    valor oficial continua sendo o da fatura do provedor.
+                </Callout>
                 <Callout type="dica" title="O mesmo resumo chega por e-mail todo dia 1º">
                     Na virada do mês, o administrador recebe no e-mail da conta o consumo do mês anterior — tokens de IA,
                     disparos de campanha e automáticos, templates da Meta e o custo estimado em reais, pelo mesmo

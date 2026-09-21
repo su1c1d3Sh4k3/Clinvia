@@ -2,12 +2,17 @@
 //
 // O n8n chama esta função a cada requisição da IA com o JSON de usage:
 // [{ id: "<workflow_id>", name, execution_id,
-//    tokenUsage: { model, tokenUsage: { completionTokens, promptTokens, totalTokens } } }]
+//    tokenUsage: { model, tokenUsage: { completionTokens, promptTokens, totalTokens,
+//                                       promptTokensDetails: { cachedTokens } } } }]
 //
 // Fluxo por item:
 //   1. Resolve o tenant pelo workflow_id (cada user tem workflow próprio):
 //      instances.workflow_id → ia_config.workflow_id
-//   2. Preço USD por modelo via tabela llm_model_prices (editável no banco)
+//   2. Preço USD por modelo via tabela llm_model_prices (editável no banco).
+//      O input CACHEADO tem preço próprio (cached_input_usd_per_1m, ~10% do
+//      input normal): o agente do n8n reenvia o prompt inteiro a cada passo de
+//      tool-call, e é o cache que torna isso barato na fatura real. Sem separar
+//      os dois, o custo calculado fica muito acima do cobrado pelo provedor.
 //   3. Converte para BRL com cotação real (AwesomeAPI USD-BRL; fallback última
 //      cotação usada no log; fallback final 5.50)
 //   4. Insere token_usage_log (source 'n8n', function_name 'n8n', cost_usd +
@@ -47,13 +52,34 @@ interface UsageItem {
     execution_id?: number | string;
     tokenUsage?: {
         model?: string;
-        tokenUsage?: { completionTokens?: number; promptTokens?: number; totalTokens?: number };
+        tokenUsage?: Record<string, any>;
         // formato achatado (tolerância)
         completionTokens?: number;
         promptTokens?: number;
         totalTokens?: number;
     };
     model?: string;              // tolerância: model na raiz
+}
+
+// Tokens de prompt servidos pelo cache do provedor. Cada SDK batiza esse campo
+// de um jeito (OpenAI: prompt_tokens_details.cached_tokens; LangChain:
+// promptTokensDetails.cachedTokens; Gemini: cachedContentTokenCount), e o n8n
+// repassa o objeto cru — então varremos todos os apelidos conhecidos.
+function readCachedTokens(usage: Record<string, any>): number {
+    const candidates = [
+        usage?.cachedTokens,
+        usage?.cached_tokens,
+        usage?.cachedContentTokenCount,
+        usage?.promptTokensDetails?.cachedTokens,
+        usage?.prompt_tokens_details?.cached_tokens,
+        usage?.inputTokensDetails?.cachedTokens,
+        usage?.input_tokens_details?.cached_tokens,
+    ];
+    for (const value of candidates) {
+        const n = Number(value);
+        if (Number.isFinite(n) && n > 0) return Math.floor(n);
+    }
+    return 0;
 }
 
 async function getUsdBrlRate(supabase: any): Promise<{ rate: number; source: string }> {
@@ -138,16 +164,21 @@ Deno.serve(async (req) => {
         // Tabela de preços (uma leitura por chamada)
         const { data: priceRows, error: priceErr } = await supabase
             .from('llm_model_prices')
-            .select('model, input_usd_per_1m, output_usd_per_1m');
+            .select('model, input_usd_per_1m, output_usd_per_1m, cached_input_usd_per_1m');
         if (priceErr) {
             return dbErrorResponse(corsHeaders, 'llm_model_prices_read_failed',
                 'carregar a tabela de preços llm_model_prices, necessária para calcular o custo dos tokens', priceErr);
         }
-        const prices = new Map<string, { input: number; output: number }>();
+        const prices = new Map<string, { input: number; output: number; cachedInput: number }>();
         for (const p of priceRows ?? []) {
+            const input = Number(p.input_usd_per_1m);
+            const cached = Number(p.cached_input_usd_per_1m);
             prices.set(String(p.model).toLowerCase(), {
-                input: Number(p.input_usd_per_1m),
+                input,
                 output: Number(p.output_usd_per_1m),
+                // Sem preço de cache cadastrado, o token cacheado é cobrado como
+                // input normal (não inventa desconto que o provedor pode não dar).
+                cachedInput: Number.isFinite(cached) && cached >= 0 ? cached : input,
             });
         }
 
@@ -168,6 +199,8 @@ Deno.serve(async (req) => {
             const promptTokens = Number((usage as any).promptTokens) || 0;
             const completionTokens = Number((usage as any).completionTokens) || 0;
             const itemTokens = Number((usage as any).totalTokens) || (promptTokens + completionTokens);
+            // promptTokens já INCLUI os cacheados; o cache nunca pode passar do total.
+            const cachedTokens = Math.min(readCachedTokens(usage as any), promptTokens);
 
             if (!workflowId) {
                 results.push({
@@ -249,7 +282,12 @@ Deno.serve(async (req) => {
             const price = prices.get(modelKey) ?? prices.get(FALLBACK_MODEL);
             const priceFallback = !prices.has(modelKey);
             if (priceFallback) {
-                console.warn(`[api-token-usage] Unknown model "${model}" — using ${FALLBACK_MODEL} prices`);
+                // Modelo desconhecido é cobrado com o preço de OUTRO modelo, então o
+                // valor sai errado. Antes isso só existia no console: agora aparece
+                // na resposta, senão ninguém descobre até comparar com a fatura.
+                const fallbackWarning = `Modelo "${model || 'desconhecido'}" não está cadastrado em llm_model_prices: o custo foi calculado com o preço de "${FALLBACK_MODEL}" e NÃO reflete a fatura real do provedor. Cadastre o modelo para corrigir.`;
+                console.warn('[api-token-usage]', fallbackWarning);
+                if (!warnings.includes(fallbackWarning)) warnings.push(fallbackWarning);
             }
             // Sem preço do modelo E sem o modelo de fallback cadastrado não há como
             // calcular custo — antes isso estourava um TypeError genérico.
@@ -263,7 +301,12 @@ Deno.serve(async (req) => {
                 continue;
             }
 
-            const costUsd = (promptTokens * price.input + completionTokens * price.output) / 1_000_000;
+            const freshPromptTokens = promptTokens - cachedTokens;
+            const costUsd = (
+                freshPromptTokens * price.input
+                + cachedTokens * price.cachedInput
+                + completionTokens * price.output
+            ) / 1_000_000;
             const costBrl = costUsd * rate;
 
             const { error: insErr } = await supabase.from('token_usage_log').insert({
@@ -273,6 +316,7 @@ Deno.serve(async (req) => {
                 source: 'n8n',
                 model: model || 'unknown',
                 prompt_tokens: promptTokens,
+                cached_prompt_tokens: cachedTokens,
                 completion_tokens: completionTokens,
                 total_tokens: itemTokens,
                 cost_usd: costUsd,
@@ -321,7 +365,12 @@ Deno.serve(async (req) => {
                 owner_id: ownerId,
                 model: model || 'unknown',
                 price_fallback: priceFallback,
-                tokens: { prompt: promptTokens, completion: completionTokens, total: itemTokens },
+                tokens: {
+                    prompt: promptTokens,
+                    prompt_cached: cachedTokens,
+                    completion: completionTokens,
+                    total: itemTokens,
+                },
                 cost_usd: Number(costUsd.toFixed(6)),
                 cost_brl: Number(costBrl.toFixed(6)),
                 ...(accWarning ? { warning: accWarning } : {}),
