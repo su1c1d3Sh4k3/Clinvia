@@ -112,8 +112,30 @@ export function ConexoesGuide() {
                 <StepByStep steps={[
                     { title: "WhatsApp não oficial", description: "Nova conexão > escaneie o QR code com o celular (Aparelhos conectados). Se o card ficar 'desconectado', basta reconectar pelo mesmo botão." },
                     { title: "WhatsApp oficial (Meta)", description: "Botão de conexão Meta > login no Facebook da empresa > escolha/crie o número. O sistema registra e verifica tudo sozinho — e AVISA no card se algo ficou pendente." },
-                    { title: "Instagram", description: "Conecte a conta profissional via login Meta. As DMs caem no inbox como um canal próprio, com fila padrão configurável.", icon: Instagram },
+                    { title: "Instagram", description: "Conecte a conta profissional via login Meta. As DMs caem no inbox como um canal próprio, com fila padrão e número de Contato WhatsApp configuráveis no card.", icon: Instagram },
                 ]} />
+                <Callout type="atencao" title="Instagram: escolha o “Contato WhatsApp” da conta">
+                    No card de cada conta do Instagram há o campo <strong>Contato WhatsApp</strong>, onde você aponta uma
+                    das suas conexões de WhatsApp. Ele serve para duas coisas:
+                    <ul className="mt-2 list-disc space-y-1 pl-5">
+                        <li>A IA passa a ter o <strong>link direto do WhatsApp</strong> daquele número para mandar ao
+                            cliente que chamou no Direct.</li>
+                        <li>É a conexão em que o <strong>agendamento pelo link</strong> feito por um cliente do Instagram
+                            é registrado.</li>
+                    </ul>
+                    <p className="mt-2">
+                        Sem esse campo preenchido, a IA <strong>não consegue gerar link de agendamento</strong> para
+                        conversas do Instagram.
+                    </p>
+                </Callout>
+                <Callout type="dica" title="Por que o link do Instagram pede nome e telefone">
+                    O Instagram não informa o telefone de quem manda DM — o contato nasce só com o @ do cliente. Por isso,
+                    o link de agendamento enviado numa conversa do Direct abre pedindo <strong>nome completo e
+                    telefone</strong> (com máscara <strong>55 (DDD) 9 XXXX-XXXX</strong>) antes de mostrar qualquer coisa.
+                    Com o telefone confirmado, o sistema encontra (ou cria) o contato de WhatsApp, atualiza o nome com o
+                    que o cliente digitou, amarra o perfil do Instagram a ele e registra o agendamento{" "}
+                    <strong>sempre no contato de WhatsApp</strong>, nunca no do Instagram.
+                </Callout>
                 <Callout type="dica" title="Caiu? Você é avisado por e-mail">
                     Além da notificação dentro do sistema, quando uma conexão perde o WhatsApp o dono da conta recebe um
                     e-mail com o nome do número e o passo a passo para reconectar. Para não virar enxurrada, é no máximo
@@ -227,6 +249,14 @@ export function ConexoesGuide() {
                         {
                             q: "Apareceu 'Register endpoint is not available for SMB businesses' ao conectar o número oficial.",
                             a: "Esse aviso vem da Meta quando o número escolhido é de coexistência (continua ativo no app WhatsApp Business). Nesses casos a própria Meta já registra o número e bloqueia a etapa de registro — o sistema agora pula essa etapa sozinho. Se o erro reaparecer, atualize o app WhatsApp Business (mínimo 2.24.17) e refaça o cadastro até o fim, sem fechar a janela da Meta.",
+                        },
+                        {
+                            q: "A IA não manda link de agendamento nas conversas do Instagram.",
+                            a: "Falta preencher o campo Contato WhatsApp no card da conta do Instagram (aba Instagram desta página). O Instagram não informa o telefone do cliente, então o link precisa saber em qual conexão de WhatsApp o agendamento será registrado. Escolha o número e a IA volta a enviar o link — e também o link direto de WhatsApp para o cliente falar com a clínica.",
+                        },
+                        {
+                            q: "Cliente do Instagram agendou pelo link. Em que contato isso foi parar?",
+                            a: "No contato de WhatsApp, sempre. Antes de mostrar a agenda, o link pede nome completo e telefone (máscara 55 (DDD) 9 XXXX-XXXX). Com o telefone, o sistema procura o contato de WhatsApp pelos últimos 8 dígitos, cria se não existir, atualiza o nome com o que o cliente digitou e vincula o perfil do Instagram a esse contato. O contato do Instagram nunca recebe o agendamento.",
                         },
                         {
                             q: "Meu template está 'Pendente' há horas. É normal?",

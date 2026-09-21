@@ -32,9 +32,28 @@ const corsHeaders = {
 };
 
 const VALID_ACTIONS = [
+    "verify_identity",
     "get_services", "get_prof_list", "get_slots",
     "create_booking", "get_pending", "cancel_booking", "reschedule_booking",
 ];
+
+/**
+ * Telefone digitado no portão do link ("55 (11) 9 8888-7777") → só dígitos.
+ * A máscara da tela já garante o formato, mas a API é pública: quem chamar na
+ * mão pode mandar qualquer coisa.
+ */
+function onlyDigits(v: unknown): string {
+    return String(v ?? "").replace(/\D/g, "");
+}
+
+/**
+ * Identidade de contato nesta casa = últimos 8 dígitos (o 9º dígito e o DDI
+ * aparecem e somem conforme o aparelho/provedor). DDD diferente é pessoa
+ * diferente, então o 8 não pode virar 9 nem 10.
+ */
+function last8(digits: string): string {
+    return digits.slice(-8);
+}
 
 function pad(n: number): string { return String(n).padStart(2, "0"); }
 
@@ -99,7 +118,10 @@ serve(async (req) => {
         const { body, response: bodyFail } = await readJsonBody(req, corsHeaders);
         if (bodyFail) return bodyFail;
 
-        const { action, user_id, contact_id, service_id, professional_id, date, time, appointment_id, instance_id, convenio_id } = body!;
+        const { action, user_id, service_id, professional_id, date, time, appointment_id, instance_id, convenio_id } = body!;
+        // `contact_id` é reatribuído mais abaixo: contato de Instagram nunca
+        // pode ser o dono de um agendamento (ver bloco "trava do Instagram").
+        let contact_id = body!.contact_id;
 
         if (!user_id) {
             return patientError(400, "booking_link_invalid",
@@ -113,6 +135,32 @@ serve(async (req) => {
             Deno.env.get("SUPABASE_URL") ?? "",
             Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
         );
+
+        // ── Trava do Instagram ────────────────────────────────────────────────
+        // O contato criado pelo instagram-webhook é preso ao IGSID e não tem
+        // telefone; ele existe só para a conversa aparecer no inbox. Agendar
+        // nele deixaria a agenda com um "paciente" que a clínica não consegue
+        // ligar nem encontrar pelo número. Se o link (ou um chamador na mão)
+        // mandar um contato de Instagram, redirecionamos para o contato de
+        // WhatsApp já vinculado; sem vínculo, o fluxo tem que passar pelo
+        // verify_identity antes.
+        if (contact_id && action !== "verify_identity") {
+            const { data: maybeIg, error: igErr } = await supabase
+                .from("contacts")
+                .select("id, instagram_id, linked_contact_id")
+                .eq("id", contact_id).eq("user_id", user_id).maybeSingle();
+            if (igErr) {
+                return patientDbError("contact_read_failed", "conferir o cadastro do contato do link", igErr,
+                    "Não conseguimos confirmar o seu cadastro agora. Tente novamente em alguns instantes ou fale com a clínica.");
+            }
+            if (maybeIg?.instagram_id) {
+                if (!maybeIg.linked_contact_id) {
+                    return patientError(409, "instagram_identity_required",
+                        "Antes de agendar pelo Instagram, precisamos do seu nome completo e do seu WhatsApp. Volte ao início do link e preencha os dados.");
+                }
+                contact_id = maybeIg.linked_contact_id;
+            }
+        }
 
         // O token do link (payload `d`) carrega a conexão: sem ela não dá pra saber
         // em qual funil do CRM o agendamento entra.
@@ -303,6 +351,101 @@ serve(async (req) => {
             });
             return { busy, response: null };
         };
+
+        // ── verify_identity: portão do link vindo do Instagram ──
+        // O Instagram não entrega telefone. Aqui o paciente diz quem é, e o
+        // contato do Instagram passa a apontar (linked_contact_id) para o
+        // contato de WhatsApp — que é quem recebe o agendamento daqui em diante.
+        if (action === "verify_identity") {
+            const fullName = String(body!.full_name ?? "").trim().replace(/\s+/g, " ");
+            const digits = onlyDigits(body!.phone);
+
+            if (fullName.length < 3) {
+                return patientError(400, "identity_name_required",
+                    "Digite o seu nome completo para continuar.");
+            }
+            // 55 + DDD (2) + celular (8 ou 9) — a máscara da tela entrega 13.
+            if (digits.length < 12 || digits.length > 13) {
+                return patientError(400, "identity_phone_invalid",
+                    "O WhatsApp informado está incompleto. Preencha no formato 55 (DDD) 9 0000-0000.");
+            }
+
+            // Contato de WhatsApp existente: identidade pelos últimos 8 dígitos.
+            // Um contato de Instagram nunca pode ser o resultado desta busca —
+            // ele não tem número, e cair nele reintroduziria o bug que esta
+            // tela existe para resolver.
+            const { data: matches, error: matchErr } = await supabase
+                .from("contacts")
+                .select("id, push_name, number, instagram_id")
+                .eq("user_id", user_id)
+                .is("instagram_id", null)
+                .like("number", `%${last8(digits)}%`)
+                .limit(20);
+            if (matchErr) {
+                return patientDbError("identity_lookup_failed", "procurar o seu cadastro pelo telefone", matchErr,
+                    "Não conseguimos confirmar o seu WhatsApp agora. Tente novamente em alguns instantes ou fale com a clínica.");
+            }
+
+            // `like %last8%` pode pegar número de outro DDD que termine igual —
+            // DDD diferente é pessoa diferente, então confirmamos os 10 últimos
+            // (DDD + 8) antes de adotar o cadastro.
+            const tail10 = digits.slice(-10);
+            let target = (matches || []).find((c: any) => onlyDigits(c.number).slice(-10) === tail10)
+                ?? null;
+
+            if (target) {
+                // O nome digitado pelo paciente vence o push_name do WhatsApp:
+                // `edited` impede que a próxima mensagem recebida o sobrescreva.
+                const { error: renameErr } = await supabase.from("contacts")
+                    .update({ push_name: fullName, edited: true })
+                    .eq("id", target.id);
+                if (renameErr) {
+                    return patientDbError("identity_update_failed", "atualizar o seu nome no cadastro", renameErr,
+                        "Não conseguimos salvar os seus dados agora. Tente novamente em alguns instantes ou fale com a clínica.");
+                }
+            } else {
+                const { data: created, error: createErr } = await supabase.from("contacts")
+                    .insert({
+                        user_id,
+                        number: digits,
+                        push_name: fullName,
+                        edited: true,
+                        // Conexão que a clínica divulga no Instagram: é nela que
+                        // a conversa vai acontecer se o paciente chamar no zap.
+                        instance_id: instance_id ?? null,
+                        channel: "whatsapp",
+                    })
+                    .select("id, push_name")
+                    .single();
+                if (createErr) {
+                    return patientDbError("identity_create_failed", "criar o seu cadastro", createErr,
+                        "Não conseguimos salvar os seus dados agora. Tente novamente em alguns instantes ou fale com a clínica.");
+                }
+                target = created;
+            }
+
+            // Revincula o contato do Instagram para o número recém-confirmado
+            // (decisão do produto: a última verificação vence).
+            if (body!.contact_id && body!.contact_id !== target.id) {
+                const { error: linkErr } = await supabase.from("contacts")
+                    .update({ linked_contact_id: target.id })
+                    .eq("id", body!.contact_id)
+                    .eq("user_id", user_id)
+                    .not("instagram_id", "is", null);
+                if (linkErr) {
+                    // Vínculo é conveniência (unifica o histórico IG+WhatsApp);
+                    // o agendamento já tem o contato certo, então não bloqueia.
+                    console.warn("[api-public-booking]",
+                        describeDbError("vincular o contato do Instagram ao contato de WhatsApp", linkErr));
+                }
+            }
+
+            return new Response(JSON.stringify({
+                success: true,
+                contact_id: target.id,
+                contact_name: fullName,
+            }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
 
         // ── get_services: categories + service_names + applications ──
         // Exibe APENAS a categoria Avaliação + serviços comprados e ainda não agendados (sem preços)

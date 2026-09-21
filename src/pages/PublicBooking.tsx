@@ -24,7 +24,47 @@ async function callApi(body: any) {
   return data;
 }
 
-interface BookingParams { user_id: string; contact_id: string; contact_name: string; instance_id: string; }
+interface BookingParams {
+  user_id: string;
+  contact_id: string;
+  contact_name: string;
+  instance_id: string;
+  /** 'instagram' = o contato do token é o do IGSID e não tem telefone. */
+  origin?: "whatsapp" | "instagram";
+}
+
+/**
+ * Máscara fixa "55 (DDD) 9 0000-0000".
+ *
+ * O paciente vindo do Instagram digita o telefone do zero — é o único dado que
+ * liga a conversa ao cadastro de WhatsApp. Sem máscara ele escreve "(11)98765"
+ * ou "+55 11 98765 4321" e a busca pelos últimos dígitos passa a depender de
+ * sorte. O estado guarda só dígitos; a formatação é de exibição.
+ */
+function formatPhoneBR(digits: string): string {
+  const d = digits.slice(0, 13);
+  const ddd = d.slice(2, 4);
+  const rest = d.slice(4);
+  let out = "55";
+  if (ddd) out += ` (${ddd}`;
+  if (ddd.length === 2) out += ")";
+  if (rest) {
+    out += ` ${rest.slice(0, 1)}`;
+    const mid = rest.slice(1, 5);
+    const end = rest.slice(5, 9);
+    if (mid) out += ` ${mid}`;
+    if (end) out += `-${end}`;
+  }
+  return out;
+}
+
+/** Mantém o 55 colado no começo por mais que o paciente apague. */
+function normalizePhoneInput(raw: string): string {
+  let d = raw.replace(/\D/g, "");
+  if (d.length <= 2) return "55";
+  if (!d.startsWith("55")) d = "55" + d;
+  return d.slice(0, 13);
+}
 type Step = "home" | "service" | "convenio" | "professional" | "datetime" | "confirm" | "done" | "reschedule" | "canceled";
 
 export default function PublicBooking() {
@@ -53,6 +93,19 @@ export default function PublicBooking() {
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  // Portão do link do Instagram: enquanto `identity` for null, nada é carregado
+  // — nem a lista de agendamentos, que é dado de paciente.
+  const [identity, setIdentity] = useState<{ contact_id: string; contact_name: string } | null>(null);
+  const [idName, setIdName] = useState("");
+  const [idPhone, setIdPhone] = useState("55");
+  const [idError, setIdError] = useState("");
+  const [verifying, setVerifying] = useState(false);
+
+  const needsIdentity = params?.origin === "instagram" && !identity;
+  /** Contato que manda: no Instagram é o de WhatsApp devolvido pela verificação. */
+  const contactId = identity?.contact_id ?? params?.contact_id;
+  const contactName = identity?.contact_name ?? params?.contact_name;
+
   const tomorrow = useMemo(() => {
     const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(0, 0, 0, 0); return d;
   }, []);
@@ -78,12 +131,15 @@ export default function PublicBooking() {
 
   const loadData = async () => {
     if (!params) return;
+    // Sem identificação não há o que carregar: no Instagram o contato do token
+    // não tem agenda nem compras — quem tem é o cadastro de WhatsApp.
+    if (needsIdentity) { setLoading(false); return; }
     setLoading(true);
     try {
       const [svcData, profData, aptData] = await Promise.all([
-        callApi({ action: "get_services", user_id: params.user_id, contact_id: params.contact_id, instance_id: params.instance_id }),
+        callApi({ action: "get_services", user_id: params.user_id, contact_id: contactId, instance_id: params.instance_id }),
         callApi({ action: "get_prof_list", user_id: params.user_id }),
-        callApi({ action: "get_pending", user_id: params.user_id, contact_id: params.contact_id }),
+        callApi({ action: "get_pending", user_id: params.user_id, contact_id: contactId }),
       ]);
       setApplications(svcData.applications || []);
       setConvenios(svcData.convenios || []);
@@ -93,7 +149,28 @@ export default function PublicBooking() {
     setLoading(false);
   };
 
-  useEffect(() => { loadData(); }, [params]);
+  useEffect(() => { loadData(); }, [params, identity]);
+
+  const submitIdentity = async () => {
+    if (!params) return;
+    const nome = idName.trim().replace(/\s+/g, " ");
+    if (nome.length < 3) { setIdError("Digite o seu nome completo."); return; }
+    if (idPhone.length < 12) { setIdError("Preencha o WhatsApp completo, com DDD."); return; }
+
+    setVerifying(true); setIdError("");
+    try {
+      const res = await callApi({
+        action: "verify_identity",
+        user_id: params.user_id,
+        contact_id: params.contact_id,
+        instance_id: params.instance_id,
+        full_name: nome,
+        phone: idPhone,
+      });
+      setIdentity({ contact_id: res.contact_id, contact_name: res.contact_name });
+    } catch (err: any) { setIdError(err.message); }
+    setVerifying(false);
+  };
 
   /** Convênios que atendem o serviço escolhido (vazio = só particular). */
   const appConvenios = useMemo(() => {
@@ -173,7 +250,7 @@ export default function PublicBooking() {
     if (!params || !selApp || !selDate || !selTime) return;
     setSubmitting(true); setError("");
     try {
-      await callApi({ action: "create_booking", user_id: params.user_id, contact_id: params.contact_id, instance_id: params.instance_id, service_id: selApp.id, professional_id: selProf?.id || null, date: format(selDate, "yyyy-MM-dd"), time: selTime, convenio_id: selConvenio?.id || null });
+      await callApi({ action: "create_booking", user_id: params.user_id, contact_id: contactId, instance_id: params.instance_id, service_id: selApp.id, professional_id: selProf?.id || null, date: format(selDate, "yyyy-MM-dd"), time: selTime, convenio_id: selConvenio?.id || null });
       setStep("done");
       loadData();
     } catch (err: any) { setError(err.message); }
@@ -229,13 +306,67 @@ export default function PublicBooking() {
         )}
         <div className="text-center space-y-1">
           <h1 className="text-xl font-bold">
-            {step === "reschedule" ? "Reagendar" : step === "canceled" ? "Cancelado" : "Agendar Atendimento"}
+            {needsIdentity ? "Confirme seus dados"
+              : step === "reschedule" ? "Reagendar"
+              : step === "canceled" ? "Cancelado"
+              : "Agendar Atendimento"}
           </h1>
-          {params?.contact_name && <p className="text-sm text-muted-foreground">Olá, {params.contact_name}</p>}
+          {!needsIdentity && contactName && <p className="text-sm text-muted-foreground">Olá, {contactName}</p>}
         </div>
 
+        {/* ── Portão do link vindo do Instagram ──
+            O Instagram não informa telefone. Sem estes dados não dá para saber
+            de quem é a agenda, então nada aparece antes de preencher. */}
+        {needsIdentity && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground text-center">
+              Como você chegou pelo Instagram, precisamos do seu nome e do seu WhatsApp
+              para localizar o seu cadastro e registrar o agendamento no lugar certo.
+            </p>
+
+            <div className="space-y-1.5">
+              <label htmlFor="id-nome" className="text-sm font-medium">Nome completo</label>
+              <input
+                id="id-nome"
+                type="text"
+                autoComplete="name"
+                value={idName}
+                onChange={(e) => setIdName(e.target.value)}
+                placeholder="Maria de Souza"
+                className="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label htmlFor="id-fone" className="text-sm font-medium">WhatsApp</label>
+              <input
+                id="id-fone"
+                type="tel"
+                inputMode="numeric"
+                autoComplete="tel"
+                value={formatPhoneBR(idPhone)}
+                onChange={(e) => setIdPhone(normalizePhoneInput(e.target.value))}
+                onKeyDown={(e) => { if (e.key === "Enter") submitIdentity(); }}
+                className="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
+              />
+              <p className="text-xs text-muted-foreground">Formato: 55 (DDD) 9 0000-0000</p>
+            </div>
+
+            {idError && (
+              <div className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3">
+                <AlertTriangle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
+                <p className="text-xs text-destructive">{idError}</p>
+              </div>
+            )}
+
+            <Button className="w-full" onClick={submitIdentity} disabled={verifying}>
+              {verifying ? <Loader2 className="w-4 h-4 animate-spin" /> : "Continuar"}
+            </Button>
+          </div>
+        )}
+
         {/* ── HOME: pending appointments + new booking button ── */}
-        {step === "home" && (
+        {!needsIdentity && step === "home" && (
           <div className="space-y-4">
             {pendingApts.length > 0 && (
               <div className="space-y-3">

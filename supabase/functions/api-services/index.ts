@@ -102,7 +102,7 @@ serve(async (req) => {
 
             const { data: conv, error: convError } = await supabase
                 .from("conversations")
-                .select("contact_id, instance_id, contacts(push_name)")
+                .select("contact_id, instance_id, instagram_instance_id, contacts(push_name)")
                 .eq("id", conversation_id)
                 .eq("user_id", user_id)
                 .maybeSingle();
@@ -120,14 +120,53 @@ serve(async (req) => {
                 };
             }
 
-            const faltando = [
-                !conv.contact_id ? "contact_id (a conversa não está vinculada a um contato)" : null,
-                !conv.instance_id ? "instance_id (a conversa não está vinculada a uma conexão de WhatsApp — conversas de Instagram não geram link)" : null,
-            ].filter(Boolean) as string[];
-            if (faltando.length > 0) {
+            if (!conv.contact_id) {
                 return {
                     link: null,
-                    error: `Link de agendamento não gerado: a conversa ${conversation_id} está sem ${faltando.join(" e sem ")}. O link precisa desses dados para saber em qual contato e em qual conexão gravar o agendamento.`,
+                    error: `Link de agendamento não gerado: a conversa ${conversation_id} não está vinculada a um contato. O link precisa disso para saber em qual cadastro gravar o agendamento.`,
+                };
+            }
+
+            // Conversa de Instagram: `instance_id` é NULL (a conexão fica em
+            // `instagram_instance_id`) e o contato é o do IGSID, sem telefone.
+            // A conexão do agendamento vem do "Número informado pela IA para
+            // contato" da conta, e o token sai marcado como origem Instagram —
+            // a tela pede nome + WhatsApp antes de deixar agendar.
+            if (!conv.instance_id && conv.instagram_instance_id) {
+                const { data: igInst, error: igErr } = await supabase
+                    .from("instagram_instances")
+                    .select("contact_instance_id")
+                    .eq("id", conv.instagram_instance_id)
+                    .maybeSingle();
+
+                if (igErr) {
+                    return {
+                        link: null,
+                        error: describeDbError(`buscar a conexão de contato da conta de Instagram da conversa ${conversation_id}`, igErr),
+                    };
+                }
+                if (!igInst?.contact_instance_id) {
+                    return {
+                        link: null,
+                        error: `Link de agendamento não gerado: a conta de Instagram desta conversa está sem "Número informado pela IA para contato". Configure a conexão de WhatsApp em Conexões > Instagram para liberar o link.`,
+                    };
+                }
+
+                return {
+                    link: buildBookingLink({
+                        user_id,
+                        contact_id: conv.contact_id,
+                        contact_name: (conv as any).contacts?.push_name || "",
+                        instance_id: igInst.contact_instance_id,
+                        origin: "instagram",
+                    }),
+                };
+            }
+
+            if (!conv.instance_id) {
+                return {
+                    link: null,
+                    error: `Link de agendamento não gerado: a conversa ${conversation_id} não está vinculada a nenhuma conexão (nem WhatsApp, nem Instagram). O link precisa disso para saber em qual conexão gravar o agendamento.`,
                 };
             }
 

@@ -637,6 +637,32 @@ const Connections = () => {
         }
     });
 
+    // Conexão de WhatsApp que a IA divulga nas conversas do Instagram e que recebe
+    // o agendamento feito pelo link público (o contato do Instagram não tem telefone).
+    const updateInstagramContactInstanceMutation = useMutation({
+        mutationFn: async ({ instanceId, contactInstanceId }: { instanceId: string, contactInstanceId: string | null }) => {
+            const { error } = await supabase
+                .from("instagram_instances" as any)
+                .update({ contact_instance_id: contactInstanceId === "none" ? null : contactInstanceId })
+                .eq("id", instanceId);
+
+            if (error) throw error;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["instagram-instances"] });
+            toast({
+                title: "Número de contato atualizado",
+            });
+        },
+        onError: (error: any) => {
+            toast({
+                title: "Erro ao atualizar número de contato",
+                description: error.message,
+                variant: "destructive",
+            });
+        }
+    });
+
     useEffect(() => {
         if (!pollingInstanceId) return;
 
@@ -1056,6 +1082,29 @@ const Connections = () => {
                                                     </div>
                                                 </div>
                                                 <div className="flex flex-col sm:flex-row sm:items-center gap-2 md:gap-4">
+                                                    {canEdit('connections') && (
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-xs md:text-sm text-muted-foreground whitespace-nowrap" title="Número que a IA informa ao cliente do Instagram para contato no WhatsApp. É também a conexão vinculada ao agendamento feito pelo link.">
+                                                                Contato WhatsApp:
+                                                            </span>
+                                                            <Select
+                                                                value={instance.contact_instance_id || "none"}
+                                                                onValueChange={(value) => updateInstagramContactInstanceMutation.mutate({ instanceId: instance.id, contactInstanceId: value })}
+                                                            >
+                                                                <SelectTrigger className="w-full sm:w-[140px] md:w-[180px] h-8 md:h-9 text-xs md:text-sm">
+                                                                    <SelectValue placeholder="Selecione" />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    <SelectItem value="none">Nenhum</SelectItem>
+                                                                    {allInstances?.map((wa: any) => (
+                                                                        <SelectItem key={wa.id} value={wa.id}>
+                                                                            {wa.name || wa.instance_name}{wa.client_number ? ` — ${wa.client_number}` : ""}
+                                                                        </SelectItem>
+                                                                    ))}
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </div>
+                                                    )}
                                                     {canEdit('connections') && (
                                                         <div className="flex items-center gap-2">
                                                             <span className="text-xs md:text-sm text-muted-foreground whitespace-nowrap">Fila:</span>

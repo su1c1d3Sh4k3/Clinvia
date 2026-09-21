@@ -539,6 +539,10 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "meu numero foi restringido pela Meta, e agora",
             "a conexao caiu / QR code",
             "erro Register endpoint is not available for SMB businesses ao conectar o numero oficial",
+            "a IA nao manda link de agendamento nas conversas do Instagram",
+            "para que serve o campo Contato WhatsApp da conta do Instagram",
+            "por que o link de agendamento do Instagram pede nome e telefone",
+            "em qual contato fica o agendamento feito por um cliente que veio do Instagram",
         ],
         steps: [
             "Abra Conexoes no menu lateral (aba Conexoes).",
@@ -547,6 +551,7 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "A aba Templates lista os modelos aprovados, com o status de cada um.",
             "Cabecalho do template: aba Templates > Novo template > campo Cabecalho. Opcoes: Sem cabecalho, Texto, Imagem (JPG/PNG ate 5 MB), Video (MP4 ate 16 MB), Documento (PDF ate 100 MB) ou Localizacao (latitude, longitude, nome e endereco).",
             "Botoes do template: no bloco Botoes clique em 'Adicionar botao' e escolha o tipo — Resposta rapida, Abrir link (URL fixa), Ligar (telefone fixo) ou Copiar codigo (cupom fixo). Ate 10 botoes no total.",
+            "Instagram: no card da conta, alem da Fila, ha o campo 'Contato WhatsApp'. Escolha ali qual conexao de WhatsApp a IA divulga para quem chama no Direct e em qual conexao o agendamento pelo link sera registrado.",
         ],
         gotchas: [
             "No numero oficial so da para iniciar conversa com template aprovado; texto livre so dentro da janela de 24h apos a ultima mensagem do cliente.",
@@ -558,6 +563,8 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "Botao de link com variavel ({{1}} na URL) nao pode ser usado em campanha — o disparo nao coleta esse valor por contato, entao o template fica de fora da lista.",
             "Erro 'Register endpoint is not available for SMB businesses' no cadastro do numero oficial: e um numero de coexistencia (continua ativo no app WhatsApp Business). A Meta ja registra esse numero sozinha e bloqueia a etapa de registro — o sistema passou a pular essa etapa. Se reaparecer, peca para o cliente atualizar o app WhatsApp Business (minimo 2.24.17) e refazer o cadastro ate o fim sem fechar a janela da Meta.",
             "A mensagem de Confirmacao 24h nao cita mais o nome do profissional (agora usa nome do cliente, horario, clinica e servico). Motivo: o sistema so guarda o nome da SALA do agendamento, e em sala avulsa (Sala 2, Consultorio 1) o paciente recebia 'procedimento de Botox com Sala 2'. No WhatsApp nao oficial a mudanca ja vale para todos. No oficial vale para os templates enviados a aprovacao a partir de agora: numeros ja conectados seguem com o template aprovado pela Meta e, para tirar o profissional, e preciso editar o template na aba Templates de Conexoes (o template volta para revisao da Meta e a confirmacao fica parada ate reaprovar).",
+            "Sem o campo 'Contato WhatsApp' preenchido no card da conta do Instagram, a IA NAO consegue gerar link de agendamento para conversas do Direct (o Instagram nao informa o telefone do cliente, entao o link nao sabe em qual conexao registrar).",
+            "O link de agendamento aberto por um cliente do Instagram pede nome completo e telefone (mascara 55 (DDD) 9 XXXX-XXXX) antes de mostrar servicos ou agendamentos. Com o telefone, o sistema acha o contato de WhatsApp pelos ultimos 8 digitos, cria se nao existir, atualiza o nome com o que o cliente digitou e vincula o perfil do Instagram a ele. O agendamento fica SEMPRE no contato de WhatsApp, nunca no do Instagram.",
         ],
     },
     {

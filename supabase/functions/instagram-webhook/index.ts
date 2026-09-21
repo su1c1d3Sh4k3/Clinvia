@@ -5,6 +5,7 @@ import {
     checkRateLimit,
     validateInstagramPayload
 } from "../_shared/utils.ts";
+import { buildBookingLink } from "../_shared/booking-link.ts";
 
 // =============================================
 // Instagram Webhook Handler
@@ -676,6 +677,56 @@ serve(async (req) => {
                                                 console.error('[INSTAGRAM WEBHOOK] Exception finding IA funnel:', err);
                                             }
 
+                                            // Conexão de WhatsApp que a clínica escolheu para atender
+                                            // quem vem do Instagram (aba Instagram em Conexões).
+                                            // Serve para duas coisas: o número que a IA divulga e a
+                                            // instância que fica vinculada ao agendamento do link.
+                                            let contactInstance: any = null;
+                                            try {
+                                                const { data: igCfg, error: igCfgError } = await supabase
+                                                    .from('instagram_instances')
+                                                    .select('contact_instance_id')
+                                                    .eq('id', instagramInstance.id)
+                                                    .maybeSingle();
+
+                                                if (igCfgError) {
+                                                    console.warn('[INSTAGRAM WEBHOOK] Error reading contact_instance_id:', igCfgError.message);
+                                                } else if (igCfg?.contact_instance_id) {
+                                                    const { data: ci, error: ciError } = await supabase
+                                                        .from('instances')
+                                                        .select('id, client_number, name')
+                                                        .eq('id', igCfg.contact_instance_id)
+                                                        .maybeSingle();
+                                                    if (ciError) {
+                                                        console.warn('[INSTAGRAM WEBHOOK] Error reading contact instance:', ciError.message);
+                                                    } else {
+                                                        contactInstance = ci;
+                                                    }
+                                                }
+                                            } catch (cfgErr) {
+                                                console.error('[INSTAGRAM WEBHOOK] Exception resolving contact instance:', cfgErr);
+                                            }
+
+                                            const contactNumber = String(contactInstance?.client_number || '').replace(/\D/g, '');
+
+                                            // Link de agendamento do Instagram: o contato daqui é o do
+                                            // IGSID (sem telefone), então o token vai marcado com
+                                            // origin=instagram e a tela exige nome + WhatsApp antes de
+                                            // agendar, trocando este contato pelo de WhatsApp.
+                                            let bookingLink: string | null = null;
+                                            let bookingLinkError: string | null = null;
+                                            if (!contactInstance) {
+                                                bookingLinkError = 'Link de agendamento não gerado: esta conta de Instagram está sem "Número informado pela IA para contato". Defina a conexão de WhatsApp em Conexões > Instagram.';
+                                            } else {
+                                                bookingLink = buildBookingLink({
+                                                    user_id: userId,
+                                                    contact_id: contact.id,
+                                                    contact_name: contact.push_name || '',
+                                                    instance_id: contactInstance.id,
+                                                    origin: 'instagram',
+                                                });
+                                            }
+
                                             // Step 3: Build payload with bd_data
                                             const forwardedPayload = {
                                                 ...payload,
@@ -684,7 +735,22 @@ serve(async (req) => {
                                                     contact_id: contact.id,
                                                     conversation_id: conversation.id,
                                                     instance_id: whatsappInstance.id,
-                                                    ia_funnel_id: iaFunnelId
+                                                    ia_funnel_id: iaFunnelId,
+                                                    // Canal de origem: o n8n precisa saber que este
+                                                    // contato não tem telefone.
+                                                    channel: 'instagram',
+                                                    // Número que a IA oferece quando o paciente quiser
+                                                    // continuar no WhatsApp.
+                                                    whatsapp_contact: contactInstance
+                                                        ? {
+                                                            instance_id: contactInstance.id,
+                                                            instance_name: contactInstance.name || null,
+                                                            number: contactNumber || null,
+                                                            link: contactNumber ? `https://wa.me/${contactNumber}` : null,
+                                                        }
+                                                        : null,
+                                                    booking_link: bookingLink,
+                                                    ...(bookingLinkError ? { booking_link_error: bookingLinkError } : {}),
                                                 }
                                             };
 
