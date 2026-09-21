@@ -640,7 +640,21 @@ serve(async (req) => {
                                 // Step 1: Check if ia_on_insta is TRUE for this Instagram instance
                                 if (instagramInstance.ia_on_insta === true) {
 
-                                    // Step 2: Find WhatsApp instance with same user_id and ia_on_wpp = TRUE
+                                    // Step 2: destino do fluxo no n8n. O Instagram tem o workflow
+                                    // dele (instagram_instances.workflow_code, gravado pelo n8n);
+                                    // sem ele o envio cai no fluxo de WhatsApp da conta, como antes.
+                                    const { data: igRoute, error: igRouteError } = await supabase
+                                        .from('instagram_instances')
+                                        .select('workflow_code, contact_instance_id')
+                                        .eq('id', instagramInstance.id)
+                                        .maybeSingle();
+
+                                    if (igRouteError) {
+                                        console.warn('[INSTAGRAM WEBHOOK] Error reading Instagram workflow_code:', igRouteError.message);
+                                    }
+
+                                    // A instância de WhatsApp continua necessária: é o instance_id
+                                    // que vai no bd_data (conversa de Instagram não tem uma).
                                     // IMPORTANT: If multiple instances match, take the first one
                                     const { data: whatsappInstances } = await supabase
                                         .from('instances')
@@ -651,8 +665,11 @@ serve(async (req) => {
 
                                     if (whatsappInstances && whatsappInstances.length > 0) {
                                         const whatsappInstance = whatsappInstances[0];
-                                        // workflow_code (gravado pelo n8n) > workflow_id (legado) > webhook_url
-                                        const workflowCode = whatsappInstance.workflow_code || whatsappInstance.workflow_id;
+                                        // workflow_code do Instagram > workflow_code do WhatsApp >
+                                        // workflow_id (legado) > webhook_url
+                                        const workflowCode = igRoute?.workflow_code
+                                            || whatsappInstance.workflow_code
+                                            || whatsappInstance.workflow_id;
                                         const webhookUrl = workflowCode
                                             ? `https://webhooks.clinvia.com.br/webhook/${workflowCode}`
                                             : whatsappInstance.webhook_url;
@@ -682,29 +699,21 @@ serve(async (req) => {
                                             // Serve para duas coisas: o número que a IA divulga e a
                                             // instância que fica vinculada ao agendamento do link.
                                             let contactInstance: any = null;
-                                            try {
-                                                const { data: igCfg, error: igCfgError } = await supabase
-                                                    .from('instagram_instances')
-                                                    .select('contact_instance_id')
-                                                    .eq('id', instagramInstance.id)
-                                                    .maybeSingle();
-
-                                                if (igCfgError) {
-                                                    console.warn('[INSTAGRAM WEBHOOK] Error reading contact_instance_id:', igCfgError.message);
-                                                } else if (igCfg?.contact_instance_id) {
+                                            if (igRoute?.contact_instance_id) {
+                                                try {
                                                     const { data: ci, error: ciError } = await supabase
                                                         .from('instances')
                                                         .select('id, client_number, name')
-                                                        .eq('id', igCfg.contact_instance_id)
+                                                        .eq('id', igRoute.contact_instance_id)
                                                         .maybeSingle();
                                                     if (ciError) {
                                                         console.warn('[INSTAGRAM WEBHOOK] Error reading contact instance:', ciError.message);
                                                     } else {
                                                         contactInstance = ci;
                                                     }
+                                                } catch (cfgErr) {
+                                                    console.error('[INSTAGRAM WEBHOOK] Exception resolving contact instance:', cfgErr);
                                                 }
-                                            } catch (cfgErr) {
-                                                console.error('[INSTAGRAM WEBHOOK] Exception resolving contact instance:', cfgErr);
                                             }
 
                                             const contactNumber = String(contactInstance?.client_number || '').replace(/\D/g, '');
