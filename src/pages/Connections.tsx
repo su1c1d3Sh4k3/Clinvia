@@ -1084,8 +1084,8 @@ const Connections = () => {
                                                 <div className="flex flex-col sm:flex-row sm:items-center gap-2 md:gap-4">
                                                     {canEdit('connections') && (
                                                         <div className="flex items-center gap-2">
-                                                            <span className="text-xs md:text-sm text-muted-foreground whitespace-nowrap" title="Número que a IA informa ao cliente do Instagram para contato no WhatsApp. É também a conexão vinculada ao agendamento feito pelo link.">
-                                                                Contato WhatsApp:
+                                                            <span className="text-xs md:text-sm text-muted-foreground" title="Número que a IA informa ao cliente do Instagram para contato no WhatsApp. É também a conexão vinculada ao agendamento feito pelo link.">
+                                                                Número informado pela IA para contato:
                                                             </span>
                                                             <Select
                                                                 value={instance.contact_instance_id || "none"}

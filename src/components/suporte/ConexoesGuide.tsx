@@ -112,10 +112,10 @@ export function ConexoesGuide() {
                 <StepByStep steps={[
                     { title: "WhatsApp não oficial", description: "Nova conexão > escaneie o QR code com o celular (Aparelhos conectados). Se o card ficar 'desconectado', basta reconectar pelo mesmo botão." },
                     { title: "WhatsApp oficial (Meta)", description: "Botão de conexão Meta > login no Facebook da empresa > escolha/crie o número. O sistema registra e verifica tudo sozinho — e AVISA no card se algo ficou pendente." },
-                    { title: "Instagram", description: "Conecte a conta profissional via login Meta. As DMs caem no inbox como um canal próprio, com fila padrão e número de Contato WhatsApp configuráveis no card.", icon: Instagram },
+                    { title: "Instagram", description: "Conecte a conta profissional via login Meta. As DMs caem no inbox como um canal próprio, com fila padrão e número informado pela IA para contato configuráveis no card.", icon: Instagram },
                 ]} />
-                <Callout type="atencao" title="Instagram: escolha o “Contato WhatsApp” da conta">
-                    No card de cada conta do Instagram há o campo <strong>Contato WhatsApp</strong>, onde você aponta uma
+                <Callout type="atencao" title="Instagram: escolha o “Número informado pela IA para contato”">
+                    No card de cada conta do Instagram há o campo <strong>Número informado pela IA para contato</strong>, onde você aponta uma
                     das suas conexões de WhatsApp. Ele serve para duas coisas:
                     <ul className="mt-2 list-disc space-y-1 pl-5">
                         <li>A IA passa a ter o <strong>link direto do WhatsApp</strong> daquele número para mandar ao
@@ -252,7 +252,7 @@ export function ConexoesGuide() {
                         },
                         {
                             q: "A IA não manda link de agendamento nas conversas do Instagram.",
-                            a: "Falta preencher o campo Contato WhatsApp no card da conta do Instagram (aba Instagram desta página). O Instagram não informa o telefone do cliente, então o link precisa saber em qual conexão de WhatsApp o agendamento será registrado. Escolha o número e a IA volta a enviar o link — e também o link direto de WhatsApp para o cliente falar com a clínica.",
+                            a: "Falta preencher o campo \"Número informado pela IA para contato\" no card da conta do Instagram (aba Instagram desta página). O Instagram não informa o telefone do cliente, então o link precisa saber em qual conexão de WhatsApp o agendamento será registrado. Escolha o número e a IA volta a enviar o link — e também o link direto de WhatsApp para o cliente falar com a clínica.",
                         },
                         {
                             q: "Cliente do Instagram agendou pelo link. Em que contato isso foi parar?",
