@@ -259,6 +259,10 @@ export function ConexoesGuide() {
                             a: "No contato de WhatsApp, sempre. Antes de mostrar a agenda, o link pede nome completo e telefone (máscara 55 (DDD) 9 XXXX-XXXX). Com o telefone, o sistema procura o contato de WhatsApp pelos últimos 8 dígitos, cria se não existir, atualiza o nome com o que o cliente digitou e vincula o perfil do Instagram a esse contato. O contato do Instagram nunca recebe o agendamento.",
                         },
                         {
+                            q: "Minha conexão sumiu da lista 'Conexões' do menu lateral.",
+                            a: "Essa lista do rodapé do menu mostra apenas as conexões online, de WhatsApp e de Instagram. Se a sua não está lá, ela caiu: abra Conexões e reconecte (QR, no caso do número não oficial). O status completo, incluindo o que está desconectado, fica sempre nesta página.",
+                        },
+                        {
                             q: "Meu template está 'Pendente' há horas. É normal?",
                             a: "Sim, a aprovação leva de minutos a algumas horas (raramente mais). Campanhas com número oficial só disparam com template Aprovado — o sistema segura e avisa.",
                         },

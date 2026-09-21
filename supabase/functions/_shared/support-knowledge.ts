@@ -543,6 +543,7 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "para que serve o campo Numero informado pela IA para contato da conta do Instagram",
             "por que o link de agendamento do Instagram pede nome e telefone",
             "em qual contato fica o agendamento feito por um cliente que veio do Instagram",
+            "minha conexao sumiu da lista Conexoes do menu lateral",
         ],
         steps: [
             "Abra Conexoes no menu lateral (aba Conexoes).",
@@ -565,6 +566,7 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "A mensagem de Confirmacao 24h nao cita mais o nome do profissional (agora usa nome do cliente, horario, clinica e servico). Motivo: o sistema so guarda o nome da SALA do agendamento, e em sala avulsa (Sala 2, Consultorio 1) o paciente recebia 'procedimento de Botox com Sala 2'. No WhatsApp nao oficial a mudanca ja vale para todos. No oficial vale para os templates enviados a aprovacao a partir de agora: numeros ja conectados seguem com o template aprovado pela Meta e, para tirar o profissional, e preciso editar o template na aba Templates de Conexoes (o template volta para revisao da Meta e a confirmacao fica parada ate reaprovar).",
             "Sem o campo 'Numero informado pela IA para contato' preenchido no card da conta do Instagram, a IA NAO consegue gerar link de agendamento para conversas do Direct (o Instagram nao informa o telefone do cliente, entao o link nao sabe em qual conexao registrar).",
             "O link de agendamento aberto por um cliente do Instagram pede nome completo e telefone (mascara 55 (DDD) 9 XXXX-XXXX) antes de mostrar servicos ou agendamentos. Com o telefone, o sistema acha o contato de WhatsApp pelos ultimos 8 digitos, cria se nao existir, atualiza o nome com o que o cliente digitou e vincula o perfil do Instagram a ele. O agendamento fica SEMPRE no contato de WhatsApp, nunca no do Instagram.",
+            "A lista 'Conexoes' no rodape do menu lateral mostra somente as conexoes ONLINE (WhatsApp e Instagram). Conexao que sumiu de la esta desconectada — reconecte pela pagina Conexoes, que e onde aparece o status completo.",
         ],
     },
     {

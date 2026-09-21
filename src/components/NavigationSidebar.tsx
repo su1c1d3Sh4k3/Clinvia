@@ -190,8 +190,10 @@ export const NavigationSidebar = () => {
     queryKey: ["instagram-instances"],
     queryFn: async () => {
       const { data, error } = await supabase
+        // select("*"): a mesma queryKey é usada em Connections.tsx, e quem monta
+        // primeiro define a queryFn para as duas telas.
         .from("instagram_instances" as any)
-        .select("id, name, status")
+        .select("*")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data as any[];
@@ -380,11 +382,12 @@ export const NavigationSidebar = () => {
     });
   }, [location.pathname]);
 
-  // Combine all instances for status display
+  // Conexões do rodapé: só as que estão online (o Instagram guarda o nome em
+  // account_name, não em name).
   const allInstances = [
-    ...(whatsappInstances || []).map((i: any) => ({ ...i, type: 'whatsapp' })),
-    ...(instagramInstances || []).map((i: any) => ({ ...i, type: 'instagram' })),
-  ];
+    ...(whatsappInstances || []).map((i: any) => ({ ...i, type: 'whatsapp', label: i.name || i.instance_name })),
+    ...(instagramInstances || []).map((i: any) => ({ ...i, type: 'instagram', label: i.account_name })),
+  ].filter((i: any) => i.status === 'connected');
 
   return (
     <>
@@ -454,55 +457,34 @@ export const NavigationSidebar = () => {
               <span className="text-[10px] uppercase tracking-wider text-sidebar-foreground/40 dark:text-white/40 font-semibold">
                 Conexões
               </span>
-              {allInstances.map((instance: any) => {
-                const isConnected = instance.status === 'connected';
-                return (
-                  <div key={`${instance.type}-${instance.id}`} className="flex items-center gap-2 py-0.5">
-                    {instance.type === 'whatsapp' ? (
-                      <FaWhatsapp className={cn(
-                        "w-3 h-3 shrink-0",
-                        isConnected ? "text-green-500" : "text-red-400"
-                      )} />
-                    ) : (
-                      <FaInstagram className={cn(
-                        "w-3 h-3 shrink-0",
-                        isConnected ? "text-pink-500" : "text-red-400"
-                      )} />
-                    )}
-                    <span className="text-[10px] text-sidebar-foreground/70 dark:text-white/70 truncate flex-1">
-                      {instance.name}
-                    </span>
-                    <span className={cn(
-                      "w-1.5 h-1.5 rounded-full shrink-0",
-                      isConnected ? "bg-green-500" : "bg-red-400"
-                    )} />
-                  </div>
-                );
-              })}
+              {allInstances.map((instance: any) => (
+                <div key={`${instance.type}-${instance.id}`} className="flex items-center gap-2 py-0.5">
+                  {instance.type === 'whatsapp' ? (
+                    <FaWhatsapp className="w-3 h-3 shrink-0 text-green-500" />
+                  ) : (
+                    <FaInstagram className="w-3 h-3 shrink-0 text-pink-500" />
+                  )}
+                  <span className="text-[10px] text-sidebar-foreground/70 dark:text-white/70 truncate flex-1">
+                    {instance.label}
+                  </span>
+                  <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-green-500" />
+                </div>
+              ))}
             </div>
           )}
 
           {/* Collapsed instance indicators (desktop only) */}
           {allInstances.length > 0 && !isMobile && (
             <div className="group-hover/sidebar:hidden flex flex-col items-center py-2 gap-1">
-              {allInstances.map((instance: any) => {
-                const isConnected = instance.status === 'connected';
-                return (
-                  <div key={`collapsed-${instance.type}-${instance.id}`} className="relative">
-                    {instance.type === 'whatsapp' ? (
-                      <FaWhatsapp className={cn(
-                        "w-3 h-3",
-                        isConnected ? "text-green-500" : "text-red-400"
-                      )} />
-                    ) : (
-                      <FaInstagram className={cn(
-                        "w-3 h-3",
-                        isConnected ? "text-pink-500" : "text-red-400"
-                      )} />
-                    )}
-                  </div>
-                );
-              })}
+              {allInstances.map((instance: any) => (
+                <div key={`collapsed-${instance.type}-${instance.id}`} className="relative">
+                  {instance.type === 'whatsapp' ? (
+                    <FaWhatsapp className="w-3 h-3 text-green-500" />
+                  ) : (
+                    <FaInstagram className="w-3 h-3 text-pink-500" />
+                  )}
+                </div>
+              ))}
             </div>
           )}
 
