@@ -156,8 +156,18 @@ serve(async (req) => {
             }
         }
 
-        // Mensagem vinda da IA/API externa NÃO atende a conversa
-        const isApiMessage = wasSentByApi === true;
+        // Mensagem vinda da IA/API externa NÃO atende a conversa.
+        //
+        // Além da flag explícita, INFERIMOS pela ausência de atendente: o painel
+        // sempre manda o JWT do usuário logado, então sem team_member resolvido
+        // não existe humano do outro lado — é n8n/IA. Sem essa inferência, o
+        // follow-up enviado pelo n8n (que não manda wasSentByApi) promovia a
+        // conversa de 'pending' para 'open' e MATAVA os follow-ups seguintes,
+        // porque get_followup_pending_contacts só olha conversa 'pending'.
+        const isApiMessage = wasSentByApi === true || authenticatedAgentId === null;
+
+        console.log('[INSTAGRAM SEND] isApiMessage:', isApiMessage,
+            '(flag:', wasSentByApi === true, '| agente:', authenticatedAgentId ?? 'nenhum', ')');
 
         // =============================================
         // Validate required fields
