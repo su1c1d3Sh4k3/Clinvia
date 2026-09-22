@@ -322,10 +322,9 @@ export default function Settings() {
             setLoading(true);
             setFinancialAccessEnabled(newValue); // Optimistic update
 
-            const { error } = await supabase
-                .from("profiles")
-                .update({ financial_access: newValue, updated_at: new Date().toISOString() })
-                .eq("id", user?.id);
+            // A coluna profiles.financial_access nao e mais escrivel pelo token do
+            // navegador: o RPC confere no servidor se quem chamou e o dono da conta.
+            const { error } = await supabase.rpc("set_financial_access", { p_enabled: newValue });
 
             if (error) throw error;
 
