@@ -3,28 +3,51 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Key, Eye, EyeOff, CheckCircle, XCircle, Loader2, AlertTriangle } from "lucide-react";
+import { Key, Eye, CheckCircle, XCircle, Loader2, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 interface OpenAITokenManagerProps {
     profileId: string;
-    currentToken: string | null;
+    /** `sk-proj-…WXYZ`. A chave em claro NÃO chega ao front: vem só pelo botão Revelar. */
+    maskedToken: string | null;
+    hasToken: boolean;
     tokenInvalid: boolean;
+    /** platform = chave criada pela Clinbia | customer = chave do próprio cliente */
+    keySource?: string | null;
     onTokenUpdated: () => void;
 }
 
 const OpenAITokenManager = ({
     profileId,
-    currentToken,
+    maskedToken,
+    hasToken,
     tokenInvalid,
+    keySource,
     onTokenUpdated,
 }: OpenAITokenManagerProps) => {
-    const [token, setToken] = useState(currentToken || "");
-    const [showToken, setShowToken] = useState(false);
+    const [token, setToken] = useState("");
+    const [revealing, setRevealing] = useState(false);
     const [testing, setTesting] = useState(false);
     const [saving, setSaving] = useState(false);
     const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
+    const handleReveal = async () => {
+        setRevealing(true);
+        try {
+            const { data, error } = await supabase.functions.invoke("admin-openai-account", {
+                body: { profileId, action: "reveal" },
+            });
+            if (error) throw error;
+            if (!data?.token) throw new Error(data?.error || "Token indisponível");
+            setToken(data.token);
+            setTestResult(null);
+        } catch (err: any) {
+            toast.error("Erro ao revelar token: " + err.message);
+        } finally {
+            setRevealing(false);
+        }
+    };
 
     const handleTestToken = async () => {
         if (!token.trim()) {
@@ -70,6 +93,7 @@ const OpenAITokenManager = ({
             if (error) throw error;
             if (!data?.success) throw new Error(data?.error || "Erro desconhecido");
 
+            setToken("");
             toast.success("Token salvo com sucesso!");
             onTokenUpdated();
         } catch (err: any) {
@@ -127,28 +151,41 @@ const OpenAITokenManager = ({
                     </Alert>
                 )}
 
-                {/* Token Input */}
-                <div className="flex gap-2">
-                    <div className="relative flex-1">
-                        <Input
-                            type={showToken ? "text" : "password"}
-                            value={token}
-                            onChange={(e) => {
-                                setToken(e.target.value);
-                                setTestResult(null);
-                            }}
-                            placeholder="sk-..."
-                            className="bg-gray-800 border-gray-700 text-white pr-10"
-                        />
-                        <button
-                            type="button"
-                            onClick={() => setShowToken(!showToken)}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                {/* Chave atual (mascarada) */}
+                {hasToken && (
+                    <div className="flex items-center gap-2 text-sm">
+                        <span className="font-mono text-gray-300">{maskedToken}</span>
+                        <span className="text-xs text-gray-500">
+                            {keySource === "platform"
+                                ? "(criada pela plataforma)"
+                                : keySource === "customer"
+                                    ? "(chave do próprio cliente)"
+                                    : ""}
+                        </span>
+                        <Button
+                            onClick={handleReveal}
+                            disabled={revealing}
+                            size="sm"
+                            variant="outline"
+                            className="border-gray-600 text-gray-300 hover:bg-gray-700"
                         >
-                            {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
+                            {revealing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Eye className="w-3.5 h-3.5" />}
+                            <span className="ml-1.5">Revelar</span>
+                        </Button>
                     </div>
-                </div>
+                )}
+
+                {/* Token Input */}
+                <Input
+                    type="text"
+                    value={token}
+                    onChange={(e) => {
+                        setToken(e.target.value);
+                        setTestResult(null);
+                    }}
+                    placeholder={hasToken ? "Cole uma nova chave para substituir" : "sk-..."}
+                    className="bg-gray-800 border-gray-700 text-white font-mono"
+                />
 
                 {/* Test Result */}
                 {testResult && (
@@ -196,7 +233,7 @@ const OpenAITokenManager = ({
                             "Salvar"
                         )}
                     </Button>
-                    {currentToken && (
+                    {hasToken && (
                         <Button
                             onClick={handleClearToken}
                             disabled={saving}

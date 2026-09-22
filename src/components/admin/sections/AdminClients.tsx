@@ -27,8 +27,6 @@ interface Profile {
     email: string | null;
     role: string | null;
     created_at: string | null;
-    openai_token: string | null;
-    openai_token_invalid: boolean | null;
     avatar_url: string | null;
     deactivated_at: string | null;
 }
@@ -104,7 +102,12 @@ export default function AdminClients({ canEdit, isSuperAdmin }: { canEdit: boole
     const [loadingPending, setLoadingPending] = useState(false);
     const [loadingInactive, setLoadingInactive] = useState(false);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
-    const [expandedProfileData, setExpandedProfileData] = useState<{ openai_token: string | null; openai_token_invalid: boolean } | null>(null);
+    const [expandedProfileData, setExpandedProfileData] = useState<{
+        has_token: boolean;
+        masked_token: string | null;
+        token_invalid: boolean;
+        key_source: string | null;
+    } | null>(null);
     const [profileToDelete, setProfileToDelete] = useState<Profile | null>(null);
     const [deletingAccount, setDeletingAccount] = useState(false);
     const [profileToDeactivate, setProfileToDeactivate] = useState<Profile | null>(null);
@@ -266,6 +269,27 @@ export default function AdminClients({ canEdit, isSuperAdmin }: { canEdit: boole
         }
     };
 
+    /**
+     * A chave OpenAI da conta NÃO é mais lida de `profiles` pelo front: a coluna
+     * saiu do alcance do role `authenticated` (a policy de linha é USING (true) e
+     * vazava a chave de todo tenant). Vem mascarada pela edge function.
+     */
+    const loadOpenAIAccount = async (profileId: string) => {
+        const { data, error } = await supabase.functions.invoke("admin-openai-account", {
+            body: { profileId, action: "get" },
+        });
+        if (error || !data?.success) {
+            setExpandedProfileData(null);
+            return;
+        }
+        setExpandedProfileData({
+            has_token: data.has_token === true,
+            masked_token: data.masked_token ?? null,
+            token_invalid: data.token_invalid === true,
+            key_source: data.key_source ?? null,
+        });
+    };
+
     const handleExpand = async (profileId: string) => {
         if (expandedId === profileId) {
             setExpandedId(null);
@@ -278,19 +302,7 @@ export default function AdminClients({ canEdit, isSuperAdmin }: { canEdit: boole
         setExpandedProfileData(null);
 
         try {
-            // Fetch profile token data
-            const { data: profileData } = await supabase
-                .from("profiles")
-                .select("openai_token, openai_token_invalid")
-                .eq("id", profileId)
-                .single();
-
-            if (profileData) {
-                setExpandedProfileData({
-                    openai_token: profileData.openai_token,
-                    openai_token_invalid: profileData.openai_token_invalid || false
-                });
-            }
+            await loadOpenAIAccount(profileId);
 
             // Fetch team members with token data
             const { data: tmData } = await (supabase.rpc as any)("admin_get_team_members_with_tokens", {
@@ -622,9 +634,11 @@ export default function AdminClients({ canEdit, isSuperAdmin }: { canEdit: boole
                                                 {canEdit && (
                                                     <OpenAITokenManager
                                                         profileId={profile.id}
-                                                        currentToken={expandedProfileData?.openai_token || null}
-                                                        tokenInvalid={expandedProfileData?.openai_token_invalid || false}
-                                                        onTokenUpdated={() => handleExpand(profile.id)}
+                                                        maskedToken={expandedProfileData?.masked_token || null}
+                                                        hasToken={expandedProfileData?.has_token || false}
+                                                        tokenInvalid={expandedProfileData?.token_invalid || false}
+                                                        keySource={expandedProfileData?.key_source || null}
+                                                        onTokenUpdated={() => loadOpenAIAccount(profile.id)}
                                                     />
                                                 )}
 

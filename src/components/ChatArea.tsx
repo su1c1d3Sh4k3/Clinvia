@@ -206,18 +206,6 @@ export const ChatArea = ({
       });
   }, [conversationId, currentTeamMember]);
 
-  // Profile & Team Data
-  const { data: profile } = useQuery({
-    queryKey: ["profile", user?.id],
-    queryFn: async () => {
-      if (!user?.id) return null;
-      const { data, error } = await supabase.from("profiles").select("*").eq("id", user?.id).single();
-      if (error) return null;
-      return data;
-    },
-    enabled: !!user?.id,
-  });
-
   // Quick Messages Fetch
   useEffect(() => {
     const fetchQuickMessages = async () => {
