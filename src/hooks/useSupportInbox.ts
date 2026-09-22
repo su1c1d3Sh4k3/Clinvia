@@ -33,10 +33,10 @@ export function useSupportTickets() {
             const ticketIds = rows.map((t) => t.id);
 
             const [{ data: profiles }, { data: messages }] = await Promise.all([
-                supabase
-                    .from("profiles")
-                    .select("id, company_name, full_name, email")
-                    .in("id", userIds),
+                // Via RPC (SECURITY DEFINER, guarda is_admin_staff() no corpo) em vez
+                // de ler public.profiles direto: o painel precisa do dono de OUTROS
+                // tenants, e a policy aberta que permitia isso vai ser fechada.
+                supabase.rpc("admin_get_support_profiles", { p_user_ids: userIds }),
                 supabase
                     .from("support_messages")
                     .select("ticket_id, body, sender_type, read_at, created_at")

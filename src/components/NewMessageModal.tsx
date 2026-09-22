@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { INSTANCE_COLUMNS_WITH_APIKEY } from "@/lib/dbColumns";
 import { useToast } from "@/hooks/use-toast";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { checkActiveConversation } from "@/hooks/useActiveConversation";
@@ -141,7 +142,7 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
         queryFn: async () => {
             const { data, error } = await supabase
                 .from("instances")
-                .select("*")
+                .select(INSTANCE_COLUMNS_WITH_APIKEY)
                 .eq("status", "connected");
 
             if (error) throw error;

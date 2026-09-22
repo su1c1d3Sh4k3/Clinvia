@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { PROFESSIONAL_GCAL_COLUMNS } from "@/lib/dbColumns";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Upload, X, CalendarDays, CheckCircle2, Unlink, RefreshCw } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
@@ -892,7 +893,7 @@ function GoogleCalendarSection({ professionalId }: { professionalId: string }) {
         queryFn: async () => {
             const { data } = await supabase
                 .from("professional_google_calendars")
-                .select("*")
+                .select(PROFESSIONAL_GCAL_COLUMNS)
                 .eq("professional_id", professionalId)
                 .eq("is_active", true)
                 .maybeSingle();

@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { INSTANCE_COLUMNS_WITH_APIKEY } from "@/lib/dbColumns";
 import { useToast } from "@/hooks/use-toast";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { checkActiveConversation } from "@/hooks/useActiveConversation";
@@ -35,7 +36,10 @@ export const ForwardMessageModal = ({ open, onOpenChange, messageToForward }: Fo
         queryFn: async () => {
             const { data, error } = await supabase
                 .from("instances")
-                .select("*")
+                // Este modal não usa `apikey`, mas a queryKey "connected-instances"
+                // é compartilhada com NewMessageModal (que usa) — quem monta
+                // primeiro define a queryFn das duas telas.
+                .select(INSTANCE_COLUMNS_WITH_APIKEY)
                 .eq("status", "connected");
 
             if (error) throw error;

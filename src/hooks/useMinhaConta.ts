@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { INSTANCE_COLUMNS, INSTAGRAM_INSTANCE_COLUMNS } from "@/lib/dbColumns";
 import { useOwnerId } from "@/hooks/useOwnerId";
 
 // Hooks da aba "Minha Conta" (Dashboard, admin-only): conexões, status da IA e
@@ -26,8 +27,8 @@ export function useMyConnections() {
         queryKey: ["minha-conta-connections"],
         queryFn: async (): Promise<MyConnection[]> => {
             const [wpp, ig] = await Promise.all([
-                supabase.from("instances").select("*").order("created_at", { ascending: false }),
-                supabase.from("instagram_instances" as any).select("*").order("created_at", { ascending: false }),
+                supabase.from("instances").select(INSTANCE_COLUMNS).order("created_at", { ascending: false }),
+                supabase.from("instagram_instances" as any).select(INSTAGRAM_INSTANCE_COLUMNS).order("created_at", { ascending: false }),
             ]);
             if (wpp.error) throw wpp.error;
             if (ig.error) throw ig.error;
@@ -71,7 +72,7 @@ export function useMyIAStatus() {
             const [cfgRes, profRes, instRes] = await Promise.all([
                 supabase.from("ia_config" as any).select("agent_name, name, ia_on").eq("user_id", ownerId!).maybeSingle(),
                 supabase.from("profiles" as any).select("company_name").eq("id", ownerId!).maybeSingle(),
-                supabase.from("instances").select("*"),
+                supabase.from("instances").select(INSTANCE_COLUMNS),
             ]);
             if (cfgRes.error) throw cfgRes.error;
             if (profRes.error) throw profRes.error;

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { INSTANCE_COLUMNS } from "@/lib/dbColumns";
 import { useOwnerId } from "@/hooks/useOwnerId";
 
 const SUPABASE_URL = "https://swfshqvvbohnahdyndch.supabase.co";
@@ -309,7 +310,7 @@ export function useCampaignInstances() {
         queryFn: async () => {
             const { data, error } = await supabase
                 .from("instances")
-                .select("*")
+                .select(INSTANCE_COLUMNS)
                 .order("created_at", { ascending: false });
             if (error) throw error;
             return ((data || []) as any[])

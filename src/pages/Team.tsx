@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { TEAM_MEMBER_COLUMNS } from "@/lib/dbColumns";
 import { useUserRole } from "@/hooks/useUserRole";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useOwnerId } from "@/hooks/useOwnerId";
@@ -66,7 +67,7 @@ export default function Team() {
         queryFn: async () => {
             const { data, error } = await supabase
                 .from("team_members")
-                .select("*")
+                .select(TEAM_MEMBER_COLUMNS)
                 .eq("user_id", ownerId)
                 .order("name");
 

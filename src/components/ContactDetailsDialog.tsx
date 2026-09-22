@@ -51,8 +51,11 @@ export const ContactDetailsDialog = ({ open, onOpenChange, contact, conversation
         queryKey: ['agent-name', conversation?.assigned_agent_id],
         queryFn: async () => {
             if (!conversation?.assigned_agent_id) return null;
-            const { data } = await supabase.from('profiles').select('name').eq('id', conversation.assigned_agent_id).single();
-            return data?.name;
+            // assigned_agent_id é FK de team_members.id (6698/6698 em produção) —
+            // a consulta antiga batia em public.profiles, que nem tem coluna `name`,
+            // então este selo nunca aparecia.
+            const { data } = await supabase.from('team_members').select('name').eq('id', conversation.assigned_agent_id).maybeSingle();
+            return data?.name ?? null;
         },
         enabled: !!conversation?.assigned_agent_id
     });

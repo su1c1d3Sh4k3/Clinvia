@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { INSTANCE_COLUMNS_WITH_APIKEY } from "@/lib/dbColumns";
 import { evolutionApi } from "@/lib/evolution";
 
 /**
@@ -90,7 +91,7 @@ export const useFetchProfilePictures = (conversationId?: string) => {
                     // URL temporária falhou ou não tinha foto → buscar da Evolution API
                     const { data: instance } = await supabase
                         .from("instances")
-                        .select("*")
+                        .select(INSTANCE_COLUMNS_WITH_APIKEY)
                         .eq("status", "connected")
                         .limit(1)
                         .single();
@@ -121,7 +122,7 @@ export const useFetchProfilePictures = (conversationId?: string) => {
                 // 3. Buscar foto da instância se não existir
                 const { data: instance } = await supabase
                     .from("instances")
-                    .select("*")
+                    .select(INSTANCE_COLUMNS_WITH_APIKEY)
                     .eq("status", "connected")
                     .limit(1)
                     .single();

@@ -11,6 +11,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "@/components/ThemeProvider";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { INSTANCE_COLUMNS, INSTAGRAM_INSTANCE_COLUMNS } from "@/lib/dbColumns";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useCurrentTeamMember } from "@/hooks/useStaff";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -179,7 +180,7 @@ export const NavigationSidebar = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("instances")
-        .select("*")
+        .select(INSTANCE_COLUMNS)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
@@ -190,10 +191,10 @@ export const NavigationSidebar = () => {
     queryKey: ["instagram-instances"],
     queryFn: async () => {
       const { data, error } = await supabase
-        // select("*"): a mesma queryKey é usada em Connections.tsx, e quem monta
-        // primeiro define a queryFn para as duas telas.
+        // a mesma queryKey é usada em Connections.tsx, e quem monta primeiro
+        // define a queryFn para as duas telas — manter a MESMA lista de colunas.
         .from("instagram_instances" as any)
-        .select("*")
+        .select(INSTAGRAM_INSTANCE_COLUMNS)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data as any[];

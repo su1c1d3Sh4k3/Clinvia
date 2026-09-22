@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import { INSTANCE_COLUMNS } from "@/lib/dbColumns";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { isMetaInstance } from "@/hooks/useCampaigns";
 import { ConversationChatModal } from "@/components/queues/ConversationChatModal";
@@ -254,7 +255,7 @@ export function MensagensAutomaticasSection() {
     const { data: hasMeta } = useQuery({
         queryKey: ["automation-msgs-has-meta"],
         queryFn: async () => {
-            const { data, error } = await supabase.from("instances").select("*");
+            const { data, error } = await supabase.from("instances").select(INSTANCE_COLUMNS);
             if (error) throw error;
             return ((data || []) as any[]).some((i) => i.status === "connected" && isMetaInstance(i));
         },

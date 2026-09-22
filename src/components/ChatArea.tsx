@@ -11,6 +11,7 @@ import { useCurrentTeamMember } from "@/hooks/useStaff";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { INSTANCE_COLUMNS_WITH_APIKEY, INSTAGRAM_INSTANCE_COLUMNS } from "@/lib/dbColumns";
 import { toast } from "sonner";
 import { uzapi } from "@/lib/uzapi";
 import { MessageList } from "@/components/chat/MessageList";
@@ -291,7 +292,7 @@ export const ChatArea = ({
     queryKey: ["instance", (conversation as any)?.instance_id],
     queryFn: async () => {
       if (!(conversation as any)?.instance_id) return null;
-      const { data, error } = await supabase.from("instances").select("*").eq("id", (conversation as any).instance_id).single();
+      const { data, error } = await supabase.from("instances").select(INSTANCE_COLUMNS_WITH_APIKEY).eq("id", (conversation as any).instance_id).single();
       if (error) return null;
       return data;
     },
@@ -306,7 +307,7 @@ export const ChatArea = ({
       if (conv?.instagram_instance_id) {
         const { data } = await supabase
           .from("instagram_instances" as any)
-          .select("*")
+          .select(INSTAGRAM_INSTANCE_COLUMNS)
           .eq("id", conv.instagram_instance_id)
           .single();
         return data || null;
@@ -314,7 +315,7 @@ export const ChatArea = ({
       // Se não houver vínculo, tenta buscar qualquer instância Instagram conectada do usuário
       const { data } = await supabase
         .from("instagram_instances" as any)
-        .select("*")
+        .select(INSTAGRAM_INSTANCE_COLUMNS)
         .limit(1)
         .maybeSingle();
       return data || null;

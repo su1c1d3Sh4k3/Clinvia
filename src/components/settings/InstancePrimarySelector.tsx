@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { INSTANCE_COLUMNS } from "@/lib/dbColumns";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -65,7 +66,7 @@ export function InstancePrimarySelector({
         queryFn: async (): Promise<AutomationInstance[]> => {
             const { data, error } = await supabase
                 .from("instances")
-                .select("*")
+                .select(INSTANCE_COLUMNS)
                 .eq("status", "connected")
                 .order("created_at", { ascending: true });
             if (error) throw error;
