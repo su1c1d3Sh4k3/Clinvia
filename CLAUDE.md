@@ -68,6 +68,22 @@ Python integration tests live in `tests/` (test_*.py, grouped by domain: appoint
 - Management API calls need `-H "Authorization: Bearer sbp_..."` (token = `SUPABASE_ACCESS_TOKEN` in `.env`); log timestamps need `Z` suffix
 - Real credentials live in `.env` at repo root — check before asking the user
 
+## Security rules (mandatory for all new code)
+
+Outcome of the September/2026 RLS correction plan. Full state — what is applied, what is ready but
+unapplied, what was never started, and the agreed resume order: **`docs/security/ESTADO_ATUAL.md`**.
+Harness and monitoring scripts: `supabase/tests/security/`.
+
+- **No `using (true)` / `with check (true)` policy** for `anon` or `authenticated`. Every tenant
+  table anchors on `public.get_owner_id()`.
+- **Never put a secret in a column the front can read.** Keys/tokens leave the DB only through an
+  edge function, masked when displayed.
+- **Every SECURITY DEFINER RPC needs a tenant check in its body and a fixed `search_path`.**
+- **Super admin is `public.admin_users`** (`is_super_admin` + `is_active`), never `profiles.role`.
+- Column-level `revoke` is inert while the table-level `grant` exists: `revoke <priv> on <table> from <role>` **then** `grant <priv> (<allowed cols>) on <table> to <role>`.
+- RLS never errors on UPDATE/DELETE (no matching policy = 0 rows, success). Only INSERT/`with check` raises `42501`. To hard-block a write, use a privilege, not a policy.
+- Every security migration ships with a `_rollback.sql` next to it and a before/after access test.
+
 ## Definition of done
 
 Every task must end with the full deploy ritual: commit + push + apply migrations + deploy affected edge functions. Work is not finished until it's in production.

@@ -1,0 +1,1 @@
+select 'OPP cols | ' || string_agg(column_name || case when is_nullable='NO' then '*' else '' end, ',' order by ordinal_position) as info from information_schema.columns where table_schema='public' and table_name='opportunities';
