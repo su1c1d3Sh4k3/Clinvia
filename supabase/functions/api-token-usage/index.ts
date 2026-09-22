@@ -15,8 +15,8 @@
 //      NUNCA informa os tokens cacheados, eles são estimados por cache_ratio
 //      (llm_cache_calibration, medido na Usage API; fallback default_cache_ratio).
 //   3. Aplica a margem de revenda: cost_usd = provider_cost_usd * (1 + markup).
-//      markup = profiles.markup ?? llm_model_prices.markup (0 se a conta usa
-//      chave própria do provedor: registra consumo, não cobra margem).
+//      markup = profiles.markup ?? llm_platform_settings.default_markup (0 se a
+//      conta usa chave própria do provedor: registra consumo, não cobra margem).
 //   4. Converte para BRL com cotação real (AwesomeAPI USD-BRL; fallback última
 //      cotação usada no log; fallback final 5.50)
 //   5. Insere token_usage_log (source 'n8n', function_name 'n8n') e soma nos
@@ -160,10 +160,15 @@ Deno.serve(async (req) => {
             });
         }
 
+        // Avisos de falhas NÃO fatais (margem padrão, acumulador, consumo do mês):
+        // o consumo já foi registrado, então a resposta segue 200 — mas o motivo
+        // aparece aqui.
+        const warnings: string[] = [];
+
         // Tabela de preços (uma leitura por chamada)
         const { data: priceRows, error: priceErr } = await supabase
             .from('llm_model_prices')
-            .select('model, input_usd_per_1m, output_usd_per_1m, cached_input_usd_per_1m, markup, default_cache_ratio');
+            .select('model, input_usd_per_1m, output_usd_per_1m, cached_input_usd_per_1m, default_cache_ratio');
         if (priceErr) {
             return dbErrorResponse(corsHeaders, 'llm_model_prices_read_failed',
                 'carregar a tabela de preços llm_model_prices, necessária para calcular o custo dos tokens', priceErr);
@@ -171,7 +176,6 @@ Deno.serve(async (req) => {
         const prices = new Map<string, ModelPrice>();
         for (const p of priceRows ?? []) {
             const cached = Number(p.cached_input_usd_per_1m);
-            const markup = Number(p.markup);
             const ratio = Number(p.default_cache_ratio);
             const key = normalizeModelName(p.model);
             prices.set(key, {
@@ -182,9 +186,27 @@ Deno.serve(async (req) => {
                 // cacheado é cobrado como input normal (não inventa desconto que o
                 // provedor pode não dar).
                 cachedInput: Number.isFinite(cached) && cached >= 0 ? cached : null,
-                markup: Number.isFinite(markup) ? markup : DEFAULT_MARKUP,
                 defaultCacheRatio: Number.isFinite(ratio) ? ratio : DEFAULT_CACHE_RATIO,
             });
+        }
+
+        // Margem padrão da plataforma: usada quando a conta não tem markup próprio.
+        // Fonte ÚNICA desde 22/09/2026 (`llm_model_prices.markup` foi apagado).
+        let platformMarkup: number | null = null;
+        const { data: platformRow, error: platformErr } = await supabase
+            .from('llm_platform_settings')
+            .select('default_markup')
+            .maybeSingle();
+        if (platformErr) {
+            const w = describeDbError(
+                `ler a margem padrão da plataforma (llm_platform_settings.default_markup) — foi aplicado o piso de ${DEFAULT_MARKUP}`,
+                platformErr,
+            );
+            console.warn('[api-token-usage]', w);
+            warnings.push(w);
+        } else {
+            const parsed = Number(platformRow?.default_markup);
+            platformMarkup = Number.isFinite(parsed) ? parsed : null;
         }
 
         // Cache ratio real por modelo (edge fn calibrate-cache-ratio, diária).
@@ -205,9 +227,6 @@ Deno.serve(async (req) => {
         const { rate, source: rateSource } = await getUsdBrlRate(supabase);
 
         const results: any[] = [];
-        // Avisos de falhas NÃO fatais (acumulador, consumo do mês): o consumo já
-        // foi registrado, então a resposta segue 200 — mas o motivo aparece aqui.
-        const warnings: string[] = [];
         const ownerCache = new Map<string, string | null>();
         const billingCache = new Map<string, { markup: number | null; billable: boolean }>();
         let totalTokens = 0, totalUsd = 0, totalBrl = 0, totalProviderUsd = 0;
@@ -321,7 +340,7 @@ Deno.serve(async (req) => {
                     .maybeSingle();
                 if (profErr) {
                     const profWarning = describeDbError(
-                        `ler a margem da conta ${ownerId} (profiles.markup) — foi aplicada a margem padrão do modelo`,
+                        `ler a margem da conta ${ownerId} (profiles.markup) — foi aplicada a margem padrão da plataforma`,
                         profErr,
                     );
                     console.warn('[api-token-usage]', profWarning);
@@ -366,6 +385,7 @@ Deno.serve(async (req) => {
                 price,
                 calibratedCacheRatio: calibration.get(priceFallback ? FALLBACK_MODEL : modelKey) ?? null,
                 markupOverride: billing.markup,
+                platformMarkup,
                 billable: billing.billable,
                 calls,
             });

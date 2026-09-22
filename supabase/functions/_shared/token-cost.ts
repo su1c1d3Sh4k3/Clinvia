@@ -16,7 +16,16 @@
 /** Abaixo disso o provedor não cacheia nada (regra da OpenAI). */
 export const MIN_CACHEABLE_PROMPT_TOKENS = 1024;
 
-export const DEFAULT_MARKUP = 0.25;
+/**
+ * Piso de margem quando nem a conta nem a plataforma informam um valor.
+ * Precedência da margem (decisão do user, 22/09/2026):
+ *   profiles.markup (por conta, quando preenchido)
+ *   → llm_platform_settings.default_markup (hoje 0.30)
+ *   → DEFAULT_MARKUP
+ * `llm_model_prices.markup` foi APAGADO: margem por modelo era uma segunda
+ * fonte da mesma regra e as duas divergiam em silêncio.
+ */
+export const DEFAULT_MARKUP = 0.30;
 export const DEFAULT_CACHE_RATIO = 0.6;
 
 /**
@@ -35,8 +44,6 @@ export interface ModelPrice {
     output: number;
     /** USD por 1M de tokens de input cacheado. null = sem preço cadastrado. */
     cachedInput: number | null;
-    /** Markup global do modelo. */
-    markup: number;
     /** Cache ratio usado quando não há calibração. */
     defaultCacheRatio: number;
 }
@@ -49,8 +56,10 @@ export interface TokenCostInput {
     price: ModelPrice;
     /** Cache ratio medido na Usage API para este modelo. null = usa o default do preço. */
     calibratedCacheRatio?: number | null;
-    /** Markup da conta (profiles.markup). null = usa o do modelo. */
+    /** Markup da conta (profiles.markup). null = usa o da plataforma. */
     markupOverride?: number | null;
+    /** Markup padrão da plataforma (llm_platform_settings.default_markup). null = usa DEFAULT_MARKUP. */
+    platformMarkup?: number | null;
     /** false quando a conta usa chave própria do provedor: registra consumo, não cobra margem. */
     billable?: boolean;
     /** Quantas chamadas ao provedor esta linha agrega. */
@@ -161,9 +170,10 @@ export function computeTokenCost(input: TokenCostInput): TokenCostResult {
     const override = typeof input.markupOverride === "number" && Number.isFinite(input.markupOverride)
         ? input.markupOverride
         : null;
-    const markupApplied = billable
-        ? (override ?? (Number.isFinite(price.markup) ? price.markup : DEFAULT_MARKUP))
-        : 0;
+    const platform = typeof input.platformMarkup === "number" && Number.isFinite(input.platformMarkup)
+        ? input.platformMarkup
+        : null;
+    const markupApplied = billable ? (override ?? platform ?? DEFAULT_MARKUP) : 0;
 
     const costUsd = providerCostUsd * (1 + markupApplied);
 

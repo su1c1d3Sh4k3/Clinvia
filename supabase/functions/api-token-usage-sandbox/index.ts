@@ -157,7 +157,7 @@ Deno.serve(async (req) => {
 
         const { data: priceRows, error: priceErr } = await supabase
             .from("llm_model_prices")
-            .select("model, input_usd_per_1m, output_usd_per_1m, cached_input_usd_per_1m, markup, default_cache_ratio");
+            .select("model, input_usd_per_1m, output_usd_per_1m, cached_input_usd_per_1m, default_cache_ratio");
         if (priceErr) {
             return dbErrorResponse(corsHeaders, "llm_model_prices_read_failed",
                 "carregar a tabela de preços llm_model_prices, necessária para calcular o custo dos tokens", priceErr);
@@ -165,7 +165,6 @@ Deno.serve(async (req) => {
         const prices = new Map<string, ModelPrice>();
         for (const p of priceRows ?? []) {
             const cached = Number(p.cached_input_usd_per_1m);
-            const markup = Number(p.markup);
             const ratio = Number(p.default_cache_ratio);
             const key = normalizeModelName(p.model);
             prices.set(key, {
@@ -173,10 +172,24 @@ Deno.serve(async (req) => {
                 input: Number(p.input_usd_per_1m),
                 output: Number(p.output_usd_per_1m),
                 cachedInput: Number.isFinite(cached) && cached >= 0 ? cached : null,
-                markup: Number.isFinite(markup) ? markup : DEFAULT_MARKUP,
                 defaultCacheRatio: Number.isFinite(ratio) ? ratio : DEFAULT_CACHE_RATIO,
             });
         }
+
+        // Margem padrão da plataforma (fonte única da margem junto com
+        // profiles.markup): o teste tem que precificar igual à produção.
+        const { data: platformRow, error: platformErr } = await supabase
+            .from("llm_platform_settings")
+            .select("default_markup")
+            .maybeSingle();
+        if (platformErr) {
+            console.warn("[api-token-usage-sandbox]", describeDbError(
+                `ler a margem padrão da plataforma (llm_platform_settings.default_markup) — foi aplicado o piso de ${DEFAULT_MARKUP}`,
+                platformErr,
+            ));
+        }
+        const parsedPlatformMarkup = Number(platformRow?.default_markup);
+        const platformMarkup = Number.isFinite(parsedPlatformMarkup) ? parsedPlatformMarkup : null;
 
         // Mesma estimativa de cache da produção: o teste tem que mostrar o mesmo
         // custo que a conversa real mostraria.
@@ -248,6 +261,7 @@ Deno.serve(async (req) => {
                 price,
                 calibratedCacheRatio: calibration.get(priceFallback ? FALLBACK_MODEL : modelKey) ?? null,
                 markupOverride,
+                platformMarkup,
                 billable,
             });
             const costUsd = cost.costUsd;

@@ -12,7 +12,6 @@ const MINI: ModelPrice = {
     input: 0.75,
     output: 4.5,
     cachedInput: 0.075,
-    markup: 0.25,
     defaultCacheRatio: 0.6,
 };
 
@@ -21,7 +20,6 @@ const SEM_CACHE: ModelPrice = {
     input: 2,
     output: 8,
     cachedInput: null,
-    markup: 0.25,
     defaultCacheRatio: 0.6,
 };
 
@@ -45,8 +43,9 @@ Deno.test("cache reportado pelo provedor tem prioridade sobre a estimativa", () 
     assertEquals(r.cachedTokensSource, "reported");
     assertEquals(r.tokensEstimated, false);
     assertAlmostEquals(r.providerCostUsd, 0.01275, 1e-12);
-    assertAlmostEquals(r.costUsd, 0.0159375, 1e-12);
-    assertEquals(r.markupApplied, 0.25);
+    // sem markup da conta e sem o da plataforma vale o piso DEFAULT_MARKUP (0,30)
+    assertAlmostEquals(r.costUsd, 0.016575, 1e-12);
+    assertEquals(r.markupApplied, 0.3);
 });
 
 Deno.test("sem cache reportado: estima por default_cache_ratio 0,60", () => {
@@ -57,7 +56,7 @@ Deno.test("sem cache reportado: estima por default_cache_ratio 0,60", () => {
     assertEquals(r.tokensEstimated, true);
     assertAlmostEquals(r.cacheRatioApplied, 0.6, 1e-12);
     assertAlmostEquals(r.providerCostUsd, 0.0195, 1e-12);
-    assertAlmostEquals(r.costUsd, 0.024375, 1e-12);
+    assertAlmostEquals(r.costUsd, 0.02535, 1e-12);
 });
 
 Deno.test("calibração medida vence o default do modelo", () => {
@@ -71,7 +70,7 @@ Deno.test("calibração medida vence o default do modelo", () => {
     assertEquals(r.cachedTokens, 40_000);
     assertEquals(r.cachedTokensSource, "estimated");
     assertAlmostEquals(r.providerCostUsd, 0.01275, 1e-12);
-    assertAlmostEquals(r.costUsd, 0.0159375, 1e-12);
+    assertAlmostEquals(r.costUsd, 0.016575, 1e-12);
 });
 
 Deno.test("prompt abaixo de 1024 tokens não cacheia", () => {
@@ -81,7 +80,7 @@ Deno.test("prompt abaixo de 1024 tokens não cacheia", () => {
     assertEquals(r.cachedTokensSource, "none");
     assertEquals(resolveCacheRatio(1000, MINI, 0.9), 0);
     assertAlmostEquals(r.providerCostUsd, 0.0012, 1e-12);
-    assertAlmostEquals(r.costUsd, 0.0015, 1e-12);
+    assertAlmostEquals(r.costUsd, 0.00156, 1e-12);
 });
 
 Deno.test("modelo sem preço de cache cadastrado: cache_ratio forçado a 0", () => {
@@ -90,7 +89,7 @@ Deno.test("modelo sem preço de cache cadastrado: cache_ratio forçado a 0", () 
     assertEquals(resolveCacheRatio(10_000, SEM_CACHE, 0.8), 0);
     assertEquals(r.cachedTokens, 0);
     assertAlmostEquals(r.providerCostUsd, 0.0216, 1e-12);
-    assertAlmostEquals(r.costUsd, 0.027, 1e-12);
+    assertAlmostEquals(r.costUsd, 0.02808, 1e-12);
 });
 
 Deno.test("conta com chave própria: markup 0, custo = custo do provedor", () => {
@@ -100,21 +99,53 @@ Deno.test("conta com chave própria: markup 0, custo = custo do provedor", () =>
         price: MINI,
         billable: false,
         markupOverride: 0.4,
+        platformMarkup: 0.3,
     });
     assertEquals(r.markupApplied, 0);
     assertAlmostEquals(r.providerCostUsd, 0.0195, 1e-12);
     assertAlmostEquals(r.costUsd, 0.0195, 1e-12);
 });
 
-Deno.test("markup do tenant sobrescreve o global do modelo", () => {
-    const r = computeTokenCost({
+Deno.test("precedência da margem: conta vence a plataforma, que vence o piso", () => {
+    const daConta = computeTokenCost({
         promptTokens: 50_000,
         completionTokens: 500,
         price: MINI,
-        markupOverride: 0.3,
+        markupOverride: 0.4,
+        platformMarkup: 0.3,
     });
-    assertEquals(r.markupApplied, 0.3);
-    assertAlmostEquals(r.costUsd, 0.02535, 1e-12);
+    assertEquals(daConta.markupApplied, 0.4);
+    assertAlmostEquals(daConta.costUsd, 0.0273, 1e-12);
+
+    // markup 0 por conta (caso Bruno Admin) não pode cair no default
+    const contaZerada = computeTokenCost({
+        promptTokens: 50_000,
+        completionTokens: 500,
+        price: MINI,
+        markupOverride: 0,
+        platformMarkup: 0.3,
+    });
+    assertEquals(contaZerada.markupApplied, 0);
+    assertAlmostEquals(contaZerada.costUsd, 0.0195, 1e-12);
+
+    const daPlataforma = computeTokenCost({
+        promptTokens: 50_000,
+        completionTokens: 500,
+        price: MINI,
+        markupOverride: null,
+        platformMarkup: 0.5,
+    });
+    assertEquals(daPlataforma.markupApplied, 0.5);
+    assertAlmostEquals(daPlataforma.costUsd, 0.02925, 1e-12);
+
+    const piso = computeTokenCost({
+        promptTokens: 50_000,
+        completionTokens: 500,
+        price: MINI,
+        markupOverride: null,
+        platformMarkup: null,
+    });
+    assertEquals(piso.markupApplied, 0.3);
 });
 
 Deno.test("cache reportado acima do prompt é limitado ao prompt", () => {
