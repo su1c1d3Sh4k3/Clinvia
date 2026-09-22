@@ -1,165 +1,247 @@
 # Plano — projeto e chave OpenAI por conta + consumo real no Super Admin
 
-Aberto em 22/09/2026. Status: **aprovado pelo user**, com a ordem de execução dele
-(segurança primeiro, depois auditoria de RLS, depois o resto da etapa).
+Aberto em 22/09/2026. **Revisão 2** (22/09/2026, após o fechamento da Parte 1 de segurança e
+os 6 ajustes de escopo pedidos pelo user). Status: **aguardando o OK do user** para aplicar as
+3 migrations do delta.
 
-Já aplicado em produção: migrations `20260922130000` (colunas + `llm_platform_settings` +
-markup global 0.30), `20260922131000` (uso/custo por projeto) e `20260922132000` (fila com
-`provisioning_enabled = false`). As 4 chaves de cliente foram **re-encriptadas** (ver 0.1).
-Pendentes de gatilho externo: `20260922133000` (revoke — espera o deploy do front) e
-`20260922134000` (`openai_key_source = 'customer'` — espera o user terminar a exclusão de
-clientes).
+O pré-requisito de segurança está **cumprido**: `20260922133000` (revoke das colunas de
+segredo) e `20260922250000` (financial_access) foram aplicadas e verificadas em produção
+(`d16ebfe`), com o front publicado pelo user. `profiles.openai_token` não é mais legível pelo
+role `authenticated` — 48 das 51 colunas seguem liberadas, as 3 secretas dão `42501` até para
+o dono da própria linha, e `select *` em `profiles` dá `42501`. Só `service_role` lê a chave.
 
-Regra que governa a etapa inteira: **nada retroativo**. Nenhum projeto/chave para conta
-existente, nenhum backfill, nenhuma reconciliação sobre o histórico, nenhuma linha antiga de
-`token_usage_log` alterada. Tudo que atinge conta existente fica pronto e **desligado**.
+Regra que governa a etapa inteira: **nada retroativo e nada automático sem interruptor**.
+Nenhum backfill de `token_usage_log`, nenhuma reconciliação de histórico, e
+`llm_platform_settings.provisioning_enabled` continua `false` até o último arquivo da etapa.
 
 ---
 
-## 0. Dois achados que mudam o desenho
+## 0. Achados que mudam o desenho
 
-### 0.1 A chave do cliente está exposta hoje (grave)
-`profiles` tem a policy **`Users can view all profiles` = SELECT USING (true)** para o role
-`authenticated`. Qualquer usuário logado de qualquer tenant lê a linha de `profiles` de todos
-os outros — e `openai_token` está gravado em **texto puro** (4 chaves `sk-proj-…` de clientes
-reais: fabriciasouzaclinic, consultoriodracintialtda, atendimento@clinicaautoestima e uma
-quarta conta). Guardar aí a chave criada pela plataforma multiplicaria o problema.
+### 0.1 A chave do cliente estava exposta (RESOLVIDO)
+`profiles` tinha `SELECT USING (true)` para `authenticated` e `openai_token` em **texto
+puro**. Corrigido por privilégio de **coluna** (`20260922133000`), não por policy — a policy
+de linha continua permissiva e isso é assunto da Fase 2 (ver `docs/security/ESTADO_ATUAL.md`).
 
-Correção proposta (cirúrgica, na parte 1 das migrations): privilégio de **coluna**.
-`revoke select (openai_token, openai_api_key_id, openai_service_account_id) on profiles from
-authenticated, anon`. A policy de linha continua como está (revisar o escopo dela é assunto
-separado — ela também expõe e-mail, empresa e custos de todos os tenants).
-
-Pré-requisito no front: `src/components/ChatArea.tsx:214` faz `.select("*")` em `profiles` e
-passaria a dar *permission denied* — trocar por lista explícita de colunas **antes** de
-aplicar. `AdminClients.tsx:284` também lê `openai_token` direto e passa a ler pela edge
-function nova.
-
-#### A criptografia era um no-op silencioso (achado em 22/09/2026, corrigido)
-`_shared/token-tracker.ts` tem `encryptToken`/`decryptToken` com prefixo `enc:` desde
-sempre, e `admin-update-profile` já chamava `encryptToken` antes de gravar — **mas o secret
-`OPENAI_TOKEN_ENCRYPTION_KEY` nunca foi criado**. Sem ele, `getEncryptionKey()` devolve
-`null`, `encryptToken` devolve `null`, o `if (encrypted)` não entra e o token é gravado em
-**texto puro**. É por isso que as 4 chaves estavam cruas: não foi legado anterior ao
-recurso, era o recurso desligado.
-
-Correção aplicada: secret criado (também guardado no `.env`, porque perder essa chave é
-perder as chaves OpenAI dos clientes) e as 4 linhas convertidas para `enc:` por reparo
-pontual (`supabase/.temp/_oa_reencrypt.mjs`, mesmo formato AES-256-GCM da edge: chave =
-SHA-256 do secret, `enc:` + base64(iv‖ciphertext‖tag)), com round-trip verificado antes de
-cada UPDATE. O SHA-256 da chave local foi comparado com o digest do `secrets list` para
-garantir que o runtime das edge functions descriptografa o que foi gravado. Daqui pra
-frente todo salvamento já nasce `enc:` — não há ação manual do Super Admin.
-
-Quem consome o valor é só `getOpenAIToken`, que descriptografa; e falha de decriptação cai
-no token padrão da plataforma (sem apagão, só desloca o faturamento). Nenhuma função nem
-view do banco devolve a coluna (`admin_get_dashboard_metrics` só lê `openai_token_invalid`).
+A criptografia era um **no-op silencioso**: `encryptToken` existia e era chamada, mas o secret
+`OPENAI_TOKEN_ENCRYPTION_KEY` nunca havia sido criado ⇒ `getEncryptionKey()` devolvia `null`,
+`encryptToken` devolvia `null` e o `if (encrypted)` não entrava. Secret criado (e guardado no
+`.env`, porque perdê-lo é perder as chaves OpenAI dos clientes) e as chaves convertidas para
+`enc:` com round-trip verificado. Daqui pra frente todo salvamento nasce `enc:`.
 
 ### 0.2 `spend_limit` por projeto — endpoint confirmado
-Correção do user (eu havia dito que não estava na referência; estava). Confirmado na doc de
-22/09/2026, em Admin > Organization > Projects > Spend limit:
 - **Organização:** `POST https://api.openai.com/v1/organization/spend_limit`.
 - **Projeto:** `POST https://api.openai.com/v1/organization/projects/{project_id}/spend_limit`,
   body `{ "threshold_amount": <centavos>, "currency": "USD", "interval": "month" }`.
 
-Uso direto, sem sondagem. O tratamento de erro fica de pé: resposta diferente de 2xx grava
-`openai_provision_error` (o projeto e a chave continuam válidos) e o limite segue vivo no
-relatório — o painel mostra "% consumido" comparando o custo real com
-`openai_spend_limit_usd` e a sincronização horária alerta a partir de 80%.
+Resposta diferente de 2xx grava `openai_provision_error` (projeto e chave continuam válidos) e
+o limite segue vivo no relatório: o painel compara o custo real com `openai_spend_limit_usd`.
+
+### 0.3 A aprovação NÃO cria a conta por trigger — e o trigger atual erra em 3 pontos (NOVO)
+Medido no código real em 22/09/2026:
+
+- O cadastro público (`src/pages/Auth.tsx`) grava em **`pending_signups`**, e **não** cria
+  linha em `profiles`. Não existe `profiles.status = 'pendente'` em produção: as 8 linhas
+  estão todas em `ativo`.
+- A linha de `profiles` nasce dentro da edge function **`approve-client`**, num
+  `upsert(..., { onConflict: 'id' })` com `status: 'ativo'`. Ou seja: na rota feliz, o
+  `AFTER INSERT` da `20260922132000` **já coincide** com o momento da aprovação.
+
+Mas ele erra em três pontos, e é isso que a migration `20260922260000` conserta:
+
+1. `approve-client` **reaproveita o usuário de auth quando o e-mail já existe**. Se a linha de
+   `profiles` já existir (corrida com `handle_new_user`, ou reaprovação), o upsert vira
+   **UPDATE** e o trigger de INSERT não dispara ⇒ conta aprovada **sem chave, em silêncio**.
+2. Reativar uma conta inativa (`inativo → ativo`) não enfileirava nada.
+3. O trigger enfileirava **qualquer** linha nova de `profiles`, inclusive as que não são conta
+   de cliente — hoje existem em produção uma linha `role = 'super-admin'` e uma
+   `role = 'agent'` (`meta-review`). Gastaria projeto na OpenAI para quem não é tenant.
+
+O gatilho passa a ser **"conta de cliente que está ativa"**: `INSERT` que já nasce ativo, ou
+`UPDATE` que *acabou* de virar ativo. `role <> 'admin'`, conta com chave/projeto e
+`openai_key_source = 'customer'` ficam de fora.
+
+### 0.4 `billable` pela presença do token é um furo de faturamento (NOVO)
+`api-token-usage/index.ts:328` decide hoje:
+`billable: !(typeof prof?.openai_token === 'string' && prof.openai_token.trim())`.
+
+No momento em que a plataforma gravar a chave provisionada em `openai_token`, **a conta viraria
+`billable = false`** e a Clinbia pararia de faturar justamente as contas cuja fatura ela paga.
+Mesmo erro em `api-token-usage-sandbox/index.ts:205`. A regra passa a ser
+`billable = openai_key_source !== 'customer'`. Isso **precisa entrar junto** com o
+provisionamento, não depois.
 
 ---
 
 ## 1. Migrations
 
-| arquivo | conteúdo | estado |
+### Já aplicadas (não mexer)
+
+| arquivo | conteúdo |
+|---|---|
+| `20260922130000_openai_key_source_and_markup.sql` | 9 colunas em `profiles` (`openai_key_source` CHECK platform/customer, `openai_project_id` + índice único, `openai_service_account_id`, `openai_api_key_id`, `openai_spend_limit_usd`, `openai_provisioned_at`, `openai_provision_error`, `openai_spend_alert_level`, `openai_spend_alert_sent_at`); singleton `llm_platform_settings`; markup global 0.25 → 0.30 |
+| `20260922131000_openai_project_usage.sql` | `openai_project_usage_daily` (tokens reais por dia/projeto/modelo) e `openai_project_costs_daily` (**USD faturado** por dia/projeto/line_item); RPC `admin_get_openai_account_usage` |
+| `20260922132000_openai_provision_queue.sql` | fila `openai_provision_queue`, trigger `zz_profiles_enqueue_openai_provision` e `claim_openai_provision_jobs()` (devolve vazio enquanto `provisioning_enabled = false`) |
+| `20260922133000_profiles_revoke_secret_columns.sql` | revoke de coluna das 3 colunas de segredo — **aplicada e verificada** em 22/09/2026 |
+
+Estado real medido em produção: `llm_platform_settings` = `default_markup 0.30`,
+`default_spend_limit_usd 200`, `spend_alert_threshold 0.80`, `provisioning_enabled **false**`.
+Fila vazia. Nenhuma conta com `openai_project_id`. Uma conta com token (ver §2).
+
+### Novas — aguardando o OK do user
+
+| arquivo | conteúdo | risco em produção |
 |---|---|---|
-| `20260922130000_openai_key_source_and_markup.sql` | 9 colunas novas em `profiles` (`openai_key_source` com CHECK platform/customer, `openai_project_id` + índice único, `openai_service_account_id`, `openai_api_key_id`, `openai_spend_limit_usd`, `openai_provisioned_at`, `openai_provision_error`, `openai_spend_alert_level`, `openai_spend_alert_sent_at`); singleton `llm_platform_settings` (`default_markup 0.30`, `default_spend_limit_usd 200`, `provisioning_enabled false`, `spend_alert_threshold 0.80`, `spend_alert_email`); **markup global 0.25 → 0.30** em `llm_model_prices` (default incluído) | **aplicada** |
-| `20260922133000_profiles_revoke_secret_columns.sql` | `revoke select` de `openai_token`, `openai_api_key_id` e `openai_service_account_id` para `authenticated` e `anon` | **espera o deploy do front** |
-| `20260922134000_openai_key_source_customer_backfill.sql` | as contas com token próprio viram `openai_key_source = 'customer'` (idempotente) | **espera a exclusão de clientes** |
-| `20260922131000_openai_project_usage.sql` | `openai_project_usage_daily (day, project_id, model, …)` = tokens reais; `openai_project_costs_daily (day, project_id, line_item, cost_usd)` = **USD faturado**; RPC `admin_get_openai_account_usage(profile_id)` com o mês corrente em SP, guardada por `admin_can('clientes','view')` | **aplicada** |
-| `20260922132000_openai_provision_queue.sql` | fila `openai_provision_queue`, trigger `zz_profiles_enqueue_openai_provision` (AFTER INSERT — só conta nova) e `claim_openai_provision_jobs()` que **retorna vazio enquanto `provisioning_enabled = false`** | **aplicada** (claim devolveu 0 jobs na verificação) |
+| `20260922260000_openai_enqueue_on_approval.sql` | reescreve `enqueue_openai_provision()` e troca o trigger para `after insert or update of status`, com o recorte do §0.3 | **nenhum efeito hoje**: não enfileira conta existente e o worker segue desligado. Só muda o comportamento de aprovações futuras |
+| `20260922261000_openai_account_usage_rpc_v2.sql` | `admin_get_openai_account_usage` v2: `synced_at` NULL em vez de `-infinity`, e passa a devolver `is_estimated`, `spend_alert_threshold` e `spend_alert_level` | **nenhum efeito hoje**: nenhuma conta tem projeto, a RPC devolve zeros como já devolve. Exige DROP+CREATE (muda as colunas de saída) e o front novo no mesmo commit |
+| `20260922262000_openai_provisioning_enable.sql` | liga `provisioning_enabled = true` | **este é o único que muda comportamento real.** Aplicar só no fim, depois do teste ponta a ponta |
 
-Duas tabelas de consumo porque as APIs têm granularidade diferente: a Usage API separa por
-modelo, a Costs API por `line_item`. O "Custo real OpenAI" sai da **Costs API** — é o valor
-faturado, não o nosso cálculo por tabela de preço.
+| `20260922134000_openai_key_source_customer_backfill.sql` | marca `openai_key_source = 'customer'` quem já tem token próprio | hoje pega **1 linha**: a conta interna `Bruno Admin` (`3e21175c`). Precisa da sua decisão (ver §2) |
 
-## 2. Regra de cobrança (nova)
+Cada uma tem `_rollback.sql` ao lado.
+
+---
+
+## 2. Inventário das contas (a lista que você pediu)
+
+8 linhas em `profiles`, todas `status = 'ativo'`. Nenhuma tem projeto OpenAI.
+
+### Candidatas a provisionar (contas de cliente)
+
+| empresa | e-mail | status | dados | consumo 30d (chave compartilhada) |
+|---|---|---|---|---|
+| PELE DERMATOLOGIA | fayruss.costa@yahoo.com | ativo | 13 colab · 3 conexões · 7.122 contatos | **27.920 reqs** (último 22/09 14:40) |
+| Contourline Equipamentos Médicos e Estéticos | jessica.oliveira@contourline.com.br | ativo | 6 colab · 1 conexão · 1.039 contatos | 432 reqs (último 22/09 10:58) |
+| Contourline | almeidaegio@gmail.com | ativo | 1 colab · 0 conexão · 231 contatos | — |
+| Ciência que Conecta | erica@ericagiacomelli.com | ativo | 1 colab · 0 conexão · 0 contatos | — |
+| Clinbia | clinbia.ai@gmail.com | ativo | 1 colab · 1 conexão · 2 contatos | — |
+
+`Clinbia` é a conta da própria casa — **me diga se ela entra ou fica na chave compartilhada.**
+
+### Fora da lista, com o motivo
+
+| linha | por que não entra |
+|---|---|
+| `Bruno Admin` (`3e21175c`, sem empresa/e-mail, 4 colab · 324 contatos) | **é a única com `openai_token` hoje** (chave própria, já re-encriptada). A `20260922134000` a marcaria `customer` ⇒ markup 0, `billable = false`, fora do provisionamento. **Decisão sua:** (a) aplicar a 134000 e deixá-la como chave própria, ou (b) limpar o token e provisioná-la como conta da plataforma. Recomendo (a): é conta interna de teste e a fatura dela não é nossa |
+| `Admin` (`23da6832`, `role = super-admin`) | não é tenant |
+| `meta-review` (`d38b48ca`, `role = agent`) | conta de revisão da Meta, zero dados |
+
+### Protocolo do provisionamento em lote (depois do seu OK)
+Uma conta por vez, `provision-openai-project` chamada com o `profileId`, na ordem da tabela
+acima (a maior primeiro, para o erro aparecer na conta que importa). Idempotente: se
+`openai_project_id` já existir, sai com `already_provisioned` e não cria nada. Relatório por
+conta com projeto criado, id da chave, limite aplicado e erro se houver. Paro no primeiro erro
+e te aviso antes de seguir.
+
+---
+
+## 3. Regra de cobrança
 
 | situação | cálculo | selo na tela |
 |---|---|---|
-| `openai_key_source = 'platform'` | custo real da Costs API do projeto × (1 + markup) | "real" |
+| `openai_key_source = 'platform'` | custo real da Costs API do projeto × (1 + markup 30%) | "real" |
 | conta na chave compartilhada (`null`) | estimativa do `token_usage_log` (cache calibrado + markup) | **"estimado"** |
 | `openai_key_source = 'customer'` | mostra o consumo, mas markup 0 e `billable = false` | "chave do cliente" |
 
-`billable` passa a ser decidido por `openai_key_source`, não pela presença do token —
-alteração em `api-token-usage`, `api-token-usage-sandbox` e `_shared/token-cost.ts`
-(redeploy das duas fns; o bundler inlina o `_shared`).
+`billable` passa a ser decidido por `openai_key_source` (ver §0.4) — alteração em
+`api-token-usage` e `api-token-usage-sandbox`, com redeploy das duas.
 
-## 3. Edge functions
+---
+
+## 4. Edge functions
 
 1. **`provision-openai-project`** (service role; secret novo `OPENAI_ADMIN_KEY_WRITE`)
-   1. idempotente: se `openai_project_id` já existe, sai com `already_provisioned`;
-   2. `POST /v1/organization/projects` → `{ name: "Clinbia - <empresa> - <id curto>" }`;
-   3. `POST /v1/organization/projects/{id}/service_accounts` → chave em `api_key.value`;
-   4. tenta o spend limit do projeto (ver 0.2), valor de `llm_platform_settings`;
-   5. grava `openai_token = enc:…`, `openai_key_source = 'platform'`, ids, limite e
-      `openai_provisioned_at`. Falha → `openai_provision_error` e a fila reprocessa (5
-      tentativas). Nunca loga a chave.
-   - Sem `OPENAI_ADMIN_KEY_WRITE` → erro claro `openai_admin_write_key_missing`.
+   1. idempotente: `openai_project_id` já preenchido ⇒ `already_provisioned`;
+      `openai_key_source = 'customer'` ⇒ `skipped_customer_key`;
+   2. `POST /v1/organization/projects` → `{ name: "Clinbia - <empresa> - <id curto>" }`
+      (empresa = `company_name`, caindo para `full_name`, depois o local part do e-mail;
+      `<id curto>` = 8 primeiros caracteres do `profiles.id`, que é o que dá unicidade);
+   3. `POST /v1/organization/projects/{id}/service_accounts` com o **mesmo nome** → a chave vem
+      em `api_key.value` e **só nessa resposta**;
+   4. tenta o spend limit do projeto (§0.2) com `llm_platform_settings.default_spend_limit_usd`;
+   5. grava `openai_token = enc:…`, `openai_key_source = 'platform'`, os três ids, o limite e
+      `openai_provisioned_at`. Falha ⇒ `openai_provision_error` e a fila reprocessa (5
+      tentativas). **Nunca loga a chave.**
+   - Sem `OPENAI_ADMIN_KEY_WRITE` ⇒ erro claro `openai_admin_write_key_missing`, sem tentar.
    - `OPENAI_ADMIN_KEY` atual passa a ser **somente leitura** (calibração + coleta de uso).
 2. **`openai-provision-worker`** (cron `*/5`): `claim_openai_provision_jobs()` → chama a
-   função acima. Desligado por `provisioning_enabled = false`.
-3. **`sync-openai-usage`** (cron: 1×/dia para o dia anterior + 1×/hora para o dia corrente):
-   `GET /v1/organization/usage/completions` (`group_by=project_id,model`, `bucket_width=1d`)
-   e `GET /v1/organization/costs` (`group_by=project_id,line_item`), com paginação
-   `next_page`; upsert nas duas tabelas. **Busca só a partir de hoje** — nada retroativo.
-   A calibração por modelo (`calibrate-cache-ratio`) continua como está.
+   função acima → marca `done`/`failed`/`skipped`. Inerte enquanto
+   `provisioning_enabled = false`.
+3. **`sync-openai-usage`** (cron 1×/dia para o dia anterior + 1×/hora para o dia corrente):
+   `GET /v1/organization/usage/completions` (`group_by=project_id,model`, `bucket_width=1d`) e
+   `GET /v1/organization/costs` (`group_by=project_id,line_item`), paginando por `next_page`;
+   upsert nas duas tabelas. **Busca só a partir de hoje** — nada retroativo. Ao cruzar
+   `spend_alert_threshold` (80%), grava `openai_spend_alert_level` e manda o e-mail uma única
+   vez por patamar.
 4. **`get-account-openai-key`** (`x-api-key`, padrão do `api-token-usage`): recebe o id da
-   conta, devolve `{ openai_api_key, openai_project_id }` **só** se
-   `openai_key_source = 'platform'`. Sem log da chave. É o que o n8n chama ao criar a
-   credencial do workflow do cliente.
+   conta e devolve `{ openai_api_key, openai_project_id }` **só** se
+   `openai_key_source = 'platform'`. Sem log da chave.
 5. **`admin-openai-account`** (JWT + `admin_can('clientes', …)`): **já no ar** com `get`
-   (estado da conta + chave **mascarada**, `view`) e `reveal` (chave em claro, `edit`, com
-   log de quem revelou). Faltam `set_spend_limit` (reenvia o POST) e `archive_project`
+   (estado + chave mascarada, `view`) e `reveal` (chave em claro, `edit`, com log de quem
+   revelou). Entram `provision` (botão de uma conta), `set_spend_limit` e `archive_project`
    (`POST /v1/organization/projects/{id}/archive`, **só na exclusão da conta**, com
-   confirmação; suspensão não arquiva). A re-encriptação não é ação de painel — já foi feita
-   (ver 0.1) e todo salvamento novo nasce `enc:`.
+   confirmação; suspensão não arquiva).
 
-## 4. Super Admin — card "Consumo de IA" na página do cliente
+### Credencial do n8n — o que fica manual
+O workflow de cada cliente no n8n continua apontando para a credencial antiga. A troca é
+**manual, feita por você**: ao fim do provisionamento eu entrego a lista
+`empresa → nome da credencial sugerido → project_id`, e enquanto a troca não acontecer aquela
+conta continua consumindo a chave compartilhada e o card mostra **"estimado"**. O
+`get-account-openai-key` existe para o n8n buscar a chave sem que ela passe por você.
 
-Mês corrente (fuso SP), via `admin_get_openai_account_usage`:
-- **Consumo Clinbia (US$ e R$)** = custo real × (1 + markup) — R$ pelo `latest_usd_brl_rate`.
-- **Custo real OpenAI (US$ e R$)**.
+---
+
+## 5. Super Admin — card "Consumo de IA" na página do cliente
+
+Mês corrente (fuso SP), via `admin_get_openai_account_usage` v2, ao lado do
+`TokenUsageCharts` (estimativa) e do `OpenAITokenManager` (chave) que já existem em
+`AdminClients.tsx`:
+
+- **Gasto Clinbia (US$ e R$)** = custo real × 1,30 — R$ pelo `latest_usd_brl_rate`.
+- **Gasto real OpenAI (US$ e R$)** — Costs API do projeto daquela conta.
 - Tokens: input, cacheado (com %), output, nº de requisições.
-- "Atualizado em <hora>" com aviso de que a API da OpenAI tem atraso.
-- Limite mensal do projeto e % consumido (barra).
-- "Token OpenAI Customizado" mascarado (`sk-…XXXX`) + origem (plataforma / cliente) +
-  revelar/copiar para super admin. Editar manualmente ⇒ grava `openai_key_source =
-  'customer'` com aviso de que a conta **sai do faturamento da plataforma**.
-- Conta sem projeto (ou `customer`): valor estimado do `token_usage_log` com selo
-  **"estimado"** + botão **"Provisionar projeto OpenAI"** (uma conta por vez).
+- Limite mensal (padrão **US$ 200**) e % consumido, com a barra virando alerta em **80%**.
+- **"Atualizado em <hora>"**, com aviso de que a API da OpenAI tem atraso; "nunca sincronizado"
+  quando `synced_at` é NULL.
+- "Token OpenAI Customizado" **mascarado** (`sk-proj-…WXYZ`) + origem (plataforma / cliente) +
+  **revelar/copiar só para super admin**. Editar manualmente ⇒ grava
+  `openai_key_source = 'customer'` com aviso de que a conta **sai do faturamento da
+  plataforma**.
+- `is_estimated = true` ⇒ selo **"estimado"** + botão **"Provisionar projeto OpenAI"** (uma
+  conta por vez).
 
-## 5. Teste ponta a ponta
-Com UMA conta de teste nova indicada pelo user: projeto criado, chave salva mascarada e
-encriptada, limite aplicado (ou o erro registrado conforme 0.2), algumas chamadas pela IA e
-o consumo aparecendo no card depois da sincronização horária.
+---
 
-## 6. Documentação (fecha a etapa)
-`src/pages/Suporte.tsx` + guia correspondente e `_shared/support-knowledge.ts`
-(+ `npx supabase functions deploy support-ai-chat`): chave por conta, markup 30%, e a
-diferença entre custo real e estimado.
+## 6. Ordem de execução e onde eu paro
+
+| # | passo | depende de você? |
+|---|---|---|
+| 1 | **este documento + as 3 migrations** | **SIM — seu OK, e a decisão sobre `Clinbia` e sobre `Bruno Admin`/134000** |
+| 2 | criar o secret `OPENAI_ADMIN_KEY_WRITE` | **SIM — só você tem a chave de admin da organização** |
+| 3 | aplicar `260000` + `261000` (+ `134000` se você aprovar) e verificar | não |
+| 4 | escrever as 4 edge functions + ajustar `billable` (§0.4) e deployar | não |
+| 5 | front: card "Consumo de IA" + botão provisionar, num commit só | **SIM — o deploy do front é seu** |
+| 6 | teste ponta a ponta com UMA conta de teste nova aprovada do zero | não (mas te mostro o resultado) |
+| 7 | aplicar `262000` (liga o provisionamento automático) | **SIM — confirmação explícita** |
+| 8 | provisionar as contas de hoje, uma por uma, com relatório | **SIM — o OK da lista do §2** |
+| 9 | entregar os nomes das credenciais para você trocar no n8n | **SIM — a troca é manual** |
+| 10 | docs: `src/pages/Suporte.tsx` + `_shared/support-knowledge.ts` (+ deploy `support-ai-chat`) | não |
+
+---
 
 ## 7. Fora do escopo (não conflitar)
-Gemini e as funções do sistema (`_shared/token-tracker.ts`, `support-ai-chat`) continuam na
-chave compartilhada — o consumo delas **não** aparece no projeto da conta. Isso é a Etapa 2,
-junto com a sub-notificação de tokens do `token-tracker`.
+Gemini e as funções do sistema (`_shared/token-tracker.ts`, `support-ai-chat`, resumo
+automático) continuam na chave compartilhada — o consumo delas **não** aparece no projeto da
+conta. Isso é a Etapa 2, junto com a sub-notificação de tokens do `token-tracker`.
 
 ---
 
 ## Contexto: o que já foi aplicado antes deste plano
+- `9caae05` / `d16ebfe` — Parte 1 de segurança encerrada; `docs/security/ESTADO_ATUAL.md` é a
+  fonte da verdade do que ficou aplicado, pronto-e-travado e não-iniciado.
 - `08d7a06` — trigger fantasma de tokens dropado, 45.296 linhas arquivadas, acumuladores
   recalculados e `reset_monthly_tokens` agendado.
-- `f824714` — gêmeo de áudio dropado + 19 linhas arquivadas; `gpt-4-turbo` cadastrado
-  (10/null/30); view `v_token_coverage_daily`.
-- `20260921161000_token_cost_backfill.sql` — **cancelado pelo user** (backfill por
-  estimativa). Fica no repositório sem aplicar.
+- `f824714` — gêmeo de áudio dropado + 19 linhas arquivadas; `gpt-4-turbo` cadastrado; view
+  `v_token_coverage_daily`.
+- `20260921161000_token_cost_backfill.sql` — **cancelado pelo user** (backfill por estimativa:
+  estimado ≈US$66 contra fatura real ≈US$136). Fica no repositório sem aplicar.
