@@ -23,8 +23,10 @@ begin
   end if;
 
   -- segredos primeiro (antes de qualquer normalizacao que possa quebrar o padrao)
-  v := regexp_replace(v, 'sk-[A-Za-z0-9_-]{16,}', '<openai_key>', 'gi');
-  v := regexp_replace(v, 'sbp_[A-Za-z0-9]{16,}', '<supabase_token>', 'gi');
+  -- Limiar baixo (8) de proposito: a chave real tem ~150 chars, mas exigir 16 deixava
+  -- passar recorte/truncamento de chave, que ja e vazamento. Mascarar demais nao custa.
+  v := regexp_replace(v, 'sk-[A-Za-z0-9_-]{8,}', '<openai_key>', 'gi');
+  v := regexp_replace(v, 'sbp_[A-Za-z0-9]{8,}', '<supabase_token>', 'gi');
   v := regexp_replace(v, 'eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+', '<jwt>', 'g');
   v := regexp_replace(v, 'EAA[A-Za-z0-9]{20,}', '<meta_token>', 'g');
   v := regexp_replace(v, '(bearer)\s+\S+', '\1 <token>', 'gi');
@@ -246,6 +248,10 @@ comment on table public.incident_catalog is
   'Catalogo de erros conhecidos. A severidade daqui VENCE a da IA quando ha match.';
 
 create index if not exists incident_catalog_ativo_idx on public.incident_catalog (is_active, source);
+-- Sem este unico o `on conflict do nothing` do seed abaixo nao tem em que se ancorar:
+-- rodar a migration duas vezes duplicaria as 14 linhas.
+create unique index if not exists incident_catalog_pattern_uniq
+  on public.incident_catalog (pattern);
 
 alter table public.incident_catalog enable row level security;
 
@@ -311,7 +317,7 @@ values
    'Template da Meta nao aprovado ou rejeitado — confirmacao de agenda e campanha param em silencio.',
    'Conferir status em /whatsapp-connection > Templates e reenviar para aprovacao.',
    'alta')
-on conflict do nothing;
+on conflict (pattern) do nothing;
 
 -- ============================================================
 -- 6. alert_recipients — nenhum numero no codigo
@@ -403,3 +409,18 @@ comment on column public.llm_platform_settings.alert_max_per_hour is
     'Teto de mensagens enviadas por hora por destinatario. Excedente vira skipped_ratelimit + uma mensagem de resumo.';
 comment on column public.llm_platform_settings.alert_analyze_model is
     'Modelo da analise de incidente. Custo vai para token_usage_log como consumo interno da plataforma, nunca rateado para cliente.';
+
+-- ============================================================
+-- 9. Privilegios: tabela nova NAO entra no GRANT ALL padrao
+-- ============================================================
+--
+-- Medido em 22/09/2026: 134 das 139 tabelas do schema public concedem TRUNCATE a
+-- anon e a authenticated — e o default do Supabase, nao um erro pontual. TRUNCATE
+-- NAO passa por RLS, entao "RLS on sem policy" nao protege contra ele. Estas cinco
+-- tabelas nascem sem privilegio nenhum para os dois papeis: o painel do Super Admin
+-- le por RPC SECURITY DEFINER e a escrita e toda por service_role.
+revoke all on table public.incidents from anon, authenticated;
+revoke all on table public.incident_events from anon, authenticated;
+revoke all on table public.incident_catalog from anon, authenticated;
+revoke all on table public.alert_recipients from anon, authenticated;
+revoke all on table public.incident_notifications from anon, authenticated;
