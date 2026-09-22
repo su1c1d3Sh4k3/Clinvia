@@ -66,7 +66,7 @@ serve(async (req) => {
             throw new Error("Não é possível excluir uma conta super-admin");
         }
 
-        // A limpeza tem ~25 etapas e o perfil so cai na ultima (junto com o auth
+        // A limpeza e longa e o perfil so cai na ultima etapa (junto com o auth
         // user), entao um clique repetido enquanto ela roda chegava aqui sem
         // perfil e devolvia 400. Sem perfil, olha o auth user antes de desistir:
         // com ele vivo ainda ha o que limpar; sem ele a conta ja foi excluida e
@@ -93,194 +93,81 @@ serve(async (req) => {
             `[admin-delete-client] Deleting account: ${targetProfile?.email ?? "(perfil ausente)"} (${profileId})`
         );
 
-        // 1. Delete notifications (no cascade via related_user_id)
-        await supabaseAdmin
-            .from("notifications" as any)
-            .delete()
-            .or(`user_id.eq.${profileId},related_user_id.eq.${profileId}`);
-
-        // 2. Delete dashboard notifications
-        await supabaseAdmin
-            .from("dashboard_notifications" as any)
-            .delete()
-            .eq("user_id", profileId);
-
-        // 3. Delete messages via conversations (messages FK → conversations)
-        //    First get conversation IDs for this user
-        const { data: conversations } = await supabaseAdmin
-            .from("conversations")
-            .select("id")
-            .eq("user_id", profileId);
-
-        if (conversations && conversations.length > 0) {
-            const convIds = conversations.map((c: any) => c.id);
-            await supabaseAdmin
-                .from("messages")
-                .delete()
-                .in("conversation_id", convIds);
-        }
-
-        // 4. Delete conversations
-        await supabaseAdmin
-            .from("conversations")
-            .delete()
-            .eq("user_id", profileId);
-
-        // 5. Delete contact_tags via contacts
-        const { data: contacts } = await supabaseAdmin
-            .from("contacts")
-            .select("id")
-            .eq("user_id", profileId);
-
-        if (contacts && contacts.length > 0) {
-            const contactIds = contacts.map((c: any) => c.id);
-            await supabaseAdmin
-                .from("contact_tags" as any)
-                .delete()
-                .in("contact_id", contactIds);
-        }
-
-        // 6. Delete contacts
-        await supabaseAdmin
-            .from("contacts")
-            .delete()
-            .eq("user_id", profileId);
-
-        // 7. Delete tasks via task_boards
-        const { data: boards } = await supabaseAdmin
-            .from("task_boards" as any)
-            .select("id")
-            .eq("user_id", profileId);
-
-        if (boards && boards.length > 0) {
-            const boardIds = boards.map((b: any) => b.id);
-            await supabaseAdmin
-                .from("tasks" as any)
-                .delete()
-                .in("board_id", boardIds);
-        }
-
-        // 8. Delete task boards
-        await supabaseAdmin
-            .from("task_boards" as any)
-            .delete()
-            .eq("user_id", profileId);
-
-        // 9. Delete appointments
-        await supabaseAdmin
-            .from("appointments" as any)
-            .delete()
-            .eq("user_id", profileId);
-
-        // 10. Delete scheduling_settings
-        await supabaseAdmin
-            .from("scheduling_settings" as any)
-            .delete()
-            .eq("user_id", profileId);
-
-        // 11. Delete professionals
-        await supabaseAdmin
-            .from("professionals" as any)
-            .delete()
-            .eq("user_id", profileId);
-
-        // 12. Delete products_services
-        await supabaseAdmin
-            .from("products_services" as any)
-            .delete()
-            .eq("user_id", profileId);
-
-        // 13. Delete tags
-        await supabaseAdmin
-            .from("tags" as any)
-            .delete()
-            .eq("user_id", profileId);
-
-        // 14. Delete queues
-        await supabaseAdmin
-            .from("queues" as any)
-            .delete()
-            .eq("user_id", profileId);
-
-        // 15. Delete instances
-        await supabaseAdmin
-            .from("instances" as any)
-            .delete()
-            .eq("user_id", profileId);
-
-        // 16. Delete financial data
-        await supabaseAdmin
-            .from("revenues" as any)
-            .delete()
-            .eq("user_id", profileId);
-
-        await supabaseAdmin
-            .from("expenses" as any)
-            .delete()
-            .eq("user_id", profileId);
-
-        await supabaseAdmin
-            .from("sales" as any)
-            .delete()
-            .eq("user_id", profileId);
-
-        // 17. Delete ia_config
-        await supabaseAdmin
-            .from("ia_config" as any)
-            .delete()
-            .eq("user_id", profileId);
-
-        // 18. Delete copilot_settings
-        await supabaseAdmin
-            .from("copilot_settings" as any)
-            .delete()
-            .eq("user_id", profileId);
-
-        // 19. Delete quick_messages
-        await supabaseAdmin
-            .from("quick_messages" as any)
-            .delete()
-            .eq("user_id", profileId);
-
-        // 20. Delete notification_settings
-        await supabaseAdmin
-            .from("notification_settings" as any)
-            .delete()
-            .eq("user_id", profileId);
-
-        // 21. Delete token usage logs
-        await supabaseAdmin
-            .from("token_usage_log" as any)
-            .delete()
-            .eq("user_id", profileId);
-
-        await supabaseAdmin
-            .from("token_monthly_history" as any)
-            .delete()
-            .eq("user_id", profileId);
-
-        // 22. Delete team_members (related to this account's team)
-        await supabaseAdmin
-            .from("team_members")
-            .delete()
-            .eq("user_id", profileId);
-
-        // 23. Delete team members who BELONG to this tenant (auth_user_id != profileId)
-        //     These are agents/supervisors under this admin account
-        const { data: teamAuthIds } = await supabaseAdmin
+        // Os colaboradores precisam ser lidos ANTES da varredura, que apaga
+        // team_members junto com o resto.
+        const { data: teamAuthIds, error: teamError } = await supabaseAdmin
             .from("team_members")
             .select("auth_user_id")
             .eq("user_id", profileId);
 
-        if (teamAuthIds && teamAuthIds.length > 0) {
-            for (const member of teamAuthIds) {
-                if (member.auth_user_id && member.auth_user_id !== profileId) {
-                    await supabaseAdmin.auth.admin.deleteUser(member.auth_user_id).catch(() => {});
+        if (teamError) {
+            throw new Error(
+                `Falha ao listar os colaboradores de ${profileId}: ${teamError.message} (${teamError.code})`
+            );
+        }
+
+        // Os arquivos tambem: a varredura apaga as linhas que guardam as URLs.
+        // Apagar linha de storage.objects NAO apaga os bytes -- a remocao real
+        // tem que passar pela API de Storage, aqui embaixo.
+        const { data: arquivos, error: arquivosError } = await supabaseAdmin.rpc(
+            "admin_tenant_storage_paths",
+            { p_user_id: profileId }
+        );
+
+        if (arquivosError) {
+            throw new Error(
+                `Falha ao listar os arquivos de ${profileId}: ${arquivosError.message} (${arquivosError.code})`
+            );
+        }
+
+        // Varredura pelo catalogo: descobre em tempo de execucao TODA tabela com
+        // coluna de dono e apaga em passadas ate convergir. A lista escrita a mao
+        // que existia aqui conhecia 25 tabelas; o schema tem 100 colunas de dono,
+        // e como quase toda FK e SET NULL/NO ACTION (nao CASCADE), o que ficava
+        // fora da lista sobrava como dado orfao.
+        const { error: sweepError } = await supabaseAdmin.rpc("admin_delete_tenant_data", {
+            p_user_id: profileId,
+            p_dry_run: false,
+        });
+
+        if (sweepError) {
+            throw new Error(
+                `Falha ao excluir os dados de ${profileId}: ${sweepError.message} (${sweepError.code})`
+            );
+        }
+
+        // Remocao dos bytes, em lotes por bucket.
+        const porBucket = new Map<string, string[]>();
+        for (const f of (arquivos ?? []) as Array<{ bucket: string; path: string }>) {
+            if (!f?.bucket || !f?.path) continue;
+            const atual = porBucket.get(f.bucket);
+            if (atual) atual.push(f.path);
+            else porBucket.set(f.bucket, [f.path]);
+        }
+
+        for (const [bucket, paths] of porBucket) {
+            for (let i = 0; i < paths.length; i += 100) {
+                const lote = paths.slice(i, i + 100);
+                const { error: removeError } = await supabaseAdmin.storage
+                    .from(bucket)
+                    .remove(lote);
+                // Arquivo que nao existe mais nao pode derrubar a exclusao da conta.
+                if (removeError) {
+                    console.error(
+                        `[admin-delete-client] Falha ao remover ${lote.length} arquivo(s) de ${bucket}: ${removeError.message}`
+                    );
                 }
             }
         }
 
-        // 24. Delete the auth user — this cascades to profiles
+        // Auth users dos colaboradores deste tenant.
+        for (const member of teamAuthIds ?? []) {
+            if (member.auth_user_id && member.auth_user_id !== profileId) {
+                await supabaseAdmin.auth.admin.deleteUser(member.auth_user_id).catch(() => {});
+            }
+        }
+
+        // Por ultimo o auth user do dono, que cascateia em profiles.
         const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(profileId);
 
         if (authError) {
