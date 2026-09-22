@@ -96,7 +96,7 @@ Fila vazia. Nenhuma conta com `openai_project_id`. Uma conta com token (ver §2)
 | `20260922261000_openai_account_usage_rpc_v2.sql` | `admin_get_openai_account_usage` v2: `synced_at` NULL em vez de `-infinity`, e passa a devolver `is_estimated`, `spend_alert_threshold` e `spend_alert_level` | **nenhum efeito hoje**: nenhuma conta tem projeto, a RPC devolve zeros como já devolve. Exige DROP+CREATE (muda as colunas de saída) e o front novo no mesmo commit |
 | `20260922262000_openai_provisioning_enable.sql` | liga `provisioning_enabled = true` | **este é o único que muda comportamento real.** Aplicar só no fim, depois do teste ponta a ponta |
 
-| `20260922134000_openai_key_source_customer_backfill.sql` | marca `openai_key_source = 'customer'` quem já tem token próprio | hoje pega **1 linha**: a conta interna `Bruno Admin` (`3e21175c`). Precisa da sua decisão (ver §2) |
+| `20260922134000_openai_key_source_customer_backfill.sql` | marca `openai_key_source = 'customer'` quem já tem token próprio | **decidido: 0 linhas.** O único token era da `Bruno Admin` (`3e21175c`) e ele foi limpo antes (decisão do user, ver §2) ⇒ a migration entra como rede de segurança para tokens futuros |
 
 Cada uma tem `_rollback.sql` ao lado.
 
@@ -115,14 +115,20 @@ Cada uma tem `_rollback.sql` ao lado.
 | Contourline | almeidaegio@gmail.com | ativo | 1 colab · 0 conexão · 231 contatos | — |
 | Ciência que Conecta | erica@ericagiacomelli.com | ativo | 1 colab · 0 conexão · 0 contatos | — |
 | Clinbia | clinbia.ai@gmail.com | ativo | 1 colab · 1 conexão · 2 contatos | — |
+| `Bruno Admin` (`3e21175c`, sem empresa/e-mail) | — | ativo | 4 colab · 324 contatos | 5 reqs (último 16/09 21:17) |
 
-`Clinbia` é a conta da própria casa — **me diga se ela entra ou fica na chave compartilhada.**
+**Decisões do user (22/09/2026), que revisam o que este plano recomendava:**
+- `Clinbia` **entra** no provisionamento, como as demais.
+- `Bruno Admin` **entra também**: o `openai_token` próprio foi **limpo** e a conta é provisionada
+  como plataforma, com `profiles.markup = 0` — é conta interna e ele quer ver o custo real no
+  painel, sem margem. (Este plano recomendava o contrário, marcá-la `customer`; a decisão do
+  user vence.) Consequência de ordem: limpando o token antes, a `20260922134000` roda em 0
+  linhas, que é justamente o estado final desejado (`platform`, não `customer`).
 
 ### Fora da lista, com o motivo
 
 | linha | por que não entra |
 |---|---|
-| `Bruno Admin` (`3e21175c`, sem empresa/e-mail, 4 colab · 324 contatos) | **é a única com `openai_token` hoje** (chave própria, já re-encriptada). A `20260922134000` a marcaria `customer` ⇒ markup 0, `billable = false`, fora do provisionamento. **Decisão sua:** (a) aplicar a 134000 e deixá-la como chave própria, ou (b) limpar o token e provisioná-la como conta da plataforma. Recomendo (a): é conta interna de teste e a fatura dela não é nossa |
 | `Admin` (`23da6832`, `role = super-admin`) | não é tenant |
 | `meta-review` (`d38b48ca`, `role = agent`) | conta de revisão da Meta, zero dados |
 
@@ -150,7 +156,7 @@ e te aviso antes de seguir.
 
 ## 4. Edge functions
 
-1. **`provision-openai-project`** (service role; secret novo `OPENAI_ADMIN_KEY_WRITE`)
+1. **`provision-openai-project`** (service role; chave de admin da organização)
    1. idempotente: `openai_project_id` já preenchido ⇒ `already_provisioned`;
       `openai_key_source = 'customer'` ⇒ `skipped_customer_key`;
    2. `POST /v1/organization/projects` → `{ name: "Clinbia - <empresa> - <id curto>" }`
@@ -162,8 +168,12 @@ e te aviso antes de seguir.
    5. grava `openai_token = enc:…`, `openai_key_source = 'platform'`, os três ids, o limite e
       `openai_provisioned_at`. Falha ⇒ `openai_provision_error` e a fila reprocessa (5
       tentativas). **Nunca loga a chave.**
-   - Sem `OPENAI_ADMIN_KEY_WRITE` ⇒ erro claro `openai_admin_write_key_missing`, sem tentar.
-   - `OPENAI_ADMIN_KEY` atual passa a ser **somente leitura** (calibração + coleta de uso).
+   - **Resolução da chave de admin (decisão do user, 22/09):** usa `OPENAI_ADMIN_KEY_WRITE`
+     quando o secret existir; se não existir, cai em `OPENAI_ADMIN_KEY` (a admin key de acesso
+     total que está cadastrada hoje) e **loga um aviso** de que está usando a chave única de
+     leitura/escrita. Nenhuma das duas presente ⇒ `openai_admin_key_missing`, sem tentar.
+     O `admin_key_source` (`write` | `fallback_shared`) volta na resposta e vai para o relatório,
+     para o user saber quando a separação das duas chaves já valeu.
 2. **`openai-provision-worker`** (cron `*/5`): `claim_openai_provision_jobs()` → chama a
    função acima → marca `done`/`failed`/`skipped`. Inerte enquanto
    `provisioning_enabled = false`.
@@ -216,9 +226,9 @@ Mês corrente (fuso SP), via `admin_get_openai_account_usage` v2, ao lado do
 
 | # | passo | depende de você? |
 |---|---|---|
-| 1 | **este documento + as 3 migrations** | **SIM — seu OK, e a decisão sobre `Clinbia` e sobre `Bruno Admin`/134000** |
-| 2 | criar o secret `OPENAI_ADMIN_KEY_WRITE` | **SIM — só você tem a chave de admin da organização** |
-| 3 | aplicar `260000` + `261000` (+ `134000` se você aprovar) e verificar | não |
+| 1 | **este documento + as 3 migrations** | **FEITO — OK em 22/09, com as 3 decisões do §2 e do §4.1** |
+| 2 | secret de escrita da OpenAI | **opcional agora**: sem `OPENAI_ADMIN_KEY_WRITE` a função cai em `OPENAI_ADMIN_KEY` com aviso |
+| 3 | aplicar `260000` + `261000` + `134000` e verificar | não |
 | 4 | escrever as 4 edge functions + ajustar `billable` (§0.4) e deployar | não |
 | 5 | front: card "Consumo de IA" + botão provisionar, num commit só | **SIM — o deploy do front é seu** |
 | 6 | teste ponta a ponta com UMA conta de teste nova aprovada do zero | não (mas te mostro o resultado) |

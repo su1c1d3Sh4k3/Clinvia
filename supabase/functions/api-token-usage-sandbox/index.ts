@@ -194,7 +194,7 @@ Deno.serve(async (req) => {
 
         const { data: prof, error: profErr } = await supabase
             .from("profiles")
-            .select("markup, openai_token")
+            .select("markup, openai_key_source")
             .eq("id", ctx.userId)
             .maybeSingle();
         if (profErr) {
@@ -202,7 +202,9 @@ Deno.serve(async (req) => {
         }
         const ownMarkup = Number(prof?.markup);
         const markupOverride = Number.isFinite(ownMarkup) ? ownMarkup : null;
-        const billable = !(typeof prof?.openai_token === "string" && prof.openai_token.trim());
+        // `billable` por `openai_key_source`, não pela presença do token: a chave
+        // provisionada pela plataforma mora em `openai_token` e a fatura dela é nossa.
+        const billable = prof?.openai_key_source !== "customer";
 
         const { rate, source: rateSource } = await getUsdBrlRate(supabase);
 

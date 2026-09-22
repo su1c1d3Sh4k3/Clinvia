@@ -307,11 +307,16 @@ Deno.serve(async (req) => {
             // Margem da conta: markup próprio (profiles.markup) e se a conta é
             // cobrável. Conta com chave própria do provedor paga direto ao
             // provedor, então registra consumo com markup 0.
+            //
+            // `billable` é decidido por `openai_key_source`, NUNCA pela presença de
+            // `openai_token`: desde o provisionamento por conta, a chave gravada aí
+            // é a que a Clinbia criou e paga — decidir pelo token faria justamente
+            // a conta cuja fatura é nossa virar `billable = false`.
             let billing = billingCache.get(ownerId);
             if (!billing) {
                 const { data: prof, error: profErr } = await supabase
                     .from('profiles')
-                    .select('markup, openai_token')
+                    .select('markup, openai_key_source')
                     .eq('id', ownerId)
                     .maybeSingle();
                 if (profErr) {
@@ -325,7 +330,7 @@ Deno.serve(async (req) => {
                 const ownMarkup = Number(prof?.markup);
                 billing = {
                     markup: Number.isFinite(ownMarkup) ? ownMarkup : null,
-                    billable: !(typeof prof?.openai_token === 'string' && prof.openai_token.trim()),
+                    billable: prof?.openai_key_source !== 'customer',
                 };
                 billingCache.set(ownerId, billing);
             }

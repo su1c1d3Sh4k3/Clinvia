@@ -294,3 +294,19 @@ verify_jwt = false
 # Relatorio mensal de consumo + aviso de exclusao (pg_cron diario)
 [functions.account-emails-cron]
 verify_jwt = false
+
+# Projeto/chave OpenAI por conta.
+# provision-openai-project: so aceita a service role key (header proprio), sem JWT de usuario.
+# openai-provision-worker e sync-openai-usage: chamadas por pg_cron.
+# get-account-openai-key: chamada pelo n8n com x-api-key.
+[functions.provision-openai-project]
+verify_jwt = false
+
+[functions.openai-provision-worker]
+verify_jwt = false
+
+[functions.sync-openai-usage]
+verify_jwt = false
+
+[functions.get-account-openai-key]
+verify_jwt = false

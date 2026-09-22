@@ -7,13 +7,21 @@
 // sai por aqui, com service role + guard de admin, e MASCARADA por padrao.
 //
 // Acoes:
-//   get     -> estado da conta com a chave mascarada (clientes/view)
-//   reveal  -> chave em claro, descriptografada (clientes/edit)
+//   get             -> estado da conta com a chave mascarada (clientes/view)
+//   reveal          -> chave em claro, descriptografada (clientes/edit)
+//   provision       -> cria projeto + chave na OpenAI para esta conta (clientes/edit)
+//   set_spend_limit -> muda o limite mensal do projeto (clientes/edit)
+//   archive_project -> arquiva o projeto e solta a conta (clientes/edit + confirm)
+//   sync            -> puxa consumo/custo do projeto agora (clientes/view)
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { decryptToken } from "../_shared/token-tracker.ts";
 import { adminCan, adminCanAccessClient, adminForbidden, resolveAdminCaller } from "../_shared/admin-guard.ts";
+import { archiveProject, resolveAdminKey, setProjectSpendLimit } from "../_shared/openai-admin.ts";
+
+const READ_ONLY_ACTIONS = new Set(['get', 'sync']);
+const VALID_ACTIONS = ['get', 'reveal', 'provision', 'set_spend_limit', 'archive_project', 'sync'];
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -51,8 +59,16 @@ serve(async (req) => {
             return json({ success: false, error: 'profileId não fornecido', code: 'missing_profile_id' });
         }
 
+        if (!VALID_ACTIONS.includes(action)) {
+            return json({
+                success: false,
+                error: `Ação inválida: ${action}. Válidas: ${VALID_ACTIONS.join(', ')}.`,
+                code: 'unknown_action',
+            });
+        }
+
         const caller = await resolveAdminCaller(supabase, req);
-        const level = action === 'reveal' ? 'edit' : 'view';
+        const level = READ_ONLY_ACTIONS.has(action) ? 'view' : 'edit';
         if (
             !caller ||
             !adminCan(caller, 'clientes', level) ||
@@ -63,7 +79,7 @@ serve(async (req) => {
 
         const { data: profile, error } = await supabase
             .from('profiles')
-            .select('openai_token, openai_token_invalid, openai_key_source, openai_project_id, openai_spend_limit_usd, openai_provisioned_at, openai_provision_error')
+            .select('company_name, full_name, openai_token, openai_token_invalid, openai_key_source, openai_project_id, openai_spend_limit_usd, openai_provisioned_at, openai_provision_error')
             .eq('id', profileId)
             .maybeSingle();
 
@@ -97,8 +113,143 @@ serve(async (req) => {
             return json({ ...base, token: plain });
         }
 
-        if (action !== 'get') {
-            return json({ success: false, error: `Ação inválida: ${action}`, code: 'unknown_action' });
+        if (action === 'provision') {
+            // Delegado: a criacao na OpenAI vive numa funcao so, usada tambem pelo
+            // worker da fila. Aqui e o botao "Provisionar projeto OpenAI".
+            const res = await fetch(`${supabaseUrl}/functions/v1/provision-openai-project`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${serviceKey}`,
+                    'x-service-key': serviceKey,
+                },
+                body: JSON.stringify({ profileId }),
+            });
+            const out = await res.json().catch(() => ({}));
+            console.log('[admin-openai-account] provision by', caller.authUserId, 'target', profileId, out?.status || out?.code);
+            return json(out);
+        }
+
+        if (action === 'set_spend_limit') {
+            const limitUsd = Number(body?.limitUsd);
+            if (!Number.isFinite(limitUsd) || limitUsd <= 0) {
+                return json({ success: false, error: 'limitUsd inválido', code: 'invalid_limit' });
+            }
+            if (!profile.openai_project_id) {
+                return json({
+                    success: false,
+                    error: 'A conta não tem projeto na OpenAI. Provisione primeiro.',
+                    code: 'no_project',
+                });
+            }
+
+            const admin = resolveAdminKey();
+            if (!admin) {
+                return json({
+                    success: false,
+                    error: 'Nenhuma chave de admin da OpenAI configurada',
+                    code: 'openai_admin_key_missing',
+                });
+            }
+
+            const applied = await setProjectSpendLimit(admin, profile.openai_project_id, limitUsd);
+
+            // O limite guardado no banco vale como alvo do alerta de 80% mesmo
+            // quando a API nao aplicou o teto no projeto.
+            const { error: upErr } = await supabase
+                .from('profiles')
+                .update({
+                    openai_spend_limit_usd: limitUsd,
+                    openai_spend_alert_level: null,
+                    openai_spend_alert_sent_at: null,
+                    updated_at: new Date().toISOString(),
+                })
+                .eq('id', profileId);
+            if (upErr) return json({ success: false, error: upErr.message, code: 'db_error' });
+
+            return json({
+                success: true,
+                spend_limit_usd: limitUsd,
+                applied_on_openai: applied.applied,
+                warning: applied.warning ?? null,
+                admin_key_source: admin.source,
+            });
+        }
+
+        if (action === 'archive_project') {
+            if (body?.confirm !== true) {
+                return json({
+                    success: false,
+                    error: 'Arquivar o projeto derruba a chave da conta na OpenAI. Reenvie com confirm: true.',
+                    code: 'confirmation_required',
+                });
+            }
+            if (!profile.openai_project_id) {
+                return json({ success: false, error: 'A conta não tem projeto na OpenAI.', code: 'no_project' });
+            }
+
+            const admin = resolveAdminKey();
+            if (!admin) {
+                return json({
+                    success: false,
+                    error: 'Nenhuma chave de admin da OpenAI configurada',
+                    code: 'openai_admin_key_missing',
+                });
+            }
+
+            const projectId = profile.openai_project_id;
+            try {
+                await archiveProject(admin, projectId);
+            } catch (err: any) {
+                return json({
+                    success: false,
+                    error: `A OpenAI não arquivou o projeto: ${err?.message || err}`,
+                    code: err?.code || 'openai_error',
+                });
+            }
+
+            // Solta a conta: ela volta para a chave compartilhada e o painel
+            // mostra "estimado" de novo. Os dias ja coletados ficam no historico.
+            const { error: upErr } = await supabase
+                .from('profiles')
+                .update({
+                    openai_token: null,
+                    openai_token_invalid: false,
+                    openai_key_source: null,
+                    openai_project_id: null,
+                    openai_service_account_id: null,
+                    openai_api_key_id: null,
+                    openai_provisioned_at: null,
+                    openai_provision_error: null,
+                    openai_spend_alert_level: null,
+                    openai_spend_alert_sent_at: null,
+                    updated_at: new Date().toISOString(),
+                })
+                .eq('id', profileId);
+            if (upErr) return json({ success: false, error: upErr.message, code: 'db_error' });
+
+            console.warn('[admin-openai-account] archive by', caller.authUserId, 'target', profileId, 'project', projectId);
+            return json({
+                success: true,
+                archived_project_id: projectId,
+                message: 'Projeto arquivado na OpenAI. A conta voltou para a chave compartilhada.',
+            });
+        }
+
+        if (action === 'sync') {
+            if (!profile.openai_project_id) {
+                return json({ success: false, error: 'A conta não tem projeto na OpenAI.', code: 'no_project' });
+            }
+            const res = await fetch(`${supabaseUrl}/functions/v1/sync-openai-usage`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${serviceKey}`,
+                },
+                body: JSON.stringify({ profileId }),
+            });
+            const out = await res.json().catch(() => ({}));
+            return json(out);
         }
 
         return json(base);
