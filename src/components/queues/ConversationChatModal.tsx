@@ -270,9 +270,12 @@ export function ConversationChatModal({
 
     const uploadFile = async (file: File): Promise<string | null> => {
         try {
+            // A RLS do bucket deriva o tenant do PRIMEIRO segmento do caminho
+            // (media/<conversationId>/...); arquivo na raiz nao pertence a
+            // ninguem e o upload e barrado.
+            if (!activeConversationId) throw new Error("Conversa nao esta ativa");
             const safeName = file.name.normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9.-]/g, '_');
-            const fileName = `${Date.now()}_${safeName}`;
-            const filePath = fileName;
+            const filePath = `${activeConversationId}/${Date.now()}_${safeName}`;
 
             const { error: uploadError } = await supabase.storage
                 .from('media')
