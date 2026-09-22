@@ -38,6 +38,7 @@ Todas as migrations abaixo foram aplicadas com `npx supabase db query --linked -
 | 11 | **financial_access** só pelo servidor (RPC `set_financial_access`) | `20260922250000_financial_access_rpc.sql` | `d16ebfe` | 22/09 | toggle de Configurações OK; `update (financial_access)` revogado de `authenticated` |
 | 12 | **Item 2 (leitura)** — `profiles` deixa de ser legível por TODO logado (`using (true)`) e passa a ser escopada por tenant | `20260922290000_profiles_select_por_tenant.sql` | `161c8d6` | 22/09 ~19:10Z | `item_0_6_profiles_select/verify.sql` + conferência na tela com sessão real de colaborador (abaixo) |
 | 13 | **Item 4 (OpenAI por conta)** — rastro de saúde do sync (`openai_sync_runs`) + 3 alertas (`openai_alerts`): sync parado, zeragem em horário comercial, anomalia diária | `20260922300000_openai_sync_runs_e_alertas.sql` | `7353ace` | 22/09 ~21:15Z | `item_4_openai_alertas/verify.sql` + `harness.sql` de 7 fases (abaixo) |
+| 14 | **Resíduo do EXECUTE para PUBLIC** — `admin_get_dashboard_metrics` e `enqueue_openai_provision` | `20260922310000_execute_publico_residuo.sql` | (este commit) | 22/09 ~21:45Z | as duas passaram de `public=true anon=true` para `public=false anon=false`; trigger de provisionamento testado disparando depois do revoke |
 
 ### 1.1 O que cada um dos três últimos fechou
 
@@ -157,6 +158,21 @@ Todas as migrations abaixo foram aplicadas com `npx supabase db query --linked -
   **depois** `grant execute ... to <role>`. É a mesma armadilha do grant por coluna. (É também a causa
   raiz do resíduo já conhecido em `admin_get_dashboard_metrics` e `enqueue_openai_provision`.)
 
+**Resíduo do EXECUTE para PUBLIC** (`20260922310000`) — fechado logo depois do item 4, porque foi a
+mesma armadilha:
+
+- `admin_get_dashboard_metrics()` (retorna jsonb) **tem** guard de super admin no corpo, então `anon`
+  já tomava erro; o defeito era a função ser alcançável. Único chamador é
+  `src/components/admin/sections/AdminDashboard.tsx`, como `authenticated` — papel que continua com
+  EXECUTE.
+- `enqueue_openai_provision()` retorna `trigger` e serve a 1 trigger
+  (`zz_profiles_enqueue_openai_provision`, `after insert or update of status on profiles`). Postgres
+  não deixa chamar função de trigger direto, e o EXECUTE de função de trigger é checado na **criação**
+  do trigger, não a cada disparo ⇒ exposição real era zero e revogar não para o provisionamento.
+  Testado de verdade: `update profiles set status = status` dentro de transação com `rollback`
+  disparou o trigger sem `permission denied`.
+- Regra virou linha no `CLAUDE.md`, ao lado da do grant por coluna.
+
 ### 1.2 Monitoramento
 
 Depois dos três applies, nas duas janelas:
@@ -189,6 +205,16 @@ blindagem da própria verificação.
   `52943194-5253-4dca-8c73-ad4d15af8274`. Era self-tenant criado em 18/09 com **só linhas de
   semente** (49). Removida via `admin_delete_tenant_data(uuid, false)` + delete em `profiles` e
   `auth.users`. `profiles` caiu de 9 para 8 linhas.
+- Tenant de teste do provisionamento OpenAI removido em 22/09 (confirmado pelo user):
+  `Clinbia TESTE OpenAI` / `9a226f0a-ebf3-451c-9c18-13f3df798f38` /
+  `clinbia.ai+testeopenai@gmail.com`. Também eram **só 49 linhas de semente** (dry-run antes:
+  crm_funnels 3, crm_stages 25, expense_categories 7, queues 7, revenue_categories 5, tags 1,
+  team_members 1) e **zero objeto no Storage**. Removidos: dados por `admin_delete_tenant_data(uuid,
+  false)`, a linha da fila `openai_provision_queue`, as 1+3 linhas de uso/custo do projeto de teste,
+  a linha de `profiles`, o usuário de `auth` (DELETE na Admin API → 200, `GET` depois = 404
+  `user_not_found`) e o projeto `proj_lAauA6wFrVZDDyEVvw3cMBhk` **arquivado na OpenAI**. `profiles`
+  ficou com 8 linhas. Para arquivar foi preciso abrir a ação `archive_project` em
+  `provision-openai-project` (por `projectId`, não por `profileId`: a conta já não existia).
 - `meta-review@clinbia.ai` **fica** (decisão do user). Correção de um erro de relatório anterior:
   não é linha de `profiles`, é **colaborador em `team_members`** (`7f75aca7-…`) do tenant
   `3e21175c-b183-4041-b375-eacb292e8d41`.

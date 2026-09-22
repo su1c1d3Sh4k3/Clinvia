@@ -81,6 +81,7 @@ Harness and monitoring scripts: `supabase/tests/security/`.
 - **Every SECURITY DEFINER RPC needs a tenant check in its body and a fixed `search_path`.**
 - **Super admin is `public.admin_users`** (`is_super_admin` + `is_active`), never `profiles.role`.
 - Column-level `revoke` is inert while the table-level `grant` exists: `revoke <priv> on <table> from <role>` **then** `grant <priv> (<allowed cols>) on <table> to <role>`.
+- Same trap with functions: **`create function` grants EXECUTE to `PUBLIC`**, and `revoke ... from anon, authenticated` does NOT remove PUBLIC's grant — the function stays callable by everyone. Every new function ends with `revoke all on function <fn>(<args>) from public, anon[, authenticated]` **then** `grant execute on function <fn>(<args>) to <roles>`. Check with `has_function_privilege('anon', oid, 'EXECUTE')`, never by reading the migration.
 - RLS never errors on UPDATE/DELETE (no matching policy = 0 rows, success). Only INSERT/`with check` raises `42501`. To hard-block a write, use a privilege, not a policy.
 - Every security migration ships with a `_rollback.sql` next to it and a before/after access test.
 

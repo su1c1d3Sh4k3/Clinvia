@@ -60,7 +60,7 @@ serve(async (req) => {
         // projeto chamavel com o service key (o admin-openai-account exige JWT
         // de admin e nao serve para o lote).
         const action = typeof body?.action === 'string' ? body.action : '';
-        if (action === 'get_spend_limit' || action === 'clear_spend_limit') {
+        if (action === 'get_spend_limit' || action === 'clear_spend_limit' || action === 'archive_project') {
             const projectId = typeof body?.projectId === 'string' ? body.projectId : '';
             if (!projectId) {
                 return json({ success: false, error: 'projectId não fornecido', code: 'missing_project_id' }, 400);
@@ -72,6 +72,13 @@ serve(async (req) => {
             if (action === 'get_spend_limit') {
                 const read = await getProjectSpendLimit(adminKey, projectId);
                 return json({ success: true, project_id: projectId, ...read });
+            }
+            // Arquivar e por projectId, nao por profileId, porque o caso de uso e
+            // limpar projeto de conta que JA foi excluida (o profile nao existe mais).
+            if (action === 'archive_project') {
+                await archiveProject(adminKey, projectId);
+                console.warn('[provision-openai-project] projeto arquivado', projectId);
+                return json({ success: true, project_id: projectId, archived: true });
             }
             const out = await clearProjectSpendLimit(adminKey, projectId);
             console.warn('[provision-openai-project] spend limit removido', projectId, out.cleared);
