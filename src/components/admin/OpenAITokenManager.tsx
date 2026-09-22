@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Key, Eye, CheckCircle, XCircle, Loader2, AlertTriangle } from "lucide-react";
+import { Key, Eye, Copy, CheckCircle, XCircle, Loader2, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -28,6 +28,7 @@ const OpenAITokenManager = ({
 }: OpenAITokenManagerProps) => {
     const [token, setToken] = useState("");
     const [revealing, setRevealing] = useState(false);
+    const [copying, setCopying] = useState(false);
     const [testing, setTesting] = useState(false);
     const [saving, setSaving] = useState(false);
     const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -46,6 +47,24 @@ const OpenAITokenManager = ({
             toast.error("Erro ao revelar token: " + err.message);
         } finally {
             setRevealing(false);
+        }
+    };
+
+    /** Copiar é o caso de uso real: a chave vai para a credencial do n8n. */
+    const handleCopy = async () => {
+        setCopying(true);
+        try {
+            const { data, error } = await supabase.functions.invoke("admin-openai-account", {
+                body: { profileId, action: "reveal" },
+            });
+            if (error) throw error;
+            if (!data?.token) throw new Error(data?.error || "Token indisponível");
+            await navigator.clipboard.writeText(data.token);
+            toast.success("Chave copiada.");
+        } catch (err: any) {
+            toast.error("Erro ao copiar token: " + err.message);
+        } finally {
+            setCopying(false);
         }
     };
 
@@ -172,6 +191,16 @@ const OpenAITokenManager = ({
                             {revealing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Eye className="w-3.5 h-3.5" />}
                             <span className="ml-1.5">Revelar</span>
                         </Button>
+                        <Button
+                            onClick={handleCopy}
+                            disabled={copying}
+                            size="sm"
+                            variant="outline"
+                            className="border-gray-600 text-gray-300 hover:bg-gray-700"
+                        >
+                            {copying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Copy className="w-3.5 h-3.5" />}
+                            <span className="ml-1.5">Copiar</span>
+                        </Button>
                     </div>
                 )}
 
@@ -248,6 +277,9 @@ const OpenAITokenManager = ({
                 <p className="text-xs text-gray-500">
                     Se configurado, este token será usado ao invés do token padrão da plataforma.
                     Se o token falhar, o sistema usará automaticamente o token padrão.
+                    {keySource === "platform"
+                        ? " Esta chave foi criada pela Clinbia: para removê-la use “Arquivar projeto” no card de consumo, senão o projeto fica ativo na OpenAI sem chave no sistema."
+                        : " Uma chave colada aqui é tratada como chave DO CLIENTE: a fatura é dele e a Clinbia não aplica margem."}
                 </p>
             </CardContent>
         </Card>

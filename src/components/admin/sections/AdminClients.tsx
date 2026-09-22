@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
 import TokenUsageCharts from "@/components/admin/TokenUsageCharts";
 import OpenAITokenManager from "@/components/admin/OpenAITokenManager";
+import OpenAIAccountCard from "@/components/admin/OpenAIAccountCard";
 import { useExchangeRate } from "@/hooks/useExchangeRate";
 import { useAdminImpersonate } from "@/hooks/useAdminImpersonate";
 import { sendClientApprovalWebhook } from "@/utils/sendApprovalWebhook";
@@ -647,6 +648,12 @@ export default function AdminClients({ canEdit, isSuperAdmin }: { canEdit: boole
                                                     </h3>
                                                     <TokenUsageCharts profileId={profile.id} />
                                                 </div>
+
+                                                <OpenAIAccountCard
+                                                    profileId={profile.id}
+                                                    canEdit={canEdit}
+                                                    onAccountChanged={() => loadOpenAIAccount(profile.id)}
+                                                />
 
                                                 {canEdit && (
                                                     <OpenAITokenManager
