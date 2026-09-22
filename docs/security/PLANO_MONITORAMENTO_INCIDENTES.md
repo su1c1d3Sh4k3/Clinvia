@@ -301,8 +301,50 @@ Pontos de chamada:
 > functions que importam `_shared`** (o bundler do Deno inclui `_shared` transitivamente).
 > São ~130 deploys. Isso **afeta produção** e por isso não acontece sem seu OK, conforme sua regra.
 > Alternativa mais barata para a Etapa 1: instrumentar só as ~20 functions de maior risco
-> (as 16 `api-*`, `webhook-handle-message`, `meta-send-message`, `sync-openai-usage`,
-> `campaign-dispatch-worker`) e deixar o resto para uma janela de deploy combinada.
+> e deixar o resto para uma janela de deploy combinada. **Decisão sua (22/09): é esta.**
+
+#### Lista da Etapa 1 — as 20 (levantada 22/09/2026, aguardando seu OK)
+
+O critério é um só: **quando isto quebra, quem descobre?** Se a resposta for "o cliente,
+horas depois, reclamando", entra. Se for "aparece na tela na hora", fica para depois.
+
+| # | Function | Dispara por | Se quebra em silêncio |
+|---|----------|-------------|------------------------|
+| **Entrada de mensagem — o pior lugar para falhar em silêncio** ||||
+| 1 | `webhook-queue-receiver` | Meta/UAZAPI | a mensagem do paciente nem entra na fila. Nada na tela indica isso |
+| 2 | `webhook-queue-processor` | cron `* * * * *` | fila enche, inbox congela no passado |
+| 3 | `webhook-handle-message` | processor | mensagem gravada mas sem CRM/IA/automação; ou nem gravada |
+| 4 | `meta-webhook` | Meta | idem 1, no canal oficial |
+| 5 | `instagram-webhook` | Meta/IG | Direct para de chegar (já aconteceu 3× este mês) |
+| **Saída de mensagem** ||||
+| 6 | `evolution-send-message` | front + automações | é o funil por onde TODO envio passa |
+| 7 | `meta-send-message` | `evolution-send-message` | envio oficial falha; erro da Meta hoje só aparece no log |
+| **Automações por cron — ninguém está olhando quando quebram** ||||
+| 8 | `campaign-dispatch` | cron `* * * * *` | campanha trava no meio; cliente só vê no relatório |
+| 9 | `appointment-confirmation-cron` | cron `*/10` | confirmação de agenda para; paciente não é lembrado |
+| 10 | `delivery-automation-worker` | cron `* * * * *` | automação de entrega para |
+| 11 | `delivery-automation-respond` | webhook | o paciente aperta o botão e nada acontece |
+| 12 | `auto-close-worker` | cron `*/5` | conversa nunca fecha; fila incha |
+| 13 | `conversation-summary-worker` | cron `* * * * *` | resumo some sem aviso |
+| 14 | `scheduler-notifications` | cron `*/10` | lembrete de agendamento não sai |
+| **Dinheiro e plataforma** ||||
+| 15 | `api-token-usage` | n8n | **já está quebrado desde 22/09 17:10 e só descobrimos por sondagem manual** |
+| 16 | `openai-provision-worker` | cron `*/5` | conta nova fica sem chave própria |
+| 17 | `sync-openai-usage` | cron `20 * * * *` | custo real para de ser medido; margem vira chute |
+| **A IA e o paciente** ||||
+| 18 | `api-scheduling` | n8n | a IA não consegue agendar e responde como se tivesse conseguido |
+| 19 | `api-availability` | n8n | a IA oferece horário errado ou nenhum |
+| 20 | `api-public-booking` | **paciente**, sem login | a única que um estranho chama; erro dela é erro na cara do paciente |
+
+**Lote 2** (entram depois, sem urgência): `webhook-handle-status`,
+`instagram-send-message`, `api-crm`, `api-send-message`, `api-get-media`,
+`api-contacts`, `api-services`, `api-professionals`, `instagram-refresh-token`,
+`recurrence-campaign-generator`, `account-emails-cron`, `uzapi-health-check`.
+
+**Fora da lista de propósito:** as 11 `*-sandbox` (ambiente de teste, erro ali é esperado)
+e `test-openai-token` (é um probe manual).
+
+Como o `_shared` é inlinado pelo bundler, instrumentar estas 20 = **20 deploys**, não 130.
 
 ### 3.2 pg_cron — watcher
 Cron novo `cron-health-watch` (`5 * * * *`) lendo `cron.job_run_details` dos 26 jobs
