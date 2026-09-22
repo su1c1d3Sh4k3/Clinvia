@@ -6,9 +6,16 @@ const corsHeaders = {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+/** Campo vazio (null, '' ou só espaço) viaja como null no payload do n8n. */
+function blankToNull(value: unknown): string | null {
+    if (typeof value !== 'string') return null;
+    const trimmed = value.trim();
+    return trimmed === '' ? null : trimmed;
+}
+
 /**
  * ia-workflow-webhook
- * 
+ *
  * Proxy function to call external IA workflow webhooks
  * Avoids CORS issues when calling from frontend
  */
@@ -51,8 +58,47 @@ serve(async (req) => {
             }
         }
 
+        // Credencial do OpenAI da conta dentro do n8n. Lida aqui com service role
+        // porque `profiles` tem grant por COLUNA e essas duas não foram concedidas
+        // ao front — ele não consegue ler para mandar no corpo. Vazio vai como null.
+        let n8nOpenaiCredentialId: string | null = null;
+        let n8nOpenaiCredentialName: string | null = null;
+
+        if (user_id) {
+            try {
+                const supabase = createClient(
+                    Deno.env.get('SUPABASE_URL')!,
+                    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+                );
+                const { data: profile, error: profileError } = await supabase
+                    .from('profiles')
+                    .select('n8n_openai_credential_id, n8n_openai_credential_name')
+                    .eq('id', user_id)
+                    .maybeSingle();
+
+                if (profileError) {
+                    // Não fatal: ligar/desligar a IA não pode travar por causa disso.
+                    console.warn('[ia-workflow-webhook] Error reading n8n credential:', profileError.message);
+                } else if (profile) {
+                    n8nOpenaiCredentialId = blankToNull(profile.n8n_openai_credential_id);
+                    n8nOpenaiCredentialName = blankToNull(profile.n8n_openai_credential_name);
+                }
+            } catch (credentialError) {
+                console.error('[ia-workflow-webhook] Exception reading n8n credential:', credentialError);
+            }
+        }
+
         console.log('[ia-workflow-webhook] Action:', action);
-        console.log('[ia-workflow-webhook] Payload:', { user_id, instance_id, instance_name, platform, phone, token: token ? '***' : '' });
+        console.log('[ia-workflow-webhook] Payload:', {
+            user_id,
+            instance_id,
+            instance_name,
+            platform,
+            phone,
+            token: token ? '***' : '',
+            n8n_openai_credential_id: n8nOpenaiCredentialId,
+            n8n_openai_credential_name: n8nOpenaiCredentialName,
+        });
 
         // Validate action
         if (!action || !['create', 'delete'].includes(action)) {
@@ -87,6 +133,8 @@ serve(async (req) => {
                     platform,
                     phone,
                     token,
+                    n8n_openai_credential_id: n8nOpenaiCredentialId,
+                    n8n_openai_credential_name: n8nOpenaiCredentialName,
                 }),
                 signal: controller.signal,
             });
