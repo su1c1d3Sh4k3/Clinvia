@@ -301,10 +301,11 @@ export function DashboardGuide() {
                     No filtro Total, o gauge de ocupação considera os últimos 12 meses (senão anos sem agenda zerariam a
                     taxa); procedimentos e faturamento seguem o histórico completo.
                 </Callout>
-                <Callout type="atencao" title="O custo da IA também é uma estimativa">
-                    A cada resposta a IA reenvia a conversa inteira para poder lembrar do contexto, e o provedor cobra
-                    essa parte repetida bem mais barato (cache). O sistema já aplica esse desconto no cálculo, mas o
-                    valor oficial continua sendo o da fatura do provedor.
+                <Callout type="atencao" title="De onde vem o custo da IA">
+                    O valor em reais é o que a Clinvia cobra pelo uso da IA da sua conta, apurado na medição do próprio
+                    provedor no projeto da conta — não é um cálculo aproximado por token. Conta que ainda não tem projeto
+                    próprio aparece com o selo <strong>estimado</strong>: nesse caso o valor vem do consumo de tokens
+                    registrado e pode divergir do fechamento.
                 </Callout>
                 <Callout type="dica" title="O mesmo resumo chega por e-mail todo dia 1º">
                     Na virada do mês, o administrador recebe no e-mail da conta o consumo do mês anterior — tokens de IA,

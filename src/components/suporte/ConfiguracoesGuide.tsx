@@ -238,9 +238,10 @@ export function ConfiguracoesGuide() {
                     deixa de saber que uma conexão caiu ou que o consumo do mês subiu.
                 </Callout>
                 <Callout type="dica" title="O relatório de consumo não é a fatura">
-                    Os valores em reais são uma <strong>estimativa</strong> do custo de IA e de mensagens da Meta,
-                    calculada pelo mesmo critério da aba Minha Conta do Dashboard. A cobrança oficial continua vindo
-                    pelos canais comerciais.
+                    O custo da IA sai da medição do provedor no projeto da sua conta; o de mensagens da Meta é uma
+                    <strong> estimativa</strong> pelo nº de envios × preço da categoria do template. Os dois seguem o
+                    mesmo critério da aba Minha Conta do Dashboard, e a cobrança oficial continua vindo pelos canais
+                    comerciais.
                 </Callout>
             </TopicSection>
 
