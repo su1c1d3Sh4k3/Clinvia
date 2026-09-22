@@ -209,12 +209,23 @@ end;
 $fn$;
 
 -- ---------------------------------------------------------------------------
--- 6) admin_users nao precisa de privilegio para anon
+-- 6) admin_users: nenhum cliente escreve nela
 -- ---------------------------------------------------------------------------
+-- Com a funcao lendo admin_users, a tabela passa a ser a raiz do privilegio da
+-- plataforma. Confiar so em RLS aqui e fraco: UPDATE/DELETE sem policy casando
+-- nao levantam erro, apenas afetam 0 linhas — e a policy admin_users_super_write
+-- e FOR ALL, ou seja, quem virasse super admin poderia promover outros.
+--
+-- O navegador NUNCA escreve nesta tabela: AdminTeam.tsx so faz SELECT e manda
+-- criar/editar/desativar pela edge fn `admin-create-user` (service_role, que
+-- sanitiza permissions/escopo e nunca toca em is_super_admin). AdminAuth.tsx,
+-- useAdminUser.ts, admin-2fa e _shared/admin-guard.ts tambem so leem.
+--
+-- Logo: authenticated fica somente com SELECT (o painel precisa ler a propria
+-- linha) e anon perde tudo. Com isso INSERT, UPDATE e DELETE feitos com o token
+-- do usuario retornam 42501 direto do privilegio, sem depender de RLS, e criar
+-- um novo super admin exige migration deliberada no banco.
 revoke all on public.admin_users from anon;
-
--- Escrita de `is_super_admin` so pelo proprio super admin (policy
--- admin_users_super_write) ou service_role. A tabela nao tem policy de UPDATE
--- para membro comum do painel, entao nao ha auto-promocao aqui.
+revoke insert, update, delete, truncate on public.admin_users from authenticated;
 
 commit;

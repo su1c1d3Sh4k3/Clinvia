@@ -151,6 +151,7 @@ end;
 $fn$;
 
 grant all on public.admin_users to anon;
+grant insert, update, delete, truncate on public.admin_users to authenticated;
 
 commit;
 
