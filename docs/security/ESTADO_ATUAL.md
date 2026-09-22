@@ -38,7 +38,7 @@ Todas as migrations abaixo foram aplicadas com `npx supabase db query --linked -
 | 11 | **financial_access** só pelo servidor (RPC `set_financial_access`) | `20260922250000_financial_access_rpc.sql` | `d16ebfe` | 22/09 | toggle de Configurações OK; `update (financial_access)` revogado de `authenticated` |
 | 12 | **Item 2 (leitura)** — `profiles` deixa de ser legível por TODO logado (`using (true)`) e passa a ser escopada por tenant | `20260922290000_profiles_select_por_tenant.sql` | `161c8d6` | 22/09 ~19:10Z | `item_0_6_profiles_select/verify.sql` + conferência na tela com sessão real de colaborador (abaixo) |
 | 13 | **Item 4 (OpenAI por conta)** — rastro de saúde do sync (`openai_sync_runs`) + 3 alertas (`openai_alerts`): sync parado, zeragem em horário comercial, anomalia diária | `20260922300000_openai_sync_runs_e_alertas.sql` | `7353ace` | 22/09 ~21:15Z | `item_4_openai_alertas/verify.sql` + `harness.sql` de 7 fases (abaixo) |
-| 14 | **Resíduo do EXECUTE para PUBLIC** — `admin_get_dashboard_metrics` e `enqueue_openai_provision` | `20260922310000_execute_publico_residuo.sql` | (este commit) | 22/09 ~21:45Z | as duas passaram de `public=true anon=true` para `public=false anon=false`; trigger de provisionamento testado disparando depois do revoke |
+| 14 | **Resíduo do EXECUTE para PUBLIC** — `admin_get_dashboard_metrics` e `enqueue_openai_provision` | `20260922310000_execute_publico_residuo.sql` | `312184b` | 22/09 ~21:45Z | as duas passaram de `public=true anon=true` para `public=false anon=false`; trigger de provisionamento testado disparando depois do revoke |
 
 ### 1.1 O que cada um dos três últimos fechou
 
