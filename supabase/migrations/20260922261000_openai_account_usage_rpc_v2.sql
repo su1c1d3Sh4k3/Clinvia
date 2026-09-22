@@ -1,4 +1,4 @@
--- RASCUNHO — NAO APLICADO. Aguardando o OK do user (22/09/2026).
+-- APLICADA E VERIFICADA em producao em 22/09/2026.
 --
 -- Etapa "projeto e chave OpenAI por conta", delta 2: ajustes na RPC que alimenta
 -- o card "Consumo de IA" do Super Admin.

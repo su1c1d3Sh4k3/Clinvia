@@ -1,4 +1,4 @@
--- RASCUNHO — NAO APLICADO. Aguardando aprovacao do user (22/09/2026).
+-- APLICADA E VERIFICADA em producao em 22/09/2026.
 --
 -- Etapa "projeto e chave OpenAI por conta", parte 2: consumo REAL por conta.
 --
