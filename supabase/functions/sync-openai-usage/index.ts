@@ -12,6 +12,12 @@
 // (`llm_platform_settings.spend_alert_threshold`, hoje 0.80, e 1.00), grava
 // `openai_spend_alert_level` + `openai_spend_alert_sent_at` uma unica vez por
 // patamar. O card do Super Admin le isso; aqui nao se dispara e-mail.
+//
+// Rastro de saude (`openai_sync_runs`, migr 20260922300000): toda execucao grava
+// uma linha com status ok/partial/error. E a UNICA prova de que a coleta esta de
+// pe — `cron.job_run_details` diz `succeeded` so porque o http_post saiu. A
+// gravacao e BEST-EFFORT de proposito: falha em registrar nunca derruba o sync
+// (e por isso a ordem entre deploy e migration nao importa).
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -40,13 +46,35 @@ serve(async (req) => {
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
+    const startedAt = new Date();
+    let trigger = 'manual';
+
+    /** Rastro de saude. Best-effort: nunca derruba o sync. */
+    const logRun = async (row: Record<string, unknown>) => {
+        try {
+            const finishedAt = new Date();
+            const { error } = await supabase.from('openai_sync_runs').insert({
+                started_at: startedAt.toISOString(),
+                finished_at: finishedAt.toISOString(),
+                duration_ms: finishedAt.getTime() - startedAt.getTime(),
+                trigger,
+                ...row,
+            });
+            if (error) console.warn('[sync-openai-usage] nao registrou a execucao:', error.message);
+        } catch (e: any) {
+            console.warn('[sync-openai-usage] nao registrou a execucao:', e?.message || e);
+        }
+    };
+
     try {
         const body = await req.json().catch(() => ({}));
         const sinceDays: number | null = Number.isFinite(body?.sinceDays) ? Number(body.sinceDays) : null;
         const onlyProfileId: string | null = typeof body?.profileId === 'string' ? body.profileId : null;
+        if (typeof body?.trigger === 'string' && body.trigger.trim()) trigger = body.trigger.trim();
 
         const admin = resolveAdminKey();
         if (!admin) {
+            await logRun({ status: 'error', error_code: 'openai_admin_key_missing' });
             return json({
                 success: false,
                 error: 'Nenhuma chave de admin da OpenAI configurada (OPENAI_ADMIN_KEY_WRITE ou OPENAI_ADMIN_KEY)',
@@ -68,10 +96,14 @@ serve(async (req) => {
         if (onlyProfileId) q = q.eq('id', onlyProfileId);
 
         const { data: accounts, error: accErr } = await q;
-        if (accErr) return json({ success: false, error: accErr.message, code: 'db_error' }, 500);
+        if (accErr) {
+            await logRun({ status: 'error', error_code: 'db_error', error_message: accErr.message });
+            return json({ success: false, error: accErr.message, code: 'db_error' }, 500);
+        }
 
         const list = accounts ?? [];
         if (!list.length) {
+            await logRun({ status: 'ok', accounts: 0, usage_rows: 0, cost_rows: 0, admin_key_source: admin.source });
             return json({ success: true, accounts: 0, message: 'Nenhuma conta com projeto na OpenAI.' });
         }
 
@@ -131,17 +163,33 @@ serve(async (req) => {
                 updated_at: new Date().toISOString(),
             }));
 
+        const runBase = {
+            accounts: list.length,
+            usage_rows: usageRows.length,
+            cost_rows: costRows.length,
+            window_start: new Date(startTime * 1000).toISOString(),
+            admin_key_source: admin.source,
+        };
+
         if (usageRows.length) {
             const { error } = await supabase
                 .from('openai_project_usage_daily')
                 .upsert(usageRows, { onConflict: 'day,project_id,model' });
-            if (error) return json({ success: false, error: error.message, code: 'db_error_usage' }, 500);
+            if (error) {
+                await logRun({ ...runBase, status: 'error', error_code: 'db_error_usage', error_message: error.message });
+                return json({ success: false, error: error.message, code: 'db_error_usage' }, 500);
+            }
         }
         if (costRows.length) {
             const { error } = await supabase
                 .from('openai_project_costs_daily')
                 .upsert(costRows, { onConflict: 'day,project_id,line_item' });
-            if (error) return json({ success: false, error: error.message, code: 'db_error_costs' }, 500);
+            if (error) {
+                // usage ja gravou e o custo nao: faturamento fica incompleto para
+                // esta janela, por isso `partial` e nao `error`.
+                await logRun({ ...runBase, status: 'partial', error_code: 'db_error_costs', error_message: error.message });
+                return json({ success: false, error: error.message, code: 'db_error_costs' }, 500);
+            }
         }
 
         // Alerta de patamar, sobre o custo real do mes corrente.
@@ -174,6 +222,8 @@ serve(async (req) => {
             }
         }
 
+        await logRun({ ...runBase, status: 'ok' });
+
         return json({
             success: true,
             accounts: list.length,
@@ -185,6 +235,11 @@ serve(async (req) => {
         });
     } catch (err: any) {
         console.error('[sync-openai-usage] erro:', err?.code, err?.message || err);
+        await logRun({
+            status: 'error',
+            error_code: err?.code || 'unexpected_error',
+            error_message: String(err?.message || err).slice(0, 500),
+        });
         return json({ success: false, error: err?.message || 'Erro inesperado', code: err?.code || 'unexpected_error' }, 500);
     }
 });

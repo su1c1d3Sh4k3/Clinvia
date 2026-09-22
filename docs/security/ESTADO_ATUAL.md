@@ -37,6 +37,7 @@ Todas as migrations abaixo foram aplicadas com `npx supabase db query --linked -
 | 10 | **Colunas de segredo de `profiles`** (chave/projeto OpenAI do cliente legível por qualquer logado) | `20260922133000_profiles_revoke_secret_columns.sql` | `d16ebfe` | 22/09 | `revoke select on profiles` + `grant select (47 colunas)`; margem e segredos fora do grant |
 | 11 | **financial_access** só pelo servidor (RPC `set_financial_access`) | `20260922250000_financial_access_rpc.sql` | `d16ebfe` | 22/09 | toggle de Configurações OK; `update (financial_access)` revogado de `authenticated` |
 | 12 | **Item 2 (leitura)** — `profiles` deixa de ser legível por TODO logado (`using (true)`) e passa a ser escopada por tenant | `20260922290000_profiles_select_por_tenant.sql` | `161c8d6` | 22/09 ~19:10Z | `item_0_6_profiles_select/verify.sql` + conferência na tela com sessão real de colaborador (abaixo) |
+| 13 | **Item 4 (OpenAI por conta)** — rastro de saúde do sync (`openai_sync_runs`) + 3 alertas (`openai_alerts`): sync parado, zeragem em horário comercial, anomalia diária | `20260922300000_openai_sync_runs_e_alertas.sql` | (este commit) | 22/09 ~21:15Z | `item_4_openai_alertas/verify.sql` + `harness.sql` de 7 fases (abaixo) |
 
 ### 1.1 O que cada um dos três últimos fechou
 
@@ -118,6 +119,43 @@ Todas as migrations abaixo foram aplicadas com `npx supabase db query --linked -
   orçamento e AutoCloseSettings **todas com dados**. Isolamento: listar `profiles` devolve só a
   linha do dono; pedir outro tenant devolve `[]`; pedir `markup` devolve 42501. Rollback não foi
   necessário.
+
+**Item 4 — rastro de saúde e alertas do consumo da OpenAI** (`item_4_openai_alertas/`):
+
+- `openai_sync_runs`: 1 linha por execução de `sync-openai-usage` (status `ok`/`partial`/`error`,
+  duração, contas, linhas de uso e de custo, janela, origem da chave, código do erro). Existe porque
+  `cron.job_run_details` diz `succeeded` só porque o `net.http_post` saiu — **não é sinal de saúde**.
+  A gravação é *best-effort* na edge function (try/catch + `console.warn`), então falhar em registrar
+  nunca derruba o sync e a ordem entre deploy e migration não importa. Upsert de uso OK e de custo com
+  erro é gravado como `partial` (faturamento incompleto), não `error`.
+- Linha semente na migration: sem ela, `max(started_at) where status='ok'` seria NULL e a primeira
+  varredura alertaria "nunca concluiu". Com a semente, a carência de 3h conta do apply.
+- `openai_alerts` + `public.openai_alert_scan()` (cron `openai-alerts-scan`, `30 * * * *`), 3 tipos:
+  **sync parado** (crítico, dedupe por hora), **zeragem** (0 requisições hoje com média ≥ 50 req/dia
+  nos 7 dias anteriores, só 8h–20h em dia útil no fuso SP, conta provisionada há mais de 1 dia) e
+  **anomalia diária** (`usd_hoje >= greatest(piso, fator × média_7d)`, fator 3 e piso US$ 3,00/dia).
+  Tudo configurável em `llm_platform_settings` (7 colunas novas, com chave de desligar por tipo).
+- Calibração decidida com número medido, não chute: zeragem é medida em **requisições**, nunca em
+  custo (há dias com centenas de chamadas e R$ 0,00 por preço de modelo faltando, corrigido só em
+  `7182253`); a razão dia/média-7d da PELE é p50 1,05 · p90 8,37 · p95 10,45 ⇒ fator 3 sem piso
+  alertaria demais; `greatest(piso, fator × média)` também resolve o caso `média = 0` (conta nova cai
+  no piso absoluto). Comparar dia **parcial** contra média de dias cheios só gera falso negativo
+  (custo só cresce), então o alerta dispara no mesmo dia do estouro.
+- Os alertas **nunca cortam serviço** — decisão do user registrada em `263000`: conta não tem teto de
+  gasto. Leitura pelo painel só por RPC (`admin_get_openai_alerts`, `admin_get_openai_sync_health`,
+  ambas com `admin_can('clientes','view')`), porque as duas tabelas têm RLS ligada e **zero policy**.
+- Pós-apply: `verify.sql` verde (2 tabelas `rls=true policies=0 anon=false authenticated=false`,
+  cron ativo, config nos defaults, 7 contas, nenhum alerta em aberto) e `harness.sql` de 7 fases
+  provou os 3 alertas disparando de verdade com dado plantado, o dedupe (2ª varredura = 0 novos), o
+  piso segurando 50× de US$ 0,50 e as 3 chaves de desligar. Ponta a ponta: o smoke gravou
+  `smoke | ok | contas=7 | usage=4 | cost=12` e o **cron real das :20** gravou `hourly | ok` com os
+  mesmos números — a seção 7 da migration (o `trigger` no corpo do `invoke_openai_usage_sync`) está
+  de pé em produção.
+- **PITFALL que custou uma rodada:** `create function` já concede EXECUTE a **PUBLIC**, e
+  `revoke ... from anon, authenticated` **não** tira o grant de PUBLIC — as 3 funções novas nasceram
+  com `anon_exec=true`. Correto: `revoke all on function ... from public, anon[, authenticated]` e
+  **depois** `grant execute ... to <role>`. É a mesma armadilha do grant por coluna. (É também a causa
+  raiz do resíduo já conhecido em `admin_get_dashboard_metrics` e `enqueue_openai_provision`.)
 
 ### 1.2 Monitoramento
 
