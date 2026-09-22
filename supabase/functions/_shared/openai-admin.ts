@@ -187,6 +187,75 @@ export async function setProjectSpendLimit(
     }
 }
 
+/** Tentativa crua contra o endpoint de limite, para o relatorio projeto por projeto. */
+export interface SpendLimitAttempt {
+    step: string;
+    status: number;
+    body: string;
+}
+
+async function rawSpendLimitCall(
+    admin: AdminKey,
+    projectId: string,
+    init: RequestInit = {},
+): Promise<{ status: number; body: string }> {
+    try {
+        const res = await fetch(`${ADMIN_BASE}/projects/${projectId}/spend_limit`, {
+            ...init,
+            headers: {
+                'Authorization': `Bearer ${admin.key}`,
+                'Content-Type': 'application/json',
+                ...(init.headers || {}),
+            },
+        });
+        return { status: res.status, body: (await res.text()).slice(0, 300) };
+    } catch (err: any) {
+        return { status: 0, body: `falha de rede: ${err?.message || err}` };
+    }
+}
+
+/** Le o limite do projeto na OpenAI. Cru: o endpoint nao e documentado. */
+export async function getProjectSpendLimit(
+    admin: AdminKey,
+    projectId: string,
+): Promise<{ status: number; body: string }> {
+    return await rawSpendLimitCall(admin, projectId);
+}
+
+/**
+ * Remove o teto de gasto do projeto (decisao do user em 22/09/2026: conta sem
+ * teto — alerta em vez de corte, porque o atendimento nao pode parar).
+ * A OpenAI nao documenta remocao: tenta DELETE e cai para POST com threshold
+ * nulo. Devolve a trilha crua das tentativas e le o estado final, para dar a
+ * conferencia projeto por projeto sem depender de suposicao.
+ */
+export async function clearProjectSpendLimit(
+    admin: AdminKey,
+    projectId: string,
+): Promise<{ cleared: boolean; attempts: SpendLimitAttempt[] }> {
+    const attempts: SpendLimitAttempt[] = [];
+    const run = async (step: string, init?: RequestInit) => {
+        const res = await rawSpendLimitCall(admin, projectId, init);
+        attempts.push({ step, ...res });
+        return res;
+    };
+
+    await run('antes');
+    const del = await run('delete', { method: 'DELETE' });
+    if (del.status < 200 || del.status >= 300) {
+        await run('post_null', {
+            method: 'POST',
+            body: JSON.stringify({ threshold_amount: null, currency: 'USD', interval: 'month' }),
+        });
+    }
+
+    const after = await run('depois');
+    // Sem teto = o endpoint nao devolve mais um threshold numerico (ou nao existe).
+    const cleared = after.status === 404
+        || (after.status >= 200 && after.status < 300 && !/"threshold_amount"\s*:\s*\d/.test(after.body));
+    return { cleared, attempts };
+}
+
 export async function archiveProject(admin: AdminKey, projectId: string): Promise<void> {
     await adminFetch(admin, `/projects/${projectId}/archive`, { method: 'POST' });
 }

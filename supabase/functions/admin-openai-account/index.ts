@@ -18,7 +18,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { decryptToken } from "../_shared/token-tracker.ts";
 import { adminCan, adminCanAccessClient, adminForbidden, resolveAdminCaller } from "../_shared/admin-guard.ts";
-import { archiveProject, resolveAdminKey, setProjectSpendLimit } from "../_shared/openai-admin.ts";
+import { archiveProject, clearProjectSpendLimit, resolveAdminKey, setProjectSpendLimit } from "../_shared/openai-admin.ts";
 
 const READ_ONLY_ACTIONS = new Set(['get', 'sync']);
 const VALID_ACTIONS = ['get', 'reveal', 'provision', 'set_spend_limit', 'archive_project', 'sync'];
@@ -131,9 +131,12 @@ serve(async (req) => {
         }
 
         if (action === 'set_spend_limit') {
-            const limitUsd = Number(body?.limitUsd);
-            if (!Number.isFinite(limitUsd) || limitUsd <= 0) {
-                return json({ success: false, error: 'limitUsd inválido', code: 'invalid_limit' });
+            // `limitUsd: null` REMOVE o teto (padrão desde 22/09/2026: conta sem
+            // teto, alerta em vez de corte). Um número > 0 continua aplicando teto.
+            const clearing = body?.limitUsd === null;
+            const limitUsd = clearing ? null : Number(body?.limitUsd);
+            if (!clearing && (!Number.isFinite(limitUsd as number) || (limitUsd as number) <= 0)) {
+                return json({ success: false, error: 'limitUsd inválido (use um número > 0, ou null para remover o teto)', code: 'invalid_limit' });
             }
             if (!profile.openai_project_id) {
                 return json({
@@ -152,7 +155,10 @@ serve(async (req) => {
                 });
             }
 
-            const applied = await setProjectSpendLimit(admin, profile.openai_project_id, limitUsd);
+            const applied = clearing
+                ? await clearProjectSpendLimit(admin, profile.openai_project_id)
+                    .then((r) => ({ applied: r.cleared, warning: r.cleared ? undefined : 'A OpenAI não confirmou a remoção do teto. Conferir no painel do projeto.', attempts: r.attempts }))
+                : await setProjectSpendLimit(admin, profile.openai_project_id, limitUsd as number);
 
             // O limite guardado no banco vale como alvo do alerta de 80% mesmo
             // quando a API nao aplicou o teto no projeto.
@@ -173,6 +179,7 @@ serve(async (req) => {
                 applied_on_openai: applied.applied,
                 warning: applied.warning ?? null,
                 admin_key_source: admin.source,
+                ...(clearing ? { attempts: (applied as any).attempts } : {}),
             });
         }
 

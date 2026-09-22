@@ -147,15 +147,19 @@ const OpenAIAccountCard = ({ profileId, canEdit, onAccountChanged }: OpenAIAccou
     };
 
     const handleSaveLimit = async () => {
-        const limitUsd = Number(String(limitInput).replace(",", "."));
-        if (!Number.isFinite(limitUsd) || limitUsd <= 0) {
-            toast.error("Informe um limite em dólares maior que zero.");
+        // Campo vazio REMOVE o teto — é o padrão da conta desde 22/09/2026
+        // (sem corte de consumo; o controle é por alerta).
+        const clearing = String(limitInput).trim() === "";
+        const limitUsd = clearing ? null : Number(String(limitInput).replace(",", "."));
+        if (!clearing && (!Number.isFinite(limitUsd as number) || (limitUsd as number) <= 0)) {
+            toast.error("Informe um limite em dólares maior que zero, ou deixe vazio para não ter teto.");
             return;
         }
         setSavingLimit(true);
         try {
             const data = await callAccountAction({ action: "set_spend_limit", limitUsd });
             if (data.warning) toast.warning(data.warning);
+            else if (clearing) toast.success("Teto removido: a conta passa a consumir sem corte.");
             else toast.success("Limite aplicado no projeto da OpenAI.");
             await load();
         } catch (err: any) {
@@ -344,11 +348,14 @@ const OpenAIAccountCard = ({ profileId, canEdit, onAccountChanged }: OpenAIAccou
                                 {canEdit && (
                                     <div className="flex items-end gap-2 flex-wrap pt-2 border-t border-gray-700">
                                         <div className="space-y-1">
-                                            <label className="text-xs text-gray-400">Limite mensal (US$)</label>
+                                            <label className="text-xs text-gray-400">
+                                                Limite mensal (US$) — vazio = sem teto
+                                            </label>
                                             <Input
                                                 value={limitInput}
                                                 onChange={(e) => setLimitInput(e.target.value)}
                                                 inputMode="decimal"
+                                                placeholder="sem teto"
                                                 className="bg-gray-800 border-gray-700 text-white w-32 h-9"
                                             />
                                         </div>

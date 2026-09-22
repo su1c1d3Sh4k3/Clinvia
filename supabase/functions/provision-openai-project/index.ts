@@ -19,9 +19,11 @@ import { encryptToken } from "../_shared/token-tracker.ts";
 import {
     archiveProject,
     buildProjectName,
+    clearProjectSpendLimit,
     createProject,
     createServiceAccount,
     findProjectByName,
+    getProjectSpendLimit,
     resolveAdminKey,
     setProjectSpendLimit,
 } from "../_shared/openai-admin.ts";
@@ -52,6 +54,30 @@ serve(async (req) => {
         }
 
         const body = await req.json().catch(() => ({}));
+
+        // Manutencao do teto de gasto: le ou remove o limite de UM projeto na
+        // OpenAI. Mora aqui porque esta e a unica porta do ciclo de vida do
+        // projeto chamavel com o service key (o admin-openai-account exige JWT
+        // de admin e nao serve para o lote).
+        const action = typeof body?.action === 'string' ? body.action : '';
+        if (action === 'get_spend_limit' || action === 'clear_spend_limit') {
+            const projectId = typeof body?.projectId === 'string' ? body.projectId : '';
+            if (!projectId) {
+                return json({ success: false, error: 'projectId não fornecido', code: 'missing_project_id' }, 400);
+            }
+            const adminKey = resolveAdminKey();
+            if (!adminKey) {
+                return json({ success: false, error: 'Nenhuma chave de admin da OpenAI configurada', code: 'openai_admin_key_missing' }, 500);
+            }
+            if (action === 'get_spend_limit') {
+                const read = await getProjectSpendLimit(adminKey, projectId);
+                return json({ success: true, project_id: projectId, ...read });
+            }
+            const out = await clearProjectSpendLimit(adminKey, projectId);
+            console.warn('[provision-openai-project] spend limit removido', projectId, out.cleared);
+            return json({ success: true, project_id: projectId, ...out });
+        }
+
         profileId = typeof body?.profileId === 'string' ? body.profileId : '';
         if (!profileId) {
             return json({ success: false, error: 'profileId não fornecido', code: 'missing_profile_id' }, 400);
@@ -96,12 +122,19 @@ serve(async (req) => {
             }, 500);
         }
 
+        // Teto de gasto: por decisao do user em 22/09/2026 a conta nasce SEM teto
+        // (o gasto do cliente nao e previsivel e o atendimento nao pode parar) —
+        // o controle virou alerta, nao corte. So aplica limite se alguem definir
+        // um valor explicito na conta ou no default da plataforma.
         const { data: settings } = await supabase
             .from('llm_platform_settings')
             .select('default_spend_limit_usd')
             .eq('id', true)
             .maybeSingle();
-        const limitUsd = Number(profile.openai_spend_limit_usd ?? settings?.default_spend_limit_usd ?? 200);
+        const rawLimit = profile.openai_spend_limit_usd ?? settings?.default_spend_limit_usd ?? null;
+        const limitUsd = rawLimit === null || !Number.isFinite(Number(rawLimit)) || Number(rawLimit) <= 0
+            ? null
+            : Number(rawLimit);
 
         const name = buildProjectName(profile);
 
@@ -129,8 +162,10 @@ serve(async (req) => {
             throw err;
         }
 
-        // 3. limite de gasto — não fatal
-        const limit = await setProjectSpendLimit(admin, project.id, limitUsd);
+        // 3. limite de gasto — não fatal, e só quando houver limite configurado
+        const limit = limitUsd === null
+            ? { applied: false, warning: undefined as string | undefined }
+            : await setProjectSpendLimit(admin, project.id, limitUsd);
 
         // 4. grava criptografado
         const encrypted = await encryptToken(account.apiKey);
@@ -154,7 +189,7 @@ serve(async (req) => {
                 openai_api_key_id: account.apiKeyId,
                 openai_spend_limit_usd: limitUsd,
                 openai_provisioned_at: new Date().toISOString(),
-                openai_provision_error: limit.applied ? null : limit.warning ?? null,
+                openai_provision_error: limit.warning ?? null,
                 updated_at: new Date().toISOString(),
             })
             .eq('id', profile.id);
@@ -184,7 +219,7 @@ serve(async (req) => {
             spend_limit_applied: limit.applied,
             admin_key_source: admin.source,
             warnings: [
-                ...(limit.applied ? [] : [limit.warning!]),
+                ...(limit.warning ? [limit.warning] : []),
                 ...(admin.source === 'fallback_shared'
                     ? ['Usou OPENAI_ADMIN_KEY (chave única de leitura/escrita) porque OPENAI_ADMIN_KEY_WRITE não existe.']
                     : []),
