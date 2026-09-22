@@ -345,16 +345,33 @@ export default function AdminClients({ canEdit, isSuperAdmin }: { canEdit: boole
                 body: { profileId: profileToDelete.id },
             });
 
-            if (error) throw error;
+            // FunctionsHttpError só diz "non-2xx status code" — o motivo real vem
+            // no corpo da resposta, que o invoke não lê. Sem isto o super admin
+            // não tem como saber por que a exclusão falhou.
+            if (error) {
+                let detalhe = error.message;
+                try {
+                    const corpo = await (error as any)?.context?.json?.();
+                    if (corpo?.error) detalhe = corpo.error;
+                } catch { /* corpo não era JSON */ }
+                throw new Error(detalhe);
+            }
             if (!data?.success) throw new Error(data?.error || "Erro desconhecido");
 
-            toast.success(`Conta de "${profileToDelete.full_name || profileToDelete.email}" excluída com sucesso`);
-            setProfileToDelete(null);
-            fetchProfiles();
+            const nome = profileToDelete.full_name || profileToDelete.email;
+            toast.success(
+                data.already_deleted
+                    ? `A conta de "${nome}" já estava excluída — lista atualizada`
+                    : `Conta de "${nome}" excluída com sucesso`
+            );
         } catch (err: any) {
             toast.error("Erro ao excluir conta: " + err.message);
         } finally {
             setDeletingAccount(false);
+            setProfileToDelete(null);
+            // Também no erro: se a linha já não existe no banco, ela tem que sair
+            // da tela — senão o clique seguinte erra de novo no mesmo id.
+            fetchProfiles();
         }
     };
 
@@ -982,7 +999,11 @@ export default function AdminClients({ canEdit, isSuperAdmin }: { canEdit: boole
                         </AlertDialogCancel>
                         <AlertDialogAction
                             className="bg-red-600 hover:bg-red-700 text-white"
-                            onClick={handleDeleteAccount}
+                            // preventDefault segura o diálogo aberto: a limpeza leva
+                            // ~15s e o Radix fechava no clique, sem nenhum sinal de
+                            // progresso — o super admin clicava de novo na mesma
+                            // conta e a segunda chamada falhava. Fecha no finally.
+                            onClick={(e) => { e.preventDefault(); handleDeleteAccount(); }}
                             disabled={deletingAccount}
                         >
                             {deletingAccount ? "Excluindo..." : "Sim, excluir conta"}

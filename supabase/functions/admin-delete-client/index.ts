@@ -47,22 +47,51 @@ serve(async (req) => {
             throw new Error("profileId é obrigatório");
         }
 
-        // Prevent deletion of super-admins
-        const { data: targetProfile } = await supabaseAdmin
+        // O erro do lookup NAO pode ser engolido: qualquer falha de banco virava
+        // "Conta nao encontrada" e o super admin ficava sem saber o motivo.
+        const { data: targetProfile, error: targetError } = await supabaseAdmin
             .from("profiles")
             .select("role, full_name, email")
             .eq("id", profileId)
-            .single();
+            .maybeSingle();
 
-        if (!targetProfile) {
-            throw new Error("Conta não encontrada");
+        if (targetError) {
+            throw new Error(
+                `Falha ao ler a conta ${profileId}: ${targetError.message} (${targetError.code})`
+            );
         }
 
-        if (targetProfile.role === "super-admin") {
+        // Prevent deletion of super-admins
+        if (targetProfile?.role === "super-admin") {
             throw new Error("Não é possível excluir uma conta super-admin");
         }
 
-        console.log(`[admin-delete-client] Deleting account: ${targetProfile.email} (${profileId})`);
+        // A limpeza tem ~25 etapas e o perfil so cai na ultima (junto com o auth
+        // user), entao um clique repetido enquanto ela roda chegava aqui sem
+        // perfil e devolvia 400. Sem perfil, olha o auth user antes de desistir:
+        // com ele vivo ainda ha o que limpar; sem ele a conta ja foi excluida e
+        // repetir o clique tem que ser inofensivo.
+        if (!targetProfile) {
+            const { data: orphan } = await supabaseAdmin.auth.admin.getUserById(profileId);
+            if (!orphan?.user) {
+                console.log(`[admin-delete-client] Nada a fazer: ${profileId} já estava excluída`);
+                return new Response(
+                    JSON.stringify({
+                        success: true,
+                        message: "Esta conta já estava excluída",
+                        already_deleted: true,
+                    }),
+                    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+                );
+            }
+            console.log(
+                `[admin-delete-client] Perfil ausente, mas o auth user ${profileId} existe — retomando a limpeza`
+            );
+        }
+
+        console.log(
+            `[admin-delete-client] Deleting account: ${targetProfile?.email ?? "(perfil ausente)"} (${profileId})`
+        );
 
         // 1. Delete notifications (no cascade via related_user_id)
         await supabaseAdmin
