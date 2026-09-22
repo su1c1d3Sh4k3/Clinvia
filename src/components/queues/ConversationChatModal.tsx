@@ -30,6 +30,7 @@ import { ClientProfileModal } from "@/components/contacts/ClientProfileModal";
 import { NoteBubble } from "@/components/chat/NoteBubble";
 import { AddNoteModal } from "@/components/chat/AddNoteModal";
 import { useConversationNotes, mergeNotesIntoMessages } from "@/hooks/useConversationNotes";
+import { conversationMediaPath, contentTypeForUpload } from "@/lib/fileTypes";
 
 interface ConversationChatModalProps {
     open: boolean;
@@ -270,17 +271,13 @@ export function ConversationChatModal({
 
     const uploadFile = async (file: File): Promise<string | null> => {
         try {
-            // A RLS do bucket deriva o tenant do PRIMEIRO segmento do caminho
-            // (media/<conversationId>/...); arquivo na raiz nao pertence a
-            // ninguem e o upload e barrado.
             if (!activeConversationId) throw new Error("Conversa nao esta ativa");
-            const safeName = file.name.normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9.-]/g, '_');
-            const filePath = `${activeConversationId}/${Date.now()}_${safeName}`;
+            const filePath = conversationMediaPath(activeConversationId, file.name);
 
             const { error: uploadError } = await supabase.storage
                 .from('media')
                 .upload(filePath, file, {
-                    contentType: file.type,
+                    contentType: contentTypeForUpload(file),
                     cacheControl: '3600',
                     upsert: true
                 });

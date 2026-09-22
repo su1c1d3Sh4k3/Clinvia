@@ -137,6 +137,21 @@ export function contentTypeForUpload(file: File): string {
     return EXT_TO_MIME[getFileExtension(file.name)] || file.type || "application/octet-stream";
 }
 
+/**
+ * Caminho do anexo de conversa dentro do bucket `media`. A RLS de
+ * `storage.objects` deriva o tenant do PRIMEIRO segmento do caminho, então o
+ * conversationId é obrigatório: arquivo na raiz do bucket não pertence a
+ * ninguém e o upload é barrado.
+ */
+export function conversationMediaPath(conversationId: string, filename: string): string {
+    if (!conversationId) throw new Error("conversationId é obrigatório para anexar mídia");
+    const safeName = filename
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9.-]/g, "_");
+    return `${conversationId}/${Date.now()}_${safeName}`;
+}
+
 /** Nome com que o arquivo será salvo — completa a extensão pelo mimetype se faltar. */
 export function resolveDownloadName(filename?: string | null, mimetype?: string | null): string {
     const name = (filename || "").trim() || "arquivo";

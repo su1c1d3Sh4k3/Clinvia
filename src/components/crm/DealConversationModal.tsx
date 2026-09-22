@@ -28,6 +28,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
+import { conversationMediaPath, contentTypeForUpload } from "@/lib/fileTypes";
 
 interface DealConversationModalProps {
     contactId: string;
@@ -125,17 +126,19 @@ export function DealConversationModal({ contactId, contactName, trigger }: DealC
             let messageType: "text" | "image" | "audio" | "video" | "document" = "text";
 
             if (selectedFile) {
-                const fileExt = selectedFile.name.split(".").pop();
-                const fileName = `${Math.random()}.${fileExt}`;
-                const { error: uploadError, data } = await supabase.storage
-                    .from("chat-media")
-                    .upload(fileName, selectedFile);
+                // Era o bucket "chat-media", que NÃO EXISTE (o do chat interno é
+                // `chat_media`): todo anexo daqui falhava. Conversa de contato usa
+                // `media/<conversationId>/...`, igual ao inbox.
+                const filePath = conversationMediaPath(activeConversationId, selectedFile.name);
+                const { error: uploadError } = await supabase.storage
+                    .from("media")
+                    .upload(filePath, selectedFile, { contentType: contentTypeForUpload(selectedFile) });
 
                 if (uploadError) throw uploadError;
 
                 const { data: { publicUrl } } = supabase.storage
-                    .from("chat-media")
-                    .getPublicUrl(fileName);
+                    .from("media")
+                    .getPublicUrl(filePath);
 
                 mediaUrl = publicUrl;
 
