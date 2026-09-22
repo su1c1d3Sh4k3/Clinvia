@@ -39,6 +39,8 @@ Todas as migrations abaixo foram aplicadas com `npx supabase db query --linked -
 | 12 | **Item 2 (leitura)** — `profiles` deixa de ser legível por TODO logado (`using (true)`) e passa a ser escopada por tenant | `20260922290000_profiles_select_por_tenant.sql` | `161c8d6` | 22/09 ~19:10Z | `item_0_6_profiles_select/verify.sql` + conferência na tela com sessão real de colaborador (abaixo) |
 | 13 | **Item 4 (OpenAI por conta)** — rastro de saúde do sync (`openai_sync_runs`) + 3 alertas (`openai_alerts`): sync parado, zeragem em horário comercial, anomalia diária | `20260922300000_openai_sync_runs_e_alertas.sql` | `7353ace` | 22/09 ~21:15Z | `item_4_openai_alertas/verify.sql` + `harness.sql` de 7 fases (abaixo) |
 | 14 | **Resíduo do EXECUTE para PUBLIC** — `admin_get_dashboard_metrics` e `enqueue_openai_provision` | `20260922310000_execute_publico_residuo.sql` | `312184b` | 22/09 ~21:45Z | as duas passaram de `public=true anon=true` para `public=false anon=false`; trigger de provisionamento testado disparando depois do revoke |
+| 15 | **Privilégios de `token_usage_log`** — `anon`/`authenticated` tinham INSERT/UPDATE/DELETE/**TRUNCATE**/REFERENCES/TRIGGER/MAINTAIN na tabela de faturamento | `20260923110000_token_usage_log_privilegios.sql` | `ebfafa6` | 22/09 ~23:00Z | `item_token_usage_log_privilegios/verify.sql` + `ANTES.md` — `anon` some da lista de grants, `authenticated` fica só com SELECT nas 22 colunas não sensíveis; 28.571 linhas do dono, `get_my_token_stats` e `service_role` intactos |
+| 16 | **Modelo de dados do monitoramento de incidentes** (fundação; nada lê nem escreve ainda) | `20260923100000_incidentes_monitoramento.sql` | `12b009c` | 22/09 ~23:02Z | `supabase/.temp/_mon_verify.sql` — 5 tabelas com RLS e só policy de `service_role`, `anon_trunc=false`, 3 funções sem EXECUTE para anon/authenticated, sanitizador mascarando chave e telefone e **preservando UUID** |
 
 ### 1.1 O que cada um dos três últimos fechou
 
@@ -294,6 +296,18 @@ scripts rodados à mão). Já está versionado e sem segredo.
 ### `alter default privileges ... revoke all` + check de CI
 Tabela nova passa a nascer invisível para o front ⇒ só junto com o check de CI e a regra no
 CLAUDE.md (a regra já está lá, ver seção 4).
+
+**Medido em 22/09/2026 (`supabase/.temp/_trunc_scan.sql`), e é o argumento para fazer isto:**
+**134 das 139 tabelas do schema `public` concedem TRUNCATE a `anon` E a `authenticated`.**
+É o `GRANT ALL` padrão do Supabase, não um erro pontual. **TRUNCATE não passa por RLS** —
+"RLS on sem policy" não protege contra ele, e a policy não filtra nada: quem tem o
+privilégio esvazia a tabela inteira. Não há verbo TRUNCATE no PostgREST, então hoje não há
+caminho de exploração pela API; o risco é qualquer função SECURITY INVOKER chamável por
+`anon`/`authenticated` que rode TRUNCATE. As 5 exceções (criadas com grant explícito):
+`_reminder_log`, `admin_users`, `conversation_summary_queue`, `openai_alerts`,
+`openai_sync_runs` — mais as 5 do monitoramento (`20260923100000`) e `token_usage_log`
+(`20260923110000`). Corrigir em massa precisa de teste próprio: `revoke` cego derruba
+leitura legítima do front nas tabelas que ele de fato usa.
 
 ### Log de auditoria
 Registrar quem leu/alterou o quê nas tabelas sensíveis.
