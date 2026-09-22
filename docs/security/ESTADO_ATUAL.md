@@ -34,6 +34,9 @@ Todas as migrations abaixo foram aplicadas com `npx supabase db query --linked -
 | 7 | **Lote 0.3** — RLS de `#3` (backup de contatos e auditoria de split), `#6` (`opportunities`, `notifications`), `#11` (`dados_atendimento`, `team_costs`, `_reminder_log`), `#12` (`llm_model_prices`) | `20260922210000_lote_0_3_rls.sql` | `d97e593` | 22/09 ~17:30Z | `lote_0_3/verify.sql` (abaixo) |
 | 8 | **Fase 1** — super admin passa a ser `public.admin_users`, e a tabela deixa de ser escrivível pelo navegador | `20260922230000_super_admin_via_admin_users.sql` | `f5cf213` + `0432d77` | 22/09 ~17:30Z | `fase_1_admin_users/verify.sql` (abaixo) |
 | 9 | **0.4** — `send_push_notification` deixa de ter EXECUTE para PUBLIC/anon/authenticated | `20260922260000_send_push_notification_revoke.sql` | `67feae7` | 22/09 ~17:30Z | `item_0_4/verify.sql` (abaixo) |
+| 10 | **Colunas de segredo de `profiles`** (chave/projeto OpenAI do cliente legível por qualquer logado) | `20260922133000_profiles_revoke_secret_columns.sql` | `d16ebfe` | 22/09 | `revoke select on profiles` + `grant select (47 colunas)`; margem e segredos fora do grant |
+| 11 | **financial_access** só pelo servidor (RPC `set_financial_access`) | `20260922250000_financial_access_rpc.sql` | `d16ebfe` | 22/09 | toggle de Configurações OK; `update (financial_access)` revogado de `authenticated` |
+| 12 | **Item 2 (leitura)** — `profiles` deixa de ser legível por TODO logado (`using (true)`) e passa a ser escopada por tenant | `20260922290000_profiles_select_por_tenant.sql` | `161c8d6` | 22/09 ~19:10Z | `item_0_6_profiles_select/verify.sql` + conferência na tela com sessão real de colaborador (abaixo) |
 
 ### 1.1 O que cada um dos três últimos fechou
 
@@ -89,6 +92,33 @@ Todas as migrations abaixo foram aplicadas com `npx supabase db query --linked -
 - Divergência real encontrada e **não corrigida**: o banco tem `search_path=public` e a migration
   do repo declara `public, extensions`.
 
+**Item 2 / leitura de `profiles`** (`item_0_6_profiles_select/`):
+
+- O furo: `policy "Users can view all profiles" | SELECT | authenticated | using (true)`. As 6
+  policies de `profiles` são OR, então `profiles_all` (`id = auth.uid()`) **não restringia nada**.
+  Medido no arnês: TODA persona — dono, colaborador, dono de outro tenant e até **conta criada
+  segundos antes** — via as 10 linhas com e-mail, empresa, telefone, role, status, `tokens_total`,
+  `approximate_cost_total`, `audio_cost_*`, `financial_access` e os metadados do projeto OpenAI.
+- Policy nova: `using (id = auth.uid() or id = public.get_owner_id() or public.is_super_admin())`,
+  mais `revoke select on profiles from anon` (o grant de 47 colunas do `anon` era inerte, mas
+  existia).
+- `get_owner_id()` na policy é **obrigatório**: colaborador NÃO tem linha própria em `profiles`
+  (12/12 membros da PELE com `auth_user_id` não têm profile) e 7 pontos do front leem a linha do
+  **DONO** por `ownerId`. Policy só de `id = auth.uid()` esvaziaria Configurações para todo
+  colaborador.
+- Nada precisou virar RPC: o painel admin já ia por `admin_get_*_profiles` (SECURITY DEFINER com
+  guard) + edge fn `admin-get-avatars`; as 25 edge functions que tocam `profiles` usam
+  `service_role` (não passam por RLS); das 25 funções do banco que leem `profiles`, 24 são SECURITY
+  DEFINER e a única INVOKER (`get_profile_name`) está sem chamadores.
+- Pós-apply: dono / colaborador / outro tenant / conta nova = **1 linha**; super admin = 10;
+  `anon` = 42501; `service_role` = 10.
+- **Conferência na tela pela rota real do navegador** (sessão de colaborador criada por
+  `generate_link` + `/auth/v1/verify`, sem enviar e-mail, descartada no fim), agente ADRIELLY e
+  supervisora DAYANA da PELE: Configurações>Empresa, Minha Conta, Recorrência, Branding do
+  orçamento e AutoCloseSettings **todas com dados**. Isolamento: listar `profiles` devolve só a
+  linha do dono; pedir outro tenant devolve `[]`; pedir `markup` devolve 42501. Rollback não foi
+  necessário.
+
 ### 1.2 Monitoramento
 
 Depois dos três applies, nas duas janelas:
@@ -100,6 +130,20 @@ bash supabase/tests/security/monitor/monitor_storage_rls.sh 1 -> {"result":[]}
 
 Zero `42501` / `permission denied` / `new row violates row-level security` de tráfego real.
 A janela de 3h que cobriu todo o lote do Storage (item 2) também voltou vazia.
+
+Monitor específico da leitura de `profiles`:
+
+```
+bash supabase/tests/security/monitor/monitor_profiles_select.sh 1
+```
+
+Dois sinais: (1) `permission denied` em `profiles` nos `postgres_logs` — esperado só quando alguém
+pede coluna sem grant (margem/segredo); (2) status de `GET /rest/v1/profiles` nos `edge_logs` — o
+sinal de regressão é **200 com corpo vazio** (tela que ficou vazia). Baseline medida: os **406**
+dessa rota são pré-existentes (semântica do PostgREST para `.single()`/`.maybeSingle()` sem linha
+única) — janela de 6h ANTES do apply deu `406×1095 / 200×948`, proporção comparável à de depois, ou
+seja não é efeito da policy. Os únicos `permission denied` e HTTP 403 da janela foram as sondas de
+blindagem da própria verificação.
 
 ### 1.3 Faxina aprovada pelo user
 
@@ -115,15 +159,11 @@ A janela de 3h que cobriu todo o lote do Storage (item 2) também voltou vazia.
 
 ## 2. Pronto e NÃO aplicado (esperando o user)
 
-Os dois itens abaixo já estão commitados, com rollback, e travados numa dependência de front:
-**o user publica o bundle, avisa, e só então a migration entra.**
+Nenhuma migration de segurança está mais nessa fila: as duas que estavam travadas em publicação de
+front (`20260922133000` colunas de segredo e `20260922250000` financial_access) foram aplicadas em
+22/09 e estão na tabela da seção 1 (linhas 10 e 11).
 
-| Item | Migration | Depende de | Por que a ordem importa |
-|---|---|---|---|
-| **Colunas de segredo de `profiles`** (chave OpenAI do cliente legível por qualquer logado) | `20260922133000_profiles_revoke_secret_columns.sql` (+ `_rollback`) | publicação do front `ccb984a` | A migration faz `revoke select on profiles from authenticated, anon` e devolve `grant select (<todas as colunas menos as 3 secretas>)`. Qualquer `select("*")` vivo em `profiles` passaria a dar `permission denied for table`. Pré-requisito já conferido: nenhuma query viva do front faz `select("*")` em profiles (só `ChatArea.tsx.bak`). **É pré-requisito da etapa da chave OpenAI por conta**, porque as chaves novas serão gravadas nessas colunas. |
-| **financial_access** | `20260922250000_financial_access_rpc.sql` (+ `_rollback`) | publicação do front `4f85f5a` | O front passou a chamar `supabase.rpc("set_financial_access", { p_enabled })`; a migration revoga `update/insert (financial_access)` de `authenticated` e cria o RPC que confere no servidor se quem chamou é o dono. Aplicar antes de publicar quebraria o toggle em Configurações. |
-
-Também já commitado e **aguardando publicação do front**, sem migration atrelada:
+Já commitado e **aguardando publicação do front**, sem migration atrelada:
 
 - `752f97f` — helper único `conversationMediaPath()` em `src/lib/fileTypes.ts` (+ teste). Corrige
   `DealConversationModal`, que apontava para o bucket `chat-media` (**inexistente** — o do chat
@@ -164,6 +204,17 @@ paciente.
 O que sobrou da auditoria fora dos lotes já fechados. Regra: uma tabela por vez, com arnês antes/
 depois. Lembrar que `copilot` tem RLS on e **zero policies** ⇒ já devolve vazio hoje
 (pré-existente, não é regressão).
+
+Dois resíduos de `profiles` registrados pelo user para entrarem aqui (decisão dele, nesta passagem
+**não** foram tocados):
+
+1. Limpeza cosmética das 3 policies redundantes de UPDATE (`Users can update own profile` ×
+   `Users can update their own profile` × `profiles_all`) e da `Allow anonymous signup insert`,
+   que é inerte (`anon` não tem grant de INSERT em coluna nenhuma).
+2. Proposta a trazer: colaborador precisa mesmo enxergar `tokens_total`,
+   `approximate_cost_total` e `audio_cost_*` da linha do dono, ou essas colunas deveriam ficar só
+   para o dono e o super admin? Medido hoje: um agente lê `tokens_total = 248.198.430` e
+   `approximate_cost_total = 171,48` da PELE.
 
 ### Rotação de segredos
 Inclui `SCHEDULING_API_KEY`. **Derruba todas as `api-*` do n8n no ato** ⇒ exige janela com aceite
