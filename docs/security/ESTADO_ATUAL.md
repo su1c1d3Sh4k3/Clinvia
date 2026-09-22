@@ -37,7 +37,7 @@ Todas as migrations abaixo foram aplicadas com `npx supabase db query --linked -
 | 10 | **Colunas de segredo de `profiles`** (chave/projeto OpenAI do cliente legível por qualquer logado) | `20260922133000_profiles_revoke_secret_columns.sql` | `d16ebfe` | 22/09 | `revoke select on profiles` + `grant select (47 colunas)`; margem e segredos fora do grant |
 | 11 | **financial_access** só pelo servidor (RPC `set_financial_access`) | `20260922250000_financial_access_rpc.sql` | `d16ebfe` | 22/09 | toggle de Configurações OK; `update (financial_access)` revogado de `authenticated` |
 | 12 | **Item 2 (leitura)** — `profiles` deixa de ser legível por TODO logado (`using (true)`) e passa a ser escopada por tenant | `20260922290000_profiles_select_por_tenant.sql` | `161c8d6` | 22/09 ~19:10Z | `item_0_6_profiles_select/verify.sql` + conferência na tela com sessão real de colaborador (abaixo) |
-| 13 | **Item 4 (OpenAI por conta)** — rastro de saúde do sync (`openai_sync_runs`) + 3 alertas (`openai_alerts`): sync parado, zeragem em horário comercial, anomalia diária | `20260922300000_openai_sync_runs_e_alertas.sql` | (este commit) | 22/09 ~21:15Z | `item_4_openai_alertas/verify.sql` + `harness.sql` de 7 fases (abaixo) |
+| 13 | **Item 4 (OpenAI por conta)** — rastro de saúde do sync (`openai_sync_runs`) + 3 alertas (`openai_alerts`): sync parado, zeragem em horário comercial, anomalia diária | `20260922300000_openai_sync_runs_e_alertas.sql` | `7353ace` | 22/09 ~21:15Z | `item_4_openai_alertas/verify.sql` + `harness.sql` de 7 fases (abaixo) |
 
 ### 1.1 O que cada um dos três últimos fechou
 
