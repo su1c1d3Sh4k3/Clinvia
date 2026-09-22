@@ -17,14 +17,41 @@
 -- do front que removeu o `select("*")` em profiles (ChatArea.tsx) e moveu a
 -- leitura do token para a edge function (AdminClients.tsx). Aplicar antes gera
 -- `permission denied for table profiles` no chat de todos os usuarios.
+--
+-- CORRIGIDO EM 22/09 (achado no arnes do item 0.5): `revoke select (coluna)` e
+-- SILENCIOSAMENTE INOCUO enquanto existir `grant select on profiles` no nivel de
+-- TABELA — o privilegio de coluna e derivado do da tabela. A versao anterior
+-- deste arquivo so tinha os `revoke select (col)` e nao teria efeito nenhum.
+-- Tem de tirar o SELECT da TABELA e devolver coluna por coluna.
+--
+-- Pre-requisito ja verificado: nenhuma query viva do front faz `select("*")` em
+-- profiles (so `src/components/ChatArea.tsx.bak`, que nao compila). Todas as 12
+-- leituras nomeiam colunas. Se alguem voltar a usar `*`, quebra com 42501.
 
-revoke select (openai_token) on public.profiles from authenticated;
-revoke select (openai_token) on public.profiles from anon;
-revoke select (openai_api_key_id) on public.profiles from authenticated;
-revoke select (openai_api_key_id) on public.profiles from anon;
-revoke select (openai_service_account_id) on public.profiles from authenticated;
-revoke select (openai_service_account_id) on public.profiles from anon;
+begin;
+
+set local lock_timeout = '5s';
+
+do $mig$
+declare cols text;
+begin
+  -- Todas as colunas MENOS as tres secretas. Montado do catalogo para nao
+  -- precisar manter lista a mao (profiles tem 51 colunas).
+  select string_agg(quote_ident(column_name), ', ' order by ordinal_position)
+    into cols
+  from information_schema.columns
+  where table_schema = 'public' and table_name = 'profiles'
+    and column_name not in ('openai_token', 'openai_api_key_id',
+                            'openai_service_account_id');
+
+  execute 'revoke select on public.profiles from authenticated, anon';
+  execute format('grant select (%s) on public.profiles to authenticated, anon', cols);
+end $mig$;
+
+commit;
 
 -- Sanidade: o service_role continua com acesso total (nao passa por RLS nem por
 -- privilegio de coluna revogado de outro role), e o proprio dono da linha
 -- tambem nao le mais a coluna — por design: a chave so sai pela edge function.
+-- O alcance de LINHA nao muda: anon e authenticated continuam com o mesmo
+-- SELECT de antes, menos as 3 colunas.
