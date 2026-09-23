@@ -9,6 +9,17 @@
 // Zero contato, zero conversa, zero linha em `messages`. O rastro do envio fica
 // em `incident_notifications`.
 //
+// FORMATO (23/09/2026): quatro blocos, nenhum vazio — o que o servico faz, o
+// que falhou (ou o que foi DETECTADO, quando o componente e um detector e nao
+// quebrou nada), a causa provavel e o que fazer. O alerta anterior saia com
+// "falha em openai:daily_anomaly / causa: analise ainda nao feita / acao: abrir
+// o painel e investigar": o nome do componente repetido tres vezes e nenhuma
+// informacao. Cada bloco tem fonte propria e nenhuma delas e "invente":
+//   o que faz    -> incident_component_catalog (tabela estatica, sem IA)
+//   o que falhou -> incident_events, o evento BRUTO (mensagem, codigo, valores)
+//   causa        -> incident-analyze; sem analise sai "análise indisponível"
+//   o que fazer  -> IA, senao a acao padrao do catalogo
+//
 // ORDEM DE ENVIO: texto livre primeiro, template como plano B.
 // Dentro da janela de 24h o texto livre e gratuito e aceita quebra de linha
 // (parametro de template NAO aceita \n). Fora da janela a Meta recusa com 131047
@@ -187,31 +198,55 @@ function templatePayload(to: string, name: string, params: string[]) {
 
 type Alerta = {
     severidade: Severity;
+    /**
+     * servico  -> o componente QUEBROU. O bloco do meio e "O QUE FALHOU".
+     * detector -> o componente FUNCIONOU e achou algo. O bloco vira "O QUE FOI
+     *             DETECTADO". Sao coisas opostas e nao podem sair com o mesmo
+     *             texto: em 23/09 um alerta anunciou "falha em
+     *             openai:daily_anomaly" quando o detector de anomalia de custo
+     *             tinha acabado de fazer exatamente o trabalho dele.
+     */
+    natureza: "servico" | "detector";
     componente: string;
-    erro: string;
-    ocorrencias: string;
     conta: string;
+    ocorrencias: string;
+    /** Catalogo estatico. Nunca vem da IA: e barato, nao falha e nao alucina. */
+    oQueFaz: string;
+    /** Erro BRUTO: mensagem real, codigo, valores. Nunca o nome do componente. */
+    oQueFalhou: string;
     causa: string;
     acao: string;
     painel: string;
 };
 
-/** Texto livre: o layout bonito, que so passa dentro da janela de 24h. */
+/**
+ * Texto livre: quatro blocos, nenhum vazio. Passa dentro da janela de 24h, que e
+ * o caminho normal — o template e plano B e nao tem espaco para esta estrutura.
+ *
+ * A regra que este layout existe para cumprir: quem le tem que entender o que
+ * houve SEM abrir o painel. "Componente X falhou, abra o painel" e um lembrete
+ * de que algo deu errado, nao um alerta.
+ */
 function alertaTexto(a: Alerta): string {
+    const tituloMeio = a.natureza === "detector" ? "O QUE FOI DETECTADO" : "O QUE FALHOU";
     return [
         `${SEV_LABEL[a.severidade]} — Alerta Clinbia`,
-        ``,
         `Componente: ${a.componente}`,
-        `Erro: ${a.erro}`,
-        `Ocorrências: ${a.ocorrencias}`,
-        `Conta: ${a.conta}`,
+        `Conta: ${a.conta} · ${a.ocorrencias}`,
         ``,
-        `Causa provável: ${a.causa}`,
-        `O que fazer: ${a.acao}`,
+        `O QUE ESSE SERVIÇO FAZ`,
+        a.oQueFaz,
+        ``,
+        tituloMeio,
+        a.oQueFalhou,
+        ``,
+        `CAUSA PROVÁVEL`,
+        a.causa,
+        ``,
+        `O QUE FAZER`,
+        a.acao,
         ``,
         `Painel: ${a.painel}`,
-        ``,
-        `Mensagem automática do monitoramento da plataforma.`,
     ].join("\n");
 }
 
@@ -238,16 +273,171 @@ function resumoTexto([periodo, total, destaques]: string[]): string {
  *   {{5}} conta · {{6}} causa provavel · {{7}} o que fazer · {{8}} painel
  */
 function alertaParams(a: Alerta): string[] {
+    // O template v2 tem 8 variaveis e nenhuma sobra para "o que esse servico faz".
+    // Criar v3 custaria outra aprovacao da Meta para um caminho que so roda fora
+    // da janela de 24h, entao os dois blocos entram juntos em {{3}}.
+    const rotulo = a.natureza === "detector" ? "DETECTADO" : "FALHOU";
     return [
         SEV_LABEL[a.severidade],
         a.componente,
-        a.erro,
+        `${a.oQueFaz} — ${rotulo}: ${a.oQueFalhou}`,
         a.ocorrencias,
         a.conta,
         a.causa,
         a.acao,
         a.painel,
     ];
+}
+
+// ── Os quatro blocos ─────────────────────────────────────────────────────────
+
+/**
+ * Valores envolvidos, tirados do `context` do evento. Sao eles que transformam
+ * "gasto acima do esperado" em "US$ 13,76 contra media de US$ 2,27".
+ */
+function valoresDoContexto(ctx: unknown, max = 4): string {
+    if (!ctx || typeof ctx !== "object" || Array.isArray(ctx)) return "";
+    const pares: string[] = [];
+    for (const [k, v] of Object.entries(ctx as Record<string, unknown>)) {
+        if (pares.length >= max) break;
+        if (v === null || typeof v === "object") continue;
+        const s = String(v);
+        if (!s || s.length > 120) continue;
+        pares.push(`${k}=${s}`);
+    }
+    return pares.join(", ");
+}
+
+/**
+ * Erro BRUTO do ultimo evento do incidente. E o bloco que o alerta de 23/09 nao
+ * tinha: ele dizia "falha em openai:daily_anomaly", que e o nome do componente
+ * repetido, nao o que aconteceu. A linha em incident_events sempre teve o texto
+ * real — quem nao o lia era esta funcao.
+ */
+async function erroBruto(supabase: Db, incidentId: string | null): Promise<string | null> {
+    if (!incidentId) return null;
+    const { data, error } = await supabase
+        .from("incident_events")
+        .select("error_name, error_message, error_description, http_code, failed_node, context")
+        .eq("incident_id", incidentId)
+        .order("received_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    if (error || !data) return null;
+
+    const partes: string[] = [];
+    const msg = data.error_message || data.error_description;
+    if (msg) partes.push(String(msg));
+    if (data.error_name && !String(msg ?? "").includes(data.error_name)) {
+        partes.push(`tipo: ${data.error_name}`);
+    }
+    if (data.http_code) partes.push(`HTTP ${data.http_code}`);
+    if (data.failed_node) partes.push(`nó: ${data.failed_node}`);
+    const valores = valoresDoContexto(data.context);
+    if (valores) partes.push(valores);
+
+    const s = partes.join(" · ").trim();
+    return s || null;
+}
+
+type Catalogo = {
+    natureza: "servico" | "detector";
+    oQueFaz: string;
+    acaoPadrao: string | null;
+    catalogado: boolean;
+};
+
+/**
+ * "O QUE ESSE SERVICO FAZ" vem de tabela, nunca da IA: e barato, nunca falha e
+ * nunca alucina. Componente fora do catalogo sai declarado como tal E abre um
+ * incidente proprio — o buraco no catalogo tem que incomodar, senao fica.
+ */
+async function catalogoDoComponente(supabase: Db, componente: string): Promise<Catalogo> {
+    const { data, error } = await supabase.rpc("incident_component_info", { p_component: componente });
+    const row = Array.isArray(data) ? data[0] : data;
+
+    if (error || !row?.catalogado) {
+        await supabase.rpc("incident_record", {
+            p_payload: {
+                source: "db_job",
+                component: "monitoramento:componente-nao-catalogado",
+                route: componente,
+                // Sem data no request_id de proposito: um aviso por componente,
+                // para sempre. Repetir todo dia seria o mesmo ruido que este
+                // sistema existe para remover.
+                request_id: `componente-nao-catalogado:${componente}`,
+                error_name: "componente_nao_catalogado",
+                error_message:
+                    `O componente "${componente}" disparou alerta sem linha em incident_component_catalog, `
+                    + `entao o bloco "O QUE ESSE SERVICO FAZ" saiu vazio para quem recebeu.`,
+                context: { componente },
+            },
+        }).then(
+            () => {},
+            (e: Error) => console.warn("[alert-notify] aviso de catalogo falhou:", e.message),
+        );
+
+        return {
+            natureza: "servico",
+            oQueFaz: "componente não catalogado — cadastre-o em incident_component_catalog "
+                + "para que este bloco pare de sair vazio",
+            acaoPadrao: null,
+            catalogado: false,
+        };
+    }
+
+    return {
+        natureza: row.natureza === "detector" ? "detector" : "servico",
+        oQueFaz: row.descricao,
+        acaoPadrao: row.acao_padrao ?? null,
+        catalogado: true,
+    };
+}
+
+// deno-lint-ignore no-explicit-any
+type IncidenteRow = any;
+
+/**
+ * Fonte UNICA do alerta de incidente. `dispatch` e `notify` montavam a mensagem
+ * cada um do seu jeito e por isso divergiam — a causa provavel dizia "ainda nao
+ * feita" num e "ainda nao concluida" no outro.
+ */
+async function montarAlerta(
+    supabase: Db,
+    inc: IncidenteRow,
+    ocorrencias: string,
+): Promise<Alerta> {
+    const [cat, bruto, conta] = await Promise.all([
+        catalogoDoComponente(supabase, inc.component),
+        erroBruto(supabase, inc.id),
+        resolverConta(supabase, inc.owner_id, inc.affected_tenants),
+    ]);
+
+    return {
+        severidade: (inc.ai_severity as Severity) ?? "media",
+        natureza: cat.natureza,
+        componente: inc.component,
+        conta,
+        ocorrencias,
+        oQueFaz: cat.oQueFaz,
+        // O bruto vem primeiro: o resumo da IA e util, mas e parafrase. Quem vai
+        // consertar precisa da mensagem literal, do codigo e dos valores.
+        oQueFalhou: bruto
+            ?? inc.ai_summary
+            ?? `o evento bruto de ${inc.component} chegou sem mensagem de erro — `
+                + `a captura desse caminho precisa ser corrigida na origem`,
+        causa: inc.ai_probable_cause
+            ? `${inc.ai_probable_cause}${inc.ai_origin ? ` — ${inc.ai_origin}` : ""}`
+            : (inc.analyzed_at ? "a análise não apontou causa" : "análise indisponível"),
+        // Ordem: o que a IA descobriu para ESTE erro, depois a acao padrao do
+        // catalogo. "Abrir o painel e investigar" nao e acao — so entra quando
+        // nem a IA nem o catalogo tem o que dizer, e ai diz por onde comecar.
+        acao: inc.ai_fix_system
+            || inc.ai_fix_n8n
+            || cat.acaoPadrao
+            || "sem ação catalogada: comece pelo erro bruto acima e pelo histórico do componente no painel",
+        painel: `${PAINEL_URL}&i=${inc.id}`,
+    };
 }
 
 // ── Envio com registro ───────────────────────────────────────────────────────
@@ -546,22 +736,13 @@ serve(async (req) => {
                 }
 
                 const recorrencia = inc.kind === "recorrencia";
-                const alertaInc: Alerta = {
-                    severidade: (inc.ai_severity as Severity) ?? "media",
-                    componente: inc.component,
-                    erro: inc.ai_summary ?? `falha em ${inc.component} (${inc.source})`,
-                    ocorrencias: recorrencia
+                const alertaInc = await montarAlerta(
+                    supabase,
+                    inc,
+                    recorrencia
                         ? `+${inc.ocorrencias_novas} desde o último aviso (${ddmmHHmm(inc.desde)}) — ${inc.event_count} no total`
                         : `${inc.event_count} desde ${ddmmHHmm(inc.first_seen)}`,
-                    conta: await resolverConta(supabase, inc.owner_id, inc.affected_tenants),
-                    causa: inc.ai_probable_cause
-                        ? `${inc.ai_probable_cause}${inc.ai_origin ? ` — ${inc.ai_origin}` : ""}`
-                        // critica/alta saem sem esperar a analise; dizer isso e melhor
-                        // do que uma causa inventada ou um campo vazio.
-                        : (inc.analyzed_at ? "a análise não apontou causa" : "análise ainda não feita"),
-                    acao: inc.ai_fix_system || inc.ai_fix_n8n || "abrir o painel e investigar",
-                    painel: `${PAINEL_URL}&i=${inc.id}`,
-                };
+                );
 
                 const r = await espalhar(
                     supabase,
@@ -620,10 +801,12 @@ serve(async (req) => {
         if (action === "test") {
             alerta = {
                 severidade: "baixa",
+                natureza: "servico",
                 componente: "alert-notify",
-                erro: sanitizeParam(body?.message ?? "teste manual do canal de alerta"),
-                ocorrencias: `1 desde ${ddmmHHmm(new Date().toISOString())}`,
                 conta: "nenhuma identificada",
+                ocorrencias: `1 desde ${ddmmHHmm(new Date().toISOString())}`,
+                oQueFaz: "entrega os alertas de incidente da plataforma no WhatsApp do Super Admin",
+                oQueFalhou: sanitizeParam(body?.message ?? "teste manual do canal de alerta — nada falhou"),
                 causa: "nenhuma — este alerta foi disparado à mão para validar o canal",
                 acao: "se esta mensagem chegou, o canal está funcionando",
                 painel: PAINEL_URL,
@@ -648,12 +831,17 @@ serve(async (req) => {
                 .map((i) => `${i.component}: ${i.ai_summary ?? "sem análise"} (${i.event_count}x)`)
                 .join(" · ");
             const inicio = new Date(Date.now() - horas * 60 * 60 * 1000).toISOString();
+            // O resumo tem texto e template proprios (resumoTexto/TPL_RESUMO) e
+            // NAO passa pelos quatro blocos; este objeto so alimenta o filtro de
+            // severidade e o registro em incident_notifications.
             alerta = {
                 severidade: "media",
+                natureza: "servico",
                 componente: "resumo",
-                erro: `${abertos.length} incidente(s) aberto(s)`,
-                ocorrencias: `${ddmmHHmm(inicio)} às ${ddmmHHmm(new Date().toISOString())}`,
                 conta: "-",
+                ocorrencias: `${ddmmHHmm(inicio)} às ${ddmmHHmm(new Date().toISOString())}`,
+                oQueFaz: "-",
+                oQueFalhou: `${abertos.length} incidente(s) aberto(s)`,
                 causa: "-",
                 acao: "abra o painel para ver os detalhes",
                 painel: PAINEL_URL,
@@ -675,7 +863,7 @@ serve(async (req) => {
             const { data: inc, error } = await supabase
                 .from("incidents")
                 .select(
-                    "id, component, source, ai_severity, ai_summary, ai_probable_cause, ai_origin, ai_fix_n8n, ai_fix_system, event_count, first_seen, owner_id, affected_tenants",
+                    "id, component, source, ai_severity, ai_summary, ai_probable_cause, ai_origin, ai_fix_n8n, ai_fix_system, event_count, first_seen, owner_id, affected_tenants, analyzed_at",
                 )
                 .eq("id", incidentId)
                 .maybeSingle();
@@ -688,20 +876,11 @@ serve(async (req) => {
             }
 
             eventCountNoEnvio = inc.event_count ?? 0;
-            const conta = await resolverConta(supabase, inc.owner_id, inc.affected_tenants);
-
-            alerta = {
-                severidade: (inc.ai_severity as Severity) ?? "media",
-                componente: inc.component,
-                erro: inc.ai_summary ?? `falha em ${inc.component} (${inc.source})`,
-                ocorrencias: `${inc.event_count} desde ${ddmmHHmm(inc.first_seen)}`,
-                conta,
-                causa: inc.ai_probable_cause
-                    ? `${inc.ai_probable_cause}${inc.ai_origin ? ` — ${inc.ai_origin}` : ""}`
-                    : "análise ainda não concluída",
-                acao: inc.ai_fix_system || inc.ai_fix_n8n || "abrir o painel e investigar",
-                painel: `${PAINEL_URL}&i=${inc.id}`,
-            };
+            alerta = await montarAlerta(
+                supabase,
+                inc,
+                `${inc.event_count} desde ${ddmmHHmm(inc.first_seen)}`,
+            );
         }
 
         // ── destinatarios ─────────────────────────────────────────────────────
