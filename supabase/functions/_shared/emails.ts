@@ -798,6 +798,101 @@ Equipe Clinbia`;
     return { subject, html, text };
 }
 
+/* ===================================================================
+   13. Alerta de incidente — SEGUNDA VIA, quando o WhatsApp não entregou
+   =================================================================== */
+
+/** Único e-mail deste arquivo que NÃO é para o cliente: vai para quem cuida da
+ *  plataforma. O motivo de existir é que todo alerta sai por um canal só — o
+ *  WhatsApp da conta Bruno Admin — e o incidente que avisa que esse canal caiu
+ *  sairia por ele mesmo. Este é o caminho que não passa pela Meta.
+ *
+ *  O layout repete, na ordem, os quatro blocos da mensagem de WhatsApp: quem lê
+ *  precisa entender o que houve SEM abrir o painel. */
+export function emailAlertaIncidente(v: {
+    severidade: "critica" | "alta" | "media" | "baixa";
+    /** `detector` achou algo; `servico` quebrou. São coisas opostas. */
+    natureza: "servico" | "detector";
+    componente: string;
+    conta: string;
+    ocorrencias: string;
+    o_que_faz: string;
+    o_que_falhou: string;
+    causa: string;
+    acao: string;
+    painel: string;
+    /** Por que este aviso veio por e-mail e não pelo WhatsApp. */
+    motivo_email: string;
+    destinatario?: string;
+}): BuiltEmail {
+    const SEV: Record<string, { rotulo: string; tom: "red" | "amber" | "blue" }> = {
+        critica: { rotulo: "CRÍTICO", tom: "red" },
+        alta: { rotulo: "ALTA", tom: "red" },
+        media: { rotulo: "MÉDIA", tom: "amber" },
+        baixa: { rotulo: "BAIXA", tom: "blue" },
+    };
+    const sev = SEV[v.severidade] ?? SEV.media;
+    const tituloMeio = v.natureza === "detector" ? "O que foi detectado" : "O que falhou";
+    const nome = v.destinatario?.trim().split(/\s+/)[0];
+    const subject = `[${sev.rotulo}] ${v.componente} — alerta Clinbia por e-mail`;
+
+    const bloco = (titulo: string, corpo: string) =>
+        `<p style="margin:0 0 4px 0;font-family:${FF};font-size:12px;line-height:18px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:${C.dark}">${esc(titulo)}</p>`
+        + p(esc(corpo));
+
+    const html = layout({
+        preheader: `${sev.rotulo}: ${v.componente}. Este aviso veio por e-mail porque o WhatsApp não entregou.`,
+        title: `${sev.rotulo} — ${v.componente}`,
+        body:
+            greeting(nome ? `Olá, ${esc(nome)}.` : "Olá.") +
+            callout(
+                `${esc(v.motivo_email)} Enquanto isso durar, os alertas da plataforma <strong>não estão chegando no telefone</strong> — só aqui e no painel.`,
+                sev.tom,
+                "Por que este alerta chegou por e-mail",
+            ) +
+            dataTable("Identificação", [
+                ["Gravidade", sev.rotulo],
+                ["Componente", v.componente],
+                ["Conta", v.conta],
+                ["Ocorrências", v.ocorrencias],
+            ]) +
+            bloco("O que esse serviço faz", v.o_que_faz) +
+            bloco(tituloMeio, v.o_que_falhou) +
+            bloco("Causa provável", v.causa) +
+            bloco("O que fazer", v.acao) +
+            cta("Abrir no painel de incidentes", v.painel) +
+            p(
+                `Mensagem automática do monitoramento da plataforma. Ela não é enviada para clientes.`,
+                `font-size:13px;line-height:21px;color:${C.soft}`,
+            ),
+    });
+
+    const text = `${sev.rotulo} — Alerta Clinbia (por e-mail)
+
+${v.motivo_email} Enquanto isso durar, os alertas da plataforma não estão chegando no telefone — só aqui e no painel.
+
+Componente: ${v.componente}
+Conta: ${v.conta} · ${v.ocorrencias}
+
+O QUE ESSE SERVIÇO FAZ
+${v.o_que_faz}
+
+${tituloMeio.toUpperCase()}
+${v.o_que_falhou}
+
+CAUSA PROVÁVEL
+${v.causa}
+
+O QUE FAZER
+${v.acao}
+
+Painel: ${v.painel}
+
+Mensagem automática do monitoramento da plataforma.`;
+
+    return { subject, html, text };
+}
+
 /* ------------------------------------------------------------------- envio */
 
 /** Envia pelo HTTP da Resend. Erro da API vira exceção com o corpo real. */

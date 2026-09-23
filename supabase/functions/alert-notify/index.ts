@@ -20,6 +20,14 @@
 //   causa        -> incident-analyze; sem analise sai "análise indisponível"
 //   o que fazer  -> IA, senao a acao padrao do catalogo
 //
+// SEGUNDA VIA (23/09/2026): critica/alta que o WhatsApp recusou sai por E-MAIL
+// (Resend, `_shared/emails.ts`). Nunca em paralelo — so quando o WhatsApp ja
+// falhou, porque alerta duplicado ensina a ignorar alerta. Media/baixa ficam de
+// fora: elas ja viajam no resumo de 2 em 2 horas. O e-mail NAO zera a falha: o
+// incidente continua na fila para ser retentado quando o canal voltar; o que ele
+// garante e que ninguem ficou sem saber. Quem vigia o canal como um todo e a
+// funcao `alert-channel-watch`.
+//
 // ORDEM DE ENVIO: texto livre primeiro, template como plano B.
 // Dentro da janela de 24h o texto livre e gratuito e aceita quebra de linha
 // (parametro de template NAO aceita \n). Fora da janela a Meta recusa com 131047
@@ -43,6 +51,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { emailAlertaIncidente, sendEmail } from "../_shared/emails.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -83,16 +92,32 @@ const SEV_LABEL: Record<Severity, string> = {
 /** Severidade que acorda alguem fora da janela de silencio do destinatario. */
 const IGNORA_JANELA: Severity[] = ["critica", "alta"];
 
+/** Severidade que, se o WhatsApp recusar, ainda sai por e-mail. */
+const SEGUNDA_VIA: Severity[] = ["critica", "alta"];
+
 type Recipient = {
     id: string;
     nome: string;
     telefone: string;
+    /**
+     * Segunda via. So e usada quando o WhatsApp NAO entregou — nunca em paralelo:
+     * o WhatsApp acorda de madrugada, o e-mail nao, e alerta duplicado ensina a
+     * ignorar alerta. Nulo aqui significa que o aviso desta pessoa morre junto
+     * com o canal.
+     */
+    email: string | null;
     instance_id: string;
     min_severity: Severity;
     window_start: string;
     window_end: string;
     timezone: string;
 };
+
+/** Colunas do destinatario — uma constante so, porque `dispatch` e `notify`
+ *  carregam a mesma lista e esquecer `email` em um dos dois deixaria metade dos
+ *  alertas sem segunda via, calado. */
+const CAMPOS_DESTINATARIO =
+    "id, nome, telefone, email, instance_id, min_severity, window_start, window_end, timezone";
 
 type Sender = {
     phone_number_id: string;
@@ -521,6 +546,66 @@ async function enviarAlerta(
     return { ...combinado, via: null };
 }
 
+/**
+ * Segunda via: o alerta que o WhatsApp recusou sai por e-mail.
+ *
+ * So vale para critica/alta. Media e baixa ja viajam no resumo de 2 em 2 horas;
+ * mandar e-mail delas encheria a caixa de entrada de coisa que pode esperar, e
+ * caixa cheia e a forma mais rapida de o alerta virar ruido ignorado.
+ *
+ * NUNCA lanca: o e-mail e o plano B: se ele tambem falhar, o que nao pode
+ * acontecer e derrubar o laco e deixar os outros destinatarios sem tentativa.
+ */
+async function segundaViaEmail(
+    supabase: Db,
+    r: Recipient,
+    a: Alerta,
+    incidentId: string | null,
+    kind: "individual" | "resumo" | "recorrencia",
+    motivoDaFalha: string,
+): Promise<boolean> {
+    if (!SEGUNDA_VIA.includes(a.severidade)) return false;
+    const para = (r.email ?? "").trim();
+    if (!para) return false;
+
+    let ok = false;
+    let erro: string | null = null;
+    try {
+        const mail = emailAlertaIncidente({
+            severidade: a.severidade,
+            natureza: a.natureza,
+            componente: a.componente,
+            conta: a.conta,
+            ocorrencias: a.ocorrencias,
+            o_que_faz: a.oQueFaz,
+            o_que_falhou: a.oQueFalhou,
+            causa: a.causa,
+            acao: a.acao,
+            painel: a.painel,
+            motivo_email: `O WhatsApp de alertas não entregou esta mensagem (${motivoDaFalha}).`,
+            destinatario: r.nome,
+        });
+        const { id } = await sendEmail({ to: para, ...mail });
+        ok = true;
+        console.log(`[alert-notify] segunda via por e-mail para ${para} (${id})`);
+    } catch (e) {
+        erro = (e as Error).message;
+        console.error(`[alert-notify] segunda via falhou para ${para}:`, erro);
+    }
+
+    await supabase.from("incident_notifications").insert({
+        incident_id: incidentId,
+        recipient_id: r.id,
+        kind,
+        via: "email",
+        status: ok ? "sent" : "failed",
+        error_code: ok ? null : "email_falhou",
+        error_message: ok ? `WhatsApp recusou: ${motivoDaFalha}` : erro,
+    });
+
+    return ok;
+}
+
 // ── Destinatarios e remetente ────────────────────────────────────────────────
 
 async function carregarSender(
@@ -600,12 +685,21 @@ async function espalhar(
     kind: "individual" | "resumo" | "recorrencia",
     teto: number,
     resumoParams: string[] | null,
+    emailLigado: boolean,
 ): Promise<Espalhamento> {
     const agora = new Date();
     const resultados: Record<string, unknown>[] = [];
     const motivos: string[] = [];
     let enviados = 0;
     let elegiveis = 0;
+
+    /** O e-mail salva o aviso, mas nao apaga a falha: `enviados` continua
+     *  contando so o WhatsApp para que o incidente seja retentado quando o canal
+     *  voltar. O que o e-mail garante e que ninguem ficou sem saber. */
+    const tentarEmail = async (r: Recipient, a: Alerta, motivo: string) => {
+        if (!emailLigado || resumoParams) return false;
+        return await segundaViaEmail(supabase, r, a, incidentId, kind, motivo);
+    };
 
     for (const r of recipients) {
         if (SEV_RANK[alerta.severidade] < SEV_RANK[r.min_severity]) {
@@ -637,8 +731,14 @@ async function espalhar(
                 error_code: "sender_sem_token",
                 error_message: "instância remetente sem meta_phone_number_id ou meta_access_token",
             });
-            resultados.push({ destinatario: r.nome, status: "failed", motivo: "sender_sem_token" });
-            motivos.push(`${r.nome}: instância remetente sem token`);
+            const porEmail = await tentarEmail(r, alerta, "instância remetente sem token");
+            resultados.push({
+                destinatario: r.nome, status: "failed", motivo: "sender_sem_token",
+                segunda_via: porEmail ? "email_enviado" : null,
+            });
+            motivos.push(
+                `${r.nome}: instância remetente sem token${porEmail ? " (avisado por e-mail)" : ""}`,
+            );
             continue;
         }
 
@@ -669,16 +769,25 @@ async function espalhar(
             res = await enviarAlerta(supabase, sender, r, alerta, incidentId, kind);
         }
 
+        const porEmail = res.ok
+            ? false
+            : await tentarEmail(r, alerta, `${res.errorCode}: ${res.errorMessage}`);
+
         resultados.push({
             destinatario: r.nome,
             status: res.ok ? "sent" : "failed",
             via: res.via,
             wamid: res.wamid ?? null,
             erro: res.ok ? null : `${res.errorCode}: ${res.errorMessage}`,
+            segunda_via: porEmail ? "email_enviado" : null,
         });
 
         if (res.ok) enviados += 1;
-        else motivos.push(`${r.nome}: ${res.errorCode} ${res.errorMessage}`);
+        else {
+            motivos.push(
+                `${r.nome}: ${res.errorCode} ${res.errorMessage}${porEmail ? " (avisado por e-mail)" : ""}`,
+            );
+        }
     }
 
     // Pulado por janela de silencio ou teto por hora tambem precisa de motivo:
@@ -713,13 +822,17 @@ serve(async (req) => {
 
         const { data: cfg } = await supabase
             .from("llm_platform_settings")
-            .select("alert_notify_enabled, alert_summary_enabled, alert_max_per_hour")
+            .select("alert_notify_enabled, alert_summary_enabled, alert_max_per_hour, alert_email_enabled")
             .limit(1)
             .maybeSingle();
 
         const notifyLigado = cfg?.alert_notify_enabled !== false;
         const resumoLigado = cfg?.alert_summary_enabled !== false;
         const teto = Number(cfg?.alert_max_per_hour ?? 10);
+        // Segunda via LIGADA por omissao: a coluna pode nao existir ainda num
+        // ambiente que esteja atras desta migration, e nesse caso o certo e
+        // tentar o e-mail, nao ficar calado.
+        const emailLigado = cfg?.alert_email_enabled !== false;
 
         // Desligar o envio NUNCA desliga a gravacao do incidente nem o painel.
         // `test` ignora a chave de proposito: e a sonda manual do Super Admin.
@@ -743,7 +856,7 @@ serve(async (req) => {
 
             const { data: dests, error: dErr } = await supabase
                 .from("alert_recipients")
-                .select("id, nome, telefone, instance_id, min_severity, window_start, window_end, timezone")
+                .select(CAMPOS_DESTINATARIO)
                 .eq("is_active", true);
             if (dErr) throw new Error(`alert_recipients: ${dErr.message}`);
 
@@ -780,6 +893,7 @@ serve(async (req) => {
                     recorrencia ? "recorrencia" : "individual",
                     teto,
                     null,
+                    emailLigado,
                 );
 
                 // elegiveis === 0 encerra o incidente: ninguem pediu para ser
@@ -918,7 +1032,7 @@ serve(async (req) => {
         // ── destinatarios ─────────────────────────────────────────────────────
         const { data: recipients, error: rErr } = await supabase
             .from("alert_recipients")
-            .select("id, nome, telefone, instance_id, min_severity, window_start, window_end, timezone")
+            .select(CAMPOS_DESTINATARIO)
             .eq("is_active", true);
         if (rErr) throw new Error(`alert_recipients: ${rErr.message}`);
         if (!recipients?.length) {
@@ -933,6 +1047,7 @@ serve(async (req) => {
             kind,
             teto,
             resumoParams,
+            emailLigado,
         );
 
         // A contabilidade do envio e a MESMA do despachante automatico: quem
