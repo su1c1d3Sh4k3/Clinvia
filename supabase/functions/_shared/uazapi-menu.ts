@@ -1,3 +1,5 @@
+import { fetchProvider } from "./provider-errors.ts";
+
 // supabase/functions/_shared/uazapi-menu.ts
 // -----------------------------------------------------------------------------
 // Lightweight wrappers around the UazAPI /send/menu and /send/text endpoints
@@ -107,7 +109,7 @@ export async function sendMenu(params: SendMenuParams): Promise<SendResult> {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000);
         try {
-            const res = await fetch(`${UAZAPI_BASE}/send/menu`, {
+            const res = await fetchProvider(`${UAZAPI_BASE}/send/menu`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -158,7 +160,7 @@ export async function sendText(params: SendTextParams): Promise<SendResult> {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000);
         try {
-            const res = await fetch(`${UAZAPI_BASE}/send/text`, {
+            const res = await fetchProvider(`${UAZAPI_BASE}/send/text`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",

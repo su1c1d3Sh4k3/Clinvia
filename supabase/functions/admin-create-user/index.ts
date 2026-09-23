@@ -4,7 +4,7 @@
 // 'super-admin'. Sem isso a função seria escalada de privilégio (qualquer
 // usuário autenticado criaria um admin) — o create-team-member NÃO valida o
 // cargo do chamador e esse vício não se repete aqui.
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import {
     apiError,
@@ -113,7 +113,7 @@ async function sanitizeScope(
     return { values };
 }
 
-serve(async (req) => {
+serveMonitored("admin-create-user", async (req) => {
     if (req.method === "OPTIONS") {
         return new Response(null, { headers: corsHeaders });
     }

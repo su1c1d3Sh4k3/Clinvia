@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import {
     corsHeaders,
     createSupabaseClient,
@@ -15,7 +15,7 @@ import {
  * - Delivery receipts (mensagem entregue)
  * - ACK events
  */
-serve(async (req) => {
+serveMonitored("webhook-handle-status", async (req) => {
     // Handle CORS preflight
     if (req.method === 'OPTIONS') {
         return new Response(null, { headers: corsHeaders });

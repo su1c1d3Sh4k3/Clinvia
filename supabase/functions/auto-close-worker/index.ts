@@ -1,9 +1,6 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { reportIncident, setIncidentComponent } from "../_shared/report-incident.ts";
-
-setIncidentComponent("auto-close-worker");
-
+import { reportIncident } from "../_shared/report-incident.ts";
 /**
  * auto-close-worker (pg_cron a cada 5 min)
  *
@@ -101,7 +98,7 @@ async function closeConversation(supabase: ReturnType<typeof getSupabase>, cand:
     if (convError) console.error(`[auto-close] resolve error conv=${cand.conv_id}:`, convError);
 }
 
-serve(async (req) => {
+serveMonitored("auto-close-worker", async (req) => {
     if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
     const supabase = getSupabase();

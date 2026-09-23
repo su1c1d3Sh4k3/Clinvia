@@ -21,6 +21,7 @@
 //   }
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import {
     apiError,
     dbErrorResponse,
@@ -34,7 +35,7 @@ const corsHeaders = {
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
-Deno.serve(async (req) => {
+serveMonitored("get-system-prompt", async (req) => {
     if (req.method === "OPTIONS") {
         return new Response("ok", { headers: corsHeaders });
     }

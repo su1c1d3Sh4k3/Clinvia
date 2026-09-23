@@ -324,3 +324,115 @@ verify_jwt = false
 # Autenticacao propria por x-api-key = N8N_ERROR_INGEST_KEY (segredo so desta porta).
 [functions.n8n-error-ingest]
 verify_jwt = false
+
+
+# =============================================
+# ESTADO REAL DE PRODUCAO, TRAZIDO PARA O REPOSITORIO (23/09/2026)
+# =============================================
+# Estas 29 estavam com `verify_jwt = false` NO PROJETO mas nao aqui — foram
+# abertas um dia com `--no-verify-jwt` na linha de comando, e a flag ficou so la.
+#
+# Isso e uma armadilha silenciosa: `--no-verify-jwt` e um caminho de mao unica.
+# Um `supabase functions deploy <nome>` comum, sem a flag, NAO restaura a
+# abertura — ele FECHA a function, porque o CLI manda o que esta neste arquivo.
+# Ou seja, qualquer redeploy de rotina derrubaria de uma vez os webhooks do
+# Google Calendar, do Instagram e da Evolution, o retorno do OAuth, o pedido de
+# nova senha e os workers chamados por cron, todos com 401 do gateway e sem
+# nenhum erro no codigo para explicar.
+#
+# Registrar aqui nao ABRE nada: elas ja estao abertas. O que muda e que o
+# repositorio passa a dizer a verdade e o deploy em lote vira idempotente.
+#
+# NAO e um atestado de que as 29 DEVEM ficar abertas. As que se defendem por
+# conta propria (x-api-key, assinatura de webhook, chave de servico) estao
+# certas; as demais precisam de uma revisao de autenticacao que nao cabe num
+# lote de monitoramento — fechar qualquer uma delas aqui, de passagem, seria
+# trocar ruido no painel por indisponibilidade de verdade.
+# =============================================
+
+[functions.admin-delete-client]
+verify_jwt = false
+
+[functions.alert-channel-watch]
+verify_jwt = false
+
+[functions.api-contact-messages]
+verify_jwt = false
+
+[functions.api-followup-pending]
+verify_jwt = false
+
+[functions.api-recurrence-due]
+verify_jwt = false
+
+[functions.delivery-automation-dispatcher]
+verify_jwt = false
+
+[functions.delivery-automation-respond]
+verify_jwt = false
+
+[functions.delivery-automation-worker]
+verify_jwt = false
+
+[functions.evolution-check-connection]
+verify_jwt = false
+
+[functions.evolution-create-instance]
+verify_jwt = false
+
+[functions.evolution-test-connection]
+verify_jwt = false
+
+[functions.evolution-webhook]
+verify_jwt = false
+
+[functions.google-calendar-poll]
+verify_jwt = false
+
+[functions.google-calendar-webhook]
+verify_jwt = false
+
+[functions.google-oauth-callback]
+verify_jwt = false
+
+[functions.instagram-debug-enrich]
+verify_jwt = false
+
+[functions.instagram-fb-manual-connect]
+verify_jwt = false
+
+[functions.instagram-fb-oauth-callback]
+verify_jwt = false
+
+[functions.instagram-fb-webhook]
+verify_jwt = false
+
+[functions.instagram-subscribe]
+verify_jwt = false
+
+[functions.process-auto-messages]
+verify_jwt = false
+
+[functions.proxy-whatsapp-image]
+verify_jwt = false
+
+[functions.refresh-contact-photos]
+verify_jwt = false
+
+[functions.request-password-reset]
+verify_jwt = false
+
+[functions.send-push-notification]
+verify_jwt = false
+
+[functions.storage-uploader]
+verify_jwt = false
+
+[functions.upload-manuals]
+verify_jwt = false
+
+[functions.upload-support-manual]
+verify_jwt = false
+
+[functions.uzapi-webhook-refactor]
+verify_jwt = false

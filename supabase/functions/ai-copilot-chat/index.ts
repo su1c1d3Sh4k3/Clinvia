@@ -1,13 +1,14 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { trackTokenUsage, getOwnerFromConversation, makeOpenAIRequest } from "../_shared/token-tracker.ts";
+import { fetchProvider } from "../_shared/provider-errors.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-serve(async (req) => {
+serveMonitored("ai-copilot-chat", async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -44,7 +45,7 @@ serve(async (req) => {
     if (!customSystemPrompt && userId && SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
       try {
         const settingsUrl = `${SUPABASE_URL}/rest/v1/copilot?user_id=eq.${userId}&select=*`;
-        const settingsResponse = await fetch(settingsUrl, {
+        const settingsResponse = await fetchProvider(settingsUrl, {
           headers: {
             "apikey": SUPABASE_SERVICE_ROLE_KEY,
             "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
@@ -67,7 +68,7 @@ serve(async (req) => {
 
         // Get owner_id from team_members table
         const ownerUrl = `${SUPABASE_URL}/rest/v1/team_members?auth_user_id=eq.${userId}&select=id,user_id`;
-        const ownerResponse = await fetch(ownerUrl, {
+        const ownerResponse = await fetchProvider(ownerUrl, {
           headers: {
             "apikey": SUPABASE_SERVICE_ROLE_KEY,
             "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
@@ -103,7 +104,7 @@ serve(async (req) => {
     if (conversationId && SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
       const messagesUrl = `${SUPABASE_URL}/rest/v1/messages?conversation_id=eq.${conversationId}&select=direction,body,created_at&order=created_at.asc`;
 
-      const messagesResponse = await fetch(messagesUrl, {
+      const messagesResponse = await fetchProvider(messagesUrl, {
         headers: {
           "apikey": SUPABASE_SERVICE_ROLE_KEY,
           "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`

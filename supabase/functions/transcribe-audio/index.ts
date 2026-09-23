@@ -1,12 +1,13 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
+import { fetchProvider } from "../_shared/provider-errors.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-serve(async (req) => {
+serveMonitored("transcribe-audio", async (req) => {
     if (req.method === "OPTIONS") {
         return new Response(null, { headers: corsHeaders });
     }
@@ -30,7 +31,7 @@ serve(async (req) => {
             throw new Error("OPENAI_API_KEY not set - please configure it in Supabase Edge Function secrets");
         }
         // 2. Download audio file
-        const audioResponse = await fetch(mediaUrl);
+        const audioResponse = await fetchProvider(mediaUrl);
 
         if (!audioResponse.ok) {
             console.error(`[TRANSCRIBE-AUDIO] Download failed: ${audioResponse.status} ${audioResponse.statusText}`);
@@ -67,7 +68,7 @@ serve(async (req) => {
         formData.append("language", "pt"); // Specify Portuguese for better accuracy
 
         // 4. Send to OpenAI Whisper
-        const transcriptionResponse = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+        const transcriptionResponse = await fetchProvider("https://api.openai.com/v1/audio/transcriptions", {
             method: "POST",
             headers: {
                 "Authorization": `Bearer ${openAiKey}`,

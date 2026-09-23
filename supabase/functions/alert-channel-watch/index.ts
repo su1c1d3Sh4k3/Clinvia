@@ -20,7 +20,7 @@
 //
 // Autenticacao: service role key em `x-service-key` ou `Authorization: Bearer`.
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { emailAlertaIncidente, sendEmail } from "../_shared/emails.ts";
 
@@ -54,7 +54,7 @@ const CAUSA: Record<string, string> = {
         + "recusa tudo — comportamento típico de token inválido ou número penalizado.",
 };
 
-serve(async (req) => {
+serveMonitored("alert-channel-watch", async (req) => {
     if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;

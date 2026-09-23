@@ -19,8 +19,18 @@
 // menos no caminho de um codigo que precisa funcionar quando as coisas ja estao
 // quebradas.
 
+import { requisicaoAtual } from "./request-context.ts";
+
 /** Preenchido por `setIncidentComponent` no topo da function instrumentada. */
 let componenteAtual: string | null = null;
+
+/**
+ * Marca posta na resposta por quem JA reportou o erro. O envelope
+ * `serveMonitored` reporta toda resposta 5xx; quem ja chamou `reportIncident`
+ * poe este header para nao contar duas vezes. Mora aqui, e nao no envelope,
+ * para que `api-errors.ts` possa usa-la sem arrastar o servidor HTTP junto.
+ */
+export const HEADER_JA_REPORTADO = "x-incident-reported";
 
 /**
  * Declara esta function como instrumentada. Chamar UMA vez, no escopo do modulo:
@@ -116,6 +126,13 @@ export interface ReportIncidentInit {
     request?: Request;
     /** Sobrepoe a leitura do header. Use quando o chamador e sabido (ex.: cron). */
     origem?: IncidentOrigem;
+    /**
+     * Sobrepoe o componente declarado. Existe para a falha que nao e DA
+     * function e sim DE UM TERCEIRO que ela chamou: `openai:sem_credito` visto
+     * por dez functions diferentes tem que virar UM incidente, nao dez. Quem
+     * usa isto e o `fetchProvider`; no resto do codigo, deixe em branco.
+     */
+    component?: string;
 }
 
 /** So as 3 primeiras linhas: o resto do stack e ruido que nao cabe num alerta. */
@@ -152,16 +169,19 @@ export function reportIncident(init: ReportIncidentInit): void {
     if (!url || !chave) return;
 
     // `origem` passada na mao e declaracao (quem chamou e sabido no codigo);
-    // vinda do header pode ser qualquer um dos dois.
+    // vinda do header pode ser qualquer um dos dois. Sem `request` explicito,
+    // usa a requisicao em curso — e o que salva os 77 `dbErrorResponse` que
+    // moram em funcoes auxiliares sem acesso ao `req`.
+    const req = init.request ?? requisicaoAtual();
     const org = init.origem
         ? { origem: init.origem, inferida: false }
-        : origemDaRequisicao(init.request);
+        : origemDaRequisicao(req);
 
     const payload = {
         source: init.source ?? "edge_function",
         origem: org.origem,
         origem_inferida: org.inferida,
-        component: componenteAtual,
+        component: init.component ?? componenteAtual,
         route: init.route ?? null,
         http_code: init.httpCode ?? null,
         error_name: (init.error as Error)?.name ?? null,

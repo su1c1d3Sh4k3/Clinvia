@@ -1,5 +1,6 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { fetchProvider } from "../_shared/provider-errors.ts";
 
 /**
  * group-member-pics
@@ -29,7 +30,7 @@ function json(body: unknown, status = 200) {
 
 const digits = (s: string) => (s || "").split("@")[0].replace(/\D/g, "");
 
-serve(async (req) => {
+serveMonitored("group-member-pics", async (req) => {
     if (req.method === "OPTIONS") {
         return new Response(null, { headers: corsHeaders });
     }
@@ -103,7 +104,7 @@ serve(async (req) => {
                 try {
                     const ctrl = new AbortController();
                     const t = setTimeout(() => ctrl.abort(), 6000);
-                    const resp = await fetch("https://clinvia.uazapi.com/chat/details", {
+                    const resp = await fetchProvider("https://clinvia.uazapi.com/chat/details", {
                         method: "POST",
                         headers: { "Content-Type": "application/json", token: instance.apikey },
                         body: JSON.stringify({ number: num, preview: true }),

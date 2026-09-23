@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { addMinutes, parse, format, isBefore, isEqual, parseISO } from "https://esm.sh/date-fns@2.30.0";
 import { getWorkHoursForDay } from "../_shared/professional-schedule.ts";
@@ -8,7 +8,7 @@ const corsHeaders = {
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-api-key",
 };
 
-serve(async (req) => {
+serveMonitored("check-availability", async (req) => {
     if (req.method === "OPTIONS") {
         return new Response("ok", { headers: corsHeaders });
     }

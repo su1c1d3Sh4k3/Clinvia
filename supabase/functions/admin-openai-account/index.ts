@@ -14,7 +14,7 @@
 //   archive_project -> arquiva o projeto e solta a conta (clientes/edit + confirm)
 //   sync            -> puxa consumo/custo do projeto agora (clientes/view)
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { decryptToken } from "../_shared/token-tracker.ts";
 import { adminCan, adminCanAccessClient, adminForbidden, resolveAdminCaller } from "../_shared/admin-guard.ts";
@@ -41,7 +41,7 @@ function maskToken(plain: string): string {
     return `${clean.slice(0, 7)}…${clean.slice(-4)}`;
 }
 
-serve(async (req) => {
+serveMonitored("admin-openai-account", async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response(null, { headers: corsHeaders });
     }

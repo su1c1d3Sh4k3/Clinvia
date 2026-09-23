@@ -8,8 +8,8 @@
 // Chamar com Authorization: Bearer <service_role_key>.
 // -----------------------------------------------------------------------------
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-
+import { serveMonitored } from "../_shared/serve-monitored.ts";
+import { fetchProvider } from "../_shared/provider-errors.ts";
 const GRAPH_API = "https://graph.facebook.com/v21.0";
 
 const REQUIRED_FIELDS = [
@@ -18,7 +18,7 @@ const REQUIRED_FIELDS = [
     "smb_message_echoes",
 ];
 
-serve(async (req) => {
+serveMonitored("meta-subscribe-fields", async (req) => {
     if (req.method === "OPTIONS") return new Response("ok", { status: 200 });
 
     try {
@@ -35,7 +35,7 @@ serve(async (req) => {
         const callbackUrl = `${supabaseUrl}/functions/v1/meta-webhook`;
 
         // Estado atual
-        const beforeResp = await fetch(
+        const beforeResp = await fetchProvider(
             `${GRAPH_API}/${appId}/subscriptions?access_token=${appToken}`
         );
         const before = await beforeResp.json();
@@ -56,7 +56,7 @@ serve(async (req) => {
             verify_token: verifyToken,
             access_token: appToken,
         });
-        const subResp = await fetch(`${GRAPH_API}/${appId}/subscriptions`, {
+        const subResp = await fetchProvider(`${GRAPH_API}/${appId}/subscriptions`, {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
             body,
@@ -64,7 +64,7 @@ serve(async (req) => {
         const subResult = await subResp.json();
 
         // Estado final
-        const afterResp = await fetch(
+        const afterResp = await fetchProvider(
             `${GRAPH_API}/${appId}/subscriptions?access_token=${appToken}`
         );
         const after = await afterResp.json();

@@ -1,6 +1,7 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { createServiceLabelResolver } from "../_shared/service-label.ts";
+import { fetchProvider } from "../_shared/provider-errors.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -19,7 +20,7 @@ function toRFC3339(ts: string): string {
 // Renova o access_token usando o refresh_token
 async function refreshAccessToken(refreshToken: string): Promise<{ access_token: string; expires_in: number } | null> {
   try {
-    const response = await fetch("https://oauth2.googleapis.com/token", {
+    const response = await fetchProvider("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
@@ -105,7 +106,7 @@ function formatGoogleEvent(appointment: {
   };
 }
 
-serve(async (req) => {
+serveMonitored("google-calendar-sync", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -201,7 +202,7 @@ serve(async (req) => {
         if (action === "delete_appointment") {
           // Remover evento do Google Calendar
           if (appointment.google_event_id) {
-            const deleteRes = await fetch(`${baseUrl}/${appointment.google_event_id}`, {
+            const deleteRes = await fetchProvider(`${baseUrl}/${appointment.google_event_id}`, {
               method: "DELETE",
               headers,
             });
@@ -230,14 +231,14 @@ serve(async (req) => {
 
           if (googleEventId) {
             // Atualizar evento existente
-            syncRes = await fetch(`${baseUrl}/${googleEventId}`, {
+            syncRes = await fetchProvider(`${baseUrl}/${googleEventId}`, {
               method: "PUT",
               headers,
               body: JSON.stringify(eventBody),
             });
           } else {
             // Criar novo evento
-            syncRes = await fetch(baseUrl, {
+            syncRes = await fetchProvider(baseUrl, {
               method: "POST",
               headers,
               body: JSON.stringify(eventBody),
@@ -249,7 +250,7 @@ serve(async (req) => {
             // Se evento não encontrado (404), criar do zero
             if (syncRes.status === 404 && googleEventId) {
               console.log(`[GCAL SYNC] Event not found (404), creating new...`);
-              const createRes = await fetch(baseUrl, {
+              const createRes = await fetchProvider(baseUrl, {
                 method: "POST",
                 headers,
                 body: JSON.stringify(eventBody),

@@ -1,5 +1,6 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { fetchProvider } from "../_shared/provider-errors.ts";
 
 // =============================================
 // Instagram Log Webhook (proxy + tenant guard + per-message enrichment)
@@ -45,7 +46,7 @@ async function getValidIgsids(supabase: SupabaseClient): Promise<Set<string>> {
     return validIgsidsCache;
 }
 
-serve(async (req) => {
+serveMonitored("instagram-log-webhook", async (req) => {
     if (req.method === "OPTIONS") {
         return new Response(null, { headers: corsHeaders });
     }
@@ -54,7 +55,7 @@ serve(async (req) => {
         const targetUrl = new URL(TARGET_URL);
         const incoming = new URL(req.url);
         for (const [k, v] of incoming.searchParams) targetUrl.searchParams.set(k, v);
-        const fwd = await fetch(targetUrl.toString(), { method: "GET" });
+        const fwd = await fetchProvider(targetUrl.toString(), { method: "GET" });
         return new Response(await fwd.text(), {
             status: fwd.status,
             headers: { "Content-Type": fwd.headers.get("Content-Type") || "text/plain" },
@@ -178,7 +179,7 @@ serve(async (req) => {
     if (sig1) fwdHeaders["x-hub-signature"] = sig1;
     if (sig256) fwdHeaders["x-hub-signature-256"] = sig256;
 
-    const fwd = await fetch(TARGET_URL, { method: "POST", headers: fwdHeaders, body: rawBody });
+    const fwd = await fetchProvider(TARGET_URL, { method: "POST", headers: fwdHeaders, body: rawBody });
     const respBody = await fwd.text();
 
     // ─── 4) ENRICHMENT SÍNCRONO ────────────────────────────────────────
@@ -250,7 +251,7 @@ async function enrichSender(supabase: SupabaseClient, igsid: string, recipientIg
 
     try {
         const u = `https://graph.instagram.com/${GRAPH_VERSION}/${igsid}?fields=name,username,profile_pic&access_token=${token}`;
-        const r = await fetch(u);
+        const r = await fetchProvider(u);
         const d = await r.json();
         if (r.ok && !d.error) {
             resolvedName = d.name || null;
@@ -262,7 +263,7 @@ async function enrichSender(supabase: SupabaseClient, igsid: string, recipientIg
     if (!resolvedName && !resolvedUsername) {
         try {
             const u = `https://graph.instagram.com/${GRAPH_VERSION}/me/conversations?fields=participants&platform=instagram&limit=200&access_token=${token}`;
-            const r = await fetch(u);
+            const r = await fetchProvider(u);
             const d = await r.json();
             if (r.ok && !d.error) {
                 outer: for (const conv of d.data || []) {
@@ -303,7 +304,7 @@ async function persistContactPhoto(
             return `${cleanUrl}?t=${Date.now()}`;
         }
 
-        const imageResponse = await fetch(photoUrl, {
+        const imageResponse = await fetchProvider(photoUrl, {
             headers: { "User-Agent": "Mozilla/5.0 (Clinvia Webhook)" },
         });
         if (!imageResponse.ok) {

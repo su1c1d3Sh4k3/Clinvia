@@ -40,6 +40,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-service-key",
@@ -73,7 +74,7 @@ async function n8n(path: string, key: string, init?: RequestInit): Promise<any> 
     return txt ? JSON.parse(txt) : null;
 }
 
-Deno.serve(async (req) => {
+serveMonitored("admin-n8n-enforce-settings", async (req) => {
     if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
     try {

@@ -1,9 +1,6 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-import { reportIncident, setIncidentComponent } from "../_shared/report-incident.ts";
-
-setIncidentComponent("webhook-queue-receiver");
-
+import { reportIncident } from "../_shared/report-incident.ts";
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -24,7 +21,7 @@ declare const EdgeRuntime: {
  * 2. Responde 200 IMEDIATAMENTE
  * 3. Salva na fila + dispara processor em background (EdgeRuntime.waitUntil)
  */
-serve(async (req) => {
+serveMonitored("webhook-queue-receiver", async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response(null, { headers: corsHeaders });
     }

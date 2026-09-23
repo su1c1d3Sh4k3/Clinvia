@@ -11,7 +11,7 @@
 //   awaiting_feedback_detail → completed (after receiving detail text)
 // -----------------------------------------------------------------------------
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { sendText } from "../_shared/uazapi-menu.ts";
 import { isMetaInstance } from "../_shared/automation-instance.ts";
@@ -35,7 +35,7 @@ interface RespondInput {
 
 const TERMINAL = new Set(["completed", "transferred", "failed"]);
 
-serve(async (req) => {
+serveMonitored("appointment-confirmation-respond", async (req) => {
     if (req.method === "OPTIONS") {
         return new Response("ok", { headers: corsHeaders });
     }

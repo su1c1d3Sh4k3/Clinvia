@@ -1,3 +1,5 @@
+import { fetchProvider } from "./provider-errors.ts";
+
 // Fonte unica das chamadas a Admin API da organizacao na OpenAI.
 //
 // Usada por provision-openai-project, sync-openai-usage e admin-openai-account.
@@ -52,7 +54,7 @@ async function adminFetch(
     const url = path.startsWith('http') ? path : `${ADMIN_BASE}${path}`;
     let res: Response;
     try {
-        res = await fetch(url, {
+        res = await fetchProvider(url, {
             ...init,
             headers: {
                 'Authorization': `Bearer ${admin.key}`,
@@ -200,7 +202,7 @@ async function rawSpendLimitCall(
     init: RequestInit = {},
 ): Promise<{ status: number; body: string }> {
     try {
-        const res = await fetch(`${ADMIN_BASE}/projects/${projectId}/spend_limit`, {
+        const res = await fetchProvider(`${ADMIN_BASE}/projects/${projectId}/spend_limit`, {
             ...init,
             headers: {
                 'Authorization': `Bearer ${admin.key}`,

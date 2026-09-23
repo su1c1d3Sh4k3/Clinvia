@@ -1,17 +1,14 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { addMinutes, subMinutes, parseISO, format, startOfDay, endOfDay } from "https://esm.sh/date-fns@2.30.0";
 import { zonedTimeToUtc, utcToZonedTime } from "https://esm.sh/date-fns-tz@2.0.0?deps=date-fns@2.30.0";
-import { reportIncident, setIncidentComponent } from "../_shared/report-incident.ts";
-
-setIncidentComponent("scheduler-notifications");
-
+import { reportIncident } from "../_shared/report-incident.ts";
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-api-key",
 };
 
-serve(async (req) => {
+serveMonitored("scheduler-notifications", async (req) => {
     if (req.method === "OPTIONS") {
         return new Response("ok", { headers: corsHeaders });
     }

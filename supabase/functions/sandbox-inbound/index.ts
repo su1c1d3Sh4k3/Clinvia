@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { apiError, readJsonBody, unexpectedErrorResponse } from "../_shared/api-errors.ts";
 import { ensureSandboxSession, SANDBOX_N8N_URL } from "../_shared/sandbox.ts";
@@ -30,7 +30,7 @@ function json(body: unknown, status = 200): Response {
     });
 }
 
-serve(async (req) => {
+serveMonitored("sandbox-inbound", async (req) => {
     if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
     try {

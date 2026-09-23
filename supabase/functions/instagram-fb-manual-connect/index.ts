@@ -1,5 +1,6 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { fetchProvider } from "../_shared/provider-errors.ts";
 
 // =============================================
 // Instagram FB Manual Connect (BETA)
@@ -23,7 +24,7 @@ interface ManualConnectRequest {
     page_access_token: string;
 }
 
-serve(async (req) => {
+serveMonitored("instagram-fb-manual-connect", async (req) => {
     if (req.method === "OPTIONS") {
         return new Response("ok", { headers: corsHeaders });
     }
@@ -45,7 +46,7 @@ serve(async (req) => {
         meUrl.searchParams.set("fields", "id,name");
         meUrl.searchParams.set("access_token", page_access_token);
 
-        const meResp = await fetch(meUrl.toString());
+        const meResp = await fetchProvider(meUrl.toString());
         const meData = await meResp.json();
 
         if (!meResp.ok || meData.error) {
@@ -64,7 +65,7 @@ serve(async (req) => {
         igUrl.searchParams.set("fields", "instagram_business_account{id,username}");
         igUrl.searchParams.set("access_token", page_access_token);
 
-        const igResp = await fetch(igUrl.toString());
+        const igResp = await fetchProvider(igUrl.toString());
         const igData = await igResp.json();
 
         if (!igResp.ok || igData.error) {
@@ -131,7 +132,7 @@ serve(async (req) => {
         subUrl.searchParams.set("subscribed_fields", subFields);
         subUrl.searchParams.set("access_token", page_access_token);
 
-        const subResp = await fetch(subUrl.toString(), { method: "POST" });
+        const subResp = await fetchProvider(subUrl.toString(), { method: "POST" });
         const subData = await subResp.json();
         const webhookOk = subResp.ok && subData?.success === true;
 
@@ -149,7 +150,7 @@ serve(async (req) => {
         const testProfileUrl = new URL(`${GRAPH}/${iba.id}`);
         testProfileUrl.searchParams.set("fields", "name,profile_pic");
         testProfileUrl.searchParams.set("access_token", page_access_token);
-        const testProfileResp = await fetch(testProfileUrl.toString());
+        const testProfileResp = await fetchProvider(testProfileUrl.toString());
         const testProfileData = await testProfileResp.json();
 
         return jsonResp({

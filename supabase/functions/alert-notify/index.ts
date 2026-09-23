@@ -49,9 +49,10 @@
 // Autenticacao: service role key em `x-service-key` ou `Authorization: Bearer`.
 // Nunca e chamada pelo navegador.
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { emailAlertaIncidente, sendEmail } from "../_shared/emails.ts";
+import { fetchProvider } from "../_shared/provider-errors.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -177,7 +178,7 @@ type SendResult = {
 
 async function graphSend(sender: Sender, payload: Record<string, unknown>): Promise<SendResult> {
     try {
-        const resp = await fetch(`${GRAPH_API}/${sender.phone_number_id}/messages`, {
+        const resp = await fetchProvider(`${GRAPH_API}/${sender.phone_number_id}/messages`, {
             method: "POST",
             headers: {
                 Authorization: `Bearer ${sender.token}`,
@@ -846,7 +847,7 @@ async function espalhar(
 
 // ── Handler ──────────────────────────────────────────────────────────────────
 
-serve(async (req) => {
+serveMonitored("alert-notify", async (req) => {
     if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;

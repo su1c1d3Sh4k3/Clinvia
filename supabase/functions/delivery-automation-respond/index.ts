@@ -11,7 +11,7 @@
 //   awaiting_confirm → (completed | transferred | abandoned | failed)
 // -----------------------------------------------------------------------------
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import {
     sendMenu,
@@ -28,10 +28,7 @@ import {
     weekdayNamePt,
     type Weekday,
 } from "../_shared/timezone.ts";
-import { reportIncident, setIncidentComponent } from "../_shared/report-incident.ts";
-
-setIncidentComponent("delivery-automation-respond");
-
+import { reportIncident } from "../_shared/report-incident.ts";
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -93,7 +90,7 @@ function inferButtonIdFromText(raw: string | null): string {
     return "";
 }
 
-serve(async (req) => {
+serveMonitored("delivery-automation-respond", async (req) => {
     if (req.method === "OPTIONS") {
         return new Response("ok", { headers: corsHeaders });
     }

@@ -25,6 +25,7 @@
 // Invocado pelo cron a cada 10 minutos.
 // =====================================================
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { sendEmailSafe, emailConexaoCaiu } from '../_shared/emails.ts';
 
 const corsHeaders = {
@@ -158,7 +159,7 @@ async function pingUzapi(serverUrl: string, apikey: string, prevHealthCheck: str
     }
 }
 
-Deno.serve(async (req) => {
+serveMonitored("uzapi-health-check", async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response(null, { headers: corsHeaders });
     }

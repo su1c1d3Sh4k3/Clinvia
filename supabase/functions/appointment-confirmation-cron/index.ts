@@ -8,12 +8,12 @@
 // Groups appointments by contact+day (Brasília). One message per contact per day.
 // -----------------------------------------------------------------------------
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { sendMenu, sendText, type MenuButton } from "../_shared/uazapi-menu.ts";
 import { utcToBrasiliaParts } from "../_shared/timezone.ts";
 import { isMetaInstance, pickAutomationInstance, type AutomationInstance } from "../_shared/automation-instance.ts";
-import { reportIncident, setIncidentComponent } from "../_shared/report-incident.ts";
+import { reportIncident } from "../_shared/report-incident.ts";
 import {
     buildTemplateParameters,
     ensureSystemTemplates,
@@ -57,10 +57,7 @@ async function withServiceLabel(supabase: any, appointments: any[] | null, dateB
         _dateBR: dateBR,
     }));
 }
-
-setIncidentComponent("appointment-confirmation-cron");
-
-serve(async (req) => {
+serveMonitored("appointment-confirmation-cron", async (req) => {
     if (req.method === "OPTIONS") {
         return new Response("ok", { headers: corsHeaders });
     }

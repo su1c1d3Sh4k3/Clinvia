@@ -1,5 +1,6 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { fetchProvider } from "../_shared/provider-errors.ts";
 
 // =============================================
 // Instagram FB Webhook (BETA)
@@ -34,7 +35,7 @@ const VERIFY_TOKEN =
     Deno.env.get("INSTAGRAM_VERIFY_TOKEN") ||
     "clinvia_instagram_webhook_verify_2024";
 
-serve(async (req) => {
+serveMonitored("instagram-fb-webhook", async (req) => {
     const url = new URL(req.url);
     const method = req.method;
 
@@ -143,7 +144,7 @@ serve(async (req) => {
                 profileUrl.searchParams.set("fields", "name,profile_pic");
                 profileUrl.searchParams.set("access_token", pageAccessToken);
 
-                const pResp = await fetch(profileUrl.toString());
+                const pResp = await fetchProvider(profileUrl.toString());
                 profileStatusCode = pResp.status;
                 profileResponseRaw = await pResp.json();
 

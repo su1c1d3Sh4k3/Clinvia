@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import {
     apiError,
@@ -28,7 +28,7 @@ const corsHeaders = {
  *   - conversation_id (obrigatorio): ID da conversa (bd_data.conversation_id)
  *   - limit (opcional, default 10)
  */
-serve(async (req) => {
+serveMonitored("api-contact-messages", async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response(null, { headers: corsHeaders });
     }

@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { getWorkHoursForDay } from "../_shared/professional-schedule.ts";
 import { getBlockedProfessionalIds } from "../_shared/day-blocks.ts";
@@ -25,10 +25,6 @@ import {
     requireApiKey,
     unexpectedErrorResponse,
 } from "../_shared/api-errors.ts";
-import { setIncidentComponent } from "../_shared/report-incident.ts";
-
-setIncidentComponent("api-availability");
-
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-api-key",
@@ -173,7 +169,7 @@ async function getSlotsForDate(
     return slots.sort((a, b) => a.minuteOfDay - b.minuteOfDay);
 }
 
-serve(async (req) => {
+serveMonitored("api-availability", async (req) => {
     if (req.method === "OPTIONS") {
         return new Response("ok", { headers: corsHeaders });
     }

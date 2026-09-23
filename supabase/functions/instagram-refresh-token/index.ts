@@ -1,5 +1,6 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { fetchProvider } from "../_shared/provider-errors.ts";
 
 // =============================================
 // Instagram Token Refresh
@@ -31,7 +32,7 @@ const corsHeaders = {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-serve(async (req) => {
+serveMonitored("instagram-refresh-token", async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders });
     }
@@ -93,7 +94,7 @@ serve(async (req) => {
         const refreshUrl = `https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=${instance.access_token}`;
 
         console.log('[INSTAGRAM REFRESH] Calling Instagram API...');
-        const response = await fetch(refreshUrl);
+        const response = await fetchProvider(refreshUrl);
         const data = await response.json();
 
         console.log('[INSTAGRAM REFRESH] API Response status:', response.status);

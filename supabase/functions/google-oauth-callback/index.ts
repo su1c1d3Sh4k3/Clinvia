@@ -1,5 +1,6 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { fetchProvider } from "../_shared/provider-errors.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -23,7 +24,7 @@ async function createGoogleCalendar(
   calendarName: string,
 ): Promise<string | null> {
   try {
-    const res = await fetch("https://www.googleapis.com/calendar/v3/calendars", {
+    const res = await fetchProvider("https://www.googleapis.com/calendar/v3/calendars", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -51,7 +52,7 @@ async function createGoogleCalendar(
 
 // ─── Serve ───────────────────────────────────────────────────────────────────
 
-serve(async (req) => {
+serveMonitored("google-oauth-callback", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -105,7 +106,7 @@ serve(async (req) => {
     // ─── PASSO 1: Trocar code por tokens ────────────────────────────────────
     console.log("[GOOGLE OAUTH] Step 1: Exchanging code for tokens...");
 
-    const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+    const tokenResponse = await fetchProvider("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
@@ -147,7 +148,7 @@ serve(async (req) => {
 
     let googleEmail = "";
     try {
-      const userInfoResponse = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+      const userInfoResponse = await fetchProvider("https://www.googleapis.com/oauth2/v2/userinfo", {
         headers: { Authorization: `Bearer ${access_token}` },
       });
       const userInfo = await userInfoResponse.json();

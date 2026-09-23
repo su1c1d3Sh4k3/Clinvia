@@ -11,7 +11,7 @@
 //   token_usage_log (o token-tracker debitaria a conta do cliente).
 // - Depois de handled_by='support' esta funcao nao e mais chamada: o front
 //   passa a inserir a mensagem direto via RLS.
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import {
     apiError,
@@ -21,6 +21,7 @@ import {
     unexpectedErrorResponse,
 } from "../_shared/api-errors.ts";
 import { KNOWLEDGE_SUMMARY, TOPIC_IDS, getTopic } from "../_shared/support-knowledge.ts";
+import { fetchProvider } from "../_shared/provider-errors.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -198,7 +199,7 @@ const TOOLS = [
 // Handler
 // ============================================================
 
-serve(async (req) => {
+serveMonitored("support-ai-chat", async (req) => {
     if (req.method === "OPTIONS") {
         return new Response(null, { headers: corsHeaders });
     }
@@ -376,7 +377,7 @@ serve(async (req) => {
         let answer = "";
 
         for (let round = 0; round < 4; round++) {
-            const aiResp = await fetch("https://api.openai.com/v1/chat/completions", {
+            const aiResp = await fetchProvider("https://api.openai.com/v1/chat/completions", {
                 method: "POST",
                 headers: {
                     Authorization: `Bearer ${openaiKey}`,

@@ -13,6 +13,7 @@
 // viagens perde a corrida quando o erro vem em rajada — que e o caso normal.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { apiError, describeDbError, requireApiKey } from "../_shared/api-errors.ts";
 
 const corsHeaders = {
@@ -31,7 +32,7 @@ const FONTES: Record<string, string> = {
     silent: "n8n_silent",
 };
 
-Deno.serve(async (req) => {
+serveMonitored("n8n-error-ingest", async (req) => {
     if (req.method === "OPTIONS") {
         return new Response("ok", { headers: corsHeaders });
     }

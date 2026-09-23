@@ -38,8 +38,9 @@
 // Autenticacao: service role key em `x-service-key` ou `Authorization: Bearer`.
 // Nunca e chamada pelo navegador.
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { fetchProvider } from "../_shared/provider-errors.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -281,7 +282,7 @@ async function analisar(
 ): Promise<{ ok: true; analise: Analise; uso: Record<string, number> } | { ok: false; erro: string; codigo: string }> {
     let resp: Response;
     try {
-        resp = await fetch("https://api.openai.com/v1/chat/completions", {
+        resp = await fetchProvider("https://api.openai.com/v1/chat/completions", {
             method: "POST",
             headers: { Authorization: `Bearer ${chave}`, "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -391,7 +392,7 @@ async function soltarReserva(supabase: Db, id: string) {
 
 // ── Handler ──────────────────────────────────────────────────────────────────
 
-serve(async (req) => {
+serveMonitored("incident-analyze", async (req) => {
     if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;

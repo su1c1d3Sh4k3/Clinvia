@@ -1,3 +1,5 @@
+import { fetchProvider } from "./provider-errors.ts";
+
 // Token Tracker Utility - Shared across Edge Functions
 // Price table in USD per 1M tokens
 
@@ -289,7 +291,7 @@ export async function makeOpenAIRequest(
     // Try custom token first if available
     if (isCustom && customToken && ownerId) {
         try {
-            const response = await fetch(config.endpoint, {
+            const response = await fetchProvider(config.endpoint, {
                 method: config.method || 'POST',
                 headers: makeHeaders(customToken),
                 body: getBody(),
@@ -316,7 +318,7 @@ export async function makeOpenAIRequest(
     }
 
     // Use default token
-    const response = await fetch(config.endpoint, {
+    const response = await fetchProvider(config.endpoint, {
         method: config.method || 'POST',
         headers: makeHeaders(defaultToken),
         body: getBody(),

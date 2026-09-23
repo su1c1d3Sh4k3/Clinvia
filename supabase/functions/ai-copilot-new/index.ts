@@ -1,11 +1,11 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-
+import { serveMonitored } from "../_shared/serve-monitored.ts";
+import { fetchProvider } from "../_shared/provider-errors.ts";
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-serve(async (req) => {
+serveMonitored("ai-copilot-new", async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response(null, { headers: corsHeaders });
     }
@@ -19,7 +19,7 @@ serve(async (req) => {
             throw new Error('OPENAI_API_KEY not configured in Edge Function secrets');
         }
 
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        const response = await fetchProvider('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

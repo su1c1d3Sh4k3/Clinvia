@@ -1,9 +1,7 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { reportIncident, setIncidentComponent } from "../_shared/report-incident.ts";
-
-setIncidentComponent("meta-send-message");
-
+import { reportIncident } from "../_shared/report-incident.ts";
+import { fetchProvider } from "../_shared/provider-errors.ts";
 /**
  * meta-send-message
  *
@@ -122,7 +120,7 @@ function buildMetaPayload(
     return payload;
 }
 
-serve(async (req) => {
+serveMonitored("meta-send-message", async (req) => {
     if (req.method === "OPTIONS") {
         return new Response(null, { headers: corsHeaders });
     }
@@ -324,7 +322,7 @@ serve(async (req) => {
 
         console.log("[meta-send-message] Sending to Meta:", JSON.stringify(metaPayload));
 
-        const sendResponse = await fetch(
+        const sendResponse = await fetchProvider(
             `${GRAPH_API}/${phoneNumberId}/messages`,
             {
                 method: "POST",

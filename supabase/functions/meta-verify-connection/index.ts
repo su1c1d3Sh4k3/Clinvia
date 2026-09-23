@@ -1,6 +1,7 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { sendEmailSafe, emailRestricaoMeta } from "../_shared/emails.ts";
+import { fetchProvider } from "../_shared/provider-errors.ts";
 
 /**
  * meta-verify-connection
@@ -31,7 +32,7 @@ function json(body: unknown, status = 200) {
     });
 }
 
-serve(async (req) => {
+serveMonitored("meta-verify-connection", async (req) => {
     if (req.method === "OPTIONS") {
         return new Response(null, { headers: corsHeaders });
     }
@@ -100,7 +101,7 @@ serve(async (req) => {
             } else if (!checks.registered) {
                 console.log("[meta-verify-connection] Not registered on Cloud API, attempting register...");
                 const pin = Math.floor(100000 + Math.random() * 900000).toString();
-                const regResp = await fetch(`${GRAPH_API}/${phoneId}/register`, {
+                const regResp = await fetchProvider(`${GRAPH_API}/${phoneId}/register`, {
                     method: "POST",
                     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
                     body: JSON.stringify({ messaging_product: "whatsapp", pin }),
@@ -144,7 +145,7 @@ serve(async (req) => {
             // Auto-reparo: re-inscrever o webhook
             if (!checks.webhook_subscribed) {
                 console.log("[meta-verify-connection] Webhook not subscribed, re-subscribing...");
-                const subResp = await fetch(`${GRAPH_API}/${wabaId}/subscribed_apps`, {
+                const subResp = await fetchProvider(`${GRAPH_API}/${wabaId}/subscribed_apps`, {
                     method: "POST",
                     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
                     body: JSON.stringify({

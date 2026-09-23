@@ -30,6 +30,7 @@
 // (n8n vs sistema) para monitoramento.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import {
     apiError,
     dbErrorResponse,
@@ -37,7 +38,6 @@ import {
     requireApiKey,
     unexpectedErrorResponse,
 } from '../_shared/api-errors.ts';
-import { setIncidentComponent } from '../_shared/report-incident.ts';
 import {
     computeTokenCost,
     DEFAULT_CACHE_RATIO,
@@ -46,9 +46,6 @@ import {
     normalizeModelName,
     readReportedCachedTokens,
 } from '../_shared/token-cost.ts';
-
-setIncidentComponent('api-token-usage');
-
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-api-key',
@@ -119,7 +116,7 @@ async function getUsdBrlRate(supabase: any): Promise<{ rate: number; source: str
     return { rate: FALLBACK_RATE, source: 'fixed_fallback' };
 }
 
-Deno.serve(async (req) => {
+serveMonitored("api-token-usage", async (req) => {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
     try {

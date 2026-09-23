@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { getWorkHoursForDay } from "../_shared/professional-schedule.ts";
 import { isProfessionalDayBlocked } from "../_shared/day-blocks.ts";
@@ -25,10 +25,6 @@ import {
     NO_CONVENIO,
     overlapsConvenio,
 } from "../_shared/convenio-schedule.ts";
-import { setIncidentComponent } from "../_shared/report-incident.ts";
-
-setIncidentComponent("api-public-booking");
-
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -116,7 +112,7 @@ function patientDbError(code: string, operation: string, error: unknown, advice:
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^\d{2}:\d{2}$/;
 
-serve(async (req) => {
+serveMonitored("api-public-booking", async (req) => {
     if (req.method === "OPTIONS") {
         return new Response("ok", { headers: corsHeaders });
     }

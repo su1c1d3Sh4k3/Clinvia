@@ -1,5 +1,6 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { fetchProvider } from "../_shared/provider-errors.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -9,7 +10,7 @@ const corsHeaders = {
 const UZAPI_URL = 'https://clinvia.uazapi.com';
 const UZAPI_ADMIN_TOKEN = '6EiMFTZGDpLxaP5u1pD2oXpzTjwL5B73WEdcCfjOIRYsTlGx1l';
 
-serve(async (req) => {
+serveMonitored("uzapi-create-instance", async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -85,7 +86,7 @@ serve(async (req) => {
     console.log('[3] No duplicate found, proceeding to create on UzAPI...');
 
     // ===== STEP 2: CREATE ON UZAPI (only after duplicate check passes) =====
-    const uzapiResponse = await fetch(`${UZAPI_URL}/instance/init`, {
+    const uzapiResponse = await fetchProvider(`${UZAPI_URL}/instance/init`, {
       method: 'POST',
       headers: {
         'Accept': 'application/json',

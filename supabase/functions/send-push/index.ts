@@ -1,7 +1,8 @@
 // @ts-nocheck
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import webpush from 'npm:web-push@3.6.7';
+import { fetchProvider } from "../_shared/provider-errors.ts";
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -54,7 +55,7 @@ async function getCachedAvatarUrl(
 
     // Not cached yet — download from WhatsApp CDN and upload to Storage
     try {
-        const response = await fetch(originalUrl, { signal: AbortSignal.timeout(5000) });
+        const response = await fetchProvider(originalUrl, { signal: AbortSignal.timeout(5000) });
         if (!response.ok) {
             console.warn('[SEND-PUSH] Avatar download failed (status', response.status, ')');
             return originalUrl; // CDN might still work for the client
@@ -127,7 +128,7 @@ async function getFCMAccessToken(): Promise<string | null> {
 
     const jwt = `${signingInput}.${base64url(new Uint8Array(signature))}`;
 
-    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+    const tokenRes = await fetchProvider('https://oauth2.googleapis.com/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
@@ -147,7 +148,7 @@ async function sendFCMDataMessage(
     projectId: string,
     accessToken: string,
 ): Promise<{ ok: boolean; error?: any; result?: any }> {
-    const res = await fetch(
+    const res = await fetchProvider(
         `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`,
         {
             method: 'POST',
@@ -181,7 +182,7 @@ async function sendFCMDataMessage(
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-serve(async (req) => {
+serveMonitored("send-push", async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders });
     }
@@ -302,7 +303,7 @@ serve(async (req) => {
         if (!fcmSent && expoToken && expoToken.startsWith('ExponentPushToken[')) {
             console.log('[SEND-PUSH] FCM not sent, trying Expo push as fallback...');
             try {
-                const expoRes = await fetch('https://exp.host/--/api/v2/push/send', {
+                const expoRes = await fetchProvider('https://exp.host/--/api/v2/push/send', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                     body: JSON.stringify({

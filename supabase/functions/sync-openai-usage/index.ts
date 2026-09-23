@@ -19,7 +19,7 @@
 // gravacao e BEST-EFFORT de proposito: falha em registrar nunca derruba o sync
 // (e por isso a ordem entre deploy e migration nao importa).
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { fetchCosts, fetchUsage, resolveAdminKey } from "../_shared/openai-admin.ts";
 
@@ -38,7 +38,7 @@ function monthStartUnix(): number {
     return Math.floor(Date.UTC(sp.getFullYear(), sp.getMonth(), 1, 3, 0, 0) / 1000);
 }
 
-serve(async (req) => {
+serveMonitored("sync-openai-usage", async (req) => {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
     const supabase = createClient(

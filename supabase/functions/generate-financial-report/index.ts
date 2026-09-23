@@ -1,6 +1,7 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { trackTokenUsage } from "../_shared/token-tracker.ts";
+import { fetchProvider } from "../_shared/provider-errors.ts";
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -22,7 +23,7 @@ interface ReportRequest {
     reportName: string;
 }
 
-serve(async (req) => {
+serveMonitored("generate-financial-report", async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response(null, { headers: corsHeaders });
     }
@@ -337,7 +338,7 @@ FORMATO DE RESPOSTA: Retorne APENAS o JSON válido, sem markdown ou texto adicio
 
         console.log('[generate-financial-report] Calling OpenAI API...');
 
-        const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+        const openaiResponse = await fetchProvider('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

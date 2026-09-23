@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { TERMINAL_STAGES } from "../_shared/crm-stages.ts";
 import {
@@ -52,7 +52,7 @@ async function recalcularValor(supabase: any, crmId: string): Promise<number> {
     return (data || []).reduce((s: number, r: any) => s + (Number(r.price) || 0), 0);
 }
 
-serve(async (req) => {
+serveMonitored("api-crm-sandbox", async (req) => {
     if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
     const json = (body: unknown, status = 200) =>

@@ -1,13 +1,14 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { trackTokenUsage, getOwnerFromConversation } from "../_shared/token-tracker.ts";
+import { fetchProvider } from "../_shared/provider-errors.ts";
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-serve(async (req) => {
+serveMonitored("ai-sentiment-analysis", async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response(null, { headers: corsHeaders });
     }
@@ -88,7 +89,7 @@ Responda APENAS um número inteiro de 0 a 10.`;
 
         console.log(`Analyzing conversation ${conversationId}...`);
 
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        const response = await fetchProvider('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

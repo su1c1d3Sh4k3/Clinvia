@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import {
     corsHeaders,
     createSupabaseClient,
@@ -14,10 +14,8 @@ import {
 import { makeOpenAIRequest, trackTokenUsage } from "../_shared/token-tracker.ts";
 import { AC_FREE_TEXT_STATES, matchAcButtonId } from "../_shared/appointment-confirmation-buttons.ts";
 import { buildBdData } from "../_shared/bd-data.ts";
-import { reportIncident, setIncidentComponent } from "../_shared/report-incident.ts";
-
-setIncidentComponent("webhook-handle-message");
-
+import { reportIncident } from "../_shared/report-incident.ts";
+import { fetchProvider } from "../_shared/provider-errors.ts";
 // EdgeRuntime.waitUntil mantém o processo vivo após o return 200 para que
 // tasks de background (persistir foto, download de mídia) terminem mesmo
 // depois do handler retornar. Crítico para evitar perda de mensagens quando
@@ -173,7 +171,7 @@ async function fetchProfilePicFromEvolution(
     number: string
 ): Promise<string | null> {
     try {
-        const response = await fetch(
+        const response = await fetchProvider(
             `${serverUrl}/chat/fetchProfilePictureUrl/${instanceName}`,
             {
                 method: 'POST',
@@ -208,7 +206,7 @@ async function fetchProfilePicFromUzapi(
     number: string,
 ): Promise<string | null> {
     try {
-        const response = await fetch(`${serverUrl.replace(/\/$/, '')}/chat/details`, {
+        const response = await fetchProvider(`${serverUrl.replace(/\/$/, '')}/chat/details`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -312,7 +310,7 @@ async function persistContactPhoto(
             return `${cleanUrl}?t=${Date.now()}`;
         }
 
-        const imageResponse = await fetch(photoUrl, {
+        const imageResponse = await fetchProvider(photoUrl, {
             // timeout implícito, mas adicionamos headers para evitar bloqueio de CDN
             headers: { 'User-Agent': 'Mozilla/5.0 (Clinvia Webhook)' },
         });
@@ -464,7 +462,7 @@ function normalizeMonitorText(text: string): string {
         .trim();
 }
 
-serve(async (req) => {
+serveMonitored("webhook-handle-message", async (req) => {
     // Handle CORS preflight
     if (req.method === 'OPTIONS') {
         return new Response(null, { headers: corsHeaders });
@@ -636,7 +634,7 @@ serve(async (req) => {
             // Handle Group Image Update (ALWAYS CHECK if provided)
             if (group && groupImagePreview && groupImagePreview.startsWith('http')) {
                 try {
-                    const imageResponse = await fetch(groupImagePreview);
+                    const imageResponse = await fetchProvider(groupImagePreview);
                     if (imageResponse.ok) {
                         const imageBlob = await imageResponse.blob();
                         const fileName = `group_${group.id}.jpg`;
@@ -749,7 +747,7 @@ serve(async (req) => {
                         if (senderDigits.length >= 8) {
                             const ctrl = new AbortController();
                             const t = setTimeout(() => ctrl.abort(), 4000);
-                            const resp = await fetch(`${baseUrl}/chat/details`, {
+                            const resp = await fetchProvider(`${baseUrl}/chat/details`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json', token: payload.token },
                                 body: JSON.stringify({ number: senderDigits, preview: true }),
@@ -1378,6 +1376,27 @@ serve(async (req) => {
                     .single();
 
                 if (msgError) {
+                    // 23505 no índice de dedupe = a mensagem JÁ ESTÁ salva. Isso é
+                    // reentrega do provedor, não falha: devolver 500 faz a fila
+                    // retentar para sempre algo que nunca vai entrar. 26 dos 39
+                    // HTTP 500 desta function em 7 dias eram exatamente isto —
+                    // ruído no painel para uma mensagem que não se perdeu.
+                    // O processamento seguinte pertence à primeira passagem, que
+                    // foi quem de fato gravou; repeti-lo é que duplicaria efeito.
+                    const ehReentrega = msgError.code === '23505' &&
+                        `${msgError.message ?? ''} ${msgError.details ?? ''}`.includes('idx_messages_evolution_per_conversation');
+                    if (ehReentrega) {
+                        console.log('[webhook-handle-message] Reentrega do provedor: mensagem já salva, confirmando sem reprocessar:', messageId);
+                        return new Response(
+                            JSON.stringify({
+                                success: true,
+                                duplicate: true,
+                                message: 'Mensagem já estava salva; reentrega do provedor confirmada sem reprocessamento.'
+                            }),
+                            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                        );
+                    }
+
                     console.error('[webhook-handle-message] Error saving message:', msgError);
                     // CRÍTICO: retornar 500 para o processor marcar como pending
                     // e retentar. Anteriormente engolíamos esse erro silenciosamente
@@ -1966,7 +1985,7 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
 
                     const forwardedPayload = { ...payload, bd_data: bdData };
 
-                    const webhookResponse = await fetch(n8nForwardUrl, {
+                    const webhookResponse = await fetchProvider(n8nForwardUrl, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',

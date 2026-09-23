@@ -2,7 +2,7 @@
 // Collects n8n + Portainer stats and stores in infra_metrics table
 // Auth: x-cron-secret header (from pg_cron) OR super-admin JWT (for "Collect Now" button)
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -11,7 +11,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-cron-secret",
 };
 
-serve(async (req) => {
+serveMonitored("infra-collector", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }

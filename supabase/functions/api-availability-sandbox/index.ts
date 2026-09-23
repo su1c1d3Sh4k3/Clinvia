@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { getWorkHoursForDay } from "../_shared/professional-schedule.ts";
 import { getBlockedProfessionalIds } from "../_shared/day-blocks.ts";
@@ -193,7 +193,7 @@ async function getSlotsForDate(
     return slots.sort((a, b) => a.minuteOfDay - b.minuteOfDay);
 }
 
-serve(async (req) => {
+serveMonitored("api-availability-sandbox", async (req) => {
     if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
     try {

@@ -12,14 +12,11 @@
 // between sends (= 5 msgs/sec).
 // -----------------------------------------------------------------------------
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { sendMenu, sendText, type MenuButton } from "../_shared/uazapi-menu.ts";
 import { todayInBrasilia, type Weekday } from "../_shared/timezone.ts";
-import { reportIncident, setIncidentComponent } from "../_shared/report-incident.ts";
-
-setIncidentComponent("delivery-automation-worker");
-
+import { reportIncident } from "../_shared/report-incident.ts";
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -38,7 +35,7 @@ const DAY_BUTTONS: Record<WeekdayIndex, { text: string; weekday: Weekday }> = {
     5: { text: "Sexta-feira", weekday: 5 },
 };
 
-serve(async (req) => {
+serveMonitored("delivery-automation-worker", async (req) => {
     if (req.method === "OPTIONS") {
         return new Response("ok", { headers: corsHeaders });
     }
@@ -74,14 +71,32 @@ serve(async (req) => {
             errors++;
             break;
         }
-        if (!job) break; // no more ready jobs
+        // Fila vazia. O teste e por `id`, e nao por `!job`, porque a RPC
+        // devolve um tipo COMPOSTO: sem candidato ela entrega uma linha com
+        // todos os campos nulos, que em JS e um objeto — logo, verdadeiro.
+        // Era isso que fazia o laco girar 50 vezes por minuto sobre fila
+        // vazia e disparar `?id=eq.null` (400) a cada volta. A RPC ja foi
+        // corrigida em 20260923500000; este teste fica como cinto.
+        if (!job?.id) break;
 
         try {
             await dispatchJob(supabase, job);
-            await supabase
+            const { error: doneErr } = await supabase
                 .from("delivery_automation_jobs")
                 .update({ status: "done", finished_at: new Date().toISOString() })
                 .eq("id", job.id);
+            // Engolir este erro foi o que escondeu o laco por meses: o job
+            // fica 'running' para sempre e o worker responde `success: true`.
+            if (doneErr) {
+                console.error(`[worker] job ${job.id}: nao consegui marcar 'done':`, doneErr.message);
+                reportIncident({
+                    route: "marcar_done",
+                    httpCode: 500,
+                    error: doneErr,
+                    requestId: `delivery_job_done:${job.id}`,
+                });
+                errors++;
+            }
             processed++;
         } catch (err) {
             errors++;
@@ -91,7 +106,7 @@ serve(async (req) => {
             if (attempts < 3) {
                 // Requeue with +30s backoff
                 const retryAt = new Date(Date.now() + 30_000).toISOString();
-                await supabase
+                const { error: reqErr } = await supabase
                     .from("delivery_automation_jobs")
                     .update({
                         status: "pending",
@@ -100,6 +115,17 @@ serve(async (req) => {
                         picked_at: null,
                     })
                     .eq("id", job.id);
+                // Sem isto o job fica preso em 'running' e a retentativa que o
+                // backoff prometeu nunca acontece — em silencio.
+                if (reqErr) {
+                    console.error(`[worker] job ${job.id}: nao consegui reenfileirar:`, reqErr.message);
+                    reportIncident({
+                        route: "reenfileirar_job",
+                        httpCode: 500,
+                        error: reqErr,
+                        requestId: `delivery_job_requeue:${job.id}`,
+                    });
+                }
             } else {
                 // Só no desfecho terminal (3ª falha): reportar cada retentativa
                 // encheria o painel com erro que o próprio backoff resolveu.
@@ -110,7 +136,7 @@ serve(async (req) => {
                     requestId: `delivery_job:${job.id}`,
                     context: { job_type: job.job_type, attempts },
                 });
-                await supabase
+                const { error: errErr } = await supabase
                     .from("delivery_automation_jobs")
                     .update({
                         status: "error",
@@ -118,6 +144,9 @@ serve(async (req) => {
                         finished_at: new Date().toISOString(),
                     })
                     .eq("id", job.id);
+                if (errErr) {
+                    console.error(`[worker] job ${job.id}: nao consegui marcar 'error':`, errErr.message);
+                }
             }
         }
 

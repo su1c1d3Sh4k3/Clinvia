@@ -13,7 +13,7 @@
 // - cada pedido invalida o codigo anterior E a verificacao anterior daquela
 //   sessao, entao todo login passa pela tela de codigo;
 // - 5 tentativas erradas queimam o codigo.
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import {
     apiError,
@@ -64,7 +64,7 @@ function maskEmail(email: string): string {
     return `${visible}${"*".repeat(Math.max(2, user.length - visible.length - tail.length))}${tail}@${domain}`;
 }
 
-serve(async (req) => {
+serveMonitored("admin-2fa", async (req) => {
     if (req.method === "OPTIONS") {
         return new Response(null, { headers: corsHeaders });
     }

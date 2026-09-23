@@ -1,5 +1,6 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { fetchProvider } from "../_shared/provider-errors.ts";
 
 // =============================================
 // Instagram FB OAuth Callback (BETA)
@@ -42,7 +43,7 @@ interface OAuthRequest {
     user_id: string; // auth.uid do usuário Clinvia
 }
 
-serve(async (req) => {
+serveMonitored("instagram-fb-oauth-callback", async (req) => {
     if (req.method === "OPTIONS") {
         return new Response("ok", { headers: corsHeaders });
     }
@@ -74,7 +75,7 @@ serve(async (req) => {
         tokenUrl.searchParams.set("redirect_uri", redirect_uri);
         tokenUrl.searchParams.set("code", code);
 
-        const tokenResp = await fetch(tokenUrl.toString());
+        const tokenResp = await fetchProvider(tokenUrl.toString());
         const tokenData = await tokenResp.json();
 
         if (!tokenResp.ok || tokenData.error) {
@@ -97,7 +98,7 @@ serve(async (req) => {
         longUrl.searchParams.set("client_secret", FB_APP_SECRET);
         longUrl.searchParams.set("fb_exchange_token", shortLivedUserToken);
 
-        const longResp = await fetch(longUrl.toString());
+        const longResp = await fetchProvider(longUrl.toString());
         const longData = await longResp.json();
 
         let userAccessToken = shortLivedUserToken;
@@ -122,7 +123,7 @@ serve(async (req) => {
         );
         pagesUrl.searchParams.set("access_token", userAccessToken);
 
-        const pagesResp = await fetch(pagesUrl.toString());
+        const pagesResp = await fetchProvider(pagesUrl.toString());
         const pagesData = await pagesResp.json();
 
         if (!pagesResp.ok || pagesData.error) {
@@ -216,7 +217,7 @@ serve(async (req) => {
             subUrl.searchParams.set("subscribed_fields", subFields);
             subUrl.searchParams.set("access_token", pageAccessToken);
 
-            const subResp = await fetch(subUrl.toString(), { method: "POST" });
+            const subResp = await fetchProvider(subUrl.toString(), { method: "POST" });
             const subData = await subResp.json();
 
             const webhookOk = subResp.ok && subData?.success === true;

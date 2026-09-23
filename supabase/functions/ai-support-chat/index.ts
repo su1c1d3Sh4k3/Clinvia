@@ -1,7 +1,8 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { makeOpenAIRequest, trackTokenUsage } from "../_shared/token-tracker.ts";
 import { allTools, executeTool, executeConfirmedAction, UserContext, UserRole } from "../_shared/bia-tools/index.ts";
+import { fetchProvider } from "../_shared/provider-errors.ts";
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -217,12 +218,12 @@ async function getManualContent(pageSlug: string): Promise<string> {
     const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/manuals/${fileName}`;
 
     try {
-        const response = await fetch(publicUrl);
+        const response = await fetchProvider(publicUrl);
 
         if (!response.ok) {
             if (fileName !== 'default.md') {
                 const defaultUrl = `${SUPABASE_URL}/storage/v1/object/public/manuals/default.md`;
-                const defaultResponse = await fetch(defaultUrl);
+                const defaultResponse = await fetchProvider(defaultUrl);
 
                 if (defaultResponse.ok) {
                     const content = await defaultResponse.text();
@@ -316,7 +317,7 @@ async function processToolCalls(
     return results;
 }
 
-serve(async (req) => {
+serveMonitored("ai-support-chat", async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response(null, { headers: corsHeaders });
     }

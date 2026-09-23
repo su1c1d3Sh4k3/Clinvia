@@ -1,5 +1,6 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { fetchProvider } from "../_shared/provider-errors.ts";
 
 // =============================================
 // Instagram OAuth Callback Handler
@@ -24,7 +25,7 @@ interface OAuthRequest {
     user_id: string; // The Clinvia user_id (auth.uid)
 }
 
-serve(async (req) => {
+serveMonitored("instagram-oauth-callback", async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders });
     }
@@ -67,7 +68,7 @@ serve(async (req) => {
         tokenFormData.append('redirect_uri', redirect_uri);
         tokenFormData.append('code', code);
 
-        const tokenResponse = await fetch('https://api.instagram.com/oauth/access_token', {
+        const tokenResponse = await fetchProvider('https://api.instagram.com/oauth/access_token', {
             method: 'POST',
             body: tokenFormData
         });
@@ -117,13 +118,13 @@ serve(async (req) => {
             // We'll try GET first (standard), but fallback to POST if we get a method error
             const longLivedUrl = `https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${INSTAGRAM_APP_SECRET}&access_token=${shortLivedToken}`;
 
-            let longLivedResponse = await fetch(longLivedUrl);
+            let longLivedResponse = await fetchProvider(longLivedUrl);
             let longLivedData = await longLivedResponse.json();
 
             // Check for method error and retry with POST
             if (!longLivedResponse.ok && longLivedData.error?.message?.includes('method type: get')) {
                 console.warn('[INSTAGRAM OAUTH] GET rejected (method type error), retrying with POST...');
-                longLivedResponse = await fetch(longLivedUrl, { method: 'POST' });
+                longLivedResponse = await fetchProvider(longLivedUrl, { method: 'POST' });
                 longLivedData = await longLivedResponse.json();
             }
 
@@ -154,13 +155,13 @@ serve(async (req) => {
             // Using v22.0 and handling method errors
             const profileUrl = `https://graph.instagram.com/v22.0/me?fields=user_id,username,name,profile_picture_url&access_token=${accessToken}`;
 
-            let profileResponse = await fetch(profileUrl);
+            let profileResponse = await fetchProvider(profileUrl);
             let profileData = await profileResponse.json();
 
             // Check for method error
             if (!profileResponse.ok && profileData.error?.message?.includes('method type: get')) {
                 console.warn('[INSTAGRAM OAUTH] GET rejected for profile (method type error), retrying with POST...');
-                profileResponse = await fetch(profileUrl, { method: 'POST' });
+                profileResponse = await fetchProvider(profileUrl, { method: 'POST' });
                 profileData = await profileResponse.json();
             }
 
@@ -254,7 +255,7 @@ serve(async (req) => {
         let webhookSubscribed = false;
         try {
             const subUrl = `https://graph.instagram.com/v23.0/me/subscribed_apps?subscribed_fields=messages,messaging_postbacks,messaging_seen,message_reactions&access_token=${accessToken}`;
-            const subResponse = await fetch(subUrl, { method: 'POST' });
+            const subResponse = await fetchProvider(subUrl, { method: 'POST' });
             const subData = await subResponse.json();
             webhookSubscribed = subResponse.ok && subData.success === true;
             if (webhookSubscribed) {

@@ -15,7 +15,7 @@
 // passes SERVICE_ROLE_KEY). Returns a count summary.
 // -----------------------------------------------------------------------------
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { todayInBrasilia, utcToBrasiliaParts } from "../_shared/timezone.ts";
 
@@ -24,7 +24,7 @@ const corsHeaders = {
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-serve(async (req) => {
+serveMonitored("delivery-automation-dispatcher", async (req) => {
     if (req.method === "OPTIONS") {
         return new Response("ok", { headers: corsHeaders });
     }

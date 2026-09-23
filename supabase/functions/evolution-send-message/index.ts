@@ -1,9 +1,7 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-import { reportIncident, setIncidentComponent } from "../_shared/report-incident.ts";
-
-setIncidentComponent("evolution-send-message");
-
+import { reportIncident } from "../_shared/report-incident.ts";
+import { fetchProvider } from "../_shared/provider-errors.ts";
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -173,7 +171,7 @@ async function bumpFailureAndMaybeDisconnect(
   }
 }
 
-serve(async (req) => {
+serveMonitored("evolution-send-message", async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -311,7 +309,7 @@ serve(async (req) => {
     if (instance?.provider === 'meta') {
       const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
       const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-      const metaResp = await fetch(`${supabaseUrl}/functions/v1/meta-send-message`, {
+      const metaResp = await fetchProvider(`${supabaseUrl}/functions/v1/meta-send-message`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -530,7 +528,7 @@ serve(async (req) => {
     const sendStartedAt = Date.now();
 
     try {
-      const sendResponse = await fetch(sendUrl, {
+      const sendResponse = await fetchProvider(sendUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

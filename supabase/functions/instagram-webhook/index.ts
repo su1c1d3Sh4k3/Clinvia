@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import {
     validateMetaWebhookSignature,
@@ -7,10 +7,8 @@ import {
     mapMessageType
 } from "../_shared/utils.ts";
 import { buildBdData } from "../_shared/bd-data.ts";
-import { reportIncident, setIncidentComponent } from "../_shared/report-incident.ts";
-
-setIncidentComponent("instagram-webhook");
-
+import { reportIncident } from "../_shared/report-incident.ts";
+import { fetchProvider } from "../_shared/provider-errors.ts";
 /**
  * Tipo do anexo do Direct → vocabulário UAZAPI, o mesmo que o WhatsApp manda
  * em `message.messageType` (o meta-webhook faz a tradução equivalente para a
@@ -120,7 +118,7 @@ const corsHeaders = {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-serve(async (req) => {
+serveMonitored("instagram-webhook", async (req) => {
     const url = new URL(req.url);
     const method = req.method;
 
@@ -317,7 +315,7 @@ serve(async (req) => {
                                 try {
 
                                     // Call Instagram API to get the account info with this token
-                                    const verifyResponse = await fetch(
+                                    const verifyResponse = await fetchProvider(
                                         `https://graph.instagram.com/v24.0/me?fields=id,username&access_token=${inst.access_token}`
                                     );
                                     const verifyData = await verifyResponse.json();
@@ -507,7 +505,7 @@ serve(async (req) => {
                             const fetchInstagramProfile = async (): Promise<{ name: string | null; profilePicUrl: string | null }> => {
                                 try {
                                     const accessToken = instagramInstance.access_token;
-                                    const profileResponse = await fetch(
+                                    const profileResponse = await fetchProvider(
                                         `https://graph.instagram.com/v24.0/${senderId}?fields=name,username,profile_pic&access_token=${accessToken}`
                                     );
                                     const profileData = await profileResponse.json();
@@ -1108,7 +1106,7 @@ serve(async (req) => {
                                             };
 
                                             try {
-                                                const forwardResponse = await fetch(webhookUrl, {
+                                                const forwardResponse = await fetchProvider(webhookUrl, {
                                                     method: 'POST',
                                                     headers: {
                                                         'Content-Type': 'application/json',

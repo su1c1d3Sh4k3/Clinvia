@@ -8,6 +8,7 @@
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { crypto } from "https://deno.land/std@0.168.0/crypto/mod.ts";
 import { encode as hexEncode } from "https://deno.land/std@0.168.0/encoding/hex.ts";
+import { fetchProvider } from "./provider-errors.ts";
 
 export const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -92,7 +93,7 @@ export async function downloadMediaFromUzapi(
         console.log('[SHARED] 🔍   → messageType:', messageType);
         console.log('[SHARED] 🔍   → originalFileName:', originalFileName);
 
-        const downloadResponse = await fetch('https://clinvia.uazapi.com/message/download', {
+        const downloadResponse = await fetchProvider('https://clinvia.uazapi.com/message/download', {
             method: 'POST',
             headers: {
                 'Accept': 'application/json',
@@ -231,7 +232,7 @@ export async function downloadMediaFromUzapi(
  */
 export async function fetchChatDetails(apiKey: string, number: string): Promise<string | null> {
     try {
-        const response = await fetch('https://clinvia.uazapi.com/chat/details', {
+        const response = await fetchProvider('https://clinvia.uazapi.com/chat/details', {
             method: 'POST',
             headers: {
                 'Accept': 'application/json',

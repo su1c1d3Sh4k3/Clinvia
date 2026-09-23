@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import {
     buildDefaultRecurrenceTemplateName,
@@ -7,6 +7,7 @@ import {
     parseRecurrenceTemplateVersion,
 } from "../_shared/recurrence-meta-template.ts";
 import { resolveAccountDefaultMessage } from "../_shared/recurrence-default-messages.ts";
+import { fetchProvider } from "../_shared/provider-errors.ts";
 
 /**
  * recurrence-template-sync (JWT team-aware OU x-api-key interno)
@@ -48,7 +49,7 @@ interface MetaInstance {
     meta_access_token: string;
 }
 
-serve(async (req) => {
+serveMonitored("recurrence-template-sync", async (req) => {
     if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
     try {
@@ -160,7 +161,7 @@ serve(async (req) => {
                     },
                 ];
 
-                const metaResp = await fetch(
+                const metaResp = await fetchProvider(
                     `${GRAPH_API}/${inst.meta_waba_id}/message_templates`,
                     {
                         method: "POST",

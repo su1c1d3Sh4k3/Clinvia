@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { resolveConversationsForContacts } from "../_shared/resolve-conversation.ts";
 import { createServiceLabelResolver } from "../_shared/service-label.ts";
@@ -34,7 +34,7 @@ const VALID_ACTIONS = ["list", "mark_contacted"];
  *       "list" (default) → atualiza pendente→vencido e retorna vendas vencidas
  *       "mark_contacted"  → body.sale_id obrigatório; marca contato_realizado
  */
-serve(async (req) => {
+serveMonitored("api-sale-scheduling-due", async (req) => {
     if (req.method === "OPTIONS") {
         return new Response("ok", { headers: corsHeaders });
     }

@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { sendEmailSafe, emailConsumoMensal, emailAvisoExclusao } from "../_shared/emails.ts";
 
@@ -88,7 +88,7 @@ function periodoLabel(year: number, month: number): string {
     return `${nome} de ${year}`;
 }
 
-serve(async (req) => {
+serveMonitored("account-emails-cron", async (req) => {
     if (req.method === "OPTIONS") {
         return new Response(null, { headers: corsHeaders });
     }

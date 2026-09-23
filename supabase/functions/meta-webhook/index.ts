@@ -1,11 +1,9 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { crypto } from "https://deno.land/std@0.168.0/crypto/mod.ts";
 import { encode as hexEncode } from "https://deno.land/std@0.168.0/encoding/hex.ts";
-import { reportIncident, setIncidentComponent } from "../_shared/report-incident.ts";
-
-setIncidentComponent("meta-webhook");
-
+import { reportIncident } from "../_shared/report-incident.ts";
+import { fetchProvider } from "../_shared/provider-errors.ts";
 /**
  * meta-webhook
  *
@@ -179,7 +177,7 @@ async function downloadMetaMedia(
 ): Promise<string | null> {
     try {
         // Step 1: Get temporary URL
-        const metaResp = await fetch(
+        const metaResp = await fetchProvider(
             `https://graph.facebook.com/v22.0/${mediaId}`,
             { headers: { Authorization: `Bearer ${accessToken}` } }
         );
@@ -192,7 +190,7 @@ async function downloadMetaMedia(
         const mime = metaData.mime_type || mimeType || "application/octet-stream";
 
         // Step 2: Download binary
-        const fileResp = await fetch(url, {
+        const fileResp = await fetchProvider(url, {
             headers: { Authorization: `Bearer ${accessToken}` },
             signal: AbortSignal.timeout(30_000),
         });
@@ -243,7 +241,7 @@ async function downloadMetaMedia(
 
 // ── Main handler ──
 
-serve(async (req) => {
+serveMonitored("meta-webhook", async (req) => {
     // CORS
     if (req.method === "OPTIONS") {
         return new Response(null, { headers: corsHeaders });
@@ -440,7 +438,7 @@ serve(async (req) => {
                         // Forward to webhook-handle-message
                         console.log("[meta-webhook] Forwarding message to webhook-handle-message:", msg.id);
                         try {
-                            const resp = await fetch(
+                            const resp = await fetchProvider(
                                 `${supabaseUrl}/functions/v1/webhook-handle-message`,
                                 {
                                     method: "POST",
@@ -484,7 +482,7 @@ serve(async (req) => {
 
                         // Forward to webhook-handle-status
                         try {
-                            await fetch(
+                            await fetchProvider(
                                 `${supabaseUrl}/functions/v1/webhook-handle-status`,
                                 {
                                     method: "POST",

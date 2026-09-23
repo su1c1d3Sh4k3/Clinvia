@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 
 const corsHeaders = {
@@ -19,7 +19,7 @@ function blankToNull(value: unknown): string | null {
  * Proxy function to call external IA workflow webhooks
  * Avoids CORS issues when calling from frontend
  */
-serve(async (req) => {
+serveMonitored("ia-workflow-webhook", async (req) => {
     // Handle CORS preflight
     if (req.method === 'OPTIONS') {
         return new Response(null, { headers: corsHeaders });

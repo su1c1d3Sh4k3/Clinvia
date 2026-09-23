@@ -1,10 +1,8 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { buildButtonParameters, buildHeaderParameter, type TemplateFixedInfo } from "../_shared/template-params.ts";
-import { reportIncident, setIncidentComponent } from "../_shared/report-incident.ts";
-
-setIncidentComponent("campaign-dispatch");
-
+import { reportIncident } from "../_shared/report-incident.ts";
+import { fetchProvider } from "../_shared/provider-errors.ts";
 /**
  * campaign-dispatch (worker)
  *
@@ -44,7 +42,7 @@ function getSupabase() {
 async function callFunction(name: string, payload: Record<string, unknown>) {
     const url = Deno.env.get("SUPABASE_URL") ?? "";
     const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-    const resp = await fetch(`${url}/functions/v1/${name}`, {
+    const resp = await fetchProvider(`${url}/functions/v1/${name}`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
@@ -644,7 +642,7 @@ async function finalizeCampaigns(supabase: any) {
     }
 }
 
-serve(async (req) => {
+serveMonitored("campaign-dispatch", async (req) => {
     if (req.method === "OPTIONS") {
         return new Response(null, { headers: corsHeaders });
     }

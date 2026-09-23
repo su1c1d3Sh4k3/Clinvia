@@ -1,8 +1,9 @@
 // Edge Function: send-satisfaction-survey
 // Sends an NPS button menu to a contact via UzAPI /send/menu endpoint
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { fetchProvider } from "../_shared/provider-errors.ts";
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -11,7 +12,7 @@ const corsHeaders = {
 
 const UZAPI_URL = 'https://clinvia.uazapi.com';
 
-serve(async (req) => {
+serveMonitored("send-satisfaction-survey", async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response(null, { headers: corsHeaders });
     }
@@ -147,7 +148,7 @@ serve(async (req) => {
         console.log('[send-satisfaction-survey] Sending button menu:', JSON.stringify(buttonPayload));
 
         // Send button menu via UzAPI
-        const response = await fetch(`${UZAPI_URL}/send/menu`, {
+        const response = await fetchProvider(`${UZAPI_URL}/send/menu`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

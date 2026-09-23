@@ -1,5 +1,6 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { fetchProvider } from "../_shared/provider-errors.ts";
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -9,7 +10,7 @@ const corsHeaders = {
 const UZAPI_URL = 'https://clinvia.uazapi.com';
 const SUPABASE_WEBHOOK_URL = 'https://swfshqvvbohnahdyndch.supabase.co/functions/v1/webhook-queue-receiver';
 
-serve(async (req) => {
+serveMonitored("uzapi-connect-instance", async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response(null, { headers: corsHeaders });
     }
@@ -52,7 +53,7 @@ serve(async (req) => {
         // ===== STEP 1: CONFIGURE WEBHOOK FIRST =====
         console.log('[2] Configuring webhook for instance BEFORE generating pair code...');
 
-        const webhookConfigResponse = await fetch(`${UZAPI_URL}/webhook`, {
+        const webhookConfigResponse = await fetchProvider(`${UZAPI_URL}/webhook`, {
             method: 'POST',
             headers: {
                 'Accept': 'application/json',
@@ -81,7 +82,7 @@ serve(async (req) => {
         // ===== STEP 2: GENERATE PAIR CODE =====
         console.log('[3] Generating pair code for phone:', phoneNumber);
 
-        const uzapiResponse = await fetch(`${UZAPI_URL}/instance/connect`, {
+        const uzapiResponse = await fetchProvider(`${UZAPI_URL}/instance/connect`, {
             method: 'POST',
             headers: {
                 'Accept': 'application/json',

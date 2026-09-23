@@ -1,5 +1,6 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { fetchProvider } from "../_shared/provider-errors.ts";
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -8,7 +9,7 @@ const corsHeaders = {
 
 const UZAPI_URL = 'https://clinvia.uazapi.com';
 
-serve(async (req) => {
+serveMonitored("uzapi-manager", async (req) => {
     // Handle CORS preflight
     if (req.method === 'OPTIONS') {
         return new Response(null, { headers: corsHeaders });
@@ -49,7 +50,7 @@ serve(async (req) => {
         if (action === 'check_connection' || action === 'check_status') {
             console.log('[uzapi-manager] Checking connection status...');
 
-            const statusResponse = await fetch(`${UZAPI_URL}/instance/status`, {
+            const statusResponse = await fetchProvider(`${UZAPI_URL}/instance/status`, {
                 method: 'GET',
                 headers: {
                     'Accept': 'application/json',
@@ -89,7 +90,7 @@ serve(async (req) => {
             if (newPicUrl && newPicUrl !== instance.profile_pic_url && newPicUrl.startsWith('http')) {
                 try {
                     console.log('[uzapi-manager] Updating profile picture...');
-                    const picResponse = await fetch(newPicUrl);
+                    const picResponse = await fetchProvider(newPicUrl);
                     if (picResponse.ok) {
                         const picBlob = await picResponse.blob();
                         const fileName = `${instanceId}_avatar_${Date.now()}.jpg`;
@@ -137,7 +138,7 @@ serve(async (req) => {
             const webhookUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/webhook-queue-receiver`;
             console.log(`[uzapi-manager] Configuring webhook to: ${webhookUrl}`);
 
-            const uzapiResponse = await fetch(`${UZAPI_URL}/webhook`, {
+            const uzapiResponse = await fetchProvider(`${UZAPI_URL}/webhook`, {
                 method: 'POST',
                 headers: {
                     'Accept': 'application/json',

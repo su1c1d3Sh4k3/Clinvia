@@ -15,7 +15,7 @@
  *   }
  */
 
-import { reportIncident } from "./report-incident.ts";
+import { HEADER_JA_REPORTADO, reportIncident } from "./report-incident.ts";
 
 export interface ApiErrorInit {
     status: number;
@@ -69,9 +69,15 @@ export function apiError(headers: Record<string, string>, init: ApiErrorInit): R
         });
     }
 
+    // O envelope `serveMonitored` reporta toda resposta 5xx que sai da function.
+    // Esta marca diz a ele que este erro já tem dono — sem ela o mesmo erro
+    // entraria duas vezes e o `event_count`, que é o número usado para decidir
+    // prioridade, sairia dobrado.
+    const marca: Record<string, string> = init.report ? { [HEADER_JA_REPORTADO]: "1" } : {};
+
     return new Response(JSON.stringify(body), {
         status: init.status,
-        headers: { ...headers, "Content-Type": "application/json" },
+        headers: { ...headers, ...marca, "Content-Type": "application/json" },
     });
 }
 

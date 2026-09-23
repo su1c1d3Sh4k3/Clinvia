@@ -1,12 +1,13 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { fetchProvider } from "../_shared/provider-errors.ts";
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-serve(async (req) => {
+serveMonitored("test-openai-token", async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response(null, { headers: corsHeaders });
     }
@@ -24,7 +25,7 @@ serve(async (req) => {
         console.log('[test-openai-token] Testing token for profile:', profileId);
 
         // Test the token with a minimal request to OpenAI
-        const testResponse = await fetch("https://api.openai.com/v1/models", {
+        const testResponse = await fetchProvider("https://api.openai.com/v1/models", {
             method: "GET",
             headers: {
                 "Authorization": `Bearer ${token}`,

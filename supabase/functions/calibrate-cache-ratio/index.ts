@@ -19,8 +19,10 @@
 // Gemini não tem endpoint equivalente: fica no default_cache_ratio do preço.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { apiError, describeDbError, unexpectedErrorResponse } from '../_shared/api-errors.ts';
 import { normalizeModelName } from '../_shared/token-cost.ts';
+import { fetchProvider } from "../_shared/provider-errors.ts";
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -70,7 +72,7 @@ async function fetchUsage(apiKey: string, startTime: number, endTime: number) {
         url.searchParams.set('limit', String(MAX_BUCKETS_PER_PAGE));
         if (page) url.searchParams.set('page', page);
 
-        const res = await fetch(url.toString(), {
+        const res = await fetchProvider(url.toString(), {
             headers: { Authorization: `Bearer ${apiKey}` },
             signal: AbortSignal.timeout(30000),
         });
@@ -87,7 +89,7 @@ async function fetchUsage(apiKey: string, startTime: number, endTime: number) {
     return buckets;
 }
 
-Deno.serve(async (req) => {
+serveMonitored("calibrate-cache-ratio", async (req) => {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
     try {

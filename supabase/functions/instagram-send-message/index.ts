@@ -1,5 +1,6 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { fetchProvider } from "../_shared/provider-errors.ts";
 
 // =============================================
 // Instagram Send Message - API for IA Integration
@@ -98,7 +99,7 @@ interface SendMessagePayload {
     wasSentByApi?: boolean;
 }
 
-serve(async (req) => {
+serveMonitored("instagram-send-message", async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders });
     }
@@ -282,7 +283,7 @@ serve(async (req) => {
                     console.log('[INSTAGRAM SEND] WebM audio detected, converting to M4A for Instagram compatibility...');
 
                     // Download the WebM file
-                    const webmResponse = await fetch(finalAudioUrl);
+                    const webmResponse = await fetchProvider(finalAudioUrl);
                     if (!webmResponse.ok) {
                         throw new Error('Failed to download WebM file');
                     }
@@ -627,7 +628,7 @@ serve(async (req) => {
             : (message_text || '');
 
         const callGraph = async (payload: any) => {
-            const r = await fetch(apiUrl, {
+            const r = await fetchProvider(apiUrl, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${instance.access_token}`,

@@ -11,6 +11,7 @@
 //   { user_id, items: [...] } | { user_id, ...item } | [{ user_id, ... }]
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import {
     apiError,
     dbErrorResponse,
@@ -94,7 +95,7 @@ async function getUsdBrlRate(supabase: any): Promise<{ rate: number; source: str
     return { rate: FALLBACK_RATE, source: "fixed_fallback" };
 }
 
-Deno.serve(async (req) => {
+serveMonitored("api-token-usage-sandbox", async (req) => {
     if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
     try {

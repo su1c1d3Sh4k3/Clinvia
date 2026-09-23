@@ -1,5 +1,6 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { fetchProvider } from "../_shared/provider-errors.ts";
 
 // =============================================
 // Instagram Webhook Subscribe - Utility Function
@@ -11,7 +12,7 @@ const corsHeaders = {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-serve(async (req) => {
+serveMonitored("instagram-subscribe", async (req) => {
     // Handle CORS preflight
     if (req.method === 'OPTIONS') {
         return new Response(null, { headers: corsHeaders });
@@ -68,7 +69,7 @@ serve(async (req) => {
 
                 console.log('[INSTAGRAM SUBSCRIBE] Calling subscription endpoint for IGSID:', instance.instagram_account_id);
 
-                const subscribeResponse = await fetch(subscribeUrl, {
+                const subscribeResponse = await fetchProvider(subscribeUrl, {
                     method: 'POST'
                 });
 

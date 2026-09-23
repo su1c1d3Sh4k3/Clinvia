@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import {
     apiError,
@@ -31,7 +31,7 @@ const VALID_ACTIONS = ["get_contact", "create_contact", "update_contact"];
 /** O resto do cadastro do paciente fictício é do cliente, não da IA. */
 const CAMPOS_EDITAVEIS = ["push_name", "email", "cpf", "company", "instagram", "patient"];
 
-serve(async (req) => {
+serveMonitored("api-contacts-sandbox", async (req) => {
     if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
     const json = (body: unknown, status = 200) =>

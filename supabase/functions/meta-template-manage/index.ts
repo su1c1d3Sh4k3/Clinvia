@@ -1,5 +1,6 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { fetchProvider } from "../_shared/provider-errors.ts";
 
 /**
  * meta-template-manage
@@ -56,7 +57,7 @@ async function uploadHeaderHandle(
     fileName: string,
     fileType: string,
 ): Promise<string> {
-    const sessionResp = await fetch(
+    const sessionResp = await fetchProvider(
         `${GRAPH_API}/${appId}/uploads?file_name=${encodeURIComponent(fileName)}` +
         `&file_length=${bytes.length}&file_type=${encodeURIComponent(fileType)}`,
         { method: "POST", headers: { Authorization: `Bearer ${accessToken}` } },
@@ -71,7 +72,7 @@ async function uploadHeaderHandle(
     }
 
     // O id já vem no formato "upload:<SESSION_ID>" — o POST vai nele direto.
-    const uploadResp = await fetch(`${GRAPH_API}/${sessionResult.id}`, {
+    const uploadResp = await fetchProvider(`${GRAPH_API}/${sessionResult.id}`, {
         method: "POST",
         headers: {
             // Este passo NÃO aceita "Bearer": a Meta exige o esquema OAuth.
@@ -100,7 +101,7 @@ function readHeaderFormat(components: any): string | null {
     return String(header.format || "TEXT").toUpperCase();
 }
 
-serve(async (req) => {
+serveMonitored("meta-template-manage", async (req) => {
     if (req.method === "OPTIONS") {
         return new Response(null, { headers: corsHeaders });
     }
@@ -140,7 +141,7 @@ serve(async (req) => {
 
         // ── ACTION: list ──
         if (action === "list" || action === "sync") {
-            const metaResp = await fetch(
+            const metaResp = await fetchProvider(
                 `${GRAPH_API}/${wabaId}/message_templates?limit=250`,
                 { headers: { Authorization: `Bearer ${accessToken}` } }
             );
@@ -268,7 +269,7 @@ serve(async (req) => {
                 return comp;
             });
 
-            const metaResp = await fetch(
+            const metaResp = await fetchProvider(
                 `${GRAPH_API}/${wabaId}/message_templates`,
                 {
                     method: "POST",
@@ -373,7 +374,7 @@ serve(async (req) => {
                 return comp;
             });
 
-            const metaResp = await fetch(
+            const metaResp = await fetchProvider(
                 `${GRAPH_API}/${localTpl.meta_template_id}`,
                 {
                     method: "POST",
@@ -429,7 +430,7 @@ serve(async (req) => {
 
             if (!templateName) throw new Error("Missing field: name");
 
-            const metaResp = await fetch(
+            const metaResp = await fetchProvider(
                 `${GRAPH_API}/${wabaId}/message_templates?name=${encodeURIComponent(templateName)}`,
                 {
                     method: "DELETE",
@@ -483,7 +484,7 @@ serve(async (req) => {
 
             console.log("[meta-template-manage] Sending template:", template_name, "to:", number);
 
-            const sendResp = await fetch(
+            const sendResp = await fetchProvider(
                 `${GRAPH_API}/${phoneNumberId}/messages`,
                 {
                     method: "POST",

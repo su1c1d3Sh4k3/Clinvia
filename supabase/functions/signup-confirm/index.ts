@@ -11,7 +11,7 @@
  *  existe e está pendente, e o reenvio tem intervalo mínimo — não dá para usar
  *  a função para descobrir e-mails nem para disparar mensagem em massa. */
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { sendEmailSafe, emailConfirmacaoCadastro } from "../_shared/emails.ts";
 
@@ -32,7 +32,7 @@ const APP_URL = Deno.env.get("APP_PUBLIC_URL") ?? "https://app.clinbia.ai";
 const VALIDADE_DIAS = 7;
 const REENVIO_MINUTOS = 2;
 
-serve(async (req) => {
+serveMonitored("signup-confirm", async (req) => {
     if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
     const admin = createClient(

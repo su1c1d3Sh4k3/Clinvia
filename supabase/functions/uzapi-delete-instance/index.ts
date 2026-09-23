@@ -1,5 +1,6 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { fetchProvider } from "../_shared/provider-errors.ts";
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -8,7 +9,7 @@ const corsHeaders = {
 
 const UZAPI_URL = 'https://clinvia.uazapi.com';
 
-serve(async (req) => {
+serveMonitored("uzapi-delete-instance", async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response(null, { headers: corsHeaders });
     }
@@ -36,7 +37,7 @@ serve(async (req) => {
 
         if (instance.apikey) {
             // 2. Delete from Uzapi
-            const uzapiResponse = await fetch(`${UZAPI_URL}/instance`, {
+            const uzapiResponse = await fetchProvider(`${UZAPI_URL}/instance`, {
                 method: 'DELETE',
                 headers: {
                     'Accept': 'application/json',

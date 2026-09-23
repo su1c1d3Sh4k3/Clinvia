@@ -1,12 +1,13 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { fetchProvider } from "../_shared/provider-errors.ts";
 
 const GOOGLE_CLIENT_ID = Deno.env.get("GOOGLE_CLIENT_ID") || "";
 const GOOGLE_CLIENT_SECRET = Deno.env.get("GOOGLE_CLIENT_SECRET") || "";
 
 async function refreshAccessToken(refreshToken: string): Promise<string | null> {
   try {
-    const response = await fetch("https://oauth2.googleapis.com/token", {
+    const response = await fetchProvider("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
@@ -26,7 +27,7 @@ async function refreshAccessToken(refreshToken: string): Promise<string | null> 
   }
 }
 
-serve(async (req) => {
+serveMonitored("google-calendar-webhook", async (req) => {
   // O Google exige resposta 200 imediata para confirmar recebimento
   const channelId = req.headers.get("x-goog-channel-id");
   const resourceState = req.headers.get("x-goog-resource-state");
@@ -96,7 +97,7 @@ async function processWebhookNotification(
     const updatedMin = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
     const eventsUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?updatedMin=${encodeURIComponent(updatedMin)}&singleEvents=true&showDeleted=true&maxResults=100`;
 
-    const eventsRes = await fetch(eventsUrl, {
+    const eventsRes = await fetchProvider(eventsUrl, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
 

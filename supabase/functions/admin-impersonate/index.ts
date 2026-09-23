@@ -3,6 +3,7 @@
 // Returns a magic link that the frontend will use to authenticate
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { adminCan, adminCanAccessClient, adminForbidden, resolveAdminCaller } from '../_shared/admin-guard.ts';
 
 const corsHeaders = {
@@ -10,7 +11,7 @@ const corsHeaders = {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-Deno.serve(async (req) => {
+serveMonitored("admin-impersonate", async (req) => {
     // Handle CORS preflight
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders });

@@ -1,5 +1,6 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { fetchProvider } from "../_shared/provider-errors.ts";
 
 /**
  * meta-quality-status
@@ -33,7 +34,7 @@ function json(body: unknown, status = 200) {
     });
 }
 
-serve(async (req) => {
+serveMonitored("meta-quality-status", async (req) => {
     if (req.method === "OPTIONS") {
         return new Response(null, { headers: corsHeaders });
     }
@@ -78,7 +79,7 @@ serve(async (req) => {
 
             // Graph API: qualidade + tier + throughput
             try {
-                const resp = await fetch(
+                const resp = await fetchProvider(
                     `${GRAPH_API}/${inst.meta_phone_number_id}?fields=quality_rating,messaging_limit_tier,display_phone_number,verified_name,throughput,name_status`,
                     { headers: { Authorization: `Bearer ${inst.meta_access_token}` } }
                 );

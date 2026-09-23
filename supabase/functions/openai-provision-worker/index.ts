@@ -7,12 +7,9 @@
 // Nenhuma criacao de conta depende disto: o trigger so enfileira. Se a OpenAI
 // estiver fora, a conta e aprovada normalmente e o job e retentado (ate 5 vezes).
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { reportIncident, setIncidentComponent } from "../_shared/report-incident.ts";
-
-setIncidentComponent("openai-provision-worker");
-
+import { reportIncident } from "../_shared/report-incident.ts";
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -22,7 +19,7 @@ const corsHeaders = {
 /** Teto por rodada: provisionar e chamada de rede, o cron escoa a fila sozinho. */
 const BATCH_SIZE = 3;
 
-serve(async (req) => {
+serveMonitored("openai-provision-worker", async (req) => {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;

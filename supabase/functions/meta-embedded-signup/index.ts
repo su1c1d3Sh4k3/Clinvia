@@ -1,6 +1,7 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { ensureSystemTemplates } from "../_shared/system-templates.ts";
+import { fetchProvider } from "../_shared/provider-errors.ts";
 
 /**
  * meta-embedded-signup
@@ -29,7 +30,7 @@ const FRONTEND_URL = "https://app.clinbia.ai";
  */
 async function submitRecurrenceDefaults(ownerId: string) {
     try {
-        const resp = await fetch(
+        const resp = await fetchProvider(
             `${Deno.env.get("SUPABASE_URL")}/functions/v1/recurrence-template-sync`,
             {
                 method: "POST",
@@ -67,7 +68,7 @@ async function processSignup(
     console.log("[meta-embedded-signup] Exchanging code for access_token...");
 
     const redirectUri = `${supabaseUrl}/functions/v1/meta-embedded-signup`;
-    const tokenResp = await fetch(
+    const tokenResp = await fetchProvider(
         `${GRAPH_API}/oauth/access_token` +
         `?client_id=${appId}` +
         `&client_secret=${appSecret}` +
@@ -95,7 +96,7 @@ async function processSignup(
         console.log("[meta-embedded-signup] Auto-discovering WABA and phone numbers...");
 
         // Get shared WABAs for this business via debug_token
-        const debugResp = await fetch(
+        const debugResp = await fetchProvider(
             `${GRAPH_API}/debug_token?input_token=${accessToken}`,
             { headers: { Authorization: `Bearer ${appId}|${appSecret}` } }
         );
@@ -119,7 +120,7 @@ async function processSignup(
         // The debug_token granular scopes can return the WABA ID in both scopes,
         // so we cannot trust whatsapp_business_messaging target_ids for phone number.
         if (wabaId) {
-            const phonesResp = await fetch(
+            const phonesResp = await fetchProvider(
                 `${GRAPH_API}/${wabaId}/phone_numbers?fields=id,display_phone_number,verified_name`,
                 { headers: { Authorization: `Bearer ${accessToken}` } }
             );
@@ -137,7 +138,7 @@ async function processSignup(
     if (!phoneNumberId) throw new Error("Could not determine Phone Number ID");
 
     // ── Step 3: Get phone number details ──
-    const phoneResp = await fetch(
+    const phoneResp = await fetchProvider(
         `${GRAPH_API}/${phoneNumberId}?fields=display_phone_number,verified_name,quality_rating,is_on_biz_app,platform_type`,
         { headers: { Authorization: `Bearer ${accessToken}` } }
     );
@@ -168,7 +169,7 @@ async function processSignup(
         console.log("[meta-embedded-signup] Registering phone number...");
         const pin = Math.floor(100000 + Math.random() * 900000).toString();
 
-        const registerResp = await fetch(
+        const registerResp = await fetchProvider(
             `${GRAPH_API}/${phoneNumberId}/register`,
             {
                 method: "POST",
@@ -199,7 +200,7 @@ async function processSignup(
     }
 
     // Confirma que o registro realmente efetivou (platform_type deve ser CLOUD_API)
-    const verifyResp = await fetch(
+    const verifyResp = await fetchProvider(
         `${GRAPH_API}/${phoneNumberId}?fields=platform_type,status`,
         { headers: { Authorization: `Bearer ${accessToken}` } }
     );
@@ -221,7 +222,7 @@ async function processSignup(
     // ── Step 5: Subscribe WABA to webhooks ──
     const webhookUrl = `${supabaseUrl}/functions/v1/meta-webhook`;
 
-    const subResp = await fetch(
+    const subResp = await fetchProvider(
         `${GRAPH_API}/${wabaId}/subscribed_apps`,
         {
             method: "POST",
@@ -382,7 +383,7 @@ async function processSignup(
 
 // ── Main handler ──
 
-serve(async (req) => {
+serveMonitored("meta-embedded-signup", async (req) => {
     if (req.method === "OPTIONS") {
         return new Response(null, { headers: corsHeaders });
     }

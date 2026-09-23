@@ -11,7 +11,7 @@
 //
 // Autenticacao: x-api-key = SCHEDULING_API_KEY (mesmo padrao das outras api-*).
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { decryptToken } from "../_shared/token-tracker.ts";
 import {
@@ -22,17 +22,13 @@ import {
     requireApiKey,
     unexpectedErrorResponse,
 } from "../_shared/api-errors.ts";
-import { setIncidentComponent } from "../_shared/report-incident.ts";
-
-setIncidentComponent("get-account-openai-key");
-
 const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-api-key',
     'Content-Type': 'application/json; charset=utf-8',
 };
 
-serve(async (req) => {
+serveMonitored("get-account-openai-key", async (req) => {
     if (req.method === 'OPTIONS') return new Response('ok', { headers });
 
     try {

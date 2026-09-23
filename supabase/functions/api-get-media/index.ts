@@ -1,6 +1,7 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
+import { fetchProvider } from "../_shared/provider-errors.ts";
 import {
     apiError,
     dbErrorResponse,
@@ -47,7 +48,7 @@ function json(body: unknown, status = 200): Response {
     });
 }
 
-serve(async (req) => {
+serveMonitored("api-get-media", async (req) => {
     if (req.method === "OPTIONS") {
         return new Response("ok", { headers: corsHeaders });
     }
@@ -153,7 +154,7 @@ serve(async (req) => {
         // ── Baixa a mídia e converte para base64 ──
         let fileResp: Response;
         try {
-            fileResp = await fetch(mediaUrl!, { signal: AbortSignal.timeout(30_000) });
+            fileResp = await fetchProvider(mediaUrl!, { signal: AbortSignal.timeout(30_000) });
         } catch (fetchErr) {
             const isTimeout = (fetchErr as Error)?.name === "TimeoutError" || (fetchErr as Error)?.name === "AbortError";
             return apiError(corsHeaders, {

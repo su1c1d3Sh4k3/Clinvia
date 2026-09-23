@@ -1,5 +1,6 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { fetchProvider } from "../_shared/provider-errors.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -18,7 +19,7 @@ async function refreshAccessToken(
       console.error("[GCAL POLL] CRITICAL: GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET not set!");
       return null;
     }
-    const response = await fetch("https://oauth2.googleapis.com/token", {
+    const response = await fetchProvider("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
@@ -91,7 +92,7 @@ function toRFC3339(ts: string): string {
   return ts.replace(" ", "T").replace(/([+-]\d{2})$/, "$1:00");
 }
 
-serve(async (req) => {
+serveMonitored("google-calendar-poll", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -177,7 +178,7 @@ serve(async (req) => {
         // ─── PRÉ-VALIDAÇÃO: testar token usando endpoint calendar.events ──────────
         // IMPORTANTE: usar /calendars/primary/events (scope: calendar.events)
         // NÃO usar /users/me/calendarList (requer scope: calendar ou calendar.readonly)
-        const testRes = await fetch(
+        const testRes = await fetchProvider(
           `https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=1`,
           { headers: { Authorization: `Bearer ${accessToken}` } },
         );
@@ -268,21 +269,21 @@ serve(async (req) => {
             let syncRes: Response;
 
             if (googleEventId) {
-              syncRes = await fetch(`${baseUrl}/${googleEventId}`, {
+              syncRes = await fetchProvider(`${baseUrl}/${googleEventId}`, {
                 method: "PUT",
                 headers: authHeaders,
                 body: JSON.stringify(eventBody),
               });
               if (syncRes.status === 404) {
                 console.log(`[GCAL POLL] Event ${googleEventId} not found in GCal, creating new one`);
-                syncRes = await fetch(baseUrl, {
+                syncRes = await fetchProvider(baseUrl, {
                   method: "POST",
                   headers: authHeaders,
                   body: JSON.stringify(eventBody),
                 });
               }
             } else {
-              syncRes = await fetch(baseUrl, {
+              syncRes = await fetchProvider(baseUrl, {
                 method: "POST",
                 headers: authHeaders,
                 body: JSON.stringify(eventBody),
@@ -325,7 +326,7 @@ serve(async (req) => {
             encodeURIComponent(futureDate.toISOString())
           }&singleEvents=true&maxResults=250`;
 
-          const eventsRes = await fetch(eventsUrl, { headers: authHeaders });
+          const eventsRes = await fetchProvider(eventsUrl, { headers: authHeaders });
 
           if (eventsRes.ok) {
             const eventsData = await eventsRes.json();

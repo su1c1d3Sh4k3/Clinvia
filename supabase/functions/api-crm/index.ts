@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { TERMINAL_STAGES } from "../_shared/crm-stages.ts";
 import {
@@ -40,7 +40,7 @@ function toSaoPaulo(iso: string | null | undefined): string | null {
     return d.toLocaleString("sv-SE", { timeZone: "America/Sao_Paulo" }).replace(" ", "T") + "-03:00";
 }
 
-serve(async (req) => {
+serveMonitored("api-crm", async (req) => {
     if (req.method === "OPTIONS") {
         return new Response("ok", { headers: corsHeaders });
     }

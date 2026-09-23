@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { readJsonBody, requireApiKey, unexpectedErrorResponse } from "../_shared/api-errors.ts";
 import { loadSandboxContext, logSandboxCall } from "../_shared/sandbox.ts";
@@ -19,7 +19,7 @@ const corsHeaders = {
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-api-key",
 };
 
-serve(async (req) => {
+serveMonitored("api-reset-context-sandbox", async (req) => {
     if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
     const json = (body: unknown, status = 200) =>

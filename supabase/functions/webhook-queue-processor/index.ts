@@ -1,9 +1,6 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-import { reportIncident, setIncidentComponent } from "../_shared/report-incident.ts";
-
-setIncidentComponent("webhook-queue-processor");
-
+import { reportIncident } from "../_shared/report-incident.ts";
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -23,7 +20,7 @@ const MAX_ATTEMPTS = 3;
  * 2. Invoca a lógica de processamento
  * 3. Marca como 'done' ou 'failed'
  */
-serve(async (req) => {
+serveMonitored("webhook-queue-processor", async (req) => {
     // Handle CORS preflight
     if (req.method === 'OPTIONS') {
         return new Response(null, { headers: corsHeaders });
