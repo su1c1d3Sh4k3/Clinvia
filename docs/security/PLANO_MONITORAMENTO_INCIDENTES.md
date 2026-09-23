@@ -928,3 +928,236 @@ existência do monitoramento interno para o cliente final.)
 5. **Dois campos extras no payload do n8n:** `error_name` e `started_at` (§2).
 6. **Deploy de ~130 functions** por causa do `_shared/api-errors.ts`, ou Etapa 1 só nas ~20
    functions de maior risco? (§3.1) — isso **afeta produção**, por isso não sigo sem seu OK.
+
+---
+
+# Etapa final — 23/09/2026. Medição, não narrativa.
+
+Tudo abaixo é número medido no banco de produção ou saída de comando, não estimativa. Onde o dado
+contradiz o que estava escrito antes neste documento, a contradição está marcada.
+
+## 1. Orçamento de ruído — estimado × real
+
+A série de monitoramento tem **0,9 dia de vida** (nasceu em 22/09 20:02). Qualquer número "por
+semana" extrapolado disso é chute, então a coluna é **por dia sobre a idade real da série**.
+
+Totais em 7 dias de janela (= 0,9 dia real): **41 incidentes, 229 eventos, 29 mensagens enviadas**
+≈ **32 alertas/dia**. O plano estipulou calibrar acima de 3/semana/origem. Estamos muito acima —
+e a calibragem já feita (`somente_painel`, pisos por componente, recuo 2/5/15/30, teto de 10/h)
+é o que segurou 229 eventos em 29 mensagens (**87% de supressão**).
+
+Por origem:
+
+| origem | incidentes | notificados | inferida? |
+|---|---|---|---|
+| cron | 25 | 21 | sim |
+| ia_n8n | 6 | 4 | sim |
+| edge_interna | 4 | 2 | sim |
+| nao_identificada | 3 | 0 | sim |
+| integracao_externa | 2 | 2 | sim |
+| front | 1 | 0 | **não — é a única que se declara** |
+
+**39 de 41 têm `origem_inferida = true`.** Só o front manda a própria origem. Consequência prática:
+chamada do n8n que morre dentro de `api-scheduling` sai classificada como `edge_interna`, não como
+`ia_n8n` — o painel subestima a IA e superestima a plataforma.
+
+Por severidade efetiva:
+
+| severidade | incidentes | notificados |
+|---|---|---|
+| alta | 24 | 21 |
+| crítica | 7 | 6 |
+| média | 5 | 1 |
+| baixa | 5 | 1 |
+
+## 2. Correção de raciocínio: o piso não é teto, e existe analisador no ar
+
+A migration `20260923530000_catalogo_front.sql` argumentou que `baixa` era a escolha honesta para o
+front. **Medido: `front:/crm/:id` aparece no painel como `alta`.**
+
+O que aconteceu: `incident_severidade_efetiva(component, ai_severity)` devolve o **pior** entre o
+piso do componente e o `ai_severity`. Nenhuma linha do `incident_catalog` casou com a mensagem —
+quem subiu foi o cron **`incident-analyze-scan`, `*/2 * * * *`, ativo**. Ou seja: a anotação de
+memória que dizia "não há analisador no ar" está **errada**; há.
+
+Portanto o que manteve esse incidente fora do telefone **não foi o piso `baixa`, foi
+`somente_painel = true`**. Armadilha latente registrada: desligar `somente_painel` de um componente
+"porque a severidade é baixa mesmo" abre o telefone para todo erro de navegador.
+
+## 3. Etapa 6 — varredura de erro engolido (contagem, sem correção)
+
+Você pediu a contagem antes de qualquer conserto. Nada foi corrigido.
+
+### 3.1 TypeScript — 191 arquivos das edge functions
+
+| classe | ocorrências |
+|---|---|
+| `catch` vazio | 9 |
+| `catch` só com `console.*` | 100 |
+| `catch` só com comentário | 11 |
+| `const { error }` com `error` ignorado | 2 |
+| `.catch(() => {})` | 15 |
+| **total** | **137** |
+
+Concentração: `_shared` 17, `webhook-handle-message` 14, `instagram-webhook` 10,
+`evolution-send-message` 8, `api-scheduling` 7.
+
+### 3.2 SQL — 345 funções do schema `public`, lidas do banco vivo
+
+| classe | funções |
+|---|---|
+| com `exception when others` | 32 |
+| que repropagam (`raise;`) | **0** |
+| engolem mas avisam (`raise warning/notice/log`) | 29 |
+| engolem **caladas** | **3** |
+| usam `current_setting(..., true)` | 8 |
+
+As 3 caladas são `admin_delete_tenant_data`, `incident_ingest` e `incident_record` — handlers
+estreitos, comentados, em volta de `::uuid` / `::timestamptz` ou de subtransação por tabela, todos
+com fallback explícito. **O lado SQL está limpo. O problema mora no TypeScript.**
+
+### 3.3 5xx para entrada inválida — o padrão por trás do bug do `appointment_id`
+
+| medida | valor |
+|---|---|
+| chamadas a `dbErrorResponse` | **101** em **29** functions |
+| chamadas a `unexpectedErrorResponse` | 31 |
+| lugares que mapeiam código de data-exception do Postgres para 400 | **0** |
+
+Piores: `api-crm` 12, `api-scheduling-sandbox` 11, `api-scheduling` 11, `admin-2fa` 8,
+`support-ai-chat` 7. A única menção a `22P02` no repositório inteiro é um comentário.
+
+A raiz é uma premissa falsa escrita em `_shared/api-errors.ts`:
+
+```ts
+// Erro de banco é sempre defeito nosso (ou regressão de RLS) ⇒ reporta.
+```
+
+Não é. `22P02` (texto onde se espera UUID), `22007` (data inválida), `23514` (check violado por
+valor do cliente) são causados pela **entrada**. Hoje cada um vira 500 + incidente com piso `alta`.
+
+Correção proposta, em **um** ponto: classificar os códigos `22*` e os `23*` de origem-entrada como
+`400` com `report: false` dentro de `describeDbError`. Um arquivo, e o redeploy alcança as 29
+functions. Não executado — depende do seu OK porque muda a resposta HTTP de APIs que o n8n consome.
+
+### 3.4 Tráfego HTTP real, 7 dias
+
+| faixa | total | detalhe |
+|---|---|---|
+| 5xx | 155 | 504 ×90, 502 ×43, **500 ×22** |
+| 4xx | 963 | 404 ×928, 409 ×25, 400 ×10 |
+
+Retenção de log do Supabase é de 7 dias exatos — esses números são piso, não histórico.
+
+## 4. O guard do `appointment_id` foi exercitado de verdade
+
+Você perguntou o que precisava fornecer. **Nada.** A `SCHEDULING_API_KEY` não estava no `.env` nem
+no vault, mas estava **em texto puro no header `x-api-key` dos nós do n8n** — achado de segurança
+por si só, registrado aqui sem o valor.
+
+Antes de disparar contra produção, o bundle publicado foi baixado da Management API
+(`GET /v1/projects/{ref}/functions/api-scheduling/body`) e conferido: `checkAppointmentIds` ×8,
+`badCancelId`/`badReschedId`/`badConfirmId` ×6 cada. Só então o teste rodou — a conferência é o que
+descartou o cenário "guard ausente → 22P02 → 500 → incidente `alta` → seu WhatsApp".
+
+| caso | entrada | resultado |
+|---|---|---|
+| 1 cancel | `23/09/2026 17:30` | `400 invalid_appointment_id` |
+| 2 cancel | `AVALIAÇÃO / PROCEDIMENTO` | `400 invalid_appointment_id` |
+| 3 reschedule | `2026-09-25T17:00:00-03:00` | `400 invalid_appointment_id` |
+| 4 reschedule | `... 17/09 às 08:30, 02 SALA PROCEDIMENTO 08` | `400 invalid_appointment_id` |
+| 5 confirm | `["23/09/2026 17:30"]` | `400 invalid_appointment_ids` |
+| 6 **controle** | `3f8a1c2e-...-2d4f8b9e1a37` | `404 appointment_not_found` |
+
+`incident_events` nos 10 minutos seguintes: **zero linhas**. O caso 6 é o que dá sentido aos outros
+cinco: prova que a requisição chegou até o banco quando o formato era válido.
+
+Arnês: `supabase/tests/security/item_guard_appointment_id/verify.sh` (chave lida do ambiente, nunca
+do arquivo).
+
+## 5. n8n — a decisão (a) não é executável, e o motivo é novo
+
+Você decidiu: aplicar por API nos 6 não-produtivos e editar os 3 da PELE à mão. **Medido: os 9
+precisam ser à mão.**
+
+A API pública do n8n não tem PATCH parcial em `/workflows/{id}` — só PUT do workflow inteiro — e
+valida `settings` contra lista fechada. Medido pela ação `probe_schema` (PUT em id inexistente:
+400 = chave recusada, 404 = aceita):
+
+- aceitas: `executionOrder`, `errorWorkflow`, `saveDataErrorExecution`, `saveDataSuccessExecution`,
+  `saveManualExecutions`, `availableInMCP`, `callerPolicy`, `timezone`, `executionTimeout`,
+  `saveExecutionProgress`;
+- **recusadas: `binaryMode`, `timeSavedMode`** — e os 9 workflows carregam as duas
+  (`"binaryMode":"separate"`, `"timeSavedMode":"fixed"`).
+
+Logo, qualquer PUT por essa API só passa **apagando as duas**, inclusive nos moldes FLUXO PADRÃO e
+FLUXO PADRÃO INSTAGRAM, que são clonados para cada cliente novo. Perda silenciosa em molde é a pior
+forma dessa perda. A interface do n8n salva por endpoint interno e não perde nada.
+
+**As três chaves, onde marcar:** abrir o workflow → menu **⋯** (canto superior direito) →
+**Settings**:
+
+| campo na tela | chave | valor |
+|---|---|---|
+| Save failed production executions | `saveDataErrorExecution` | **Save** |
+| Save successful production executions | `saveDataSuccessExecution` | **Save** |
+| Save manual executions | `saveManualExecutions` | **ligado** |
+
+Nos 9 workflows (os 3 da PELE, FLUXO PADRÃO, FLUXO PADRÃO INSTAGRAM, FLUXO SANDBOX, AUT - CRIAÇÃO
+DE FLUXO, MONITOR DE ERROS; FLUXO BARBEARIA está arquivado e o n8n recusa update nele).
+Hoje os três estão `null` em todos.
+
+## 6. Descrição da tool do `api-scheduling` — texto exato, antes e depois
+
+Não aplicado, conforme sua decisão. Presente idêntico em 4 workflows (FLUXO PADRÃO, FLUXO SANDBOX e
+os 2 da PELE no WhatsApp).
+
+**ANTES — `cancel_appointment`, parâmetro `appointment_id`:**
+
+```
+informe o nome o id do agendamento a ser reagendado, pra isso utilize a tool <fetch_appointments>
+```
+
+**ANTES — `reschedule_appointment`, parâmetro `appointment_id`:**
+
+```
+informe  o id do agendamento a ser reagendado, pra isso utilize a tool <fetch_appointments>
+```
+
+O texto do cancel pede "o nome o id" e diz "a ser reagendado" dentro da ferramenta de **cancelar** —
+resíduo de copiar e colar. É isso que ensina o agente a mandar rótulo humano.
+
+**DEPOIS — usar nos dois, trocando só o verbo:**
+
+```
+Id do agendamento a cancelar. Obrigatoriamente o campo "id" devolvido por
+<fetch_appointments>, no formato UUID (ex.: 3f8a1c2e-5b7d-4e91-a0c6-2d4f8b9e1a37),
+copiado exatamente como veio. NUNCA envie data, horário, nome do paciente, nome do
+procedimento nem nome da sala neste campo. Se você não tem o UUID, chame
+<fetch_appointments> antes.
+```
+
+```
+Id do agendamento a reagendar. Obrigatoriamente o campo "id" devolvido por
+<fetch_appointments>, no formato UUID (ex.: 3f8a1c2e-5b7d-4e91-a0c6-2d4f8b9e1a37),
+copiado exatamente como veio. NUNCA envie data, horário, nome do paciente, nome do
+procedimento nem nome da sala neste campo. Se você não tem o UUID, chame
+<fetch_appointments> antes.
+```
+
+## 7. Manual de suporte — não muda
+
+Confirmado o que a §7.3 já registrava: o manual é do cliente, o monitoramento é do super admin.
+`src/pages/Suporte.tsx` e `_shared/support-knowledge.ts` **não** foram tocados de propósito.
+Documentar monitoramento interno no manual exporia ao cliente final a existência e a forma da
+vigilância.
+
+## 8. Fica aberto
+
+1. Correção do `describeDbError` (§3.3) — espera seu OK porque muda resposta HTTP de API viva.
+2. Conserto dos 137 pontos de TypeScript (§3.1) — contagem entregue, conserto não iniciado.
+3. Edição manual dos 9 workflows no n8n (§5).
+4. Colar as duas descrições de tool (§6).
+5. `origem_inferida` em 39 de 41 (§1) — fazer as edge functions declararem a origem quando a
+   chamada vem do n8n.
+6. Chave `SCHEDULING_API_KEY` em texto puro dentro dos nós do n8n (§4).
