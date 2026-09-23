@@ -112,6 +112,26 @@ Harness and monitoring scripts: `supabase/tests/security/`.
 - RLS never errors on UPDATE/DELETE (no matching policy = 0 rows, success). Only INSERT/`with check` raises `42501`. To hard-block a write, use a privilege, not a policy.
 - Every security migration ships with a `_rollback.sql` next to it and a before/after access test.
 
+## Testing against production (mandatory, no exceptions)
+
+**Ask BEFORE, not after.** Any test that touches a real channel, production data, or the user's
+phone requires an explicit heads-up and his confirmation FIRST. Warning him afterwards, in the
+report, is too late — by then the message is already on his phone. This is a rule, not a courtesy.
+
+The reason is not the damage (usually zero). It is that **he must always be able to tell a real
+alert from a test.** A red CRÍTICO on his WhatsApp that turns out to be a drill teaches him that red
+can be ignored — and then the whole alerting system is worth nothing on the day it matters.
+
+Consequences for how tests are built:
+
+- **Test components use the `zz-teste:` prefix, catalogued as `somente_painel`.** A test incident
+  stays in the panel and never reaches WhatsApp on its own. When a test genuinely has to prove the
+  message arrives, warn him first and wait for the go-ahead.
+- Prefer an injection that cannot escape: a panel-only component, a recipient that is not him, a
+  channel that is not the real one. Reach for the real channel only when the thing being proven IS
+  the real channel.
+- Never measure volume, run load, or mutate rows on a large ACTIVE tenant.
+
 ## Definition of done
 
 Every task must end with the full deploy ritual: commit + push + apply migrations + deploy affected edge functions. Work is not finished until it's in production.
