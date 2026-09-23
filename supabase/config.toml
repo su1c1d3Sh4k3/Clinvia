@@ -310,3 +310,8 @@ verify_jwt = false
 
 [functions.get-account-openai-key]
 verify_jwt = false
+
+# Ingestao de falhas do n8n: o n8n nao tem JWT do Supabase.
+# Autenticacao propria por x-api-key = N8N_ERROR_INGEST_KEY (segredo so desta porta).
+[functions.n8n-error-ingest]
+verify_jwt = false

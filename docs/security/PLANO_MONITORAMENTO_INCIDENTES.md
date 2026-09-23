@@ -301,6 +301,18 @@ provedor** (regra do markup: nem no alerta).
 
 ## 2. Lado n8n — `n8n-error-ingest`
 
+> **NO AR desde 23/09/2026.** Function `n8n-error-ingest` deployada com `verify_jwt = false`
+> (o n8n não tem JWT do Supabase) + migration `20260923130000_incident_ingest.sql` aplicada.
+> O agrupamento **não** acontece na edge function: ela é porteiro (chave, 64 KB, `source`,
+> `workflow_id`) e repassa tudo para a RPC `public.incident_ingest(jsonb)`, que sanitiza de novo,
+> resolve o tenant e faz `insert ... on conflict (fingerprint) where status <> 'resolved'
+> do update` numa transação só. Motivo: `incidents` tem índice único **parcial** por fingerprint —
+> agrupar em duas viagens perde a corrida quando o erro vem em rajada, que é o caso normal.
+> A RPC é `security definer`, `execute` só para `service_role` (conferido por
+> `has_function_privilege`: `public/anon/authenticated = false`).
+> Rollback pronto: `20260923130000_incident_ingest_rollback.sql`.
+> **Curl pronto para colar no n8n: §2.2.**
+
 Edge function nova, autenticada por **`x-api-key` = `N8N_ERROR_INGEST_KEY`** (segredo novo, valor
 na §"O que depende de você"). Não reusa `SCHEDULING_API_KEY` de propósito: o ingest é escrito por
 um workflow que você edita à mão e não deve carregar a chave que dá acesso a agenda/CRM.
@@ -340,6 +352,70 @@ um workflow que você edita à mão e não deve carregar a chave que dá acesso 
 `error_name` e `started_at` são os **dois campos extras** que pedi (§"O que depende de você"):
 `error_name` melhora muito o fingerprint (separa `NodeApiError` de `NodeOperationError` com a
 mesma frase) e `started_at` permite medir atraso sem depender da hora de chegada.
+
+### 2.2 A curl (testada em produção em 23/09/2026)
+
+`$INGEST_KEY` = conteúdo de `supabase/.temp/_n8n_ingest_key.txt` (gitignorado). A chave que está
+escrita neste documento na §"O que depende de você" é a **antiga, queimada** — não serve.
+
+```bash
+curl -sS -X POST "https://swfshqvvbohnahdyndch.supabase.co/functions/v1/n8n-error-ingest" \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: $INGEST_KEY" \
+  -d '{
+    "source": "error_trigger",
+    "workflow_id": "ID_DO_WORKFLOW",
+    "workflow_name": "NOME DO WORKFLOW",
+    "execution_id": "123",
+    "execution_url": "https://webhooks.clinvia.com.br/workflow/.../executions/123",
+    "mode": "trigger",
+    "failed_node": "HTTP Request",
+    "failed_node_type": "n8n-nodes-base.httpRequest",
+    "error_name": "NodeApiError",
+    "error_message": "Request failed with status code 500",
+    "error_description": "The service refused the connection",
+    "http_code": 500,
+    "started_at": "2026-09-23T14:05:00.000Z",
+    "nodes_executed": [{"node": "Webhook", "status": "success"}]
+  }'
+```
+
+Resposta de sucesso:
+
+```json
+{"success": true, "incident_id": "uuid", "event_id": "uuid", "is_new": true,
+ "component": "n8n:NOME DO WORKFLOW", "severity": null, "tenant_warning": null}
+```
+
+`is_new: false` significa que agrupou num incidente já aberto — é o esperado em rajada.
+`tenant_warning` preenchido = o incidente foi gravado **sem dono** porque nenhuma instância tem
+esse `workflow_id` em `instances.workflow_code`; não é erro, mas o alerta sai sem conta.
+
+**No nó HTTP Request do workflow MONITOR DE ERROS** (método POST, Body Content Type JSON, header
+`x-api-key`), os campos viram expressões do Error Trigger:
+
+| campo | expressão |
+|---|---|
+| `workflow_id` | `{{ $json.workflow.id }}` |
+| `workflow_name` | `{{ $json.workflow.name }}` |
+| `execution_id` | `{{ $json.execution.id }}` |
+| `execution_url` | `{{ $json.execution.url }}` |
+| `mode` | `{{ $json.execution.mode }}` |
+| `failed_node` | `{{ $json.execution.lastNodeExecuted }}` |
+| `error_name` | `{{ $json.execution.error.name }}` |
+| `error_message` | `{{ $json.execution.error.message }}` |
+| `error_description` | `{{ $json.execution.error.description }}` |
+| `http_code` | `{{ $json.execution.error.httpCode }}` |
+| `started_at` | `{{ $json.execution.startedAt }}` |
+
+Erros que a porta devolve (todos com `code` estável para o n8n ramificar sem ler texto):
+`method_not_allowed` (405), `api_key_not_configured` (500), `api_key_missing` /
+`api_key_invalid` (401), `payload_too_large` (413, >64 KB), `body_empty` / `body_invalid_json` /
+`body_not_object` / `source_invalid` / `workflow_id_missing` (400), `ingest_failed` (500).
+
+**Conferido em produção (23/09):** 2 POSTs do mesmo erro caíram no **mesmo** `incident_id` com
+`event_count = 2`; `sk-proj-…` virou `<openai_key>` e o telefone virou `<phone>` **dentro do banco**;
+`started_at` ausente não derrubou a ingestão. As linhas de teste foram apagadas depois.
 
 ### 2.1 Detector de erro silencioso, sem o monitor de consumo
 Você vai desativar o monitor de consumo de tokens. Se o detector silencioso vive dentro dele, ele
@@ -596,10 +672,11 @@ existência do monitoramento interno para o cliente final.)
    existe?
 2. **Aprovar os 2 templates** da §0.3 na conexão Bruno Admin. Se a Meta recusar `UTILITY`,
    reenviar como `MARKETING`.
-3. **`N8N_ERROR_INGEST_KEY`** (gerada agora, 32 bytes):
-   `91d5de17aaa6ab1306402bdbafc98b4ca0b56e8860374ecc85fed130168ababb`
-   Vai para os secrets do Supabase (`npx supabase secrets set`) e para o header `x-api-key` do nó
-   HTTP Request do seu workflow MONITOR DE ERROS.
+3. ~~**`N8N_ERROR_INGEST_KEY`**~~ **FEITO.** A primeira chave gerada aqui foi escrita em texto puro
+   neste documento e por isso está **QUEIMADA — não usar**. A chave em uso foi rotacionada em
+   22/09/2026, já está no secret `N8N_ERROR_INGEST_KEY` do Supabase, e o valor em claro mora **só**
+   em `supabase/.temp/_n8n_ingest_key.txt` (gitignorado). Nunca voltar a escrever chave neste
+   arquivo.
 4. **Detector silencioso:** cria o `N8N_API_KEY` (Personal Access Token do n8n) para eu fazer a
    varredura periódica, ou prefere o nó manual dentro de cada workflow? (§2.1)
 5. **Dois campos extras no payload do n8n:** `error_name` e `started_at` (§2).
