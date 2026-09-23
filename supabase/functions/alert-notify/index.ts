@@ -292,8 +292,19 @@ function alertaParams(a: Alerta): string[] {
 // ── Os quatro blocos ─────────────────────────────────────────────────────────
 
 /**
+ * Chave de contexto que so serve para o banco. Identificador interno nao cabe na
+ * mensagem: "project_id=proj_D4cs..." nao diz nada para quem le no WhatsApp e
+ * ainda ocupa o lugar do numero que importa. Quem precisar do id abre o painel,
+ * que tem o evento inteiro.
+ */
+const CHAVE_INTERNA = /(^|_)(id|ids|uuid|ref|hash|token|wamid|request|execution)$/i;
+/** Valor opaco: uuid, `proj_…`/`sk-…`/`org-…` e afins. Mesmo motivo. */
+const VALOR_OPACO =
+    /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|(proj|org|sk|key|user|acct|asst|wamid)[-_][A-Za-z0-9_-]{6,})$/i;
+
+/**
  * Valores envolvidos, tirados do `context` do evento. Sao eles que transformam
- * "gasto acima do esperado" em "US$ 13,76 contra media de US$ 2,27".
+ * "gasto acima do esperado" em "US$ 13,76 contra media de US$ 2,27" — e so isso.
  */
 function valoresDoContexto(ctx: unknown, max = 4): string {
     if (!ctx || typeof ctx !== "object" || Array.isArray(ctx)) return "";
@@ -301,8 +312,10 @@ function valoresDoContexto(ctx: unknown, max = 4): string {
     for (const [k, v] of Object.entries(ctx as Record<string, unknown>)) {
         if (pares.length >= max) break;
         if (v === null || typeof v === "object") continue;
+        if (CHAVE_INTERNA.test(k)) continue;
         const s = String(v);
         if (!s || s.length > 120) continue;
+        if (VALOR_OPACO.test(s)) continue;
         pares.push(`${k}=${s}`);
     }
     return pares.join(", ");
@@ -379,8 +392,11 @@ async function catalogoDoComponente(supabase: Db, componente: string): Promise<C
 
         return {
             natureza: "servico",
-            oQueFaz: "componente não catalogado — cadastre-o em incident_component_catalog "
-                + "para que este bloco pare de sair vazio",
+            // Sem recado de desenvolvedor: o pedido de cadastro vive no
+            // incidente 'monitoramento:componente-nao-catalogado' acima, que e
+            // somente_painel e nunca chega ao WhatsApp. A mensagem de operacao
+            // declara a lacuna e para.
+            oQueFaz: "componente não catalogado",
             acaoPadrao: null,
             catalogado: false,
         };
@@ -814,17 +830,19 @@ serve(async (req) => {
         } else if (action === "summary") {
             kind = "resumo";
             const horas = Number(body?.hours ?? 2);
-            const desde = new Date(Date.now() - horas * 60 * 60 * 1000).toISOString();
-            const { data: abertos, error } = await supabase
-                .from("incidents")
-                .select("id, component, ai_summary, ai_severity, event_count, last_seen")
-                .eq("status", "open")
-                .in("ai_severity", ["media", "baixa"])
-                .gte("last_seen", desde)
-                .order("event_count", { ascending: false })
-                .limit(20);
-            if (error) throw new Error(`incidents: ${error.message}`);
-            if (!abertos?.length) {
+            // A lista vem do MESMO RPC que serve de portao ao cron
+            // `alert-summary`. Montar a consulta aqui de novo faria o portao
+            // acordar a function para uma lista que ela nao encontra — foi
+            // exatamente assim que o despachante ficou acordando a toa antes.
+            const { data, error } = await supabase
+                .rpc("incident_summary_pending", { p_hours: horas });
+            if (error) throw new Error(`incident_summary_pending: ${error.message}`);
+            const abertos = (data ?? []) as {
+                component: string;
+                ai_summary: string | null;
+                event_count: number;
+            }[];
+            if (!abertos.length) {
                 return json({ success: true, skipped: "nenhum incidente media/baixa na janela" });
             }
             const destaques = abertos
