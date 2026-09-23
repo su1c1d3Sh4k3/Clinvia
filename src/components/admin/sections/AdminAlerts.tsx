@@ -25,11 +25,14 @@ import {
     BellOff,
     Check,
     ChevronDown,
+    Clock,
     Eye,
+    FlaskConical,
     RefreshCw,
     Search,
     Send,
     Siren,
+    Wallet,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -143,6 +146,7 @@ export default function AdminAlerts({ canEdit }: { canEdit: boolean }) {
     const [busca, setBusca] = useState("");
     const [buscaAtiva, setBuscaAtiva] = useState("");
     const [aberto, setAberto] = useState<string | null>(null);
+    const [novoSaldo, setNovoSaldo] = useState("");
 
     const counters = useQuery({
         queryKey: ["admin-incident-counters"],
@@ -210,6 +214,49 @@ export default function AdminAlerts({ canEdit }: { canEdit: boolean }) {
         onError: (e) => toast.error(e.message),
     });
 
+    // Simular NAO tem caminho de envio proprio: grava um incidente de verdade
+    // pela mesma funcao que o varredor usa. Um botao que falasse direto com a
+    // Meta provaria um caminho que nao e o que falhou em 22/09.
+    const simular = useMutation({
+        mutationFn: async () => {
+            const { data, error } = await supabase.rpc("admin_simulate_incident", {
+                p_severity: "critica",
+            });
+            if (error) throw error;
+            return data;
+        },
+        onSuccess: () => {
+            toast.success(
+                "Incidente crítico criado. O despachante roda a cada minuto — o resultado aparece no próprio incidente.",
+            );
+            qc.invalidateQueries({ queryKey: ["admin-incidents"] });
+            qc.invalidateQueries({ queryKey: ["admin-incident-counters"] });
+            // o envio sai no proximo minuto; recarrega sozinho para ele nao
+            // precisar ficar clicando em Atualizar para ver se chegou.
+            setTimeout(() => {
+                qc.invalidateQueries({ queryKey: ["admin-incidents"] });
+                qc.invalidateQueries({ queryKey: ["admin-incident-counters"] });
+            }, 70_000);
+        },
+        onError: (e) => toast.error(e.message),
+    });
+
+    const salvarSaldo = useMutation({
+        mutationFn: async ({ saldo, autoRecarga }) => {
+            const { error } = await supabase.rpc("admin_set_openai_credit", {
+                p_saldo_usd: saldo,
+                p_auto_recharge: autoRecarga,
+            });
+            if (error) throw error;
+        },
+        onSuccess: () => {
+            toast.success("Saldo registrado");
+            qc.invalidateQueries({ queryKey: ["admin-alert-settings"] });
+            qc.invalidateQueries({ queryKey: ["admin-incidents"] });
+        },
+        onError: (e) => toast.error(e.message),
+    });
+
     const testar = useMutation({
         mutationFn: async () => {
             const { data, error } = await supabase.functions.invoke("alert-notify", {
@@ -231,8 +278,16 @@ export default function AdminAlerts({ canEdit }: { canEdit: boolean }) {
     const destinatarios = settings.data?.destinatarios ?? [];
     const incidentes = lista.data ?? [];
 
+    const saldo = settings.data?.saldo ?? {};
+
     const canalMudo = !cfg.alert_notify_enabled;
     const enviosFalhando = (c.envios_falhos_24h ?? 0) > 0;
+    // Grave, aberto, ja tentou e nao conseguiu avisar NENHUMA vez: e este o
+    // estado em que ele nao pode contar com o WhatsApp.
+    const mudoDeFato = (c.criticos_sem_aviso ?? 0) > 0;
+    // Grave, aberto e ainda nem tentado. Se nao zerar em poucos minutos, quem
+    // parou foi o despachante — nao a Meta.
+    const parado = (c.aguardando_despacho ?? 0) > 0;
 
     return (
         <div className="space-y-4">
@@ -256,6 +311,18 @@ export default function AdminAlerts({ canEdit }: { canEdit: boolean }) {
                     </Button>
                     {canEdit && (
                         <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => simular.mutate()}
+                            disabled={simular.isPending}
+                            className="border-red-500/40 text-red-300 hover:text-white hover:bg-red-600"
+                        >
+                            <FlaskConical className="w-4 h-4 mr-2" />
+                            {simular.isPending ? "Criando…" : "Simular incidente crítico"}
+                        </Button>
+                    )}
+                    {canEdit && (
+                        <Button
                             size="sm"
                             onClick={() => testar.mutate()}
                             disabled={testar.isPending}
@@ -274,6 +341,38 @@ export default function AdminAlerts({ canEdit }: { canEdit: boolean }) {
                     <p className="text-sm text-yellow-200">
                         O envio por WhatsApp está desligado. Os incidentes continuam sendo gravados e
                         aparecem aqui — só o aviso não sai.
+                    </p>
+                </div>
+            )}
+
+            {mudoDeFato && (
+                <div className="flex items-start gap-2 bg-red-500/15 border-2 border-red-500 rounded-lg px-3 py-2.5">
+                    <BellOff className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                    <div className="text-sm text-red-100">
+                        <p className="font-semibold">
+                            Canal mudo: {c.criticos_sem_aviso} incidente(s) grave(s) sem conseguir avisar.
+                        </p>
+                        <p className="text-red-200/90 mt-0.5">
+                            O incidente está gravado, mas nenhuma mensagem chegou ao WhatsApp. Motivo da
+                            última falha: <span className="font-mono">{c.ultima_falha_envio ?? "—"}</span>
+                            {c.proxima_tentativa && ` · próxima tentativa ${quando(c.proxima_tentativa)}`}
+                        </p>
+                        <p className="text-red-200/70 text-[11px] mt-0.5">
+                            Enquanto os templates não forem aprovados, o aviso depende da janela de 24h da
+                            Meta. A tentativa se repete sozinha (2, 5, 15 e depois 30 em 30 min), então o
+                            aviso sai assim que você mandar qualquer mensagem para o número remetente.
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            {parado && (
+                <div className="flex items-start gap-2 bg-orange-500/10 border border-orange-500/40 rounded-lg px-3 py-2">
+                    <Clock className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
+                    <p className="text-sm text-orange-200">
+                        {c.aguardando_despacho} incidente(s) grave(s) na fila de aviso, ainda sem tentativa.
+                        O despachante roda a cada minuto — se este número não zerar, foi ele que parou.
+                        {c.ultimo_envio_ok && ` Último envio bem-sucedido: ${quando(c.ultimo_envio_ok)}.`}
                     </p>
                 </div>
             )}
@@ -393,6 +492,12 @@ export default function AdminAlerts({ canEdit }: { canEdit: boolean }) {
                                                     {i.envios_falhos} envio(s) falho(s)
                                                 </Badge>
                                             )}
+                                            {i.canal_mudo && (
+                                                <Badge className="bg-red-600 text-white border-0">
+                                                    <BellOff className="w-3 h-3 mr-1" />
+                                                    não avisado
+                                                </Badge>
+                                            )}
                                         </div>
                                         <p className="text-sm text-gray-300 mt-1 truncate">
                                             {i.ai_summary || "Análise ainda não concluída."}
@@ -415,6 +520,16 @@ export default function AdminAlerts({ canEdit }: { canEdit: boolean }) {
                                                 i.notified_count > 0 &&
                                                 ` · +${i.ocorrencias_desde_ultimo_aviso} desde o último aviso`}
                                         </p>
+                                        {/* por que este incidente não avisou, na linha do próprio
+                                            incidente: sem isso o "não avisado" seria só um rótulo. */}
+                                        {i.notify_failed_count > 0 && (
+                                            <p className="text-[11px] text-red-300 mt-1 break-words">
+                                                {i.notify_failed_count} tentativa(s) sem sucesso
+                                                {i.notify_next_attempt_at &&
+                                                    ` · próxima ${quando(i.notify_next_attempt_at)}`}
+                                                {i.notify_last_error && ` · ${i.notify_last_error}`}
+                                            </p>
+                                        )}
                                     </div>
                                     <ChevronDown
                                         className={`w-4 h-4 text-gray-500 shrink-0 transition-transform ${expandido ? "rotate-180" : ""}`}
@@ -468,6 +583,141 @@ export default function AdminAlerts({ canEdit }: { canEdit: boolean }) {
                     })}
                 </div>
             )}
+
+            {/* Saldo da OpenAI ─────────────────────────────────────────────────
+                A OpenAI não expõe saldo por API: o número é o que ele digita
+                depois de cada recarga. A tela mostra a IDADE desse número em vez
+                de fingir precisão — âncora vencida esconde a projeção. */}
+            <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-4">
+                <div className="flex items-center gap-2">
+                    <Wallet className="w-4 h-4 text-gray-400" />
+                    <p className="text-sm font-semibold text-gray-200">Saldo da conta OpenAI</p>
+                </div>
+
+                {saldo.tem_ancora === false ? (
+                    <p className="text-sm text-gray-400">
+                        {saldo.motivo ??
+                            "Saldo nunca informado. Preencha abaixo depois da próxima recarga."}
+                    </p>
+                ) : (
+                    <>
+                        {saldo.ancora_vencida && (
+                            <div className="flex items-start gap-2 bg-yellow-500/10 border border-yellow-500/40 rounded px-3 py-2">
+                                <AlertTriangle className="w-4 h-4 text-yellow-400 shrink-0 mt-0.5" />
+                                <p className="text-sm text-yellow-200">
+                                    O saldo informado tem {saldo.dias_desde_ancora} dia(s) — mais que o
+                                    limite de {saldo.limite_dias_ancora}. A projeção está escondida de
+                                    propósito: atualize o valor abaixo para voltar a ver o saldo estimado.
+                                </p>
+                            </div>
+                        )}
+
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <Counter
+                                label="Saldo estimado"
+                                value={
+                                    saldo.saldo_estimado_usd != null
+                                        ? `US$ ${saldo.saldo_estimado_usd}`
+                                        : "—"
+                                }
+                                tone={
+                                    saldo.saldo_estimado_usd == null
+                                        ? "text-gray-500"
+                                        : saldo.saldo_estimado_usd < saldo.limite_critico_usd
+                                            ? "text-red-400"
+                                            : saldo.saldo_estimado_usd < saldo.limite_aviso_usd
+                                                ? "text-orange-400"
+                                                : "text-green-400"
+                                }
+                                hint={`crítico abaixo de US$ ${saldo.limite_critico_usd}`}
+                            />
+                            <Counter
+                                label="Informado"
+                                value={`US$ ${saldo.saldo_informado_usd}`}
+                                tone="text-gray-200"
+                                hint={`em ${quando(saldo.informado_em)} · ${saldo.dias_desde_ancora}d atrás`}
+                            />
+                            <Counter
+                                label="Gasto desde então"
+                                value={`US$ ${saldo.gasto_desde_ancora_usd}`}
+                                tone="text-gray-200"
+                                hint={`queima US$ ${saldo.queima_dia_usd}/dia`}
+                            />
+                            <Counter
+                                label="Dias restantes"
+                                value={saldo.dias_restantes ?? "—"}
+                                tone={
+                                    saldo.dias_restantes != null && saldo.dias_restantes < 7
+                                        ? "text-red-400"
+                                        : "text-gray-200"
+                                }
+                                hint={
+                                    saldo.recarga_automatica
+                                        ? "recarga automática ligada"
+                                        : "recarga automática DESLIGADA"
+                                }
+                            />
+                        </div>
+
+                        <p className="text-[11px] text-gray-500">
+                            Base do cálculo: {saldo.base_do_calculo}. O custo cobrado embute a margem do
+                            sistema, então a queima é superestimada — o alerta chega antes da hora, nunca
+                            depois.
+                        </p>
+                    </>
+                )}
+
+                {canEdit && (
+                    <div className="flex flex-wrap items-end gap-3 border-t border-gray-700 pt-3">
+                        <div>
+                            <p className="text-[11px] uppercase tracking-wide text-gray-500 mb-1">
+                                Saldo atual (US$)
+                            </p>
+                            <Input
+                                type="number"
+                                min={0}
+                                step="0.01"
+                                value={novoSaldo}
+                                onChange={(e) => setNovoSaldo(e.target.value)}
+                                placeholder={String(saldo.saldo_informado_usd ?? "0.00")}
+                                className="w-32 bg-gray-900 border-gray-700 text-gray-200"
+                            />
+                        </div>
+                        <Button
+                            size="sm"
+                            disabled={!novoSaldo || salvarSaldo.isPending}
+                            onClick={() =>
+                                salvarSaldo.mutate(
+                                    { saldo: Number(novoSaldo), autoRecarga: null },
+                                    { onSuccess: () => setNovoSaldo("") },
+                                )
+                            }
+                            className="bg-blue-600 hover:bg-blue-700 text-white"
+                        >
+                            Registrar saldo
+                        </Button>
+                        <label className="flex items-center gap-2 ml-auto">
+                            <span className="text-sm text-gray-300">
+                                Recarga automática na OpenAI
+                                <span className="block text-[11px] text-gray-500">
+                                    Desligada, saldo abaixo de US$ {saldo.limite_aviso_usd ?? 50} vira
+                                    crítico na hora.
+                                </span>
+                            </span>
+                            <Switch
+                                checked={!!saldo.recarga_automatica}
+                                disabled={!saldo.tem_ancora || salvarSaldo.isPending}
+                                onCheckedChange={(v) =>
+                                    salvarSaldo.mutate({
+                                        saldo: saldo.saldo_informado_usd,
+                                        autoRecarga: v,
+                                    })
+                                }
+                            />
+                        </label>
+                    </div>
+                )}
+            </div>
 
             <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-4">
                 <p className="text-sm font-semibold text-gray-200">Canal de alerta</p>
@@ -598,6 +848,91 @@ export default function AdminAlerts({ canEdit }: { canEdit: boolean }) {
                             onBlur={(e) =>
                                 mudarChave.mutate({
                                     key: "incident_analyze_cooldown_min",
+                                    value: e.target.value,
+                                })
+                            }
+                            className="w-20 bg-gray-900 border-gray-700 text-gray-200"
+                        />
+                    </label>
+
+                    <label className="flex items-center justify-between gap-3">
+                        <span className="text-sm text-gray-300">
+                            Avisar sobre saldo da OpenAI
+                            <span className="block text-[11px] text-gray-500">
+                                Desligar não desliga o 429 "sem crédito": esse sai sempre.
+                            </span>
+                        </span>
+                        <Switch
+                            checked={!!cfg.openai_balance_alert_enabled}
+                            disabled={!canEdit}
+                            onCheckedChange={(v) =>
+                                mudarChave.mutate({ key: "openai_balance_alert_enabled", value: v })
+                            }
+                        />
+                    </label>
+
+                    <label className="flex items-center justify-between gap-3">
+                        <span className="text-sm text-gray-300">
+                            Saldo vira aviso em (US$)
+                            <span className="block text-[11px] text-gray-500">
+                                Abaixo disso o incidente entra como alta.
+                            </span>
+                        </span>
+                        <Input
+                            type="number"
+                            min={0}
+                            step="1"
+                            defaultValue={cfg.openai_balance_warn_usd ?? 50}
+                            disabled={!canEdit}
+                            onBlur={(e) =>
+                                mudarChave.mutate({
+                                    key: "openai_balance_warn_usd",
+                                    value: e.target.value,
+                                })
+                            }
+                            className="w-20 bg-gray-900 border-gray-700 text-gray-200"
+                        />
+                    </label>
+
+                    <label className="flex items-center justify-between gap-3">
+                        <span className="text-sm text-gray-300">
+                            Saldo vira crítico em (US$)
+                            <span className="block text-[11px] text-gray-500">
+                                Abaixo disso, ou com recarga automática desligada, é crítico.
+                            </span>
+                        </span>
+                        <Input
+                            type="number"
+                            min={0}
+                            step="1"
+                            defaultValue={cfg.openai_balance_critical_usd ?? 20}
+                            disabled={!canEdit}
+                            onBlur={(e) =>
+                                mudarChave.mutate({
+                                    key: "openai_balance_critical_usd",
+                                    value: e.target.value,
+                                })
+                            }
+                            className="w-20 bg-gray-900 border-gray-700 text-gray-200"
+                        />
+                    </label>
+
+                    <label className="flex items-center justify-between gap-3">
+                        <span className="text-sm text-gray-300">
+                            Saldo informado vence em (dias)
+                            <span className="block text-[11px] text-gray-500">
+                                Passou disso, a tela esconde a projeção em vez de fingir precisão.
+                            </span>
+                        </span>
+                        <Input
+                            type="number"
+                            min={1}
+                            max={90}
+                            defaultValue={cfg.openai_credit_stale_days ?? 7}
+                            disabled={!canEdit}
+                            onBlur={(e) =>
+                                mudarChave.mutate({
+                                    key: "openai_credit_stale_days",
                                     value: e.target.value,
                                 })
                             }

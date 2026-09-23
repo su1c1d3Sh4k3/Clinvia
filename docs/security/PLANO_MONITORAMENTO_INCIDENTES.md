@@ -584,6 +584,28 @@ remaining`. Os 182 eventos colapsaram em **um** incidente (o agrupamento funcion
 Já normalizou sozinho: o último resumo `done` é de 23/09 00:58. As conversas daquela janela ficam
 sem resumo para sempre. Isto reforça o item ainda pendente do **alerta de saldo da organização**.
 
+**Alerta de saldo — APLICADO em 23/09 (`20260923180000_openai_saldo.sql`).** Limites aprovados por
+ele: aviso (**alta**) em US$ 50, **crítico** em US$ 20, e **saldo < US$ 50 com recarga automática
+desligada = crítico na hora**. O 429 entrou no `incident_catalog` como `critica` em três formas
+(`no credits remaining`, `insufficient_quota`, `billing_hard_limit_reached`), então qualquer
+caminho que chame `incident_record` já o reconhece — e ele sai **mesmo com o alerta de saldo
+desligado**, porque sem crédito a IA parou.
+
+A API da OpenAI **não expõe saldo nem estado da recarga automática**. O número é digitado no painel
+(`admin_set_openai_credit`, que carimba `openai_credit_recorded_at` e resolve sozinho os incidentes
+de saldo abertos). A tela mostra a **idade** da âncora; passando de `openai_credit_stale_days`
+(7 por padrão) a projeção some e no lugar aparece o aviso — melhor do que fingir precisão. Cron
+`openai-saldo-scan` (`15 * * * *`); âncora vencida gera `openai:ancora_de_saldo_vencida` (`media`),
+não alerta de saldo, porque alertar com base em número velho é pior do que não alertar.
+
+**Dívida registrada — `provider_cost_usd`:** está **zerada** em `source='system'` e **parcial** no
+n8n (só preenchida depois de `ad8f002`). Somá-la dá US$ 10,01 em 30 dias contra fatura real de
+≈US$ 136 — inutilizável como base de gasto. A base é `cost_usd` (n8n US$ 155,55 + sistema
+US$ 15,93 = US$ 171,48/30d ≈ **US$ 5,72/dia**, coerente com a fatura). Como `cost_usd` embute a
+margem cobrada, a queima sai **superestimada**: o saldo estimado é conservador e o alerta chega
+antes da hora, nunca depois. É o lado certo de errar. Quando `provider_cost_usd` estiver completo
+nas duas fontes, trocar a base derruba a estimativa para perto do custo puro do provedor.
+
 Segunda passada: **0 eventos novos** — a idempotência por `request_id` está de pé.
 
 Os dois incidentes sintéticos dos testes (o curl do n8n e o 500 forçado em `api-public-booking`)
@@ -699,7 +721,70 @@ resumos que morreram no 429 da OpenAI viram **1**.
 
 ## 5. Envio e agrupamento — `alert-notify`
 
-Cron `alert-dispatch` (`*/2 * * * *`) + resumo (`0 */2 * * *`).
+Cron `alert-dispatch` (**`* * * * *`**, aplicado em 23/09 pela migration
+`20260923170000_incident_despacho.sql`) + resumo (`0 */2 * * *`).
+
+### 5.0 O despacho não existia — foi isto que deixou o crítico de 22/09 mudo
+
+O plano descrevia o cron acima; ele **nunca foi criado**. Até 23/09, `alert-notify` só tinha as
+ações `notify` (exige `incident_id` no corpo), `summary` e `test`, e os únicos crons de
+monitoramento apenas ESCREVIAM incidente. Medido no incidente dos 182 resumos:
+`alert_notify_enabled = true`, janela de 24h **aberta** (mensagem dele às 22:31 × incidente às
+23:33) e **zero** linhas em `incident_notifications`. Ou seja: não foi a Meta, não foi template,
+não foi a chave — **ninguém ligou para a função**.
+
+Três correções em série, todas na `20260923170000`:
+
+1. **Ação `dispatch` + cron de 1 minuto.** `invoke_alert_dispatch()` só acorda a edge function
+   quando `incident_notify_pending_count() > 0`.
+2. **Crítica/alta não esperam análise.** O claim era `analyzed_at is not null`; sem analisador no
+   ar, nada grave sairia nunca. Agora `(ai_severity in ('critica','alta') or analyzed_at is not
+   null)`, e a mensagem diz "análise ainda não feita" em vez de inventar causa.
+3. **`openai_alerts` era uma ilha.** O scan inseria só na própria tabela; os 3 alertas da conta
+   OpenAI eram mudos por construção. Ponte = trigger `zz_openai_alert_to_incident` (AFTER INSERT),
+   que cobre também qualquer caminho de insert futuro.
+
+**Quarta falha, achada no teste de ponta a ponta (23/09 09:14)** e corrigida pela
+`20260923190000_alert_dispatch_chave.sql`: o cron dizia `succeeded`, o `net.http_post` saía e a
+resposta era `401 {"error":"Não autorizado"}`. O projeto migrou para as chaves novas — dentro da
+edge function `SUPABASE_SERVICE_ROLE_KEY` vale `sb_secret_...`, mas o `vault` guarda o JWT antigo.
+O gateway aceita os dois (a chamada chegava), a função compara com a variável dela (rejeitava).
+Segredo novo `SUPABASE_EDGE_SECRET_KEY` + header `x-service-key`.
+**Dívida:** toda função que confere a chave por conta própria e é acordada por cron tem o mesmo
+defeito latente — auditar as invocadoras é item separado.
+
+### 5.1 Reserva ≠ contabilidade (o que permite tentar de novo)
+
+Antes, o próprio `UPDATE` do claim já somava `notified_count + 1`: atômico, mas sem retentativa.
+Agora `notify_claimed_at` é só a **reserva** (expira em 5 min) e quem fecha o ciclo é
+`incident_notification_done(id, ok, event_count, erro)`:
+
+| resultado | efeito |
+|---|---|
+| enviou para alguém | `notified_count + 1`, zera falhas e backoff |
+| ninguém elegível (`elegiveis = 0`) | **sucesso terminal** — ninguém pediu para ser avisado nessa gravidade |
+| falhou / adiado | limpa a reserva, `notify_failed_count + 1`, `notify_next_attempt_at` com backoff **2 → 5 → 15 → 30 min (teto 30)**, grava `notify_last_error` |
+
+O teto é 30 min porque **não há como saber quando a janela de 24h da Meta reabre** (reabre quando o
+destinatário escreve). Insistir é a única estratégia honesta; 30 min é o atraso de pior caso entre
+a janela reabrir e o alerta sair.
+
+### 5.2 Como ele confirma sem esperar erro real
+
+Botão **"Simular incidente crítico"** em `/admin?tab=alertas` → `admin_simulate_incident('critica')`,
+que grava um incidente REAL pela mesma `incident_record` do varredor. **De propósito não existe
+caminho de envio próprio**: um botão que falasse direto com a Meta provaria um caminho que não é o
+que falhou. O despachante pega no minuto seguinte e o resultado aparece no próprio incidente
+(bloco "Envios"). Prova em 23/09: criado 09:17 → enviado 09:18:02, `status=sent`, wamid, texto
+livre.
+
+### 5.3 Canal mudo em destaque na página
+
+`admin_incident_counters` ganhou `criticos_sem_aviso` (grave, aberto, já tentou e não conseguiu
+nenhuma vez), `aguardando_despacho` (grave, aberto, ainda nem tentado — se não zerar em minutos,
+quem parou foi o despachante), `ultima_falha_envio`, `ultimo_envio_ok` e `proxima_tentativa`.
+`admin_list_incidents` ganhou `canal_mudo`, `notify_failed_count`, `notify_last_error`,
+`notify_next_attempt_at`, e ordena os mudos primeiro.
 
 | situação | regra |
 |---|---|

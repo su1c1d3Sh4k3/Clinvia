@@ -17,9 +17,15 @@
 // incident_notifications.error_message. Nada quebra.
 //
 // Acoes:
-//   { action: "notify",  incident_id }  -> alerta individual
+//   { action: "dispatch", limit?: 10 }  -> drena a fila de avisos (cron de 1 min)
+//   { action: "notify",  incident_id }  -> alerta individual, um incidente so
 //   { action: "summary", hours?: 2 }    -> resumo agrupado de media/baixa
 //   { action: "test",    message? }     -> alerta ficticio, nao toca em incidents
+//
+// `dispatch` e a acao que faltava. Ate 23/09/2026 esta funcao so existia: nenhum
+// cron a chamava e `notify` exige incident_id explicito no corpo, que ninguem
+// fornecia. O incidente critico dos 182 resumos (22/09 23:33) foi gravado
+// corretamente e nunca virou mensagem por causa disso.
 //
 // Autenticacao: service role key em `x-service-key` ou `Authorization: Bearer`.
 // Nunca e chamada pelo navegador.
@@ -329,6 +335,146 @@ async function estourouORateLimit(
     return (count ?? 0) >= teto;
 }
 
+/** Nome da conta afetada, do jeito que aparece na mensagem. */
+async function resolverConta(
+    supabase: Db,
+    ownerId: string | null,
+    afetados: string[] | null,
+): Promise<string> {
+    if (ownerId) {
+        const { data: p } = await supabase
+            .from("profiles")
+            .select("company_name, full_name")
+            .eq("id", ownerId)
+            .maybeSingle();
+        return p?.company_name || p?.full_name || "conta não identificada";
+    }
+    if (Array.isArray(afetados) && afetados.length > 1) {
+        return `${afetados.length} contas afetadas`;
+    }
+    return "nenhuma identificada";
+}
+
+type Espalhamento = {
+    enviados: number;
+    /**
+     * Destinatarios que passaram no filtro de severidade minima. Zero aqui nao e
+     * falha: e a decisao de que ninguem precisa saber deste incidente — e por isso
+     * o despachante o encerra em vez de tentar de novo para sempre.
+     */
+    elegiveis: number;
+    resultados: Record<string, unknown>[];
+    /** Motivo consolidado quando NINGUEM recebeu — e o que vai para notify_last_error. */
+    erro: string | null;
+};
+
+/**
+ * Manda um alerta para todos os destinatarios elegiveis.
+ * Extraida do handler porque `dispatch` roda este mesmo laco N vezes, uma por
+ * incidente da fila — e o laco carrega as regras de severidade minima, janela
+ * de silencio e teto por hora, que nao podem divergir entre as acoes.
+ */
+async function espalhar(
+    supabase: Db,
+    recipients: Recipient[],
+    alerta: Alerta,
+    incidentId: string | null,
+    kind: "individual" | "resumo" | "recorrencia",
+    teto: number,
+    resumoParams: string[] | null,
+): Promise<Espalhamento> {
+    const agora = new Date();
+    const resultados: Record<string, unknown>[] = [];
+    const motivos: string[] = [];
+    let enviados = 0;
+    let elegiveis = 0;
+
+    for (const r of recipients) {
+        if (SEV_RANK[alerta.severidade] < SEV_RANK[r.min_severity]) {
+            resultados.push({ destinatario: r.nome, status: "abaixo_da_severidade_minima" });
+            continue;
+        }
+        elegiveis += 1;
+
+        if (!IGNORA_JANELA.includes(alerta.severidade) && !dentroDaJanela(r, agora)) {
+            await supabase.from("incident_notifications").insert({
+                incident_id: incidentId, recipient_id: r.id, kind, status: "skipped_window",
+            });
+            resultados.push({ destinatario: r.nome, status: "skipped_window" });
+            continue;
+        }
+
+        if (await estourouORateLimit(supabase, r.id, teto)) {
+            await supabase.from("incident_notifications").insert({
+                incident_id: incidentId, recipient_id: r.id, kind, status: "skipped_ratelimit",
+            });
+            resultados.push({ destinatario: r.nome, status: "skipped_ratelimit" });
+            continue;
+        }
+
+        const sender = await carregarSender(supabase, r.instance_id);
+        if (!sender) {
+            await supabase.from("incident_notifications").insert({
+                incident_id: incidentId, recipient_id: r.id, kind, status: "failed",
+                error_code: "sender_sem_token",
+                error_message: "instância remetente sem meta_phone_number_id ou meta_access_token",
+            });
+            resultados.push({ destinatario: r.nome, status: "failed", motivo: "sender_sem_token" });
+            motivos.push(`${r.nome}: instância remetente sem token`);
+            continue;
+        }
+
+        let res: SendResult & { via: "texto" | "template" | null };
+        if (resumoParams) {
+            const livre = await graphSend(sender, textPayload(r.telefone, resumoTexto(resumoParams)));
+            if (livre.ok) {
+                res = { ...livre, via: "texto" };
+            } else {
+                const tpl = await graphSend(sender, templatePayload(r.telefone, TPL_RESUMO, resumoParams));
+                res = tpl.ok ? { ...tpl, via: "template" } : {
+                    ok: false,
+                    errorCode: tpl.errorCode,
+                    errorMessage:
+                        `template: ${tpl.errorMessage} | texto livre: ${livre.errorCode} ${livre.errorMessage}`,
+                    via: null,
+                };
+            }
+            await supabase.from("incident_notifications").insert({
+                incident_id: incidentId, recipient_id: r.id, kind,
+                status: res.ok ? "sent" : "failed",
+                template_name: res.via === "template" ? TPL_RESUMO : null,
+                wamid: res.wamid ?? null,
+                error_code: res.errorCode ?? null,
+                error_message: res.errorMessage ?? null,
+            });
+        } else {
+            res = await enviarAlerta(supabase, sender, r, alerta, incidentId, kind);
+        }
+
+        resultados.push({
+            destinatario: r.nome,
+            status: res.ok ? "sent" : "failed",
+            via: res.via,
+            wamid: res.wamid ?? null,
+            erro: res.ok ? null : `${res.errorCode}: ${res.errorMessage}`,
+        });
+
+        if (res.ok) enviados += 1;
+        else motivos.push(`${r.nome}: ${res.errorCode} ${res.errorMessage}`);
+    }
+
+    // Pulado por janela de silencio ou teto por hora tambem precisa de motivo:
+    // sem ele o incidente voltaria para a fila com "falha sem motivo informado"
+    // e o painel nao distinguiria "a Meta recusou" de "ainda nao era hora".
+    const erro = enviados > 0 || elegiveis === 0
+        ? null
+        : (motivos.length
+            ? motivos.join(" | ")
+            : "adiado: janela de silêncio do destinatário ou teto por hora atingido");
+
+    return { enviados, elegiveis, resultados, erro };
+}
+
 // ── Handler ──────────────────────────────────────────────────────────────────
 
 serve(async (req) => {
@@ -364,6 +510,101 @@ serve(async (req) => {
         }
         if (action === "summary" && !resumoLigado) {
             return json({ success: true, skipped: "alert_summary_enabled=false" });
+        }
+
+        // ── dispatch: drena a fila, um incidente por vez ──────────────────────
+        // Chamada pelo cron `alert-dispatch` (* * * * *), que so acorda esta
+        // funcao quando incident_notify_pending_count() > 0.
+        if (action === "dispatch") {
+            const limite = Math.min(Math.max(Number(body?.limit ?? 10), 1), 50);
+
+            const { data: fila, error: fErr } = await supabase
+                .rpc("incident_claim_for_notification", { p_limit: limite });
+            if (fErr) throw new Error(`incident_claim_for_notification: ${fErr.message}`);
+            if (!fila?.length) return json({ success: true, action, despachados: 0 });
+
+            const { data: dests, error: dErr } = await supabase
+                .from("alert_recipients")
+                .select("id, nome, telefone, instance_id, min_severity, window_start, window_end, timezone")
+                .eq("is_active", true);
+            if (dErr) throw new Error(`alert_recipients: ${dErr.message}`);
+
+            const despachos: Record<string, unknown>[] = [];
+
+            for (const inc of fila) {
+                // Sem destinatario ativo o incidente NAO pode ser dado por avisado:
+                // ele fica na fila e sai assim que alguem for cadastrado.
+                if (!dests?.length) {
+                    await supabase.rpc("incident_notification_done", {
+                        p_incident_id: inc.id,
+                        p_ok: false,
+                        p_event_count: inc.event_count,
+                        p_error: "nenhum destinatário ativo cadastrado",
+                    });
+                    despachos.push({ incidente: inc.id, status: "sem_destinatario" });
+                    continue;
+                }
+
+                const recorrencia = inc.kind === "recorrencia";
+                const alertaInc: Alerta = {
+                    severidade: (inc.ai_severity as Severity) ?? "media",
+                    componente: inc.component,
+                    erro: inc.ai_summary ?? `falha em ${inc.component} (${inc.source})`,
+                    ocorrencias: recorrencia
+                        ? `+${inc.ocorrencias_novas} desde o último aviso (${ddmmHHmm(inc.desde)}) — ${inc.event_count} no total`
+                        : `${inc.event_count} desde ${ddmmHHmm(inc.first_seen)}`,
+                    conta: await resolverConta(supabase, inc.owner_id, inc.affected_tenants),
+                    causa: inc.ai_probable_cause
+                        ? `${inc.ai_probable_cause}${inc.ai_origin ? ` — ${inc.ai_origin}` : ""}`
+                        // critica/alta saem sem esperar a analise; dizer isso e melhor
+                        // do que uma causa inventada ou um campo vazio.
+                        : (inc.analyzed_at ? "a análise não apontou causa" : "análise ainda não feita"),
+                    acao: inc.ai_fix_system || inc.ai_fix_n8n || "abrir o painel e investigar",
+                    painel: `${PAINEL_URL}&i=${inc.id}`,
+                };
+
+                const r = await espalhar(
+                    supabase,
+                    (dests ?? []) as Recipient[],
+                    alertaInc,
+                    inc.id,
+                    recorrencia ? "recorrencia" : "individual",
+                    teto,
+                    null,
+                );
+
+                // elegiveis === 0 encerra o incidente: ninguem pediu para ser
+                // avisado nesta severidade, entao nao ha o que retentar.
+                const ok = r.enviados > 0 || r.elegiveis === 0;
+                if (r.elegiveis === 0) {
+                    await supabase.from("incident_notifications").insert({
+                        incident_id: inc.id,
+                        recipient_id: dests[0].id,
+                        kind: recorrencia ? "recorrencia" : "individual",
+                        status: "skipped_severity",
+                    });
+                }
+
+                const { error: doneErr } = await supabase.rpc("incident_notification_done", {
+                    p_incident_id: inc.id,
+                    p_ok: ok,
+                    p_event_count: inc.event_count,
+                    p_error: r.erro,
+                });
+                if (doneErr) console.error("[alert-notify] done falhou:", inc.id, doneErr.message);
+
+                despachos.push({
+                    incidente: inc.id,
+                    componente: inc.component,
+                    severidade: inc.ai_severity,
+                    tipo: inc.kind,
+                    enviados: r.enviados,
+                    elegiveis: r.elegiveis,
+                    erro: r.erro,
+                });
+            }
+
+            return json({ success: true, action, despachados: despachos.length, despachos });
         }
 
         // ── monta o alerta ────────────────────────────────────────────────────
@@ -447,18 +688,7 @@ serve(async (req) => {
             }
 
             eventCountNoEnvio = inc.event_count ?? 0;
-
-            let conta = "nenhuma identificada";
-            if (inc.owner_id) {
-                const { data: p } = await supabase
-                    .from("profiles")
-                    .select("company_name, full_name")
-                    .eq("id", inc.owner_id)
-                    .maybeSingle();
-                conta = p?.company_name || p?.full_name || "conta não identificada";
-            } else if (Array.isArray(inc.affected_tenants) && inc.affected_tenants.length > 1) {
-                conta = `${inc.affected_tenants.length} contas afetadas`;
-            }
+            const conta = await resolverConta(supabase, inc.owner_id, inc.affected_tenants);
 
             alerta = {
                 severidade: (inc.ai_severity as Severity) ?? "media",
@@ -484,116 +714,36 @@ serve(async (req) => {
             return json({ success: true, skipped: "nenhum destinatario ativo" });
         }
 
-        const agora = new Date();
-        const resultados: Record<string, unknown>[] = [];
-        let enviados = 0;
+        const r = await espalhar(
+            supabase,
+            recipients as Recipient[],
+            alerta,
+            incidentId,
+            kind,
+            teto,
+            resumoParams,
+        );
 
-        for (const raw of recipients) {
-            const r = raw as Recipient;
-
-            if (SEV_RANK[alerta.severidade] < SEV_RANK[r.min_severity]) {
-                resultados.push({ destinatario: r.nome, status: "abaixo_da_severidade_minima" });
-                continue;
-            }
-
-            if (!IGNORA_JANELA.includes(alerta.severidade) && !dentroDaJanela(r, agora)) {
-                await supabase.from("incident_notifications").insert({
-                    incident_id: incidentId,
-                    recipient_id: r.id,
-                    kind,
-                    status: "skipped_window",
-                });
-                resultados.push({ destinatario: r.nome, status: "skipped_window" });
-                continue;
-            }
-
-            if (await estourouORateLimit(supabase, r.id, teto)) {
-                await supabase.from("incident_notifications").insert({
-                    incident_id: incidentId,
-                    recipient_id: r.id,
-                    kind,
-                    status: "skipped_ratelimit",
-                });
-                resultados.push({ destinatario: r.nome, status: "skipped_ratelimit" });
-                continue;
-            }
-
-            const sender = await carregarSender(supabase, r.instance_id);
-            if (!sender) {
-                await supabase.from("incident_notifications").insert({
-                    incident_id: incidentId,
-                    recipient_id: r.id,
-                    kind,
-                    status: "failed",
-                    error_code: "sender_sem_token",
-                    error_message: "instância remetente sem meta_phone_number_id ou meta_access_token",
-                });
-                resultados.push({ destinatario: r.nome, status: "failed", motivo: "sender_sem_token" });
-                continue;
-            }
-
-            let res: SendResult & { via: "texto" | "template" | null };
-            if (resumoParams) {
-                const livre = await graphSend(sender, textPayload(r.telefone, resumoTexto(resumoParams)));
-                if (livre.ok) {
-                    res = { ...livre, via: "texto" };
-                } else {
-                    const tpl = await graphSend(
-                        sender,
-                        templatePayload(r.telefone, TPL_RESUMO, resumoParams),
-                    );
-                    res = tpl.ok
-                        ? { ...tpl, via: "template" }
-                        : {
-                            ok: false,
-                            errorCode: tpl.errorCode,
-                            errorMessage:
-                                `template: ${tpl.errorMessage} | texto livre: ${livre.errorCode} ${livre.errorMessage}`,
-                            via: null,
-                        };
-                }
-                await supabase.from("incident_notifications").insert({
-                    incident_id: incidentId,
-                    recipient_id: r.id,
-                    kind,
-                    status: res.ok ? "sent" : "failed",
-                    template_name: res.via === "template" ? TPL_RESUMO : null,
-                    wamid: res.wamid ?? null,
-                    error_code: res.errorCode ?? null,
-                    error_message: res.errorMessage ?? null,
-                });
-            } else {
-                res = await enviarAlerta(supabase, sender, r, alerta, incidentId, kind);
-            }
-
-            resultados.push({
-                destinatario: r.nome,
-                status: res.ok ? "sent" : "failed",
-                via: res.via,
-                wamid: res.wamid ?? null,
-                erro: res.ok ? null : `${res.errorCode}: ${res.errorMessage}`,
+        // A contabilidade do envio e a MESMA do despachante automatico: quem
+        // dispara pela mao (acao `notify`) tambem limpa a reserva, zera o backoff
+        // e grava o motivo da falha. Duas contabilidades divergentes foi o que
+        // deixou o incidente critico de 22/09 sem rastro nenhum.
+        if (incidentId) {
+            await supabase.rpc("incident_notification_done", {
+                p_incident_id: incidentId,
+                p_ok: r.enviados > 0 || r.elegiveis === 0,
+                p_event_count: eventCountNoEnvio,
+                p_error: r.erro,
             });
-
-            if (res.ok) enviados += 1;
         }
 
-        if (incidentId && enviados > 0) {
-            const { data: atual } = await supabase
-                .from("incidents")
-                .select("notified_count")
-                .eq("id", incidentId)
-                .maybeSingle();
-            await supabase
-                .from("incidents")
-                .update({
-                    last_notified_at: new Date().toISOString(),
-                    notified_count: (atual?.notified_count ?? 0) + enviados,
-                    notified_at_event_count: eventCountNoEnvio,
-                })
-                .eq("id", incidentId);
-        }
-
-        return json({ success: true, action, incident_id: incidentId, enviados, resultados });
+        return json({
+            success: true,
+            action,
+            incident_id: incidentId,
+            enviados: r.enviados,
+            resultados: r.resultados,
+        });
     } catch (e) {
         console.error("[alert-notify] erro inesperado:", (e as Error).message);
         return json(
