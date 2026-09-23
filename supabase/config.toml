@@ -220,6 +220,18 @@ verify_jwt = false
 [functions.admin-create-user]
 verify_jwt = false
 
+# As duas abaixo estao aqui com `true` EXPLICITO, e nao por omissao, porque o
+# padrao nao protege contra o dedo errado: um `functions deploy --no-verify-jwt`
+# desliga o portao e um redeploy SEM a flag nao o religa — o valor anterior fica
+# gravado no projeto. Declarado no arquivo, qualquer deploy pelo CLI restaura.
+# Nenhuma das duas depende so disto (a admin-2fa confere a sessao no corpo e a
+# enforce confere o x-service-key), mas portao aberto por engano nao vira rotina.
+[functions.admin-2fa]
+verify_jwt = true
+
+[functions.admin-n8n-enforce-settings]
+verify_jwt = true
+
 [functions.support-ai-chat]
 verify_jwt = false
 
