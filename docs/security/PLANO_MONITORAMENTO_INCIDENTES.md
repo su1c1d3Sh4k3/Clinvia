@@ -461,6 +461,24 @@ Pontos de chamada:
   respondem erro. As functions que respondem erro sem os helpers (levantamento na execução) entram
   em um segundo lote, com a lista no PR.
 
+> ❌ **Isto acima estava errado, e a execução (23/09) mostrou.** Das 22 da Etapa 1, só **5**
+> importam `_shared/api-errors.ts` (`api-token-usage`, `api-scheduling`, `api-availability`,
+> `api-public-booking`, `get-account-openai-key`) — nessas a cobertura veio de graça e bastou
+> declarar o componente. As outras **17** são webhooks e workers que respondem erro à mão, e cada
+> uma precisou de um `reportIncident` no ponto certo. Não havia atalho.
+>
+> Três achados da mesma passagem:
+> - `campaign-dispatch-worker` **não existe**; a function real é `campaign-dispatch`.
+> - `delivery-automation-worker` **não tem `catch` externo**. Em vez de embrulhar o handler inteiro
+>   (mudança de comportamento num cron de produção), foram instrumentados os dois pontos que
+>   realmente somem: a RPC de pick falhando — que derruba o worker inteiro e ainda responde
+>   `success: true` — e o desfecho terminal do job. A retentativa intermediária **não** reporta:
+>   encheria o painel com erro que o próprio backoff resolve.
+> - `sync-openai-usage` ficou **sem instrumentação de propósito**. Ela já grava o fracasso em
+>   `openai_sync_runs`, e o varredor do §3.3 transforma essa linha em incidente. Reportar nos dois
+>   lugares daria dois incidentes com fingerprint diferente para a mesma falha — e o caminho do
+>   varredor é melhor, porque também pega o caso em que a function nem chega a rodar.
+
 > ⚠️ **Impacto de deploy:** mexer em `_shared/api-errors.ts` obriga **redeploy de todas as
 > functions que importam `_shared`** (o bundler do Deno inclui `_shared` transitivamente).
 > São ~130 deploys. Isso **afeta produção** e por isso não acontece sem seu OK, conforme sua regra.
@@ -510,6 +528,19 @@ e `test-openai-token` (é um probe manual).
 
 Como o `_shared` é inlinado pelo bundler, instrumentar estas 20 = **20 deploys**, não 130.
 
+#### ✅ Executado em 23/09/2026 (`0968b3e`)
+Viraram **21 deploys**, não 20: com o OK dele entraram também `get-account-openai-key` e
+`approve-client` (aprovação travada = cliente novo sem acesso, e o rastro era só o `console.error`);
+`sync-openai-usage` saiu, por ficar coberta pelo varredor do §3.3.
+
+Conferido em produção, nesta ordem:
+1. 500 forçado em `api-public-booking` (`contact_id` que não é UUID → 22P02, leitura pura, zero
+   efeito colateral) **abriu** o evento `edge_function`.
+2. 400 de ação desconhecida na mesma function **não** abriu nada — a regra "só 5xx" segura o ruído.
+
+Não deu para usar `api-token-usage` como canário: `SCHEDULING_API_KEY` só existe no ambiente das
+edge functions, não está no `.env`, e trocar o segredo quebraria o n8n.
+
 ### 3.2 pg_cron — watcher
 Cron novo `cron-health-watch` (`5 * * * *`) lendo `cron.job_run_details` dos 26 jobs
 inventariados, e reportando três coisas:
@@ -530,12 +561,36 @@ Jobs de referência já inventariados: `openai-usage-sync-hourly` (jobid 42, `20
 - Fila de provisionamento: linha com `profiles.openai_provision_error` preenchido →
   `source: provisioning`, severidade `alta`.
 - `automation_send_queue` com 3 falhas (a regra de "Rejeitada" que já existe) → `media`.
-- `conversation_summary_queue` e `campaign-dispatch-worker` travados → `media`.
+- `conversation_summary_queue` e `campaign-dispatch` travados → `media`.
 - **Ponte com o que já existe:** `openai_alerts` (migration `20260922300000`, kinds
   `sync_failure|zero_usage|daily_anomaly`) **não** é duplicado nem migrado. O watcher lê linhas
   novas de `openai_alerts` e abre incidente correspondente, mapeando `severity 'critical'→'alta'`
   e `'warning'→'media'`. `openai_alerts` continua sendo a fonte da verdade do custo; `incidents`
   passa a ser a fonte única do *aviso*. E a regra permanece: **alerta nunca corta**.
+
+#### ✅ Executado em 23/09/2026 — migration `20260923150000`
+`public.incident_scan_db_sources(p_lookback, p_max_per_source)` + cron `incident-scan-db-sources`
+(`*/10 * * * *`). É **SQL puro**: o pg_cron executa direto, sem rede no caminho para falhar.
+Chave de desligar: `llm_platform_settings.incident_db_scan_enabled`.
+
+Por que varredor e não gatilho nas tabelas: gatilho roda dentro da transação de quem escreveu,
+então um erro na coleta derrubaria justamente o worker que só queria registrar que falhou. O
+varredor lê de fora e, no pior caso, atrasa 10 minutos.
+
+**A primeira passada achou uma falha real que ninguém tinha visto:** 182 resumos de conversa
+falharam entre 21/09 16:16 e 22/09 18:36, em 2 contas, com `OpenAI 429: you have no credits
+remaining`. Os 182 eventos colapsaram em **um** incidente (o agrupamento funciona), severidade
+`critica` vinda do catálogo — o palpite `media` do varredor não sobrescreveu, como projetado.
+Já normalizou sozinho: o último resumo `done` é de 23/09 00:58. As conversas daquela janela ficam
+sem resumo para sempre. Isto reforça o item ainda pendente do **alerta de saldo da organização**.
+
+Segunda passada: **0 eventos novos** — a idempotência por `request_id` está de pé.
+
+Os dois incidentes sintéticos dos testes (o curl do n8n e o 500 forçado em `api-public-booking`)
+foram marcados `resolved` com nota, para a aba não nascer com caso falso.
+
+Fontes vazias hoje, ligadas e esperando: `openai_alerts`, `openai_sync_runs`,
+`profiles.openai_provision_error`, `automation_send_queue`.
 
 ### 3.4 Erro de permissão em produção (`42501`)
 `describeDbError` já classifica erro do Postgres. O reporter marca
