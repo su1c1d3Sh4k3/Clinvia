@@ -105,8 +105,12 @@ serveMonitored("webhook-queue-receiver", async (req) => {
     if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
         EdgeRuntime.waitUntil(backgroundWork);
     } else {
-        // Fallback sem EdgeRuntime (desenvolvimento local)
-        backgroundWork.catch(() => {});
+        // Fallback sem EdgeRuntime (desenvolvimento local). O corpo ja tem
+        // try/catch proprio, entao so chega aqui erro DO tratador de erro —
+        // engolir esse era garantir que um defeito no `reportIncident` nunca
+        // fosse descoberto.
+        backgroundWork.catch((err) =>
+            console.error('[webhook-queue-receiver] falha ao tratar erro de fundo:', err));
     }
 
     return immediateResponse;

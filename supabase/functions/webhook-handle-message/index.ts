@@ -503,14 +503,32 @@ serveMonitored("webhook-handle-message", async (req) => {
         // final, antes do return. Mantém a mensagem sendo salva mesmo quando
         // WhatsApp CDN está lento (causa principal de drop silencioso ~8.5%).
         const backgroundTasks: Promise<any>[] = [];
+        // `Promise.allSettled` NUNCA rejeita — o `.catch` que existia aqui era
+        // codigo morto, e o silencio de verdade estava em ninguem LER os
+        // `rejected`. Download de midia, repasse pro n8n e sync de CRM podiam
+        // falhar todos e a function respondia 200. Continuam sem bloquear o
+        // INSERT da mensagem; passam a deixar rastro.
+        const relatarFalhasDeFundo = (rs: PromiseSettledResult<any>[]) => {
+            const caidas = rs.filter((r) => r.status === "rejected");
+            if (caidas.length === 0) return;
+            for (const r of caidas) {
+                console.error("[webhook-handle-message] tarefa de fundo falhou:",
+                    (r as PromiseRejectedResult).reason);
+            }
+            reportIncident({
+                route: "background_tasks",
+                message: `${caidas.length} de ${rs.length} tarefas de fundo falharam`,
+                error: (caidas[0] as PromiseRejectedResult).reason,
+                context: { falhas: caidas.length, total: rs.length },
+            });
+        };
         const flushBackgroundTasks = () => {
             if (backgroundTasks.length === 0) return;
+            const settled = Promise.allSettled(backgroundTasks).then(relatarFalhasDeFundo);
             if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime?.waitUntil) {
-                EdgeRuntime.waitUntil(Promise.allSettled(backgroundTasks));
-            } else {
-                // Fallback (dev local): apenas dispara, sem garantia de conclusão
-                Promise.allSettled(backgroundTasks).catch(() => { });
+                EdgeRuntime.waitUntil(settled);
             }
+            // Fallback (dev local): apenas dispara, sem garantia de conclusão
         };
 
         // ✅ INPUT VALIDATION
