@@ -123,6 +123,31 @@ WhatsApp via UAZAPI e Meta Cloud API, Instagram Direct.
 
 Responda SEMPRE em portugues do Brasil, direto, sem preambulo.
 
+NATUREZA DO COMPONENTE — leia antes de qualquer outra coisa.
+O contexto sempre traz uma linha "Natureza:". Ela decide o que o incidente significa:
+- Natureza SERVICO: o componente executa algo e o incidente significa que ele FALHOU.
+  Analise a falha.
+- Natureza DETECTOR: o componente vigia algo e o incidente significa que ele FUNCIONOU e
+  ACHOU alguma coisa. O defeito NAO esta nele. Analise o que foi detectado, no sistema
+  vigiado. Recomendar "revisar o detector" ou "validar o calculo do detector" e uma
+  inversao: se o numero dele estivesse errado, isso seria outro incidente. Trate o achado
+  como verdadeiro.
+- Natureza DESCONHECIDA: o componente nao esta catalogado. NAO afirme que ele falhou nem
+  que ele detectou. Descreva so o que o evento bruto mostra e baixe a confianca.
+
+REGRAS DO PRODUTO QUE VOCE NAO PODE CONTRARIAR.
+Sao decisoes de negocio ja tomadas, nao defeitos. Sugerir o contrario e pior do que nao
+responder, porque manda quem le desfazer algo que foi feito de proposito:
+1. Conta de cliente NAO tem teto de gasto de IA. O limite de gasto dos projetos da OpenAI
+   foi removido deliberadamente. O controle de custo desta plataforma e ALERTA, nunca
+   corte: cliente nunca pode parar de ser atendido por causa de valor. Nunca recomende
+   implementar limite, teto, spend limit, cota ou bloqueio por custo. Diga o que investigar
+   no consumo.
+2. O painel de custo do cliente mostra, de proposito, um valor ACIMA do custo do provedor
+   (margem de 30%). Numero do painel maior que a fatura da OpenAI nao e erro de calculo.
+Se a correcao que voce ia sugerir contraria uma destas regras, proponha o que fazer DENTRO
+da regra.
+
 Regras de severidade, nesta ordem exata:
 - critica: cliente final sem atendimento, dado em risco, ou cobranca quebrada.
 - alta: funcao importante fora do ar, mas existe contorno.
@@ -200,9 +225,18 @@ async function montarContexto(supabase: Db, inc: Record<string, unknown>) {
         `Componente: ${inc.component}`,
         `Origem do sinal: ${inc.source}`,
         info?.descricao ? `O que esse componente faz: ${info.descricao}` : null,
-        info?.natureza === "detector"
-            ? "ATENCAO: este componente e um DETECTOR. O incidente significa que ele FUNCIONOU e detectou algo, nao que ele falhou. Analise o que foi detectado."
-            : null,
+        // Sempre presente, inclusive no caso sem catalogo. A linha condicional
+        // anterior so aparecia para detector catalogado: o alerta de gasto
+        // anomalo de 23/09 caiu justamente no buraco (o emissor gravava um nome
+        // fora do catalogo), a IA nao recebeu natureza nenhuma, tratou uma
+        // deteccao como falha do detector e mandou criar teto de gasto.
+        `Natureza: ${
+            info?.natureza === "detector"
+                ? "DETECTOR"
+                : info?.natureza === "servico"
+                ? "SERVICO"
+                : "DESCONHECIDA (componente sem linha no catalogo)"
+        }`,
         `Ocorrencias: ${inc.event_count} (primeira em ${inc.first_seen}, ultima em ${inc.last_seen})`,
         ultimo.environment ? `Ambiente: ${ultimo.environment}` : null,
         ultimo.error_name ? `Nome do erro: ${limpar(ultimo.error_name, 200)}` : null,
