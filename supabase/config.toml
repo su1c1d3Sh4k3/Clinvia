@@ -160,9 +160,6 @@ verify_jwt = false
 [functions.instagram-refresh-token]
 verify_jwt = false
 
-[functions.instagram-enrich-profiles]
-verify_jwt = false
-
 [functions.instagram-log-webhook]
 verify_jwt = false
 
