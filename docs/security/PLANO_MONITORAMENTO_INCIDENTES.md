@@ -663,6 +663,38 @@ incidentes `analyzed_at is null`, mais um reprocesso quando `event_count` cruza 
   `owner_id` = conta da plataforma (Clinbia) — é consumo interno, **não** é rateado para cliente
   nenhum e **não** entra em relatório de cliente.
 
+### 4.1 Regra de recorrência — APLICADA em 23/09/2026 (`20260923160000_incident_recorrencia.sql`)
+
+Um erro idêntico passa pela IA **uma vez**. O controle mora no banco, como o fingerprint: a
+reserva é feita no próprio `UPDATE` que devolve a linha (`for update skip locked`), então rajada
+simultânea não gera duas análises.
+
+| momento | IA | WhatsApp |
+|---|---|---|
+| 1ª ocorrência do fingerprint | analisa | avisa (`kind='individual'`) |
+| repetições dentro de `incident_notify_cooldown_min` (60) | não | não — só `event_count`/`last_seen` sobem |
+| passada a janela, erro continuou | **não** | uma mensagem `kind='recorrencia'` com "N ocorrências desde HH:MM" |
+| mensagem de erro mudou (fingerprint novo) | analisa | avisa |
+| você resolve e o erro volta | analisa de novo (contexto mudou) | avisa |
+| resolvido por automação e volta dentro de `incident_analyze_cooldown_min` (60) | copia a análise anterior, custo zero (`analysis_reused_from`) | avisa |
+| incidente reaberto (resolved → open) | `analyzed_at`, contadores de aviso e reserva zerados: analisa de novo | avisa |
+
+Funções: `incident_claim_for_analysis(limit)`, `incident_finish_analysis(id, jsonb)`,
+`incident_claim_for_notification(limit)` — as três só para `service_role`.
+Distinguir "resolvido por você" de "resolvido por automação" é `resolved_by is null`: o RPC
+`admin_set_incident_status` carimba `auth.uid()` quando uma pessoa resolve.
+
+**`alert_max_per_hour` não é consumido por evento suprimido** — evento suprimido não chega ao
+notificador, logo não gera linha em `incident_notifications`, e a cota é contada de lá.
+
+Contadores sobem **no momento da reserva**, não depois do envio: é o que impede dois avisos do
+mesmo incidente em execuções concorrentes. O preço é que um envio que falhe não é retentado antes
+da próxima janela — aparece no painel como `envios_falhos`.
+
+Contrafactual medido nas 48h reais do banco (23/09, 184 eventos em 3 incidentes):
+**184 análises e 184 avisos no modelo antigo → 3 análises e 3 avisos na regra nova.** Os 182
+resumos que morreram no 429 da OpenAI viram **1**.
+
 ---
 
 ## 5. Envio e agrupamento — `alert-notify`
@@ -673,7 +705,7 @@ Cron `alert-dispatch` (`*/2 * * * *`) + resumo (`0 */2 * * *`).
 |---|---|
 | incidente novo `critica` ou `alta` | envio imediato, template 1 |
 | incidente novo `media` ou `baixa` | entra no resumo de 2h; **não envia se não houver nada** |
-| incidente aberto que continua | novo aviso só se `now() - last_notified_at >= 1h` **ou** `event_count - notified_at_event_count >= 20`; `{{3}}` = `"continua acontecendo: N ocorrências"` |
+| incidente aberto que continua | quem decide é `incident_claim_for_notification` (§4.1): só depois de `incident_notify_cooldown_min` **e** se `event_count > notified_at_event_count`; `{{3}}` = `"continua acontecendo: N ocorrências desde HH:MM"`, **sem nova análise** |
 | fora da janela do destinatário | `status: skipped_window`, fica no painel; entra no primeiro envio dentro da janela |
 | acima do rate limit | `status: skipped_ratelimit` + **uma** mensagem de resumo dizendo quantos ficaram no painel |
 

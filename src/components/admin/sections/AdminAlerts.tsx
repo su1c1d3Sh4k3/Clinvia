@@ -98,7 +98,7 @@ function Detalhe({ incidentId }) {
                                 <p className="text-[11px] text-gray-500">
                                     {quando(e.received_at)} · {e.source} · {e.error_name || "sem nome"}
                                 </p>
-                                <p className="text-xs text-gray-300 break-words">{e.message}</p>
+                                <p className="text-xs text-gray-300 break-words">{e.error_message}</p>
                             </div>
                         ))}
                     </div>
@@ -401,9 +401,19 @@ export default function AdminAlerts({ canEdit }: { canEdit: boolean }) {
                                             {i.event_count}x · de {quando(i.first_seen)} a {quando(i.last_seen)} ·{" "}
                                             {i.conta}
                                             {i.contas_afetadas > 1 && ` (+${i.contas_afetadas - 1} contas)`}
-                                            {i.last_notified_at
-                                                ? ` · avisado ${quando(i.last_notified_at)}`
-                                                : " · nunca avisado"}
+                                        </p>
+                                        {/* a recorrência tem que ser legível SEM abrir o incidente:
+                                            é ela que explica por que só chegou uma mensagem. */}
+                                        <p className="text-[11px] text-gray-500">
+                                            análise IA:{" "}
+                                            {i.analyzed_at ? quando(i.analyzed_at) : "ainda não"}
+                                            {i.analise_reaproveitada && " (reaproveitada)"} ·{" "}
+                                            {i.notified_count > 0
+                                                ? `${i.notified_count} aviso(s), último ${quando(i.last_notified_at)}`
+                                                : "nunca avisado"}
+                                            {i.ocorrencias_desde_ultimo_aviso > 0 &&
+                                                i.notified_count > 0 &&
+                                                ` · +${i.ocorrencias_desde_ultimo_aviso} desde o último aviso`}
                                         </p>
                                     </div>
                                     <ChevronDown
@@ -513,6 +523,22 @@ export default function AdminAlerts({ canEdit }: { canEdit: boolean }) {
 
                     <label className="flex items-center justify-between gap-3">
                         <span className="text-sm text-gray-300">
+                            Varrer falhas do banco
+                            <span className="block text-[11px] text-gray-500">
+                                Filas e crons que falharam viram incidente sozinhos.
+                            </span>
+                        </span>
+                        <Switch
+                            checked={!!cfg.incident_db_scan_enabled}
+                            disabled={!canEdit}
+                            onCheckedChange={(v) =>
+                                mudarChave.mutate({ key: "incident_db_scan_enabled", value: v })
+                            }
+                        />
+                    </label>
+
+                    <label className="flex items-center justify-between gap-3">
+                        <span className="text-sm text-gray-300">
                             Teto por hora
                             <span className="block text-[11px] text-gray-500">
                                 O excedente vira uma mensagem de resumo, não some.
@@ -526,6 +552,54 @@ export default function AdminAlerts({ canEdit }: { canEdit: boolean }) {
                             disabled={!canEdit}
                             onBlur={(e) =>
                                 mudarChave.mutate({ key: "alert_max_per_hour", value: e.target.value })
+                            }
+                            className="w-20 bg-gray-900 border-gray-700 text-gray-200"
+                        />
+                    </label>
+
+                    <label className="flex items-center justify-between gap-3">
+                        <span className="text-sm text-gray-300">
+                            Silêncio após avisar (min)
+                            <span className="block text-[11px] text-gray-500">
+                                Na janela o erro repetido só conta. Depois sai UMA mensagem de
+                                recorrência, sem nova análise.
+                            </span>
+                        </span>
+                        <Input
+                            type="number"
+                            min={0}
+                            max={10080}
+                            defaultValue={cfg.incident_notify_cooldown_min ?? 60}
+                            disabled={!canEdit}
+                            onBlur={(e) =>
+                                mudarChave.mutate({
+                                    key: "incident_notify_cooldown_min",
+                                    value: e.target.value,
+                                })
+                            }
+                            className="w-20 bg-gray-900 border-gray-700 text-gray-200"
+                        />
+                    </label>
+
+                    <label className="flex items-center justify-between gap-3">
+                        <span className="text-sm text-gray-300">
+                            Reaproveitar análise (min)
+                            <span className="block text-[11px] text-gray-500">
+                                Erro idêntico que volta nesse prazo copia a análise. Se você tinha
+                                dado por resolvido, a IA analisa de novo.
+                            </span>
+                        </span>
+                        <Input
+                            type="number"
+                            min={0}
+                            max={10080}
+                            defaultValue={cfg.incident_analyze_cooldown_min ?? 60}
+                            disabled={!canEdit}
+                            onBlur={(e) =>
+                                mudarChave.mutate({
+                                    key: "incident_analyze_cooldown_min",
+                                    value: e.target.value,
+                                })
                             }
                             className="w-20 bg-gray-900 border-gray-700 text-gray-200"
                         />
