@@ -15,7 +15,8 @@
  *   }
  */
 
-import { HEADER_JA_REPORTADO, reportIncident } from "./report-incident.ts";
+import { chavesConfiguradas } from "./api-keys.ts";
+import { HEADER_JA_REPORTADO, reportIncident, reportInputError } from "./report-incident.ts";
 
 export interface ApiErrorInit {
     status: number;
@@ -94,7 +95,42 @@ export function describeDbError(operation: string, error: unknown): string {
     return `Falha ao ${operation}: ${detail || "o banco recusou a operação sem detalhar o motivo"}${code}`;
 }
 
-/** Resposta 500 para erro de banco, já com o motivo real em `details`. */
+/**
+ * SQLSTATEs que só acontecem porque a ENTRADA está errada. LISTA FECHADA, e
+ * fechada de propósito — decisão do user em 23/09/2026.
+ *
+ * O que está aqui são erros de *data exception*: o valor chegou com formato que
+ * o Postgres não consegue nem interpretar. Não há como o nosso código produzir
+ * isso sozinho a partir de entrada válida.
+ *
+ * O que NÃO está aqui, e não entra sem análise caso a caso:
+ *   23503 (FK) e 23505 (unique). Às vezes é o chamador mandando um id que não
+ *   existe; às vezes somos nós gravando duas vezes o que deveria ser único. Os
+ *   dois casos têm o mesmo código e desfechos opostos — tratar como 400 esconde
+ *   defeito nosso.
+ *
+ * RESSALVA CONHECIDA sobre 23514 (CHECK): ele também dispara quando somos NÓS
+ * que calculamos um valor fora da regra — foi assim que o insert de
+ * `skipped_severity` falhou em silêncio em 23/09. Por isso o 400 aqui nunca é
+ * mudo: toda ocorrência é contada em `entrada:<function>` e a repetição vira
+ * incidente pelo detector de taxa.
+ */
+const SQLSTATE_ENTRADA_INVALIDA: Record<string, string> = {
+    "22P02": "um dos valores enviados não tem o formato que o banco espera (texto onde se espera um identificador UUID, um número ou um valor de lista)",
+    "22007": "a data/hora enviada não está num formato que o banco reconheça",
+    "22008": "a data/hora enviada está fora da faixa aceita",
+    "23514": "um dos valores enviados viola uma regra de validação da tabela",
+};
+
+/**
+ * Resposta para erro de banco, já com o motivo real em `details`.
+ *
+ * 500 quando o defeito é nosso; **400 quando o SQLSTATE prova que a entrada é
+ * que estava errada** — nesse caso não abre incidente do componente, só conta
+ * (ver `reportInputError`). A premissa antiga deste arquivo, "erro de banco é
+ * sempre defeito nosso", era falsa e produziu incidente ALTA falso toda vez que
+ * o agente do n8n mandou um rótulo humano onde a API pedia UUID.
+ */
 export function dbErrorResponse(
     headers: Record<string, string>,
     code: string,
@@ -102,7 +138,26 @@ export function dbErrorResponse(
     error: unknown,
     request?: Request,
 ): Response {
-    // Erro de banco é sempre defeito nosso (ou regressão de RLS) ⇒ reporta.
+    const e = error as Record<string, unknown> | null;
+    const sqlstate = String(e?.code ?? "");
+    const explicacao = SQLSTATE_ENTRADA_INVALIDA[sqlstate];
+    const cru = String(e?.message ?? error ?? "");
+
+    if (explicacao) {
+        // Conta, agrupa, não acorda ninguém.
+        reportInputError({ route: code, sqlstate, detalhe: cru, request });
+
+        return apiError(headers, {
+            status: 400,
+            code,
+            request,
+            message: `Falha ao ${operation}: ${explicacao}. Corrija o valor e repita a chamada. Detalhe do banco: ${cru || "sem detalhe"} [${sqlstate}]`,
+            details: cru || undefined,
+            extra: { input_error: true, sqlstate },
+        });
+    }
+
+    // Erro de banco que NÃO é de formato: defeito nosso (ou regressão de RLS).
     // O `error` cru vai junto para o reporter porque é dele que sai o `code` do
     // Postgres — é o `42501` ali dentro que aciona a regra de RLS no banco.
     reportIncident({ route: code, httpCode: 500, error, message: describeDbError(operation, error), request });
@@ -112,7 +167,7 @@ export function dbErrorResponse(
         code,
         request,
         message: describeDbError(operation, error),
-        details: String((error as Record<string, unknown>)?.message ?? error ?? ""),
+        details: cru,
     });
 }
 
@@ -157,6 +212,11 @@ export function unexpectedErrorResponse(
     }
     // erro do supabase-js/PostgREST vazando pelo catch: tem code/details/hint
     if (e && (e.code || e.details || e.hint) && e.message) {
+        // Mesma lista fechada do `dbErrorResponse`: um 22P02 que escapou pelo
+        // catch externo continua sendo entrada inválida, não defeito nosso.
+        if (SQLSTATE_ENTRADA_INVALIDA[String(e.code ?? "")]) {
+            return dbErrorResponse(headers, "database_error", context, error, request);
+        }
         reportIncident({ route: "database_error", httpCode: 500, error, message: describeDbError(context, error), request });
         return apiError(headers, {
             status: 500,
@@ -183,17 +243,20 @@ export function unexpectedErrorResponse(
 }
 
 /**
- * Valida o `x-api-key` contra `SCHEDULING_API_KEY`.
- * Distingue os 3 casos (segredo não configurado / header ausente / chave errada)
- * — "Unauthorized" seco não diz qual é o problema.
+ * Valida o `x-api-key` contra as chaves registradas em `_shared/api-keys.ts`
+ * (uma por origem: n8n, cron, edge interna, integração; mais a legada
+ * `SCHEDULING_API_KEY`, que continua aceita).
+ *
+ * Distingue os 3 casos (nenhum segredo configurado / header ausente / chave
+ * errada) — "Unauthorized" seco não diz qual é o problema.
  */
 export function requireApiKey(req: Request, headers: Record<string, string>): Response | null {
-    const envApiKey = Deno.env.get("SCHEDULING_API_KEY");
-    if (!envApiKey) {
+    const registro = chavesConfiguradas();
+    if (registro.length === 0) {
         return apiError(headers, {
             status: 500,
             code: "api_key_not_configured",
-            message: "O segredo SCHEDULING_API_KEY não está configurado nesta edge function. Configure-o em Supabase > Edge Functions > Secrets e faça o deploy novamente.",
+            message: "Nenhuma chave de API está configurada nesta edge function. Configure API_KEY_N8N (ou a legada SCHEDULING_API_KEY) em Supabase > Edge Functions > Secrets e faça o deploy novamente.",
         });
     }
 
@@ -205,11 +268,11 @@ export function requireApiKey(req: Request, headers: Record<string, string>): Re
             message: "Header x-api-key ausente. Envie o header x-api-key com a chave da API de agendamento.",
         });
     }
-    if (apiKey !== envApiKey) {
+    if (!registro.some((c) => c.valor === apiKey)) {
         return apiError(headers, {
             status: 401,
             code: "api_key_invalid",
-            message: "Header x-api-key inválido — a chave enviada não confere com a configurada nesta conta.",
+            message: "Header x-api-key inválido — a chave enviada não confere com nenhuma das configuradas.",
         });
     }
     return null;

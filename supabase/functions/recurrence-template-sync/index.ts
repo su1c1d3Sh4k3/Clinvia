@@ -6,6 +6,7 @@ import {
     convertRecurrenceMessageToMeta,
     parseRecurrenceTemplateVersion,
 } from "../_shared/recurrence-meta-template.ts";
+import { chaveDaRequisicao } from "../_shared/api-keys.ts";
 import { resolveAccountDefaultMessage } from "../_shared/recurrence-default-messages.ts";
 import { fetchProvider } from "../_shared/provider-errors.ts";
 
@@ -61,10 +62,12 @@ serveMonitored("recurrence-template-sync", async (req) => {
         const body = await req.json();
 
         // ── Autenticação: interna (x-api-key + user_id) ou JWT team-aware ──
+        // Vale QUALQUER chave registrada em `_shared/api-keys.ts`, nao so a
+        // legada: desde 23/09/2026 cada chamador tem a sua (quem chama daqui e o
+        // `meta-embedded-signup`, com API_KEY_EDGE). Comparar contra uma chave
+        // fixa faria a troca da chave do chamador virar 401 silencioso.
         let ownerId: string | null = null;
-        const apiKey = req.headers.get("x-api-key");
-        const internalKey = Deno.env.get("SCHEDULING_API_KEY");
-        if (apiKey && internalKey && apiKey === internalKey) {
+        if (chaveDaRequisicao(req)) {
             ownerId = typeof body?.user_id === "string" ? body.user_id : null;
             if (!ownerId) return json({ success: false, error: "Missing field: user_id" }, 400);
         } else {

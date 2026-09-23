@@ -36,7 +36,14 @@ async function submitRecurrenceDefaults(ownerId: string) {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "x-api-key": Deno.env.get("SCHEDULING_API_KEY") ?? "",
+                    // API_KEY_EDGE, nao a legada: esta chamada e edge->edge, e
+                    // e por chamadas como esta que a legada nao conseguia
+                    // declarar origem (servia n8n, nos e terceiro ao mesmo
+                    // tempo). Fallback para a legada enquanto o segredo novo
+                    // nao existir em todos os ambientes.
+                    "x-api-key": Deno.env.get("API_KEY_EDGE")
+                        ?? Deno.env.get("SCHEDULING_API_KEY") ?? "",
+                    "x-origin": "edge_interna",
                 },
                 body: JSON.stringify({ default: true, user_id: ownerId }),
             },

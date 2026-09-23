@@ -19,6 +19,7 @@
 // menos no caminho de um codigo que precisa funcionar quando as coisas ja estao
 // quebradas.
 
+import { chaveDaRequisicao } from "./api-keys.ts";
 import { requisicaoAtual } from "./request-context.ts";
 
 /** Preenchido por `setIncidentComponent` no topo da function instrumentada. */
@@ -67,10 +68,12 @@ const ORIGENS: readonly string[] = [
  * e leitura de indicio e sai com `inferida: true`, porque no dia em que a
  * inferencia estiver errada e preciso saber que era inferencia.
  *
- * Nao adivinha `ia_n8n` por chave de API: `SCHEDULING_API_KEY` e a mesma chave
- * usada por integracao de terceiro nos mesmos endpoints. Chutar ali daria uma
- * distribuicao bonita e errada — `nao_identificada` e resposta melhor que
- * palpite bem-apresentado.
+ * A CHAVE DE API E DECLARACAO, NAO PALPITE — desde 23/09/2026. Antes havia uma
+ * chave so (`SCHEDULING_API_KEY`) servindo n8n, chamada interna e terceiro ao
+ * mesmo tempo, e por isso este arquivo se recusava a deduzir origem dela. Agora
+ * ha uma chave POR ORIGEM (`_shared/api-keys.ts`): quem se autentica com a chave
+ * do n8n E o n8n. A legada continua aceita e cai em `ia_n8n` por eliminacao —
+ * marcada `inferida: true`, porque eliminacao ainda e deducao.
  */
 export function origemDaRequisicao(
     req?: Request,
@@ -85,7 +88,12 @@ export function origemDaRequisicao(
         return { origem: declarada as IncidentOrigem, inferida: false };
     }
 
-    // 2. Indicios, do mais conclusivo para o menos.
+    // 2. A chave apresentada. Vem antes dos indicios porque e autenticacao: o
+    //    chamador provou quem e, nao pareceu quem e.
+    const chave = chaveDaRequisicao(req);
+    if (chave) return { origem: chave.origem, inferida: !chave.declarada };
+
+    // 3. Indicios, do mais conclusivo para o menos.
     //    A Meta e a UAZAPI assinam o corpo; so um webhook de terceiro faz isso.
     if (h.get("x-hub-signature-256") || h.get("x-hub-signature")) {
         return { origem: "webhook_externo", inferida: true };
@@ -154,6 +162,48 @@ function textoDoErro(err: unknown): string {
         e.code ? `[${e.code}]` : "",
     ].filter(Boolean);
     return partes.join(" — ");
+}
+
+/**
+ * Erro de ENTRADA: o chamador mandou um valor que o Postgres recusou pelo
+ * formato (22P02, 22007, 22008, 23514). Nao e defeito nosso, entao nao pode
+ * entrar como falha do componente e acordar ninguem.
+ *
+ * Mas tambem NAO pode sumir. `report: false` puro viraria cegueira, e foi
+ * exatamente essa cegueira que deixou o bug do `appointment_id` viver de 16/09
+ * a 23/09/2026: cada ocorrencia individual era irrelevante, o padrao era o
+ * defeito.
+ *
+ * Por isso vai para uma familia PROPRIA de componente, `entrada:<function>`,
+ * catalogada com `somente_painel = true`: conta, agrupa e aparece no painel, e
+ * nunca vira mensagem sozinha. Quem grita e o detector de taxa
+ * `entrada_invalida_scan`, que olha a REPETICAO e nao o evento.
+ */
+export function reportInputError(init: {
+    /** codigo/rota do chamador (ex.: `cancel_appointment_failed`) */
+    route?: string;
+    /** SQLSTATE do Postgres — entra no agrupamento */
+    sqlstate: string;
+    /** o valor recusado / mensagem crua do banco, so para o contexto */
+    detalhe?: string;
+    request?: Request;
+}): void {
+    if (!componenteAtual) return;
+
+    reportIncident({
+        component: `entrada:${componenteAtual}`,
+        route: `${init.route ?? "rota_nao_informada"}:${init.sqlstate}`,
+        httpCode: 400,
+        // Mensagem ESTAVEL de proposito. O valor recusado muda a cada chamada e,
+        // se entrasse aqui, entraria no fingerprint — daria um incidente por
+        // valor errado em vez de um por defeito, que e o oposto de contar.
+        message: `entrada invalida [${init.sqlstate}] em ${init.route ?? "rota nao informada"}`,
+        context: {
+            sqlstate: init.sqlstate,
+            detalhe: init.detalhe ? init.detalhe.slice(0, 300) : undefined,
+        },
+        request: init.request,
+    });
 }
 
 /**

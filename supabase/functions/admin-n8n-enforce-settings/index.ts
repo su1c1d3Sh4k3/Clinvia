@@ -183,6 +183,54 @@ serveMonitored("admin-n8n-enforce-settings", async (req) => {
             return json({ success: true, action, aceitas: dentro, recusadas: fora });
         }
 
+        // put_probe — responde UMA pergunta: um PUT que OMITE `settings` preserva o
+        // `settings` que ja esta gravado, ou zera?
+        //
+        // Isso decide se da para rotacionar a chave nos 127 nos por API. Se PUT
+        // omitindo preserva, o unico dano possivel de um PUT e o que eu NAO mandar
+        // de volta — e ai a rotacao vira uma operacao mensuravel, com backup antes.
+        // Se zera, a API esta fora de questao e sobra a mao.
+        //
+        // Roda num workflow DESCARTAVEL criado aqui e apagado no fim: nenhum fluxo
+        // real e tocado, nem o sandbox.
+        if (action === "put_probe") {
+            const nome = `zz-teste-put-probe-${Date.now()}`;
+            const criado = await n8n("/workflows", N8N_API_KEY, {
+                method: "POST",
+                body: JSON.stringify({
+                    name: nome,
+                    nodes: [{
+                        parameters: {}, id: crypto.randomUUID(), name: "No Operation",
+                        type: "n8n-nodes-base.noOp", typeVersion: 1, position: [0, 0],
+                    }],
+                    connections: {},
+                    settings: { executionOrder: "v1", executionTimeout: 3607, callerPolicy: "workflowsFromSameOwner" },
+                }),
+            });
+
+            const id = criado.id;
+            const passos: Record<string, unknown> = { id, nome, criado_settings: criado.settings };
+            try {
+                // PUT mandando so nome/nodes/connections — `settings` OMITIDO.
+                let semSettings: unknown = null;
+                try {
+                    await n8n(`/workflows/${id}`, N8N_API_KEY, {
+                        method: "PUT",
+                        body: JSON.stringify({ name: nome, nodes: criado.nodes, connections: criado.connections }),
+                    });
+                    semSettings = "PUT aceito";
+                } catch (e) {
+                    semSettings = `PUT recusado: ${(e as Error).message}`;
+                }
+                passos.put_sem_settings = semSettings;
+                passos.depois_do_put_sem_settings = (await n8n(`/workflows/${id}`, N8N_API_KEY)).settings;
+            } finally {
+                // Artefato meu, criado nesta chamada: some junto. Nada do dele.
+                await n8n(`/workflows/${id}`, N8N_API_KEY, { method: "DELETE" }).catch(() => {});
+            }
+            return json({ success: true, action, passos });
+        }
+
         if (action === "dump") {
             const pedidos: string[] = Array.isArray(body.ids) ? body.ids : [];
             const saida: Record<string, unknown> = {};

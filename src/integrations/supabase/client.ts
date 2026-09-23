@@ -14,5 +14,13 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     storage: localStorage,
     persistSession: true,
     autoRefreshToken: true,
-  }
+  },
+  global: {
+    // Origem DECLARADA do incidente (23/09/2026). Sem isto o monitoramento
+    // deduz "front" pelo formato do JWT ou pelo Referer e marca
+    // `origem_inferida = true`. Uma linha aqui cobre TODA chamada do app —
+    // PostgREST e edge function — porque o supabase-js aplica estes headers
+    // em ambos.
+    headers: { "x-origin": "front" },
+  },
 });
