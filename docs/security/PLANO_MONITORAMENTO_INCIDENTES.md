@@ -192,6 +192,37 @@ Fora da janela o texto livre falha com `131047` e o template assume — que é e
 alerta às 3h da manhã. Os **dois** erros vão para `incident_notifications.error_message` quando
 ambos falham: sem o erro do texto livre não dá para distinguir "janela fechou" de "token errado".
 
+### 0.6 A categoria é imutável — por isso existem as `_v2` (23/09/2026)
+
+As `_v1` ficaram registradas como **MARKETING**, não `UTILITY`. Isso importa: `MARKETING` está
+sujeito a opt-out do destinatário e a throttling por qualidade, ou seja, a Meta pode engolir
+justamente o aviso de que o sistema caiu.
+
+Três tentativas contra a Graph v22, todas com o token da própria WABA:
+
+| tentativa | resultado |
+| --- | --- |
+| `POST /{template_id}` com `category: UTILITY` | `400` · code `100` · subcode **`3835031`** — "Não é possível atualizar uma categoria de modelo aprovada" |
+| `POST /{template_id}` com `category` + `components` juntos | mesmo `3835031` |
+| `POST /{template_id}` só com `components`, em template **PENDING** | **`200 {"success": true}`** |
+
+Ou seja: **corpo é editável a qualquer momento, categoria não é editável nunca.** O único caminho
+para corrigir a categoria é criar de novo com outro nome.
+
+Foram criadas `sys_alerta_incidente_v2` e `sys_alerta_resumo_v2`, corpo idêntico ao das `_v1`, e a
+Meta aceitou as duas como `UTILITY`. O detalhe que decide: **não enviar `allow_category_change`**.
+Com esse campo em `true` a Meta reclassifica em silêncio (foi o que produziu as `_v1` em MARKETING);
+sem ele, ou ela aceita a categoria pedida, ou recusa com motivo explícito. `alert-notify` passou a
+apontar para as `_v2`.
+
+As `_v1` continuam lá, em MARKETING e sem uso — apagar é um clique em Templates, mas nada quebra se
+ficarem.
+
+**Consequência para o app inteiro:** a trava "só edita APPROVED/REJECTED/PAUSED" existia no front
+(`src/pages/Templates.tsx`) e na edge fn (`meta-template-manage`, action `edit`) e estava errada —
+barrava exatamente o momento em que mais se quer corrigir o texto, logo depois de enviar para
+revisão. `PENDING` entrou nas duas listas.
+
 ---
 
 ## 1. Modelo de dados

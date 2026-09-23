@@ -352,10 +352,13 @@ serve(async (req) => {
                 throw new Error("Template não encontrado — sincronize os templates primeiro");
             }
 
-            // Meta só permite editar templates APPROVED, REJECTED ou PAUSED
+            // PENDING é editável: conferido direto na Graph v22 em 23/09/2026
+            // (POST /{template_id} com components devolveu 200 num template em
+            // revisão). A regra antiga barrava justamente o momento em que mais
+            // se quer corrigir o texto — logo depois de enviar.
             const st = (localTpl.status || "").toUpperCase();
-            if (!["APPROVED", "REJECTED", "PAUSED"].includes(st)) {
-                throw new Error(`Template com status ${st} não pode ser editado (aguarde a revisão da Meta)`);
+            if (!["APPROVED", "REJECTED", "PAUSED", "PENDING"].includes(st)) {
+                throw new Error(`Template com status ${st} não pode ser editado`);
             }
 
             // Exemplos para variáveis do BODY (exigido pela Meta)

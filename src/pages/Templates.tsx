@@ -1159,7 +1159,11 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
                                                             <Send className="h-3 w-3 mr-1" /> Enviar
                                                         </Button>
                                                     )}
-                                                    {['APPROVED', 'REJECTED', 'PAUSED'].includes(tpl.status?.toUpperCase()) && (
+                                                    {/* PENDING entra na lista: conferido na Graph v22 em 23/09/2026 —
+                                                        a Meta aceita editar template em revisão (a revisão recomeça
+                                                        com o texto novo). O que ela NÃO aceita, em estado nenhum, é
+                                                        trocar a categoria; para isso só apagando e recriando. */}
+                                                    {['APPROVED', 'REJECTED', 'PAUSED', 'PENDING'].includes(tpl.status?.toUpperCase()) && (
                                                         <Button size="sm" variant="outline" className="h-7 text-xs"
                                                             onClick={(e) => { e.stopPropagation(); openEditDialog(tpl); }}>
                                                             <Pencil className="h-3 w-3 mr-1" /> Editar

@@ -548,6 +548,8 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "por que o link de agendamento do Instagram pede nome e telefone",
             "em qual contato fica o agendamento feito por um cliente que veio do Instagram",
             "minha conexao sumiu da lista Conexoes do menu lateral",
+            "como editar um template que ainda esta pendente / em revisao",
+            "como mudar a categoria do template de Marketing para Utilidade",
         ],
         steps: [
             "Abra Conexoes no menu lateral (aba Conexoes).",
@@ -570,6 +572,8 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "A mensagem de Confirmacao 24h nao cita mais o nome do profissional (agora usa nome do cliente, horario, clinica e servico). Motivo: o sistema so guarda o nome da SALA do agendamento, e em sala avulsa (Sala 2, Consultorio 1) o paciente recebia 'procedimento de Botox com Sala 2'. No WhatsApp nao oficial a mudanca ja vale para todos. No oficial vale para os templates enviados a aprovacao a partir de agora: numeros ja conectados seguem com o template aprovado pela Meta e, para tirar o profissional, e preciso editar o template na aba Templates de Conexoes (o template volta para revisao da Meta e a confirmacao fica parada ate reaprovar).",
             "Sem o campo 'Numero informado pela IA para contato' preenchido no card da conta do Instagram, a IA NAO consegue gerar link de agendamento para conversas do Direct (o Instagram nao informa o telefone do cliente, entao o link nao sabe em qual conexao registrar).",
             "O link de agendamento aberto por um cliente do Instagram pede nome completo e telefone (mascara 55 (DDD) 9 XXXX-XXXX) antes de mostrar servicos ou agendamentos. Com o telefone, o sistema acha o contato de WhatsApp pelos ultimos 8 digitos, cria se nao existir, atualiza o nome com o que o cliente digitou e vincula o perfil do Instagram a ele. O agendamento fica SEMPRE no contato de WhatsApp, nunca no do Instagram.",
+            "Template PENDENTE tambem pode ser editado: o botao Editar aparece nos status Aprovado, Rejeitado, Pausado e Pendente. Se o cliente percebeu o erro logo depois de enviar para aprovacao, ele corrige na hora — a revisao recomeca do zero com o texto novo. Antes o botao sumia enquanto estava pendente.",
+            "A CATEGORIA do template (Marketing, Utilidade, Autenticacao) e definida na criacao e a Meta NAO aceita trocar depois, nem com o template pendente (erro 'Nao e possivel atualizar uma categoria de modelo aprovada'). O unico jeito e criar outro template, com outro nome, na categoria certa, e apagar o antigo. Vale o esforco quando o template e operacional: Marketing pode ser bloqueado pelo cliente (opt-out) e e freado quando a qualidade do numero cai; Utilidade passa nos dois casos e custa bem menos.",
             "A lista 'Conexoes' no rodape do menu lateral mostra somente as conexoes ONLINE (WhatsApp e Instagram). Conexao que sumiu de la esta desconectada — reconecte pela pagina Conexoes, que e onde aparece o status completo.",
             "O card da conta do Instagram NAO escolhe mais a fila (o campo foi removido): a fila segue a mesma regra do WhatsApp. Direct novo entra em 'Atendimento IA' quando o switch geral da IA e o switch da IA daquela conta estao ligados, e em 'Atendimento Humano' quando qualquer um dos dois esta desligado. Desligar a IA da conta devolve as conversas abertas dela para a fila humana na hora.",
         ],

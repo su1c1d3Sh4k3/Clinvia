@@ -37,8 +37,12 @@ const corsHeaders = {
 const GRAPH_API = "https://graph.facebook.com/v22.0";
 const PAINEL_URL = "https://app.clinbia.ai/admin?tab=alertas";
 
-const TPL_INCIDENTE = "sys_alerta_incidente_v1";
-const TPL_RESUMO = "sys_alerta_resumo_v1";
+// v2 porque a categoria de um template e imutavel: as v1 foram registradas como
+// MARKETING (a Meta reclassificou na criacao) e MARKETING esta sujeito a opt-out
+// e a throttling por qualidade — ou seja, a Meta poderia engolir justamente o
+// aviso de que o sistema caiu. As v2 nasceram UTILITY em 23/09/2026.
+const TPL_INCIDENTE = "sys_alerta_incidente_v2";
+const TPL_RESUMO = "sys_alerta_resumo_v2";
 const TPL_LANG = "pt_BR";
 
 const json = (body: unknown, status = 200) =>

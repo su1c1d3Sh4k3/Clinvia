@@ -169,7 +169,14 @@ export function ConexoesGuide() {
                     { title: "Botões: 4 tipos", description: "Até 10 botões por template: Resposta rápida (o cliente responde com um toque), Abrir link (URL fixa), Ligar (telefone fixo) e Copiar código (um cupom fixo que o cliente copia com um toque). A Meta permite no máximo 2 de link, 1 de telefone e 1 de cupom; cada texto tem até 25 caracteres e não pode repetir." },
                     { title: "Templates do sistema", description: "Confirmação, lembrete e pesquisa de satisfação são criados automaticamente (badge azul 'Template Automatizado'). Você pode editar o texto — os botões de resposta, não." },
                     { title: "Ligue/desligue por template", description: "Cada template automatizado tem um switch — desligado, aquela mensagem automática não é enviada." },
+                    { title: "Dá para editar em revisão", description: "O botão Editar aparece também enquanto o template está Pendente — se você percebeu o erro logo depois de enviar, corrija na hora. A revisão recomeça do zero com o texto novo." },
                 ]} />
+                <Callout type="atencao" title="Categoria não se muda depois de criar">
+                    Marketing, Utilidade e Autenticação são definidos na criação e a Meta não aceita trocar depois — nem
+                    enquanto o template está pendente. Para corrigir a categoria é preciso criar outro template, com outro
+                    nome, e apagar o antigo. Isso pesa: Marketing pode ser bloqueado pelo cliente (opt-out) e é freado
+                    quando a qualidade do número cai, enquanto Utilidade, além de mais barato, passa nessas duas situações.
+                </Callout>
                 <Callout type="atencao" title="Cabeçalho de mídia some da campanha se o arquivo não estiver salvo">
                     O arquivo que a Meta aprova serve só para a aprovação — em cada disparo o sistema reenvia a mídia salva
                     no template. Se o arquivo (ou a localização, ou o cupom) não estiver gravado, o template nem aparece na
