@@ -95,6 +95,27 @@ Rules:
 - Never build a cron on `current_setting('app.settings.*')`: **those GUCs were never defined in this
   project.** `instagram-enrich-profiles` failed 100% of its runs for 140 days because of it.
 
+### Incident severity: the component floor is a floor, NOT a cap (measured 23/09/2026)
+
+`incident_severidade_efetiva(component, ai_severity)` returns the **worst** of two independent
+sources: `incident_component_catalog.severidade_padrao` (the per-component floor) and
+`incidents.ai_severity` (written by an `incident_catalog` message match **or** re-rated upward by
+the cron `incident-analyze-scan`, `*/2 * * * *`, **which is active** — any note claiming there is no
+analyzer in production is wrong). A component catalogued as `baixa` can therefore show `alta`.
+
+**What keeps an alert off his phone is `somente_painel = true`, not a low floor.** Never turn
+`somente_painel` off reasoning that "the severity is low anyway".
+
+### An input error is not our defect
+
+`_shared/api-errors.ts` states *"Erro de banco é sempre defeito nosso (ou regressão de RLS) ⇒
+reporta"*. That premise is false and it is the pattern behind the `appointment_id` incidents:
+`22P02` (text where a UUID is expected), `22007` (bad date) and input-caused `23514` come from the
+CALLER. Today `dbErrorResponse` answers 500 and always reports — 101 call sites across 29 functions,
+and zero places in the repo map a Postgres data-exception code to 400. Validate the shape at the
+edge of the handler (`checkAppointmentIds` in `api-scheduling` is the model) and return 400 through
+`apiError`, which does not report.
+
 ## Security rules (mandatory for all new code)
 
 Outcome of the September/2026 RLS correction plan. Full state — what is applied, what is ready but
