@@ -325,6 +325,16 @@ verify_jwt = false
 [functions.n8n-error-ingest]
 verify_jwt = false
 
+# Ingestao de erro do navegador. Anonima DE PROPOSITO: o erro que mais interessa
+# e o que acontece ANTES de o usuario conseguir logar (tela branca no boot, falha
+# no Auth), e exigir JWT fecharia a porta exatamente nesse caso. O que segura o
+# abuso nao e autenticacao e sim o desenho: nada do payload vira comando, o
+# `request_id` e deterministico (versao+rota+erro+hora) entao a mesma falha
+# repetida vira UM evento por hora, e o prefixo `front:` esta catalogado como
+# baixa/somente_painel — nao acorda telefone de ninguem.
+[functions.frontend-error-ingest]
+verify_jwt = false
+
 
 # =============================================
 # ESTADO REAL DE PRODUCAO, TRAZIDO PARA O REPOSITORIO (23/09/2026)
