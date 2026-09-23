@@ -313,9 +313,15 @@ provedor** (regra do markup: nem no alerta).
 > Rollback pronto: `20260923130000_incident_ingest_rollback.sql`.
 > **Curl pronto para colar no n8n: §2.2.**
 
-Edge function nova, autenticada por **`x-api-key` = `N8N_ERROR_INGEST_KEY`** (segredo novo, valor
-na §"O que depende de você"). Não reusa `SCHEDULING_API_KEY` de propósito: o ingest é escrito por
-um workflow que você edita à mão e não deve carregar a chave que dá acesso a agenda/CRM.
+Edge function nova, autenticada por **`x-api-key` = `SCHEDULING_API_KEY`** — a **mesma chave das
+outras `api-*`**, via `requireApiKey` do `_shared/api-errors.ts` (decisão sua em 23/09/2026: uma
+chave só para o n8n inteiro).
+
+> O desenho original usava um segredo separado (`N8N_ERROR_INGEST_KEY`) porque o workflow MONITOR DE
+> ERROS é editado à mão e qualquer um da equipe pode abri-lo. Com a chave única, esse workflow passa
+> a carregar a credencial que **também** abre agenda e CRM, e rotacioná-la obriga a mexer em todos os
+> nós do n8n que a usam. Trade-off consciente, registrado aqui para não parecer descuido depois.
+> O secret `N8N_ERROR_INGEST_KEY` continua existindo no Supabase, agora **sem uso**.
 
 - Limite de corpo: **64 KB**; acima disso → `413` com `code: payload_too_large`.
 - Validação: `source` ∈ `{error_trigger, silent}`; `workflow_id` obrigatório; o resto opcional.
@@ -355,13 +361,14 @@ mesma frase) e `started_at` permite medir atraso sem depender da hora de chegada
 
 ### 2.2 A curl (testada em produção em 23/09/2026)
 
-`$INGEST_KEY` = conteúdo de `supabase/.temp/_n8n_ingest_key.txt` (gitignorado). A chave que está
-escrita neste documento na §"O que depende de você" é a **antiga, queimada** — não serve.
+`$SCHEDULING_API_KEY` = a **mesma chave** que os outros nós do n8n já usam (`api-scheduling`,
+`api-send-message`, `api-token-usage`, …). Ela vive só no env das edge functions — não está no
+`.env` do repo e não se escreve em documento.
 
 ```bash
 curl -sS -X POST "https://swfshqvvbohnahdyndch.supabase.co/functions/v1/n8n-error-ingest" \
   -H "Content-Type: application/json" \
-  -H "x-api-key: $INGEST_KEY" \
+  -H "x-api-key: $SCHEDULING_API_KEY" \
   -d '{
     "source": "error_trigger",
     "workflow_id": "ID_DO_WORKFLOW",
@@ -416,6 +423,10 @@ Erros que a porta devolve (todos com `code` estável para o n8n ramificar sem le
 **Conferido em produção (23/09):** 2 POSTs do mesmo erro caíram no **mesmo** `incident_id` com
 `event_count = 2`; `sk-proj-…` virou `<openai_key>` e o telefone virou `<phone>` **dentro do banco**;
 `started_at` ausente não derrubou a ingestão. As linhas de teste foram apagadas depois.
+Esse teste rodou com a chave dedicada, antes da troca para a chave única; depois da troca foi
+conferido que a chave antiga passou a ser recusada (`api_key_invalid`) e que header ausente devolve
+`api_key_missing`. O caminho de sucesso com a `SCHEDULING_API_KEY` **você** confirma no primeiro
+disparo real — o valor não fica do lado de cá.
 
 ### 2.1 Detector de erro silencioso, sem o monitor de consumo
 Você vai desativar o monitor de consumo de tokens. Se o detector silencioso vive dentro dele, ele

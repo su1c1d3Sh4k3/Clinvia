@@ -1,9 +1,10 @@
 // n8n-error-ingest — recebe a falha do n8n e a transforma em incidente.
 //
-// AUTENTICACAO: `x-api-key` = N8N_ERROR_INGEST_KEY, um segredo SO desta porta.
-// De proposito NAO reusa SCHEDULING_API_KEY: este endpoint e configurado num
-// workflow que se edita a mao e que qualquer um da equipe pode abrir — nao pode
-// carregar a chave que da acesso a agenda e ao CRM.
+// AUTENTICACAO: `x-api-key` = SCHEDULING_API_KEY, a MESMA das outras api-*
+// (decisao do user em 23/09/2026 — uma chave so para o n8n inteiro, em vez de
+// uma por porta). Consequencia aceita: o workflow MONITOR DE ERROS, que se
+// edita a mao, passa a carregar a chave que tambem abre agenda e CRM; se ela
+// vazar, rotacionar obriga a mexer em todos os nos que a usam.
 //
 // O TRABALHO PESADO ESTA NO BANCO (public.incident_ingest): sanitizacao,
 // resolucao do tenant e agrupamento por fingerprint acontecem numa transacao so.
@@ -12,7 +13,7 @@
 // viagens perde a corrida quando o erro vem em rajada — que e o caso normal.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { apiError, describeDbError } from "../_shared/api-errors.ts";
+import { apiError, describeDbError, requireApiKey } from "../_shared/api-errors.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -45,31 +46,11 @@ Deno.serve(async (req) => {
         }
 
         // ── chave ──────────────────────────────────────────────────────────
-        // Os 3 casos ficam separados: "não autorizado" seco não diz se o
-        // problema é o secret do servidor, o header ou o valor.
-        const esperada = Deno.env.get("N8N_ERROR_INGEST_KEY");
-        if (!esperada) {
-            return apiError(corsHeaders, {
-                status: 500,
-                code: "api_key_not_configured",
-                message: "O segredo N8N_ERROR_INGEST_KEY não está configurado nesta edge function. Configure em Supabase > Edge Functions > Secrets e faça o deploy novamente.",
-            });
-        }
-        const recebida = req.headers.get("x-api-key");
-        if (!recebida) {
-            return apiError(corsHeaders, {
-                status: 401,
-                code: "api_key_missing",
-                message: "Header x-api-key ausente. Envie o header x-api-key com a chave de ingestão de erros do n8n.",
-            });
-        }
-        if (recebida !== esperada) {
-            return apiError(corsHeaders, {
-                status: 401,
-                code: "api_key_invalid",
-                message: "Header x-api-key inválido — a chave enviada não confere com N8N_ERROR_INGEST_KEY.",
-            });
-        }
+        // Mesmo helper das outras api-*: devolve os 3 casos separados
+        // (secret ausente / header ausente / valor errado) com os mesmos
+        // `code`, então o n8n ramifica igual em qualquer porta.
+        const semChave = requireApiKey(req, corsHeaders);
+        if (semChave) return semChave;
 
         // ── tamanho ────────────────────────────────────────────────────────
         // O corpo é lido como texto antes de virar JSON justamente para poder
