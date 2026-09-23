@@ -3,6 +3,7 @@ import React, { Component, ErrorInfo, ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, RefreshCcw } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { reportarErroDoFront } from "@/lib/frontIncident";
 
 interface Props {
     children: ReactNode;
@@ -65,6 +66,12 @@ export class ErrorBoundary extends Component<Props, State> {
         }
 
         console.error(`Uncaught error in ${this.props.name || 'Component'}:`, error, errorInfo);
+
+        // Até aqui o erro morria no console do navegador do cliente — ou seja,
+        // em lugar nenhum. Agora vira incidente no painel, com rota mascarada e
+        // versão do bundle. O reporte não pode falhar de volta: a função
+        // engole o próprio erro.
+        reportarErroDoFront({ tipo: "render", erro: error, onde: this.props.name });
     }
 
     public handleReload = () => {

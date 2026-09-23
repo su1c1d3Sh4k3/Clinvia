@@ -28,6 +28,12 @@ import "./index.css";
 
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { registerSW } from 'virtual:pwa-register';
+import { instalarCapturaGlobalDeErros } from "@/lib/frontIncident";
+
+// Antes de tudo: erro que acontece no boot é justamente o que ninguém consegue
+// reproduzir depois. O ErrorBoundary só existe a partir do render, e nem ele vê
+// erro fora de render (clique, timer, promise sem catch).
+instalarCapturaGlobalDeErros();
 
 // Register Service Worker for PWA and Push Notifications
 const updateSW = registerSW({
