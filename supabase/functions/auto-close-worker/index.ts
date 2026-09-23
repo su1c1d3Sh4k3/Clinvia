@@ -1,5 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { reportIncident, setIncidentComponent } from "../_shared/report-incident.ts";
+
+setIncidentComponent("auto-close-worker");
 
 /**
  * auto-close-worker (pg_cron a cada 5 min)
@@ -148,6 +151,7 @@ serve(async (req) => {
         return new Response(JSON.stringify({ success: true, ...stats }), { headers: corsHeaders });
     } catch (e) {
         console.error("[auto-close] fatal:", e);
+        reportIncident({ route: "scan", httpCode: 500, error: e });
         return new Response(JSON.stringify({ success: false, error: String(e) }), {
             status: 500,
             headers: corsHeaders,

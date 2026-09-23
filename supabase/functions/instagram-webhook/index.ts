@@ -7,6 +7,9 @@ import {
     mapMessageType
 } from "../_shared/utils.ts";
 import { buildBdData } from "../_shared/bd-data.ts";
+import { reportIncident, setIncidentComponent } from "../_shared/report-incident.ts";
+
+setIncidentComponent("instagram-webhook");
 
 /**
  * Tipo do anexo do Direct → vocabulário UAZAPI, o mesmo que o WhatsApp manda
@@ -1136,6 +1139,9 @@ serve(async (req) => {
 
         } catch (error: any) {
             console.error('[INSTAGRAM WEBHOOK] Error:', error);
+            // 200 para a Meta nao retentar ⇒ sem incidente, o Direct parava de
+            // chegar e so se descobria pela reclamacao (3× neste mes).
+            reportIncident({ route: "webhook", httpCode: 500, error });
             return new Response(
                 JSON.stringify({ success: false, error: error.message }),
                 { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

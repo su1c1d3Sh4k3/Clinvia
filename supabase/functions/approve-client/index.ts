@@ -5,6 +5,9 @@ import {
     emailAcessoLiberado,
     emailCadastroRecusado,
 } from "../_shared/emails.ts";
+import { reportIncident, setIncidentComponent } from "../_shared/report-incident.ts";
+
+setIncidentComponent("approve-client");
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -164,6 +167,9 @@ serve(async (req) => {
 
     } catch (error) {
         console.error("Error:", error);
+        // Aprovacao de cadastro travada = cliente novo sem acesso, e o rastro
+        // hoje e so este console.error.
+        reportIncident({ route: "approve", httpCode: 500, error });
         // Retorna 200 com success:false para que o SDK não mascare a mensagem real de erro
         return new Response(
             JSON.stringify({ success: false, error: error.message }),

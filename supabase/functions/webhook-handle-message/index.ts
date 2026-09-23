@@ -14,6 +14,9 @@ import {
 import { makeOpenAIRequest, trackTokenUsage } from "../_shared/token-tracker.ts";
 import { AC_FREE_TEXT_STATES, matchAcButtonId } from "../_shared/appointment-confirmation-buttons.ts";
 import { buildBdData } from "../_shared/bd-data.ts";
+import { reportIncident, setIncidentComponent } from "../_shared/report-incident.ts";
+
+setIncidentComponent("webhook-handle-message");
 
 // EdgeRuntime.waitUntil mantém o processo vivo após o return 200 para que
 // tasks de background (persistir foto, download de mídia) terminem mesmo
@@ -2003,6 +2006,7 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
 
     } catch (error: any) {
         console.error('[webhook-handle-message] Error:', error);
+        reportIncident({ route: "handle", httpCode: 500, error });
         return new Response(
             JSON.stringify({ success: false, error: error.message }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }

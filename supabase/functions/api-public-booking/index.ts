@@ -25,6 +25,9 @@ import {
     NO_CONVENIO,
     overlapsConvenio,
 } from "../_shared/convenio-schedule.ts";
+import { setIncidentComponent } from "../_shared/report-incident.ts";
+
+setIncidentComponent("api-public-booking");
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -97,6 +100,10 @@ function patientError(
         code,
         message,
         details: technicalDetail ? String(technicalDetail) : undefined,
+        // Esta é a única API que um PACIENTE chama, e ele lê o `error` na tela.
+        // Um 5xx aqui é erro na cara dele ⇒ sempre incidente. 4xx é escolha
+        // errada dele no formulário (data passada, serviço inexistente).
+        report: status >= 500,
     });
 }
 

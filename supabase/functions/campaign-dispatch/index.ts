@@ -1,6 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { buildButtonParameters, buildHeaderParameter, type TemplateFixedInfo } from "../_shared/template-params.ts";
+import { reportIncident, setIncidentComponent } from "../_shared/report-incident.ts";
+
+setIncidentComponent("campaign-dispatch");
 
 /**
  * campaign-dispatch (worker)
@@ -656,6 +659,7 @@ serve(async (req) => {
         return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     } catch (error: any) {
         console.error("[campaign-dispatch] Fatal error:", error);
+        reportIncident({ route: "dispatch", httpCode: 500, error });
         return new Response(JSON.stringify({ success: false, error: error.message }), {
             status: 500,
             headers: corsHeaders,

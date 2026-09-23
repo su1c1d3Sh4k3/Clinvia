@@ -1,5 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { reportIncident, setIncidentComponent } from "../_shared/report-incident.ts";
+
+setIncidentComponent("meta-send-message");
 
 /**
  * meta-send-message
@@ -424,6 +427,13 @@ serve(async (req) => {
             status = 422; errorCode = "wrong_provider";
         } else if (userMessage.includes("credentials missing")) {
             status = 422; errorCode = "meta_not_configured";
+        }
+
+        // So 5xx: os 400/404/422 acima sao entrada ruim de quem chamou.
+        // O erro da Meta cai no 500 generico — e justamente esse que hoje
+        // aparece SO no log.
+        if (status >= 500) {
+            reportIncident({ route: errorCode, httpCode: status, error });
         }
 
         return new Response(

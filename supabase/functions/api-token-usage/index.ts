@@ -37,6 +37,7 @@ import {
     requireApiKey,
     unexpectedErrorResponse,
 } from '../_shared/api-errors.ts';
+import { setIncidentComponent } from '../_shared/report-incident.ts';
 import {
     computeTokenCost,
     DEFAULT_CACHE_RATIO,
@@ -45,6 +46,8 @@ import {
     normalizeModelName,
     readReportedCachedTokens,
 } from '../_shared/token-cost.ts';
+
+setIncidentComponent('api-token-usage');
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',

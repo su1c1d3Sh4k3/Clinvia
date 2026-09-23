@@ -1,0 +1,112 @@
+// report-incident — leva a falha de uma edge function para `incidents`.
+//
+// TRES REGRAS QUE NAO SE NEGOCIAM, porque um monitor que derruba o que monitora
+// e pior do que nenhum monitor:
+//
+// 1. NUNCA entra no caminho da resposta. O envio sai num `queueMicrotask` sem
+//    `await`: a resposta ao cliente e devolvida antes de o fetch acontecer.
+// 2. NUNCA lanca. Todo erro do proprio reporter (rede, RPC fora, chave errada)
+//    morre num `.catch()` vazio. Se o monitoramento cair, o sistema continua.
+// 3. SO reporta quem se declarou. Sem `setIncidentComponent(...)` no topo do
+//    modulo, `reportIncident` nao faz nada. Isso e de proposito: o bundler do
+//    Deno inlina este arquivo em TODA function que importa `_shared`, e sem esse
+//    portao qualquer redeploy futuro de uma function nao instrumentada comecaria
+//    a despejar incidente sem nome no painel.
+//
+// Nao usa o supabase-js: `fetch` direto no endpoint da RPC. E uma dependencia
+// menos no caminho de um codigo que precisa funcionar quando as coisas ja estao
+// quebradas.
+
+/** Preenchido por `setIncidentComponent` no topo da function instrumentada. */
+let componenteAtual: string | null = null;
+
+/**
+ * Declara esta function como instrumentada. Chamar UMA vez, no escopo do modulo:
+ *
+ *     setIncidentComponent("api-scheduling");
+ *
+ * Constante por isolate — sem estado por requisicao, logo sem corrida entre
+ * requisicoes concorrentes.
+ */
+export function setIncidentComponent(nome: string): void {
+    componenteAtual = nome;
+}
+
+export interface ReportIncidentInit {
+    /** rota/acao que quebrou — e o que separa dois erros da mesma function */
+    route?: string;
+    httpCode?: number;
+    /** o erro cru: Error, erro do supabase-js, ou texto */
+    error?: unknown;
+    /** texto ja montado, quando o chamador tem uma frase melhor que a do erro */
+    message?: string;
+    /** identidade da linha de origem — torna o registro idempotente */
+    requestId?: string;
+    ownerId?: string | null;
+    /** contexto pequeno e SEM dado de paciente (o banco sanitiza de novo) */
+    context?: Record<string, unknown>;
+    source?: "edge_function" | "integration";
+}
+
+/** So as 3 primeiras linhas: o resto do stack e ruido que nao cabe num alerta. */
+function stackCurto(err: unknown): string | undefined {
+    const bruto = (err as Error)?.stack;
+    if (!bruto || typeof bruto !== "string") return undefined;
+    return bruto.split("\n").slice(0, 3).join("\n");
+}
+
+function textoDoErro(err: unknown): string {
+    if (!err) return "";
+    const e = err as Record<string, unknown>;
+    // erro do supabase-js/PostgREST: o `code` e o que permite ramificar depois
+    // (e o que a regra do 42501 procura no lado do banco).
+    const partes = [
+        String(e.message ?? err ?? "").trim(),
+        e.details ? String(e.details) : "",
+        e.hint ? String(e.hint) : "",
+        e.code ? `[${e.code}]` : "",
+    ].filter(Boolean);
+    return partes.join(" — ");
+}
+
+/**
+ * Registra a falha e devolve na hora. Nao da para `await` de proposito:
+ * a assinatura e `void` para que um `await reportIncident(...)` distraido
+ * nao segure a resposta.
+ */
+export function reportIncident(init: ReportIncidentInit): void {
+    if (!componenteAtual) return;
+
+    const url = Deno.env.get("SUPABASE_URL");
+    const chave = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!url || !chave) return;
+
+    const payload = {
+        source: init.source ?? "edge_function",
+        component: componenteAtual,
+        route: init.route ?? null,
+        http_code: init.httpCode ?? null,
+        error_name: (init.error as Error)?.name ?? null,
+        error_message: init.message ?? textoDoErro(init.error),
+        error_stack: stackCurto(init.error) ?? null,
+        request_id: init.requestId ?? null,
+        owner_id: init.ownerId ?? null,
+        context: init.context ?? null,
+        started_at: new Date().toISOString(),
+    };
+
+    // Fora do caminho da resposta, e sem `await` em nenhum ponto.
+    queueMicrotask(() => {
+        fetch(`${url}/rest/v1/rpc/incident_record`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                apikey: chave,
+                Authorization: `Bearer ${chave}`,
+            },
+            body: JSON.stringify({ p_payload: payload }),
+        }).catch(() => {
+            // Silencio proposital: se o monitoramento falha, o sistema segue.
+        });
+    });
+}

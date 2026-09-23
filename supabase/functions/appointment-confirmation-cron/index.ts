@@ -13,6 +13,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { sendMenu, sendText, type MenuButton } from "../_shared/uazapi-menu.ts";
 import { utcToBrasiliaParts } from "../_shared/timezone.ts";
 import { isMetaInstance, pickAutomationInstance, type AutomationInstance } from "../_shared/automation-instance.ts";
+import { reportIncident, setIncidentComponent } from "../_shared/report-incident.ts";
 import {
     buildTemplateParameters,
     ensureSystemTemplates,
@@ -56,6 +57,8 @@ async function withServiceLabel(supabase: any, appointments: any[] | null, dateB
         _dateBR: dateBR,
     }));
 }
+
+setIncidentComponent("appointment-confirmation-cron");
 
 serve(async (req) => {
     if (req.method === "OPTIONS") {
@@ -204,6 +207,7 @@ serve(async (req) => {
         return json({ success: true, sent: totalSent, errors: totalErrors });
     } catch (err) {
         console.error("[ac-cron] fatal error:", err);
+        reportIncident({ route: "scan", httpCode: 500, error: err });
         return json({ success: false, error: String(err?.message || err) }, 500);
     }
 });

@@ -16,6 +16,9 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { sendMenu, sendText, type MenuButton } from "../_shared/uazapi-menu.ts";
 import { todayInBrasilia, type Weekday } from "../_shared/timezone.ts";
+import { reportIncident, setIncidentComponent } from "../_shared/report-incident.ts";
+
+setIncidentComponent("delivery-automation-worker");
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -65,6 +68,9 @@ serve(async (req) => {
         const { data: job, error: pickErr } = await supabase.rpc("pick_delivery_automation_job");
         if (pickErr) {
             console.error("[worker] pick RPC error:", pickErr.message);
+            // A RPC de pick falhando para o worker INTEIRO, e a resposta ainda
+            // sai `success: true` — nada denuncia isso do lado de fora.
+            reportIncident({ route: "pick_job", httpCode: 500, error: pickErr });
             errors++;
             break;
         }
@@ -95,6 +101,15 @@ serve(async (req) => {
                     })
                     .eq("id", job.id);
             } else {
+                // Só no desfecho terminal (3ª falha): reportar cada retentativa
+                // encheria o painel com erro que o próprio backoff resolveu.
+                reportIncident({
+                    route: "job_failed",
+                    httpCode: 500,
+                    error: err,
+                    requestId: `delivery_job:${job.id}`,
+                    context: { job_type: job.job_type, attempts },
+                });
                 await supabase
                     .from("delivery_automation_jobs")
                     .update({

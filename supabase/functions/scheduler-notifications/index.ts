@@ -2,6 +2,9 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { addMinutes, subMinutes, parseISO, format, startOfDay, endOfDay } from "https://esm.sh/date-fns@2.30.0";
 import { zonedTimeToUtc, utcToZonedTime } from "https://esm.sh/date-fns-tz@2.0.0?deps=date-fns@2.30.0";
+import { reportIncident, setIncidentComponent } from "../_shared/report-incident.ts";
+
+setIncidentComponent("scheduler-notifications");
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -233,6 +236,9 @@ serve(async (req) => {
         return new Response(JSON.stringify({ error: "Invalid action" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     } catch (error) {
+        // O catch devolve 400 (legado), mas uma excecao que chega aqui e bug
+        // nosso, nao entrada ruim — por isso o incidente vai como 500.
+        reportIncident({ route: "notify", httpCode: 500, error });
         return new Response(
             JSON.stringify({ error: error.message }),
             { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }

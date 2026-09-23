@@ -35,6 +35,9 @@ import {
     unknownAction,
 } from "../_shared/api-errors.ts";
 import { createServiceLabelResolver, findServiceByDisplayName } from "../_shared/service-label.ts";
+import { setIncidentComponent } from "../_shared/report-incident.ts";
+
+setIncidentComponent("api-scheduling");
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",

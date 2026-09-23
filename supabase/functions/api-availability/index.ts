@@ -25,6 +25,9 @@ import {
     requireApiKey,
     unexpectedErrorResponse,
 } from "../_shared/api-errors.ts";
+import { setIncidentComponent } from "../_shared/report-incident.ts";
+
+setIncidentComponent("api-availability");
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",

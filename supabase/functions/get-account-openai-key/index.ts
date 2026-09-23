@@ -22,6 +22,9 @@ import {
     requireApiKey,
     unexpectedErrorResponse,
 } from "../_shared/api-errors.ts";
+import { setIncidentComponent } from "../_shared/report-incident.ts";
+
+setIncidentComponent("get-account-openai-key");
 
 const headers = {
     'Access-Control-Allow-Origin': '*',

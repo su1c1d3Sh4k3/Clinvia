@@ -1,6 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { generateConversationSummary, loadConversationTranscript } from "../_shared/conversation-summary.ts";
+import { reportIncident, setIncidentComponent } from "../_shared/report-incident.ts";
+
+setIncidentComponent("conversation-summary-worker");
 
 /**
  * conversation-summary-worker (pg_cron a cada minuto)
@@ -75,6 +78,7 @@ serve(async (req) => {
         return new Response(JSON.stringify({ success: true, ...stats }), { headers: corsHeaders });
     } catch (e) {
         console.error("[conversation-summary] fatal:", e);
+        reportIncident({ route: "batch", httpCode: 500, error: e });
         return new Response(JSON.stringify({ success: false, error: String(e) }), {
             status: 500,
             headers: corsHeaders,

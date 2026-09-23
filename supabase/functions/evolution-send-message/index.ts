@@ -1,5 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { reportIncident, setIncidentComponent } from "../_shared/report-incident.ts";
+
+setIncidentComponent("evolution-send-message");
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -807,6 +810,20 @@ serve(async (req) => {
     } else if (rawMsg.includes('Uzapi timeout')) {
       status = 504; errorCode = 'uzapi_timeout';
       userMessage = 'O servidor de WhatsApp não respondeu em 10s. Tente novamente.';
+    }
+
+    // So 5xx vira incidente: 400/404/422 aqui e entrada ruim de quem chamou
+    // (conversa inexistente, instancia nao configurada), nao defeito nosso.
+    if (status >= 500) {
+      reportIncident({
+        route: errorCode,
+        httpCode: status,
+        error,
+        context: {
+          provider_code: (error as any)?.uzapiProviderCode ?? null,
+          error_key: (error as any)?.uzapiErrorKey ?? null,
+        },
+      });
     }
 
     return new Response(

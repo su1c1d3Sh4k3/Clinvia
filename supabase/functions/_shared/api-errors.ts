@@ -15,6 +15,8 @@
  *   }
  */
 
+import { reportIncident } from "./report-incident.ts";
+
 export interface ApiErrorInit {
     status: number;
     /** código estável, snake_case, para o chamador ramificar */
@@ -25,6 +27,14 @@ export interface ApiErrorInit {
     details?: string;
     /** campos extras que o chamador já lia antes (ex.: deal_id) */
     extra?: Record<string, unknown>;
+    /**
+     * Abre incidente no monitoramento. Desligado por padrão: `apiError` é o
+     * caminho do erro de VALIDAÇÃO do cliente (campo faltando, ação
+     * desconhecida, chave errada) e reportar isso encheria o painel de ruído
+     * que não é defeito nosso. Os dois caminhos que sempre reportam são
+     * `dbErrorResponse` e `unexpectedErrorResponse`, abaixo.
+     */
+    report?: boolean;
 }
 
 export function apiError(headers: Record<string, string>, init: ApiErrorInit): Response {
@@ -38,6 +48,15 @@ export function apiError(headers: Record<string, string>, init: ApiErrorInit): R
     if (init.details) body.details = init.details;
 
     console.error(`[api-error ${init.status} ${init.code}] ${init.message}${init.details ? ` | ${init.details}` : ""}`);
+
+    // Não bloqueia: reportIncident volta na hora e envia num microtask.
+    if (init.report) {
+        reportIncident({
+            route: init.code,
+            httpCode: init.status,
+            message: [init.message, init.details].filter(Boolean).join(" | "),
+        });
+    }
 
     return new Response(JSON.stringify(body), {
         status: init.status,
@@ -65,6 +84,11 @@ export function dbErrorResponse(
     operation: string,
     error: unknown,
 ): Response {
+    // Erro de banco é sempre defeito nosso (ou regressão de RLS) ⇒ reporta.
+    // O `error` cru vai junto para o reporter porque é dele que sai o `code` do
+    // Postgres — é o `42501` ali dentro que aciona a regra de RLS no banco.
+    reportIncident({ route: code, httpCode: 500, error, message: describeDbError(operation, error) });
+
     return apiError(headers, {
         status: 500,
         code,
@@ -105,10 +129,14 @@ export function unexpectedErrorResponse(
             code: String(e!.code),
             message: String(e!.message),
             details: e!.details ? String(e!.details) : undefined,
+            // Só 5xx vira incidente: um ApiError 400 foi LANÇADO de propósito
+            // para recusar entrada inválida do chamador, não é defeito nosso.
+            report: Number(e!.status) >= 500,
         });
     }
     // erro do supabase-js/PostgREST vazando pelo catch: tem code/details/hint
     if (e && (e.code || e.details || e.hint) && e.message) {
+        reportIncident({ route: "database_error", httpCode: 500, error, message: describeDbError(context, error) });
         return apiError(headers, {
             status: 500,
             code: "database_error",
@@ -118,6 +146,9 @@ export function unexpectedErrorResponse(
     }
 
     const raw = String(e?.message ?? e ?? "").trim();
+    // Exceção que chegou até o catch externo: é sempre bug. Reporta com stack.
+    reportIncident({ route: "unexpected_error", httpCode: 500, error, message: `${context}: ${raw || "erro sem mensagem"}` });
+
     return apiError(headers, {
         status: 500,
         code: "unexpected_error",

@@ -28,6 +28,9 @@ import {
     weekdayNamePt,
     type Weekday,
 } from "../_shared/timezone.ts";
+import { reportIncident, setIncidentComponent } from "../_shared/report-incident.ts";
+
+setIncidentComponent("delivery-automation-respond");
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -151,6 +154,9 @@ serve(async (req) => {
         return json({ success: true, ...result });
     } catch (error) {
         console.error("[respond] error:", error);
+        // O paciente apertou o botao e nada aconteceu: do lado dele nao ha
+        // mensagem de erro nenhuma, so silencio.
+        reportIncident({ route: "respond", httpCode: 500, error });
         return json({ success: false, error: String(error?.message || error) }, 500);
     }
 });

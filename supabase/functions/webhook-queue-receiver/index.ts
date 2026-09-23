@@ -1,5 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { reportIncident, setIncidentComponent } from "../_shared/report-incident.ts";
+
+setIncidentComponent("webhook-queue-receiver");
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -73,6 +76,15 @@ serve(async (req) => {
 
             if (error) {
                 console.error('[webhook-queue-receiver] Error saving to queue:', error.message);
+                // Pior falha silenciosa do sistema: o 200 JA foi devolvido ao
+                // provedor, entao ele nunca retenta e a mensagem do paciente
+                // simplesmente nao existe. Nada na tela indica isso.
+                reportIncident({
+                    route: 'enqueue',
+                    httpCode: 500,
+                    error,
+                    context: { instance_name: instanceName, event_type: eventType },
+                });
                 return;
             }
 
@@ -84,6 +96,12 @@ serve(async (req) => {
 
         } catch (e) {
             console.error('[webhook-queue-receiver] Background error:', e);
+            reportIncident({
+                route: 'background',
+                httpCode: 500,
+                error: e,
+                context: { instance_name: instanceName, event_type: eventType },
+            });
         }
     })();
 

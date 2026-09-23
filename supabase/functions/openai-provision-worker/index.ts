@@ -9,6 +9,9 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { reportIncident, setIncidentComponent } from "../_shared/report-incident.ts";
+
+setIncidentComponent("openai-provision-worker");
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -86,6 +89,7 @@ serve(async (req) => {
         return new Response(JSON.stringify({ success: true, ...stats, report }), { headers: corsHeaders });
     } catch (err: any) {
         console.error('[openai-provision-worker] erro geral:', err?.message || err);
+        reportIncident({ route: "provision", httpCode: 500, error: err });
         return new Response(
             JSON.stringify({ success: false, error: err?.message || 'Erro inesperado', ...stats }),
             { status: 500, headers: corsHeaders },

@@ -2,6 +2,9 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { crypto } from "https://deno.land/std@0.168.0/crypto/mod.ts";
 import { encode as hexEncode } from "https://deno.land/std@0.168.0/encoding/hex.ts";
+import { reportIncident, setIncidentComponent } from "../_shared/report-incident.ts";
+
+setIncidentComponent("meta-webhook");
 
 /**
  * meta-webhook
@@ -504,6 +507,9 @@ serve(async (req) => {
         return new Response("OK", { status: 200 });
     } catch (err: any) {
         console.error("[meta-webhook] Error:", err);
+        // Devolvemos 200 de proposito (senao a Meta retenta em cascata), o que
+        // significa que ESTE log era o unico rastro da falha. Dai o incidente.
+        reportIncident({ route: "webhook", httpCode: 500, error: err });
         // Still return 200 to prevent Meta retries on our errors
         return new Response("OK", { status: 200 });
     }
