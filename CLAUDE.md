@@ -68,6 +68,33 @@ Python integration tests live in `tests/` (test_*.py, grouped by domain: appoint
 - Management API calls need `-H "Authorization: Bearer sbp_..."` (token = `SUPABASE_ACCESS_TOKEN` in `.env`); log timestamps need `Z` suffix
 - Real credentials live in `.env` at repo root — check before asking the user
 
+### Two service keys coexist, and the gateway hides the difference (23/09/2026)
+
+The project migrated to the new API keys, but the migration was partial:
+
+| Where | What is actually stored |
+|---|---|
+| Edge function env `SUPABASE_SERVICE_ROLE_KEY` | new key, `sb_secret_…` (41 chars) |
+| Vault secret `SUPABASE_SERVICE_ROLE_KEY` | **legacy JWT**, `eyJ…` (219 chars) |
+| Vault secret `SUPABASE_EDGE_SECRET_KEY` | new key, `sb_secret_…` |
+
+**The Supabase gateway accepts BOTH formats**, so a caller using the legacy JWT gets through the
+gateway and the request reaches the function. The failure only happens if the function then
+compares the presented key against its OWN env — the two strings differ and it answers 401. That is
+invisible from the caller's side because `net.http_post` is fire-and-forget: **pg_cron reports
+`succeeded` for a call that was rejected.** `alert-notify` was 401 for weeks this way.
+
+Rules:
+- A DB function that wakes an edge function must read **`SUPABASE_EDGE_SECRET_KEY`** from the vault,
+  not `SUPABASE_SERVICE_ROLE_KEY`, and send it in `x-service-key`. 19 invokers still carry the
+  legacy JWT — they work only because they call functions that do not self-check.
+- Never trust `cron.job_run_details.status` as a health signal. The HTTP outcome is in
+  `net._http_response` — which has **no URL column** and is **purged after 30 minutes**. Fire
+  through `public.clinvia_http_post(...)` so the request id gets recorded and the failure can be
+  named; `cron-health-watch` (`public.cron_health_scan()`, every 5 min) turns it into an incident.
+- Never build a cron on `current_setting('app.settings.*')`: **those GUCs were never defined in this
+  project.** `instagram-enrich-profiles` failed 100% of its runs for 140 days because of it.
+
 ## Security rules (mandatory for all new code)
 
 Outcome of the September/2026 RLS correction plan. Full state — what is applied, what is ready but

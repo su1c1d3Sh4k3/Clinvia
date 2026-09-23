@@ -554,6 +554,53 @@ Jobs de referência já inventariados: `openai-usage-sync-hourly` (jobid 42, `20
 `cleanup-pg-net-responses` (`*/15`), `process-auto-follow-up` (`*/2`),
 `cleanup-tickets-daily` (`0 3 * * *`).
 
+#### ✅ Executado em 23/09/2026 — migration `20260923200000_cron_health_watch.sql`
+
+O plano acima subestimava o problema. `cron.job_run_details.status` **não é sinal de saúde**:
+`net.http_post` é fire-and-forget, então o job termina com `succeeded` no instante em que
+*enfileira* a requisição. Foi exatamente assim que o despachante ficou 401 por semanas com o cron
+dizendo que estava tudo bem. O varredor entregue lê **`net._http_response`**, não só o status.
+
+Três limitações estruturais que o desenho teve de absorver:
+
+1. **`net._http_response` não tem a URL.** Só `id`, `status_code`, `content`, `error_msg`. Por isso
+   a tabela `cron_http_calls` guarda `request_id → alvo`, alimentada por
+   `public.clinvia_http_post(...)`. Sem registro o incidente ainda abre, como
+   `cron-http:http-desconhecido`.
+2. **Poda aos 30 minutos** (`cleanup-pg-net-responses`, de 15 em 15). Por isso o varredor roda a
+   cada **5 min**: precisa de várias passadas dentro da janela de retenção.
+3. **Marca d'água por `id`** (monotônico), guardada em `llm_platform_settings`. Imune a relógio.
+
+O que vira incidente:
+- `status_code >= 400` → sempre. **401/403 entram como `critica`** — é a classe de defeito que
+  falha 100% das vezes, em silêncio, para sempre.
+- `status_code is null` + timeout → **não** vira incidente individual: o padrão fire-and-forget de
+  5s torna o timeout o desfecho esperado (medido: ~4%). Só abre incidente **agregado** acima de 30%
+  numa passada, que já significa edge function fora do ar.
+- `cron.job_run_details.status <> 'succeeded'` → `alta`, idempotente por `runid`.
+- Job sub-horário ativo que parou de executar → `critica`. Carência de 2h via `cron_health_seen`,
+  porque `cron.job` **não guarda data de criação** e sem isso o varredor acusa a si mesmo de estar
+  parado na primeira passada (aconteceu).
+
+**Teste de injeção de falha — `supabase/tests/security/item_cron_health_watch/`.** Monitor que nunca
+foi testado falhando não vale nada. `injecao_de_falha.sql` chama o `alert-notify` com
+`x-service-key` deliberadamente errada (não altera configuração nenhuma: é reversível por
+construção); `verify.sql` roda o varredor e confere 12 pontos. Resultado de 23/09: 401 registrado →
+incidente `cron-http:alert-notify` crítico e **nomeado** → WhatsApp entregue às 12:58:06Z. Pitfall do
+próprio teste: CTE sem dependência explícita pode ser avaliada **antes** da varredura — o
+`cross join passada` não é enfeite.
+
+**Achados da primeira passada, todos invisíveis até aqui:**
+
+| Job | Falha | Desde |
+|---|---|---|
+| `instagram-enrich-profiles` | `null value in column "url"` — os GUCs `app.settings.supabase_url` / `service_role_key` **nunca foram definidos** neste projeto | 06/05/2026, **140 dias**, 100% das execuções |
+| `financial_due_daily` / `financial_overdue_daily` | `function check_financial_*() does not exist` — a migration `20260116180000` apagou as funções e esqueceu de desagendar os crons | 16/01/2026, **250 dias** |
+
+Os dois crons órfãos do financeiro foram desagendados em `20260923210000` (não havia
+funcionalidade a preservar). **O `instagram-enrich-profiles` NÃO foi corrigido:** consertá-lo faz
+uma função que nunca rodou começar a rodar contra a API da Meta em produção — precisa de aval.
+
 ### 3.3 Syncs, filas e provisionamento
 - `sync-openai-usage` e `calibrate-cache-ratio`: já gravam em `openai_sync_runs`
   (`status`, `error_code`, `error_message`). O watcher lê `status <> 'ok'` e reporta —
@@ -605,6 +652,22 @@ US$ 15,93 = US$ 171,48/30d ≈ **US$ 5,72/dia**, coerente com a fatura). Como `c
 margem cobrada, a queima sai **superestimada**: o saldo estimado é conservador e o alerta chega
 antes da hora, nunca depois. É o lado certo de errar. Quando `provider_cost_usd` estiver completo
 nas duas fontes, trocar a base derruba a estimativa para perto do custo puro do provedor.
+
+> **PRIORIDADE NA FILA (decisão dele, 23/09/2026).** "Errar para o lado seguro serve por agora, mas
+> não por muito tempo." `provider_cost_usd` não é só a base do saldo: é também a base do
+> **faturamento por projeto**. Enquanto ele estiver zerado em `source='system'` e parcial no n8n,
+> não existe custo real por conta — só custo com margem embutida, que serve para alarmar e não
+> serve para cobrar. Escopo do conserto, na ordem:
+> 1. **Preencher na escrita.** `source='system'` nunca grava `provider_cost_usd`; achar todos os
+>    sites de insert em `token_usage_log` com `source='system'` e calcular o custo do provedor pelo
+>    mesmo caminho que o n8n usa desde `ad8f002` (preço de `llm_model_prices` sem markup, com o
+>    tratamento de input cacheado de `7182253`).
+> 2. **Não fazer backfill cego.** A regra de parada de `20260921161000` continua valendo: o
+>    estimado (≈US$66) contra a fatura real (≈US$136) mostra que faltam chamadas no log; backfill
+>    antes de saber quais chamadas faltam só carimba um número errado como verdade.
+> 3. **Só então trocar a base** do `openai_saldo_estimado()` de `cost_usd` para `provider_cost_usd`
+>    — e nunca antes, porque trocar para uma coluna incompleta faz a queima ser **subestimada**, o
+>    que inverte o lado do erro e transforma o alerta de saldo em silêncio.
 
 Segunda passada: **0 eventos novos** — a idempotência por `request_id` está de pé.
 
