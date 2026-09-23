@@ -146,6 +146,52 @@ mostra no painel e **tenta** o envio; a recusa da Meta é gravada em
 `incident_notifications.error_message` e **nada quebra**. `appointment-confirmation-cron:571-576`
 já usa essa regra (pula template que não está `APPROVED`) — mantemos a mesma disciplina.
 
+### 0.4 O que foi registrado de verdade na WABA (medido em 22/09/2026 21:40)
+
+`GET /v22.0/497613820103663/message_templates` devolveu os dois templates **`PENDING`** e
+**`MARKETING`** (não `UTILITY`), com um corpo **diferente** do proposto acima. `alert-notify` foi
+escrito contra o corpo REAL, não contra o desta seção — se o template for recriado, conferir de
+novo antes de mexer no código.
+
+**`sys_alerta_incidente_v1` (real):**
+
+```
+*Alerta Clinbia* - {{1}}
+Componente: {{2}}
+Erro: {{3}}
+Ocorrencias: {{4}}
+Conta: {{5}}
+Causa provavel: {{6}}
+O que fazer: {{7}}
+Painel: {{8}}
+Mensagem automatica do monitoramento interno.
+```
+
+Diferenças para a proposta: a contagem saiu de `{{3}}` e virou `{{4}}` própria; **`origem provável`
+deixou de ter variável** (vai concatenada na causa, `causa — origem`); `{{5}}` é a conta.
+
+**`sys_alerta_resumo_v1` (real):** `{{1}}` período · `{{2}}` quantidade de incidentes ·
+`{{3}}` destaques. O link do painel virou linha estática, não é mais variável.
+
+**Tentativa real do caminho de template em 22/09 21:56:** `132001 — template name
+(sys_alerta_incidente_v1) does not exist in pt_BR`. É o que a Meta responde para template não
+aprovado; confirma que o plano B está inerte até a aprovação sair.
+
+### 0.5 Ordem de envio: texto livre primeiro, template como plano B
+
+Decisão tomada na implementação, **não estava no plano original**. `alert-notify` tenta
+`type: text` e só cai no template quando a Meta recusa. Três motivos:
+
+1. Dentro da janela de 24h o texto livre é **gratuito** e o alerta é um canal de baixo volume mas
+   contínuo — em `MARKETING` cada envio custa ~8× um `UTILITY`.
+2. Texto livre **aceita quebra de linha**, então o layout bonito da §5 sai inteiro, sem depender do
+   corpo do template.
+3. Tira a dependência dura da aprovação: o canal já funciona hoje.
+
+Fora da janela o texto livre falha com `131047` e o template assume — que é exatamente o caso do
+alerta às 3h da manhã. Os **dois** erros vão para `incident_notifications.error_message` quando
+ambos falham: sem o erro do texto livre não dá para distinguir "janela fechou" de "token errado".
+
 ---
 
 ## 1. Modelo de dados
