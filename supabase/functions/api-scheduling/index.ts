@@ -74,6 +74,33 @@ const VALID_ACTIONS = [
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^\d{2}:\d{2}$/;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * 400 dizendo que o id nao e um id, em vez de deixar o texto chegar cru no
+ * Postgres e voltar como 22P02 (`invalid input syntax for type uuid`) num 500.
+ *
+ * Nao e defensivo a toa: o agente manda o ROTULO que leu na tela em vez do
+ * `id`. Em 7 dias apareceram quatro formatos diferentes, nenhum deles um uuid —
+ * `"AVALIACAO / PROCEDIMENTO"`, `"AVALIACAO / PROCEDIMENTO, 17/09 as 08:30, 02
+ * SALA PROCEDIMENTO 08"`, `"2026-09-25T17:00:00-03:00"` e `"23/09/2026 17:30"`.
+ * Cada um desses e um cliente pedindo para cancelar e o sistema recusando.
+ *
+ * O 500 tambem escondia a causa: erro de banco em vez de erro de entrada, sem
+ * instrucao que o agente pudesse seguir para se corrigir na tentativa seguinte.
+ */
+function checkAppointmentIds(ids: unknown[], field: string): Response | null {
+    const ruim = ids.find((v) => !UUID_RE.test(String(v)));
+    if (ruim === undefined) return null;
+    return apiError(corsHeaders, {
+        status: 400,
+        code: "invalid_appointment_id",
+        message: `Campo ${field} inválido: "${ruim}". Esperado o id do agendamento `
+            + `(UUID, ex.: 3f8a1c2e-5b7d-4e91-a0c6-2d4f8b9e1a37), não a data, o horário `
+            + `nem o nome do procedimento. Chame fetch_appointments e use o campo "id" `
+            + `do agendamento escolhido, copiado exatamente como veio.`,
+    });
+}
 
 /** 400 dizendo exatamente qual formato veio errado, em vez de deixar virar "Invalid Date". */
 function checkDateTimeFormat(
@@ -373,6 +400,13 @@ serve(async (req) => {
             const ids: string[] = Array.isArray(body.appointment_ids)
                 ? body.appointment_ids
                 : (body.appointment_id ? [body.appointment_id] : []);
+
+            // Lista vazia e legitima: confirma o lote futuro inteiro.
+            if (ids.length > 0) {
+                const badConfirmId = checkAppointmentIds(
+                    ids, Array.isArray(body.appointment_ids) ? "appointment_ids" : "appointment_id");
+                if (badConfirmId) return badConfirmId;
+            }
 
             let query = supabase.from("appointments")
                 .select("id, user_id, status, service_id, service_name, professional_name, start_time")
@@ -675,6 +709,9 @@ serve(async (req) => {
                 "Use fetch_appointments para obter o appointment_id. Formatos: new_date AAAA-MM-DD e new_time HH:MM (horário de Brasília).");
             if (missingResched) return missingResched;
 
+            const badReschedId = checkAppointmentIds([appointment_id], "appointment_id");
+            if (badReschedId) return badReschedId;
+
             const formatFail = checkDateTimeFormat(new_date, new_time, "new_date", "new_time");
             if (formatFail) return formatFail;
 
@@ -847,6 +884,9 @@ serve(async (req) => {
             const missingCancel = missingFields(corsHeaders, body, ["appointment_id"],
                 "Use fetch_appointments para obter o appointment_id.");
             if (missingCancel) return missingCancel;
+
+            const badCancelId = checkAppointmentIds([appointment_id], "appointment_id");
+            if (badCancelId) return badCancelId;
 
             const { data: current, error: currentErr } = await supabase.from("appointments")
                 .select("id, user_id, status").eq("id", appointment_id).maybeSingle();
