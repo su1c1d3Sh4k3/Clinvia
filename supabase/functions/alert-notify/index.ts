@@ -357,6 +357,13 @@ type Catalogo = {
     natureza: "servico" | "detector";
     oQueFaz: string;
     acaoPadrao: string | null;
+    /**
+     * Gravidade que vale enquanto a IA nao analisou. E a MESMA coluna que o banco
+     * usa para rotear (`incident_severidade_efetiva`): se a mensagem mostrasse
+     * outra coisa, o alerta diria "media" para algo que acordou o telefone como
+     * critico.
+     */
+    severidadePadrao: Severity;
     catalogado: boolean;
 };
 
@@ -398,6 +405,7 @@ async function catalogoDoComponente(supabase: Db, componente: string): Promise<C
             // declara a lacuna e para.
             oQueFaz: "componente não catalogado",
             acaoPadrao: null,
+            severidadePadrao: "media",
             catalogado: false,
         };
     }
@@ -406,6 +414,7 @@ async function catalogoDoComponente(supabase: Db, componente: string): Promise<C
         natureza: row.natureza === "detector" ? "detector" : "servico",
         oQueFaz: row.descricao,
         acaoPadrao: row.acao_padrao ?? null,
+        severidadePadrao: (row.severidade_padrao as Severity) ?? "media",
         catalogado: true,
     };
 }
@@ -430,7 +439,10 @@ async function montarAlerta(
     ]);
 
     return {
-        severidade: (inc.ai_severity as Severity) ?? "media",
+        // Mesma regra do banco: a IA vence o catalogo, o catalogo vence o
+        // silencio. Sem isto um incidente roteado como critico pela severidade
+        // do catalogo chegaria escrito "MEDIA" no WhatsApp.
+        severidade: (inc.ai_severity as Severity) ?? cat.severidadePadrao,
         natureza: cat.natureza,
         componente: inc.component,
         conta,
@@ -793,7 +805,9 @@ serve(async (req) => {
                 despachos.push({
                     incidente: inc.id,
                     componente: inc.component,
-                    severidade: inc.ai_severity,
+                    // a efetiva, nao a crua: o retorno do dispatch tem que dizer
+                    // por que aquele incidente foi tratado como urgente
+                    severidade: alertaInc.severidade,
                     tipo: inc.kind,
                     enviados: r.enviados,
                     elegiveis: r.elegiveis,

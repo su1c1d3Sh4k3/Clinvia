@@ -145,6 +145,13 @@ responder, porque manda quem le desfazer algo que foi feito de proposito:
    no consumo.
 2. O painel de custo do cliente mostra, de proposito, um valor ACIMA do custo do provedor
    (margem de 30%). Numero do painel maior que a fatura da OpenAI nao e erro de calculo.
+   Quem ve o custo real do provedor e SO o Super Admin; o cliente ve sempre o valor com
+   margem. Divergencia entre esses dois numeros e o desenho, nao defeito — nunca recomende
+   "corrigir" o painel do cliente para bater com a fatura.
+3. O Gemini e FALLBACK: so entra quando o provedor principal nao responde. O consumo dele
+   e irrelevante para custo e nunca deve gerar alarme de gasto nem recomendacao de
+   economia. Volume de Gemini subindo e sintoma de que o PRINCIPAL esta falhando — a
+   analise vai para o principal, nao para o fallback.
 Se a correcao que voce ia sugerir contraria uma destas regras, proponha o que fazer DENTRO
 da regra.
 
