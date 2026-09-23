@@ -12,6 +12,7 @@ import { ADMIN_PAGES, type AdminPage } from "@/lib/adminPermissions";
 import AdminDashboard from "@/components/admin/sections/AdminDashboard";
 import AdminClients from "@/components/admin/sections/AdminClients";
 import AdminMonitoring from "@/components/admin/sections/AdminMonitoring";
+import AdminAlerts from "@/components/admin/sections/AdminAlerts";
 import AdminTeam from "@/components/admin/sections/AdminTeam";
 import AdminSupport from "@/components/admin/sections/AdminSupport";
 import AdminUpdates from "@/components/admin/sections/AdminUpdates";
@@ -116,6 +117,8 @@ export default function Admin() {
                 );
             case "monitoramento":
                 return <AdminMonitoring canEdit={can("monitoramento", "edit")} />;
+            case "alertas":
+                return <AdminAlerts canEdit={can("alertas", "edit")} />;
             case "equipe":
                 return <AdminTeam canEdit={can("equipe", "edit")} />;
             case "suporte":

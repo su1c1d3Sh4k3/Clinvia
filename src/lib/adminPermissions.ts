@@ -10,6 +10,7 @@ import {
     Megaphone,
     Image,
     FileCode2,
+    Siren,
     type LucideIcon,
 } from "lucide-react";
 
@@ -17,6 +18,7 @@ export type AdminPage =
     | "dashboard"
     | "clientes"
     | "monitoramento"
+    | "alertas"
     | "equipe"
     | "suporte"
     | "system-prompt"
@@ -36,6 +38,9 @@ export const ADMIN_PAGES: AdminPageDef[] = [
     { value: "dashboard", label: "Dashboard", icon: LayoutDashboard, description: "Visão geral do sistema" },
     { value: "clientes", label: "Clientes", icon: Users, description: "Contas ativas (pendentes e inativas são exclusivas do super-admin)" },
     { value: "monitoramento", label: "Monitoramento", icon: Activity, description: "Saúde da infraestrutura" },
+    // "Monitoramento" é a saúde da infra agora; "Alertas" é o histórico de
+    // incidentes do n8n e da plataforma, com a análise e a prova de envio.
+    { value: "alertas", label: "Alertas", icon: Siren, description: "Incidentes do n8n e da plataforma" },
     { value: "equipe", label: "Equipe", icon: ShieldCheck, description: "Usuários do painel e permissões" },
     { value: "suporte", label: "Suporte", icon: Headphones, description: "Chamados dos clientes" },
     { value: "system-prompt", label: "System Prompt", icon: FileCode2, description: "Prompts usados pelos fluxos do n8n" },
@@ -55,6 +60,7 @@ export const DEFAULT_ADMIN_PERMISSIONS: AdminPermissions = {
     dashboard: "view",
     clientes: "none",
     monitoramento: "none",
+    alertas: "none",
     equipe: "none",
     suporte: "edit",
     "system-prompt": "none",
