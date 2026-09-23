@@ -816,6 +816,8 @@ export function emailAlertaIncidente(v: {
     componente: string;
     conta: string;
     ocorrencias: string;
+    /** Já vem pronto como rótulo humano ("IA (fluxo do n8n) (inferida)"). */
+    origem?: string;
     o_que_faz: string;
     o_que_falhou: string;
     causa: string;
@@ -853,6 +855,7 @@ export function emailAlertaIncidente(v: {
             dataTable("Identificação", [
                 ["Gravidade", sev.rotulo],
                 ["Componente", v.componente],
+                ["Origem", v.origem || "Não identificada"],
                 ["Conta", v.conta],
                 ["Ocorrências", v.ocorrencias],
             ]) +
@@ -872,6 +875,7 @@ export function emailAlertaIncidente(v: {
 ${v.motivo_email} Enquanto isso durar, os alertas da plataforma não estão chegando no telefone — só aqui e no painel.
 
 Componente: ${v.componente}
+Origem: ${v.origem || "Não identificada"}
 Conta: ${v.conta} · ${v.ocorrencias}
 
 O QUE ESSE SERVIÇO FAZ

@@ -160,7 +160,7 @@ Deno.serve(async (req) => {
             .select("model, input_usd_per_1m, output_usd_per_1m, cached_input_usd_per_1m, default_cache_ratio");
         if (priceErr) {
             return dbErrorResponse(corsHeaders, "llm_model_prices_read_failed",
-                "carregar a tabela de preços llm_model_prices, necessária para calcular o custo dos tokens", priceErr);
+                "carregar a tabela de preços llm_model_prices, necessária para calcular o custo dos tokens", priceErr, req);
         }
         const prices = new Map<string, ModelPrice>();
         for (const p of priceRows ?? []) {
@@ -347,6 +347,6 @@ Deno.serve(async (req) => {
         });
     } catch (error) {
         return unexpectedErrorResponse(corsHeaders,
-            "Falha inesperada na API de consumo de tokens do ambiente de teste (api-token-usage-sandbox)", error);
+            "Falha inesperada na API de consumo de tokens do ambiente de teste (api-token-usage-sandbox)", error, req);
     }
 });

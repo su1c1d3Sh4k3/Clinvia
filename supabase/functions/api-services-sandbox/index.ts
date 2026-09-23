@@ -103,7 +103,7 @@ serve(async (req) => {
 
             if (snError) {
                 return dbErrorResponse(corsHeaders, "service_name_lookup_failed",
-                    `buscar o serviço "${serviceName}" no cadastro de serviços`, snError);
+                    `buscar o serviço "${serviceName}" no cadastro de serviços`, snError, req);
             }
 
             if (!sn) {
@@ -135,7 +135,7 @@ serve(async (req) => {
 
             if (appsError) {
                 return dbErrorResponse(corsHeaders, "service_applications_read_failed",
-                    `listar as aplicações ativas do serviço "${sn.name}" nesta conta`, appsError);
+                    `listar as aplicações ativas do serviço "${sn.name}" nesta conta`, appsError, req);
             }
 
             const visibleApps = aptoIds ? (apps || []).filter((a: any) => aptoIds.has(a.id)) : (apps || []);
@@ -184,7 +184,7 @@ serve(async (req) => {
 
         if (scError) {
             return dbErrorResponse(corsHeaders, "account_services_read_failed",
-                `listar os serviços ativos da conta ${userId}`, scError);
+                `listar os serviços ativos da conta ${userId}`, scError, req);
         }
 
         const scRowsVisible = aptoIds ? (allSc || []).filter((s: any) => aptoIds.has(s.id)) : (allSc || []);
@@ -208,7 +208,7 @@ serve(async (req) => {
 
         if (snsError) {
             return dbErrorResponse(corsHeaders, "service_names_read_failed",
-                `carregar os nomes dos ${snIds.length} serviços da conta ${userId}`, snsError);
+                `carregar os nomes dos ${snIds.length} serviços da conta ${userId}`, snsError, req);
         }
 
         const catIds = [...new Set((sns || []).map((s: any) => s.category_id))];
@@ -235,6 +235,6 @@ serve(async (req) => {
             { headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
     } catch (error) {
-        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de serviços do ambiente de teste (api-services-sandbox)", error);
+        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de serviços do ambiente de teste (api-services-sandbox)", error, req);
     }
 });

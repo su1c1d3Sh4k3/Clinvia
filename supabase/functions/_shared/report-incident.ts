@@ -6,7 +6,9 @@
 // 1. NUNCA entra no caminho da resposta. O envio sai num `queueMicrotask` sem
 //    `await`: a resposta ao cliente e devolvida antes de o fetch acontecer.
 // 2. NUNCA lanca. Todo erro do proprio reporter (rede, RPC fora, chave errada)
-//    morre num `.catch()` vazio. Se o monitoramento cair, o sistema continua.
+//    morre num `.catch()`. Se o monitoramento cair, o sistema continua — mas o
+//    catch LOGA: um monitor que falha em silencio vira exatamente o tipo de
+//    defeito que ele existe para cacar.
 // 3. SO reporta quem se declarou. Sem `setIncidentComponent(...)` no topo do
 //    modulo, `reportIncident` nao faz nada. Isso e de proposito: o bundler do
 //    Deno inlina este arquivo em TODA function que importa `_shared`, e sem esse
@@ -32,6 +34,66 @@ export function setIncidentComponent(nome: string): void {
     componenteAtual = nome;
 }
 
+/** Lista FECHADA: o banco recusa (coage para `nao_identificada`) o que nao esta aqui. */
+export type IncidentOrigem =
+    | "ia_n8n"
+    | "front"
+    | "webhook_externo"
+    | "cron"
+    | "edge_interna"
+    | "integracao_externa"
+    | "nao_identificada";
+
+const ORIGENS: readonly string[] = [
+    "ia_n8n", "front", "webhook_externo", "cron",
+    "edge_interna", "integracao_externa", "nao_identificada",
+];
+
+/**
+ * Descobre quem chamou esta function.
+ *
+ * DECLARADA vence INFERIDA, sempre. O header `x-origin` e a unica fonte que nao
+ * e palpite: quem o manda esta se identificando de proposito. Tudo o mais aqui
+ * e leitura de indicio e sai com `inferida: true`, porque no dia em que a
+ * inferencia estiver errada e preciso saber que era inferencia.
+ *
+ * Nao adivinha `ia_n8n` por chave de API: `SCHEDULING_API_KEY` e a mesma chave
+ * usada por integracao de terceiro nos mesmos endpoints. Chutar ali daria uma
+ * distribuicao bonita e errada — `nao_identificada` e resposta melhor que
+ * palpite bem-apresentado.
+ */
+export function origemDaRequisicao(
+    req?: Request,
+): { origem: IncidentOrigem; inferida: boolean } {
+    if (!req) return { origem: "nao_identificada", inferida: true };
+
+    const h = req.headers;
+
+    // 1. Declaracao explicita.
+    const declarada = (h.get("x-origin") ?? "").trim().toLowerCase();
+    if (ORIGENS.includes(declarada)) {
+        return { origem: declarada as IncidentOrigem, inferida: false };
+    }
+
+    // 2. Indicios, do mais conclusivo para o menos.
+    //    A Meta e a UAZAPI assinam o corpo; so um webhook de terceiro faz isso.
+    if (h.get("x-hub-signature-256") || h.get("x-hub-signature")) {
+        return { origem: "webhook_externo", inferida: true };
+    }
+    //    O front e o unico que manda um JWT de usuario (3 partes, alg no header).
+    const auth = h.get("authorization") ?? "";
+    if (auth.startsWith("Bearer eyJ") && auth.split(".").length === 3) {
+        return { origem: "front", inferida: true };
+    }
+    //    Navegador: so ele manda Origin/Referer de dominio nosso.
+    const origin = h.get("origin") ?? h.get("referer") ?? "";
+    if (/^https?:\/\/[^/]*clin[bv]ia\./i.test(origin)) {
+        return { origem: "front", inferida: true };
+    }
+
+    return { origem: "nao_identificada", inferida: true };
+}
+
 export interface ReportIncidentInit {
     /** rota/acao que quebrou — e o que separa dois erros da mesma function */
     route?: string;
@@ -46,6 +108,14 @@ export interface ReportIncidentInit {
     /** contexto pequeno e SEM dado de paciente (o banco sanitiza de novo) */
     context?: Record<string, unknown>;
     source?: "edge_function" | "integration";
+    /**
+     * A requisicao que estava sendo atendida. Passar isto e o que permite dizer
+     * se a falha veio da IA, do front ou de terceiro — sem ela a origem sai
+     * `nao_identificada`, que e resultado valido mas nao ajuda ninguem.
+     */
+    request?: Request;
+    /** Sobrepoe a leitura do header. Use quando o chamador e sabido (ex.: cron). */
+    origem?: IncidentOrigem;
 }
 
 /** So as 3 primeiras linhas: o resto do stack e ruido que nao cabe num alerta. */
@@ -81,8 +151,16 @@ export function reportIncident(init: ReportIncidentInit): void {
     const chave = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     if (!url || !chave) return;
 
+    // `origem` passada na mao e declaracao (quem chamou e sabido no codigo);
+    // vinda do header pode ser qualquer um dos dois.
+    const org = init.origem
+        ? { origem: init.origem, inferida: false }
+        : origemDaRequisicao(init.request);
+
     const payload = {
         source: init.source ?? "edge_function",
+        origem: org.origem,
+        origem_inferida: org.inferida,
         component: componenteAtual,
         route: init.route ?? null,
         http_code: init.httpCode ?? null,
@@ -105,8 +183,23 @@ export function reportIncident(init: ReportIncidentInit): void {
                 Authorization: `Bearer ${chave}`,
             },
             body: JSON.stringify({ p_payload: payload }),
-        }).catch(() => {
-            // Silencio proposital: se o monitoramento falha, o sistema segue.
-        });
+        })
+            .then((r) => {
+                // 200 nao basta: a RPC responde {ok:false} sem status de erro
+                // quando recusa o payload, e isso some se nao for lido.
+                if (!r.ok) {
+                    console.error(
+                        `[report-incident] ${componenteAtual}: RPC ${r.status}`,
+                    );
+                }
+            })
+            .catch((e) => {
+                // Nao lanca — mas nao cala. Um monitor que falha em silencio e o
+                // proprio defeito que ele existe para achar.
+                console.error(
+                    `[report-incident] ${componenteAtual}: nao registrou —`,
+                    (e as Error)?.message ?? e,
+                );
+            });
     });
 }

@@ -222,7 +222,7 @@ serve(async (req) => {
 
         if (scError) {
             return dbErrorResponse(corsHeaders, "service_lookup_failed",
-                `buscar a aplicação "${service_name}" no catálogo desta conta`, scError);
+                `buscar a aplicação "${service_name}" no catálogo desta conta`, scError, req);
         }
 
         // A IA às vezes repete o nome composto que leu ("Hifu Hipro - Face -
@@ -279,7 +279,7 @@ serve(async (req) => {
 
             if (convError) {
                 return dbErrorResponse(corsHeaders, "conversation_lookup_failed",
-                    `buscar a conversa ${conversation_id} para checar se a campanha do cliente limita os profissionais`, convError);
+                    `buscar a conversa ${conversation_id} para checar se a campanha do cliente limita os profissionais`, convError, req);
             }
             if (!conv) {
                 return apiError(corsHeaders, {
@@ -314,7 +314,7 @@ serve(async (req) => {
                 // profissionais que a campanha não liberou.
                 if (campError) {
                     return dbErrorResponse(corsHeaders, "campaign_lookup_failed",
-                        `buscar a campanha ativa do cliente para saber quais profissionais estão liberados`, campError);
+                        `buscar a campanha ativa do cliente para saber quais profissionais estão liberados`, campError, req);
                 }
 
                 const camp = (campSent as any)?.campaigns;
@@ -347,7 +347,7 @@ serve(async (req) => {
             .in("id", profIds).eq("active", true);
         if (profError) {
             return dbErrorResponse(corsHeaders, "professionals_read_failed",
-                `buscar os profissionais vinculados à aplicação "${sc.name}"`, profError);
+                `buscar os profissionais vinculados à aplicação "${sc.name}"`, profError, req);
         }
 
         // Convênio "sim" só enxerga salas habilitadas (e ligadas ao convênio).
@@ -528,6 +528,6 @@ serve(async (req) => {
         }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     } catch (error) {
-        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de disponibilidade (api-availability)", error);
+        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de disponibilidade (api-availability)", error, req);
     }
 });

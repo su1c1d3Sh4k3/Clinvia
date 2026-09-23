@@ -365,6 +365,6 @@ serve(async (req) => {
 
         return unknownAction(corsHeaders, action, VALID_ACTIONS);
     } catch (error) {
-        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de CRM do ambiente de teste (api-crm-sandbox)", error);
+        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de CRM do ambiente de teste (api-crm-sandbox)", error, req);
     }
 });

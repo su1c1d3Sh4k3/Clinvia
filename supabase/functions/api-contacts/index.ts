@@ -200,6 +200,6 @@ serve(async (req) => {
         return unknownAction(corsHeaders, action, VALID_ACTIONS);
 
     } catch (error) {
-        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de contatos (api-contacts)", error);
+        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de contatos (api-contacts)", error, req);
     }
 });

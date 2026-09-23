@@ -157,6 +157,6 @@ serve(async (req) => {
             n8n_status: n8nStatus,
         });
     } catch (error) {
-        return unexpectedErrorResponse(corsHeaders, "Falha inesperada ao enviar a mensagem no ambiente de teste (sandbox-inbound)", error);
+        return unexpectedErrorResponse(corsHeaders, "Falha inesperada ao enviar a mensagem no ambiente de teste (sandbox-inbound)", error, req);
     }
 });

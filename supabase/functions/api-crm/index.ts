@@ -91,7 +91,7 @@ serve(async (req) => {
 
             if (svcsError) {
                 return dbErrorResponse(corsHeaders, "crm_services_read_failed",
-                    "listar os serviços da negociação", svcsError);
+                    "listar os serviços da negociação", svcsError, req);
             }
 
             const label = await createServiceLabelResolver(supabase, (svcs || []).map((s: any) => s.service_client_id));
@@ -170,7 +170,7 @@ serve(async (req) => {
 
             if (error) {
                 return dbErrorResponse(corsHeaders, "crm_move_stage_failed",
-                    `mover a negociação ${card.id} para a etapa "${matched}"`, error);
+                    `mover a negociação ${card.id} para a etapa "${matched}"`, error, req);
             }
 
             return new Response(
@@ -228,7 +228,7 @@ serve(async (req) => {
 
                     if (scError) {
                         return dbErrorResponse(corsHeaders, "service_lookup_failed",
-                            `buscar o serviço "${wanted}" no catálogo desta conta`, scError);
+                            `buscar o serviço "${wanted}" no catálogo desta conta`, scError, req);
                     }
 
                     const qty = svc.quantity || 1;
@@ -267,7 +267,7 @@ serve(async (req) => {
 
             if (cardError) {
                 return dbErrorResponse(corsHeaders, "crm_create_deal_failed",
-                    `criar a negociação na etapa "${targetStage}" para o contato ${conv!.contactId}`, cardError);
+                    `criar a negociação na etapa "${targetStage}" para o contato ${conv!.contactId}`, cardError, req);
             }
 
             // Insert services
@@ -276,7 +276,7 @@ serve(async (req) => {
                 const { error: svcInsertError } = await supabase.from("crm_client_services").insert(rows);
                 if (svcInsertError) {
                     return dbErrorResponse(corsHeaders, "crm_create_deal_services_failed",
-                        `gravar os serviços da negociação ${newCard.id} (a negociação foi criada, mas ficou sem os serviços)`, svcInsertError);
+                        `gravar os serviços da negociação ${newCard.id} (a negociação foi criada, mas ficou sem os serviços)`, svcInsertError, req);
                 }
             }
 
@@ -328,7 +328,7 @@ serve(async (req) => {
 
             if (scError) {
                 return dbErrorResponse(corsHeaders, "service_lookup_failed",
-                    `buscar o serviço "${serviceName}" no catálogo desta conta`, scError);
+                    `buscar o serviço "${serviceName}" no catálogo desta conta`, scError, req);
             }
             if (!sc) {
                 return apiError(corsHeaders, {
@@ -348,7 +348,7 @@ serve(async (req) => {
 
             if (existingError) {
                 return dbErrorResponse(corsHeaders, "crm_services_read_failed",
-                    `verificar se o serviço "${sc.name}" já estava na negociação ${card.id}`, existingError);
+                    `verificar se o serviço "${sc.name}" já estava na negociação ${card.id}`, existingError, req);
             }
 
             if (existing) {
@@ -371,7 +371,7 @@ serve(async (req) => {
             });
             if (insertError) {
                 return dbErrorResponse(corsHeaders, "crm_add_service_failed",
-                    `adicionar o serviço "${sc.name}" à negociação ${card.id}`, insertError);
+                    `adicionar o serviço "${sc.name}" à negociação ${card.id}`, insertError, req);
             }
 
             // Recalculate deal value
@@ -382,7 +382,7 @@ serve(async (req) => {
 
             if (allSvcsError) {
                 return dbErrorResponse(corsHeaders, "crm_services_read_failed",
-                    `recalcular o valor da negociação ${card.id} (o serviço "${sc.name}" já foi adicionado)`, allSvcsError);
+                    `recalcular o valor da negociação ${card.id} (o serviço "${sc.name}" já foi adicionado)`, allSvcsError, req);
             }
 
             const newTotal = (allSvcs || []).reduce((s: number, r: any) => s + r.unit_price * r.quantity, 0);
@@ -391,7 +391,7 @@ serve(async (req) => {
                 .eq("id", card.id);
             if (totalError) {
                 return dbErrorResponse(corsHeaders, "crm_update_value_failed",
-                    `gravar o novo valor (R$ ${newTotal}) da negociação ${card.id} (o serviço "${sc.name}" já foi adicionado)`, totalError);
+                    `gravar o novo valor (R$ ${newTotal}) da negociação ${card.id} (o serviço "${sc.name}" já foi adicionado)`, totalError, req);
             }
 
             return new Response(
@@ -428,7 +428,7 @@ serve(async (req) => {
             });
             if (rpcError) {
                 return dbErrorResponse(corsHeaders, "crm_close_ticket_failed",
-                    `encerrar a negociação da conversa ${conv!.conversationId} na etapa "${matched}" (RPC crm_close_conversation_negotiation)`, rpcError);
+                    `encerrar a negociação da conversa ${conv!.conversationId} na etapa "${matched}" (RPC crm_close_conversation_negotiation)`, rpcError, req);
             }
 
             // Garantia extra: sem card ativo a RPC não faz nada, o ticket precisa fechar mesmo assim
@@ -439,7 +439,7 @@ serve(async (req) => {
                 .in("status", ["open", "pending"]);
             if (convError) {
                 return dbErrorResponse(corsHeaders, "conversation_resolve_failed",
-                    `marcar a conversa ${conv!.conversationId} como resolvida (a negociação já foi movida para "${matched}")`, convError);
+                    `marcar a conversa ${conv!.conversationId} como resolvida (a negociação já foi movida para "${matched}")`, convError, req);
             }
 
             const deal = await findActiveCardForChannel(supabase, conv!);
@@ -470,6 +470,6 @@ serve(async (req) => {
         return unknownAction(corsHeaders, action, VALID_ACTIONS);
 
     } catch (error) {
-        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de CRM (api-crm)", error);
+        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de CRM (api-crm)", error, req);
     }
 });

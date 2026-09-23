@@ -92,7 +92,7 @@ serve(async (req) => {
             .maybeSingle();
         if (convError) {
             return dbErrorResponse(corsHeaders, "conversation_lookup_failed",
-                `buscar a conversa ${conversationId} onde a nota seria anexada`, convError);
+                `buscar a conversa ${conversationId} onde a nota seria anexada`, convError, req);
         }
         if (!conv) {
             return apiError(corsHeaders, {
@@ -129,7 +129,7 @@ serve(async (req) => {
 
         if (error) {
             return dbErrorResponse(corsHeaders, "note_insert_failed",
-                `gravar a nota "${title}" no histórico do contato ${contactId} (client_documents, categoria 'notas')`, error);
+                `gravar a nota "${title}" no histórico do contato ${contactId} (client_documents, categoria 'notas')`, error, req);
         }
 
         return json({
@@ -140,6 +140,6 @@ serve(async (req) => {
             contact_id: contactId,
         });
     } catch (err) {
-        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de notas de conversa (api-add-note)", err);
+        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de notas de conversa (api-add-note)", err, req);
     }
 });

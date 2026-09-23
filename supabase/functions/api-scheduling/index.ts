@@ -983,6 +983,6 @@ serve(async (req) => {
         return unknownAction(corsHeaders, action, VALID_ACTIONS);
 
     } catch (error) {
-        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de agendamento (api-scheduling)", error);
+        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de agendamento (api-scheduling)", error, req);
     }
 });

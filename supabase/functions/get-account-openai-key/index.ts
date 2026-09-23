@@ -63,7 +63,7 @@ serve(async (req) => {
                 .select('user_id')
                 .eq('id', conversationId)
                 .maybeSingle();
-            if (error) return dbErrorResponse(headers, 'buscar a conversa', error);
+            if (error) return dbErrorResponse(headers, 'conversation_lookup_failed', 'buscar a conversa', error, req);
             if (!conv) {
                 return apiError(headers, {
                     status: 404,
@@ -79,7 +79,7 @@ serve(async (req) => {
             .select('id, company_name, openai_token, openai_key_source, openai_project_id, openai_token_invalid')
             .eq('id', ownerId)
             .maybeSingle();
-        if (profErr) return dbErrorResponse(headers, 'buscar a conta', profErr);
+        if (profErr) return dbErrorResponse(headers, 'account_lookup_failed', 'buscar a conta', profErr, req);
         if (!profile) {
             return apiError(headers, {
                 status: 404,
@@ -123,6 +123,6 @@ serve(async (req) => {
             token_invalid: profile.openai_token_invalid === true,
         }), { headers });
     } catch (err) {
-        return unexpectedErrorResponse(headers, 'get-account-openai-key', err);
+        return unexpectedErrorResponse(headers, 'get-account-openai-key', err, req);
     }
 });

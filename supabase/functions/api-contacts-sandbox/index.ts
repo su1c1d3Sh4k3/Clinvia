@@ -131,6 +131,6 @@ serve(async (req) => {
 
         return json({ success: true, contact: formatar(updated), updated: true });
     } catch (err) {
-        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de contatos do ambiente de teste (api-contacts-sandbox)", err);
+        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de contatos do ambiente de teste (api-contacts-sandbox)", err, req);
     }
 });

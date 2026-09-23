@@ -58,7 +58,7 @@ serve(async (req) => {
 
         if (convError) {
             return dbErrorResponse(corsHeaders, 'conversation_lookup_failed',
-                `buscar a conversa ${conversationId} cujo histórico foi pedido`, convError);
+                `buscar a conversa ${conversationId} cujo histórico foi pedido`, convError, req);
         }
         if (!conv) {
             return apiError(corsHeaders, {
@@ -83,7 +83,7 @@ serve(async (req) => {
 
         if (error) {
             return dbErrorResponse(corsHeaders, 'conversation_history_failed',
-                `montar o histórico das últimas ${limit} mensagens da conversa ${conversationId} (RPC get_conversation_messages_toon)`, error);
+                `montar o histórico das últimas ${limit} mensagens da conversa ${conversationId} (RPC get_conversation_messages_toon)`, error, req);
         }
 
         return new Response(
@@ -97,6 +97,6 @@ serve(async (req) => {
         );
 
     } catch (err) {
-        return unexpectedErrorResponse(corsHeaders, 'Falha inesperada na API de histórico de conversa (api-contact-messages)', err);
+        return unexpectedErrorResponse(corsHeaders, 'Falha inesperada na API de histórico de conversa (api-contact-messages)', err, req);
     }
 });

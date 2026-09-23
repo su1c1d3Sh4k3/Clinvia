@@ -88,7 +88,7 @@ serve(async (req) => {
 
         if (convError) {
             return dbErrorResponse(corsHeaders, "conversation_lookup_failed",
-                `buscar a conversa ${conversationId} de destino do envio`, convError);
+                `buscar a conversa ${conversationId} de destino do envio`, convError, req);
         }
         if (!conv) {
             return apiError(corsHeaders, {
@@ -115,7 +115,7 @@ serve(async (req) => {
 
         if (instanceError) {
             return dbErrorResponse(corsHeaders, "instance_lookup_failed",
-                `buscar a conexão ${conv.instance_id} vinculada à conversa ${conversationId}`, instanceError);
+                `buscar a conexão ${conv.instance_id} vinculada à conversa ${conversationId}`, instanceError, req);
         }
         if (!instance) {
             return apiError(corsHeaders, {
@@ -176,7 +176,7 @@ serve(async (req) => {
 
             if (uploadError) {
                 return dbErrorResponse(corsHeaders, "audio_upload_failed",
-                    `subir o áudio (${fileBytes.length} bytes, ${effectiveMime}) para o bucket 'media' em ${fileName}`, uploadError);
+                    `subir o áudio (${fileBytes.length} bytes, ${effectiveMime}) para o bucket 'media' em ${fileName}`, uploadError, req);
             }
 
             mediaUrl = supabase.storage.from("media").getPublicUrl(fileName).data.publicUrl;
@@ -245,6 +245,6 @@ serve(async (req) => {
             conversation_id: conversationId,
         }, sendResp.status);
     } catch (error) {
-        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de envio de mensagem (api-send-message)", error);
+        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de envio de mensagem (api-send-message)", error, req);
     }
 });

@@ -88,6 +88,6 @@ serve(async (req) => {
             contact_id: ctx.contact.id,
         });
     } catch (err) {
-        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de notas do ambiente de teste (api-add-note-sandbox)", err);
+        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de notas do ambiente de teste (api-add-note-sandbox)", err, req);
     }
 });

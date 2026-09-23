@@ -118,7 +118,7 @@ serve(async (req) => {
                 .eq("id", userId)
                 .maybeSingle();
             if (profileError) {
-                return dbErrorResponse(corsHeaders, "profile_lookup_failed", "verificar o cargo de quem pediu o código", profileError);
+                return dbErrorResponse(corsHeaders, "profile_lookup_failed", "verificar o cargo de quem pediu o código", profileError, req);
             }
 
             const { data: adminUser, error: adminError } = await supabaseAdmin
@@ -127,7 +127,7 @@ serve(async (req) => {
                 .eq("auth_user_id", userId)
                 .maybeSingle();
             if (adminError) {
-                return dbErrorResponse(corsHeaders, "admin_user_lookup_failed", "localizar o usuário na equipe do painel", adminError);
+                return dbErrorResponse(corsHeaders, "admin_user_lookup_failed", "localizar o usuário na equipe do painel", adminError, req);
             }
 
             const isSuperAdmin = profile?.role === "super-admin";
@@ -157,7 +157,7 @@ serve(async (req) => {
                 .eq("auth_user_id", userId)
                 .is("consumed_at", null);
             if (burnError) {
-                return dbErrorResponse(corsHeaders, "code_invalidate_failed", "invalidar os códigos anteriores", burnError);
+                return dbErrorResponse(corsHeaders, "code_invalidate_failed", "invalidar os códigos anteriores", burnError, req);
             }
 
             const { error: clearError } = await supabaseAdmin
@@ -166,7 +166,7 @@ serve(async (req) => {
                 .eq("auth_user_id", userId)
                 .eq("session_id", sessionId);
             if (clearError) {
-                return dbErrorResponse(corsHeaders, "verification_clear_failed", "limpar a verificação anterior", clearError);
+                return dbErrorResponse(corsHeaders, "verification_clear_failed", "limpar a verificação anterior", clearError, req);
             }
 
             const code = generateCode();
@@ -180,7 +180,7 @@ serve(async (req) => {
                     expires_at: new Date(Date.now() + CODE_TTL_MINUTES * 60_000).toISOString(),
                 });
             if (insertError) {
-                return dbErrorResponse(corsHeaders, "code_insert_failed", "gravar o código de acesso", insertError);
+                return dbErrorResponse(corsHeaders, "code_insert_failed", "gravar o código de acesso", insertError, req);
             }
 
             // Aqui o envio NAO pode ser fire-and-forget: sem e-mail o admin fica
@@ -227,7 +227,7 @@ serve(async (req) => {
             .limit(1)
             .maybeSingle();
         if (pendingError) {
-            return dbErrorResponse(corsHeaders, "code_lookup_failed", "localizar o código de acesso", pendingError);
+            return dbErrorResponse(corsHeaders, "code_lookup_failed", "localizar o código de acesso", pendingError, req);
         }
 
         if (!pending || new Date(pending.expires_at).getTime() < Date.now()) {
@@ -260,7 +260,7 @@ serve(async (req) => {
             .update({ consumed_at: new Date().toISOString(), attempts: (pending.attempts ?? 0) + 1 })
             .eq("id", pending.id);
         if (consumeError) {
-            return dbErrorResponse(corsHeaders, "code_consume_failed", "encerrar o código usado", consumeError);
+            return dbErrorResponse(corsHeaders, "code_consume_failed", "encerrar o código usado", consumeError, req);
         }
 
         const { error: verifyError } = await supabaseAdmin
@@ -270,13 +270,13 @@ serve(async (req) => {
                 { onConflict: "auth_user_id,session_id" },
             );
         if (verifyError) {
-            return dbErrorResponse(corsHeaders, "verification_write_failed", "liberar o acesso ao painel", verifyError);
+            return dbErrorResponse(corsHeaders, "verification_write_failed", "liberar o acesso ao painel", verifyError, req);
         }
 
         return new Response(JSON.stringify({ success: true }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
     } catch (error) {
-        return unexpectedErrorResponse(corsHeaders, "Falha na verificação em duas etapas do painel", error);
+        return unexpectedErrorResponse(corsHeaders, "Falha na verificação em duas etapas do painel", error, req);
     }
 });

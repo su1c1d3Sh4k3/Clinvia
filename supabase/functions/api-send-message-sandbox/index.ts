@@ -147,6 +147,6 @@ serve(async (req) => {
             provider: "sandbox",
         });
     } catch (error) {
-        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de envio de mensagem do ambiente de teste (api-send-message-sandbox)", error);
+        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de envio de mensagem do ambiente de teste (api-send-message-sandbox)", error, req);
     }
 });

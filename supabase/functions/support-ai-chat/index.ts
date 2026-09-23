@@ -250,7 +250,7 @@ serve(async (req) => {
             .eq("auth_user_id", authUserId)
             .maybeSingle();
         if (memberError) {
-            return dbErrorResponse(corsHeaders, "member_lookup_error", "identificar seu usuário", memberError);
+            return dbErrorResponse(corsHeaders, "member_lookup_error", "identificar seu usuário", memberError, req);
         }
 
         const ownerId = member?.user_id ?? authUserId;
@@ -261,7 +261,7 @@ serve(async (req) => {
             .eq("id", ownerId)
             .maybeSingle();
         if (ownerProfileError) {
-            return dbErrorResponse(corsHeaders, "profile_lookup_error", "carregar os dados da conta", ownerProfileError);
+            return dbErrorResponse(corsHeaders, "profile_lookup_error", "carregar os dados da conta", ownerProfileError, req);
         }
 
         let personName = member?.name ?? null;
@@ -286,7 +286,7 @@ serve(async (req) => {
                 .eq("id", ticketIdInput)
                 .maybeSingle();
             if (error) {
-                return dbErrorResponse(corsHeaders, "ticket_lookup_error", "abrir o chamado", error);
+                return dbErrorResponse(corsHeaders, "ticket_lookup_error", "abrir o chamado", error, req);
             }
             if (!data || data.auth_user_id !== authUserId) {
                 return apiError(corsHeaders, {
@@ -321,7 +321,7 @@ serve(async (req) => {
                 .select("id, title, status, priority, handled_by, auth_user_id")
                 .single();
             if (error) {
-                return dbErrorResponse(corsHeaders, "ticket_create_error", "abrir o chamado", error);
+                return dbErrorResponse(corsHeaders, "ticket_create_error", "abrir o chamado", error, req);
             }
             ticket = data;
         }
@@ -337,7 +337,7 @@ serve(async (req) => {
             body: userMessage,
         });
         if (clientMsgError) {
-            return dbErrorResponse(corsHeaders, "message_insert_error", "registrar sua mensagem", clientMsgError);
+            return dbErrorResponse(corsHeaders, "message_insert_error", "registrar sua mensagem", clientMsgError, req);
         }
 
         // 5. Histórico
@@ -348,7 +348,7 @@ serve(async (req) => {
             .order("created_at", { ascending: false })
             .limit(HISTORY_LIMIT);
         if (historyError) {
-            return dbErrorResponse(corsHeaders, "history_error", "carregar a conversa", historyError);
+            return dbErrorResponse(corsHeaders, "history_error", "carregar a conversa", historyError, req);
         }
 
         const history = (historyRows ?? []).slice().reverse().map((m: any) => ({
@@ -499,7 +499,7 @@ serve(async (req) => {
             .select("id, ticket_id, sender_type, sender_name, body, created_at")
             .single();
         if (aiMsgError) {
-            return dbErrorResponse(corsHeaders, "ai_message_error", "registrar a resposta do assistente", aiMsgError);
+            return dbErrorResponse(corsHeaders, "ai_message_error", "registrar a resposta do assistente", aiMsgError, req);
         }
 
         return new Response(
@@ -513,7 +513,7 @@ serve(async (req) => {
             { headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
     } catch (error) {
-        return unexpectedErrorResponse(corsHeaders, "processar o chat de suporte", error);
+        return unexpectedErrorResponse(corsHeaders, "processar o chat de suporte", error, req);
     }
 });
 

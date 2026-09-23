@@ -192,7 +192,7 @@ serve(async (req) => {
 
             if (snError) {
                 return dbErrorResponse(corsHeaders, "service_name_lookup_failed",
-                    `buscar o serviço "${service_name}" no cadastro de serviços`, snError);
+                    `buscar o serviço "${service_name}" no cadastro de serviços`, snError, req);
             }
 
             if (!sn) {
@@ -228,7 +228,7 @@ serve(async (req) => {
 
             if (appsError) {
                 return dbErrorResponse(corsHeaders, "service_applications_read_failed",
-                    `listar as aplicações ativas do serviço "${sn.name}" nesta conta`, appsError);
+                    `listar as aplicações ativas do serviço "${sn.name}" nesta conta`, appsError, req);
             }
 
             const visibleApps = aptoIds ? (apps || []).filter((a: any) => aptoIds.has(a.id)) : (apps || []);
@@ -278,7 +278,7 @@ serve(async (req) => {
 
         if (scError) {
             return dbErrorResponse(corsHeaders, "account_services_read_failed",
-                `listar os serviços ativos da conta ${user_id}`, scError);
+                `listar os serviços ativos da conta ${user_id}`, scError, req);
         }
 
         // No modo convênio o serviço só aparece se pelo menos uma aplicação dele
@@ -303,7 +303,7 @@ serve(async (req) => {
         // "nenhum serviço" para uma conta que tem serviços cadastrados.
         if (snsError) {
             return dbErrorResponse(corsHeaders, "service_names_read_failed",
-                `carregar os nomes dos ${snIds.length} serviços da conta ${user_id}`, snsError);
+                `carregar os nomes dos ${snIds.length} serviços da conta ${user_id}`, snsError, req);
         }
 
         const catIds = [...new Set((sns || []).map((s: any) => s.category_id))];
@@ -338,6 +338,6 @@ serve(async (req) => {
         );
 
     } catch (error) {
-        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de serviços (api-services)", error);
+        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de serviços (api-services)", error, req);
     }
 });

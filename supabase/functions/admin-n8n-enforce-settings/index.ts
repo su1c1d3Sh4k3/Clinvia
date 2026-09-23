@@ -8,9 +8,30 @@
 // NAO toca em `nodes` nem em `connections`: so o objeto `settings`. O PATCH do
 // n8n e feito um por vez, com relatorio de antes/depois por workflow.
 //
+// VEREDITO 23/09/2026 — `apply` NAO SERVE, e o motivo esta provado aqui:
+//
+//   1. O n8n nao tem PATCH parcial em /workflows/{id}: so PUT do workflow inteiro.
+//   2. A API PUBLICA valida `settings` contra uma lista FECHADA. Medido pela acao
+//      `probe_schema` (PUT num id inexistente: 400 = chave recusada, 404 = aceita):
+//        aceitas : executionOrder, errorWorkflow, saveDataErrorExecution,
+//                  saveDataSuccessExecution, saveManualExecutions, availableInMCP,
+//                  callerPolicy, timezone, executionTimeout, saveExecutionProgress
+//        RECUSADAS: binaryMode, timeSavedMode
+//   3. Os 9 workflows carregam `binaryMode: "separate"` e `timeSavedMode: "fixed"`.
+//      Logo, qualquer PUT por esta API so passa se APAGAR as duas — inclusive nos
+//      moldes FLUXO PADRAO e FLUXO PADRAO INSTAGRAM, que sao clonados para cada
+//      cliente novo. Perda silenciosa em molde e a pior forma dessa perda.
+//   4. FLUXO BARBEARIA esta ARQUIVADO: o n8n recusa qualquer update nele.
+//
+// Conclusao: a retencao de execucao se ajusta A MAO na interface do n8n. Esta
+// function fica como INVENTARIO (le e mede). `apply` segue no codigo para o dia
+// em que o n8n aceitar PATCH, e ja reenvia pinData/staticData — mas nao use.
+//
 // Acoes:
-//   inventory  — so le e classifica (padrao, nao escreve nada)
-//   apply      — aplica, um por vez
+//   inventory     — so le e classifica (padrao, nao escreve nada)
+//   probe_schema  — descobre quais chaves de settings a API aceita, sem escrever
+//   dump          — devolve o JSON INTEIRO dos ids pedidos (backup pre-PUT)
+//   apply         — aplica, um por vez. NAO USE: ver veredito acima.
 //
 // Chamada:
 //   POST .../admin-n8n-enforce-settings
@@ -135,15 +156,63 @@ Deno.serve(async (req) => {
             });
         }
 
+        // Descobre QUAIS chaves de `settings` a API publica aceita, sem escrever em
+        // nada: o validador de schema roda antes da busca do workflow, entao um id
+        // inexistente devolve 400 (chave recusada) ou 404 (chave aceita).
+        if (action === "probe_schema") {
+            const chaves: string[] = Array.isArray(body.keys) ? body.keys : [];
+            const fora: string[] = [];
+            const dentro: string[] = [];
+            for (const k of chaves) {
+                try {
+                    await n8n(`/workflows/id-que-nao-existe-0000`, N8N_API_KEY, {
+                        method: "PUT",
+                        body: JSON.stringify({
+                            name: "x", nodes: [], connections: {},
+                            settings: { [k]: k === "availableInMCP" ? false : "v1" },
+                        }),
+                    });
+                    dentro.push(k);
+                } catch (e) {
+                    const txt = String(e);
+                    if (txt.includes("additional properties")) fora.push(k);
+                    else dentro.push(k);   // 404 = a chave passou pela validacao
+                }
+            }
+            return json({ success: true, action, aceitas: dentro, recusadas: fora });
+        }
+
+        if (action === "dump") {
+            const pedidos: string[] = Array.isArray(body.ids) ? body.ids : [];
+            const saida: Record<string, unknown> = {};
+            for (const id of pedidos) saida[id] = await n8n(`/workflows/${id}`, N8N_API_KEY);
+            return json({ success: true, action, workflows: saida });
+        }
+
         if (action === "apply") {
+            // Sem `ids` explicitos nao aplica em nada: um `apply` sem alvo cairia
+            // em cima dos fluxos de cliente vivos, que e exatamente o que ele vetou.
             const pedidos: string[] | null = Array.isArray(body.ids) && body.ids.length ? body.ids : null;
-            const fila = todos.filter((w) =>
-                w.id !== ERROR_WORKFLOW && (pedidos ? pedidos.includes(w.id) : true));
+            if (!pedidos) {
+                return json({ success: false, error: "informe `ids`: apply sem alvo e proibido" }, 400);
+            }
+            const fila = todos.filter((w) => pedidos.includes(w.id));
 
             const relatorio: any[] = [];
             for (const w of fila) {          // um por vez, de proposito
                 const antes = diagnostico(w);
-                if (antes.ja_conforme) {
+                // O proprio fluxo de captura nao pode apontar para si mesmo: nele
+                // aplicamos SO a retencao de execucao.
+                const eOMonitor = w.id === ERROR_WORKFLOW;
+                const alvo: Record<string, unknown> = eOMonitor
+                    ? { saveDataErrorExecution: ALVO.saveDataErrorExecution,
+                        saveDataSuccessExecution: ALVO.saveDataSuccessExecution,
+                        saveManualExecutions: ALVO.saveManualExecutions }
+                    : { ...ALVO };
+
+                const conforme = Object.entries(alvo)
+                    .every(([k, v]) => (w.settings || {})[k] === v);
+                if (conforme) {
                     relatorio.push({ ...antes, resultado: "ja_estava_conforme" });
                     continue;
                 }
@@ -151,20 +220,54 @@ Deno.serve(async (req) => {
                     // PUT com o workflow inteiro: o n8n rejeita PATCH parcial em
                     // /workflows/{id}. `nodes` e `connections` vao IGUAIS aos que
                     // acabamos de ler — so `settings` muda.
+                    //
+                    // PEGADINHA: um PUT que omite `pinData`/`staticData` os APAGA.
+                    // Os 6 tem pinData e os 3 moldes tem staticData com o estado
+                    // de recorrencia dos Schedule Triggers. Reenviamos os dois.
+                    // Se a validacao do n8n recusar a propriedade extra, tentamos
+                    // de novo so com staticData, e por ultimo sem nenhum dos dois
+                    // — mas ai o relatorio diz o que foi perdido.
                     const atual = await n8n(`/workflows/${w.id}`, N8N_API_KEY);
-                    const novo = {
+                    const base = {
                         name: atual.name,
                         nodes: atual.nodes,
                         connections: atual.connections,
-                        settings: { ...(atual.settings || {}), ...ALVO },
+                        settings: { ...(atual.settings || {}), ...alvo },
                     };
-                    const salvo = await n8n(`/workflows/${w.id}`, N8N_API_KEY, {
-                        method: "PUT",
-                        body: JSON.stringify(novo),
-                    });
+                    const tentativas: Array<[string, Record<string, unknown>]> = [
+                        ["com_pindata_e_staticdata", { ...base, pinData: atual.pinData ?? {}, staticData: atual.staticData ?? null }],
+                        ["so_staticdata", { ...base, staticData: atual.staticData ?? null }],
+                        ["so_o_minimo", base],
+                    ];
+                    let salvo: any = null;
+                    let forma = "";
+                    let recusas: string[] = [];
+                    for (const [nome, payload] of tentativas) {
+                        try {
+                            salvo = await n8n(`/workflows/${w.id}`, N8N_API_KEY, {
+                                method: "PUT",
+                                body: JSON.stringify(payload),
+                            });
+                            forma = nome;
+                            break;
+                        } catch (e) {
+                            recusas.push(`${nome}: ${String(e).slice(0, 160)}`);
+                        }
+                    }
+                    if (!salvo) throw new Error(recusas.join(" | "));
                     relatorio.push({
                         ...antes,
                         resultado: "atualizado",
+                        forma_do_put: forma,
+                        recusas_antes_de_acertar: recusas,
+                        preservado: {
+                            pinData_antes: Object.keys(atual.pinData || {}).length,
+                            pinData_depois: Object.keys(salvo?.pinData || {}).length,
+                            staticData_antes: atual.staticData ? Object.keys(atual.staticData).length : 0,
+                            staticData_depois: salvo?.staticData ? Object.keys(salvo.staticData).length : 0,
+                            ativo_antes: !!atual.active,
+                            ativo_depois: !!salvo?.active,
+                        },
                         depois: {
                             errorWorkflow: salvo?.settings?.errorWorkflow ?? null,
                             saveDataErrorExecution: salvo?.settings?.saveDataErrorExecution ?? null,

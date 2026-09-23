@@ -235,6 +235,13 @@ type Alerta = {
     componente: string;
     conta: string;
     ocorrencias: string;
+    /**
+     * De onde veio a chamada que quebrou. Linha propria na mensagem porque e a
+     * primeira pergunta de quem le: "isso e a IA, o front ou terceiro?" — sem
+     * ela o nome do componente sozinho nao separa um defeito nosso de uma
+     * integracao de fora batendo errado na nossa porta.
+     */
+    origem: string;
     /** Catalogo estatico. Nunca vem da IA: e barato, nao falha e nao alucina. */
     oQueFaz: string;
     /** Erro BRUTO: mensagem real, codigo, valores. Nunca o nome do componente. */
@@ -257,6 +264,7 @@ function alertaTexto(a: Alerta): string {
     return [
         `${SEV_LABEL[a.severidade]} — Alerta Clinbia`,
         `Componente: ${a.componente}`,
+        `Origem: ${a.origem}`,
         `Conta: ${a.conta} · ${a.ocorrencias}`,
         ``,
         `O QUE ESSE SERVIÇO FAZ`,
@@ -307,7 +315,10 @@ function alertaParams(a: Alerta): string[] {
         a.componente,
         `${a.oQueFaz} — ${rotulo}: ${a.oQueFalhou}`,
         a.ocorrencias,
-        a.conta,
+        // A origem nao tem variavel propria: o template v2 tem 8 e todas ocupadas.
+        // Entra colada na conta em vez de esperar a aprovacao de um v3 — este
+        // caminho so roda FORA da janela de 24h, que e a excecao.
+        `${a.conta} · origem: ${a.origem}`,
         a.causa,
         a.acao,
         a.painel,
@@ -448,6 +459,35 @@ async function catalogoDoComponente(supabase: Db, componente: string): Promise<C
 type IncidenteRow = any;
 
 /**
+ * Rotulo humano da origem. Gemeo em pt-BR de `public.incident_origem_rotulo`,
+ * que serve o painel; a versao do banco e sem acento (padrao dos arquivos de
+ * migration) e esta mensagem vai para o WhatsApp de uma pessoa.
+ *
+ * `(inferida)` nao e detalhe de implementacao: e a diferenca entre "o n8n disse
+ * que foi ele" e "deduzi pelo formato do evento". No dia em que a deducao
+ * estiver errada, quem le precisa saber que era deducao.
+ */
+const ORIGEM_ROTULO: Record<string, string> = {
+    ia_n8n: "IA (fluxo do n8n)",
+    front: "Front (navegador do usuário)",
+    webhook_externo: "Webhook de terceiro (Meta/UAZAPI/Instagram)",
+    cron: "Rotina agendada (cron)",
+    edge_interna: "Chamada interna da plataforma",
+    integracao_externa: "Integração externa (provedor)",
+    multiplas: "Múltiplas origens no mesmo incidente",
+    nao_identificada: "Não identificada",
+};
+
+function origemRotulo(origem: unknown, inferida: unknown): string {
+    const base = ORIGEM_ROTULO[String(origem ?? "")] ?? "Não identificada";
+    // "Nao identificada" ja diz que e palpite; repetir "(inferida)" ali so
+    // alonga a linha sem acrescentar nada.
+    return inferida && origem && origem !== "nao_identificada"
+        ? `${base} (inferida)`
+        : base;
+}
+
+/**
  * Fonte UNICA do alerta de incidente. `dispatch` e `notify` montavam a mensagem
  * cada um do seu jeito e por isso divergiam — a causa provavel dizia "ainda nao
  * feita" num e "ainda nao concluida" no outro.
@@ -472,6 +512,7 @@ async function montarAlerta(
         componente: inc.component,
         conta,
         ocorrencias,
+        origem: origemRotulo(inc.origem, inc.origem_inferida),
         oQueFaz: cat.oQueFaz,
         // O bruto vem primeiro: o resumo da IA e util, mas e parafrase. Quem vai
         // consertar precisa da mensagem literal, do codigo e dos valores.
@@ -577,6 +618,7 @@ async function segundaViaEmail(
             componente: a.componente,
             conta: a.conta,
             ocorrencias: a.ocorrencias,
+            origem: a.origem,
             o_que_faz: a.oQueFaz,
             o_que_falhou: a.oQueFalhou,
             causa: a.causa,
@@ -948,6 +990,7 @@ serve(async (req) => {
                 natureza: "servico",
                 componente: "alert-notify",
                 conta: "nenhuma identificada",
+                origem: "Disparo manual de teste",
                 ocorrencias: `1 desde ${ddmmHHmm(new Date().toISOString())}`,
                 oQueFaz: "entrega os alertas de incidente da plataforma no WhatsApp do Super Admin",
                 oQueFalhou: sanitizeParam(body?.message ?? "teste manual do canal de alerta — nada falhou"),
@@ -985,6 +1028,9 @@ serve(async (req) => {
                 natureza: "servico",
                 componente: "resumo",
                 conta: "-",
+                // O resumo agrupa incidentes de origens diferentes; uma origem
+                // unica aqui seria mentira. Cada linha do painel tem a sua.
+                origem: "-",
                 ocorrencias: `${ddmmHHmm(inicio)} às ${ddmmHHmm(new Date().toISOString())}`,
                 oQueFaz: "-",
                 oQueFalhou: `${abertos.length} incidente(s) aberto(s)`,
@@ -1009,7 +1055,7 @@ serve(async (req) => {
             const { data: inc, error } = await supabase
                 .from("incidents")
                 .select(
-                    "id, component, source, ai_severity, ai_summary, ai_probable_cause, ai_origin, ai_fix_n8n, ai_fix_system, event_count, first_seen, owner_id, affected_tenants, analyzed_at",
+                    "id, component, source, ai_severity, ai_summary, ai_probable_cause, ai_origin, ai_fix_n8n, ai_fix_system, event_count, first_seen, owner_id, affected_tenants, analyzed_at, origem, origem_inferida",
                 )
                 .eq("id", incidentId)
                 .maybeSingle();

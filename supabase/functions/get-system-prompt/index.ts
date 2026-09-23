@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
             .maybeSingle();
 
         if (error) {
-            return dbErrorResponse(corsHeaders, "system_prompts_read_failed", "ler os system prompts", error);
+            return dbErrorResponse(corsHeaders, "system_prompts_read_failed", "ler os system prompts", error, req);
         }
         if (!data) {
             return apiError(corsHeaders, {
@@ -87,6 +87,6 @@ Deno.serve(async (req) => {
             { headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
     } catch (err) {
-        return unexpectedErrorResponse(corsHeaders, "buscar os system prompts", err);
+        return unexpectedErrorResponse(corsHeaders, "buscar os system prompts", err, req);
     }
 });

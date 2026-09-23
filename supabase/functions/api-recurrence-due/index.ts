@@ -84,7 +84,7 @@ serve(async (req) => {
 
         if (error) {
             return dbErrorResponse(corsHeaders, "recurrence_query_failed",
-                `listar as recorrências com abordagem pendente em ${date} para a conta ${userId}`, error);
+                `listar as recorrências com abordagem pendente em ${date} para a conta ${userId}`, error, req);
         }
 
         // As demais APIs (agendamento, CRM, envio) trabalham por conversation_id
@@ -131,7 +131,7 @@ serve(async (req) => {
         return json({ success: true, count: results.length, data: results });
     } catch (err) {
         return unexpectedErrorResponse(corsHeaders,
-            "Falha inesperada na API de recorrências pendentes (api-recurrence-due)", err);
+            "Falha inesperada na API de recorrências pendentes (api-recurrence-due)", err, req);
     }
 });
 

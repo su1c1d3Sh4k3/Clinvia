@@ -243,7 +243,7 @@ serve(async (req) => {
 
         if (scError) {
             return dbErrorResponse(corsHeaders, "service_lookup_failed",
-                `buscar a aplicação "${service_name}" no catálogo desta conta`, scError);
+                `buscar a aplicação "${service_name}" no catálogo desta conta`, scError, req);
         }
 
         const sc = scExact
@@ -291,7 +291,7 @@ serve(async (req) => {
             .in("id", profIds).eq("active", true);
         if (profError) {
             return dbErrorResponse(corsHeaders, "professionals_read_failed",
-                `buscar os profissionais vinculados à aplicação "${sc.name}"`, profError);
+                `buscar os profissionais vinculados à aplicação "${sc.name}"`, profError, req);
         }
 
         let professionals = (allProfessionals || []) as any[];
@@ -517,6 +517,6 @@ serve(async (req) => {
             ...sandboxInfo,
         }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     } catch (error) {
-        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de disponibilidade do ambiente de teste (api-availability-sandbox)", error);
+        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de disponibilidade do ambiente de teste (api-availability-sandbox)", error, req);
     }
 });

@@ -111,7 +111,7 @@ serve(async (req) => {
                     messageId
                         ? `buscar a mensagem de id do provider "${messageId}" na conta ${userId}`
                         : `buscar a última mensagem recebida com mídia da conversa ${conversationId}`,
-                    msgError);
+                    msgError, req);
             }
 
             if (!msg?.media_url) {
@@ -197,6 +197,6 @@ serve(async (req) => {
             size_bytes: bytes.length,
         });
     } catch (error) {
-        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de download de mídia (api-get-media)", error);
+        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de download de mídia (api-get-media)", error, req);
     }
 });

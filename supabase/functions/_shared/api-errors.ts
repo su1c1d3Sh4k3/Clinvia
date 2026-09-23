@@ -35,6 +35,16 @@ export interface ApiErrorInit {
      * `dbErrorResponse` e `unexpectedErrorResponse`, abaixo.
      */
     report?: boolean;
+    /**
+     * A requisição sendo atendida. É o que permite dizer se a falha veio da IA,
+     * do front ou de terceiro (header `x-origin`, ou inferência a partir dele).
+     *
+     * Opcional de propósito, e NÃO existe um "request atual" global: o isolate do
+     * Deno atende requisições concorrentes intercaladas nos `await`, então uma
+     * variável de módulo daria origem trocada entre dois chamadores. Sem este
+     * campo a origem sai `nao_identificada`, que é resultado honesto.
+     */
+    request?: Request;
 }
 
 export function apiError(headers: Record<string, string>, init: ApiErrorInit): Response {
@@ -55,6 +65,7 @@ export function apiError(headers: Record<string, string>, init: ApiErrorInit): R
             route: init.code,
             httpCode: init.status,
             message: [init.message, init.details].filter(Boolean).join(" | "),
+            request: init.request,
         });
     }
 
@@ -83,15 +94,17 @@ export function dbErrorResponse(
     code: string,
     operation: string,
     error: unknown,
+    request?: Request,
 ): Response {
     // Erro de banco é sempre defeito nosso (ou regressão de RLS) ⇒ reporta.
     // O `error` cru vai junto para o reporter porque é dele que sai o `code` do
     // Postgres — é o `42501` ali dentro que aciona a regra de RLS no banco.
-    reportIncident({ route: code, httpCode: 500, error, message: describeDbError(operation, error) });
+    reportIncident({ route: code, httpCode: 500, error, message: describeDbError(operation, error), request });
 
     return apiError(headers, {
         status: 500,
         code,
+        request,
         message: describeDbError(operation, error),
         details: String((error as Record<string, unknown>)?.message ?? error ?? ""),
     });
@@ -115,6 +128,7 @@ export function unexpectedErrorResponse(
     headers: Record<string, string>,
     context: string,
     error: unknown,
+    request?: Request,
 ): Response {
     const e = error as Record<string, unknown> | null;
 
@@ -129,6 +143,7 @@ export function unexpectedErrorResponse(
             code: String(e!.code),
             message: String(e!.message),
             details: e!.details ? String(e!.details) : undefined,
+            request,
             // Só 5xx vira incidente: um ApiError 400 foi LANÇADO de propósito
             // para recusar entrada inválida do chamador, não é defeito nosso.
             report: Number(e!.status) >= 500,
@@ -136,10 +151,11 @@ export function unexpectedErrorResponse(
     }
     // erro do supabase-js/PostgREST vazando pelo catch: tem code/details/hint
     if (e && (e.code || e.details || e.hint) && e.message) {
-        reportIncident({ route: "database_error", httpCode: 500, error, message: describeDbError(context, error) });
+        reportIncident({ route: "database_error", httpCode: 500, error, message: describeDbError(context, error), request });
         return apiError(headers, {
             status: 500,
             code: "database_error",
+            request,
             message: describeDbError(context, error),
             details: String(e.message),
         });
@@ -147,11 +163,12 @@ export function unexpectedErrorResponse(
 
     const raw = String(e?.message ?? e ?? "").trim();
     // Exceção que chegou até o catch externo: é sempre bug. Reporta com stack.
-    reportIncident({ route: "unexpected_error", httpCode: 500, error, message: `${context}: ${raw || "erro sem mensagem"}` });
+    reportIncident({ route: "unexpected_error", httpCode: 500, error, message: `${context}: ${raw || "erro sem mensagem"}`, request });
 
     return apiError(headers, {
         status: 500,
         code: "unexpected_error",
+        request,
         message: raw
             ? `${context}: ${raw}`
             : `${context}: a função encerrou com um erro sem mensagem. Verifique os logs desta edge function no painel do Supabase.`,

@@ -230,6 +230,6 @@ Deno.serve(async (req) => {
         });
     } catch (error) {
         return unexpectedErrorResponse(corsHeaders,
-            'Falha inesperada na calibração do cache ratio (calibrate-cache-ratio)', error);
+            'Falha inesperada na calibração do cache ratio (calibrate-cache-ratio)', error, req);
     }
 });

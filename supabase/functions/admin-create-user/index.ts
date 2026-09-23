@@ -153,7 +153,7 @@ serve(async (req) => {
             .maybeSingle();
 
         if (profileError) {
-            return dbErrorResponse(corsHeaders, "caller_profile_error", "verificar o cargo de quem chamou", profileError);
+            return dbErrorResponse(corsHeaders, "caller_profile_error", "verificar o cargo de quem chamou", profileError, req);
         }
         if (callerProfile?.role !== "super-admin") {
             return apiError(corsHeaders, {
@@ -232,7 +232,7 @@ serve(async (req) => {
 
             if (insertError) {
                 await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
-                return dbErrorResponse(corsHeaders, "admin_user_insert_failed", "gravar o usuário da equipe do painel", insertError);
+                return dbErrorResponse(corsHeaders, "admin_user_insert_failed", "gravar o usuário da equipe do painel", insertError, req);
             }
 
             return new Response(JSON.stringify({ success: true, admin_user: inserted }), {
@@ -250,7 +250,7 @@ serve(async (req) => {
             .maybeSingle();
 
         if (targetError) {
-            return dbErrorResponse(corsHeaders, "admin_user_lookup_failed", "localizar o usuário da equipe", targetError);
+            return dbErrorResponse(corsHeaders, "admin_user_lookup_failed", "localizar o usuário da equipe", targetError, req);
         }
         if (!target) {
             return apiError(corsHeaders, {
@@ -311,13 +311,13 @@ serve(async (req) => {
             .single();
 
         if (updateError) {
-            return dbErrorResponse(corsHeaders, "admin_user_update_failed", "atualizar o usuário da equipe", updateError);
+            return dbErrorResponse(corsHeaders, "admin_user_update_failed", "atualizar o usuário da equipe", updateError, req);
         }
 
         return new Response(JSON.stringify({ success: true, admin_user: updated }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
     } catch (error) {
-        return unexpectedErrorResponse(corsHeaders, "Falha ao gerenciar a equipe do painel administrativo", error);
+        return unexpectedErrorResponse(corsHeaders, "Falha ao gerenciar a equipe do painel administrativo", error, req);
     }
 });

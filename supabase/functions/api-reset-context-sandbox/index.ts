@@ -71,6 +71,6 @@ serve(async (req) => {
                 : "Contexto limpo: a IA passa a ver este contato como um cliente novo.",
         });
     } catch (err) {
-        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de reset de contexto do ambiente de teste (api-reset-context-sandbox)", err);
+        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de reset de contexto do ambiente de teste (api-reset-context-sandbox)", err, req);
     }
 });

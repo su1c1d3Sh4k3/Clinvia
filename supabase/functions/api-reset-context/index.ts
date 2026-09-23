@@ -94,6 +94,6 @@ serve(async (req) => {
                 : "Contexto limpo: a IA passa a ver este contato como um cliente novo.",
         });
     } catch (err) {
-        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de reset de contexto da IA (api-reset-context)", err);
+        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de reset de contexto da IA (api-reset-context)", err, req);
     }
 });

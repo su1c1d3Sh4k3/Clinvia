@@ -96,7 +96,7 @@ serve(async (req) => {
         if (error) {
             return dbErrorResponse(corsHeaders, "followup_pending_query_failed",
                 `listar as conversas pendentes de follow-up da conta ${userId} (RPC get_followup_pending_contacts, min=${minutes}${followNumber !== null ? `, follow_number=${followNumber}` : ""})`,
-                error);
+                error, req);
         }
 
         const contacts = data || [];
@@ -114,6 +114,6 @@ serve(async (req) => {
 
     } catch (err) {
         return unexpectedErrorResponse(corsHeaders,
-            "Falha inesperada na API de follow-up pendente (api-followup-pending)", err);
+            "Falha inesperada na API de follow-up pendente (api-followup-pending)", err, req);
     }
 });

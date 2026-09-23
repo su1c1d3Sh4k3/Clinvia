@@ -75,7 +75,7 @@ serve(async (req) => {
 
                 if (sError) {
                     return dbErrorResponse(corsHeaders, "services_lookup_failed",
-                        `buscar os serviços com nome parecido com "${service_name}" na conta ${user_id}`, sError);
+                        `buscar os serviços com nome parecido com "${service_name}" na conta ${user_id}`, sError, req);
                 }
 
                 const serviceIds = (services || []).map(s => s.id);
@@ -119,7 +119,7 @@ serve(async (req) => {
         }
 
         if (error) {
-            return dbErrorResponse(corsHeaders, errorCode, operation, error);
+            return dbErrorResponse(corsHeaders, errorCode, operation, error, req);
         }
 
         return new Response(
@@ -128,6 +128,6 @@ serve(async (req) => {
         );
 
     } catch (error) {
-        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de profissionais (api-professionals)", error);
+        return unexpectedErrorResponse(corsHeaders, "Falha inesperada na API de profissionais (api-professionals)", error, req);
     }
 });

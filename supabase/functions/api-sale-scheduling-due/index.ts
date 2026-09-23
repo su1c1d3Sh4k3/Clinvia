@@ -166,6 +166,6 @@ serve(async (req) => {
         });
     } catch (err) {
         return unexpectedErrorResponse(corsHeaders,
-            "Falha inesperada na API de vendas com Agendamento IA vencido (api-sale-scheduling-due)", err);
+            "Falha inesperada na API de vendas com Agendamento IA vencido (api-sale-scheduling-due)", err, req);
     }
 });
