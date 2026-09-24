@@ -97,6 +97,8 @@ serveMonitored("group-member-pics", async (req) => {
 
         const pics: Record<string, string> = {};
         const updates: { id: string; url: string }[] = [];
+        let falhas = 0;
+        let ultimaFalha: unknown = null;
 
         for (let i = 0; i < targets.length; i += 6) {
             const batch = targets.slice(i, i + 6);
@@ -118,15 +120,25 @@ serveMonitored("group-member-pics", async (req) => {
                     pics[num] = url;
                     const m = memberByLast8.get(num.slice(-8));
                     if (m && m.profile_pic_url !== url) updates.push({ id: m.id, url });
-                } catch (_) { /* privacidade/timeout — segue */ }
+                } catch (err) {
+                    // Perfil privado e timeout são respostas legítimas da UAZAPI,
+                    // então isto NÃO vira incidente — vira número. Sem ele não
+                    // dava para distinguir "ninguém tem foto pública" de "a
+                    // chamada está falhando para todo mundo".
+                    falhas++;
+                    ultimaFalha = err;
+                }
             }));
         }
 
         for (const u of updates) {
-            await supabase.from("group_members").update({ profile_pic_url: u.url }).eq("id", u.id);
+            const { error } = await supabase.from("group_members")
+                .update({ profile_pic_url: u.url }).eq("id", u.id);
+            if (error) console.error("[group-member-pics] não persistiu foto de", u.id, ":", error);
         }
 
-        console.log(`[group-member-pics] group=${group.id} targets=${targets.length} found=${Object.keys(pics).length} persisted=${updates.length}`);
+        console.log(`[group-member-pics] group=${group.id} targets=${targets.length} found=${Object.keys(pics).length} persisted=${updates.length} falhas=${falhas}`);
+        if (falhas > 0) console.error("[group-member-pics] última falha de busca:", ultimaFalha);
         return json({ pics, persisted: updates.length });
     } catch (err: any) {
         console.error("[group-member-pics] Error:", err?.message || err);

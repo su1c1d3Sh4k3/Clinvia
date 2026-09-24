@@ -198,7 +198,13 @@ serveMonitored("recurrence-template-sync", async (req) => {
                             method: "DELETE",
                             headers: { Authorization: `Bearer ${inst.meta_access_token}` },
                         },
-                    ).catch(() => {});
+                    )
+                        .then((r) => { if (!r.ok) console.error(
+                            "[recurrence-template-sync] template antigo", existing.name,
+                            "não foi removido na Meta: HTTP", r.status); })
+                        .catch((err) => console.error(
+                            "[recurrence-template-sync] remoção do template antigo",
+                            existing.name, "falhou:", err));
                 }
 
                 const row = {

@@ -147,14 +147,18 @@ serveMonitored("instagram-log-webhook", async (req) => {
             console.warn("[IG-LOG] log block failed:", logErr);
         }
     } else {
-        try {
-            await supabase.from("instagram_webhook_logs").insert({
-                event_type: "non_json_body",
-                raw_body: rawBody,
-                http_headers: headersObj,
-                payload: { _non_json: true },
-            });
-        } catch (_e) {}
+        // Este insert É o registro do corpo não-JSON. Engolir a falha dele
+        // apagava as duas coisas de uma vez: o corpo estranho e o fato de não
+        // termos conseguido guardá-lo.
+        const { error: naoJsonErr } = await supabase.from("instagram_webhook_logs").insert({
+            event_type: "non_json_body",
+            raw_body: rawBody,
+            http_headers: headersObj,
+            payload: { _non_json: true },
+        });
+        if (naoJsonErr) {
+            console.error("[IG-LOG] falha ao registrar corpo não-JSON:", naoJsonErr);
+        }
     }
 
     // ─── 2) TENANT GUARD ─────────────────────────────────────────────────
@@ -258,7 +262,12 @@ async function enrichSender(supabase: SupabaseClient, igsid: string, recipientIg
             resolvedPic = d.profile_pic || null;
             resolvedUsername = d.username || null;
         }
-    } catch (_e) {}
+    } catch (err) {
+        // Enriquecimento é best-effort (perfil privado é resposta legítima da
+        // Graph), então NÃO vira incidente — mas some do log nunca mais: foi
+        // assim que o `instagram-enrich-profiles` falhou 100% por 140 dias.
+        console.error("[IG-LOG] perfil do IGSID", igsid, "não resolvido:", err);
+    }
 
     if (!resolvedName && !resolvedUsername) {
         try {
@@ -275,7 +284,9 @@ async function enrichSender(supabase: SupabaseClient, igsid: string, recipientIg
                     }
                 }
             }
-        } catch (_e) {}
+        } catch (err) {
+            console.error("[IG-LOG] varredura de conversations não resolveu", igsid, ":", err);
+        }
     }
 
     const updates: Record<string, any> = {};

@@ -158,20 +158,34 @@ serveMonitored("meta-send-message", async (req) => {
             if (authHeader) {
                 try {
                     const token = authHeader.replace("Bearer ", "");
-                    const { data: { user } } = await supabase.auth.getUser(token);
+                    const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
+                    if (authErr) {
+                        console.error("[meta-send-message] getUser falhou:", authErr);
+                    }
                     if (user) {
                         userId = user.id;
-                        const { data: teamMember } = await supabase
+                        // `.maybeSingle()`: quem não tem linha em `team_members` é
+                        // caso normal (o dono), e não pode ser tratado como erro.
+                        const { data: teamMember, error: tmErr } = await supabase
                             .from("team_members")
                             .select("id, user_id")
                             .eq("auth_user_id", user.id)
-                            .single();
+                            .maybeSingle();
+                        if (tmErr) {
+                            console.error("[meta-send-message] leitura de team_members falhou:", tmErr);
+                            reportIncident({ route: "resolve_conversation:team_members", error: tmErr });
+                        }
                         if (teamMember) {
                             authenticatedAgentId = teamMember.id;
                             userId = teamMember.user_id;
                         }
                     }
-                } catch {}
+                } catch (err) {
+                    // O `catch {}` daqui virava "User not authenticated" logo abaixo:
+                    // o erro chegava ao chamador, mas com a causa apagada.
+                    console.error("[meta-send-message] falha ao resolver o remetente:", err);
+                    reportIncident({ route: "resolve_conversation:auth", error: err });
+                }
             }
 
             if (!userId) throw new Error("User not authenticated");
@@ -263,16 +277,29 @@ serveMonitored("meta-send-message", async (req) => {
         if (authHeader && !isApiMessage) {
             try {
                 const token = authHeader.replace("Bearer ", "");
-                const { data: { user } } = await supabase.auth.getUser(token);
+                const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
+                if (authErr) {
+                    console.error("[meta-send-message] getUser falhou na assinatura:", authErr);
+                }
                 if (user) {
-                    const { data: teamMember } = await supabase
+                    const { data: teamMember, error: tmErr } = await supabase
                         .from("team_members")
                         .select("id")
                         .eq("auth_user_id", user.id)
-                        .single();
+                        .maybeSingle();
+                    if (tmErr) {
+                        console.error("[meta-send-message] leitura de team_members na assinatura falhou:", tmErr);
+                        reportIncident({ route: "agent_signature:team_members", error: tmErr });
+                    }
                     if (teamMember) authenticatedAgentId = teamMember.id;
                 }
-            } catch {}
+            } catch (err) {
+                // Aqui o silêncio não derrubava nada — era pior: a mensagem SAÍA,
+                // sem assinatura e sem `sender_name`, e ninguém ficava sabendo que
+                // a atribuição de autoria tinha falhado.
+                console.error("[meta-send-message] falha ao identificar quem assina:", err);
+                reportIncident({ route: "agent_signature", error: err });
+            }
         }
 
         const signerAgentId = authenticatedAgentId || conversation.assigned_agent_id;

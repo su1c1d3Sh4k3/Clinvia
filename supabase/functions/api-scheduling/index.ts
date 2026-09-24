@@ -35,10 +35,46 @@ import {
     unknownAction,
 } from "../_shared/api-errors.ts";
 import { createServiceLabelResolver, findServiceByDisplayName } from "../_shared/service-label.ts";
+import { reportIncident } from "../_shared/report-incident.ts";
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-api-key",
 };
+
+/**
+ * Sincroniza o agendamento com o Google Calendar sem bloquear a resposta.
+ *
+ * Os três lugares que chamam isto (criar, reagendar, cancelar) tinham o mesmo
+ * par `.catch(() => {})` + `catch (_) {}`: dessincronização com a agenda do
+ * profissional era 100% silenciosa, e o `catch` externo ainda era código morto
+ * porque o `fetch` não é aguardado. Continua fire-and-forget — o agendamento já
+ * está gravado e não pode depender do Google —, mas agora deixa rastro.
+ */
+function syncGoogleCalendar(
+    action: "sync_appointment" | "delete_appointment",
+    appointmentId: string,
+    userId: string,
+): void {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    const relatar = (motivo: string, erro?: unknown) => {
+        console.error(`[api-scheduling] google-calendar-sync (${action}) falhou:`, motivo, erro ?? "");
+        reportIncident({
+            route: `google_calendar_sync:${action}`,
+            message: `sincronia com o Google Calendar falhou (${action}): ${motivo}`,
+            error: erro,
+            ownerId: userId,
+            context: { appointment_id: appointmentId, action },
+        });
+    };
+    fetch(`${supabaseUrl}/functions/v1/google-calendar-sync`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${serviceKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ action, appointment_id: appointmentId, user_id: userId }),
+    })
+        .then((r) => { if (!r.ok) relatar(`HTTP ${r.status}`); })
+        .catch((err) => relatar("rede", err));
+}
 
 function pad(n: number): string { return String(n).padStart(2, "0"); }
 
@@ -580,15 +616,7 @@ serveMonitored("api-scheduling", async (req) => {
             }
 
             // Google Calendar sync (fire-and-forget)
-            try {
-                const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-                const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-                fetch(`${supabaseUrl}/functions/v1/google-calendar-sync`, {
-                    method: "POST",
-                    headers: { "Authorization": `Bearer ${serviceKey}`, "Content-Type": "application/json" },
-                    body: JSON.stringify({ action: "sync_appointment", appointment_id: created.id, user_id }),
-                }).catch(() => {});
-            } catch (_) {}
+            syncGoogleCalendar("sync_appointment", created.id, user_id);
 
             // CRM sync: move/create card to Agendado + add service — o card é do
             // funil da conexão desta conversa.
@@ -823,15 +851,7 @@ serveMonitored("api-scheduling", async (req) => {
             }
 
             // Google Calendar sync
-            try {
-                const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-                const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-                fetch(`${supabaseUrl}/functions/v1/google-calendar-sync`, {
-                    method: "POST",
-                    headers: { "Authorization": `Bearer ${serviceKey}`, "Content-Type": "application/json" },
-                    body: JSON.stringify({ action: "sync_appointment", appointment_id, user_id }),
-                }).catch(() => {});
-            } catch (_) {}
+            syncGoogleCalendar("sync_appointment", appointment_id, user_id);
 
             // CRM: move card to Agendado — funil da conexão do agendamento.
             // O reagendamento já foi gravado: falha aqui vira aviso, não erro.
@@ -913,15 +933,7 @@ serveMonitored("api-scheduling", async (req) => {
             }
 
             // Google Calendar: delete event
-            try {
-                const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-                const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-                fetch(`${supabaseUrl}/functions/v1/google-calendar-sync`, {
-                    method: "POST",
-                    headers: { "Authorization": `Bearer ${serviceKey}`, "Content-Type": "application/json" },
-                    body: JSON.stringify({ action: "delete_appointment", appointment_id, user_id }),
-                }).catch(() => {});
-            } catch (_) {}
+            syncGoogleCalendar("delete_appointment", appointment_id, user_id);
 
             // CRM: create Perdido card for the canceled service.
             // O cancelamento já foi gravado: falha aqui vira aviso, não erro.

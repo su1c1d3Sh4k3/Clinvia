@@ -225,8 +225,11 @@ serveMonitored("infra-collector", async (req) => {
                     if (res.ok) {
                       baselineStats.set(id, await res.json());
                     }
-                  } catch (_) {
-                    // ignore — container will report 0% CPU
+                  } catch (err) {
+                    // O fallback (0% de CPU) fica, mas ele é perigoso calado: um
+                    // container que não responde stats vira "saudável" e nunca
+                    // cruza o limiar de alerta.
+                    console.error("[infra-collector] baseline de stats falhou para", id, ":", err);
                   }
                 })
               );
@@ -296,8 +299,11 @@ serveMonitored("infra-collector", async (req) => {
                     memUsage = formatBytes(memUsageBytes);
                     memLimit = formatBytes(memLimitBytes);
                   }
-                } catch (_) {
-                  // stats fetch failed — use zeros
+                } catch (err) {
+                  // Zeros continuam sendo o fallback, pelo mesmo motivo de cima —
+                  // e pelo mesmo motivo não podem ser mudos.
+                  console.error("[infra-collector] stats de", container.Names?.[0] ?? container.Id,
+                    "falharam; métricas vão zeradas:", err);
                 }
 
                 if (cpuPercent > cpuThreshold) {

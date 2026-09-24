@@ -226,7 +226,11 @@ serveMonitored("admin-n8n-enforce-settings", async (req) => {
                 passos.depois_do_put_sem_settings = (await n8n(`/workflows/${id}`, N8N_API_KEY)).settings;
             } finally {
                 // Artefato meu, criado nesta chamada: some junto. Nada do dele.
-                await n8n(`/workflows/${id}`, N8N_API_KEY, { method: "DELETE" }).catch(() => {});
+                // Engolir a falha da limpeza deixava lixo com a minha cara no n8n
+                // DELE, sem ninguém saber que ficou.
+                await n8n(`/workflows/${id}`, N8N_API_KEY, { method: "DELETE" })
+                    .catch((err) => console.error(
+                        `[admin-n8n-enforce-settings] sonda ${id} NÃO foi apagada — limpar à mão:`, err));
             }
             return json({ success: true, action, passos });
         }

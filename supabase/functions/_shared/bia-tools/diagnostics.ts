@@ -3,6 +3,7 @@
 
 import { UserContext, FunctionResult, ToolFunction } from './types.ts';
 import { formatDateBR } from './helpers.ts';
+import { reportIncident } from '../report-incident.ts';
 
 // ============================================
 // TOOL DEFINITIONS
@@ -268,13 +269,32 @@ async function getFinancial(
     const startISO = startDate.toISOString();
     const endISO = endDate.toISOString();
 
+    // O `try/catch` que envolvia a leitura de `expenses` era código morto:
+    // supabase-js não lança em erro de consulta, ele DEVOLVE `{data, error}`. O
+    // silêncio de verdade estava no `error` descartado nas duas leituras — falha
+    // de leitura virava "R$ 0,00" com cara de resposta correta, a mesma classe do
+    // `busy` vazio que fazia a API oferecer horário já ocupado. E o comentário
+    // "table might not exist" estava velho: `revenues` e `expenses` existem
+    // (conferido em 23/09), então erro aqui é defeito, não ausência.
+    const avisos: string[] = [];
+
     // Revenues (receitas pagas ou futuras no período)
-    const { data: revenueData } = await supabase
+    const { data: revenueData, error: revenueError } = await supabase
         .from('revenues')
         .select('amount, status')
         .eq('user_id', context.owner_id)
         .gte('due_date', startISO)
         .lte('due_date', endISO);
+
+    if (revenueError) {
+        console.error('[bia-tools/diagnostics] falha ao ler revenues:', revenueError);
+        reportIncident({
+            route: 'financial_summary:revenues',
+            error: revenueError,
+            ownerId: context.owner_id,
+        });
+        avisos.push('não foi possível ler as receitas do período');
+    }
 
     const totalRevenue = revenueData?.reduce((sum: number, r: any) => sum + (parseFloat(r.amount) || 0), 0) || 0;
     const paidRevenue = revenueData?.filter((r: any) => r.status === 'paid')
@@ -282,17 +302,24 @@ async function getFinancial(
     const salesCount = revenueData?.length || 0;
 
     // Expenses (despesas no período)
-    let expenses = 0;
-    try {
-        const { data: expenseData } = await supabase
-            .from('expenses')
-            .select('amount, status')
-            .eq('user_id', context.owner_id)
-            .gte('due_date', startISO)
-            .lte('due_date', endISO);
+    const { data: expenseData, error: expenseError } = await supabase
+        .from('expenses')
+        .select('amount, status')
+        .eq('user_id', context.owner_id)
+        .gte('due_date', startISO)
+        .lte('due_date', endISO);
 
-        expenses = expenseData?.reduce((sum: number, e: any) => sum + (parseFloat(e.amount) || 0), 0) || 0;
-    } catch (_) { /* table might not exist */ }
+    if (expenseError) {
+        console.error('[bia-tools/diagnostics] falha ao ler expenses:', expenseError);
+        reportIncident({
+            route: 'financial_summary:expenses',
+            error: expenseError,
+            ownerId: context.owner_id,
+        });
+        avisos.push('não foi possível ler as despesas do período');
+    }
+
+    const expenses = expenseData?.reduce((sum: number, e: any) => sum + (parseFloat(e.amount) || 0), 0) || 0;
 
     const periodLabel = args.period === 'today' ? 'hoje' :
         args.period === 'week' ? 'última semana' : 'este mês';
@@ -309,7 +336,10 @@ async function getFinancial(
             expenses: expenses,
             expenses_formatted: `R$ ${expenses.toFixed(2)}`,
             profit: paidRevenue - expenses,
-            profit_formatted: `R$ ${(paidRevenue - expenses).toFixed(2)}`
+            profit_formatted: `R$ ${(paidRevenue - expenses).toFixed(2)}`,
+            // O número continua saindo (fallback intacto), mas quem lê passa a
+            // saber que ele está incompleto em vez de confiar num zero.
+            aviso: avisos.length > 0 ? avisos.join('; ') : undefined
         }
     };
 }

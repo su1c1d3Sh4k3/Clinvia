@@ -11,6 +11,8 @@
 //  - QUICK_REPLY: máx. 25 caracteres por botão
 // -----------------------------------------------------------------------------
 
+import { reportIncident } from "./report-incident.ts";
+
 export interface SystemTemplateDef {
     name: string;
     category: "UTILITY";
@@ -180,10 +182,29 @@ export async function callFunction(
         },
         body: JSON.stringify(payload),
     });
+    // Lê como TEXTO primeiro. Quem responde HTML (gateway 401, 504 do proxy) não
+    // é JSON, e era exatamente aí que o status E o corpo sumiam: o chamador
+    // recebia `{ok:false, result:null}` e não tinha como dizer POR QUE falhou.
+    // Foi dessa forma que o 401 do `alert-notify` passou semanas invisível.
+    const bruto = await resp.text().catch(() => "");
     let result: any = null;
     try {
-        result = await resp.json();
-    } catch { /* resposta não-JSON */ }
+        result = bruto ? JSON.parse(bruto) : null;
+    } catch { /* resposta não-JSON: o fallback continua, mas agora deixa rastro */ }
+
+    if (!resp.ok) {
+        console.error(`[system-templates] ${name} respondeu ${resp.status}:`, bruto.slice(0, 300));
+        reportIncident({
+            route: `call_function:${name}`,
+            httpCode: resp.status,
+            message: `chamada interna a ${name} falhou com HTTP ${resp.status}`,
+            context: { fn: name, corpo: bruto.slice(0, 300), corpo_era_json: result !== null },
+        });
+    } else if (result === null && bruto) {
+        // 2xx com corpo ilegível: não derruba nada, mas quem depende do `result`
+        // vai tratar sucesso como ausência de dado.
+        console.error(`[system-templates] ${name} respondeu 2xx não-JSON:`, bruto.slice(0, 300));
+    }
     return { ok: resp.ok, result };
 }
 

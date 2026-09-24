@@ -1,4 +1,5 @@
 import { serveMonitored } from "../_shared/serve-monitored.ts";
+import { reportIncident } from "../_shared/report-incident.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
@@ -168,13 +169,24 @@ async function saveMessage(supabase: any, conversationId: string | null, ownerId
 }
 
 async function logSent(supabase: any, autoMessageId: string, entityType: string, entityId: string) {
-  try {
-    await supabase.from("auto_message_logs").insert({
-      auto_message_id: autoMessageId,
-      entity_type: entityType,
-      entity_id: entityId,
+  // Este insert É o antiduplicata. O `catch { /* dup ignored */ }` tratava toda
+  // falha como se fosse duplicata: se o insert falhasse por outro motivo, o
+  // registro não existia, `alreadySent` devolvia false e a MESMA mensagem saía de
+  // novo na passada seguinte — reenvio ao paciente, em silêncio.
+  const { error } = await supabase.from("auto_message_logs").insert({
+    auto_message_id: autoMessageId,
+    entity_type: entityType,
+    entity_id: entityId,
+  });
+  // 23505 é o caminho esperado (a duplicata que a coluna única barrou).
+  if (error && error.code !== "23505") {
+    console.error("[process-auto-messages] antiduplicata não gravou:", error);
+    reportIncident({
+      route: "log_sent",
+      error,
+      context: { auto_message_id: autoMessageId, entity_type: entityType, entity_id: entityId },
     });
-  } catch { /* dup ignored */ }
+  }
 }
 
 async function alreadySent(supabase: any, autoMessageId: string, entityId: string): Promise<boolean> {

@@ -182,7 +182,12 @@ serveMonitored("uzapi-health-check", async (req) => {
                 const body = await req.clone().json().catch(() => null) as any;
                 if (body?.owner_id) ownerIdFilter = String(body.owner_id);
             }
-        } catch { /* ignore parse errors */ }
+        } catch (err) {
+            // Sem o filtro a varredura roda inteira em vez de só o owner pedido:
+            // o resultado continua correto, mas mais caro — e isso precisa ser
+            // visível quando alguém for investigar lentidão aqui.
+            console.error('[uzapi-health-check] owner_id não pôde ser lido; varrendo tudo:', err);
+        }
 
         let listQuery = supabase
             .from('instances')

@@ -681,19 +681,29 @@ async function createAppointmentAndUpdateDelivery(
     const endIso = endDate.toISOString();
 
     // Overlap guard via RPC (if it exists in this DB; otherwise rely on slot-engine freshness)
-    try {
-        const { data: overlap } = await supabase.rpc("check_appointment_overlap", {
-            p_professional_id: ctx.professional.id,
-            p_start_time: startIso,
-            p_end_time: endIso,
-            p_exclude_id: null,
+    //
+    // O `try/catch` daqui era código morto: `supabase.rpc` devolve `{data, error}`,
+    // não lança. O silêncio real era o `error` descartado — e o preço dele é caro:
+    // a guarda de sobreposição some sem aviso e o agendamento duplo só aparece na
+    // agenda do profissional.
+    const { data: overlap, error: overlapErr } = await supabase.rpc("check_appointment_overlap", {
+        p_professional_id: ctx.professional.id,
+        p_start_time: startIso,
+        p_end_time: endIso,
+        p_exclude_id: null,
+    });
+    if (overlapErr) {
+        console.error("[respond] guarda de sobreposição indisponível:", overlapErr);
+        reportIncident({
+            route: "check_appointment_overlap",
+            error: overlapErr,
+            ownerId: session.user_id,
+            context: { professional_id: ctx.professional.id, inicio: startIso },
         });
-        if (overlap === true) {
-            console.warn(`[respond] race: slot ${slot.time} now overlapping — recomputing`);
-            return null;
-        }
-    } catch (err) {
-        // RPC not available — continue; worst case is a rare DB constraint violation which we catch below.
+    }
+    if (overlap === true) {
+        console.warn(`[respond] race: slot ${slot.time} now overlapping — recomputing`);
+        return null;
     }
 
     // contact_id: patient.contact_id preferred, else session.contact_id

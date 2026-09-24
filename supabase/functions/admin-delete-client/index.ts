@@ -161,9 +161,22 @@ serveMonitored("admin-delete-client", async (req) => {
         }
 
         // Auth users dos colaboradores deste tenant.
+        //
+        // O `.catch(() => {})` daqui apagava um resíduo sério: colaborador cuja
+        // exclusão falha CONTINUA conseguindo logar depois da conta excluída. A
+        // falha segue não derrubando a exclusão (o dono é o que importa), mas
+        // agora é nomeada — e volta na resposta, que é onde alguém olha.
+        const colaboradoresNaoExcluidos: string[] = [];
         for (const member of teamAuthIds ?? []) {
             if (member.auth_user_id && member.auth_user_id !== profileId) {
-                await supabaseAdmin.auth.admin.deleteUser(member.auth_user_id).catch(() => {});
+                const { error: delErr } = await supabaseAdmin.auth.admin
+                    .deleteUser(member.auth_user_id);
+                if (delErr) {
+                    colaboradoresNaoExcluidos.push(member.auth_user_id);
+                    console.error(
+                        `[admin-delete-client] Falha ao excluir o auth user ${member.auth_user_id}: ${delErr.message}`
+                    );
+                }
             }
         }
 
@@ -177,7 +190,13 @@ serveMonitored("admin-delete-client", async (req) => {
         console.log(`[admin-delete-client] Account deleted successfully: ${profileId}`);
 
         return new Response(
-            JSON.stringify({ success: true, message: "Conta excluída com sucesso" }),
+            JSON.stringify({
+                success: true,
+                message: "Conta excluída com sucesso",
+                colaboradores_nao_excluidos: colaboradoresNaoExcluidos.length > 0
+                    ? colaboradoresNaoExcluidos
+                    : undefined,
+            }),
             { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
 

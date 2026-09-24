@@ -2,6 +2,7 @@
 // Auto-create support tickets when Bia can't resolve issues
 
 import { UserContext, FunctionResult, ToolFunction } from './types.ts';
+import { reportIncident } from '../report-incident.ts';
 
 // ============================================
 // TOOL DEFINITIONS
@@ -89,17 +90,30 @@ async function supportCreateTicket(
 ): Promise<FunctionResult> {
 
     // Fetch creator name
+    //
+    // O `try/catch` daqui era código morto (supabase-js devolve `{data, error}`,
+    // não lança) e o `error` ia para o lixo. `.single()` sem linha responde
+    // PGRST116 — normal para o dono, que pode não ter linha em `team_members` —
+    // então a leitura passa a `.maybeSingle()`, e o que sobra de erro não é
+    // normal: o chamado nasceria com "Usuário" no lugar de quem abriu.
     let creatorName = 'Usuário';
-    try {
-        const { data: tm } = await supabase
-            .from('team_members')
-            .select('full_name, name')
-            .eq('auth_user_id', context.auth_user_id)
-            .single();
-        if (tm) {
-            creatorName = tm.full_name || tm.name || 'Usuário';
-        }
-    } catch (_) { /* fallback to default */ }
+    const { data: tm, error: tmError } = await supabase
+        .from('team_members')
+        .select('full_name, name')
+        .eq('auth_user_id', context.auth_user_id)
+        .maybeSingle();
+
+    if (tmError) {
+        console.error('[bia-tools/support] falha ao ler team_members:', tmError);
+        reportIncident({
+            route: 'support_create_ticket:team_members',
+            error: tmError,
+            ownerId: context.owner_id,
+        });
+    }
+    if (tm) {
+        creatorName = tm.full_name || tm.name || 'Usuário';
+    }
 
     const { data, error } = await supabase
         .from('support_tickets')
