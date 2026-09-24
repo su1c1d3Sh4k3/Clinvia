@@ -2,11 +2,10 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { ChevronDown, Loader2, Play } from "lucide-react";
+import { Loader2, Play } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -87,97 +86,87 @@ export function SandboxSimulators({
     };
 
     return (
-        <Collapsible defaultOpen={false}>
-            <Card data-tour="sandbox-simuladores">
-                <CollapsibleTrigger className="group w-full text-left">
-                    <CardHeader className="flex-row items-start justify-between gap-3 space-y-0">
-                        <div className="min-w-0">
-                            <CardTitle className="text-base">Simuladores</CardTitle>
-                            <CardDescription className="mt-1.5">
-                                Coloque o paciente fictício na situação que você quer testar. A
-                                mensagem aparece no chat como se ele tivesse recebido e você
-                                responde no lugar dele.
-                            </CardDescription>
-                        </div>
-                        <ChevronDown className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
-                    </CardHeader>
-                </CollapsibleTrigger>
+        <Card>
+            <CardHeader>
+                <CardTitle className="text-base">Simuladores</CardTitle>
+                <CardDescription>
+                    Coloque o paciente fictício na situação que você quer testar. A mensagem
+                    aparece no chat como se ele tivesse recebido e você responde no lugar dele.
+                </CardDescription>
+            </CardHeader>
 
-                <CollapsibleContent>
-                <CardContent>
-                    <Tabs defaultValue="campanha">
-                        <TabsList className="flex-nowrap overflow-x-auto">
-                            <TabsTrigger value="campanha" className="shrink-0">Campanha</TabsTrigger>
-                            <TabsTrigger value="recorrencia" className="shrink-0">Recorrência</TabsTrigger>
-                            <TabsTrigger value="confirmacao" className="shrink-0">Confirmação</TabsTrigger>
-                            <TabsTrigger value="venda" className="shrink-0">Venda</TabsTrigger>
-                            <TabsTrigger value="convenio" className="shrink-0">Convênio</TabsTrigger>
-                        </TabsList>
+            <CardContent>
+                <Tabs defaultValue="campanha">
+                    <TabsList className="flex-nowrap overflow-x-auto">
+                        <TabsTrigger value="campanha" className="shrink-0">Campanha</TabsTrigger>
+                        <TabsTrigger value="recorrencia" className="shrink-0">Recorrência</TabsTrigger>
+                        <TabsTrigger value="confirmacao" className="shrink-0">Confirmação</TabsTrigger>
+                        <TabsTrigger value="venda" className="shrink-0">Venda</TabsTrigger>
+                        <TabsTrigger value="convenio" className="shrink-0">Convênio</TabsTrigger>
+                    </TabsList>
 
-                        <TabsContent value="campanha" className="pt-4">
-                            <CampanhaSim
-                                modo="manual"
-                                sessionId={sessionId}
-                                ownerId={ownerId}
-                                salas={salas}
-                                servicos={servicos}
-                                inserirMensagem={inserirMensagem}
-                                registrarLog={registrarLog}
-                                onDone={onDone}
-                            />
-                        </TabsContent>
+                    <TabsContent value="campanha" className="pt-4">
+                        <CampanhaSim
+                            modo="manual"
+                            sessionId={sessionId}
+                            ownerId={ownerId}
+                            salas={salas}
+                            servicos={servicos}
+                            inserirMensagem={inserirMensagem}
+                            registrarLog={registrarLog}
+                            onDone={onDone}
+                        />
+                    </TabsContent>
 
-                        <TabsContent value="recorrencia" className="pt-4">
-                            <CampanhaSim
-                                modo="recurrence"
-                                sessionId={sessionId}
-                                ownerId={ownerId}
-                                salas={salas}
-                                servicos={servicos}
-                                inserirMensagem={inserirMensagem}
-                                registrarLog={registrarLog}
-                                onDone={onDone}
-                            />
-                        </TabsContent>
+                    <TabsContent value="recorrencia" className="pt-4">
+                        <CampanhaSim
+                            modo="recurrence"
+                            sessionId={sessionId}
+                            ownerId={ownerId}
+                            salas={salas}
+                            servicos={servicos}
+                            inserirMensagem={inserirMensagem}
+                            registrarLog={registrarLog}
+                            onDone={onDone}
+                        />
+                    </TabsContent>
 
-                        <TabsContent value="confirmacao" className="pt-4">
-                            <ConfirmacaoSim
-                                sessionId={sessionId}
-                                ownerId={ownerId}
-                                contato={contato}
-                                salas={salas}
-                                servicos={servicos}
-                                clinicaNome={clinicaNome}
-                                inserirMensagem={inserirMensagem}
-                                registrarLog={registrarLog}
-                                onDone={onDone}
-                            />
-                        </TabsContent>
+                    <TabsContent value="confirmacao" className="pt-4">
+                        <ConfirmacaoSim
+                            sessionId={sessionId}
+                            ownerId={ownerId}
+                            contato={contato}
+                            salas={salas}
+                            servicos={servicos}
+                            clinicaNome={clinicaNome}
+                            inserirMensagem={inserirMensagem}
+                            registrarLog={registrarLog}
+                            onDone={onDone}
+                        />
+                    </TabsContent>
 
-                        <TabsContent value="venda" className="pt-4">
-                            <VendaSim
-                                sessionId={sessionId}
-                                ownerId={ownerId}
-                                contato={contato}
-                                servicos={servicos}
-                                registrarLog={registrarLog}
-                                onDone={onDone}
-                            />
-                        </TabsContent>
+                    <TabsContent value="venda" className="pt-4">
+                        <VendaSim
+                            sessionId={sessionId}
+                            ownerId={ownerId}
+                            contato={contato}
+                            servicos={servicos}
+                            registrarLog={registrarLog}
+                            onDone={onDone}
+                        />
+                    </TabsContent>
 
-                        <TabsContent value="convenio" className="pt-4">
-                            <ConvenioSim
-                                contato={contato}
-                                convenios={convenios}
-                                registrarLog={registrarLog}
-                                onDone={onDone}
-                            />
-                        </TabsContent>
-                    </Tabs>
-                </CardContent>
-                </CollapsibleContent>
-            </Card>
-        </Collapsible>
+                    <TabsContent value="convenio" className="pt-4">
+                        <ConvenioSim
+                            contato={contato}
+                            convenios={convenios}
+                            registrarLog={registrarLog}
+                            onDone={onDone}
+                        />
+                    </TabsContent>
+                </Tabs>
+            </CardContent>
+        </Card>
     );
 }
 

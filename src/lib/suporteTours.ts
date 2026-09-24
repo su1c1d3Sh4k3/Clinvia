@@ -446,7 +446,7 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
             element: '[data-tour="sandbox-paciente"]',
             title: "Paciente fictício",
             description:
-                "Quem está do outro lado da conversa. Edite nome, e-mail, CPF, Instagram e convênios: a IA passa a enxergar esses dados na mensagem seguinte.",
+                "Ao lado da conversa fica um painel de três abas: Logs, Voz e Simuladores. Este é o primeiro bloco da aba Logs — quem está do outro lado. Edite nome, e-mail, CPF, Instagram e convênios: a IA passa a enxergar esses dados na mensagem seguinte.",
         },
         {
             element: '[data-tour="sandbox-logs"]',
@@ -470,13 +470,13 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
             element: '[data-tour="sandbox-tom"]',
             title: "Tom de voz em rascunho",
             description:
-                "Clique no título para abrir. São os mesmos controles da aba Tom de voz. Salvar no teste faz a próxima mensagem do chat já sair no tom novo, sem mexer no atendimento real. Salvar em produção publica para valer.",
+                "A aba Voz traz os mesmos controles da aba Tom de voz, um abaixo do outro. Salvar no teste faz a próxima mensagem do chat já sair no tom novo, sem mexer no atendimento real. Salvar em produção publica para valer.",
         },
         {
             element: '[data-tour="sandbox-simuladores"]',
             title: "Simuladores",
             description:
-                "Clique no título para abrir. Provoque as situações que normalmente dependem de esperar: campanha chegando, mensagem de recorrência, confirmação de agendamento, venda avulsa ou convênio no cadastro. A IA recebe como receberia na vida real.",
+                "A aba Simuladores provoca as situações que normalmente dependem de esperar: campanha chegando, mensagem de recorrência, confirmação de agendamento, venda avulsa ou convênio no cadastro. A IA recebe como receberia na vida real.",
         },
         {
             title: "Terminou? Resete",

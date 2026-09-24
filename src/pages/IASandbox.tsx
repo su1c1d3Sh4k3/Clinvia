@@ -15,6 +15,7 @@ import {
     AlertDialogTitle,
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -253,8 +254,9 @@ export default function IASandbox() {
                 <SandboxTokenBar totais={tokens.data} />
             </div>
 
-            {/* 72/28: a conversa ocupa 20% a mais de largura que os 60% de antes. */}
-            <div className="grid gap-4 lg:grid-cols-[72fr_28fr]">
+            {/* 61/39: a conversa cedeu 15% da largura porque tudo o que antes
+                ficava embaixo dela agora mora no painel de abas ao lado. */}
+            <div className="grid gap-4 lg:grid-cols-[61fr_39fr]">
                 <SandboxChat
                     mensagens={mensagens || []}
                     carregando={carregandoMsgs}
@@ -267,49 +269,97 @@ export default function IASandbox() {
                     pacienteNome={contato.push_name}
                 />
 
-                <div className="space-y-4">
-                    <SandboxPacienteCard
-                        contato={contato}
-                        convenios={catalogo?.convenios || []}
-                        salvando={salvarPaciente.isPending}
-                        onSalvar={(patch) =>
-                            salvarPaciente.mutate(
-                                { contactId: contato.id, patch },
-                                {
-                                    onSuccess: () => toast.success("Paciente de teste atualizado."),
-                                    onError: () =>
-                                        toast.error("Não foi possível salvar o paciente de teste."),
-                                },
-                            )
-                        }
-                    />
-                    <SandboxLogsCard logs={logs.data || []} />
-                    <SandboxCrmCardPanel
-                        cards={crm.data?.cards || []}
-                        historico={crm.data?.historico || []}
-                    />
-                    <SandboxAgendaCard
-                        agendamentos={agenda.data || []}
-                        vendas={vendas.data || []}
-                        salas={catalogo?.salas || []}
-                        servicos={catalogo?.servicos || []}
-                    />
-                </div>
+                {/* Painel lateral: mesma altura do chat, com rolagem própria, para
+                    trocar de aba não empurrar a conversa para cima nem para baixo.
+                    "Logs" é a aba padrão de propósito — o Radix desmonta o conteúdo
+                    das abas fechadas, e é nela que estão as âncoras do tour. */}
+                <Tabs
+                    defaultValue="logs"
+                    className="flex flex-col gap-3 lg:h-[768px] lg:min-h-0"
+                >
+                    <TabsList className="w-full flex-nowrap overflow-x-auto">
+                        <TabsTrigger value="logs" className="shrink-0 flex-1">
+                            Logs
+                        </TabsTrigger>
+                        <TabsTrigger
+                            value="voz"
+                            className="shrink-0 flex-1"
+                            data-tour="sandbox-tom"
+                        >
+                            Voz
+                        </TabsTrigger>
+                        <TabsTrigger
+                            value="simuladores"
+                            className="shrink-0 flex-1"
+                            data-tour="sandbox-simuladores"
+                        >
+                            Simuladores
+                        </TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent
+                        value="logs"
+                        className="mt-0 space-y-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1"
+                    >
+                        <SandboxPacienteCard
+                            contato={contato}
+                            convenios={catalogo?.convenios || []}
+                            salvando={salvarPaciente.isPending}
+                            onSalvar={(patch) =>
+                                salvarPaciente.mutate(
+                                    { contactId: contato.id, patch },
+                                    {
+                                        onSuccess: () =>
+                                            toast.success("Paciente de teste atualizado."),
+                                        onError: () =>
+                                            toast.error(
+                                                "Não foi possível salvar o paciente de teste.",
+                                            ),
+                                    },
+                                )
+                            }
+                        />
+                        <SandboxLogsCard logs={logs.data || []} />
+                        <SandboxCrmCardPanel
+                            cards={crm.data?.cards || []}
+                            historico={crm.data?.historico || []}
+                        />
+                        <SandboxAgendaCard
+                            agendamentos={agenda.data || []}
+                            vendas={vendas.data || []}
+                            salas={catalogo?.salas || []}
+                            servicos={catalogo?.servicos || []}
+                        />
+                    </TabsContent>
+
+                    <TabsContent
+                        value="voz"
+                        className="mt-0 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1"
+                    >
+                        <SandboxTonePanel
+                            sessionId={sessionId}
+                            savedSettings={sandbox.session.tone_settings}
+                        />
+                    </TabsContent>
+
+                    <TabsContent
+                        value="simuladores"
+                        className="mt-0 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1"
+                    >
+                        <SandboxSimulators
+                            sessionId={sessionId}
+                            ownerId={sandbox.session.user_id}
+                            conversationId={conversationId}
+                            contato={contato}
+                            salas={catalogo?.salas || []}
+                            servicos={catalogo?.servicos || []}
+                            convenios={catalogo?.convenios || []}
+                            clinicaNome={clinicaNome || "a clínica"}
+                            onDone={invalidar}
+                        />
+                    </TabsContent>
+                </Tabs>
             </div>
-
-            <SandboxTonePanel sessionId={sessionId} savedSettings={sandbox.session.tone_settings} />
-
-            <SandboxSimulators
-                sessionId={sessionId}
-                ownerId={sandbox.session.user_id}
-                conversationId={conversationId}
-                contato={contato}
-                salas={catalogo?.salas || []}
-                servicos={catalogo?.servicos || []}
-                convenios={catalogo?.convenios || []}
-                clinicaNome={clinicaNome || "a clínica"}
-                onDone={invalidar}
-            />
         </div>
     );
 }
