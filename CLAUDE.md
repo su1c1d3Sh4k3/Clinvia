@@ -118,6 +118,12 @@ analyzer in production is wrong). A component catalogued as `baixa` can therefor
 **What keeps an alert off his phone is `somente_painel = true`, not a low floor.** Never turn
 `somente_painel` off reasoning that "the severity is low anyway".
 
+Since 24/09/2026 there IS a downward clamp: `incident_component_catalog.severidade_teto`
+(`20260924180000`). Null = today's behaviour. It is an **exception, not a new rule** — use it only
+for a class already decided on its merits, where the AI's opinion must not move it (the catalogued
+case is `{uazapi,meta}:instancia-desconectada`, baixa with teto baixa). Setting a ceiling on a
+component whose severity is genuinely unknown is a gag, not a fix.
+
 ### An input error is not our defect
 
 `_shared/api-errors.ts` states *"Erro de banco é sempre defeito nosso (ou regressão de RLS) ⇒
@@ -164,6 +170,30 @@ Consequences for how tests are built:
   channel that is not the real one. Reach for the real channel only when the thing being proven IS
   the real channel.
 - Never measure volume, run load, or mutate rows on a large ACTIVE tenant.
+
+### Measuring from outside the platform (measured 24/09/2026)
+
+Two traps that make an external probe lie, both found building `monitoring/sentinela_login/`:
+
+- **Cloudflare answers `403` to `Python-urllib/*`** — on `app.clinbia.ai` and on the Resend API
+  (`error code: 1010`). The same GET returns 200 with no User-Agent and 200 with a browser one. A
+  script that measures the app, or that sends the alert, must present a browser UA — otherwise the
+  thing that goes mute is the warning, exactly when it is the only thing talking.
+- **In a SPA, a bundle that did not ship returns `200` with the fallback index, not `404`.** The
+  HTTP code proves nothing; check `content-type`. A deploy that publishes a new index pointing at a
+  hash that never went up is a white screen with the server saying everything is fine.
+
+Related, same family: **`curl` does not do preflight**, so it cannot prove anything about CORS. To
+prove it, send `OPTIONS` with `Access-Control-Request-Headers` to the exact `/functions/v1/<slug>`
+endpoint — never to `/auth/v1/`, which is the gateway and echoes back whatever you ask for.
+
+## Reporting
+
+**The affected client comes first, always, before what you built.** Impact, then cause, then fix.
+If the report reads correctly bottom-up, the order is wrong. *"O que não aparece no relatório eu
+trato como não feito"* — so a finding that changes his decision belongs in the body, not in a
+footnote: a security hole found on the way (anonymous webhook repointing, a key in plain text)
+leads the report even when it was not the task.
 
 ## Definition of done
 
