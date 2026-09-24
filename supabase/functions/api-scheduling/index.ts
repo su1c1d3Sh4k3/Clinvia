@@ -38,7 +38,7 @@ import { createServiceLabelResolver, findServiceByDisplayName } from "../_shared
 import { reportIncident } from "../_shared/report-incident.ts";
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-api-key",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-api-key, x-origin",
 };
 
 /**

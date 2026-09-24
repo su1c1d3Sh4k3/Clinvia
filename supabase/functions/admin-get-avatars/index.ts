@@ -4,7 +4,7 @@ import { adminCan, adminForbidden, resolveAdminCaller } from "../_shared/admin-g
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-origin',
 };
 
 serveMonitored("admin-get-avatars", async (req) => {

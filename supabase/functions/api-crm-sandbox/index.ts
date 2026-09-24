@@ -25,7 +25,7 @@ import { loadSandboxContext, logSandboxCall, type SandboxContext, toSaoPaulo } f
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-api-key",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-api-key, x-origin",
 };
 
 const CRM_STAGES = [

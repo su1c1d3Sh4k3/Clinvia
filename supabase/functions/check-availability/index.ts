@@ -5,7 +5,7 @@ import { getWorkHoursForDay } from "../_shared/professional-schedule.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-api-key",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-api-key, x-origin",
 };
 
 serveMonitored("check-availability", async (req) => {

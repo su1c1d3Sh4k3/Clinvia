@@ -24,7 +24,7 @@ import { loadSandboxContext, logSandboxCall } from "../_shared/sandbox.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-api-key",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-api-key, x-origin",
 };
 
 const VALID_ACTIONS = ["get_contact", "create_contact", "update_contact"];

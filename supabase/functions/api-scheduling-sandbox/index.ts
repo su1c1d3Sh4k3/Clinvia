@@ -49,7 +49,7 @@ import { loadSandboxContext, logSandboxCall, toSaoPaulo, type SandboxContext } f
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-api-key",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-api-key, x-origin",
 };
 
 function parseWorkTime(t: any): number | null {

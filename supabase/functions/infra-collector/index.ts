@@ -8,7 +8,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-cron-secret",
+    "authorization, x-client-info, apikey, content-type, x-cron-secret, x-origin",
 };
 
 serveMonitored("infra-collector", async (req) => {

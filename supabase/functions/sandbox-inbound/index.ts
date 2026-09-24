@@ -20,7 +20,7 @@ import { buildSandboxBdData } from "../_shared/sandbox-payload.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-origin",
 };
 
 function json(body: unknown, status = 200): Response {

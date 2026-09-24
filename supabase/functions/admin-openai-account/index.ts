@@ -25,7 +25,7 @@ const VALID_ACTIONS = ['get', 'reveal', 'provision', 'set_spend_limit', 'archive
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-origin',
 };
 
 const json = (body: unknown, status = 200) =>

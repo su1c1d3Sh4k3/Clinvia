@@ -45,7 +45,7 @@ import { fetchProvider } from "../_shared/provider-errors.ts";
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers":
-        "authorization, x-client-info, apikey, content-type, x-service-key",
+        "authorization, x-client-info, apikey, content-type, x-service-key, x-origin",
     "Content-Type": "application/json; charset=utf-8",
 };
 
