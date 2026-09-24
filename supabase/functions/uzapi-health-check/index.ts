@@ -27,6 +27,24 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { sendEmailSafe, emailConexaoCaiu } from '../_shared/emails.ts';
+import { reportIncident } from "../_shared/report-incident.ts";
+
+// `serveMonitored("uzapi-health-check", ...)` la embaixo ja declara o
+// componente desta function; aqui so precisamos do reporter.
+
+// Componente da CLASSE "instancia desconectada", catalogado baixa com TETO
+// baixa (20260924180000). O teto existe porque `incident_severidade_efetiva`
+// devolve o pior entre o piso do catalogo e a `ai_severity`, e o analisador por
+// IA roda a cada 2 min: sem teto, bastaria ele achar grave uma desconexao para
+// a classe voltar ao telefone pela porta dos fundos.
+const COMPONENTE_DESCONEXAO = 'uazapi:instancia-desconectada';
+
+// Mensagem ESTAVEL de proposito: ela entra no fingerprint. O motivo da queda
+// muda a cada vez ("token invalido", "presenca unavailable", ...) e, se
+// entrasse aqui, daria um incidente por MOTIVO em vez de um por instancia. O
+// motivo viaja no contexto, onde nao agrupa nada.
+const mensagemDesconexao = (nome: string) =>
+    `Instancia "${nome}" perdeu a conexao com o WhatsApp.`;
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -264,6 +282,27 @@ serveMonitored("uzapi-health-check", async (req) => {
             const justReconnected = prevStatus !== 'connected' && newStatus === 'connected';
 
             if (justDisconnected) {
+                // UM aviso, aqui, na borda. `notifications` nunca foi ligada a
+                // `incidents` — foi por isso que o pele-10 passou 14 dias
+                // desconectado sem um unico alerta. A guarda de 24h abaixo vale
+                // para o aviso in-app; o incidente nao precisa dela porque a
+                // borda so existe uma vez por queda: enquanto durar,
+                // `prevStatus` ja e 'disconnected' e este ramo nao roda.
+                reportIncident({
+                    component: COMPONENTE_DESCONEXAO,
+                    route: inst.id,
+                    message: mensagemDesconexao(inst.name),
+                    httpCode: ping.httpCode,
+                    ownerId: inst.user_id,
+                    origem: 'cron',
+                    context: {
+                        instance_id: inst.id,
+                        instance_name: inst.name,
+                        motivo: friendlyReason(ping.reason),
+                        http_code: ping.httpCode,
+                    },
+                });
+
                 const lastNotified = inst.last_disconnect_notified_at
                     ? new Date(inst.last_disconnect_notified_at).getTime()
                     : 0;
@@ -319,6 +358,21 @@ serveMonitored("uzapi-health-check", async (req) => {
             }
 
             if (justReconnected) {
+                // Fecha o incidente da queda. Sem isto, a PROXIMA queda cairia
+                // dentro do incidente ainda aberto (`on conflict (fingerprint)
+                // where status <> 'resolved'`) e o "novo aviso so se
+                // desconectar de novo, depois de ter voltado" nao aconteceria.
+                // Best-effort: falhar em fechar nao pode derrubar o health-check.
+                try {
+                    await supabase.rpc('incident_resolver_edge', {
+                        p_component: COMPONENTE_DESCONEXAO,
+                        p_route: inst.id,
+                        p_nota: 'instancia reconectada',
+                    });
+                } catch (resolveErr) {
+                    console.error('[uzapi-health-check] failed to resolve incident:', resolveErr);
+                }
+
                 await supabase.from('notifications').insert({
                     type: 'instance_reconnected',
                     title: `Instância "${inst.name}" reconectada`,

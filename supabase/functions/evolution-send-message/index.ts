@@ -1,6 +1,6 @@
 import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-import { reportIncident } from "../_shared/report-incident.ts";
+import { reportIncident, HEADER_JA_REPORTADO } from "../_shared/report-incident.ts";
 import { fetchProvider } from "../_shared/provider-errors.ts";
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -610,6 +610,14 @@ serveMonitored("evolution-send-message", async (req) => {
             console.error('[evolution-send-message] failed to mark instance as disconnected:', markErr);
           }
 
+          // 502 aqui NÃO é defeito: é o sistema falando com uma instância que o
+          // cliente desligou de propósito. Sem este header, `serveMonitored`
+          // relataria todo >= 500 e cada tentativa de envio viraria um incidente
+          // no componente `evolution-send-message` (catalogado alta). As 34
+          // falhas seguidas do pele-10 seriam 34 alertas altos.
+          //
+          // O aviso da desconexão sai UMA vez, na borda, pelo `uzapi-health-check`
+          // (componente `uazapi:instancia-desconectada`, baixa com teto baixa).
           return new Response(
             JSON.stringify({
               success: false,
@@ -620,7 +628,11 @@ serveMonitored("evolution-send-message", async (req) => {
             }),
             {
               status: 502,
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              headers: {
+                ...corsHeaders,
+                'Content-Type': 'application/json',
+                [HEADER_JA_REPORTADO]: 'instancia-desconectada',
+              },
             },
           );
         }
