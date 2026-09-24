@@ -28,12 +28,23 @@
 // garante e que ninguem ficou sem saber. Quem vigia o canal como um todo e a
 // funcao `alert-channel-watch`.
 //
-// ORDEM DE ENVIO: texto livre primeiro, template como plano B.
-// Dentro da janela de 24h o texto livre e gratuito e aceita quebra de linha
-// (parametro de template NAO aceita \n). Fora da janela a Meta recusa com 131047
-// e ai o template entra. Enquanto os templates nao estiverem APPROVED, o plano B
-// tambem falha — o incidente continua gravado e a recusa fica registrada em
-// incident_notifications.error_message. Nada quebra.
+// ORDEM DE ENVIO (corrigida em 24/09/2026): a JANELA DE 24h e consultada ANTES
+// de enviar, em alert_recipients.last_inbound_at.
+//   aberta  -> texto livre (gratuito e aceita \n, que parametro de template nao
+//              aceita), com o template como plano B se a Meta recusar na hora.
+//   fechada -> template direto. Os dois (sys_alerta_incidente_v2 e
+//              sys_alerta_resumo_v2) estao APPROVED na WABA desde 22/09.
+//
+// POR QUE NAO DA PARA SO "TENTAR TEXTO LIVRE E VER SE FALHA": fora da janela a
+// Meta responde HTTP 200 COM WAMID DE VERDADE e so depois derruba a mensagem,
+// por webhook assincrono de status, com {"code":131047}. O OK sincrono nao e
+// prova de entrega. Em 23-24/09 isso deixou o canal 19h mudo com o painel
+// verde: 13 alertas gravados como 'sent' que nunca chegaram.
+//
+// A rede de seguranca do erro acima e a reconciliacao: meta-webhook casa o
+// wamid pela RPC `alert_notification_status`, o 'sent' vira 'failed', o
+// incidente volta para a fila e o last_inbound_at e zerado (na proxima o alerta
+// ja sai como template). `delivered_at` passa a ser a unica prova de entrega.
 //
 // Acoes:
 //   { action: "dispatch", limit?: 10 }  -> drena a fila de avisos (cron de 1 min)
@@ -112,13 +123,39 @@ type Recipient = {
     window_start: string;
     window_end: string;
     timezone: string;
+    /**
+     * Ultima mensagem RECEBIDA deste telefone — define a janela de 24h da Meta.
+     * Mantido pelo meta-webhook (RPC alert_recipient_inbound) e zerado pela
+     * reconciliacao quando a Meta devolve 131047.
+     */
+    last_inbound_at: string | null;
 };
+
+/**
+ * Margem sobre as 24h da Meta. A janela conta a partir do horario que a META
+ * registrou, que nao e exatamente o nosso `created_at`, e um alerta que sai aos
+ * 23h59 corre o risco de chegar do outro lado como 131047. Meia hora de folga
+ * custa um template de US$0,008 e evita o silencio.
+ */
+const JANELA_LIVRE_MS = 23.5 * 60 * 60 * 1000;
+
+/**
+ * A janela de 24h esta aberta? NULL (nunca respondeu, ou a Meta acabou de
+ * recusar por 131047) conta como FECHADA — o padrao seguro e o template, que
+ * funciona dentro E fora da janela.
+ */
+function janelaLivreAberta(r: Recipient): boolean {
+    if (!r.last_inbound_at) return false;
+    const t = new Date(r.last_inbound_at).getTime();
+    if (isNaN(t)) return false;
+    return Date.now() - t < JANELA_LIVRE_MS;
+}
 
 /** Colunas do destinatario — uma constante so, porque `dispatch` e `notify`
  *  carregam a mesma lista e esquecer `email` em um dos dois deixaria metade dos
  *  alertas sem segunda via, calado. */
 const CAMPOS_DESTINATARIO =
-    "id, nome, telefone, email, instance_id, min_severity, window_start, window_end, timezone";
+    "id, nome, telefone, email, instance_id, min_severity, window_start, window_end, timezone, last_inbound_at";
 
 type Sender = {
     phone_number_id: string;
@@ -562,10 +599,41 @@ async function enviarAlerta(
         });
     };
 
-    const livre = await graphSend(sender, textPayload(r.telefone, alertaTexto(a)));
-    if (livre.ok) {
-        await registrar("sent", "texto", livre);
-        return { ...livre, via: "texto" };
+    // A ORDEM E A CORRECAO DE 24/09/2026. Antes o texto livre vinha sempre
+    // primeiro e o template era plano B "se falhar". So que fora da janela de
+    // 24h a Meta NAO falha na hora: responde 200 com wamid de verdade e derruba
+    // a mensagem depois, por webhook assincrono (131047). `livre.ok` ficava
+    // verdadeiro, o template nunca era tentado, a segunda via por e-mail
+    // tambem nao — e o telefone ficou 19h mudo com o painel verde.
+    //
+    // Agora a janela e consultada ANTES de enviar. Fechada = template direto,
+    // que esta APROVADO na WABA e entrega dentro e fora da janela.
+    const aberta = janelaLivreAberta(r);
+
+    if (aberta) {
+        const livre = await graphSend(sender, textPayload(r.telefone, alertaTexto(a)));
+        if (livre.ok) {
+            await registrar("sent", "texto", livre);
+            return { ...livre, via: "texto" };
+        }
+        const tpl = await graphSend(
+            sender,
+            templatePayload(r.telefone, TPL_INCIDENTE, alertaParams(a)),
+        );
+        if (tpl.ok) {
+            await registrar("sent", "template", tpl);
+            return { ...tpl, via: "template" };
+        }
+        // Guarda os DOIS motivos: sem o erro do texto livre nao da para saber se a
+        // janela fechou ou se o token/numero e que estao errados.
+        const combinado: SendResult = {
+            ok: false,
+            errorCode: tpl.errorCode,
+            errorMessage:
+                `template: ${tpl.errorMessage} | texto livre: ${livre.errorCode} ${livre.errorMessage}`,
+        };
+        await registrar("failed", "template", combinado);
+        return { ...combinado, via: null };
     }
 
     const tpl = await graphSend(
@@ -576,16 +644,15 @@ async function enviarAlerta(
         await registrar("sent", "template", tpl);
         return { ...tpl, via: "template" };
     }
-
-    // Guarda os DOIS motivos: sem o erro do texto livre nao da para saber se a
-    // janela fechou ou se o token/numero e que estao errados.
-    const combinado: SendResult = {
+    // Nada de tentar texto livre aqui: fora da janela ele seria aceito com 200 e
+    // morreria calado, gravando um 'sent' falso por cima da falha real.
+    const fora: SendResult = {
         ok: false,
         errorCode: tpl.errorCode,
-        errorMessage: `template: ${tpl.errorMessage} | texto livre: ${livre.errorCode} ${livre.errorMessage}`,
+        errorMessage: `template (janela de 24h fechada): ${tpl.errorMessage}`,
     };
-    await registrar("failed", "template", combinado);
-    return { ...combinado, via: null };
+    await registrar("failed", "template", fora);
+    return { ...fora, via: null };
 }
 
 /**
@@ -787,18 +854,31 @@ async function espalhar(
 
         let res: SendResult & { via: "texto" | "template" | null };
         if (resumoParams) {
-            const livre = await graphSend(sender, textPayload(r.telefone, resumoTexto(resumoParams)));
-            if (livre.ok) {
-                res = { ...livre, via: "texto" };
-            } else {
+            // Mesma correcao de enviarAlerta: fora da janela de 24h o texto
+            // livre e aceito com 200 e derrubado depois. O resumo de 2 em 2
+            // horas foi metade dos alertas perdidos em 23-24/09.
+            if (!janelaLivreAberta(r)) {
                 const tpl = await graphSend(sender, templatePayload(r.telefone, TPL_RESUMO, resumoParams));
                 res = tpl.ok ? { ...tpl, via: "template" } : {
                     ok: false,
                     errorCode: tpl.errorCode,
-                    errorMessage:
-                        `template: ${tpl.errorMessage} | texto livre: ${livre.errorCode} ${livre.errorMessage}`,
+                    errorMessage: `template (janela de 24h fechada): ${tpl.errorMessage}`,
                     via: null,
                 };
+            } else {
+                const livre = await graphSend(sender, textPayload(r.telefone, resumoTexto(resumoParams)));
+                if (livre.ok) {
+                    res = { ...livre, via: "texto" };
+                } else {
+                    const tpl = await graphSend(sender, templatePayload(r.telefone, TPL_RESUMO, resumoParams));
+                    res = tpl.ok ? { ...tpl, via: "template" } : {
+                        ok: false,
+                        errorCode: tpl.errorCode,
+                        errorMessage:
+                            `template: ${tpl.errorMessage} | texto livre: ${livre.errorCode} ${livre.errorMessage}`,
+                        via: null,
+                    };
+                }
             }
             await supabase.from("incident_notifications").insert({
                 incident_id: incidentId, recipient_id: r.id, kind,

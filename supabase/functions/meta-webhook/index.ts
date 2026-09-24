@@ -239,6 +239,89 @@ async function downloadMetaMedia(
     }
 }
 
+// ── Alertas do Super Admin: reconciliacao do wamid ───────────────────────────
+//
+// alert-notify fala direto com o Graph e NAO cria linha em `messages` (senao
+// cada erro da plataforma viraria contato + conversa + card no inbox do tenant
+// Bruno Admin). O preco disso e que webhook-handle-status nao tem em que casar
+// o status: a falha assincrona da Meta caia no chao. Foi assim que 13 alertas
+// recusados com 131047 ("Re-engagement message", janela de 24h fechada)
+// ficaram gravados como 'sent' e o canal passou 19h mudo com o painel verde
+// em 23-24/09/2026.
+//
+// Aqui o casamento e feito pelo wamid. Nao da para chamar a RPC em todo status
+// — seriam milhares por dia de mensagem de tenant. O corte e o telefone do
+// destinatario (`status.recipient_id`), comparado com a lista de destinatarios
+// de alerta, que tem meia duzia de linhas e muda quase nunca: cache de 5 min.
+
+const alertaCache: { fones: Set<string> | null; ate: number } = { fones: null, ate: 0 };
+
+/** Ultimos 8 digitos — a regra de identidade de telefone do projeto. */
+const last8 = (s: string) => String(s || "").replace(/\D/g, "").slice(-8);
+
+async function fonesDeAlerta(supabase: any): Promise<Set<string>> {
+    if (alertaCache.fones) return alertaCache.fones;
+    const { data, error } = await supabase.from("alert_recipients").select("telefone");
+    if (error) {
+        // Sem a lista o corte fica aberto demais ou fechado demais; um Set vazio
+        // apenas pula a reconciliacao desta rodada, que o proximo status refaz.
+        console.error("[meta-webhook] alert_recipients:", error.message);
+        return new Set<string>();
+    }
+    const set = new Set<string>((data ?? []).map((r: any) => last8(r.telefone)).filter(Boolean));
+    alertaCache.fones = set;
+    alertaCache.ate = Date.now() + 5 * 60 * 1000;
+    return set;
+}
+
+/** Nunca lanca: reconciliacao e rastro, nao pode derrubar o webhook da Meta. */
+async function reconciliarAlerta(supabase: any, status: any): Promise<void> {
+    try {
+        const alvo = last8(status?.recipient_id ?? "");
+        if (!alvo || !status?.id) return;
+        if (!["failed", "delivered", "read"].includes(status.status)) return;
+        const fones = await fonesDeAlerta(supabase);
+        if (!fones.has(alvo)) return;
+
+        const err = Array.isArray(status.errors) ? status.errors[0] : null;
+        const { data, error } = await supabase.rpc("alert_notification_status", {
+            p_wamid: status.id,
+            p_status: status.status,
+            p_error_code: err?.code != null ? String(err.code) : null,
+            p_error_message: err
+                ? String(err.error_data?.details || err.message || err.title || "")
+                : null,
+        });
+        if (error) {
+            console.error("[meta-webhook] alert_notification_status:", error.message);
+        } else if (data === true) {
+            console.log(
+                `[meta-webhook] alerta reconciliado: ${status.id} -> ${status.status}` +
+                    (err ? ` (${err.code})` : ""),
+            );
+        }
+    } catch (e) {
+        console.error("[meta-webhook] reconciliarAlerta:", (e as Error).message);
+    }
+}
+
+/**
+ * Ele respondeu: a janela de 24h reabre e o proximo alerta volta a sair como
+ * texto livre (layout completo) em vez de template.
+ */
+async function marcarJanelaDeAlerta(supabase: any, telefone: string): Promise<void> {
+    try {
+        const alvo = last8(telefone);
+        if (!alvo) return;
+        const fones = await fonesDeAlerta(supabase);
+        if (!fones.has(alvo)) return;
+        await supabase.rpc("alert_recipient_inbound", { p_telefone: telefone });
+        console.log(`[meta-webhook] janela de alerta reaberta para ...${alvo}`);
+    } catch (e) {
+        console.error("[meta-webhook] marcarJanelaDeAlerta:", (e as Error).message);
+    }
+}
+
 // ── Main handler ──
 
 serveMonitored("meta-webhook", async (req) => {
@@ -285,6 +368,9 @@ serveMonitored("meta-webhook", async (req) => {
         if (payload.object !== "whatsapp_business_account") {
             return new Response("OK", { status: 200 });
         }
+
+        // Zera o cache de telefones de alerta se ele venceu. Ver alertaCache.
+        if (Date.now() > alertaCache.ate) alertaCache.fones = null;
 
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
         const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -375,6 +461,11 @@ serveMonitored("meta-webhook", async (req) => {
                         // o chat/contato deve sempre apontar para o cliente
                         const peer = isEcho ? (msg.to || msg.recipient_id || "") : msg.from;
                         if (!peer) continue;
+
+                        // Resposta de um destinatario de alerta reabre a janela
+                        // de 24h. Echo nao conta: `peer` ali e o cliente, e a
+                        // janela so reabre com mensagem RECEBIDA.
+                        if (!isEcho) await marcarJanelaDeAlerta(supabase, msg.from || peer);
 
                         const msgText = extractTextFromMeta(msg);
                         const mediaMsgTypes = ["image", "audio", "video", "document", "sticker"];
@@ -479,6 +570,11 @@ serveMonitored("meta-webhook", async (req) => {
                         if (status.status === "failed" && status.errors) {
                             console.error("[meta-webhook] Message failed:", status.id, JSON.stringify(status.errors));
                         }
+
+                        // Alerta do Super Admin nao tem linha em `messages`:
+                        // o webhook-handle-status abaixo nao encontraria nada
+                        // para atualizar. O casamento e aqui, pelo wamid.
+                        await reconciliarAlerta(supabase, status);
 
                         // Forward to webhook-handle-status
                         try {
