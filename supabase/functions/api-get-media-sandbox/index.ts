@@ -113,10 +113,19 @@ serveMonitored("api-get-media-sandbox", async (req) => {
             }
 
             if (!msg?.media_url) {
+                // O fluxo do n8n chama esta tool ÀS CEGAS em toda mensagem que
+                // entra e deixa o Switch decidir depois (`onError` é
+                // `continueRegularOutput`, então o 404 não quebra nada). Numa
+                // conversa de texto isso é o esperado, não uma falha — e pintar
+                // de vermelho no painel do ambiente de teste, uma vez por
+                // mensagem, ensina o cliente a ignorar a cor. Só é falha quando
+                // alguém pediu uma mídia NOMEADA (`message_id`) e ela não existe.
                 await logSandboxCall(supabase, ctx, {
                     function_name: "api-get-media-sandbox",
-                    label: "Tentou baixar uma mídia e não encontrou nenhuma",
-                    ok: false,
+                    label: messageId
+                        ? `Procurou a mídia da mensagem ${messageId} e não encontrou`
+                        : "Conferiu se o paciente mandou mídia — esta mensagem é só texto",
+                    ok: !messageId,
                     status_code: 404,
                     request: body,
                 });

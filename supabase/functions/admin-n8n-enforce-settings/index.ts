@@ -28,10 +28,11 @@
 // em que o n8n aceitar PATCH, e ja reenvia pinData/staticData — mas nao use.
 //
 // Acoes:
-//   inventory     — so le e classifica (padrao, nao escreve nada)
-//   probe_schema  — descobre quais chaves de settings a API aceita, sem escrever
-//   dump          — devolve o JSON INTEIRO dos ids pedidos (backup pre-PUT)
-//   apply         — aplica, um por vez. NAO USE: ver veredito acima.
+//   inventory        — so le e classifica (padrao, nao escreve nada)
+//   probe_schema     — descobre quais chaves de settings a API aceita, sem escrever
+//   dump             — devolve o JSON INTEIRO dos ids pedidos (backup pre-PUT)
+//   apply            — aplica, um por vez. NAO USE: ver veredito acima.
+//   patch_node_urls  — troca a `url` (e acrescenta headers) de nos NOMEADOS.
 //
 // Chamada:
 //   POST .../admin-n8n-enforce-settings
@@ -240,6 +241,126 @@ serveMonitored("admin-n8n-enforce-settings", async (req) => {
             const saida: Record<string, unknown> = {};
             for (const id of pedidos) saida[id] = await n8n(`/workflows/${id}`, N8N_API_KEY);
             return json({ success: true, action, workflows: saida });
+        }
+
+        // patch_node_urls — troca a `url` de nos NOMEADOS de UM workflow.
+        //
+        // Existe porque o FLUXO SANDBOX chamava function que nao existe
+        // (`api-*-sanbox`, sem o 'd') e function de PRODUCAO. Os tres nos de tool
+        // carregam `neverError: true`, entao o 404 voltava para o modelo como se
+        // fosse resposta boa — o cliente via a IA "nao achar" tudo.
+        //
+        // Cuidados desta acao, todos medidos:
+        //   - a API publica RECUSA `binaryMode`/`timeSavedMode` em settings, e os
+        //     fluxos carregam as duas ⇒ filtramos por lista de aceitas. O que cai
+        //     vai NOMEADO no relatorio, nunca em silencio.
+        //   - PUT que omite pinData/staticData APAGA os dois ⇒ reenviamos.
+        //   - `active` nao viaja no PUT. Se o workflow desativar, reativamos pelo
+        //     endpoint proprio e o relatorio diz se voltou.
+        //   - so mexe em no cujo nome foi pedido, e falha se algum nao existir:
+        //     patch parcial calado seria pior que nao patchar.
+        if (action === "patch_node_urls") {
+            const id: string = body.id ?? "";
+            const trocas: Record<string, { url?: string; add_headers?: Array<{ name: string; value: string }> }> =
+                body.trocas ?? {};
+            const nomes = Object.keys(trocas);
+            if (!id || nomes.length === 0) {
+                return json({ success: false, error: "informe `id` e `trocas`" }, 400);
+            }
+
+            const atual = await n8n(`/workflows/${id}`, N8N_API_KEY);
+            const nodes = JSON.parse(JSON.stringify(atual.nodes ?? []));
+
+            const faltando = nomes.filter((n) => !nodes.some((x: any) => x.name === n));
+            if (faltando.length) {
+                return json({ success: false, error: `nos inexistentes: ${faltando.join(", ")}` }, 400);
+            }
+
+            const mudancas: any[] = [];
+            for (const no of nodes) {
+                const t = trocas[no.name];
+                if (!t) continue;
+                no.parameters = no.parameters || {};
+                const antesUrl = no.parameters.url ?? null;
+                if (t.url) no.parameters.url = t.url;
+
+                const headersAdicionados: string[] = [];
+                for (const h of t.add_headers ?? []) {
+                    no.parameters.sendHeaders = true;
+                    no.parameters.headerParameters = no.parameters.headerParameters || {};
+                    const lista: any[] = no.parameters.headerParameters.parameters || [];
+                    const achou = lista.find((p: any) => String(p?.name).toLowerCase() === h.name.toLowerCase());
+                    if (achou) achou.value = h.value;
+                    else lista.push({ name: h.name, value: h.value });
+                    no.parameters.headerParameters.parameters = lista;
+                    headersAdicionados.push(h.name);
+                }
+
+                mudancas.push({
+                    no: no.name,
+                    url_antes: antesUrl,
+                    url_depois: no.parameters.url ?? null,
+                    headers: headersAdicionados,
+                });
+            }
+
+            const ACEITAS = new Set([
+                "executionOrder", "errorWorkflow", "saveDataErrorExecution",
+                "saveDataSuccessExecution", "saveManualExecutions", "availableInMCP",
+                "callerPolicy", "timezone", "executionTimeout", "saveExecutionProgress",
+            ]);
+            const settingsOriginal = atual.settings || {};
+            const settings: Record<string, unknown> = {};
+            const settingsPerdidas: string[] = [];
+            for (const [k, v] of Object.entries(settingsOriginal)) {
+                if (ACEITAS.has(k)) settings[k] = v;
+                else settingsPerdidas.push(k);
+            }
+
+            const salvo = await n8n(`/workflows/${id}`, N8N_API_KEY, {
+                method: "PUT",
+                body: JSON.stringify({
+                    name: atual.name,
+                    nodes,
+                    connections: atual.connections,
+                    settings,
+                    pinData: atual.pinData ?? {},
+                    staticData: atual.staticData ?? null,
+                }),
+            });
+
+            let reativado: string | null = null;
+            if (atual.active && !salvo?.active) {
+                try {
+                    await n8n(`/workflows/${id}/activate`, N8N_API_KEY, { method: "POST" });
+                    reativado = "reativado";
+                } catch (e) {
+                    reativado = `FALHOU reativar: ${String(e).slice(0, 200)}`;
+                }
+            }
+            const depois = await n8n(`/workflows/${id}`, N8N_API_KEY);
+
+            return json({
+                success: true,
+                action,
+                workflow: { id, nome: atual.name },
+                mudancas,
+                settings_perdidas_pela_api: settingsPerdidas,
+                reativado,
+                conferencia: {
+                    nos_antes: (atual.nodes || []).length,
+                    nos_depois: (depois.nodes || []).length,
+                    pindata_antes: Object.keys(atual.pinData || {}).length,
+                    pindata_depois: Object.keys(depois.pinData || {}).length,
+                    staticdata_antes: atual.staticData ? Object.keys(atual.staticData).length : 0,
+                    staticdata_depois: depois.staticData ? Object.keys(depois.staticData).length : 0,
+                    ativo_antes: !!atual.active,
+                    ativo_depois: !!depois.active,
+                    urls_depois: (depois.nodes || [])
+                        .filter((n: any) => nomes.includes(n.name))
+                        .map((n: any) => ({ no: n.name, url: n.parameters?.url ?? null })),
+                },
+            });
         }
 
         if (action === "apply") {
