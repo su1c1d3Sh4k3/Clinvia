@@ -543,7 +543,7 @@ async function enviarAlerta(
     r: Recipient,
     a: Alerta,
     incidentId: string | null,
-    kind: "individual" | "resumo" | "recorrencia",
+    kind: "individual" | "resumo" | "recorrencia" | "rajada",
 ): Promise<SendResult & { via: "texto" | "template" | null }> {
     const registrar = async (
         status: string,
@@ -603,7 +603,7 @@ async function segundaViaEmail(
     r: Recipient,
     a: Alerta,
     incidentId: string | null,
-    kind: "individual" | "resumo" | "recorrencia",
+    kind: "individual" | "resumo" | "recorrencia" | "rajada",
     motivoDaFalha: string,
 ): Promise<boolean> {
     if (!SEGUNDA_VIA.includes(a.severidade)) return false;
@@ -725,7 +725,7 @@ async function espalhar(
     recipients: Recipient[],
     alerta: Alerta,
     incidentId: string | null,
-    kind: "individual" | "resumo" | "recorrencia",
+    kind: "individual" | "resumo" | "recorrencia" | "rajada",
     teto: number,
     resumoParams: string[] | null,
     emailLigado: boolean,
@@ -865,7 +865,9 @@ serveMonitored("alert-notify", async (req) => {
 
         const { data: cfg } = await supabase
             .from("llm_platform_settings")
-            .select("alert_notify_enabled, alert_summary_enabled, alert_max_per_hour, alert_email_enabled")
+            // Uma string so, sem concatenacao: o supabase-js infere o tipo da
+            // linha a partir do LITERAL do select, e concatenar joga tudo fora.
+            .select("alert_notify_enabled, alert_summary_enabled, alert_max_per_hour, alert_email_enabled, alert_rajada_enabled, alert_rajada_min")
             .limit(1)
             .maybeSingle();
 
@@ -876,6 +878,8 @@ serveMonitored("alert-notify", async (req) => {
         // ambiente que esteja atras desta migration, e nesse caso o certo e
         // tentar o e-mail, nao ficar calado.
         const emailLigado = cfg?.alert_email_enabled !== false;
+        const rajadaLigada = cfg?.alert_rajada_enabled !== false;
+        const rajadaMin = Math.max(2, Number(cfg?.alert_rajada_min ?? 3));
 
         // Desligar o envio NUNCA desliga a gravacao do incidente nem o painel.
         // `test` ignora a chave de proposito: e a sonda manual do Super Admin.
@@ -905,10 +909,10 @@ serveMonitored("alert-notify", async (req) => {
 
             const despachos: Record<string, unknown>[] = [];
 
-            for (const inc of fila) {
-                // Sem destinatario ativo o incidente NAO pode ser dado por avisado:
-                // ele fica na fila e sai assim que alguem for cadastrado.
-                if (!dests?.length) {
+            // Sem destinatario ativo NENHUM incidente pode ser dado por avisado:
+            // eles ficam na fila e saem assim que alguem for cadastrado.
+            if (!dests?.length) {
+                for (const inc of fila) {
                     await supabase.rpc("incident_notification_done", {
                         p_incident_id: inc.id,
                         p_ok: false,
@@ -916,17 +920,83 @@ serveMonitored("alert-notify", async (req) => {
                         p_error: "nenhum destinatário ativo cadastrado",
                     });
                     despachos.push({ incidente: inc.id, status: "sem_destinatario" });
-                    continue;
                 }
+                return json({ success: true, action, despachados: despachos.length, despachos });
+            }
 
+            // Monta todos os alertas ANTES de enviar: e o unico jeito de saber a
+            // severidade EFETIVA de cada um (ela sai de `montarAlerta`, nao do
+            // retorno cru da fila) e, com isso, decidir quem pode ir agrupado.
+            const preparados: { inc: Record<string, any>; alerta: Alerta }[] = [];
+            for (const inc of fila) {
                 const recorrencia = inc.kind === "recorrencia";
-                const alertaInc = await montarAlerta(
-                    supabase,
+                preparados.push({
                     inc,
-                    recorrencia
-                        ? `+${inc.ocorrencias_novas} desde o último aviso (${ddmmHHmm(inc.desde)}) — ${inc.event_count} no total`
-                        : `${inc.event_count} desde ${ddmmHHmm(inc.first_seen)}`,
+                    alerta: await montarAlerta(
+                        supabase,
+                        inc,
+                        recorrencia
+                            ? `+${inc.ocorrencias_novas} desde o último aviso (${ddmmHHmm(inc.desde)}) — ${inc.event_count} no total`
+                            : `${inc.event_count} desde ${ddmmHHmm(inc.first_seen)}`,
+                    ),
+                });
+            }
+
+            // RAJADA: 3+ incidentes NAO-criticos na mesma passada quase sempre sao
+            // uma causa raiz so — em 23/09 uma varredura do `cron-health-watch`
+            // rendeu 8 WhatsApps no mesmo minuto. Eles viram UMA mensagem com a
+            // lista. Critico nunca entra aqui: continua saindo individual, sempre.
+            const agrupaveis = rajadaLigada
+                ? preparados.filter((p) => p.alerta.severidade !== "critica")
+                : [];
+            const emRajada = agrupaveis.length >= rajadaMin
+                ? new Set(agrupaveis.map((p) => p.inc.id))
+                : new Set<string>();
+
+            if (emRajada.size > 0) {
+                const destaques = agrupaveis
+                    .map((p) => `${p.alerta.componente} (${SEV_LABEL[p.alerta.severidade]})`)
+                    .join(" · ");
+                const r = await espalhar(
+                    supabase,
+                    (dests ?? []) as Recipient[],
+                    agrupaveis[0].alerta,
+                    // A notificacao fica pendurada no primeiro incidente do grupo;
+                    // os outros sao encerrados junto. O painel continua com os N.
+                    agrupaveis[0].inc.id,
+                    "rajada",
+                    teto,
+                    [`rajada de ${ddmmHHmm(new Date().toISOString())}`, String(agrupaveis.length), destaques],
+                    emailLigado,
                 );
+
+                // Rajada recusada NAO vira silencio: os incidentes voltam para a
+                // fila com o recuo de sempre e saem individuais na proxima passada.
+                const ok = r.enviados > 0 || r.elegiveis === 0;
+                for (const p of agrupaveis) {
+                    await supabase.rpc("incident_notification_done", {
+                        p_incident_id: p.inc.id,
+                        p_ok: ok,
+                        p_event_count: p.inc.event_count,
+                        p_error: r.erro,
+                    });
+                }
+                despachos.push({
+                    tipo: "rajada",
+                    incidentes: agrupaveis.length,
+                    componentes: agrupaveis.map((p) => p.alerta.componente),
+                    enviados: r.enviados,
+                    elegiveis: r.elegiveis,
+                    erro: r.erro,
+                });
+                // Nada de reenviar individualmente na MESMA passada quando a
+                // rajada falha: `incident_notification_done(ok=false)` ja marcou o
+                // recuo, e insistir agora seria mandar duas vezes o mesmo aviso.
+            }
+
+            for (const { inc, alerta: alertaInc } of preparados) {
+                if (emRajada.has(inc.id)) continue;
+                const recorrencia = inc.kind === "recorrencia";
 
                 const r = await espalhar(
                     supabase,
