@@ -94,12 +94,36 @@ serveMonitored("api-services-sandbox", async (req) => {
 
         // ── Um serviço específico: devolve as aplicações ──
         if (serviceName) {
-            const { data: sn, error: snError } = await supabase
-                .from("service_name")
-                .select("id, name, category_id")
-                .ilike("name", serviceName)
-                .limit(1)
-                .maybeSingle();
+            // Mesmo cuidado de `api-services`: o nome é resolvido DENTRO do
+            // catálogo da conta. `service_name` aceita linhas repetidas com o
+            // mesmo nome e um `.limit(1)` solto pega qualquer uma — quase
+            // sempre uma sem aplicação nenhuma, e a IA do teste ouvia
+            // "não encontrado" para um serviço que está ativo na tela.
+            const { data: scNameRows, error: scNameError } = await supabase
+                .from("services_client")
+                .select("service_name_id")
+                .eq("user_id", userId)
+                .eq("status", true);
+
+            if (scNameError) {
+                return dbErrorResponse(corsHeaders, "account_services_read_failed",
+                    `listar os serviços ativos da conta ${userId} para encontrar "${serviceName}"`, scNameError, req);
+            }
+
+            const accountSnIds = [
+                ...new Set((scNameRows || []).map((s: any) => s.service_name_id).filter(Boolean)),
+            ];
+
+            const { data: snMatches, error: snError } = accountSnIds.length === 0
+                ? { data: [], error: null }
+                : await supabase
+                    .from("service_name")
+                    .select("id, name, category_id")
+                    .in("id", accountSnIds)
+                    .ilike("name", serviceName)
+                    .order("name");
+
+            const sn = (snMatches || [])[0];
 
             if (snError) {
                 return dbErrorResponse(corsHeaders, "service_name_lookup_failed",
@@ -129,7 +153,7 @@ serveMonitored("api-services-sandbox", async (req) => {
                 .from("services_client")
                 .select("id, name, price, min_price, convenio_price, duration_minutes, description")
                 .eq("user_id", userId)
-                .eq("service_name_id", sn.id)
+                .in("service_name_id", (snMatches || []).map((s: any) => s.id))
                 .eq("status", true)
                 .order("name");
 

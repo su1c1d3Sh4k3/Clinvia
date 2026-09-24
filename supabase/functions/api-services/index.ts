@@ -182,18 +182,45 @@ serveMonitored("api-services", async (req) => {
 
         // If service_name provided: return applications for that service
         if (service_name) {
-            // Find the service_name record (level 2) by name (case-insensitive)
-            const { data: sn, error: snError } = await supabase
-                .from("service_name")
-                .select("id, name, category_id")
-                .ilike("name", service_name)
-                .limit(1)
-                .maybeSingle();
+            // O nome é resolvido DENTRO do catálogo da conta, nunca na tabela
+            // global. `service_name` aceita linhas repetidas com o mesmo nome
+            // (importar modelos, cadastrar à mão) e um `.limit(1)` solto pega
+            // qualquer uma delas — quase sempre uma que não tem aplicação
+            // nenhuma pendurada. Medido em 24/09/2026: uma conta com 15 linhas
+            // "Toxina Botulínica", só 1 com aplicações ⇒ a IA recebia
+            // "não encontrado" (ou lista vazia) para um serviço ativo.
+            const { data: scNameRows, error: scNameError } = await supabase
+                .from("services_client")
+                .select("service_name_id")
+                .eq("user_id", user_id)
+                .eq("status", true);
+
+            if (scNameError) {
+                return dbErrorResponse(corsHeaders, "account_services_read_failed",
+                    `listar os serviços ativos da conta ${user_id} para encontrar "${service_name}"`, scNameError, req);
+            }
+
+            const accountSnIds = [
+                ...new Set((scNameRows || []).map((s: any) => s.service_name_id).filter(Boolean)),
+            ];
+
+            const { data: snMatches, error: snError } = accountSnIds.length === 0
+                ? { data: [], error: null }
+                : await supabase
+                    .from("service_name")
+                    .select("id, name, category_id")
+                    .in("id", accountSnIds)
+                    .ilike("name", service_name)
+                    .order("name");
 
             if (snError) {
                 return dbErrorResponse(corsHeaders, "service_name_lookup_failed",
                     `buscar o serviço "${service_name}" no cadastro de serviços`, snError, req);
             }
+
+            // Duplicata do mesmo nome não é escolha: as aplicações das duas
+            // linhas são o mesmo serviço aos olhos do paciente e entram juntas.
+            const sn = (snMatches || [])[0];
 
             if (!sn) {
                 return apiError(corsHeaders, {
@@ -222,7 +249,7 @@ serveMonitored("api-services", async (req) => {
                 .from("services_client")
                 .select("id, name, price, min_price, convenio_price, duration_minutes, description")
                 .eq("user_id", user_id)
-                .eq("service_name_id", sn.id)
+                .in("service_name_id", (snMatches || []).map((s: any) => s.id))
                 .eq("status", true)
                 .order("name");
 
