@@ -75,7 +75,7 @@ export function SandboxChat({
     };
 
     return (
-        <Card className="flex flex-col h-[640px]" data-tour="sandbox-chat">
+        <Card className="flex flex-col h-[768px]" data-tour="sandbox-chat">
             <CardHeader className="shrink-0 flex-row items-center justify-between gap-3 space-y-0 border-b py-3">
                 <div className="min-w-0">
                     <CardTitle className="text-base truncate">

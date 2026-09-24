@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { AlertTriangle, Loader2, Rocket, Save } from "lucide-react";
+import { AlertTriangle, ChevronDown, Loader2, Rocket, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Label } from "@/components/ui/label";
 import {
     Select,
@@ -13,24 +14,43 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { ToneSlider } from "@/components/ia/ToneSlider";
 import {
-    CONTEXTO_MARCA_MAX,
     DEFAULT_TONE_SETTINGS,
     LIB_EMOJI,
     LIB_TRATAMENTO,
-    TONE_AXES_VOZ,
-    checkContextoMarca,
     composeTone,
     normalizeToneSettings,
     sanitizeContexto,
     type ToneAviso,
+    type ToneAxis,
     type ToneEmoji,
     type ToneSettings,
     type ToneTratamento,
 } from "@/lib/tone";
 import { useOwnerId } from "@/hooks/useOwnerId";
+
+/**
+ * Ordem de TELA dos sliders, lida de cima para baixo em cada coluna:
+ *
+ *   Proximidade   | Abordagem      | Tecnicidade
+ *   Elaboração    | Formalidade    | (Tratamento)
+ *   Assertividade | Expressividade | (Emoji)
+ *
+ * Tratamento e Emoji não são eixos de 1 a 5 (são selects) e fecham a 3ª coluna
+ * logo depois desta lista. Isto é ordem visual e NADA MAIS: quem manda na ordem
+ * dos blocos da diretiva é `TONE_AXES_VOZ`, em `@/lib/tone` — reordenar lá
+ * mudaria o prompt que vai para a IA, inclusive em produção.
+ */
+const EIXOS_EM_COLUNAS: ToneAxis[] = [
+    "proximidade",
+    "elaboracao",
+    "assertividade",
+    "comercial",
+    "formalidade",
+    "expressividade",
+    "tecnicidade",
+];
 
 /**
  * Tom de voz dentro do ambiente de teste.
@@ -86,8 +106,9 @@ export function SandboxTonePanel({ sessionId, savedSettings }: SandboxTonePanelP
 
     const avisoDe = (campo: ToneAviso["campo"]) => avisos.find((a) => a.campo === campo)?.texto;
 
+    // "Sobre a clínica" só se edita em IA > Tom de voz. Aqui o valor viaja junto,
+    // sem campo na tela, para o inject do teste não sair diferente do de produção.
     const contexto = settings.contexto_marca || "";
-    const contextoCheck = useMemo(() => checkContextoMarca(contexto), [contexto]);
 
     const compor = () =>
         composeTone({ ...settings, contexto_marca: sanitizeContexto(contexto) || undefined });
@@ -144,130 +165,108 @@ export function SandboxTonePanel({ sessionId, savedSettings }: SandboxTonePanelP
     });
 
     const salvando = salvarNoTeste.isPending || salvarEmProducao.isPending;
-    const bloqueado = salvando || contextoCheck.bloqueado;
 
     return (
-        <Card data-tour="sandbox-tom">
-            <CardHeader>
-                <CardTitle className="text-base">Tom de voz do teste</CardTitle>
-                <CardDescription>
-                    Mexa nos controles e salve no teste: a próxima mensagem do chat já sai com o
-                    novo jeito de falar. A IA de produção só muda quando você publicar.
-                </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-5">
-                <div className="grid gap-5 md:grid-cols-2">
-                    {TONE_AXES_VOZ.map((axis) => (
-                        <ToneSlider
-                            key={axis}
-                            axis={axis}
-                            value={settings[axis]}
-                            onChange={(v) => aplicar({ [axis]: v } as Partial<ToneSettings>)}
-                            aviso={avisoDe(axis)}
-                        />
-                    ))}
-                    <ToneSlider
-                        axis="comercial"
-                        value={settings.comercial}
-                        onChange={(v) => aplicar({ comercial: v })}
-                        aviso={avisoDe("comercial")}
-                    />
+        <Collapsible defaultOpen={false}>
+            <Card data-tour="sandbox-tom">
+                <CollapsibleTrigger className="group w-full text-left">
+                    <CardHeader className="flex-row items-start justify-between gap-3 space-y-0">
+                        <div className="min-w-0">
+                            <CardTitle className="text-base">Tom de voz do teste</CardTitle>
+                            <CardDescription className="mt-1.5">
+                                Mexa nos controles e salve no teste: a próxima mensagem do chat já
+                                sai com o novo jeito de falar. A IA de produção só muda quando você
+                                publicar.
+                            </CardDescription>
+                        </div>
+                        <ChevronDown className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                    </CardHeader>
+                </CollapsibleTrigger>
 
-                    <div className="space-y-2">
-                        <Label>Tratamento</Label>
-                        <Select
-                            value={settings.tratamento}
-                            onValueChange={(v) => aplicar({ tratamento: v as ToneTratamento })}
-                        >
-                            <SelectTrigger>
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {(["voce", "senhor"] as ToneTratamento[]).map((t) => (
-                                    <SelectItem key={t} value={t}>
-                                        {LIB_TRATAMENTO[t].label}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
+                <CollapsibleContent>
+                    <CardContent className="space-y-5">
+                        <div className="grid gap-5 md:grid-flow-col md:grid-cols-3 md:grid-rows-3">
+                            {EIXOS_EM_COLUNAS.map((axis) => (
+                                <ToneSlider
+                                    key={axis}
+                                    axis={axis}
+                                    value={settings[axis]}
+                                    onChange={(v) =>
+                                        aplicar({ [axis]: v } as Partial<ToneSettings>)}
+                                    aviso={avisoDe(axis)}
+                                />
+                            ))}
 
-                    <div className="space-y-2">
-                        <Label>Emoji</Label>
-                        <Select
-                            value={settings.emoji}
-                            onValueChange={(v) => aplicar({ emoji: v as ToneEmoji })}
-                        >
-                            <SelectTrigger>
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {(["nunca", "raro", "natural"] as ToneEmoji[]).map((e) => (
-                                    <SelectItem key={e} value={e}>
-                                        {LIB_EMOJI[e].label}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        {avisoDe("emoji") && (
-                            <p className="flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-500">
-                                <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                                <span>{avisoDe("emoji")}</span>
-                            </p>
-                        )}
-                    </div>
-                </div>
+                            <div className="space-y-2">
+                                <Label>Tratamento</Label>
+                                <Select
+                                    value={settings.tratamento}
+                                    onValueChange={(v) =>
+                                        aplicar({ tratamento: v as ToneTratamento })}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {(["voce", "senhor"] as ToneTratamento[]).map((t) => (
+                                            <SelectItem key={t} value={t}>
+                                                {LIB_TRATAMENTO[t].label}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
 
-                <div className="space-y-2">
-                    <Label>Sobre a clínica</Label>
-                    <Textarea
-                        value={contexto}
-                        onChange={(e) => setSettings({ ...settings, contexto_marca: e.target.value })}
-                        maxLength={CONTEXTO_MARCA_MAX}
-                        rows={2}
-                        placeholder="Clínica de dermatologia com 15 anos, público 40+, foco em resultado natural."
-                    />
-                    <div className="flex items-start justify-between gap-3">
-                        <p
-                            className={
-                                contextoCheck.mensagem
-                                    ? "flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-500"
-                                    : "text-xs text-muted-foreground"
-                            }
-                        >
-                            {contextoCheck.mensagem && (
-                                <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                            )}
-                            <span>{contextoCheck.mensagem || "Opcional."}</span>
-                        </p>
-                        <span className="text-xs text-muted-foreground shrink-0">
-                            {contexto.length}/{CONTEXTO_MARCA_MAX}
-                        </span>
-                    </div>
-                </div>
+                            <div className="space-y-2">
+                                <Label>Emoji</Label>
+                                <Select
+                                    value={settings.emoji}
+                                    onValueChange={(v) => aplicar({ emoji: v as ToneEmoji })}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {(["nunca", "raro", "natural"] as ToneEmoji[]).map((e) => (
+                                            <SelectItem key={e} value={e}>
+                                                {LIB_EMOJI[e].label}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                {avisoDe("emoji") && (
+                                    <p className="flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-500">
+                                        <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                                        <span>{avisoDe("emoji")}</span>
+                                    </p>
+                                )}
+                            </div>
+                        </div>
 
-                <div className="flex flex-wrap justify-end gap-2">
-                    <Button
-                        variant="outline"
-                        onClick={() => salvarNoTeste.mutate()}
-                        disabled={bloqueado || !sessionId}
-                    >
-                        {salvarNoTeste.isPending
-                            ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            : <Save className="mr-2 h-4 w-4" />}
-                        Salvar no teste
-                    </Button>
-                    <Button
-                        onClick={() => salvarEmProducao.mutate()}
-                        disabled={bloqueado || !ownerId}
-                    >
-                        {salvarEmProducao.isPending
-                            ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            : <Rocket className="mr-2 h-4 w-4" />}
-                        Salvar em produção
-                    </Button>
-                </div>
-            </CardContent>
-        </Card>
+                        <div className="flex flex-wrap justify-end gap-2">
+                            <Button
+                                variant="outline"
+                                onClick={() => salvarNoTeste.mutate()}
+                                disabled={salvando || !sessionId}
+                            >
+                                {salvarNoTeste.isPending
+                                    ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    : <Save className="mr-2 h-4 w-4" />}
+                                Salvar no teste
+                            </Button>
+                            <Button
+                                onClick={() => salvarEmProducao.mutate()}
+                                disabled={salvando || !ownerId}
+                            >
+                                {salvarEmProducao.isPending
+                                    ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    : <Rocket className="mr-2 h-4 w-4" />}
+                                Salvar em produção
+                            </Button>
+                        </div>
+                    </CardContent>
+                </CollapsibleContent>
+            </Card>
+        </Collapsible>
     );
 }

@@ -246,26 +246,28 @@ export default function IASandbox() {
                 </AlertDialog>
             </div>
 
-            <SandboxTokenBar totais={tokens.data} />
+            {/* Contadores presos no topo: o custo do teste tem de ficar à vista
+                enquanto se rola a conversa. As margens negativas cancelam o padding
+                da página para a faixa cobrir a largura toda ao grudar. */}
+            <div className="sticky top-0 z-20 -mx-4 bg-background px-4 pb-3 pt-1 md:-mx-8 md:px-8">
+                <SandboxTokenBar totais={tokens.data} />
+            </div>
 
-            <SandboxTonePanel sessionId={sessionId} savedSettings={sandbox.session.tone_settings} />
+            {/* 72/28: a conversa ocupa 20% a mais de largura que os 60% de antes. */}
+            <div className="grid gap-4 lg:grid-cols-[72fr_28fr]">
+                <SandboxChat
+                    mensagens={mensagens || []}
+                    carregando={carregandoMsgs}
+                    aguardandoResposta={aguardando}
+                    enviando={enviar.isPending}
+                    agendaMode={sandbox.session.agenda_mode}
+                    onEnviar={onEnviar}
+                    onLimpar={onLimpar}
+                    onTrocarAgenda={onTrocarAgenda}
+                    pacienteNome={contato.push_name}
+                />
 
-            <div className="grid gap-4 lg:grid-cols-5">
-                <div className="lg:col-span-3">
-                    <SandboxChat
-                        mensagens={mensagens || []}
-                        carregando={carregandoMsgs}
-                        aguardandoResposta={aguardando}
-                        enviando={enviar.isPending}
-                        agendaMode={sandbox.session.agenda_mode}
-                        onEnviar={onEnviar}
-                        onLimpar={onLimpar}
-                        onTrocarAgenda={onTrocarAgenda}
-                        pacienteNome={contato.push_name}
-                    />
-                </div>
-
-                <div className="space-y-4 lg:col-span-2">
+                <div className="space-y-4">
                     <SandboxPacienteCard
                         contato={contato}
                         convenios={catalogo?.convenios || []}
@@ -294,6 +296,8 @@ export default function IASandbox() {
                     />
                 </div>
             </div>
+
+            <SandboxTonePanel sessionId={sessionId} savedSettings={sandbox.session.tone_settings} />
 
             <SandboxSimulators
                 sessionId={sessionId}

@@ -428,13 +428,7 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
             element: '[data-tour="sandbox-tokens"]',
             title: "Quanto o teste já custou",
             description:
-                "Tokens lidos, tokens escritos e o custo em reais desta sessão de teste. Esse valor é contado à parte: não entra no Relatório do Consumo nem na fatura da conta.",
-        },
-        {
-            element: '[data-tour="sandbox-tom"]',
-            title: "Tom de voz em rascunho",
-            description:
-                "Os mesmos controles da aba Tom de voz. Salvar no teste faz a próxima mensagem do chat já sair no tom novo, sem mexer no atendimento real. Salvar em produção publica para valer.",
+                "Tokens lidos, tokens escritos e o custo em reais desta sessão de teste. Fica preso no topo enquanto você rola a página. Esse valor é contado à parte: não entra no Relatório do Consumo nem na fatura da conta.",
         },
         {
             element: '[data-tour="sandbox-chat"]',
@@ -473,10 +467,16 @@ const TOURS: Record<string, { element?: string; title: string; description: stri
                 "O que a IA marcou e o que você lançou pelos simuladores. Venda sem agendamento vira compra pendente — exatamente como na conta real, e é isso que a IA oferece para remarcar.",
         },
         {
+            element: '[data-tour="sandbox-tom"]',
+            title: "Tom de voz em rascunho",
+            description:
+                "Clique no título para abrir. São os mesmos controles da aba Tom de voz. Salvar no teste faz a próxima mensagem do chat já sair no tom novo, sem mexer no atendimento real. Salvar em produção publica para valer.",
+        },
+        {
             element: '[data-tour="sandbox-simuladores"]',
             title: "Simuladores",
             description:
-                "Provoque as situações que normalmente dependem de esperar: campanha chegando, mensagem de recorrência, confirmação de agendamento, venda avulsa ou convênio no cadastro. A IA recebe como receberia na vida real.",
+                "Clique no título para abrir. Provoque as situações que normalmente dependem de esperar: campanha chegando, mensagem de recorrência, confirmação de agendamento, venda avulsa ou convênio no cadastro. A IA recebe como receberia na vida real.",
         },
         {
             title: "Terminou? Resete",
