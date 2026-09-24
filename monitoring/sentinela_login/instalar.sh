@@ -24,8 +24,15 @@ fi
 
 id -u sentinela &>/dev/null || useradd --system --no-create-home --shell /usr/sbin/nologin sentinela
 
+# A logica de decisao (quando avisar) e a unica peca que ninguem ve
+# funcionando. Provar antes de instalar custa um segundo; descobrir no dia do
+# incidente custa o incidente.
+echo "conferindo a logica de decisao..."
+python3 "$AQUI/teste_logica.py"
+
 install -d -m 755 "$DESTINO"
-install -m 644 "$AQUI/probe.py" "$AQUI/sentinela.py" "$DESTINO/"
+install -m 644 "$AQUI/probe.py" "$AQUI/sentinela.py" "$AQUI/teste_logica.py" \
+    "$DESTINO/"
 
 # A chave da Resend mora aqui: so o root le, o servico recebe por
 # EnvironmentFile.

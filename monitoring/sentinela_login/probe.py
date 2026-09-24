@@ -31,6 +31,11 @@ algum incidente real deste projeto:
   7. login_real        (so com sentinela configurada) grant de senha de verdade,
                        leitura autenticada e logout
 
+As seis primeiras sao leitura pura e podem rodar de minuto em minuto sem deixar
+rastro. A setima ESCREVE: cada passada e uma sessao em `auth.sessions` e uma
+linha no log de auditoria. A cadencia dela e decidida pelo executor
+(`sentinela.py`), nao aqui — ver `--sem-login`.
+
 Fora de qualquer dependencia do projeto de proposito: so biblioteca padrao. O
 arquivo e autocontido para poder ser copiado para qualquer executor externo sem
 carregar nada da plataforma que ele vigia.
@@ -44,8 +49,9 @@ Uso
     export SENTINELA_EMAIL=...
     export SENTINELA_SENHA=...
 
-    python probe.py            # relatorio legivel, sai 0 se tudo ok
-    python probe.py --json     # uma linha JSON, para o executor encadear
+    python probe.py              # relatorio legivel, sai 0 se tudo ok
+    python probe.py --json       # uma linha JSON, para o executor encadear
+    python probe.py --sem-login  # so as 6 de leitura, nao toca em auth
 
 Saida: 0 = tudo ok, 1 = ha falha.
 """
@@ -263,6 +269,10 @@ def ck_login_real(cfg: dict, estado: dict) -> str:
     return "entrou, leu e saiu"
 
 
+# A UNICA verificacao que escreve. Separada por nome para o executor poder
+# rarea-la sem precisar saber o que ela faz.
+LOGIN_REAL = "login_real"
+
 VERIFICACOES = [
     ("front_html", ck_front_html),
     ("front_bundle", ck_front_bundle),
@@ -270,11 +280,16 @@ VERIFICACOES = [
     ("verify_turnstile", ck_verify_turnstile),
     ("auth_health", ck_auth_health),
     ("rest_anon", ck_rest_anon),
-    ("login_real", ck_login_real),
+    (LOGIN_REAL, ck_login_real),
 ]
 
 
-def rodar() -> dict:
+def rodar(incluir_login: bool = True) -> dict:
+    """Roda as verificacoes. `incluir_login=False` deixa a 7 de fora.
+
+    Quem pula nao e a sonda, e o executor: aqui a passada so fica registrada
+    em `login_medido`, para o executor nao confundir "nao mediu" com "passou".
+    """
     cfg = {
         "url": os.environ.get("SENTINELA_SUPABASE_URL", "").rstrip("/"),
         "anon": os.environ.get("SENTINELA_ANON_KEY", ""),
@@ -291,7 +306,9 @@ def rodar() -> dict:
 
     estado: dict = {}
     resultados = []
-    for nome, fn in VERIFICACOES:
+    escolhidas = [(n, f) for n, f in VERIFICACOES
+                  if incluir_login or n != LOGIN_REAL]
+    for nome, fn in escolhidas:
         inicio = time.monotonic()
         try:
             detalhe, ok = fn(cfg, estado), True
@@ -311,11 +328,12 @@ def rodar() -> dict:
         "ok": all(r["ok"] for r in resultados),
         "falhas": [r["verificacao"] for r in resultados if not r["ok"]],
         "resultados": resultados,
+        "login_medido": incluir_login,
     }
 
 
 def main() -> int:
-    r = rodar()
+    r = rodar(incluir_login="--sem-login" not in sys.argv)
     if "--json" in sys.argv:
         print(json.dumps(r, ensure_ascii=False))
     else:

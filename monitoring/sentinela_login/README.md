@@ -48,6 +48,36 @@ login está *alcançável*, não que ele *funciona*: um grant de senha de verdad
 escreve em `auth.sessions` e exercita os gatilhos do schema `auth`, caminho que
 tentativa com senha errada nunca toca.
 
+## Cadência: 1 a 6 por minuto, 7 a cada 5
+
+As seis primeiras são leitura pura e não deixam rastro. A sétima **escreve**:
+1.440 grants por dia encheriam `auth.sessions` e o log de auditoria, e arriscam
+limite de taxa no GoTrue — a sentinela viraria ela mesma um incidente. Por isso
+ela roda a cada 5 minutos.
+
+Com uma exceção que importa: **o racionamento vale só para o caminho saudável.**
+Grant que falha não cria sessão nenhuma, então assim que o login quebra ele
+volta para cadência de 1 minuto. Sem isso, confirmar (3 medições) custaria 15
+minutos. Com isso, o pior caso é 5 (cadência) + 3 (confirmação) = 8 minutos, e
+o típico ~5.
+
+A contagem de confirmações é **por verificação**, não pela assinatura do
+conjunto. É consequência direta do escalonamento: com um contador só, a passada
+que pula o login mudaria a assinatura e zeraria o relógio de uma falha que
+continua de pé. Verificação que não foi medida numa passada não é incrementada
+**nem zerada** — não medir não é prova de nada, nem a favor nem contra.
+
+## Quem vigia a sentinela
+
+Ela roda numa caixa de fora. Se a caixa morrer, ela fica muda — e silêncio é
+indistinguível de "tudo bem". É a terceira vez que esse padrão aparece neste
+projeto, depois do canal de alertas mudo e do vigia de cron que precisou se
+acusar.
+
+A resposta é um **e-mail diário em horário fixo** (`SENTINELA_DIARIO_HORA`). A
+ausência dele é o sinal. Ele sai todo dia, inclusive com falha aberta: o diário
+prova que a *sentinela* está viva, não que a aplicação está.
+
 ## Onde ela mora
 
 Na **VPS de backup**. Uma sentinela hospedada dentro do que ela vigia fica muda
@@ -77,15 +107,18 @@ um buraco de segurança. A chave da Resend, no pior caso, manda e-mail.
 
 ## Quando ela avisa
 
-O aviso só sai depois de **3 passadas seguidas** com a **mesma** verificação
-quebrada — 3 minutos de login fora. Menos que isso pega oscilação de rede da
-própria caixa, e alarme falso ensina a ignorar alarme.
+O aviso só sai depois de **3 medições seguidas** da **mesma** verificação
+quebrada. Menos que isso pega oscilação de rede da própria caixa, e alarme
+falso ensina a ignorar alarme.
 
 Isso é supressão na **origem** (não existe incidente ainda), não teto na porta.
 Uma vez confirmado, o aviso sai e **sai de novo a cada 30 minutos enquanto
-durar, sem limite de quantidade**. Quando volta, ela avisa que voltou e por
-quanto tempo ficou fora — mas só se a queda chegou a ser avisada: "voltou" sem
-"caiu" é ruído puro.
+durar, sem limite de quantidade**. Se quebrar **mais** coisa, o aviso novo não
+espera o lembrete — o conjunto cresceu, é notícia. Se o conjunto **encolher**,
+não sai nada: recuperação parcial repetindo o mesmo alerta só gasta atenção.
+
+Quando tudo volta, ela avisa que voltou e por quanto tempo ficou fora — mas só
+se a queda chegou a ser avisada: "voltou" sem "caiu" é ruído puro.
 
 ## Manutenção
 
@@ -102,10 +135,19 @@ barata. A cobertura completa é do guarda de repositório
 ```sh
 cd monitoring/sentinela_login
 export SENTINELA_SUPABASE_URL=... SENTINELA_ANON_KEY=... SENTINELA_APP_ORIGIN=...
-python probe.py          # só mede, não avisa
-python probe.py --json   # uma linha JSON
-python sentinela.py      # mede, decide e avisa
+python probe.py             # só mede, não avisa
+python probe.py --json      # uma linha JSON
+python probe.py --sem-login # só as 6 de leitura, não toca em auth
+python sentinela.py         # mede, decide e avisa
+
+python teste_logica.py      # prova a decisão sem rede (rodar após instalar)
 ```
+
+O `teste_logica.py` troca a sonda e o e-mail por dublês e roda uma linha do
+tempo de passadas de 1 minuto. A única peça da sentinela que ninguém vê
+funcionando é justamente a que decide **quando** avisar; se ela regredir, o
+defeito aparece no dia do incidente, que é o pior dia para descobrir que o
+vigia estava quebrado.
 
 Só biblioteca padrão, de propósito: o arquivo é autocontido para poder ser
 copiado para qualquer executor sem carregar nada da plataforma que ele vigia.
