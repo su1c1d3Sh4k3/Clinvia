@@ -92,6 +92,16 @@ const TPL_RESUMO = "sys_alerta_resumo_v2";
 // \n (ver sanitizeParam).
 const TPL_INCIDENTE_V3 = "sys_alerta_incidente_v3";
 const TPL_RESUMO_V3 = "sys_alerta_resumo_v3";
+
+/**
+ * v4, 24/09/2026. Titulo pedido por ele: "Componente | Origem da falha | Cliente
+ * | Resolucao", para entender problema, impacto e solucao SO pelo titulo.
+ *
+ * Por que nome novo em vez de editar o v3: a Meta recusa edicao de template que
+ * nao esteja REJEITADO (erro 2388003, "Apenas e possivel editar modelos de
+ * mensagem caso estes tenham sido rejeitados"). Medido, nao suposto.
+ */
+const TPL_INCIDENTE_V4 = "sys_alerta_incidente_v4";
 const TPL_LANG = "pt_BR";
 
 /**
@@ -298,15 +308,18 @@ type EnvioTemplate = SendResult & { templateName: string };
 async function enviarTemplate(
     sender: Sender,
     to: string,
-    novo: { name: string; params: string[] },
-    reserva: { name: string; params: string[] },
+    candidatos: { name: string; params: string[] }[],
 ): Promise<EnvioTemplate> {
-    const r3 = await graphSend(sender, templatePayload(to, novo.name, novo.params));
-    if (r3.ok || !TPL_INDISPONIVEL.has(String(r3.errorCode))) {
-        return { ...r3, templateName: novo.name };
+    let ultimo!: EnvioTemplate;
+    for (const c of candidatos) {
+        const r = await graphSend(sender, templatePayload(to, c.name, c.params));
+        ultimo = { ...r, templateName: c.name };
+        if (r.ok || !TPL_INDISPONIVEL.has(String(r.errorCode))) return ultimo;
     }
-    const r2 = await graphSend(sender, templatePayload(to, reserva.name, reserva.params));
-    return { ...r2, templateName: reserva.name };
+    // Todos indisponiveis: devolve o ultimo erro, que e o da reserva mais antiga
+    // — a que deveria estar aprovada. Se nem ela responde, o problema nao e o
+    // template.
+    return ultimo;
 }
 
 // ── Montagem da mensagem ─────────────────────────────────────────────────────
@@ -332,6 +345,18 @@ type Alerta = {
      * integracao de fora batendo errado na nossa porta.
      */
     origem: string;
+    /**
+     * Mesma origem em rotulo CURTO, para caber no titulo de 4 campos sem virar
+     * a parede de texto que o titulo existe para evitar. "Webhook de terceiro
+     * (Meta/UAZAPI/Instagram)" tem 43 caracteres e sozinho ja estoura a linha.
+     */
+    origemCurta: string;
+    /**
+     * Quem consegue consertar. Quarta parte do titulo, pedida por ele: "Claude
+     * Code se voce conseguir resolver, humano se for algo que voce nao tem
+     * acesso como o n8n".
+     */
+    resolucao: string;
     /** Catalogo estatico. Nunca vem da IA: e barato, nao falha e nao alucina. */
     oQueFaz: string;
     /** Erro BRUTO: mensagem real, codigo, valores. Nunca o nome do componente. */
@@ -349,13 +374,46 @@ type Alerta = {
  * houve SEM abrir o painel. "Componente X falhou, abra o painel" e um lembrete
  * de que algo deu errado, nao um alerta.
  */
+/**
+ * O titulo de 4 campos: "Componente | Origem da falha | Cliente | Resolucao".
+ * Fonte unica para o texto livre e para o template v4 — se cada caminho montar
+ * o seu, eles divergem, e ja divergiram antes (a causa provavel saia com dois
+ * textos diferentes em `dispatch` e `notify`).
+ */
+/**
+ * O componente do n8n embute o nome do cliente ("n8n:FLUXO CLIENTE - PELE
+ * DERMATOLOGIA (meta-123)"), que agora tem campo proprio no titulo. Repetido, o
+ * titulo chega a 114 caracteres com o mesmo nome duas vezes — a parede de texto
+ * que este titulo existe para evitar.
+ *
+ * Tira SO o nome duplicado e preserva o que esta entre parenteses: a instancia e
+ * a chave para achar o incidente no painel depois, e encurtar a ponto de perde-la
+ * trocaria uma leitura boa por uma busca impossivel.
+ */
+function componenteNoTitulo(a: Alerta): string {
+    if (a.conta.length < 4 || !a.componente.includes(a.conta)) return a.componente;
+    return a.componente
+        .replace(a.conta, "")
+        .replace(/\s*-\s*\(/, " (")
+        .replace(/\s*-\s*$/, "")
+        .replace(/\s{2,}/g, " ")
+        .trim();
+}
+
+function tituloDoAlerta(a: Alerta): string {
+    return [componenteNoTitulo(a), a.origemCurta, a.conta, a.resolucao].join(" | ");
+}
+
 function alertaTexto(a: Alerta): string {
     const tituloMeio = a.natureza === "detector" ? "O QUE FOI DETECTADO" : "O QUE FALHOU";
     return [
         `${SEV_LABEL[a.severidade]} — Alerta Clinbia`,
-        `Componente: ${a.componente}`,
-        `Origem: ${a.origem}`,
-        `Conta: ${a.conta} · ${a.ocorrencias}`,
+        // Titulo de 4 campos: componente, onde quebrou, quem sentiu, quem
+        // conserta. Igual ao do template v4 de proposito — o texto livre e o
+        // template sao o MESMO alerta por caminhos diferentes, e ja divergiram
+        // uma vez.
+        tituloDoAlerta(a),
+        `Ocorrências: ${a.ocorrencias}`,
         ``,
         `O QUE ESSE SERVIÇO FAZ`,
         a.oQueFaz,
@@ -403,10 +461,19 @@ function alertaParams(a: Alerta): string[] {
     const rotulo = a.natureza === "detector" ? "DETECTADO" : "FALHOU";
     return [
         SEV_LABEL[a.severidade],
-        a.componente,
+        // O titulo de 4 campos entra AQUI, na variavel que o corpo aprovado
+        // prefixa com "Componente:". Fica um rotulo torto ("Componente: x | y |
+        // z | w"), e e de proposito: esperar a aprovacao do v4 para so entao
+        // entregar o titulo deixaria ele sem o titulo por tempo indeterminado —
+        // a Meta nao promete prazo. Rotulo torto hoje vale mais que rotulo certo
+        // em data desconhecida; quando o v4 aprovar, este caminho para de ser
+        // usado sozinho.
+        tituloDoAlerta(a),
         `${a.oQueFaz} — ${rotulo}: ${a.oQueFalhou}`,
         a.ocorrencias,
-        `${a.conta} · origem: ${a.origem}`,
+        // A origem saiu daqui porque ja esta no titulo. Repetir gastaria a unica
+        // linha que ainda diz de quem e a conta.
+        a.conta,
         a.causa,
         a.acao,
         a.painel,
@@ -428,9 +495,37 @@ function alertaParamsV3(a: Alerta): string[] {
     const rotulo = a.natureza === "detector" ? "Detectado" : "Falhou";
     return [
         SEV_LABEL[a.severidade],
-        a.componente,
-        a.origem,
+        // O v3 ja tem linha propria para origem e para conta, entao aqui nao cabe
+        // o titulo inteiro — repetiria dois dos quatro campos em linhas vizinhas.
+        // So a `resolucao`, que e o campo que o v3 nao tem em lugar nenhum, sobe
+        // para ca. O resultado carrega os 4 campos dele sem duplicar nada.
+        `${componenteNoTitulo(a)} | ${a.resolucao}`,
+        a.origemCurta,
         a.conta,
+        a.ocorrencias,
+        a.oQueFaz,
+        `${rotulo}: ${a.oQueFalhou}`,
+        a.causa,
+        a.acao,
+        a.painel,
+    ];
+}
+
+/**
+ * v4: o titulo de 4 campos ganha 4 variaveis proprias ({{2}}..{{5}}), e a linha
+ * "Origem:" some do corpo porque a origem passou a morar no titulo.
+ *   {{1}} severidade · {{2}} componente · {{3}} origem curta · {{4}} cliente
+ *   {{5}} resolucao · {{6}} ocorrencias · {{7}} o que faz · {{8}} o que aconteceu
+ *   {{9}} causa · {{10}} acao · {{11}} painel
+ */
+function alertaParamsV4(a: Alerta): string[] {
+    const rotulo = a.natureza === "detector" ? "Detectado" : "Falhou";
+    return [
+        SEV_LABEL[a.severidade],
+        componenteNoTitulo(a),
+        a.origemCurta,
+        a.conta,
+        a.resolucao,
         a.ocorrencias,
         a.oQueFaz,
         `${rotulo}: ${a.oQueFalhou}`,
@@ -445,24 +540,29 @@ function resumoParamsV3([periodo, total, destaques]: string[]): string[] {
     return [periodo, total, destaques, PAINEL_URL];
 }
 
-/** Alerta de incidente: v3 com reserva no v2. */
+/**
+ * Melhor disponivel, na ordem: v4 (titulo de 4 campos + hierarquia), v3 (so
+ * hierarquia) e v2 (lista chapada, mas APROVADO). Enquanto a Meta nao aprova os
+ * novos o alerta sai no que houver, e sobe de degrau sozinho a cada aprovacao.
+ */
 function enviarTemplateIncidente(sender: Sender, to: string, a: Alerta) {
-    return enviarTemplate(
-        sender,
-        to,
+    return enviarTemplate(sender, to, [
+        { name: TPL_INCIDENTE_V4, params: alertaParamsV4(a) },
         { name: TPL_INCIDENTE_V3, params: alertaParamsV3(a) },
         { name: TPL_INCIDENTE, params: alertaParams(a) },
-    );
+    ]);
 }
 
-/** Resumo de 2h: v3 com reserva no v2. */
+/**
+ * Resumo de 2h: v3 com reserva no v2. NAO ganhou titulo de 4 campos de
+ * proposito — ele agrega N incidentes de componentes, clientes e origens
+ * diferentes, entao componente/cliente/resolucao nao tem valor unico.
+ */
 function enviarTemplateResumo(sender: Sender, to: string, params: string[]) {
-    return enviarTemplate(
-        sender,
-        to,
+    return enviarTemplate(sender, to, [
         { name: TPL_RESUMO_V3, params: resumoParamsV3(params) },
         { name: TPL_RESUMO, params },
-    );
+    ]);
 }
 
 // ── Os quatro blocos ─────────────────────────────────────────────────────────
@@ -618,6 +718,54 @@ const ORIGEM_ROTULO: Record<string, string> = {
     nao_identificada: "Não identificada",
 };
 
+/**
+ * Rotulo curto para o titulo. Os nomes sao os que ELE usou ao pedir o formato
+ * ("front end, n8n, banco de dados, edge functions").
+ *
+ * FALTA DE PROPOSITO: nao existe "banco de dados" aqui porque o classificador
+ * nunca emite esse valor — um erro de Postgres chega como `cron` ou
+ * `edge_interna`, conforme quem chamou. Inventar a etiqueta faria o titulo
+ * prometer uma distincao que o dado nao tem.
+ */
+const ORIGEM_CURTA: Record<string, string> = {
+    ia_n8n: "n8n",
+    front: "Front-end",
+    webhook_externo: "Webhook externo",
+    cron: "Cron",
+    edge_interna: "Edge function",
+    integracao_externa: "Integração externa",
+    multiplas: "Múltiplas origens",
+    nao_identificada: "Origem indefinida",
+};
+
+/**
+ * Onde o conserto mora — e por isso quem consegue faze-lo.
+ *
+ * Derivado da ORIGEM, e nao de `ai_fix_system` x `ai_fix_n8n`: medido em 24/09,
+ * dos 9 incidentes com origem `ia_n8n`, 7 tinham os DOIS campos preenchidos. A
+ * IA escreve os dois quase sempre, entao como discriminador binario eles nao
+ * servem.
+ */
+const RESOLUCAO: Record<string, string> = {
+    // Codigo deste repositorio: edge function, cron, front. Eu alcanco.
+    cron: "Claude Code",
+    edge_interna: "Claude Code",
+    front: "Claude Code",
+    // O n8n so aceita PUT do workflow inteiro e recusa campos que os 9 fluxos
+    // carregam — decisao ja fechada: os workflows vao a mao.
+    ia_n8n: "Humano (n8n)",
+    // Meta, UAZAPI, Instagram, OpenAI: o defeito esta do lado de la.
+    webhook_externo: "Humano (provedor)",
+    integracao_externa: "Humano (provedor)",
+};
+
+function resolucaoRotulo(origem: unknown): string {
+    // `multiplas` e `nao_identificada` caem aqui de proposito: sem saber de onde
+    // veio nao da para dizer quem conserta, e chutar "Claude Code" faria o
+    // titulo mentir justamente no campo que ele criou para decidir se age.
+    return RESOLUCAO[String(origem ?? "")] ?? "A definir";
+}
+
 function origemRotulo(origem: unknown, inferida: unknown): string {
     const base = ORIGEM_ROTULO[String(origem ?? "")] ?? "Não identificada";
     // "Nao identificada" ja diz que e palpite; repetir "(inferida)" ali so
@@ -640,7 +788,7 @@ async function montarAlerta(
     const [cat, bruto, conta] = await Promise.all([
         catalogoDoComponente(supabase, inc.component),
         erroBruto(supabase, inc.id),
-        resolverConta(supabase, inc.owner_id, inc.affected_tenants),
+        resolverConta(supabase, inc.owner_id, inc.affected_tenants, inc.component, inc.origem),
     ]);
 
     return {
@@ -653,6 +801,14 @@ async function montarAlerta(
         conta,
         ocorrencias,
         origem: origemRotulo(inc.origem, inc.origem_inferida),
+        // O "(inferida)" acompanha o rotulo curto tambem: 39 de 41 incidentes da
+        // serie tem origem deduzida, e quem le o titulo precisa saber que a
+        // atribuicao — e portanto o campo Resolucao — e palpite.
+        origemCurta: (ORIGEM_CURTA[String(inc.origem ?? "")] ?? "Origem indefinida")
+            + (inc.origem_inferida && inc.origem && inc.origem !== "nao_identificada"
+                ? " (inferida)"
+                : ""),
+        resolucao: resolucaoRotulo(inc.origem),
         oQueFaz: cat.oQueFaz,
         // O bruto vem primeiro: o resumo da IA e util, mas e parafrase. Quem vai
         // consertar precisa da mensagem literal, do codigo e dos valores.
@@ -847,24 +1003,87 @@ async function estourouORateLimit(
     return (count ?? 0) >= teto;
 }
 
+/** Nome da empresa de um owner, ou null se o perfil nao tem nome nenhum. */
+async function nomeDaEmpresa(supabase: Db, ownerId: string): Promise<string | null> {
+    const { data: p } = await supabase
+        .from("profiles")
+        .select("company_name, full_name")
+        .eq("id", ownerId)
+        .maybeSingle();
+    return p?.company_name || p?.full_name || null;
+}
+
+/**
+ * Ultimo recurso antes de desistir do campo Cliente: o componente do incidente do
+ * n8n carrega a instancia entre parenteses — "n8n:FLUXO CLIENTE - X (meta-123)" ou
+ * "... (pelemaceio - INSTAGRAM)". Medido em 24/09: dos incidentes `n8n:` com
+ * parenteses, os de WhatsApp casam em `instances.instance_name` e os de Direct em
+ * `instagram_instances.account_name` depois de tirar o sufixo " - INSTAGRAM".
+ *
+ * Vale a consulta porque e exatamente a familia de incidente que NAO tem owner_id
+ * gravado e que mais aparece — sem isto o campo Cliente fica cego justo onde ele
+ * tem dono conhecido.
+ */
+async function contaPeloComponente(supabase: Db, componente: string): Promise<string | null> {
+    const m = componente.match(/\(([^)]+)\)\s*$/);
+    if (!m) return null;
+    const alvo = m[1].trim();
+
+    const { data: inst } = await supabase
+        .from("instances")
+        .select("user_id")
+        .eq("instance_name", alvo)
+        .maybeSingle();
+    if (inst?.user_id) return await nomeDaEmpresa(supabase, inst.user_id);
+
+    const conta = alvo.replace(/\s*-\s*INSTAGRAM$/i, "").trim();
+    const { data: ig } = await supabase
+        .from("instagram_instances")
+        .select("user_id")
+        .eq("account_name", conta)
+        .maybeSingle();
+    if (ig?.user_id) return await nomeDaEmpresa(supabase, ig.user_id);
+
+    return null;
+}
+
+/**
+ * Origens cujo defeito mora em codigo/rotina compartilhada: quando nao ha dono,
+ * o certo e mesmo dizer "Todos os clientes". Fora daqui, a ausencia de dono NAO
+ * significa que todo mundo foi afetado — significa que nao sabemos de quem e.
+ */
+const ORIGEM_GLOBAL = new Set(["cron", "front"]);
+
 /** Nome da conta afetada, do jeito que aparece na mensagem. */
 async function resolverConta(
     supabase: Db,
     ownerId: string | null,
     afetados: string[] | null,
+    componente: string,
+    origem: unknown,
 ): Promise<string> {
     if (ownerId) {
-        const { data: p } = await supabase
-            .from("profiles")
-            .select("company_name, full_name")
-            .eq("id", ownerId)
-            .maybeSingle();
-        return p?.company_name || p?.full_name || "conta não identificada";
+        return (await nomeDaEmpresa(supabase, ownerId)) ?? "Conta não identificada";
     }
     if (Array.isArray(afetados) && afetados.length > 1) {
         return `${afetados.length} contas afetadas`;
     }
-    return "nenhuma identificada";
+    // Um tenant afetado e UMA conta, e nao "geral". Antes caia no mesmo ramo do
+    // cron e era anunciado como "Todos os clientes" — o campo que ele criou para
+    // medir impacto era justamente o que exagerava o impacto.
+    if (Array.isArray(afetados) && afetados.length === 1) {
+        return (await nomeDaEmpresa(supabase, afetados[0])) ?? "Conta não identificada";
+    }
+
+    const doComponente = await contaPeloComponente(supabase, componente);
+    if (doComponente) return doComponente;
+
+    // Medido em 24/09: 44 dos 50 incidentes da base nao tem dono NEM tenant
+    // afetado, e entre eles ha `api-public-booking`, `instagram` e
+    // `delivery-automation-worker`, que sao de UM cliente. Carimbar "Todos os
+    // clientes" neles faria o titulo mentir no campo de impacto. Por isso o
+    // "todos" dele fica restrito a origem de codigo/rotina compartilhada.
+    return ORIGEM_GLOBAL.has(String(origem ?? "")) ? "Todos os clientes" : "Conta não identificada";
 }
 
 type Espalhamento = {
@@ -1249,6 +1468,11 @@ serveMonitored("alert-notify", async (req) => {
                 componente: "alert-notify",
                 conta: "nenhuma identificada",
                 origem: "Disparo manual de teste",
+                // O titulo de um teste precisa dizer que e teste na PRIMEIRA
+                // palavra depois do componente: se ele nao distinguir alerta real
+                // de ensaio pelo titulo, o canal inteiro perde valor.
+                origemCurta: "Teste manual",
+                resolucao: "Nada a fazer",
                 ocorrencias: `1 desde ${ddmmHHmm(new Date().toISOString())}`,
                 oQueFaz: "entrega os alertas de incidente da plataforma no WhatsApp do Super Admin",
                 oQueFalhou: sanitizeParam(body?.message ?? "teste manual do canal de alerta — nada falhou"),
@@ -1289,6 +1513,12 @@ serveMonitored("alert-notify", async (req) => {
                 // O resumo agrupa incidentes de origens diferentes; uma origem
                 // unica aqui seria mentira. Cada linha do painel tem a sua.
                 origem: "-",
+                // Mesmo motivo para os dois campos novos: o resumo nao tem
+                // componente, cliente nem responsavel unicos, e o titulo de 4
+                // campos so vale quando os 4 tem UM valor. Por isso o resumo
+                // manteve o cabecalho antigo (ver enviarTemplateResumo).
+                origemCurta: "-",
+                resolucao: "-",
                 ocorrencias: `${ddmmHHmm(inicio)} às ${ddmmHHmm(new Date().toISOString())}`,
                 oQueFaz: "-",
                 oQueFalhou: `${abertos.length} incidente(s) aberto(s)`,
