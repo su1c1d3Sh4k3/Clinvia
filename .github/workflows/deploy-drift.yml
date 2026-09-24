@@ -1,0 +1,37 @@
+# Funcao implantada sem fonte no repositorio nao pode nascer de novo.
+#
+# Apagar `supabase/functions/<slug>/` NAO remove a funcao do projeto Supabase:
+# ela fica ACTIVE, publicamente alcancavel, rodando o ultimo bundle publicado --
+# codigo que ninguem mais consegue ler pelo git. Foi assim que 19 funcoes
+# ficaram no ar por ate 7 meses e meio, duas delas escrevendo sem autenticacao.
+#
+# Este job falha quando isso acontece. Ele NAO e o build do frontend (que e
+# manual, no EasyPanel): e um sinal de status no push/PR.
+#
+# Exige o segredo SUPABASE_ACCESS_TOKEN no repositorio (Settings > Secrets and
+# variables > Actions). Sem ele o job falha de proposito, em vez de passar
+# calado -- teste que passa sem medir nada e pior que teste nenhum.
+
+name: deploy drift
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  edge-functions-sem-fonte:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Funcoes implantadas sem fonte no repo
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: swfshqvvbohnahdyndch
+        run: python supabase/tests/security/deploy_drift/check.py

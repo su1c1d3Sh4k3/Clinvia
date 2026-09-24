@@ -8,7 +8,8 @@ funcoes ficaram no ar sem fonte no repositorio.
 Uso:
     python supabase/tests/security/deploy_drift/check.py
 
-Le SUPABASE_ACCESS_TOKEN e SUPABASE_PROJECT_REF do .env da raiz.
+Le SUPABASE_ACCESS_TOKEN e SUPABASE_PROJECT_REF do ambiente e, se nao achar, do
+.env da raiz (que nao vai para o git -- e por isso que o CI usa o ambiente).
 Sai com codigo 1 se houver qualquer funcao implantada sem fonte no repositorio.
 """
 
@@ -25,10 +26,18 @@ FUNCS = RAIZ / "supabase" / "functions"
 
 
 def do_env(chave: str) -> str:
+    do_ambiente = os.environ.get(chave, "").strip()
+    if do_ambiente:
+        return do_ambiente
+    if not ENV.exists():
+        sys.exit(
+            f"{chave} nao esta no ambiente e nao existe {ENV}.\n"
+            "No CI, cadastre o segredo no repositorio; na maquina, use o .env da raiz."
+        )
     texto = ENV.read_text(encoding="utf-8", errors="replace")
     m = re.search(rf"^{chave}=(.*)$", texto, re.M)
     if not m:
-        sys.exit(f"{chave} nao encontrada em {ENV}")
+        sys.exit(f"{chave} nao encontrada no ambiente nem em {ENV}")
     return m.group(1).strip().strip('"')
 
 

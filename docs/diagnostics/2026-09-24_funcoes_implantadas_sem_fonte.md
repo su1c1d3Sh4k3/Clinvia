@@ -304,3 +304,58 @@ aparece imediatamente. Mas é escrita em produção, então não fiz — só dei
 - Não apaguei, não desativei e não alterei `verify_jwt` de nada. Você decide em cima do tráfego.
 - Não toquei em `src/pages/Suporte.tsx` nem em `_shared/support-knowledge.ts` — exceção acordada
   para trabalho interno.
+
+---
+
+## 8. Decisão e execução (24/09, mesma tarde)
+
+Decisão dele: **apagar as 19, todas, hoje.** `verify_jwt=true` foi recusado até como passo
+intermediário — *"a chave anon é um JWT válido e está no bundle público do front. Meia correção que
+parece correção é pior que nenhuma."*
+
+Executado na ordem que ele deu, do mais perigoso para o menos, via
+`DELETE /v1/projects/{ref}/functions/{slug}`:
+
+1. `uzapi-configure-webhook` — primeiro. Não era resto de migração: era reapontamento anônimo de
+   webhook usando o `apikey` privado do cliente.
+2. `evolution-webhook` — a única órfã que ainda escrevia sem autenticação.
+3. `uzapi-webhook`, `uzapi-webhook-refactor`, `uzapi-set-webhook`, `uzapi-setup-webhook`,
+   `whatsapp-webhook`.
+4. `storage-uploader` — *"comparar com `clinvia-upload-2026` em texto puro dentro do bundle público
+   não é autenticação, é decoração."*
+5. O resto do balde B e o balde C inteiro (`refresh-contact-photos`, `backfill-instagram-photos`).
+
+**19 de 19: `DELETE` 200, `GET` 404.** POST anônimo nas duas perigosas responde 404.
+`deploy_drift/check.py` fecha em **zero órfãs** (136 implantadas, 138 com fonte no repo).
+
+Reversível: as fontes recuperadas dos bundles estão versionadas em
+`supabase/tests/security/deploy_drift/fontes_recuperadas/<slug>/index.ts`.
+
+### O detector de "voltou a receber POST" NÃO é possível hoje — medido
+
+Ele pediu para ser avisado se alguma delas voltasse a receber requisição. **Não dá, e a prova é
+minha própria sonda:** um POST para `uzapi-configure-webhook` feito às 12h4x, com 404 confirmado na
+resposta, **não deixou uma linha** em `edge_logs`, `function_edge_logs` nem em nenhuma das 7 fontes
+que o projeto expõe. Busca por `event_message like '%uzapi-configure-webhook%'` nas duas fontes:
+zero. Busca por qualquer `| 404 |` em `function_edge_logs`: zero.
+
+O gateway recusa antes de escrever log. Requisição para função inexistente é invisível por desenho.
+
+A única forma de enxergar seria republicar cada slug como lápide (função que só registra e devolve
+410) — ou seja, desfazer a deleção para poder observá-la. Fica como decisão dele, não como
+iniciativa minha: apagar significa apagar.
+
+### Dois diretórios no repo que nunca foram publicados
+
+O `check.py` agora aponta os dois: `_webhook-template` (molde, tudo bem) e
+**`evolution-webhook.disabled`** — a pasta renomeada em 03/02/2026 que deu origem a todo este
+incidente, por parecer desativação sem ser. Agora que a função foi apagada de verdade do projeto,
+ela é peso morto e enganosa. Não apaguei: aguarda decisão.
+
+### CI
+
+`.github/workflows/deploy-drift.yml` roda o `check.py` em push para `main`, em PR e sob demanda,
+e falha quando aparece função implantada sem fonte. O repositório **não tinha `.github` nenhum** —
+este é o primeiro workflow. Exige o segredo `SUPABASE_ACCESS_TOKEN` cadastrado em
+Settings → Secrets and variables → Actions; sem ele o job falha de propósito, em vez de passar
+calado. Isso **não** é o build do frontend, que segue manual no EasyPanel.

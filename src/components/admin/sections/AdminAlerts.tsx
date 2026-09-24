@@ -398,7 +398,7 @@ export default function AdminAlerts({ canEdit }: { canEdit: boolean }) {
                     label="Avisos enviados"
                     value={c.envios_ok_1h}
                     tone="text-sky-400"
-                    hint={`teto ${cfg.alert_max_per_hour ?? 10}/h`}
+                    hint={`teto ${cfg.alert_max_per_hour ?? 10}/h (só média/baixa)`}
                 />
             </div>
 
@@ -791,7 +791,8 @@ export default function AdminAlerts({ canEdit }: { canEdit: boolean }) {
                         <span className="text-sm text-gray-300">
                             Teto por hora
                             <span className="block text-[11px] text-gray-500">
-                                O excedente vira uma mensagem de resumo, não some.
+                                Vale só para média e baixa (resumo e rajada). Crítica e alta
+                                NUNCA são seguradas por teto: saem quantas forem.
                             </span>
                         </span>
                         <Input

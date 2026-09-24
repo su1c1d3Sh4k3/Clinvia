@@ -107,6 +107,15 @@ const IGNORA_JANELA: Severity[] = ["critica", "alta"];
 /** Severidade que, se o WhatsApp recusar, ainda sai por e-mail. */
 const SEGUNDA_VIA: Severity[] = ["critica", "alta"];
 
+/** Severidade que o teto por hora NAO segura.
+ *
+ *  REGRA DO DONO: nao existe teto de envio para critica e alta. Se derem 40
+ *  criticos num dia, os 40 saem. Barulho se corta na ORIGEM (catalogo do
+ *  componente, `somente_painel`, calibragem do cron), nunca na porta de saida.
+ *  O que o teto ainda protege e o que ja e agregado por natureza — o resumo de
+ *  2 em 2 horas e a rajada de media/baixa. */
+const IGNORA_TETO: Severity[] = ["critica", "alta"];
+
 type Recipient = {
     id: string;
     nome: string;
@@ -826,7 +835,10 @@ async function espalhar(
             continue;
         }
 
-        if (await estourouORateLimit(supabase, r.id, teto)) {
+        if (
+            !IGNORA_TETO.includes(alerta.severidade) &&
+            await estourouORateLimit(supabase, r.id, teto)
+        ) {
             await supabase.from("incident_notifications").insert({
                 incident_id: incidentId, recipient_id: r.id, kind, status: "skipped_ratelimit",
             });
