@@ -1,0 +1,14 @@
+[Unit]
+Description=Roda a sentinela de login de minuto em minuto
+
+[Timer]
+OnBootSec=60
+OnUnitActiveSec=60
+# Sem isto o systemd agrupa disparos para poupar energia e a cadencia de 1 min
+# vira "por volta de cada minuto". Aqui a cadencia E o requisito.
+AccuracySec=5s
+Persistent=false
+Unit=sentinela-login.service
+
+[Install]
+WantedBy=timers.target

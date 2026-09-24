@@ -1,0 +1,21 @@
+[Unit]
+Description=Sentinela de login da Clinvia (verificacao externa)
+# Sem After=network-online: se a rede da caixa cair, a sonda DEVE tentar e
+# falhar. Adiar a execucao esconderia justamente o tipo de queda que ela vigia.
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/sentinela-login.env
+WorkingDirectory=/opt/sentinela-login
+ExecStart=/usr/bin/python3 /opt/sentinela-login/sentinela.py
+# A sonda sai 1 quando ha falha. Isso e resultado esperado, nao defeito do
+# servico: sem isto o journal ficaria vermelho e o `failed` perderia sentido.
+SuccessExitStatus=0 1
+TimeoutStartSec=90
+User=sentinela
+Group=sentinela
+StateDirectory=sentinela
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
