@@ -27,6 +27,10 @@ npm test           # vitest (config: vitest.config.ts, setup: src/test/setup.ts)
 
 **O DEPLOY DO FRONTEND É SEMPRE MANUAL, FEITO PELO USER.** Não existe deploy automático no push para main — nunca fique esperando o bundle de produção trocar sozinho, nem prometa que a correção "já está no ar" depois de um push. Seu trabalho termina em commit + push; avise o user que o deploy depende dele.
 
+Frontend build = EasyPanel + `docker buildx` (Dockerfile `node:20-alpine`, VITE_*/SUPABASE_* como build args), Cloudflare só na frente. Produção é `app.clinbia.ai`; existem duas VPS (produção e backup) — comparar as duas é o teste mais rápido para separar código de infra. `vercel.json` é resíduo; não há Vercel.
+
+O único workflow do GitHub Actions é `.github/workflows/deploy-drift.yml` (roda `supabase/tests/security/deploy_drift/check.py`, que falha se existir edge function ACTIVE sem fonte no repo). **Ele NÃO é o build do frontend.**
+
 Do NOT wait for local `npm run build` to verify (PWA precache + OneDrive makes it take 8-10 min).
 
 Frontend tests: vitest, either colocated (`src/components/**/X.test.tsx`) or grouped by feature in `src/test/<feature>/`.
@@ -42,11 +46,15 @@ Python integration tests live in `tests/` (test_*.py, grouped by domain: appoint
 - `src/contexts/`, `src/types/`, `src/utils/` — React contexts, shared TS types, misc helpers
 - `src/integrations/supabase/client.ts` — Supabase client (`import { supabase } from "@/integrations/supabase/client"`). NOTE: `types.ts` is intentionally EMPTY — there are no generated DB types; check real columns via `information_schema` before assuming a schema
 - `src/lib/` — domain helpers (`utils.ts` = `cn()`, `timezone.ts`, `nps.ts`, `chatDates.ts`, `messageSender.ts`, `suporteTours.ts`, import\* parsers, ...)
-- `supabase/functions/` — ~127 Deno edge functions; shared code in `supabase/functions/_shared/`
-- `supabase/migrations/` — SQL migrations
-- `docs/diagnostics/` and `docs/reports/` — incident post-mortems and client reports (write new diagnostics here)
+- `supabase/functions/` — ~137 Deno edge functions; shared code in `supabase/functions/_shared/`. `_webhook-template` and `evolution-webhook.disabled` are not deployed
+- `supabase/migrations/` — SQL migrations (~660); `supabase/rollback/` — paired rollbacks
+- `supabase/tests/security/` — access-test harness and monitors, one folder per item (`deploy_drift/`, `fase_*/`, `item_*/`); most are `check.py`/`verify.sql`
+- `supabase/manuals/` — per-page markdown the support AI reads; `manuais/` at the root is the older copy
+- `monitoring/sentinela_login/` — external login sentinel (stdlib Python, alerts by Resend without Supabase in the path); runs off-box
+- `docs/diagnostics/`, `docs/reports/`, `docs/security/` — post-mortems, client reports, and the RLS/security state of record (`docs/security/ESTADO_ATUAL.md`)
+- `tests/` — Python integration tests; `scripts/` — webhook-function generator + ad-hoc SQL
 - `feegow/` — PRD for planned Feegow Clinic API integration (IA scheduling), not yet implemented
-- Repo root contains legacy one-off scripts/SQL (analyze_schema.js, manual_*.sql, etc.) — ignore them; put ad-hoc SQL in `supabase/.temp/`
+- Repo root contains legacy one-off scripts/SQL/dumps (analyze_schema.js, manual_*.sql, schema_dump.sql, current_*_revert.tsx, vite.config.ts.timestamp-*.mjs, ...) — ignore them; put ad-hoc SQL in `supabase/.temp/`
 
 ## Conventions
 
@@ -60,6 +68,9 @@ Python integration tests live in `tests/` (test_*.py, grouped by domain: appoint
 - `_shared/` helpers are the single source of truth (`api-errors.ts` error contract, `crm-stages.ts`, `slot-settings.ts`, `system-templates.ts`, `support-knowledge.ts`, ...). Some have a frontend twin in `src/lib/` (e.g. `professional-schedule.ts`) that must be kept in sync. The Deno bundler inlines `_shared`, so editing a shared file requires redeploying EVERY function that imports it
 - A React Query `queryFn` must `throw` on a Supabase error — swallowing it caches an empty result with no retry (recurring cause of "screen is empty" bugs)
 - PostgREST caps responses at 1000 rows; `.limit(5000)` does NOT bypass it. Paginate with `.range()` when a query can exceed that
+- `supabase.functions.invoke` on a non-2xx replaces the message with the fixed string `"Edge Function returned a non-2xx status code"`, returns `data: null` and hides the body in `error.context`. Always unwrap through `src/lib/functionError.ts` (`mensagemDoErroDaFuncao`) — `if (data?.error)` never fires
+- Resolving a ticket DELETES rows from `messages` and archives them into `conversations.messages_history`. Any message query with a window longer than a day must read BOTH, or it undercounts by an order of magnitude
+- CORS: the client sends a custom `x-origin` header, which forces a preflight. Every edge function must list it in `Access-Control-Allow-Headers`. Almost none of them import `corsHeaders` from `_shared/utils.ts` — the block is copy-pasted per function, so a new header means sweeping the whole repo. `curl` does NOT prove CORS: test with `OPTIONS` + `Access-Control-Request-Headers` against the exact `/functions/v1/<slug>`
 
 ## Supabase workflow (IMPORTANT)
 
@@ -67,6 +78,7 @@ Python integration tests live in `tests/` (test_*.py, grouped by domain: appoint
 - Deploy functions with `npx supabase functions deploy <name>`
 - Management API calls need `-H "Authorization: Bearer sbp_..."` (token = `SUPABASE_ACCESS_TOKEN` in `.env`); log timestamps need `Z` suffix
 - Real credentials live in `.env` at repo root — check before asking the user
+- **There is no log warehouse.** `edge_logs`, `function_edge_logs`, `postgres_logs` and friends answer `Table "X" does not exist`, and `logs.all` returns 410. `console.error` in an edge function writes nowhere and cannot be read back. Anything you need to diagnose later must be written to a TABLE. To inspect a deployed function's actual code, fetch the published bundle: `GET /v1/projects/{ref}/functions/<slug>/body`
 
 ### Two service keys coexist, and the gateway hides the difference (23/09/2026)
 
