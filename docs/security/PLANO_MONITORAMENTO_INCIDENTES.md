@@ -1161,3 +1161,279 @@ vigilância.
 5. `origem_inferida` em 39 de 41 (§1) — fazer as edge functions declararem a origem quando a
    chamada vem do n8n.
 6. Chave `SCHEDULING_API_KEY` em texto puro dentro dos nós do n8n (§4).
+
+> **Atualização 24/09/2026:** os seis itens acima viraram as suas seis decisões. O que foi executado
+> e o que sobrou está em §9 a §12, com a medição de cada um.
+
+---
+
+# Execução das seis decisões (24/09/2026)
+
+## 9. Placar
+
+| # | decisão | estado | onde |
+|---|---|---|---|
+| 1 | `describeDbError` → 400 em lista fechada + contador + detector de taxa | **no ar** | `ae7773d`, migr `20260923540000` |
+| 2 | origem declarada por chave, uma chave por origem | **no ar, meta não atingida** | `ae7773d` + `da16316`, migrs `560000`/`570000` |
+| 3 | 26 pontos reais que engoliam erro | **no ar, fechado** | `fed73e1`, migr `580000` |
+| 4 | teto de 5 mensagens/dia | **metade no ar; a outra metade é proposta, §10** | `a4e939b`, migr `20260924100000` |
+| 5 | rotação da `SCHEDULING_API_KEY` | **medido, não executado, §11** | — |
+| 6 | descrição da tool `confirm_appointment` | **texto pronto, §12** | — |
+
+### 9.1 Item 1 — o que exatamente virou 400
+
+Lista fechada, como você pediu: `22P02`, `22007`, `22008`, `23514`. `23503` e `23505` **ficaram
+fora** — continuam 500 e continuam reportando.
+
+O `report:false` não virou cegueira: cada 400 desses grava em `api_input_errors` e o cron
+`entrada-invalida-scan` abre incidente próprio quando um par (função, ação) passa do teto por hora.
+O evento individual saiu do seu telefone; o padrão não.
+
+Pré-condição que você mandou checar — **nenhum nó do n8n ramifica por código HTTP**. Medido no dump
+dos 9 workflows: zero ocorrências de `statusCode` em qualquer nó; as duas únicas menções a código
+HTTP estão no `MONITOR DE ERROS`, que **grava** o número no incidente e não decide nada com ele. E
+vai além: **74 nós têm `neverError: true`**, ou seja, ignoram o status de propósito e entregam o
+corpo da resposta ao agente como dado. Trocar 500 por 400 não muda caminho de fluxo nenhum — o que o
+agente lê continua sendo o mesmo `{error, message, code}`.
+
+### 9.2 Item 2 — a meta de 10% depende do item 5
+
+O mecanismo está no ar e **funcionou**: o primeiro incidente com `origem_inferida = false` da
+história do projeto foi gravado em 23/09 19:18 (`front:/crm/:id`), vindo do
+`src/integrations/supabase/client.ts`.
+
+Mas a distribuição atual ainda é:
+
+| origem | incidentes | inferida |
+|---|---|---|
+| cron | 25 | true |
+| ia_n8n | 6 | true |
+| edge_interna | 4 | true |
+| integracao_externa | 2 | true |
+| nao_identificada | 1 | true |
+| **front** | **1** | **false** |
+
+O motivo é direto e não é defeito: **os nós do n8n ainda apresentam a chave legada.** Em
+`_shared/api-keys.ts` a `SCHEDULING_API_KEY` mapeia para `ia_n8n` por eliminação, com
+`declarada: false`. Ela vira declaração no instante em que os nós passarem a mandar `API_KEY_N8N` —
+que é exatamente a edição do item 5. **Os dois itens são a mesma operação física.** Enquanto os 127
+nós não forem editados, `origem_inferida` não desce de 10%.
+
+## 10. Item 4 — proposta para chegar a 5 mensagens/dia
+
+### 10.1 O que já está no ar (`a4e939b`)
+
+- **Rajada:** 3+ incidentes não-críticos na mesma passada do despachante viram **uma** mensagem com
+  a lista. Crítico nunca entra na rajada. Chaves `alert_rajada_enabled` / `alert_rajada_min` em
+  `llm_platform_settings`, ajustáveis sem deploy.
+- **Ensaio de alerta fora do telefone:** `simulacao-de-alerta` virou `somente_painel`. Isso corrige
+  uma violação que **eu** introduzi: 3 ensaios meus chegaram no seu WhatsApp como `CRÍTICO` porque o
+  piso `baixa` não segura nada — a gravidade efetiva é o pior entre piso e IA, e a IA leu o texto do
+  ensaio e disse `critica`. É o cenário exato que a sua regra do aviso prévio existe para impedir.
+
+### 10.2 A medição mudou o diagnóstico duas vezes
+
+Baseline da série (22/09 21:55 → 23/09 19:00, 21h05): **33 mensagens = 37,6/dia**.
+
+A primeira hipótese era "cron é falador demais, atrasa o aviso e deixa o incidente se resolver
+sozinho". **Os dados mataram isso:** os 8 incidentes de cron das 12:05 viveram em média 194,7
+minutos. Uma janela de maturação de 10 ou 15 minutos teria suprimido ~4 mensagens de 33. Descartada.
+
+A segunda medição é a que importa, e é onde o barulho realmente nasce:
+
+| | mensagens |
+|---|---|
+| componentes **sem cadastro** no `incident_component_catalog` | **24 de 33** |
+| componentes cadastrados | 9 |
+
+Componente sem cadastro cai no piso implícito `media` e **a IA passa a ser a única autora da
+gravidade**. E a IA não discrimina nada nessa família: deu `alta` para 18 de 21 incidentes de cron —
+inclusive para `cron:financial_due_daily`, um job **desagendado há 250 dias**. Dezoito `alta`
+seguidos não são sinal, são constante.
+
+Quer dizer: **o piso do catálogo não falhou. Ele nunca foi consultado, porque o componente não
+estava lá.**
+
+### 10.3 Proposta — três alavancas, nenhuma aplicada
+
+Não apliquei nenhuma das três: as três trocam ruído por sinal, e essa é uma escolha sua.
+
+**(a) Cadastrar a família `cron:*` / `cron-http:*` como `somente_painel`, com lista curta de
+exceção.** Cron quebrado é problema real, mas não é "o telefone precisa tocar agora" — o painel mais
+o resumo diário cobrem. Exceções que continuam tocando, porque estão no caminho do dinheiro ou da
+mensagem: `campaign-dispatch-worker`, `appointment-confirmation-cron`, `delivery-automation-*` e o
+próprio `alert-notify`. Efeito na série: dos 15 envios dessa família, **9 saem do telefone e 6
+continuam**.
+
+**(b) Teto de escalada da IA.** A IA pode subir **no máximo um degrau** acima do piso e **nunca pode
+declarar `critica`** — só o catálogo declara vermelho. Justificativa: dos 33 envios, 4 existem
+apenas porque a IA subiu (3 de `baixa` para `critica`, 1 de `media` para `alta`). **Efeito marginal
+nesta série: 1**, porque 3 dos 4 eram o meu ensaio, que já foi calado. O valor de (b) é para frente,
+não para trás: enquanto a IA puder declarar vermelho sozinha, qualquer componente novo entra
+tocando, e é assim que o barulho volta.
+
+**(c) `n8n:AUT - CRIAÇÃO DE FLUXO` como `somente_painel`.** Três das cinco mensagens de n8n da série
+são desse workflow, que é a sua bancada de trabalho — você editando o próprio nó. Erro em bancada
+não é incidente de produção. Efeito: **−3**. Os fluxos de cliente (PELE) continuam tocando.
+
+**Aritmética honesta.** Subtrair alavanca por alavanca contaria as mesmas mensagens duas vezes — a
+rajada e a proposta (a) mordem o mesmo grupo de cron. Então o que vale é o estado final, mensagem
+por mensagem. Das 33 enviadas, 29 têm componente atribuível; as outras 2 são o resumo diário e uma
+recorrência.
+
+| grupo | hoje | depois de tudo | por quê |
+|---|---|---|---|
+| `simulacao-de-alerta` | 3 | **0** | já no ar |
+| `api-scheduling` (entrada inválida) | 2 | **0** | item 1, já no ar |
+| `monitoramento:componente-nao-catalogado` | 1 | **0** | já é `somente_painel` |
+| `n8n:AUT - CRIAÇÃO DE FLUXO` | 3 | **0** | proposta (c) |
+| família cron silenciada | 9 | **0** | proposta (a) |
+| família cron mantida (dinheiro/mensagem/alarme) | 6 | **3** | (a) mantém; rajada agrupa quando caem juntas |
+| `n8n:*` de cliente (PELE) | 2 | **2** | não dá para calar |
+| `instagram` + `openai` ×2 | 3 | **3** | não dá para calar |
+| resumo diário + recorrência | 2 | **2** | é o substituto do que foi calado |
+| **total** | **31 contabilizadas** | **≈10 em 0,88 dia ≈ 11/dia** | |
+
+**Onze ainda não é cinco, e eu não vou fingir que é.** Duas coisas sobre esse número:
+
+1. **Esta janela não é operação normal.** Ela contém a primeira varredura histórica de um monitor
+   recém-nascido: 12 crons que estavam quebrados há dias ou meses e ninguém sabia. Um deles há 250
+   dias. Isso não se repete depois de consertado. O ritmo de regime só pode ser medido numa janela
+   nova, depois que o catálogo entrar.
+2. **Se você quer garantia e não estimativa, existe uma quarta alavanca**, e ela é a única que
+   entrega o número independente do que quebre: **orçamento diário duro.** Depois de N mensagens
+   não-críticas em 24h corridas, o resto vai para o painel e para o resumo do dia seguinte;
+   `critica` sempre passa, sem exceção e sem contar no teto. Com N=4, o teto é 5 com o resumo
+   diário incluído. Também não apliquei — é a alavanca com maior chance de esconder algo, e prefiro
+   que a decisão seja sua.
+
+### 10.4 O que não dá para suprimir sem perder sinal — e por quê
+
+Você pediu nominalmente. São estes, e eles são a razão de o alvo de 5 ser um alvo e não uma regra:
+
+| componente | por que continua tocando |
+|---|---|
+| `canal:whatsapp-alertas` | é o alarme sobre o alarme. Se ele calar, tudo o mais cala junto e você não fica sabendo. |
+| `openai-alerts` / `openai:daily_anomaly` / saldo | crédito acabando derruba **toda** a IA de todos os clientes. E o aviso precisa chegar antes do corte, não depois. |
+| `instagram:token-vencido` | token de 60 dias. Perdido o aviso, o canal morre em silêncio — ninguém reclama, as mensagens simplesmente param. |
+| `api-scheduling` / `api-public-booking` com 5xx **real** | é paciente na tela sem conseguir marcar. Os 400 de entrada já saíram daqui pelo item 1; o que sobra é defeito nosso. |
+| `n8n:*` dos fluxos de **cliente** | é a IA respondendo errado para paciente de verdade. Foi assim que o monitor pegou o erro real na PELE. |
+| `critica` de qualquer origem | o dia em que vermelho couber no orçamento diário é o dia em que vermelho deixa de querer dizer alguma coisa. |
+
+## 11. Item 5 — rotação da `SCHEDULING_API_KEY`: o custo real, medido
+
+O bloqueio que eu tinha anunciado (“não dá para contar os nós daqui”) **estava errado** e eu mesmo
+derrubei: o token do n8n está nos secrets do projeto (`N8N_API_KEY`), que é como o dump dos 9
+workflows já tinha sido baixado.
+
+### 11.1 Tamanho da exposição
+
+**127 nós** carregam o mesmo literal no header `x-api-key`. Confirmado por hash: o SHA-256 do valor
+achado nos nós bate com o digest do secret `SCHEDULING_API_KEY` na Management API — é ela, não uma
+chave parecida.
+
+| workflow | nós com a chave |
+|---|---|
+| FLUXO CLIENTE - PELE (meta-215168561689565) | 24 |
+| FLUXO CLIENTE - PELE (meta-1220713571131185) | 24 |
+| FLUXO PADRÃO | 24 |
+| FLUXO SANDBOX | 18 |
+| FLUXO CLIENTE - PELE (INSTAGRAM) | 17 |
+| FLUXO PADRÃO INSTAGRAM | 17 |
+| AUT - CRIAÇÃO DE FLUXO | 2 |
+| MONITOR DE ERROS | 1 |
+| FLUXO BARBEARIA (arquivado) | 0 |
+| **total** | **127** |
+
+**A chave não é só de agenda.** Ela abre 24 edge functions distintas, entre elas
+**`get-account-openai-key`** — ou seja, quem tiver esse literal pega a chave da OpenAI da conta. O
+nome `SCHEDULING_API_KEY` subestima o que ela é: é a chave do contorno inteiro que o n8n consome.
+
+### 11.2 Por que não dá para rotacionar pela API
+
+Mesmo motivo de §5: o n8n público só tem PUT do workflow inteiro e recusa `binaryMode` /
+`timeSavedMode`, que os 9 carregam. Qualquer PUT passa apagando as duas, inclusive nos moldes que
+são clonados para cliente novo.
+
+### 11.3 Proposta, e ela fecha o item 2 de graça
+
+As quatro chaves por origem **já estão emitidas** como secrets (`API_KEY_N8N`, `API_KEY_CRON`,
+`API_KEY_EDGE`, `API_KEY_INTEGRACAO`), com valores distintos entre si e distintos da legada, e as
+functions já aceitam todas — `_shared/api-keys.ts` é um registro, não um `if`. Isso significa
+**migração sem janela de parada**: as duas chaves valem ao mesmo tempo enquanto durar a troca.
+
+Ordem proposta:
+
+1. Criar no n8n **uma credencial Header Auth** com `API_KEY_N8N` (os workflows já usam credenciais
+   para redis, supabase e openai, então o recurso existe; hoje **nenhum** nó usa credencial para o
+   `x-api-key` — os 127 têm o literal colado).
+2. Trocar os 127 nós para a credencial. É a mesma passada de mão que o §5 já exige. Feito uma vez,
+   a **próxima** rotação custa 1 edição em vez de 127.
+3. Medir `origem_inferida` — deve cair para perto de zero na família n8n, que é a meta do item 2.
+4. Só então remover `SCHEDULING_API_KEY` dos secrets e do registro.
+
+Enquanto o passo 4 não acontece, a chave exposta continua válida. Não há meio-termo aqui: ou ela
+sai dos 127 nós, ou ela continua sendo uma senha em texto puro num sistema que 9 workflows leem.
+
+### 11.4 Achado de brinde, no mesmo dump
+
+Três nós do **FLUXO SANDBOX** apontam para functions que **não existem** — erro de digitação
+`sanbox` no lugar de `sandbox`:
+
+| nó | destino | existe? |
+|---|---|---|
+| `get_next_dates` | `api-availability-sanbox` | não |
+| `create_appointment` | `api-scheduling-sanbox` | não |
+| `add_service` | `api-crm-sanbox` | não |
+
+São 404 permanentes. Na prática **a IA do sandbox não consegue criar agendamento** desde que esses
+nós existem. Não toquei — é edição no n8n, e a decisão é sua.
+
+## 12. Item 6 — `confirm_appointment`
+
+### 12.1 Antes do texto: a tool não existe
+
+Procurei nos 9 workflows. **Nenhum nó `confirm_appointment` em nenhum deles.** As três ocorrências
+da palavra “confirm” aparecem só no prompt dos nós `AI Agent` do FLUXO SANDBOX, como texto.
+
+Ou seja: hoje o agente **não tem como confirmar um agendamento pela API**. A confirmação que
+funciona é a do botão da mensagem automática, interceptado em `webhook-handle-message`. Se o
+paciente responde “confirmo” em texto livre no meio da conversa, o agente não tem ferramenta para
+registrar isso — e a sessão de confirmação continua aberta.
+
+Então o texto abaixo não é uma correção de descrição como os outros dois: é a tool inteira,
+para quando você decidir criar o nó.
+
+### 12.2 Contrato real, lido do código (`api-scheduling/index.ts:423-490`)
+
+- `POST` para `api-scheduling`, `action: "confirm_appointment"`;
+- aceita `appointment_ids` (lista) **ou** `appointment_id` (único);
+- **lista vazia é legítima**: confirma todos os agendamentos futuros ainda pendentes do contato — o
+  mesmo lote que a mensagem automática apresentou;
+- id fora do formato UUID → `400 invalid_appointment_ids` (guard `checkAppointmentIds`);
+- nenhum agendamento correspondente → `404 no_appointment_to_confirm`;
+- em caso de sucesso, além de marcar os agendamentos, encerra a
+  `appointment_confirmation_sessions` aberta (`state = 'completed'`).
+
+### 12.3 Descrição da tool
+
+```
+Confirma agendamento(s) já existentes deste contato — é o equivalente ao botão
+"Sim, pode confirmar" da mensagem automática de confirmação. Use quando o
+paciente confirmar presença em texto livre. Esta ferramenta NÃO cria, NÃO remarca
+e NÃO cancela nada: se o paciente quiser outro horário use <reschedule_appointment>,
+se quiser desmarcar use <cancel_appointment>.
+```
+
+### 12.4 Descrição do parâmetro `appointment_ids`
+
+```
+Lista de ids dos agendamentos a confirmar. Cada item é obrigatoriamente o campo
+"id" devolvido por <fetch_appointments>, no formato UUID (ex.:
+3f8a1c2e-5b7d-4e91-a0c6-2d4f8b9e1a37), copiado exatamente como veio. NUNCA envie
+data, horário, nome do paciente, nome do procedimento nem nome da sala neste
+campo. Deixe a lista VAZIA para confirmar todos os agendamentos futuros ainda
+pendentes deste contato — é o mesmo lote que a mensagem automática apresentou. Se
+o paciente confirmou só um horário específico e você não tem o UUID dele, chame
+<fetch_appointments> antes.
+```
