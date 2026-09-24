@@ -2,6 +2,7 @@ import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { createServiceLabelResolver } from "../_shared/service-label.ts";
 import { fetchProvider } from "../_shared/provider-errors.ts";
+import { googleCalendarLigado, respostaGoogleCalendarDesligado } from "../_shared/google-calendar-flag.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -109,6 +110,12 @@ function formatGoogleEvent(appointment: {
 serveMonitored("google-calendar-sync", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
+  }
+
+  // Recurso desligado por chave: 200 sem fazer nada. Nao apaga evento, nao
+  // toca em google_event_id, nao gera incidente.
+  if (!await googleCalendarLigado()) {
+    return respostaGoogleCalendarDesligado(corsHeaders);
   }
 
   try {

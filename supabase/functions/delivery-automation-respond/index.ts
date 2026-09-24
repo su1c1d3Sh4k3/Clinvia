@@ -29,6 +29,7 @@ import {
     type Weekday,
 } from "../_shared/timezone.ts";
 import { reportIncident } from "../_shared/report-incident.ts";
+import { googleCalendarLigado } from "../_shared/google-calendar-flag.ts";
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-origin",
@@ -742,10 +743,15 @@ async function createAppointmentAndUpdateDelivery(
         })
         .eq("id", ctx.delivery.id);
 
-    // Fire-and-forget Google Calendar sync
-    supabase.functions
-        .invoke("google-calendar-sync", { body: { appointment_id: apt.id } })
-        .catch((err: any) => console.warn("[respond] gcal sync fire-and-forget error:", err?.message));
+    // Fire-and-forget Google Calendar sync (só se a chave estiver ligada)
+    googleCalendarLigado()
+        .then((ligado) => {
+            if (!ligado) return;
+            return supabase.functions
+                .invoke("google-calendar-sync", { body: { appointment_id: apt.id } })
+                .catch((err: any) => console.warn("[respond] gcal sync fire-and-forget error:", err?.message));
+        })
+        .catch(() => {});
 
     return apt.id;
 }

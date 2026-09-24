@@ -1,6 +1,7 @@
 import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { fetchProvider } from "../_shared/provider-errors.ts";
+import { googleCalendarLigado, respostaGoogleCalendarDesligado } from "../_shared/google-calendar-flag.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -95,6 +96,11 @@ function toRFC3339(ts: string): string {
 serveMonitored("google-calendar-poll", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
+  }
+
+  // Recurso desligado por chave: 200 sem varrer nada nos dois sentidos.
+  if (!await googleCalendarLigado()) {
+    return respostaGoogleCalendarDesligado(corsHeaders);
   }
 
   try {

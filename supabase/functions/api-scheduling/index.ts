@@ -36,6 +36,7 @@ import {
 } from "../_shared/api-errors.ts";
 import { createServiceLabelResolver, findServiceByDisplayName } from "../_shared/service-label.ts";
 import { reportIncident } from "../_shared/report-incident.ts";
+import { googleCalendarLigado } from "../_shared/google-calendar-flag.ts";
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-api-key, x-origin",
@@ -49,6 +50,13 @@ const corsHeaders = {
  * profissional era 100% silenciosa, e o `catch` externo ainda era código morto
  * porque o `fetch` não é aguardado. Continua fire-and-forget — o agendamento já
  * está gravado e não pode depender do Google —, mas agora deixa rastro.
+ *
+ * Desde 25/09/2026 a chave `llm_platform_settings.google_calendar_enabled` é
+ * consultada ANTES de qualquer coisa. Desligada, a função não chama nada e
+ * não relata nada: é aqui que a supressão acontece na ORIGEM. Filtrar o
+ * incidente depois de criado seria supressão na porta, que é o que ele
+ * proibiu. A consulta da chave mora dentro do fire-and-forget de propósito —
+ * não adiciona um milissegundo ao caminho da resposta.
  */
 function syncGoogleCalendar(
     action: "sync_appointment" | "delete_appointment",
@@ -67,13 +75,18 @@ function syncGoogleCalendar(
             context: { appointment_id: appointmentId, action },
         });
     };
-    fetch(`${supabaseUrl}/functions/v1/google-calendar-sync`, {
-        method: "POST",
-        headers: { "Authorization": `Bearer ${serviceKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ action, appointment_id: appointmentId, user_id: userId }),
-    })
-        .then((r) => { if (!r.ok) relatar(`HTTP ${r.status}`); })
-        .catch((err) => relatar("rede", err));
+    googleCalendarLigado()
+        .then((ligado) => {
+            if (!ligado) return;
+            return fetch(`${supabaseUrl}/functions/v1/google-calendar-sync`, {
+                method: "POST",
+                headers: { "Authorization": `Bearer ${serviceKey}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ action, appointment_id: appointmentId, user_id: userId }),
+            })
+                .then((r) => { if (!r.ok) relatar(`HTTP ${r.status}`); })
+                .catch((err) => relatar("rede", err));
+        })
+        .catch(() => { /* chave ilegível ⇒ desligado, e desligado não relata */ });
 }
 
 function pad(n: number): string { return String(n).padStart(2, "0"); }

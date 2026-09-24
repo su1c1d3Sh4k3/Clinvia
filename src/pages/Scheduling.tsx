@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { generateDailyReport } from "@/utils/generateDailyReport";
 import { useOwnerId } from "@/hooks/useOwnerId";
+import { useGoogleCalendarEnabled } from "@/hooks/useGoogleCalendarEnabled";
 import { useServiceDisplayNames } from "@/hooks/useServiceDisplayNames";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useCrmAppointmentSync } from "@/hooks/useCrmAppointmentSync";
@@ -38,6 +39,7 @@ export default function Scheduling() {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const { data: ownerId } = useOwnerId();
+    const { gcalEnabled } = useGoogleCalendarEnabled();
     const { resolveServiceName } = useServiceDisplayNames();
     const { onAppointmentCompleted, onAppointmentLost } = useCrmAppointmentSync();
     const [date, setDate] = useState<Date | undefined>(new Date());
@@ -335,7 +337,10 @@ export default function Scheduling() {
                 .maybeSingle();
             return data;
         },
-        enabled: !!ownerId,
+        // Chave desligada ⇒ a consulta não roda, e sem ela os dois botões de
+        // sincronizar somem, o auto-sync do mount não dispara e o handler
+        // volta na primeira linha. Um único ponto governa a tela inteira.
+        enabled: !!ownerId && gcalEnabled,
     });
 
     // Sincronizar Google Calendar (bidirectional poll)
@@ -486,7 +491,7 @@ export default function Scheduling() {
             if (error) throw error;
 
             // Fire-and-forget: sincronizar com Google Calendar
-            if (ownerId) {
+            if (ownerId && gcalEnabled) {
                 const syncAction = (newStatus === "canceled" || newStatus === "no-show") ? "delete_appointment" : "sync_appointment";
                 supabase.functions.invoke("google-calendar-sync", {
                     body: { action: syncAction, appointment_id: appointmentId, user_id: ownerId },

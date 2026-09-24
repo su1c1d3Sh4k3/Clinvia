@@ -355,6 +355,7 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "como ver a agenda de um profissional so (visao solo)",
             "por que o cliente nao escolhe a sala no link de agendamento",
             "quais salas aparecem para o cliente escolher no link de agendamento",
+            "por que a opcao de conectar o Google Calendar sumiu do cadastro do profissional",
         ],
         steps: [
             "Abra Agenda no menu lateral. O botao no cabecalho alterna entre grade (dia) e calendario (mes).",
@@ -383,6 +384,7 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
             "No bloco 'Agendado por' dos Detalhes do Agendamento, tudo que foi marcado pela IA ou pelo link publico de agendamento aparece como IA — a linha de baixo diz se veio 'Via API' ou 'Via link de agendamento'. Agendamento feito na propria agenda mostra o nome do colaborador ('Pela agenda') e, quando veio de planilha, o nome de quem subiu a planilha ('Por planilha importada').",
             "Agendamentos antigos aparecem como 'Nao informado' no bloco 'Agendado por': eles foram criados antes de o sistema passar a registrar a autoria. A data e hora em que foram marcados continua aparecendo. Isso nao se corrige — vale para os agendamentos dali em diante.",
             "Remarcar, confirmar ou concluir NAO muda o 'Agendado por': ele guarda quem CRIOU o agendamento, nao quem mexeu nele depois.",
+            "A sincronia com o Google Calendar esta TEMPORARIAMENTE INDISPONIVEL: a opcao de conectar nao aparece mais no cadastro do profissional e os agendamentos nao sao espelhados no Google. A agenda da Clinvia funciona normalmente. Nada foi apagado — quem ja tinha conectado ve um aviso de indisponibilidade no lugar da opcao, e a conexao e os eventos ja sincronizados voltam a funcionar quando o recurso for religado. Nao ha previsao de retorno; se o cliente perguntar quando volta, encaminhe para a equipe.",
             "Todo agendamento precisa de um cliente vinculado e cria/liga uma venda com pagamento pendente.",
             "Concluir o agendamento NAO cria venda nova — ela ja existe desde a criacao.",
             "As mensagens automaticas (confirmacao 24h, lembrete 2h e pesquisa 24h depois) funcionam independentemente da IA estar ligada.",

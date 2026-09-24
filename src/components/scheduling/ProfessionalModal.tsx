@@ -20,6 +20,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import type { GoogleCalendarConnection, GoogleSyncMode } from "@/types/googleCalendar";
 import { useOwnerId } from "@/hooks/useOwnerId";
+import { useGoogleCalendarEnabled } from "@/hooks/useGoogleCalendarEnabled";
 import { ServiceCategoryPicker } from "@/components/services/ServiceCategoryPicker";
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
@@ -884,6 +885,7 @@ function GoogleCalendarSection({ professionalId }: { professionalId: string }) {
     const { toast } = useToast();
     const queryClient = useQueryClient();
     const { data: ownerId } = useOwnerId();
+    const { gcalEnabled, gcalFlagLoading } = useGoogleCalendarEnabled();
     const [isDisconnecting, setIsDisconnecting] = useState(false);
     const [isSavingMode, setIsSavingMode] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
@@ -899,7 +901,52 @@ function GoogleCalendarSection({ professionalId }: { professionalId: string }) {
                 .maybeSingle();
             return data as GoogleCalendarConnection | null;
         },
+        enabled: gcalEnabled,
     });
+
+    // Recurso desligado: quem NUNCA conectou não vê nada (a opção some da
+    // tela); quem já conectou um dia precisa de explicação, senão a opção
+    // simplesmente desaparece e ele vem perguntar.
+    const { data: jaConectouUmDia } = useQuery<boolean>({
+        queryKey: ["google-calendar-ja-conectou", professionalId],
+        queryFn: async () => {
+            const { data } = await supabase
+                .from("professional_google_calendars")
+                .select("id")
+                .eq("professional_id", professionalId)
+                .limit(1)
+                .maybeSingle();
+            return !!data;
+        },
+        enabled: !gcalEnabled && !gcalFlagLoading,
+    });
+
+    if (gcalFlagLoading) return null;
+    if (!gcalEnabled) {
+        if (!jaConectouUmDia) return null;
+        return (
+            <>
+                <Separator />
+                <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                        <CalendarDays className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-sm font-medium">Google Calendar</span>
+                    </div>
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-3 space-y-1">
+                        <p className="text-sm font-medium text-amber-800 dark:text-amber-400">
+                            Temporariamente indisponível
+                        </p>
+                        <p className="text-xs text-amber-700 dark:text-amber-500">
+                            A sincronia com o Google Calendar está desativada no momento. Os agendamentos
+                            continuam normais na agenda da Clinvia — só não são espelhados no Google.
+                            Nada foi apagado: a conexão deste profissional e os eventos já sincronizados
+                            ficam como estão e voltam a funcionar quando o recurso for religado.
+                        </p>
+                    </div>
+                </div>
+            </>
+        );
+    }
 
     // Verificar se a clínica já tem uma conexão clínica-wide ativa
     const { data: clinicHasConnection } = useQuery<boolean>({

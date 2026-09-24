@@ -1,6 +1,7 @@
 import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { fetchProvider } from "../_shared/provider-errors.ts";
+import { googleCalendarLigado } from "../_shared/google-calendar-flag.ts";
 
 const GOOGLE_CLIENT_ID = Deno.env.get("GOOGLE_CLIENT_ID") || "";
 const GOOGLE_CLIENT_SECRET = Deno.env.get("GOOGLE_CLIENT_SECRET") || "";
@@ -37,6 +38,14 @@ serveMonitored("google-calendar-webhook", async (req) => {
 
   // Responder 200 imediatamente (requisito do Google)
   const response = new Response("OK", { status: 200 });
+
+  // Recurso desligado por chave: o 200 continua (o Google reenvia se não vier,
+  // e canal que não some vira retry eterno), mas nada é processado — nenhum
+  // appointment é alterado a partir de evento do Google.
+  if (!await googleCalendarLigado()) {
+    console.log("[GCAL WEBHOOK] Ignorado: sincronia desligada por chave.");
+    return response;
+  }
 
   // Processar em background para não bloquear a resposta
   if (channelId && resourceState && resourceState !== "sync") {

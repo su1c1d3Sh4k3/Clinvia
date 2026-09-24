@@ -74,7 +74,7 @@ export function AgendaGuide() {
                 </p>
                 <Callout type="dica" title="Quem alimenta a Agenda?">
                     Você (botão Criar Agendamento), a IA (agendando direto na conversa), o cliente (link público de
-                    agendamento), a importação por planilha e até o Google Calendar sincronizado. Tudo cai na mesma grade.
+                    agendamento) e a importação por planilha. Tudo cai na mesma grade.
                 </Callout>
             </TopicSection>
 
@@ -363,7 +363,7 @@ export function AgendaGuide() {
                         },
                         {
                             q: "Posso sincronizar com o Google Calendar?",
-                            a: "Sim — conecte a conta no cadastro do profissional. Os agendamentos do sistema vão para o Google e eventos criados lá aparecem na grade (sem cliente vinculado, portanto sem automações de CRM/mensagens).",
+                            a: "No momento não. A sincronia com o Google Calendar está temporariamente indisponível e a opção de conectar não aparece no cadastro do profissional. Sua agenda na Clinvia continua funcionando normalmente — só não é espelhada no Google. Nada foi apagado: quem já tinha conectado mantém a conexão e os eventos já sincronizados, e tudo volta a funcionar quando o recurso for religado.",
                         },
                         {
                             q: "Agendei manualmente pelo WhatsApp com o cliente. Preciso lançar na Agenda?",

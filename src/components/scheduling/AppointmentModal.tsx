@@ -21,6 +21,7 @@ import { format, addMinutes, parseISO, set } from "date-fns";
 import { ContactPicker } from "@/components/ui/contact-picker";
 
 import { useOwnerId } from "@/hooks/useOwnerId";
+import { useGoogleCalendarEnabled } from "@/hooks/useGoogleCalendarEnabled";
 import { useCrmAppointmentSync } from "@/hooks/useCrmAppointmentSync";
 
 
@@ -111,6 +112,12 @@ export async function commitAppointmentDraft(
         ownerId: string;
         expectedSaleId?: string | null;
         syncCrm?: (args: any) => Promise<any>;
+        /**
+         * Chave da sincronia com o Google Calendar (`useGoogleCalendarEnabled`).
+         * Obrigatório de propósito: o TypeScript é o que garante que nenhuma
+         * chamada nova volte a disparar a sincronia sem consultar a chave.
+         */
+        gcalEnabled: boolean;
     },
 ): Promise<string> {
     let createdBy: string | null = null;
@@ -139,7 +146,7 @@ export async function commitAppointmentDraft(
         .single();
     if (error) throw error;
 
-    if (created?.id) {
+    if (created?.id && opts.gcalEnabled) {
         supabase.functions.invoke("google-calendar-sync", {
             body: { action: "sync_appointment", appointment_id: created.id, user_id: opts.ownerId },
         }).catch(() => { });
@@ -201,6 +208,7 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
     const [interestRate, setInterestRate] = useState(0);
     const [cashAmount, setCashAmount] = useState(0);
     const { data: ownerId } = useOwnerId();
+    const { gcalEnabled } = useGoogleCalendarEnabled();
     const { onAppointmentCreated: syncCrmOnCreate } = useCrmAppointmentSync();
 
     // ── Vínculo com campanha ativa (obrigatório quando o contato está em campanha) ──
@@ -881,7 +889,7 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                 if (error) throw error;
                 toast({ title: "Agendamento atualizado!" });
                 // Fire-and-forget: sincronizar com Google Calendar
-                if (ownerId) {
+                if (ownerId && gcalEnabled) {
                     supabase.functions.invoke("google-calendar-sync", {
                         body: { action: "sync_appointment", appointment_id: appointmentToEdit.id, user_id: ownerId },
                     }).catch(() => {});
@@ -910,6 +918,7 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
 
                 const createdId = await commitAppointmentDraft(draft, {
                     ownerId,
+                    gcalEnabled,
                     syncCrm: values.type === "appointment" ? syncCrmOnCreate : undefined,
                 });
                 toast({ title: "Agendamento criado!" });

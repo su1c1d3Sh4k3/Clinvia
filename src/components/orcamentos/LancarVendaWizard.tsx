@@ -9,6 +9,7 @@ import { CurrencyInput } from "@/components/ui/currency-input";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useOwnerId } from "@/hooks/useOwnerId";
+import { useGoogleCalendarEnabled } from "@/hooks/useGoogleCalendarEnabled";
 import { useSalas } from "@/hooks/useResponsaveis";
 import { useCrmAppointmentSync } from "@/hooks/useCrmAppointmentSync";
 import { useServiceDisplayNames } from "@/hooks/useServiceDisplayNames";
@@ -66,6 +67,7 @@ export function LancarVendaWizard({ open, onOpenChange, orcamento, onDone }: Lan
     const [saving, setSaving] = useState(false);
 
     const { data: ownerId } = useOwnerId();
+    const { gcalEnabled } = useGoogleCalendarEnabled();
     const { data: salas = [] } = useSalas();
     const queryClient = useQueryClient();
     const { onAppointmentCreated: syncCrmOnCreate } = useCrmAppointmentSync();
@@ -202,6 +204,7 @@ export function LancarVendaWizard({ open, onOpenChange, orcamento, onDone }: Lan
                 try {
                     await commitAppointmentDraft(draft, {
                         ownerId,
+                        gcalEnabled,
                         expectedSaleId: r.sale_id,
                         syncCrm: syncCrmOnCreate,
                     });
