@@ -71,9 +71,31 @@ Os outros 53 pontos estão **medidos e não corrigidos** — item de fila, não 
 O botão verde de renovar aparecia igual para as 5 contas, inclusive para a que tinha o selo vermelho
 "Token Expirado" ao lado. Clicar nele só podia dar 401.
 
-Agora, quando `token_expires_at` está no passado: o botão fica desabilitado e cinza, o `title`
-explica o porquê, e a linha de data deixa de dizer *"Token expira: 05/07/2026"* (que soa futuro) e
-passa a dizer, em vermelho, **"Token venceu em 05/07/2026 — só reconectando"**.
+A primeira versão do conserto **desabilitou** o botão na conta vencida. Ele recusou, com razão:
+
+> *"se o botão em questão não renova, por que não é possível ao clicar nele ele tem que aparecer a
+> tela pra reconectar, não simplesmente dar erro ou deixar um botão inútil"*
+
+Botão cinza não é conserto — é o mesmo beco sem saída, só mais silencioso. Quando só existe um
+caminho possível, o clique tem que ir por ele.
+
+Agora, com `token_expires_at` no passado, o ícone de renovar **dá lugar a um botão “Reconectar”**
+(contorno + ícone do Instagram) que leva direto ao consentimento OAuth — o mesmo destino do botão
+“Conectar Instagram”. A linha de data continua em vermelho: **"Token venceu em 05/07/2026 —
+reconecte a conta"**.
+
+E para o caso em que a tela ainda não sabe que o token morreu (a Meta pode recusar antes da data
+prevista, `code 190`), o toast de erro deixou de ser só aviso: ele carrega uma **ação “Reconectar”**.
+Os dois códigos — `TOKEN_EXPIRED` (checagem local) e `190` (recusa da Meta) — caem no mesmo destino,
+porque têm a mesma saída. O `onError` também invalida a query: um 190 marca a instância como
+`expired` no banco, e sem recarregar a tela seguiria oferecendo renovar.
+
+### Por que reconectar é seguro nesta conta (verificado, não suposto)
+
+`instagram-oauth-callback` (linhas 189-240) procura a linha por `instagram_account_id` + `user_id` e,
+achando, faz **UPDATE** — não insere. Reconectar preserva o `id` da instância e, com ele, as
+conversas, os contatos e o "Número informado pela IA para contato". Não há risco de conta duplicada
+nem de perder vínculo.
 
 ## 4. O silêncio do monitoramento está CERTO — e eu prefiro dizer isso do que ligar barulho
 
