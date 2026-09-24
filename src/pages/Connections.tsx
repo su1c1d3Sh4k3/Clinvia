@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { INSTANCE_COLUMNS, INSTAGRAM_INSTANCE_COLUMNS } from "@/lib/dbColumns";
+import { mensagemDoErroDaFuncao } from "@/lib/functionError";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -579,8 +580,18 @@ const Connections = () => {
                 body: { instance_id: instanceId }
             });
 
-            if (error) throw error;
-            if (data?.error) throw new Error(data.error);
+            // Sem desembrulhar `error.context`, o motivo vira "Edge Function
+            // returned a non-2xx status code" — ver src/lib/functionError.ts.
+            if (error) {
+                throw new Error(await mensagemDoErroDaFuncao(
+                    error,
+                    "Não foi possível atualizar o token.",
+                    (code) => code === "TOKEN_EXPIRED"
+                        ? "Este token já venceu e o Instagram não renova token vencido. A única saída é reconectar a conta pelo botão “Conectar Instagram”."
+                        : undefined,
+                ));
+            }
+            if (data?.error) throw new Error(data.message || data.error);
 
             return data;
         },
@@ -1038,9 +1049,15 @@ const Connections = () => {
                                                             ID: {instance.instagram_account_id}
                                                         </p>
                                                         {instance.token_expires_at && (
-                                                            <p className="text-xs text-muted-foreground">
-                                                                Token expira: {new Date(instance.token_expires_at).toLocaleDateString()}
-                                                            </p>
+                                                            new Date(instance.token_expires_at) < new Date() ? (
+                                                                <p className="text-xs text-destructive font-medium">
+                                                                    Token venceu em {new Date(instance.token_expires_at).toLocaleDateString()} — só reconectando
+                                                                </p>
+                                                            ) : (
+                                                                <p className="text-xs text-muted-foreground">
+                                                                    Token expira: {new Date(instance.token_expires_at).toLocaleDateString()}
+                                                                </p>
+                                                            )
                                                         )}
                                                     </div>
                                                 </div>
@@ -1072,17 +1089,25 @@ const Connections = () => {
                                                         {getStatusBadge(instance.status)}
                                                         {(canEdit('connections') || canDelete('connections')) && (
                                                             <>
-                                                                {canEdit('connections') && (
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="icon"
-                                                                        onClick={() => refreshInstagramTokenMutation.mutate(instance.id)}
-                                                                        disabled={refreshInstagramTokenMutation.isPending}
-                                                                        title="Atualizar token"
-                                                                    >
-                                                                        <RefreshCw className={`h-4 w-4 text-green-500 ${refreshInstagramTokenMutation.isPending ? 'animate-spin' : ''}`} />
-                                                                    </Button>
-                                                                )}
+                                                                {/* O Instagram só renova token que AINDA VALE. Oferecer o botão
+                                                                    numa conta vencida é prometer o que a API não faz. */}
+                                                                {canEdit('connections') && (() => {
+                                                                    const vencido = instance.token_expires_at
+                                                                        && new Date(instance.token_expires_at) < new Date();
+                                                                    return (
+                                                                        <Button
+                                                                            variant="ghost"
+                                                                            size="icon"
+                                                                            onClick={() => refreshInstagramTokenMutation.mutate(instance.id)}
+                                                                            disabled={refreshInstagramTokenMutation.isPending || !!vencido}
+                                                                            title={vencido
+                                                                                ? "Token vencido: o Instagram não renova token expirado. Reconecte a conta."
+                                                                                : "Atualizar token"}
+                                                                        >
+                                                                            <RefreshCw className={`h-4 w-4 ${vencido ? 'text-muted-foreground' : 'text-green-500'} ${refreshInstagramTokenMutation.isPending ? 'animate-spin' : ''}`} />
+                                                                        </Button>
+                                                                    );
+                                                                })()}
                                                                 {canDelete('connections') && (
                                                                     <Button
                                                                         variant="ghost"
