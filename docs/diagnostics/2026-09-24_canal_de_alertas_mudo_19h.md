@@ -161,6 +161,30 @@ três funções (a pegadinha do grant a `PUBLIC`); `search_path` fixo; wamid
 desconhecido e telefone desconhecido devolvem `false` sem efeito colateral; o
 detector conhece o motivo novo; o backfill achou a janela do destinatário real.
 
+### O canal provado de ponta a ponta (24/09 12:21)
+
+Entre o conserto (11:47) e 12:21 nada chegou — e isso **não** era falha: a fila
+estava vazia, a recorrência é de hora em hora e a última tinha sido 11:27. Em
+vez de esperar a próxima, forcei um envio pelo canal real:
+
+```
+12:21:05  enviado   via template sys_alerta_incidente_v2
+12:21:14  entregue  confirmação da Meta — 9 segundos
+```
+
+**Primeira confirmação de entrega real que este sistema já teve.** Antes só
+existia "a Meta aceitou".
+
+Duas coisas que esse minuto ensina, além do conserto:
+
+- **Silêncio na fila não é canal quebrado.** Antes de concluir qualquer coisa a
+  partir de "não chegou nada", olhar quantos incidentes estavam esperando
+  despacho na janela observada.
+- **Quando a pergunta é "por que não está chegando", a resposta não é análise —
+  é fazer chegar.** O disparo manual se identifica como teste (severidade
+  `baixa`, origem "Disparo manual de teste"), então não confunde com alerta
+  real, mas quem dispara avisa na mesma hora que foi ele.
+
 ---
 
 ## 5. O que fica em aberto
