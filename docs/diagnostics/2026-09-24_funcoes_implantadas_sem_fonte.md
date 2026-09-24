@@ -218,21 +218,18 @@ Dois detalhes que mudam a leitura do número:
 ### O número
 
 **Janela de retenção: 2026-06-25 a 2026-09-24 (92 dias).**
-**Medição parcial: 23 dos 92 dias varridos até agora. Invocações das 19 órfãs nesses 23 dias: ZERO.
-Todas. Nenhuma exceção.**
+**Medição COMPLETA (fechada em 24/09): os 92 dias varridos, um a um. Invocações das 19 órfãs:
+ZERO. Todas. Nenhuma exceção, nenhum dia com uma única requisição.**
 
-Dias já medidos — escolhidos para cobrir as duas pontas, porque "zero em 7 dias" realmente não
-prova nada para coisa sazonal:
+Não é amostra nem extrapolação — é a retenção inteira, dia a dia, porque o endpoint de logs trava
+toda consulta em fatia de 24h. A varredura levou horas: o backend de analytics da conta entra em
+*throttling* depois de uso sustentado e passa a devolver HTTP 500 em consulta trivial
+(`supabase/.temp/_orfas/_trafego.py`, retomável — grava o JSON a cada dia e pula o que já mediu).
 
-- **Ponta recente (decide se alguém de fora está batendo hoje):** 24, 23, 22, 20, 17 e 11/09.
-- **Ponta antiga (decide se é sazonal):** 25, 27, 28, 29, 30/06; 01, 03, 10, 12, 13, 16, 19, 23,
-  26, 27, 29/07; 17/08.
-
-A varredura dos 69 dias restantes continua rodando em segundo plano
-(`supabase/.temp/_orfas/_trafego.py`, retomável — grava o JSON a cada dia e pula o que já mediu). O
-backend de analytics da conta entra em *throttling* depois de uso sustentado e passa a devolver HTTP
-500 em consulta trivial, o que faz a varredura levar horas. **Atualizo este documento e te aviso
-quando os 92 fecharem.**
+O que isso encerra e o que **não** encerra: encerra a dúvida "alguém está batendo nelas hoje, ou
+bateu em algum momento dos últimos três meses?" — não, ninguém. Não encerra a dúvida sobre as
+sazonais de mão única (backfill, upload de manual): três meses de silêncio provam que ninguém
+rodou, não que ninguém vá querer rodar.
 
 **A distinção que você pediu, por função.** Como o resultado até aqui é zero uniforme, a diferença
 entre "morto" e "sazonal adormecido" não vem do tráfego — vem de quem poderia chamar:
@@ -248,7 +245,7 @@ entre "morto" e "sazonal adormecido" não vem do tráfego — vem de quem poderi
 
 ## 6. Os três baldes
 
-Invocações = 23 dos 92 dias de retenção, varredura em andamento. **Nada foi apagado.**
+Invocações = os 92 dias de retenção, varredura FECHADA. **Nada foi apagado.**
 
 ### Balde A — reintegrar ao repositório (0)
 
@@ -264,7 +261,7 @@ autenticação**, não continuar como está.
 
 Sem substituto a construir: ou já têm um vivo, ou servem a coisa que saiu do produto.
 
-| Função | Invocações (23/92 dias) | Por quê |
+| Função | Invocações (92/92 dias) | Por quê |
 |---|---|---|
 | `evolution-webhook` v68 | 0 | **Prioridade 1.** Único que ainda escreve sem autenticação (`instances.status`). Evolution API saiu do produto. Entrada viva = `webhook-queue-receiver`. |
 | `uzapi-configure-webhook` v45 | 0 | **Prioridade 2.** Reconfigura o webhook do cliente na UAZAPI com o token privado dele, sem autenticação. Substituto: `uzapi-manager:configure_webhook`. |
@@ -287,7 +284,7 @@ Sem substituto a construir: ou já têm um vivo, ou servem a coisa que saiu do p
 
 Fazem trabalho que ainda tem valor, mas não têm hoje um substituto pronto no repo.
 
-| Função | Invocações (23/92) | O que precisa antes |
+| Função | Invocações (92/92) | O que precisa antes |
 |---|---|---|
 | `refresh-contact-photos` v11 | 0 | Único utilitário de manutenção real (foto de contato em lote, UAZAPI). Se for manter: reescrever no repo com autenticação. Se não: cai no balde B. **Decisão sua.** |
 | `backfill-instagram-photos` v16 | 0 | Backfill de mão única já executado. `verify_jwt=true`, então não é buraco de segurança. Sai assim que você confirmar que o backfill não vai se repetir. |
