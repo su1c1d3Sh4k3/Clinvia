@@ -146,13 +146,18 @@ function validateWorkSchedule(
     return null;
 }
 
-/** Card ativo do funil do sandbox (só existe um por sessão). */
-async function cardAtivo(supabase: any, ctx: SandboxContext) {
-    const { data } = await supabase
+/**
+ * Card ativo do funil do sandbox (só existe um por sessão).
+ *
+ * Devolve o `error` em vez de engolir: leitura que falha é indistinguível de
+ * "não existe card", e quem chama abriria um card novo por cima do que já há.
+ */
+async function cardAtivo(supabase: any, ctx: SandboxContext): Promise<{ card: any; error: any }> {
+    const { data, error } = await supabase
         .from("sandbox_crm").select("*")
         .eq("session_id", ctx.session.id).eq("is_active", true)
         .limit(1).maybeSingle();
-    return data;
+    return { card: data, error };
 }
 
 serveMonitored("api-scheduling-sandbox", async (req) => {
@@ -519,49 +524,104 @@ serveMonitored("api-scheduling-sandbox", async (req) => {
             }
 
             // Funil do sandbox: card ativo vai para "Agendado" (ou nasce lá).
+            //
+            // O `try/catch` daqui era letra morta: o supabase-js NÃO lança em erro de
+            // banco, devolve `{ error }`. Como nenhuma destas escritas conferia o
+            // `error`, uma falha no funil era 100% invisível — agendamento na tela,
+            // funil parado e resposta limpa. Agora cada escrita é conferida e o que
+            // falhar volta em `crm_warning` (o agendamento já existe, não dá para
+            // derrubar a resposta inteira por causa do funil).
             let crmWarning: string | null = null;
-            try {
-                const card = await cardAtivo(supabase, ctx);
-                if (card && !TERMINAL_STAGES.includes(card.stage)) {
-                    if (card.stage !== "Agendado") {
-                        await supabase.from("sandbox_crm")
-                            .update({ stage: "Agendado", updated_at: new Date().toISOString() })
-                            .eq("id", card.id);
-                        await supabase.from("sandbox_crm_history").insert({
-                            crm_id: card.id, user_id: userId, from_stage: card.stage, to_stage: "Agendado",
-                        });
-                    }
-                    const { data: jaTem } = await supabase.from("sandbox_crm_services")
-                        .select("id").eq("crm_id", card.id).eq("service_client_id", sc.id).maybeSingle();
-                    if (!jaTem) {
-                        await supabase.from("sandbox_crm_services").insert({
-                            crm_id: card.id, user_id: userId, service_client_id: sc.id,
-                            service_name: sc.name, price: finalPrice,
-                        });
-                    }
-                } else {
-                    // Sem card ativo (ou o anterior já terminou): abre um novo
-                    if (card) {
-                        await supabase.from("sandbox_crm").update({ is_active: false }).eq("id", card.id);
-                    }
-                    const { data: novo } = await supabase.from("sandbox_crm").insert({
-                        session_id: ctx.session.id, user_id: userId, contact_id: ctx.contact.id,
-                        conversation_id: ctx.conversation.id, stage: "Agendado", is_active: true,
-                    }).select().single();
-                    if (novo) {
-                        await supabase.from("sandbox_crm_services").insert({
-                            crm_id: novo.id, user_id: userId, service_client_id: sc.id,
-                            service_name: sc.name, price: finalPrice,
-                        });
-                        await supabase.from("sandbox_crm_history").insert({
-                            crm_id: novo.id, user_id: userId, from_stage: null, to_stage: "Agendado",
-                        });
-                    }
-                }
-            } catch (crmErr) {
-                crmWarning = describeDbError("sincronizar o funil do ambiente de teste após o agendamento", crmErr);
+            const falhouCrm = (etapa: string, err: any) => {
+                if (!crmWarning) crmWarning = describeDbError(etapa, err);
                 console.warn("[api-scheduling-sandbox]", crmWarning);
+            };
+
+            const { card, error: cardErr } = await cardAtivo(supabase, ctx);
+            if (cardErr) {
+                // Sem saber se já há card, abrir um novo duplicaria o funil.
+                falhouCrm("buscar a negociação ativa do ambiente de teste", cardErr);
+            } else if (card && !TERMINAL_STAGES.includes(card.stage)) {
+                if (card.stage !== "Agendado") {
+                    const { error: mvErr } = await supabase.from("sandbox_crm")
+                        .update({ stage: "Agendado", updated_at: new Date().toISOString() })
+                        .eq("id", card.id);
+                    if (mvErr) falhouCrm("mover a negociação do teste para \"Agendado\"", mvErr);
+
+                    const { error: hErr } = await supabase.from("sandbox_crm_history").insert({
+                        crm_id: card.id, user_id: userId, from_stage: card.stage, to_stage: "Agendado",
+                    });
+                    if (hErr) falhouCrm("registrar no histórico do funil do teste a ida para \"Agendado\"", hErr);
+                }
+                const { data: jaTem } = await supabase.from("sandbox_crm_services")
+                    .select("id").eq("crm_id", card.id).eq("service_client_id", sc.id).maybeSingle();
+                if (!jaTem) {
+                    const { error: sErr } = await supabase.from("sandbox_crm_services").insert({
+                        crm_id: card.id, user_id: userId, service_client_id: sc.id,
+                        service_name: sc.name, price: finalPrice,
+                    });
+                    if (sErr) falhouCrm(`incluir "${sc.name}" na negociação do teste`, sErr);
+                }
+            } else {
+                // Sem card ativo (ou o anterior já terminou): abre um novo
+                if (card) {
+                    const { error: offErr } = await supabase.from("sandbox_crm")
+                        .update({ is_active: false }).eq("id", card.id);
+                    if (offErr) falhouCrm("encerrar a negociação anterior do teste", offErr);
+                }
+                const { data: novo, error: novoErr } = await supabase.from("sandbox_crm").insert({
+                    session_id: ctx.session.id, user_id: userId, contact_id: ctx.contact.id,
+                    conversation_id: ctx.conversation.id, stage: "Agendado", is_active: true,
+                }).select().single();
+                if (novoErr) {
+                    falhouCrm("abrir a negociação do teste na etapa \"Agendado\"", novoErr);
+                } else {
+                    const { error: sErr } = await supabase.from("sandbox_crm_services").insert({
+                        crm_id: novo.id, user_id: userId, service_client_id: sc.id,
+                        service_name: sc.name, price: finalPrice,
+                    });
+                    if (sErr) falhouCrm(`incluir "${sc.name}" na negociação do teste`, sErr);
+
+                    const { error: hErr } = await supabase.from("sandbox_crm_history").insert({
+                        crm_id: novo.id, user_id: userId, from_stage: null, to_stage: "Agendado",
+                    });
+                    if (hErr) falhouCrm("registrar no histórico do funil do teste a abertura em \"Agendado\"", hErr);
+                }
             }
+
+            // Venda do teste. Em produção quem faz isto é o gatilho
+            // `link_or_create_sale_on_appointment`: criar agendamento amarra a compra
+            // pendente ou lança a venda. O sandbox não tem gatilho nenhum, então sem
+            // isto o painel mostrava o agendamento e NUNCA a venda.
+            let vendaWarning: string | null = null;
+            const { data: pendente, error: buscaVendaErr } = await supabase
+                .from("sandbox_sales").select("id")
+                .eq("session_id", ctx.session.id)
+                .eq("service_client_id", sc.id)
+                .is("appointment_id", null)
+                .limit(1).maybeSingle();
+            if (buscaVendaErr) {
+                vendaWarning = describeDbError(
+                    "procurar uma compra pendente do teste para amarrar neste agendamento", buscaVendaErr);
+            } else if (pendente) {
+                const { error: linkErr } = await supabase.from("sandbox_sales")
+                    .update({ appointment_id: created.id }).eq("id", pendente.id);
+                if (linkErr) {
+                    vendaWarning = describeDbError(
+                        "amarrar a compra pendente do teste neste agendamento", linkErr);
+                }
+            } else {
+                const { error: vendaErr } = await supabase.from("sandbox_sales").insert({
+                    session_id: ctx.session.id, user_id: userId, contact_id: ctx.contact.id,
+                    service_client_id: sc.id, appointment_id: created.id,
+                    service_name: sc.name, value: finalPrice,
+                });
+                if (vendaErr) {
+                    vendaWarning = describeDbError(
+                        `lançar a venda de "${sc.name}" junto com o agendamento do teste`, vendaErr);
+                }
+            }
+            if (vendaWarning) console.warn("[api-scheduling-sandbox]", vendaWarning);
 
             await logSandboxCall(supabase, ctx, {
                 function_name: "api-scheduling-sandbox",
@@ -583,6 +643,7 @@ serveMonitored("api-scheduling-sandbox", async (req) => {
                 },
                 sandbox: true,
                 ...(crmWarning ? { crm_warning: crmWarning } : {}),
+                ...(vendaWarning ? { venda_warning: vendaWarning } : {}),
             }), { status: 201, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
@@ -732,27 +793,47 @@ serveMonitored("api-scheduling-sandbox", async (req) => {
             }
 
             // Funil: o serviço cancelado sai do card ativo; card sem serviço encerra.
+            // Mesmo caso do create_appointment: o `try/catch` não pegava nada, porque
+            // o supabase-js devolve `{ error }` em vez de lançar. Cada escrita é
+            // conferida e o que falhar volta em `crm_warning` — o cancelamento em si
+            // já está gravado e não pode ser desfeito por causa do funil.
             let crmWarning: string | null = null;
-            try {
-                const card = await cardAtivo(supabase, ctx);
-                if (card && updated.service_id) {
-                    await supabase.from("sandbox_crm_services").delete()
-                        .eq("crm_id", card.id).eq("service_client_id", updated.service_id);
-                    const { data: restantes } = await supabase.from("sandbox_crm_services")
-                        .select("id").eq("crm_id", card.id);
-                    if (!restantes || restantes.length === 0) {
-                        await supabase.from("sandbox_crm")
-                            .update({ is_active: false, stage: "Perdido", updated_at: new Date().toISOString() })
-                            .eq("id", card.id);
-                        await supabase.from("sandbox_crm_history").insert({
-                            crm_id: card.id, user_id: userId, from_stage: card.stage, to_stage: "Perdido",
-                        });
-                    }
-                }
-            } catch (crmErr) {
-                crmWarning = describeDbError("sincronizar o funil do ambiente de teste após o cancelamento", crmErr);
+            const falhouCrm = (etapa: string, err: any) => {
+                if (!crmWarning) crmWarning = describeDbError(etapa, err);
                 console.warn("[api-scheduling-sandbox]", crmWarning);
+            };
+
+            const { card, error: cardErr } = await cardAtivo(supabase, ctx);
+            if (cardErr) falhouCrm("buscar a negociação ativa do ambiente de teste", cardErr);
+            if (card && updated.service_id) {
+                const { error: delErr } = await supabase.from("sandbox_crm_services").delete()
+                    .eq("crm_id", card.id).eq("service_client_id", updated.service_id);
+                if (delErr) falhouCrm("tirar o serviço cancelado da negociação do teste", delErr);
+
+                const { data: restantes, error: restErr } = await supabase.from("sandbox_crm_services")
+                    .select("id").eq("crm_id", card.id);
+                if (restErr) {
+                    falhouCrm("conferir se sobrou algum serviço na negociação do teste", restErr);
+                } else if (restantes.length === 0) {
+                    const { error: offErr } = await supabase.from("sandbox_crm")
+                        .update({ is_active: false, stage: "Perdido", updated_at: new Date().toISOString() })
+                        .eq("id", card.id);
+                    if (offErr) falhouCrm("encerrar a negociação do teste em \"Perdido\"", offErr);
+
+                    const { error: hErr } = await supabase.from("sandbox_crm_history").insert({
+                        crm_id: card.id, user_id: userId, from_stage: card.stage, to_stage: "Perdido",
+                    });
+                    if (hErr) falhouCrm("registrar no histórico do funil do teste a ida para \"Perdido\"", hErr);
+                }
             }
+
+            // A venda do teste solta do agendamento cancelado e volta a ser compra
+            // pendente — assim um reagendamento posterior a reaproveita em vez de
+            // lançar a mesma venda duas vezes. (`sandbox_sales` não tem coluna de
+            // status; quem carrega o cancelamento é o agendamento.)
+            const { error: vendaErr } = await supabase.from("sandbox_sales")
+                .update({ appointment_id: null }).eq("appointment_id", updated.id);
+            if (vendaErr) falhouCrm("soltar a venda do teste do agendamento cancelado", vendaErr);
 
             await logSandboxCall(supabase, ctx, {
                 function_name: "api-scheduling-sandbox",

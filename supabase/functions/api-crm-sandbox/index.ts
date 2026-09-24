@@ -38,13 +38,63 @@ const VALID_ACTIONS = [
     "get_deal", "move_stage", "create_deal", "add_service", "close_ticket", "list_stages",
 ];
 
-/** Card ativo do ambiente de teste (só existe um). */
-async function cardAtivo(supabase: any, ctx: SandboxContext) {
-    const { data } = await supabase
+/**
+ * Card ativo do ambiente de teste (só existe um).
+ *
+ * Devolve o `error` em vez de engolir: uma leitura que falha aqui é
+ * indistinguível de "não existe card", e quem chama abriria um card novo por
+ * cima do que já existe.
+ */
+async function cardAtivo(supabase: any, ctx: SandboxContext): Promise<{ card: any; error: any }> {
+    const { data, error } = await supabase
         .from("sandbox_crm").select("*")
         .eq("session_id", ctx.session.id).eq("is_active", true)
         .limit(1).maybeSingle();
-    return data;
+    return { card: data, error };
+}
+
+/**
+ * Card ativo, abrindo um se ainda não houver.
+ *
+ * Em produção o card nasce SOZINHO: um gatilho põe a conversa numa fila e o
+ * funil acompanha, então `move_stage`, `add_service` e `close_ticket` nunca
+ * encontram o funil vazio. O sandbox não tem gatilho nenhum — o único criador
+ * era a ação `create_deal`, que o prompt do n8n não chama justamente porque em
+ * produção ela é desnecessária. Resultado: as tools respondiam sem escrever
+ * nada e o painel "Etapa no CRM" ficava vazio para sempre.
+ *
+ * Aqui a própria tool garante o card, para que toda chamada do sandbox produza
+ * o registro que a tela mostra.
+ */
+async function garantirCard(
+    supabase: any,
+    ctx: SandboxContext,
+    stageInicial = "Em Atendimento IA",
+): Promise<{ card: any; error: any }> {
+    const { card: existente, error: leituraError } = await cardAtivo(supabase, ctx);
+    if (leituraError) return { card: null, error: leituraError };
+    if (existente) return { card: existente, error: null };
+
+    const { data: novo, error } = await supabase
+        .from("sandbox_crm")
+        .insert({
+            session_id: ctx.session.id,
+            user_id: ctx.userId,
+            contact_id: ctx.contact.id,
+            conversation_id: ctx.conversation.id,
+            stage: stageInicial,
+            is_active: true,
+        })
+        .select("*")
+        .single();
+    if (error) return { card: null, error };
+
+    const { error: histError } = await supabase.from("sandbox_crm_history").insert({
+        crm_id: novo.id, user_id: ctx.userId, from_stage: null, to_stage: stageInicial,
+    });
+    if (histError) return { card: null, error: histError };
+
+    return { card: novo, error: null };
 }
 
 async function recalcularValor(supabase: any, crmId: string): Promise<number> {
@@ -88,7 +138,11 @@ serveMonitored("api-crm-sandbox", async (req) => {
 
         // ── get_deal ──
         if (action === "get_deal") {
-            const card = await cardAtivo(supabase, ctx);
+            const { card, error: cardError } = await cardAtivo(supabase, ctx);
+            if (cardError) {
+                return dbErrorResponse(corsHeaders, "crm_card_read_failed",
+                    "buscar a negociação ativa do ambiente de teste", cardError);
+            }
             if (!card) {
                 await logSandboxCall(supabase, ctx, {
                     function_name: "api-crm-sandbox",
@@ -140,13 +194,10 @@ serveMonitored("api-crm-sandbox", async (req) => {
                 });
             }
 
-            const card = await cardAtivo(supabase, ctx);
-            if (!card) {
-                return apiError(corsHeaders, {
-                    status: 404,
-                    code: "no_active_deal",
-                    message: "Não existe negociação ativa no ambiente de teste, então não há card para mover. Use a ação create_deal antes.",
-                });
+            const { card, error: cardError } = await garantirCard(supabase, ctx);
+            if (cardError) {
+                return dbErrorResponse(corsHeaders, "crm_card_create_failed",
+                    "abrir a negociação do ambiente de teste para então mover a etapa", cardError);
             }
             if (TERMINAL_STAGES.includes(card.stage)) {
                 return apiError(corsHeaders, {
@@ -189,7 +240,11 @@ serveMonitored("api-crm-sandbox", async (req) => {
                 ? CRM_STAGES.find((s) => s.toLowerCase() === String(stage).toLowerCase()) || "Qualificado"
                 : "Qualificado";
 
-            const existing = await cardAtivo(supabase, ctx);
+            const { card: existing, error: existingError } = await cardAtivo(supabase, ctx);
+            if (existingError) {
+                return dbErrorResponse(corsHeaders, "crm_card_read_failed",
+                    "conferir se já existe negociação ativa no ambiente de teste", existingError);
+            }
             if (existing) {
                 return apiError(corsHeaders, {
                     status: 409,
@@ -257,13 +312,10 @@ serveMonitored("api-crm-sandbox", async (req) => {
 
         // ── add_service ──
         if (action === "add_service") {
-            const card = await cardAtivo(supabase, ctx);
-            if (!card) {
-                return apiError(corsHeaders, {
-                    status: 404,
-                    code: "no_active_deal",
-                    message: "Não existe negociação ativa no ambiente de teste, então não há onde adicionar o serviço. Use a ação create_deal primeiro.",
-                });
+            const { card, error: cardError } = await garantirCard(supabase, ctx);
+            if (cardError) {
+                return dbErrorResponse(corsHeaders, "crm_card_create_failed",
+                    "abrir a negociação do ambiente de teste para então incluir o serviço", cardError);
             }
             if (TERMINAL_STAGES.includes(card.stage)) {
                 return apiError(corsHeaders, {
@@ -335,15 +387,30 @@ serveMonitored("api-crm-sandbox", async (req) => {
                 });
             }
 
-            const card = await cardAtivo(supabase, ctx);
-            if (card) {
-                await supabase.from("sandbox_crm")
-                    .update({ stage: matched, is_active: false, updated_at: new Date().toISOString() })
-                    .eq("id", card.id);
-                await supabase.from("sandbox_crm_history").insert({
-                    crm_id: card.id, user_id: ctx.userId, from_stage: card.stage, to_stage: matched,
-                });
+            // Sem card não havia o que encerrar e a resposta saía `success: true`
+            // tendo gravado NADA — o painel ficava vazio e ninguém era avisado.
+            const { card, error: cardError } = await garantirCard(supabase, ctx);
+            if (cardError) {
+                return dbErrorResponse(corsHeaders, "crm_card_create_failed",
+                    `abrir a negociação do ambiente de teste para então encerrá-la em "${matched}"`, cardError);
             }
+
+            const { error: fecharError } = await supabase.from("sandbox_crm")
+                .update({ stage: matched, is_active: false, updated_at: new Date().toISOString() })
+                .eq("id", card.id);
+            if (fecharError) {
+                return dbErrorResponse(corsHeaders, "crm_close_ticket_failed",
+                    `mover a negociação do ambiente de teste para a etapa final "${matched}"`, fecharError);
+            }
+
+            const { error: histError } = await supabase.from("sandbox_crm_history").insert({
+                crm_id: card.id, user_id: ctx.userId, from_stage: card.stage, to_stage: matched,
+            });
+            if (histError) {
+                return dbErrorResponse(corsHeaders, "crm_history_insert_failed",
+                    `registrar no histórico do funil do teste a ida para "${matched}"`, histError);
+            }
+
             await supabase.from("sandbox_conversations")
                 .update({ status: "resolved" }).eq("id", ctx.conversation.id);
 

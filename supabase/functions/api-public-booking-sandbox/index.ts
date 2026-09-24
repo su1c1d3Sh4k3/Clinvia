@@ -706,56 +706,92 @@ serveMonitored("api-public-booking-sandbox", async (req) => {
                     "Não conseguimos registrar o agendamento de teste. Tente novamente em alguns instantes.");
             }
 
-            // Consome a compra pendente do mesmo serviço (espelha o trigger da produção)
-            const { data: venda } = await supabase.from("sandbox_sales")
+            // Funil e venda do teste.
+            //
+            // O `try/catch` que envolvia este trecho era letra morta: o supabase-js
+            // NÃO lança em erro de banco, devolve `{ error }`. Como nenhuma escrita
+            // conferia o `error`, o funil podia não sair do lugar sem ninguém saber.
+            // Agora cada escrita é conferida e o que falhar volta em `crm_warning` —
+            // o agendamento já está gravado e não pode cair por causa do funil.
+            let crmWarning: string | null = null;
+            const falhou = (etapa: string, err: any) => {
+                if (!crmWarning) crmWarning = describeDbError(etapa, err);
+                console.warn("[api-public-booking-sandbox]", crmWarning);
+            };
+
+            // Compra pendente do mesmo serviço é consumida; sem ela, a venda nasce
+            // aqui. Em produção quem faz isso é o gatilho
+            // `link_or_create_sale_on_appointment`, e o sandbox não tem gatilho
+            // nenhum — antes o painel mostrava o agendamento e NUNCA a venda.
+            const { data: venda, error: vendaBuscaErr } = await supabase.from("sandbox_sales")
                 .select("id").eq("session_id", ctx.session.id)
                 .eq("service_client_id", service_id).is("appointment_id", null)
                 .limit(1).maybeSingle();
-            if (venda) {
-                await supabase.from("sandbox_sales").update({ appointment_id: created.id }).eq("id", venda.id);
+            if (vendaBuscaErr) {
+                falhou("procurar uma compra pendente do teste para amarrar neste agendamento", vendaBuscaErr);
+            } else if (venda) {
+                const { error: linkErr } = await supabase.from("sandbox_sales")
+                    .update({ appointment_id: created.id }).eq("id", venda.id);
+                if (linkErr) falhou("amarrar a compra pendente do teste neste agendamento", linkErr);
+            } else {
+                const { error: vendaErr } = await supabase.from("sandbox_sales").insert({
+                    session_id: ctx.session.id, user_id: userId, contact_id: contactId,
+                    service_client_id: service_id, appointment_id: created.id,
+                    service_name: svc.name, value: finalPrice,
+                });
+                if (vendaErr) falhou(`lançar a venda de "${svc.name}" junto com o agendamento do teste`, vendaErr);
             }
 
-            // Funil do teste: card ativo vai para Agendado
-            let crmWarning: string | null = null;
-            try {
-                const { data: card } = await supabase.from("sandbox_crm").select("*")
-                    .eq("session_id", ctx.session.id).eq("is_active", true).limit(1).maybeSingle();
+            const { data: card, error: cardErr } = await supabase.from("sandbox_crm").select("*")
+                .eq("session_id", ctx.session.id).eq("is_active", true).limit(1).maybeSingle();
+            if (cardErr) {
+                falhou("buscar a negociação ativa do ambiente de teste", cardErr);
+            } else if (card && !TERMINAL_STAGES.includes(card.stage)) {
+                if (card.stage !== "Agendado") {
+                    const { error: mvErr } = await supabase.from("sandbox_crm")
+                        .update({ stage: "Agendado", updated_at: new Date().toISOString() }).eq("id", card.id);
+                    if (mvErr) falhou("mover a negociação do teste para \"Agendado\"", mvErr);
 
-                if (card && !TERMINAL_STAGES.includes(card.stage)) {
-                    if (card.stage !== "Agendado") {
-                        await supabase.from("sandbox_crm")
-                            .update({ stage: "Agendado", updated_at: new Date().toISOString() }).eq("id", card.id);
-                        await supabase.from("sandbox_crm_history").insert({
-                            crm_id: card.id, user_id: userId, from_stage: card.stage, to_stage: "Agendado",
-                        });
-                    }
-                    const { data: jaTem } = await supabase.from("sandbox_crm_services")
-                        .select("id").eq("crm_id", card.id).eq("service_client_id", service_id).maybeSingle();
-                    if (!jaTem) {
-                        await supabase.from("sandbox_crm_services").insert({
-                            crm_id: card.id, user_id: userId, service_client_id: service_id,
-                            service_name: svc.name, price: finalPrice,
-                        });
-                    }
-                } else {
-                    if (card) await supabase.from("sandbox_crm").update({ is_active: false }).eq("id", card.id);
-                    const { data: novo } = await supabase.from("sandbox_crm").insert({
-                        session_id: ctx.session.id, user_id: userId, contact_id: contactId,
-                        conversation_id: ctx.conversation.id, stage: "Agendado", is_active: true,
-                    }).select().single();
-                    if (novo) {
-                        await supabase.from("sandbox_crm_services").insert({
-                            crm_id: novo.id, user_id: userId, service_client_id: service_id,
-                            service_name: svc.name, price: finalPrice,
-                        });
-                        await supabase.from("sandbox_crm_history").insert({
-                            crm_id: novo.id, user_id: userId, from_stage: null, to_stage: "Agendado",
-                        });
-                    }
+                    const { error: hErr } = await supabase.from("sandbox_crm_history").insert({
+                        crm_id: card.id, user_id: userId, from_stage: card.stage, to_stage: "Agendado",
+                    });
+                    if (hErr) falhou("registrar no histórico do funil do teste a ida para \"Agendado\"", hErr);
                 }
-            } catch (crmErr) {
-                crmWarning = describeDbError("sincronizar o funil do teste com o agendamento criado", crmErr);
-                console.warn("[api-public-booking-sandbox]", crmWarning);
+                const { data: jaTem, error: jaTemErr } = await supabase.from("sandbox_crm_services")
+                    .select("id").eq("crm_id", card.id).eq("service_client_id", service_id).maybeSingle();
+                if (jaTemErr) {
+                    falhou("conferir se o serviço já estava na negociação do teste", jaTemErr);
+                } else if (!jaTem) {
+                    const { error: sErr } = await supabase.from("sandbox_crm_services").insert({
+                        crm_id: card.id, user_id: userId, service_client_id: service_id,
+                        service_name: svc.name, price: finalPrice,
+                    });
+                    if (sErr) falhou(`incluir "${svc.name}" na negociação do teste`, sErr);
+                }
+            } else {
+                if (card) {
+                    const { error: offErr } = await supabase.from("sandbox_crm")
+                        .update({ is_active: false }).eq("id", card.id);
+                    if (offErr) falhou("encerrar a negociação anterior do teste", offErr);
+                }
+                const { data: novo, error: novoErr } = await supabase.from("sandbox_crm").insert({
+                    session_id: ctx.session.id, user_id: userId, contact_id: contactId,
+                    conversation_id: ctx.conversation.id, stage: "Agendado", is_active: true,
+                }).select().single();
+                if (novoErr) {
+                    falhou("abrir a negociação do teste na etapa \"Agendado\"", novoErr);
+                } else {
+                    const { error: sErr } = await supabase.from("sandbox_crm_services").insert({
+                        crm_id: novo.id, user_id: userId, service_client_id: service_id,
+                        service_name: svc.name, price: finalPrice,
+                    });
+                    if (sErr) falhou(`incluir "${svc.name}" na negociação do teste`, sErr);
+
+                    const { error: hErr } = await supabase.from("sandbox_crm_history").insert({
+                        crm_id: novo.id, user_id: userId, from_stage: null, to_stage: "Agendado",
+                    });
+                    if (hErr) falhou("registrar no histórico do funil do teste a abertura em \"Agendado\"", hErr);
+                }
             }
 
             await logSandboxCall(supabase, ctx, {
@@ -841,31 +877,44 @@ serveMonitored("api-public-booking-sandbox", async (req) => {
                     "Não conseguimos cancelar o agendamento. Tente novamente em alguns instantes.");
             }
 
+            // Mesmo caso do create_booking: o `try/catch` não pegava nada, porque o
+            // supabase-js devolve `{ error }` em vez de lançar.
+            let crmWarning: string | null = null;
+            const falhou = (etapa: string, err: any) => {
+                if (!crmWarning) crmWarning = describeDbError(etapa, err);
+                console.warn("[api-public-booking-sandbox]", crmWarning);
+            };
+
             // Devolve a compra para a lista de pendentes
-            await supabase.from("sandbox_sales").update({ appointment_id: null }).eq("appointment_id", appointment_id);
+            const { error: vendaErr } = await supabase.from("sandbox_sales")
+                .update({ appointment_id: null }).eq("appointment_id", appointment_id);
+            if (vendaErr) falhou("soltar a venda do teste do agendamento cancelado", vendaErr);
 
             // Funil: tira o serviço do card ativo; card sem serviço vira Perdido
-            let crmWarning: string | null = null;
-            try {
-                const { data: card } = await supabase.from("sandbox_crm").select("*")
-                    .eq("session_id", ctx.session.id).eq("is_active", true).limit(1).maybeSingle();
-                if (card) {
-                    await supabase.from("sandbox_crm_services").delete()
-                        .eq("crm_id", card.id).eq("service_client_id", toCancel.service_id);
-                    const { data: restantes } = await supabase.from("sandbox_crm_services")
-                        .select("id").eq("crm_id", card.id);
-                    if (!restantes || restantes.length === 0) {
-                        await supabase.from("sandbox_crm")
-                            .update({ stage: "Perdido", is_active: false, updated_at: new Date().toISOString() })
-                            .eq("id", card.id);
-                        await supabase.from("sandbox_crm_history").insert({
-                            crm_id: card.id, user_id: userId, from_stage: card.stage, to_stage: "Perdido",
-                        });
-                    }
+            const { data: card, error: cardErr } = await supabase.from("sandbox_crm").select("*")
+                .eq("session_id", ctx.session.id).eq("is_active", true).limit(1).maybeSingle();
+            if (cardErr) {
+                falhou("buscar a negociação ativa do ambiente de teste", cardErr);
+            } else if (card) {
+                const { error: delErr } = await supabase.from("sandbox_crm_services").delete()
+                    .eq("crm_id", card.id).eq("service_client_id", toCancel.service_id);
+                if (delErr) falhou("tirar o serviço cancelado da negociação do teste", delErr);
+
+                const { data: restantes, error: restErr } = await supabase.from("sandbox_crm_services")
+                    .select("id").eq("crm_id", card.id);
+                if (restErr) {
+                    falhou("conferir se sobrou algum serviço na negociação do teste", restErr);
+                } else if (restantes.length === 0) {
+                    const { error: offErr } = await supabase.from("sandbox_crm")
+                        .update({ stage: "Perdido", is_active: false, updated_at: new Date().toISOString() })
+                        .eq("id", card.id);
+                    if (offErr) falhou("encerrar a negociação do teste em \"Perdido\"", offErr);
+
+                    const { error: hErr } = await supabase.from("sandbox_crm_history").insert({
+                        crm_id: card.id, user_id: userId, from_stage: card.stage, to_stage: "Perdido",
+                    });
+                    if (hErr) falhou("registrar no histórico do funil do teste a ida para \"Perdido\"", hErr);
                 }
-            } catch (crmErr) {
-                crmWarning = describeDbError("sincronizar o funil do teste com o cancelamento", crmErr);
-                console.warn("[api-public-booking-sandbox]", crmWarning);
             }
 
             await logSandboxCall(supabase, ctx, {
