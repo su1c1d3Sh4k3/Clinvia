@@ -81,7 +81,26 @@ const PAINEL_URL = "https://app.clinbia.ai/admin?tab=alertas";
 // aviso de que o sistema caiu. As v2 nasceram UTILITY em 23/09/2026.
 const TPL_INCIDENTE = "sys_alerta_incidente_v2";
 const TPL_RESUMO = "sys_alerta_resumo_v2";
+
+// v3 criados em 24/09/2026. O v2 e uma lista chapada de "rotulo: valor" — sem
+// linha em branco, sem titulo de secao, e com dois blocos inteiros espremidos
+// em {{3}}. Enquanto o texto livre era o caminho normal isso passava
+// despercebido; desde a correcao de 24/09 o template e o caminho NORMAL (a
+// janela de 24h so reabre se o destinatario responder), entao o layout DELE
+// virou o layout do alerta. O v3 leva a hierarquia para o CORPO do template,
+// que e o unico lugar onde a quebra de linha sobrevive: parametro nao aceita
+// \n (ver sanitizeParam).
+const TPL_INCIDENTE_V3 = "sys_alerta_incidente_v3";
+const TPL_RESUMO_V3 = "sys_alerta_resumo_v3";
 const TPL_LANG = "pt_BR";
+
+/**
+ * Codigos da Meta que significam "esse template nao esta disponivel" — e SO
+ * esses. Qualquer outro erro e do envio, nao do template, e cair no v2 ali
+ * esconderia a falha real.
+ *   132001 nao existe nessa lingua · 132015 pausado · 132016 desabilitado
+ */
+const TPL_INDISPONIVEL = new Set(["132001", "132015", "132016"]);
 
 const json = (body: unknown, status = 200) =>
     new Response(JSON.stringify(body), { status, headers: corsHeaders });
@@ -266,6 +285,30 @@ function templatePayload(to: string, name: string, params: string[]) {
     };
 }
 
+type EnvioTemplate = SendResult & { templateName: string };
+
+/**
+ * Tenta o v3 e, so se ele ainda nao estiver disponivel, cai no v2 aprovado.
+ *
+ * O teste de disponibilidade e o proprio erro da Meta, nao uma consulta de
+ * status: enquanto o v3 estiver PENDING o alerta sai no v2 e, no minuto em que
+ * a Meta aprovar, passa a sair no v3 sozinho — sem redeploy e sem depender de
+ * `message_templates` estar sincronizada com a WABA.
+ */
+async function enviarTemplate(
+    sender: Sender,
+    to: string,
+    novo: { name: string; params: string[] },
+    reserva: { name: string; params: string[] },
+): Promise<EnvioTemplate> {
+    const r3 = await graphSend(sender, templatePayload(to, novo.name, novo.params));
+    if (r3.ok || !TPL_INDISPONIVEL.has(String(r3.errorCode))) {
+        return { ...r3, templateName: novo.name };
+    }
+    const r2 = await graphSend(sender, templatePayload(to, reserva.name, reserva.params));
+    return { ...r2, templateName: reserva.name };
+}
+
 // ── Montagem da mensagem ─────────────────────────────────────────────────────
 
 type Alerta = {
@@ -353,23 +396,73 @@ function resumoTexto([periodo, total, destaques]: string[]): string {
  *   {{5}} conta · {{6}} causa provavel · {{7}} o que fazer · {{8}} painel
  */
 function alertaParams(a: Alerta): string[] {
-    // O template v2 tem 8 variaveis e nenhuma sobra para "o que esse servico faz".
-    // Criar v3 custaria outra aprovacao da Meta para um caminho que so roda fora
-    // da janela de 24h, entao os dois blocos entram juntos em {{3}}.
+    // O v2 tem 8 variaveis e nenhuma sobra para "o que esse servico faz" nem para
+    // a origem, entao dois blocos se espremem em {{3}} e a origem cola na conta em
+    // {{5}}. E exatamente isso que produz a parede de texto — resolvido no v3; o v2
+    // fica so como reserva enquanto a Meta nao aprova o novo.
     const rotulo = a.natureza === "detector" ? "DETECTADO" : "FALHOU";
     return [
         SEV_LABEL[a.severidade],
         a.componente,
         `${a.oQueFaz} — ${rotulo}: ${a.oQueFalhou}`,
         a.ocorrencias,
-        // A origem nao tem variavel propria: o template v2 tem 8 e todas ocupadas.
-        // Entra colada na conta em vez de esperar a aprovacao de um v3 — este
-        // caminho so roda FORA da janela de 24h, que e a excecao.
         `${a.conta} · origem: ${a.origem}`,
         a.causa,
         a.acao,
         a.painel,
     ];
+}
+
+/**
+ * v3: uma variavel por campo, nenhuma acumulando dois blocos, e os titulos de
+ * secao ("O QUE ACONTECEU", "CAUSA PROVAVEL", ...) morando no corpo do
+ * template. E a mesma estrutura do texto livre — a diferenca e que aqui ela
+ * sobrevive a janela de 24h fechada.
+ *   {{1}} severidade · {{2}} componente · {{3}} origem · {{4}} conta
+ *   {{5}} ocorrencias · {{6}} o que faz · {{7}} o que aconteceu
+ *   {{8}} causa · {{9}} acao · {{10}} painel
+ */
+function alertaParamsV3(a: Alerta): string[] {
+    // A distincao servico/detector nao pode virar titulo fixo: "O QUE FALHOU"
+    // num detector que funcionou seria o erro de 23/09 de volta.
+    const rotulo = a.natureza === "detector" ? "Detectado" : "Falhou";
+    return [
+        SEV_LABEL[a.severidade],
+        a.componente,
+        a.origem,
+        a.conta,
+        a.ocorrencias,
+        a.oQueFaz,
+        `${rotulo}: ${a.oQueFalhou}`,
+        a.causa,
+        a.acao,
+        a.painel,
+    ];
+}
+
+/** v3 do resumo: {{1}} periodo · {{2}} incidentes · {{3}} destaques · {{4}} painel */
+function resumoParamsV3([periodo, total, destaques]: string[]): string[] {
+    return [periodo, total, destaques, PAINEL_URL];
+}
+
+/** Alerta de incidente: v3 com reserva no v2. */
+function enviarTemplateIncidente(sender: Sender, to: string, a: Alerta) {
+    return enviarTemplate(
+        sender,
+        to,
+        { name: TPL_INCIDENTE_V3, params: alertaParamsV3(a) },
+        { name: TPL_INCIDENTE, params: alertaParams(a) },
+    );
+}
+
+/** Resumo de 2h: v3 com reserva no v2. */
+function enviarTemplateResumo(sender: Sender, to: string, params: string[]) {
+    return enviarTemplate(
+        sender,
+        to,
+        { name: TPL_RESUMO_V3, params: resumoParamsV3(params) },
+        { name: TPL_RESUMO, params },
+    );
 }
 
 // ── Os quatro blocos ─────────────────────────────────────────────────────────
@@ -595,13 +688,16 @@ async function enviarAlerta(
         status: string,
         via: "texto" | "template" | null,
         res?: SendResult,
+        // Qual template de fato saiu — v3 ou a reserva v2. Gravar o nome fixo
+        // deixaria o log mentindo justamente sobre o layout que ele recebeu.
+        templateName?: string,
     ) => {
         await supabase.from("incident_notifications").insert({
             incident_id: incidentId,
             recipient_id: r.id,
             kind,
             status,
-            template_name: via === "template" ? TPL_INCIDENTE : null,
+            template_name: via === "template" ? (templateName ?? TPL_INCIDENTE) : null,
             wamid: res?.wamid ?? null,
             error_code: res?.errorCode ?? null,
             error_message: res?.errorMessage ?? null,
@@ -625,12 +721,9 @@ async function enviarAlerta(
             await registrar("sent", "texto", livre);
             return { ...livre, via: "texto" };
         }
-        const tpl = await graphSend(
-            sender,
-            templatePayload(r.telefone, TPL_INCIDENTE, alertaParams(a)),
-        );
+        const tpl = await enviarTemplateIncidente(sender, r.telefone, a);
         if (tpl.ok) {
-            await registrar("sent", "template", tpl);
+            await registrar("sent", "template", tpl, tpl.templateName);
             return { ...tpl, via: "template" };
         }
         // Guarda os DOIS motivos: sem o erro do texto livre nao da para saber se a
@@ -641,16 +734,13 @@ async function enviarAlerta(
             errorMessage:
                 `template: ${tpl.errorMessage} | texto livre: ${livre.errorCode} ${livre.errorMessage}`,
         };
-        await registrar("failed", "template", combinado);
+        await registrar("failed", "template", combinado, tpl.templateName);
         return { ...combinado, via: null };
     }
 
-    const tpl = await graphSend(
-        sender,
-        templatePayload(r.telefone, TPL_INCIDENTE, alertaParams(a)),
-    );
+    const tpl = await enviarTemplateIncidente(sender, r.telefone, a);
     if (tpl.ok) {
-        await registrar("sent", "template", tpl);
+        await registrar("sent", "template", tpl, tpl.templateName);
         return { ...tpl, via: "template" };
     }
     // Nada de tentar texto livre aqui: fora da janela ele seria aceito com 200 e
@@ -660,7 +750,7 @@ async function enviarAlerta(
         errorCode: tpl.errorCode,
         errorMessage: `template (janela de 24h fechada): ${tpl.errorMessage}`,
     };
-    await registrar("failed", "template", fora);
+    await registrar("failed", "template", fora, tpl.templateName);
     return { ...fora, via: null };
 }
 
@@ -866,11 +956,15 @@ async function espalhar(
 
         let res: SendResult & { via: "texto" | "template" | null };
         if (resumoParams) {
+            // Qual template de fato saiu — v3 ou a reserva v2. Sem isso o log
+            // mentiria justamente sobre o layout que chegou no telefone dele.
+            let templateEnviado: string | null = null;
             // Mesma correcao de enviarAlerta: fora da janela de 24h o texto
             // livre e aceito com 200 e derrubado depois. O resumo de 2 em 2
             // horas foi metade dos alertas perdidos em 23-24/09.
             if (!janelaLivreAberta(r)) {
-                const tpl = await graphSend(sender, templatePayload(r.telefone, TPL_RESUMO, resumoParams));
+                const tpl = await enviarTemplateResumo(sender, r.telefone, resumoParams);
+                templateEnviado = tpl.templateName;
                 res = tpl.ok ? { ...tpl, via: "template" } : {
                     ok: false,
                     errorCode: tpl.errorCode,
@@ -882,7 +976,8 @@ async function espalhar(
                 if (livre.ok) {
                     res = { ...livre, via: "texto" };
                 } else {
-                    const tpl = await graphSend(sender, templatePayload(r.telefone, TPL_RESUMO, resumoParams));
+                    const tpl = await enviarTemplateResumo(sender, r.telefone, resumoParams);
+                    templateEnviado = tpl.templateName;
                     res = tpl.ok ? { ...tpl, via: "template" } : {
                         ok: false,
                         errorCode: tpl.errorCode,
@@ -895,7 +990,7 @@ async function espalhar(
             await supabase.from("incident_notifications").insert({
                 incident_id: incidentId, recipient_id: r.id, kind,
                 status: res.ok ? "sent" : "failed",
-                template_name: res.via === "template" ? TPL_RESUMO : null,
+                template_name: res.via === "template" ? templateEnviado : null,
                 wamid: res.wamid ?? null,
                 error_code: res.errorCode ?? null,
                 error_message: res.errorMessage ?? null,
