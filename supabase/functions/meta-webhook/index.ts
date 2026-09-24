@@ -558,12 +558,28 @@ serveMonitored("meta-webhook", async (req) => {
                             failed: "Failed",
                         };
 
+                        const erroDaMeta = status.errors?.[0];
+
                         const normalizedStatus = {
                             instanceName: instance.instance_name,
                             type: "ReadReceipt",
                             EventType: "messages_update",
                             state: statusMap[status.status] || "Sent",
                             event: { MessageIDs: [status.id] },
+                            // A Meta so diz POR QUE a mensagem morreu aqui, no
+                            // recibo assincrono. Ate 24/09/2026 este motivo ia
+                            // para o `console.error` da linha abaixo e acabava
+                            // ali: o `webhook-handle-status` marcava `failed`
+                            // sem saber de que, e nao havia como distinguir
+                            // "numero nao existe" de "template pausado". Sao
+                            // problemas diferentes, com donos diferentes.
+                            erro: erroDaMeta
+                                ? {
+                                    code: erroDaMeta.code ?? null,
+                                    title: erroDaMeta.title ?? null,
+                                    details: erroDaMeta.error_data?.details ?? null,
+                                }
+                                : null,
                         };
 
                         // Log failures

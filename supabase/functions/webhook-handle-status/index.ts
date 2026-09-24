@@ -1,4 +1,5 @@
 import { serveMonitored } from "../_shared/serve-monitored.ts";
+import { reportIncident } from "../_shared/report-incident.ts";
 import {
     corsHeaders,
     createSupabaseClient,
@@ -6,6 +7,60 @@ import {
     checkRateLimit,
     validateWebhookPayload
 } from "../_shared/utils.ts";
+
+/**
+ * Codigos em que a recusa NAO e defeito nosso: o destinatario nao pode receber,
+ * ou a politica da Meta barrou aquela mensagem especifica. Continuam virando
+ * incidente — a mensagem nao chegou, e isso e um fato que o dono da conta
+ * precisa ver — mas numa familia de componente propria, porque o primeiro
+ * respondente e outro e a gravidade padrao e outra.
+ */
+const RECUSA_DO_DESTINATARIO = new Set([
+    "131026", // mensagem nao entregavel (numero nao tem WhatsApp / recusou)
+    "131047", // precisa reengajar: passaram 24h desde a ultima resposta
+    "131049", // limite por usuario do "healthy ecosystem" (marketing)
+    "131051", // tipo de mensagem nao suportado pelo destinatario
+    "130472", // usuario em experimento da Meta
+]);
+
+/**
+ * Mensagem que o provedor ACEITOU no envio e derrubou depois.
+ *
+ * POR QUE ISTO EXISTE: nada neste caminho responde 5xx. A Meta devolve 200 com
+ * wamid real no envio, o recibo de falha chega minutos depois por webhook e
+ * este handler responde 200 — entao o `serveMonitored`, que so reporta >= 500,
+ * nunca ve. Medido em 24/09/2026: 9 mensagens morreram assim num unico dia,
+ * numa unica conta, e o painel ficou verde o dia inteiro enquanto o cliente
+ * final nao recebia nada. "Nao chegou ao cliente" e exatamente a falha que o
+ * monitoramento existe para pegar.
+ *
+ * O componente carrega o codigo do provedor E a instancia entre parenteses:
+ * o codigo separa "numero bloqueado" de "template pausado" em incidentes
+ * distintos (problemas diferentes nao podem somar no mesmo contador), e a
+ * instancia entre parenteses e o que faz o titulo do alerta descobrir de qual
+ * cliente se trata, pela mesma cadeia que o `alert-notify` ja usa.
+ */
+function reportarRejeicao(payload: any, quantas: number): void {
+    const instancia = String(payload?.instanceName ?? "").trim() || "instância desconhecida";
+    const erro = payload?.erro ?? null;
+    const codigo = erro?.code != null ? String(erro.code) : "sem_codigo";
+    const motivo = erro?.title || erro?.details || "o provedor não informou o motivo";
+    const familia = RECUSA_DO_DESTINATARIO.has(codigo) ? "bloqueado" : "rejeitado";
+
+    reportIncident({
+        component: `envio:${familia}-${codigo} (${instancia})`,
+        route: "recibo_de_falha",
+        // A recusa e nossa mesmo quando quem avisa e a Meta: a mensagem, a
+        // instancia e a decisao de enviar sao nossas. Marcar `webhook_externo`
+        // aqui faria o titulo do alerta dizer "Humano (provedor)" e empurrar
+        // para fora um problema que quase sempre se resolve deste lado.
+        origem: "edge_interna",
+        message:
+            `${quantas} mensagem(ns) aceita(s) no envio e recusada(s) depois pelo provedor ` +
+            `[${codigo}]: ${motivo}. O destinatário NÃO recebeu.`,
+        context: { instancia, codigo, quantas },
+    });
+}
 
 /**
  * webhook-handle-status
@@ -132,6 +187,17 @@ serveMonitored("webhook-handle-status", async (req) => {
                     console.log('[webhook-handle-status] Message not found:', messageId);
                     notFound++;
                 }
+            }
+
+            // So reporta o que era MESMO mensagem de conversa. O recibo de um
+            // wamid que nao existe em `messages` nem no historico e o alerta do
+            // proprio super admin, que nao tem linha ali (o `meta-webhook`
+            // reconcilia esses pelo wamid) — reportar o alerta que falhou por
+            // este caminho criaria um incidente que so pode ser avisado pelo
+            // canal que acabou de cair. Quem cuida daquele caso e o
+            // `canal:whatsapp-alertas`, que vive fora do canal de proposito.
+            if (status === 'failed' && updated + archived > 0) {
+                reportarRejeicao(payload, updated + archived);
             }
 
             return new Response(
