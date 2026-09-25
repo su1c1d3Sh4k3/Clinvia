@@ -79,7 +79,15 @@ Python integration tests live in `tests/` (test_*.py, grouped by domain: appoint
 - Deploy functions with `npx supabase functions deploy <name>`
 - Management API calls need `-H "Authorization: Bearer sbp_..."` (token = `SUPABASE_ACCESS_TOKEN` in `.env`); log timestamps need `Z` suffix
 - Real credentials live in `.env` at repo root — check before asking the user
-- **There is no log warehouse.** `edge_logs`, `function_edge_logs`, `postgres_logs` and friends answer `Table "X" does not exist`, and `logs.all` returns 410. `console.error` in an edge function writes nowhere and cannot be read back. Anything you need to diagnose later must be written to a TABLE. To inspect a deployed function's actual code, fetch the published bundle: `GET /v1/projects/{ref}/functions/<slug>/body`
+- **The log warehouse EXISTS, and `console.error` IS recorded** (re-measured 25/09/2026 — an earlier note here claimed the opposite and was WRONG). Two renames caused the confusion: the endpoint `analytics/endpoints/logs.all` now answers **410** naming its replacement `analytics/endpoints/logs`, and the per-source tables (`edge_logs`, `function_edge_logs`, `postgres_logs`, …) were unified into a single table called **`logs`**. Querying the old names returns `Table "X" does not exist` — that is a stale name, NOT an absent warehouse. Working call:
+
+  ```
+  GET /v1/projects/{ref}/analytics/endpoints/logs
+      ?sql=select timestamp, event_message from logs where event_message like '%…%'
+      &iso_timestamp_start=…&iso_timestamp_end=…
+  ```
+
+  Limits, all measured: **the window is clamped to 24h from `iso_timestamp_start`, and the API does NOT say so** — a 30-day window silently returns only the first 24h, so a wide query looks like "almost no traffic" (same class of lie as the SPA answering 200 with the fallback index). Retention reaches **≥90 days**. Only three fields exist — `id`, `timestamp`, `event_message`; `metadata` and `level` do not, so filtering is `like` over a raw string (`"POST | 200 | <url>"`). Throttling is aggressive: a few queries in a row return `ThrottlerException: Too Many Requests`, so space them ~90s — sweeping 90 days costs ~90 queries ≈ 2.5h. Reachable only through the Management API (`sbp_` token), not from SQL and not from the app, and **nothing alerts on it**: it is forensics, not monitoring. Anything that must raise an alert still has to reach a TABLE (`incidents`). To inspect a deployed function's actual code, fetch the published bundle: `GET /v1/projects/{ref}/functions/<slug>/body`
 
 ### Reissuing a DB function silently deletes the previous migration's fix
 
