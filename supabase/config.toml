@@ -138,8 +138,11 @@ verify_jwt = false
 [functions.uzapi-create-instance]
 verify_jwt = false
 
+# Chamada só pelo front, com sessão. O portão do gateway é o SEGUNDO cadeado: o
+# que de fato segura é a checagem de dono dentro da function (a chave anon é um
+# JWT válido e viaja no bundle público).
 [functions.uzapi-delete-instance]
-verify_jwt = false
+verify_jwt = true
 
 [functions.uzapi-set-webhook]
 verify_jwt = false

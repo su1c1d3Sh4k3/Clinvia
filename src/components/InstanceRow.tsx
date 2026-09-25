@@ -50,16 +50,28 @@ export const InstanceRow = ({ instance, onConnect }: InstanceRowProps) => {
         mutationFn: async (id: string) => {
             // O erro era descartado: a exclusão falhava e o onSuccess ainda
             // anunciava "Instância deletada".
-            const { error } = await supabase.functions.invoke("uzapi-delete-instance", {
+            const { data, error } = await supabase.functions.invoke("uzapi-delete-instance", {
                 body: { instanceId: id },
             });
             if (error) throw new Error(await mensagemDoErroDaFuncao(error, "Não foi possível excluir a instância."));
+            // Provedor recusou a remoção: a linha FICA, marcada como pendente. É
+            // resposta 200 de propósito (o incidente certo é o do provedor, e a
+            // function já o abriu) — então o `error` acima não dispara e quem
+            // distingue é este campo.
+            return { pendente: Boolean(data?.pending_removal), aviso: data?.message as string | undefined };
         },
-        onSuccess: () => {
+        onSuccess: ({ pendente, aviso }) => {
             queryClient.invalidateQueries({ queryKey: ["instances"] });
-            toast({
-                title: "Instância deletada",
-            });
+            toast(
+                pendente
+                    ? {
+                        title: "Remoção pendente",
+                        description: aviso,
+                        variant: "destructive",
+                        duration: 12000,
+                    }
+                    : { title: "Instância deletada" },
+            );
         },
         onError: (error: any) => {
             toast({
@@ -81,6 +93,16 @@ export const InstanceRow = ({ instance, onConnect }: InstanceRowProps) => {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between p-3 md:p-4 border rounded-lg gap-3 md:gap-4">
             <div className="space-y-0.5 md:space-y-1 min-w-0">
                 <h3 className="font-semibold text-sm md:text-base truncate">{instance.name}</h3>
+                {/* A linha só continua aqui porque o provedor recusou a remoção.
+                    Esconder isso é o que transformaria a conexão em órfã invisível. */}
+                {instance.removal_pending_at && (
+                    <p className="text-[11px] md:text-xs text-amber-600 dark:text-amber-400 flex items-start gap-1">
+                        <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
+                        <span>
+                            Remoção pendente — não conseguimos remover no provedor. O suporte vai concluir.
+                        </span>
+                    </p>
+                )}
             </div>
 
             <div className="flex flex-col sm:flex-row sm:items-center gap-2 md:gap-4">

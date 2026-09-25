@@ -45,6 +45,7 @@ export const INSTANCE_COLUMNS = [
   "workflow_code",
   "disconnect_email_sent_at",
   "restriction_email_sent_at",
+  "removal_pending_at",
 ].join(", ");
 
 // TODO(Fase 3): os pontos que ainda chamam a UAZAPI direto do navegador usam
