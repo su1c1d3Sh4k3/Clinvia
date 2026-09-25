@@ -1,6 +1,7 @@
 import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { trackTokenUsage, getOwnerFromConversation, makeOpenAIRequest } from "../_shared/token-tracker.ts";
+import { apiError } from "../_shared/api-errors.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -104,10 +105,13 @@ serveMonitored("ai-suggest-response", async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error: any) {
-    console.error("Error in ai-suggest-response:", error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    return apiError(corsHeaders, {
       status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      code: "suggestion_failed",
+      request: req,
+      report: true,
+      message: "Não foi possível sugerir uma resposta agora. Tente novamente em alguns instantes.",
+      details: String(error?.message ?? error),
     });
   }
 });

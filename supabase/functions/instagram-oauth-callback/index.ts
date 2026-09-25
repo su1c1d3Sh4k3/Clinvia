@@ -1,6 +1,7 @@
 import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { fetchProvider } from "../_shared/provider-errors.ts";
+import { apiError } from "../_shared/api-errors.ts";
 
 // =============================================
 // Instagram OAuth Callback Handler
@@ -281,10 +282,13 @@ serveMonitored("instagram-oauth-callback", async (req) => {
         );
 
     } catch (error: any) {
-        console.error('[INSTAGRAM OAUTH] Unexpected error:', error);
-        return new Response(
-            JSON.stringify({ success: false, error: error.message }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        return apiError(corsHeaders, {
+            status: 500,
+            code: "ig_oauth_failed",
+            request: req,
+            report: true,
+            message: "A conexão com o Instagram não pôde ser concluída. Tente conectar novamente; se repetir, fale com o suporte.",
+            details: String(error?.message ?? error),
+        });
     }
 });

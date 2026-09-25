@@ -1,5 +1,6 @@
 import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
+import { apiError } from "../_shared/api-errors.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -201,10 +202,13 @@ serveMonitored("admin-delete-client", async (req) => {
         );
 
     } catch (error: any) {
-        console.error("[admin-delete-client] Error:", error);
-        return new Response(
-            JSON.stringify({ success: false, error: error.message }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return apiError(corsHeaders, {
+            status: 400,
+            code: "delete_client_failed",
+            request: req,
+            report: true,
+            message: "Não foi possível concluir a exclusão do cliente. O erro foi registrado; veja o motivo no painel de incidentes antes de repetir.",
+            details: String(error?.message ?? error),
+        });
     }
 });

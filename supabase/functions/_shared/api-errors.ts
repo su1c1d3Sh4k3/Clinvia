@@ -1,22 +1,65 @@
 /**
- * Erros padronizados das APIs públicas (n8n, link de agendamento).
+ * Erros padronizados das edge functions.
  *
  * Regra: NENHUMA resposta de erro pode ser genérica. Toda falha diz o que
- * aconteceu, em qual etapa, e — quando o motivo é técnico — carrega o detalhe
- * do banco em `details` em vez de escondê-lo atrás de "Erro".
+ * aconteceu e em qual etapa, com um `code` estável para o chamador ramificar.
  *
- * Formato da resposta (compatível com os dois formatos que já existiam):
+ * Formato da resposta:
  *   {
  *     success: false,
- *     error:   "<texto legível>",   // quem lê `.error` (n8n, PublicBooking)
- *     message: "<mesmo texto>",     // quem lê `.message`
+ *     error:   "<frase humana>",    // quem lê `.error` (n8n, PublicBooking)
+ *     message: "<mesma frase>",     // quem lê `.message`
  *     code:    "<código estável>",  // para o n8n ramificar sem parsear texto
- *     details: "<detalhe técnico>"  // opcional, só quando existe
+ *     details: "<detalhe técnico>"  // SÓ quando a function declarou (ver abaixo)
  *   }
+ *
+ * ## Detalhe técnico é opt-IN, e o padrão é corpo limpo
+ *
+ * Este arquivo nasceu para as `api-*`, cujo único chamador é o n8n. Lá o texto
+ * cru do Postgres em `details` é o que faz a API ser diagnosticável. A premissa
+ * deixa de valer no instante em que a mesma forma é copiada para uma function
+ * anônima (`verify_jwt = false`) ou chamada pela tela do cliente: aí o mesmo
+ * campo entrega nome de tabela, de coluna e de policy para quem só sabe a URL.
+ *
+ * Enquanto a limpeza era opt-in (`internalDetails`), quem escrevesse a próxima
+ * function e esquecesse o campo vazava igual — estávamos contando com memória.
+ * Agora é o contrário: **o corpo sai limpo por omissão**. `details` só entra na
+ * resposta quando a function declara, uma vez no topo do módulo:
+ *
+ *     import { detalheTecnicoNoCorpo } from "../_shared/api-errors.ts";
+ *     detalheTecnicoNoCorpo();   // API do n8n: o detalhe do banco é o valor
+ *
+ * Quem esquece fica seguro, não exposto. O motivo real nunca se perde: ele vai
+ * para o `console.error` e para o incidente em todos os casos.
  */
 
 import { chavesConfiguradas } from "./api-keys.ts";
 import { HEADER_JA_REPORTADO, reportIncident, reportInputError } from "./report-incident.ts";
+
+/**
+ * Ligado por `detalheTecnicoNoCorpo()`. Variável de módulo é seguro aqui (ao
+ * contrário do "request atual", que não pode ser global): o valor é uma
+ * propriedade da FUNCTION, decidida no carregamento do módulo, igual para todas
+ * as requisições que aquele isolate atende.
+ */
+let detalheLiberado = false;
+
+/**
+ * Declara que esta function fala com o n8n e que o detalhe técnico no corpo é
+ * desejado. Chame uma vez, no topo do módulo, antes de servir.
+ *
+ * NÃO chame em function anônima, nem em function que a tela do cliente ou um
+ * paciente alcança — `api-public-booking` é lida por um paciente e por isso
+ * NÃO declara.
+ */
+export function detalheTecnicoNoCorpo(): void {
+    detalheLiberado = true;
+}
+
+/** Para o teste de acesso conferir a declaração sem reimplementar a regra. */
+export function detalheTecnicoEstaLiberado(): boolean {
+    return detalheLiberado;
+}
 
 export interface ApiErrorInit {
     status: number;
@@ -24,24 +67,19 @@ export interface ApiErrorInit {
     code: string;
     /** texto legível — nunca "Erro", "Unauthorized" ou similar */
     message: string;
-    /** detalhe técnico (mensagem do Postgres, corpo de resposta HTTP, ...) */
-    details?: string;
     /**
-     * Detalhe técnico que vai para o LOG e para o INCIDENTE, e **nunca** para o
-     * corpo da resposta.
+     * Detalhe técnico (mensagem do Postgres, corpo de resposta HTTP, ...).
      *
-     * Existe porque `details` só é seguro quando o chamador é o n8n — que é a
-     * premissa deste arquivo. Numa function anônima (`verify_jwt = false`) ou
-     * chamada pela tela do cliente, o texto cru do Postgres/Auth nomeia tabela,
-     * coluna e policy para quem apenas sabe a URL.
+     * Vai SEMPRE para o `console.error` e para o incidente. Entra no corpo da
+     * resposta SÓ se a function tiver chamado `detalheTecnicoNoCorpo()`.
      *
-     * Sanitizar o corpo SEM este campo seria trocar vazamento por cegueira: o
-     * `serveMonitored` monta a mensagem do incidente lendo o CORPO da resposta
-     * 5xx, então um corpo limpo produziria um incidente sem motivo nenhum.
-     * Quem usa `internalDetails` precisa de `report: true` junto — é ele que
-     * carrega o motivo real para o painel e marca a resposta como já reportada.
+     * É por isso que limpar o corpo não cega o monitoramento: o `serveMonitored`
+     * monta a mensagem do incidente lendo o CORPO da resposta 5xx, então um
+     * corpo limpo sem `report: true` produziria incidente sem motivo nenhum.
+     * `dbErrorResponse` e `unexpectedErrorResponse` já reportam sozinhos; quem
+     * chama `apiError` direto num ramo 5xx precisa passar `report: true`.
      */
-    internalDetails?: string;
+    details?: string;
     /** campos extras que o chamador já lia antes (ex.: deal_id) */
     extra?: Record<string, unknown>;
     /**
@@ -72,18 +110,18 @@ export function apiError(headers: Record<string, string>, init: ApiErrorInit): R
         code: init.code,
         ...(init.extra || {}),
     };
-    if (init.details) body.details = init.details;
+    // Corpo limpo por omissão: o detalhe técnico só sai daqui se a function
+    // tiver declarado que fala com o n8n.
+    if (init.details && detalheLiberado) body.details = init.details;
 
-    const tecnico = [init.details, init.internalDetails].filter(Boolean).join(" | ");
-
-    console.error(`[api-error ${init.status} ${init.code}] ${init.message}${tecnico ? ` | ${tecnico}` : ""}`);
+    console.error(`[api-error ${init.status} ${init.code}] ${init.message}${init.details ? ` | ${init.details}` : ""}`);
 
     // Não bloqueia: reportIncident volta na hora e envia num microtask.
     if (init.report) {
         reportIncident({
             route: init.code,
             httpCode: init.status,
-            message: [init.message, tecnico].filter(Boolean).join(" | "),
+            message: [init.message, init.details].filter(Boolean).join(" | "),
             request: init.request,
         });
     }
@@ -101,8 +139,23 @@ export function apiError(headers: Record<string, string>, init: ApiErrorInit): R
 }
 
 /**
+ * Escolhe a frase que vai no corpo. O texto técnico só aparece para quem
+ * declarou; o seguro nomeia a etapa e o que fazer, sem citar o banco.
+ *
+ * As duas frases existem porque `message`/`error` são o que o n8n lê para
+ * decidir — tirar o motivo de lá para TODO mundo cegaria a integração que hoje
+ * depende disso. O `code` continua igual nos dois casos.
+ */
+function frase(seguro: string, tecnico: string): string {
+    return detalheLiberado ? tecnico : seguro;
+}
+
+/**
  * Descreve um erro do supabase-js sem perder o motivo real.
  * `operation` deve completar a frase "Falha ao ...": "gravar o agendamento".
+ *
+ * ATENÇÃO: o retorno contém texto cru do Postgres. Use para log, incidente ou
+ * dentro de `frase(...)` — nunca direto no corpo de uma resposta.
  */
 export function describeDbError(operation: string, error: unknown): string {
     const e = error as Record<string, unknown> | null;
@@ -169,7 +222,10 @@ export function dbErrorResponse(
             status: 400,
             code,
             request,
-            message: `Falha ao ${operation}: ${explicacao}. Corrija o valor e repita a chamada. Detalhe do banco: ${cru || "sem detalhe"} [${sqlstate}]`,
+            message: frase(
+                `Falha ao ${operation}: ${explicacao}. Corrija o valor e repita a chamada.`,
+                `Falha ao ${operation}: ${explicacao}. Corrija o valor e repita a chamada. Detalhe do banco: ${cru || "sem detalhe"} [${sqlstate}]`,
+            ),
             details: cru || undefined,
             extra: { input_error: true, sqlstate },
         });
@@ -184,7 +240,10 @@ export function dbErrorResponse(
         status: 500,
         code,
         request,
-        message: describeDbError(operation, error),
+        message: frase(
+            `Falha ao ${operation}. O erro foi registrado e o suporte consegue ver o motivo; tente novamente em alguns minutos.`,
+            describeDbError(operation, error),
+        ),
         details: cru,
     });
 }
@@ -240,7 +299,10 @@ export function unexpectedErrorResponse(
             status: 500,
             code: "database_error",
             request,
-            message: describeDbError(context, error),
+            message: frase(
+                `${context}: o banco recusou a operação. O erro foi registrado e o suporte consegue ver o motivo; tente novamente em alguns minutos.`,
+                describeDbError(context, error),
+            ),
             details: String(e.message),
         });
     }
@@ -253,9 +315,12 @@ export function unexpectedErrorResponse(
         status: 500,
         code: "unexpected_error",
         request,
-        message: raw
-            ? `${context}: ${raw}`
-            : `${context}: a função encerrou com um erro sem mensagem. Verifique os logs desta edge function no painel do Supabase.`,
+        message: frase(
+            `${context}: a operação falhou por um erro interno. O erro foi registrado e o suporte consegue ver o motivo; tente novamente em alguns minutos.`,
+            raw
+                ? `${context}: ${raw}`
+                : `${context}: a função encerrou com um erro sem mensagem. Verifique os logs desta edge function no painel do Supabase.`,
+        ),
         details: raw || undefined,
     });
 }

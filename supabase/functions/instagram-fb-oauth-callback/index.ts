@@ -1,6 +1,7 @@
 import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { fetchProvider } from "../_shared/provider-errors.ts";
+import { apiError } from "../_shared/api-errors.ts";
 
 // =============================================
 // Instagram FB OAuth Callback (BETA)
@@ -248,8 +249,14 @@ serveMonitored("instagram-fb-oauth-callback", async (req) => {
             instances: saved,
         });
     } catch (err: any) {
-        console.error("[IG-FB-OAUTH] Erro inesperado:", err);
-        return jsonResp({ success: false, error: err.message }, 500);
+        return apiError(corsHeaders, {
+            status: 500,
+            code: "ig_fb_oauth_failed",
+            request: req,
+            report: true,
+            message: "A conexão com o Instagram não pôde ser concluída. Tente conectar novamente; se repetir, fale com o suporte.",
+            details: String(err?.message ?? err),
+        });
     }
 });
 

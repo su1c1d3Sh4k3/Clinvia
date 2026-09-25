@@ -790,10 +790,13 @@ serveMonitored("evolution-send-message", async (req) => {
     let status = 500;
     let errorCode: string = 'internal_error';
     // userMessage = mensagem que vai para o toast no frontend.
-    // Por padrão, é igual a rawMsg, mas para erros de UZAPI removemos o
-    // prefixo "Failed to send message via Uzapi: " e categorizamos policy
-    // restriction do WhatsApp separadamente.
-    let userMessage: string = rawMsg;
+    //
+    // O padrão NÃO pode ser `rawMsg`: esta function é anônima e o toast é da
+    // tela do cliente, então o caminho não categorizado (`internal_error`)
+    // entregava texto cru do Postgres/UZAPI a quem só sabe a URL. Cada ramo
+    // abaixo que reconhece o erro escreve a frase própria; o que não reconhece
+    // fica com a genérica — e o motivo real vai no `reportIncident`.
+    let userMessage = 'Não foi possível enviar a mensagem. Tente de novo; se repetir, confira a conexão do WhatsApp.';
 
     if (rawMsg.includes('Conversation ID is required')) {
       status = 400; errorCode = 'missing_conversation_id';

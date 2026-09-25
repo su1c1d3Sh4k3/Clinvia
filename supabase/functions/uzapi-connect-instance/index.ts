@@ -1,6 +1,7 @@
 import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { fetchProvider } from "../_shared/provider-errors.ts";
+import { apiError } from "../_shared/api-errors.ts";
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -164,16 +165,14 @@ serveMonitored("uzapi-connect-instance", async (req) => {
         );
 
     } catch (error: any) {
-        console.error('[ERROR] uzapi-connect-instance failed:', error);
-        return new Response(
-            JSON.stringify({
-                success: false,
-                error: error.message || 'Erro desconhecido ao conectar instância'
-            }),
-            {
-                status: 200,
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            }
-        );
+        // Status 200 de propósito: a tela lê `error` do corpo.
+        return apiError(corsHeaders, {
+            status: 200,
+            code: "uzapi_connect_failed",
+            request: req,
+            report: true,
+            message: "Não foi possível conectar a instância do WhatsApp. Tente de novo em alguns instantes; se repetir, fale com o suporte.",
+            details: String(error?.message ?? error),
+        });
     }
 });

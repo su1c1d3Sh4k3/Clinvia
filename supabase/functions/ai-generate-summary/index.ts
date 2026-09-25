@@ -4,6 +4,7 @@ import {
   generateConversationSummary,
   loadConversationTranscript,
 } from "../_shared/conversation-summary.ts";
+import { apiError } from "../_shared/api-errors.ts";
 
 /**
  * ai-generate-summary — botão "Gerar Resumo" da lateral de inteligência.
@@ -59,13 +60,13 @@ serveMonitored("ai-generate-summary", async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('Error:', error);
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
-    );
+    return apiError(corsHeaders, {
+      status: 500,
+      code: "summary_failed",
+      request: req,
+      report: true,
+      message: "Não foi possível gerar o resumo da conversa agora. Tente novamente em alguns instantes.",
+      details: String((error as Error)?.message ?? error),
+    });
   }
 });

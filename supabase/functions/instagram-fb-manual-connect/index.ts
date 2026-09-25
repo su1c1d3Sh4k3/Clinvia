@@ -1,6 +1,7 @@
 import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { fetchProvider } from "../_shared/provider-errors.ts";
+import { apiError } from "../_shared/api-errors.ts";
 
 // =============================================
 // Instagram FB Manual Connect (BETA)
@@ -168,8 +169,14 @@ serveMonitored("instagram-fb-manual-connect", async (req) => {
             },
         });
     } catch (err: any) {
-        console.error("[IG-FB-MANUAL] Erro:", err);
-        return jsonResp({ success: false, error: err.message }, 500);
+        return apiError(corsHeaders, {
+            status: 500,
+            code: "ig_manual_connect_failed",
+            request: req,
+            report: true,
+            message: "Não foi possível concluir a conexão manual do Instagram. O erro foi registrado; veja o motivo no painel de incidentes.",
+            details: String(err?.message ?? err),
+        });
     }
 });
 

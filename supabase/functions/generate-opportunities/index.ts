@@ -1,5 +1,6 @@
 import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { apiError } from "../_shared/api-errors.ts";
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -260,10 +261,14 @@ serveMonitored("generate-opportunities", async (req) => {
         );
 
     } catch (error: any) {
-        console.error('=== [GENERATE OPPORTUNITIES] ERROR ===', error);
-        return new Response(
-            JSON.stringify({ success: false, error: error.message, ...results }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        return apiError(corsHeaders, {
+            status: 500,
+            code: "opportunities_failed",
+            request: req,
+            report: true,
+            message: "A varredura de oportunidades parou no meio. O que já havia sido processado está no corpo desta resposta.",
+            details: String(error?.message ?? error),
+            extra: results,
+        });
     }
 });

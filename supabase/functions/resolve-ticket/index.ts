@@ -1,5 +1,6 @@
 import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { apiError } from "../_shared/api-errors.ts";
 
 /**
  * resolve-ticket — encerra a conversa pelo botão "Finalizar" do inbox.
@@ -80,10 +81,13 @@ serveMonitored("resolve-ticket", async (req) => {
         );
 
     } catch (error) {
-        console.error('Error:', error);
-        return new Response(
-            JSON.stringify({ error: error.message }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        return apiError(corsHeaders, {
+            status: 500,
+            code: "resolve_ticket_failed",
+            request: req,
+            report: true,
+            message: "Não foi possível encerrar o atendimento. Recarregue a conversa e tente de novo; se repetir, fale com o suporte.",
+            details: String((error as Error)?.message ?? error),
+        });
     }
 });

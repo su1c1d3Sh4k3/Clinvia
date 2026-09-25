@@ -2,6 +2,7 @@ import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { trackTokenUsage, getOwnerFromConversation, makeOpenAIRequest } from "../_shared/token-tracker.ts";
 import { fetchProvider } from "../_shared/provider-errors.ts";
+import { apiError } from "../_shared/api-errors.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -187,10 +188,13 @@ serveMonitored("ai-copilot-chat", async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error: any) {
-    console.error("Error in ai-copilot-chat:", error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    return apiError(corsHeaders, {
       status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      code: "copilot_failed",
+      request: req,
+      report: true,
+      message: "O copiloto não conseguiu responder agora. Tente novamente em alguns instantes.",
+      details: String(error?.message ?? error),
     });
   }
 });

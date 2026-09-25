@@ -2,6 +2,7 @@ import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { trackTokenUsage } from "../_shared/token-tracker.ts";
 import { fetchProvider } from "../_shared/provider-errors.ts";
+import { apiError } from "../_shared/api-errors.ts";
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -109,10 +110,13 @@ serveMonitored("generate-client-report", async (req) => {
         );
 
     } catch (error) {
-        console.error('Error:', error);
-        return new Response(
-            JSON.stringify({ error: error.message }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        return apiError(corsHeaders, {
+            status: 500,
+            code: "client_report_failed",
+            request: req,
+            report: true,
+            message: "Não foi possível gerar o relatório do cliente agora. Tente novamente em alguns instantes.",
+            details: String((error as Error)?.message ?? error),
+        });
     }
 });

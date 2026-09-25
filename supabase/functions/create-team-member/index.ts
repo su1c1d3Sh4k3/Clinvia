@@ -1,6 +1,7 @@
 import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { sendEmailSafe, emailConviteColaborador } from "../_shared/emails.ts";
+import { apiError } from "../_shared/api-errors.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -136,9 +137,15 @@ serveMonitored("create-team-member", async (req) => {
             { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
     } catch (error) {
-        return new Response(
-            JSON.stringify({ error: error.message }),
-            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        // Status 200 de propósito: a tela lê `error` do corpo. Trocar para 4xx
+        // aqui mudaria o contrato do front sem necessidade.
+        return apiError(corsHeaders, {
+            status: 200,
+            code: "create_member_failed",
+            request: req,
+            report: true,
+            message: "Não foi possível criar o colaborador. O erro foi registrado; veja o motivo no painel de incidentes.",
+            details: String((error as Error)?.message ?? error),
+        });
     }
 });

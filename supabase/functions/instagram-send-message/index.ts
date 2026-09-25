@@ -1,6 +1,7 @@
 import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { fetchProvider } from "../_shared/provider-errors.ts";
+import { apiError } from "../_shared/api-errors.ts";
 
 // =============================================
 // Instagram Send Message - API for IA Integration
@@ -821,10 +822,13 @@ serveMonitored("instagram-send-message", async (req) => {
         );
 
     } catch (error: any) {
-        console.error('[INSTAGRAM SEND] Error:', error);
-        return new Response(
-            JSON.stringify({ success: false, error: error.message }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        return apiError(corsHeaders, {
+            status: 500,
+            code: "ig_send_failed",
+            request: req,
+            report: true,
+            message: "A mensagem não foi enviada pelo Direct. Tente de novo; se repetir, confira a conexão do Instagram.",
+            details: String(error?.message ?? error),
+        });
     }
 });

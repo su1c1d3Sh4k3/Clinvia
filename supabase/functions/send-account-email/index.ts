@@ -24,6 +24,7 @@ import {
     emailSenhaAlterada,
     type BuiltEmail,
 } from "../_shared/emails.ts";
+import { apiError } from "../_shared/api-errors.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -232,7 +233,13 @@ serveMonitored("send-account-email", async (req) => {
         const { id } = await sendEmail({ to, ...mail, replyTo: reply_to });
         return json({ success: true, id, template, subject: mail.subject });
     } catch (error) {
-        console.error("[send-account-email]", error);
-        return json({ success: false, error: (error as Error).message }, 500);
+        return apiError(corsHeaders, {
+            status: 500,
+            code: "account_email_failed",
+            request: req,
+            report: true,
+            message: "Não foi possível enviar o e-mail. O erro foi registrado; veja o motivo no painel de incidentes.",
+            details: String((error as Error)?.message ?? error),
+        });
     }
 });

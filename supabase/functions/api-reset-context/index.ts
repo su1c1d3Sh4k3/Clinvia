@@ -7,7 +7,14 @@ import {
     readJsonBody,
     requireApiKey,
     unexpectedErrorResponse,
+    detalheTecnicoNoCorpo,
 } from "../_shared/api-errors.ts";
+
+// Esta API fala com o n8n: o detalhe tecnico do banco no corpo da resposta e
+// o que a torna diagnosticavel. Sem esta declaracao o corpo sai limpo -- ver
+// o cabecalho de `_shared/api-errors.ts`.
+detalheTecnicoNoCorpo();
+
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",

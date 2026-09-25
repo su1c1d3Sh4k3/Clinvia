@@ -1,6 +1,7 @@
 import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { fetchProvider } from "../_shared/provider-errors.ts";
+import { apiError } from "../_shared/api-errors.ts";
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -268,10 +269,14 @@ serveMonitored("process-auto-follow-up", async (req) => {
         );
 
     } catch (error: any) {
-        console.error('[auto-follow-up] Error:', error);
-        return new Response(
-            JSON.stringify({ success: false, error: error.message, ...results }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        return apiError(corsHeaders, {
+            status: 500,
+            code: "auto_follow_up_failed",
+            request: req,
+            report: true,
+            message: "O processamento do follow-up automático parou no meio. O que já havia sido processado está no corpo desta resposta.",
+            details: String(error?.message ?? error),
+            extra: results,
+        });
     }
 });

@@ -87,17 +87,19 @@ serveMonitored("request-password-reset", async (req) => {
         // `(error as Error).message` — texto cru do Postgres/Auth, com nome de
         // tabela, coluna e policy dentro.
         //
-        // O motivo real não se perde: `internalDetails` + `report: true` o
-        // levam para o log e para o incidente. Sem isso a limpeza seria
-        // cegueira, porque o `serveMonitored` monta o incidente lendo o CORPO
-        // da resposta 5xx.
+        // O motivo real não se perde: `details` + `report: true` o levam para o
+        // log e para o incidente. Sem isso a limpeza seria cegueira, porque o
+        // `serveMonitored` monta o incidente lendo o CORPO da resposta 5xx.
+        //
+        // `details` NÃO sai no corpo aqui: só sai em function que chamou
+        // `detalheTecnicoNoCorpo()`, e esta — anônima — nunca vai chamar.
         return apiError(corsHeaders, {
             status: 500,
             code: "reset_failed",
             request: req,
             report: true,
             message: "Não foi possível iniciar a recuperação de senha agora. Tente novamente em alguns minutos; se continuar, fale com o suporte.",
-            internalDetails: String((error as Error)?.message ?? error ?? "erro sem mensagem"),
+            details: String((error as Error)?.message ?? error ?? "erro sem mensagem"),
         });
     }
 });
