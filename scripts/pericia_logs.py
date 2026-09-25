@@ -95,14 +95,17 @@ def consultar(sql: str, inicio: datetime, fim: datetime, tok: str) -> list[dict]
             continue
 
         # O throttle chega com HTTP 200 e corpo de mensagem -- nao levanta excecao.
-        msg = corpo.get("message", "")
+        # E o mesmo texto pode vir sob `message` OU sob `error`, entao olhe os dois: tratar
+        # "Backend error" como recusa definitiva aborta uma consulta que so precisava de ar.
+        msg = f"{corpo.get('message', '')} {corpo.get('error', '')}"
         if "Throttler" in msg or "Too Many Requests" in msg:
             print(f"    throttle; aguardando {espera:.0f}s", file=sys.stderr)
             time.sleep(espera)
             espera *= 1.5
             continue
         if "Backend error" in msg:
-            print(f"    backend reclamou; aguardando {espera:.0f}s", file=sys.stderr)
+            print(f"    backend reclamou (consulta pesada demais ou instavel); "
+                  f"aguardando {espera:.0f}s", file=sys.stderr)
             time.sleep(espera)
             espera *= 1.5
             continue
@@ -173,6 +176,11 @@ def main(argv: list[str]) -> int:
     if linhas:
         print()
         for l in sorted(linhas, key=lambda x: x.get("timestamp", ""), reverse=True):
+            # `--sql` com agregados nao devolve event_message; imprimir os campos crus e
+            # melhor do que imprimir duas colunas vazias e parecer que nao veio nada.
+            if "event_message" not in l:
+                print("  " + "  ".join(f"{k}={v}" for k, v in l.items()))
+                continue
             ts = str(l.get("timestamp", ""))[:19]
             msg = str(l.get("event_message", "")).strip().replace("\n", " ")
             print(f"{ts}  {msg[:240]}")
