@@ -212,6 +212,22 @@ Consequences for how tests are built:
   the real channel.
 - Never measure volume, run load, or mutate rows on a large ACTIVE tenant.
 
+### Concluding from a failed measurement (two rules, 25/09/2026)
+
+Both come from writing *"there is no log warehouse"* into this file as a fact. It was false, it sat
+in the first thing every future session reads, and the evidence against it was inside the very
+error response that produced it.
+
+- **Read the body of the error response before concluding.** `410`, `404` and `Table "X" does not
+  exist` very often say exactly what changed. The 410 on `logs.all` carried the name of its
+  replacement endpoint and a changelog link; the conclusion "the warehouse is gone" was drawn with
+  the correction already on screen.
+- **A claim of absence needs a second, independent path before it is recorded as fact.** *"X does
+  not exist"* is the easiest conclusion to get wrong, because **failing to find is indistinguishable
+  from there being nothing** — a renamed table, a stale endpoint, a clamped window and a missing
+  permission all look identical from the caller's side. Prove it twice, or write it down as "I could
+  not reach X by this path", which is a different and honest sentence.
+
 ### Measuring from outside the platform (measured 24/09/2026)
 
 Two traps that make an external probe lie, both found building `monitoring/sentinela_login/`:
@@ -223,6 +239,12 @@ Two traps that make an external probe lie, both found building `monitoring/senti
 - **In a SPA, a bundle that did not ship returns `200` with the fallback index, not `404`.** The
   HTTP code proves nothing; check `content-type`. A deploy that publishes a new index pointing at a
   hash that never went up is a white screen with the server saying everything is fine.
+- **The log endpoint clamps the window to 24h from `iso_timestamp_start`, and says nothing.** Ask
+  for 30 days and you get the first 24h, with HTTP 200 and no warning — so a wide query reads as
+  "almost no traffic" when it actually answered a sliver. Same class as the two above: **the call
+  succeeding does not prove the scope of what it answered.** Nearly published "2 requests in 30
+  days" for a number that was "2 in 24h". Never sweep this by hand — use
+  `scripts/pericia_logs.py`, which walks day by day and joins the slices.
 
 Related, same family: **`curl` does not do preflight**, so it cannot prove anything about CORS. To
 prove it, send `OPTIONS` with `Access-Control-Request-Headers` to the exact `/functions/v1/<slug>`
