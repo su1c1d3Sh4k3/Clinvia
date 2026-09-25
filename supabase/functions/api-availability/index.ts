@@ -181,7 +181,7 @@ serveMonitored("api-availability", async (req) => {
         const { body, response: bodyFail } = await readJsonBody(req, corsHeaders);
         if (bodyFail) return bodyFail;
 
-        const { user_id, service_name, date, period, conversation_id } = body!;
+        const { user_id, service_name, date, period, conversation_id, professional_name } = body!;
 
         const missingRequired = missingFields(corsHeaders, body!, ["user_id", "service_name"],
             "Envie o id da conta (bd_data.user_id no prompt da IA) e o nome exato da aplicação a consultar.");
@@ -371,7 +371,55 @@ serveMonitored("api-availability", async (req) => {
             });
         }
 
+        // ── Filtro opcional por profissional ──
+        //
+        // Mesma regra de nome do `resolveProfessional` de `api-scheduling`
+        // (comparação por `includes`, sem caixa): um nome que funciona aqui
+        // precisa funcionar no create_appointment, senão a IA oferece o horário
+        // e não consegue agendar. A diferença de propósito é que lá o `.find`
+        // escolhe UM e aqui ficam TODOS os que batem — consultar agenda é
+        // listagem, e "Camila" devolvendo as duas Camilas é resposta melhor que
+        // devolver a primeira em silêncio.
+        let professionalFilter: string | null = null;
+        if (professional_name != null && String(professional_name).trim() !== "") {
+            if (typeof professional_name !== "string") {
+                return apiError(corsHeaders, {
+                    status: 400,
+                    code: "invalid_professional_name",
+                    message: `Campo professional_name precisa ser texto. Recebido: ${Array.isArray(professional_name) ? "array" : typeof professional_name}.`,
+                });
+            }
+            const alvo = professional_name.trim().toLowerCase();
+            const escolhidos = professionals.filter((p: any) =>
+                String(p.name || "").toLowerCase().includes(alvo));
+
+            if (escolhidos.length === 0) {
+                return apiError(corsHeaders, {
+                    status: 404,
+                    code: "professional_does_not_serve",
+                    message: `O profissional "${professional_name}" não atende a aplicação "${sc.name}"${
+                        convenio.requested && convenio.convenio ? " nas salas habilitadas para convênio" : ""
+                    }. Profissionais disponíveis para ela: ${professionals.map((p: any) => p.name).join(", ")}.`,
+                });
+            }
+
+            professionals = escolhidos;
+            professionalFilter = escolhidos.map((p: any) => p.name).join(", ");
+        }
+
         const MAX_SEARCH = 30;
+
+        // Igual ao campaign_filter: sem isto a IA lê uma agenda recortada como se
+        // fosse a agenda inteira da aplicação e diz que "não tem mais horário".
+        const professionalInfo = professionalFilter
+            ? {
+                professional_filter: {
+                    requested: String(professional_name),
+                    professionals: professionalFilter,
+                    note: `Horários apenas de ${professionalFilter}. Outros profissionais atendem esta aplicação em horários que não estão nesta lista.`,
+                },
+            }
+            : {};
 
         // Vai junto em toda resposta de sucesso: deixa explícito para a IA que a
         // lista já saiu restringida pela campanha (e por quem).
@@ -432,7 +480,8 @@ serveMonitored("api-availability", async (req) => {
                     by_professional: groupByProfessional(flat),
                     slots: flat,
                     ...campaignInfo,
-                ...convenioInfo,
+                    ...convenioInfo,
+                    ...professionalInfo,
                 }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
             }
 
@@ -459,6 +508,7 @@ serveMonitored("api-availability", async (req) => {
                         slots: sFlat,
                         ...campaignInfo,
                         ...convenioInfo,
+                        ...professionalInfo,
                     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
                 }
 
@@ -472,6 +522,7 @@ serveMonitored("api-availability", async (req) => {
                 slots: [],
                 ...campaignInfo,
                 ...convenioInfo,
+                ...professionalInfo,
             }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
@@ -521,6 +572,7 @@ serveMonitored("api-availability", async (req) => {
             availability,
             ...campaignInfo,
             ...convenioInfo,
+            ...professionalInfo,
         }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     } catch (error) {

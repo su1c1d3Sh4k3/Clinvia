@@ -203,7 +203,7 @@ serveMonitored("api-availability-sandbox", async (req) => {
         const { body, response: bodyFail } = await readJsonBody(req, corsHeaders);
         if (bodyFail) return bodyFail;
 
-        const { service_name, date, period } = body!;
+        const { service_name, date, period, professional_name } = body!;
 
         const missingRequired = missingFields(corsHeaders, body!, ["service_name"],
             "Envie o nome exato da aplicação a consultar.");
@@ -344,7 +344,53 @@ serveMonitored("api-availability-sandbox", async (req) => {
             });
         }
 
+        // ── Filtro opcional por profissional (gêmeo do de `api-availability`) ──
+        // Mesma comparação por `includes` sem caixa do `resolveProfessional` de
+        // `api-scheduling`: nome que lista horário aqui tem que agendar lá.
+        // Fica com TODOS os que batem, não com o primeiro: consultar agenda é
+        // listagem, e "Camila" devolvendo as duas é melhor resposta.
+        let professionalFilter: string | null = null;
+        if (professional_name != null && String(professional_name).trim() !== "") {
+            if (typeof professional_name !== "string") {
+                return apiError(corsHeaders, {
+                    status: 400,
+                    code: "invalid_professional_name",
+                    message: `Campo professional_name precisa ser texto. Recebido: ${Array.isArray(professional_name) ? "array" : typeof professional_name}.`,
+                });
+            }
+            const alvo = professional_name.trim().toLowerCase();
+            const escolhidos = professionals.filter((p: any) =>
+                String(p.name || "").toLowerCase().includes(alvo));
+
+            if (escolhidos.length === 0) {
+                return apiError(corsHeaders, {
+                    status: 404,
+                    code: "professional_does_not_serve",
+                    message: `O profissional "${professional_name}" não atende a aplicação "${sc.name}"${
+                        convenio.requested && convenio.convenio ? " nas salas habilitadas para convênio" : ""
+                    }. Profissionais disponíveis para ela: ${professionals.map((p: any) => p.name).join(", ")}.`,
+                });
+            }
+
+            professionals = escolhidos;
+            professionalFilter = escolhidos.map((p: any) => p.name).join(", ");
+        }
+
+        // O painel do ambiente de teste mostra este texto: sem o nome, uma agenda
+        // recortada por profissional parece a agenda cheia da aplicação.
+        const sufixoProf = professionalFilter ? ` — só ${professionalFilter}` : "";
+
         const MAX_SEARCH = 30;
+
+        const professionalInfo = professionalFilter
+            ? {
+                professional_filter: {
+                    requested: String(professional_name),
+                    professionals: professionalFilter,
+                    note: `Horários apenas de ${professionalFilter}. Outros profissionais atendem esta aplicação em horários que não estão nesta lista.`,
+                },
+            }
+            : {};
 
         const campaignInfo = campaignFilter
             ? {
@@ -396,7 +442,7 @@ serveMonitored("api-availability-sandbox", async (req) => {
                 const flat = filtered.map((s) => ({ time: s.time, professional: s.professional }));
                 await logSandboxCall(supabase, ctx, {
                     function_name: "api-availability-sandbox",
-                    label: `Consultou horários de ${dateStr.split("-").reverse().join("/")} à ${periodLabel} (${flat.length} livres)`,
+                    label: `Consultou horários de ${dateStr.split("-").reverse().join("/")} à ${periodLabel} (${flat.length} livres)${sufixoProf}`,
                     request: body,
                 });
                 return new Response(JSON.stringify({
@@ -409,6 +455,7 @@ serveMonitored("api-availability-sandbox", async (req) => {
                     slots: flat,
                     ...campaignInfo,
                     ...convenioInfo,
+                    ...professionalInfo,
                     ...sandboxInfo,
                 }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
             }
@@ -426,7 +473,7 @@ serveMonitored("api-availability-sandbox", async (req) => {
                     const sFlat = sFiltered.map((s) => ({ time: s.time, professional: s.professional }));
                     await logSandboxCall(supabase, ctx, {
                         function_name: "api-availability-sandbox",
-                        label: `Sem horários em ${dateStr.split("-").reverse().join("/")}; ofereceu ${sDateStr.split("-").reverse().join("/")}`,
+                        label: `Sem horários em ${dateStr.split("-").reverse().join("/")}; ofereceu ${sDateStr.split("-").reverse().join("/")}${sufixoProf}`,
                         request: body,
                     });
                     return new Response(JSON.stringify({
@@ -441,6 +488,7 @@ serveMonitored("api-availability-sandbox", async (req) => {
                         slots: sFlat,
                         ...campaignInfo,
                         ...convenioInfo,
+                        ...professionalInfo,
                         ...sandboxInfo,
                     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
                 }
@@ -450,7 +498,7 @@ serveMonitored("api-availability-sandbox", async (req) => {
 
             await logSandboxCall(supabase, ctx, {
                 function_name: "api-availability-sandbox",
-                label: `Consultou horários e não achou nada nos próximos 30 dias (${periodLabel})`,
+                label: `Consultou horários e não achou nada nos próximos 30 dias (${periodLabel})${sufixoProf}`,
                 request: body,
             });
             return new Response(JSON.stringify({
@@ -460,6 +508,7 @@ serveMonitored("api-availability-sandbox", async (req) => {
                 slots: [],
                 ...campaignInfo,
                 ...convenioInfo,
+                ...professionalInfo,
                 ...sandboxInfo,
             }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
@@ -504,7 +553,7 @@ serveMonitored("api-availability-sandbox", async (req) => {
 
         await logSandboxCall(supabase, ctx, {
             function_name: "api-availability-sandbox",
-            label: `Consultou a agenda de "${sc.name}" (${availability.length} dia(s) com horário)`,
+            label: `Consultou a agenda de "${sc.name}" (${availability.length} dia(s) com horário)${sufixoProf}`,
             request: body,
         });
 
@@ -514,6 +563,7 @@ serveMonitored("api-availability-sandbox", async (req) => {
             availability,
             ...campaignInfo,
             ...convenioInfo,
+            ...professionalInfo,
             ...sandboxInfo,
         }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     } catch (error) {
