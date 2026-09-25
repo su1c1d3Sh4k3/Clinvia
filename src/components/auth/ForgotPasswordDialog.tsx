@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Loader2, Mail } from "lucide-react";
+import { mensagemDoErroDaFuncao } from "@/lib/functionError";
 
 export function ForgotPasswordDialog() {
     const [email, setEmail] = useState("");
@@ -30,10 +31,15 @@ export function ForgotPasswordDialog() {
                 body: { email: email.trim() },
             });
 
-            if (error) throw error;
+            // Em não-2xx o `invoke` troca a mensagem pela frase fixa e joga o
+            // corpo em `error.context` — `data` vem null, então o `!data.success`
+            // abaixo nunca chegava a rodar no caminho de erro.
+            if (error) {
+                throw new Error(await mensagemDoErroDaFuncao(error, "Não foi possível solicitar a recuperação de senha."));
+            }
 
             if (!data?.success) {
-                throw new Error(data?.message || "Erro ao solicitar recuperação de senha.");
+                throw new Error(data?.message || data?.error || "Não foi possível solicitar a recuperação de senha.");
             }
 
             toast.success("Se o email estiver cadastrado, você receberá o link para criar uma nova senha.");
@@ -41,7 +47,7 @@ export function ForgotPasswordDialog() {
             setEmail("");
         } catch (error: any) {
             console.error("Forgot password error:", error);
-            toast.error("Erro ao solicitar recuperação de senha. Tente novamente.");
+            toast.error(error?.message || "Não foi possível solicitar a recuperação de senha.");
         } finally {
             setIsLoading(false);
         }

@@ -58,3 +58,18 @@ jobs:
 
       - name: functions.invoke sem tratar o error
         run: npm run lint:invoke
+
+  # Terceiro da familia, e o espelho do segundo na outra ponta: o front que
+  # engole o motivo x a function que devolve motivo demais. Tambem nao depende
+  # de segredo -- le so o repositorio.
+  erro-cru-na-resposta:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Texto cru de erro interno no corpo da resposta
+        run: python supabase/tests/security/item_erro_cru_na_resposta/check.py

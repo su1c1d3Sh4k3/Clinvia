@@ -26,6 +26,22 @@ export interface ApiErrorInit {
     message: string;
     /** detalhe técnico (mensagem do Postgres, corpo de resposta HTTP, ...) */
     details?: string;
+    /**
+     * Detalhe técnico que vai para o LOG e para o INCIDENTE, e **nunca** para o
+     * corpo da resposta.
+     *
+     * Existe porque `details` só é seguro quando o chamador é o n8n — que é a
+     * premissa deste arquivo. Numa function anônima (`verify_jwt = false`) ou
+     * chamada pela tela do cliente, o texto cru do Postgres/Auth nomeia tabela,
+     * coluna e policy para quem apenas sabe a URL.
+     *
+     * Sanitizar o corpo SEM este campo seria trocar vazamento por cegueira: o
+     * `serveMonitored` monta a mensagem do incidente lendo o CORPO da resposta
+     * 5xx, então um corpo limpo produziria um incidente sem motivo nenhum.
+     * Quem usa `internalDetails` precisa de `report: true` junto — é ele que
+     * carrega o motivo real para o painel e marca a resposta como já reportada.
+     */
+    internalDetails?: string;
     /** campos extras que o chamador já lia antes (ex.: deal_id) */
     extra?: Record<string, unknown>;
     /**
@@ -58,14 +74,16 @@ export function apiError(headers: Record<string, string>, init: ApiErrorInit): R
     };
     if (init.details) body.details = init.details;
 
-    console.error(`[api-error ${init.status} ${init.code}] ${init.message}${init.details ? ` | ${init.details}` : ""}`);
+    const tecnico = [init.details, init.internalDetails].filter(Boolean).join(" | ");
+
+    console.error(`[api-error ${init.status} ${init.code}] ${init.message}${tecnico ? ` | ${tecnico}` : ""}`);
 
     // Não bloqueia: reportIncident volta na hora e envia num microtask.
     if (init.report) {
         reportIncident({
             route: init.code,
             httpCode: init.status,
-            message: [init.message, init.details].filter(Boolean).join(" | "),
+            message: [init.message, tecnico].filter(Boolean).join(" | "),
             request: init.request,
         });
     }
