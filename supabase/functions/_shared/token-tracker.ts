@@ -130,7 +130,25 @@ async function getEncryptionKey(): Promise<CryptoKey | null> {
 export async function encryptToken(plainToken: string): Promise<string | null> {
     try {
         const key = await getEncryptionKey();
-        if (!key) return null; // Sem chave = armazena em plaintext (compatibilidade)
+        if (!key) {
+            // ESTE e o caminho que acontece de verdade, e ele era o unico MUDO:
+            // `token:cripto-falhou` so era relatado pelo `catch` abaixo, que exige
+            // uma excecao do WebCrypto. Secret ausente nao lanca — devolvia `null`
+            // em silencio e cabia ao chamador nao gravar em claro. Um dos dois
+            // chamadores nao fazia isso.
+            //
+            // O contrato agora e: quem recebe `null` NAO GRAVA. Nenhum caminho
+            // deste arquivo devolve a chave do cliente para ser escrita em claro.
+            console.error('[encryptToken] OPENAI_TOKEN_ENCRYPTION_KEY not set');
+            reportIncident({
+                component: 'token:cripto-falhou',
+                route: 'encrypt_token',
+                httpCode: 500,
+                message: 'nao foi possivel criptografar a chave da OpenAI — ela NAO foi gravada',
+                context: { motivo: 'chave_de_criptografia_ausente' },
+            });
+            return null;
+        }
 
         const iv = crypto.getRandomValues(new Uint8Array(12));
         const encoded = new TextEncoder().encode(plainToken);
@@ -149,15 +167,16 @@ export async function encryptToken(plainToken: string): Promise<string | null> {
         return 'enc:' + btoa(String.fromCharCode(...combined));
     } catch (err) {
         console.error('[encryptToken] Error:', err);
-        // Devolver null aqui faz o chamador guardar a chave do cliente em texto
-        // puro no banco. Falhar em silencio nisto e criar um vazamento por
-        // acidente, entao isto grita.
+        // Mesmo contrato do ramo acima: `null` significa NAO GRAVOU. O texto
+        // antigo dizia "seria gravada em texto puro" e descrevia o defeito que
+        // existia em `admin-update-profile`, hoje corrigido.
         reportIncident({
             component: 'token:cripto-falhou',
             route: 'encrypt_token',
             httpCode: 500,
             error: err,
-            message: 'nao foi possivel criptografar a chave da OpenAI — ela seria gravada em texto puro',
+            message: 'nao foi possivel criptografar a chave da OpenAI — ela NAO foi gravada',
+            context: { motivo: 'excecao_do_webcrypto' },
         });
         return null;
     }

@@ -135,6 +135,36 @@ c21 as (
            'painel=' || coalesce(bool_or(somente_painel)::text, '(ausente)')
       from public.incident_component_catalog
      where component = 'recebimento:banco-'
+),
+-- 22. O DESFECHO, nao o caminho. Ate 25/09 `encryptToken` devolvendo null deixava
+--     `admin-update-profile` gravar a chave do cliente em claro: o `if (encrypted)`
+--     nao tinha `else`. O codigo agora recusa a escrita, mas o que importa medir e
+--     a COLUNA — esta linha pega o vazamento por qualquer caminho, inclusive um
+--     chamador novo que ninguem reviu. Conta, nunca mostra: o valor e credencial.
+c22 as (
+    select 22, 'nenhuma chave OpenAI em texto puro em profiles',
+           case when count(*) = 0 then 'ok' else 'FALHOU' end,
+           count(*)::text || ' de ' ||
+           (select count(*) from public.profiles
+             where openai_token is not null and btrim(openai_token) <> '')::text ||
+           ' chave(s) sem o prefixo enc:'
+      from public.profiles
+     where openai_token is not null
+       and btrim(openai_token) <> ''
+       and openai_token not like 'enc:%'
+),
+-- 23. Texto do alerta batendo com o comportamento. A descricao original mandava
+--     "procurar em profiles.openai_token as linhas SEM o prefixo enc:" — instrucao
+--     correta para o codigo de ontem e enganosa para o de hoje, que nao grava
+--     nada. Alerta que manda procurar no lugar errado custa o plantao inteiro.
+c23 as (
+    select 23, 'token:cripto-falhou nao promete mais chave em texto puro',
+           case when count(*) = 0 then 'ok' else 'FALHOU' end,
+           case when count(*) = 0 then 'descricao fala em recusa de escrita'
+                else 'descricao/acao ainda citam TEXTO PURO' end
+      from public.incident_component_catalog
+     where component = 'token:cripto-falhou'
+       and (descricao ilike '%texto puro%' or acao_padrao ilike '%enc:%')
 )
 select * from c_linhas
 union all select * from c13
@@ -146,4 +176,6 @@ union all select * from c18
 union all select * from c19
 union all select * from c20
 union all select * from c21
+union all select * from c22
+union all select * from c23
 order by ord;

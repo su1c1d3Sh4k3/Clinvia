@@ -50,13 +50,24 @@ serveMonitored("admin-update-profile", async (req) => {
             }
         }
 
-        // 🔐 Criptografar token OpenAI antes de salvar
+        // 🔐 Criptografar token OpenAI antes de salvar.
+        // Sem o `else` abaixo, `encryptToken` devolvendo null deixava o texto puro
+        // em `sanitizedUpdates` e o update gravava a chave do cliente em claro —
+        // vazamento criado pelo próprio código, em silêncio. Falhou, não grava.
         if (sanitizedUpdates.openai_token && typeof sanitizedUpdates.openai_token === 'string') {
             const encrypted = await encryptToken(sanitizedUpdates.openai_token);
-            if (encrypted) {
-                sanitizedUpdates.openai_token = encrypted;
-                console.log('[admin-update-profile] Token encrypted before storage');
+            if (!encrypted) {
+                return new Response(
+                    JSON.stringify({
+                        success: false,
+                        error: 'A chave não foi salva: a criptografia falhou. Gravá-la em texto puro no banco seria um vazamento. O time da plataforma já foi avisado — tente de novo em alguns minutos.',
+                        code: 'encryption_key_missing',
+                    }),
+                    { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                );
             }
+            sanitizedUpdates.openai_token = encrypted;
+            console.log('[admin-update-profile] Token encrypted before storage');
         }
 
         // Chave colada a mão = chave DO CLIENTE: markup 0 e `billable = false`.
