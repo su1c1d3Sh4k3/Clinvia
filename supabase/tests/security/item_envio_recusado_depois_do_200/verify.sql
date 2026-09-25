@@ -2,12 +2,19 @@
 -- Leitura pura: nenhuma linha e criada, alterada ou apagada.
 -- Statement unico de proposito: o CLI so devolve as linhas do ultimo statement.
 
+-- MUDANCA DE DECISAO EM 25/09/2026, por ordem nominal dele: recusa AVULSA da
+-- Meta deixou de acordar o telefone. O que acorda agora e defeito nosso
+-- (envio:defeito-, alta), conta inteira (envio:conta-, critica) e VOLUME acima
+-- de 3x a media de 7 dias (envio:pico-diario, alta). As duas familias abaixo
+-- ficam no painel — o atendente ja ve a caixa vermelha no cartao da mensagem.
+-- As checagens 1, 2 e 6 cobravam o oposto e foram INVERTIDAS de proposito.
 with
--- 1-2. As duas familias existem, ativas, com o piso de gravidade combinado.
+-- 1-2. As duas familias existem, ativas, com o piso de gravidade combinado e
+--      agora marcadas somente_painel.
 c1 as (
     select 1 as ord,
-           'envio:rejeitado- catalogado como alta e nao somente_painel' as checagem,
-           case when severidade_padrao = 'alta' and somente_painel = false
+           'envio:rejeitado- catalogado como alta e somente_painel' as checagem,
+           case when severidade_padrao = 'alta' and somente_painel
                  and is_active and match_tipo = 'prefixo'
                 then 'ok' else 'FALHOU' end as resultado,
            severidade_padrao || ' / painel=' || somente_painel::text as detalhe
@@ -15,8 +22,8 @@ c1 as (
      where component = 'envio:rejeitado-'
 ),
 c2 as (
-    select 2, 'envio:bloqueado- catalogado como media e nao somente_painel',
-           case when severidade_padrao = 'media' and somente_painel = false
+    select 2, 'envio:bloqueado- catalogado como media e somente_painel',
+           case when severidade_padrao = 'media' and somente_painel
                  and is_active and match_tipo = 'prefixo'
                 then 'ok' else 'FALHOU' end,
            severidade_padrao || ' / painel=' || somente_painel::text
@@ -48,12 +55,13 @@ c5 as (
                 then 'ok' else 'FALHOU' end,
            public.incident_severidade_efetiva('envio:bloqueado-131047 (pele-10)', 'critica')
 ),
--- 6. Nenhuma das duas cai na peneira que segura alerta no painel. Se alguem
---    marcar somente_painel um dia, este teste e que avisa.
+-- 6. As duas ficam na peneira que segura alerta no painel. Se alguem tirar
+--    somente_painel de uma delas, recusa avulsa volta a acordar o telefone —
+--    e este teste e que avisa.
 c6 as (
-    select 6, 'nenhuma das duas familias e somente_painel',
-           case when count(*) = 0 then 'ok' else 'FALHOU' end,
-           count(*)::text || ' marcada(s)'
+    select 6, 'as duas familias sao somente_painel',
+           case when count(*) = 2 then 'ok' else 'FALHOU' end,
+           count(*)::text || ' de 2 marcada(s)'
       from public.incident_component_catalog
      where component in ('envio:rejeitado-', 'envio:bloqueado-')
        and somente_painel

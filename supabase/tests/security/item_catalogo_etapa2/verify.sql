@@ -61,6 +61,16 @@ union all
 -- conversa muda na fila da IA) ou e incidente de seguranca/fatura
 -- (`token:cripto-*` grava a chave do cliente em texto puro; `token:cripto-
 -- ausente`/`-ilegivel` jogam o consumo dele na chave da plataforma).
+--
+-- 25/09/2026, segunda leva: os 4 de `20260925200000`, tambem por ordem nominal
+-- dele. A recusa AVULSA da Meta ficou so-painel (`envio:rejeitado-`,
+-- `envio:bloqueado-`) exatamente para que estes quatro signifiquem alguma coisa
+-- quando tocarem: `envio:defeito-` e defeito NOSSO (131008/131009/131021/
+-- 131045), `envio:conta-` e a conta inteira barrada (131031/131042),
+-- `envio:pico-diario` e volume do dia acima de 3x a media de 7 dias com piso de
+-- 10, e `recebimento:fila-parada` e payload de paciente represado ha mais de 10
+-- minutos. Nenhum dispara por mensagem individual: ou e classe de falha nossa,
+-- ou e a conta inteira, ou e agregado do dia.
 -- Quem acrescentar um componente `alta` novo sem passar por aqui reprova.
 select format('%-6s componentes novos que acordariam telefone: %s (tem que ser 0)',
               case when count(*) = 0 then 'ok' else 'FALHOU' end, count(*))
@@ -74,5 +84,9 @@ select format('%-6s componentes novos que acordariam telefone: %s (tem que ser 0
                          'n8n:repasse-falhou',
                          'token:cripto-falhou',
                          'token:cripto-ausente',
-                         'token:cripto-ilegivel')
+                         'token:cripto-ilegivel',
+                         'envio:defeito-',
+                         'envio:conta-',
+                         'envio:pico-diario',
+                         'recebimento:fila-parada')
 order by 1;
