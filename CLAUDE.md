@@ -80,6 +80,38 @@ Python integration tests live in `tests/` (test_*.py, grouped by domain: appoint
 - Real credentials live in `.env` at repo root — check before asking the user
 - **There is no log warehouse.** `edge_logs`, `function_edge_logs`, `postgres_logs` and friends answer `Table "X" does not exist`, and `logs.all` returns 410. `console.error` in an edge function writes nowhere and cannot be read back. Anything you need to diagnose later must be written to a TABLE. To inspect a deployed function's actual code, fetch the published bundle: `GET /v1/projects/{ref}/functions/<slug>/body`
 
+### Reissuing a DB function silently deletes the previous migration's fix
+
+`create or replace function` replaces the WHOLE body. A migration written from an older copy
+of the source therefore erases guards added in between, and **nothing fails** — the function
+goes back to being wrong, which is worse than breaking. This has already happened twice; the
+last casualty was the `v_ok_recente` guard in `canal_alertas_scan`, added 23/09 and gone by 24/09.
+
+Mandatory before any `create or replace function` in a migration:
+
+1. Read the **live** version — `select pg_get_functiondef(oid) from pg_proc …`, never the old
+   migration file — and diff it against what you are about to write.
+2. **List every removal in the report.** A reissue that drops something and says nothing is a
+   regression shipped on purpose.
+3. If the removal was not intentional, put it back and pin it with a verify that greps
+   `pg_get_functiondef` for the guard (model: `item_canal_mudo_contraste/verify.sql`), so the
+   next reissue fails in the suite instead of on his phone.
+
+### Run the access-test suite before applying a migration
+
+`python supabase/tests/security/_suite/rodar.py [filtro …]` runs every `*/verify.sql`, exits 1 on
+any `CONFERIR`. Without a filter it takes minutes (see below) — run it in the background while
+you write the migration, and always run at least the folders related to what you are touching.
+
+- The suite is **sequential by measurement, not by caution**: each `supabase db query` mints the
+  temp role `cli_login_postgres` with a new password, so two concurrent calls kill each other with
+  `28P01`. Setting `SUPABASE_DB_PASSWORD` and connecting directly would collapse the whole run
+  into one session.
+- Two verifies write to real tables (`item_entrada_invalida`, `item_silencio_sql`) and are
+  excluded from the automatic run by name.
+- Roughly half the verifies have no `status ok|CONFERIR` column — they dump measurements for a
+  human. They run, and the runner marks them `sem veredito`. A new verify must have the column.
+
 ### Two service keys coexist, and the gateway hides the difference (23/09/2026)
 
 The project migrated to the new API keys, but the migration was partial:

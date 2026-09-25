@@ -42,19 +42,23 @@ checagens as (
 
     -- ── B. cobertura: nenhum nome emissivel fica sem linha ───────────────────
     union all
+    -- "catalogado" e a EXISTENCIA da linha, nao uma coluna: a funcao devolve
+    -- zero linhas para componente fora do catalogo. Ate 24/09 havia a coluna
+    -- `catalogado`, que valia sempre `true`; a re-emissao da funcao em
+    -- 20260924180000 a removeu e estas tres checagens pararam de EXECUTAR
+    -- (42703), silenciosamente, porque o verify so rodava no dia em que nasceu.
     select 'B1 todo literal do banco resolve no catalogo',
            not exists (
                select 1 from literais l
-               left join lateral public.incident_component_info(l.componente) i on true
-               where coalesce(i.catalogado, false) is false
+               where not exists (select 1 from public.incident_component_info(l.componente))
            )
     union all
     -- os dois componentes emitidos por edge function, que o regex de SQL nao ve
     select 'B2 componente do alert-notify catalogado',
-           (select catalogado from public.incident_component_info('monitoramento:componente-nao-catalogado'))
+           exists (select 1 from public.incident_component_info('monitoramento:componente-nao-catalogado'))
     union all
     select 'B3 componente do incident-analyze catalogado',
-           (select catalogado from public.incident_component_info('monitoramento:analise-indisponivel'))
+           exists (select 1 from public.incident_component_info('monitoramento:analise-indisponivel'))
 
     -- ── C. o defeito de 23/09: nome do emissor x nome do catalogo ────────────
     -- 'openai-alerts' NAO casava com o prefixo 'openai:' por causa do hifen, e
@@ -89,7 +93,7 @@ checagens as (
                select 1 from unnest(array['sync-openai-usage', 'openai-provision-worker',
                                           'automation-send-queue', 'api-public-booking']) c
                left join lateral public.incident_component_info(c) i on true
-               where coalesce(i.catalogado, false) is false
+               where i.component is null
                   or i.natureza is distinct from 'servico'
            )
     union all

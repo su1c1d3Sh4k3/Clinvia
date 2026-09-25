@@ -41,8 +41,14 @@ checagens as (
 
     -- ── B. o defeito: media/baixa saiam na hora ──────────────────────────────
     union all
+    -- Atualizado em 24/09: desde 23/09 o corte usa a gravidade EFETIVA, nao a
+    -- coluna crua. Ler `ai_severity` direto ignorava o piso do catalogo e
+    -- segurava critico enquanto o analisador estivesse fora do ar. O verify
+    -- continuou cobrando o texto velho e acusava falso negativo — invisivel,
+    -- porque so rodava no dia em que nasceu.
     select 'B1 claim exige critica ou alta',
-           (select prosrc like '%and i.ai_severity in (''critica'', ''alta'')%' from src
+           (select prosrc like '%incident_severidade_efetiva(i.component, i.ai_severity)%'
+                   and prosrc like '%(''critica'', ''alta'')%' from src
              where proname = 'incident_claim_for_notification')
     union all
     -- a condicao velha era uma DISJUNCAO: "analisado OU (critica/alta e 2 min)".
@@ -52,7 +58,8 @@ checagens as (
              where proname = 'incident_claim_for_notification')
     union all
     select 'B3 portao exige critica ou alta',
-           (select prosrc like '%and i.ai_severity in (''critica'', ''alta'')%' from src
+           (select prosrc like '%incident_severidade_efetiva(i.component, i.ai_severity)%'
+                   and prosrc like '%(''critica'', ''alta'')%' from src
              where proname = 'incident_notify_pending_count')
     union all
     select 'B4 disjuncao antiga sumiu do portao',
@@ -67,9 +74,13 @@ checagens as (
 
     -- ── C. o caminho agrupado, que nao existia ───────────────────────────────
     union all
-    select 'C1 cron alert-summary agendado e ativo',
+    -- O MINUTO nao entra na checagem de proposito: 20260924230000 espalhou os
+    -- crons para fora do :00 justamente porque a concorrencia no minuto cheio
+    -- estourava a folga de conexao do banco. Fixar o minuto aqui faria a proxima
+    -- recalibragem reprovar um acerto.
+    select 'C1 cron alert-summary agendado e ativo de 2 em 2 horas',
            exists (select 1 from cron.job
-                    where jobname = 'alert-summary' and active and schedule = '0 */2 * * *')
+                    where jobname = 'alert-summary' and active and schedule like '% */2 * * *')
     union all
     select 'C2 invocador do resumo tem portao de fila vazia',
            (select prosrc like '%incident_summary_pending(2)%' and prosrc like '%return;%' from src
@@ -83,9 +94,15 @@ checagens as (
            (select prosrc like '%clinvia_http_post%' and prosrc like '%cron:alert-summary%' from src
              where proname = 'invoke_alert_summary')
     union all
+    -- O ramo `ai_severity is null` deixou de existir porque deixou de ser
+    -- preciso: o resumo passou a cortar pela gravidade EFETIVA, e efetiva de
+    -- nulo nunca e nula (cai no piso do catalogo, default media). O buraco que
+    -- esta checagem existe para impedir — incidente sem gravidade nao ir a lugar
+    -- nenhum — agora se prova assim.
     select 'C5 severidade nula tem caminho (cai no resumo)',
-           (select prosrc like '%i.ai_severity is null%' from src
+           (select prosrc like '%incident_severidade_efetiva%' from src
              where proname = 'incident_summary_pending')
+           and public.incident_severidade_efetiva('zzz:inexistente', null) is not null
 
     -- ── D. os dois caminhos nao se cruzam nem deixam buraco ──────────────────
     union all
@@ -111,9 +128,19 @@ checagens as (
     union all
     -- a marca e excecao, nao regra: se ela vazar para um componente de operacao,
     -- o alerta dele fica mudo para sempre e ninguem percebe
-    select 'E3 so um componente do catalogo e somente_painel',
-           (select count(*) = 1 from public.incident_component_catalog
-             where is_active and somente_painel)
+    -- Era `count(*) = 1` e virou lista nominal: quatro marcas novas entraram
+    -- por decisao (teste, simulacao, erro de entrada do chamador, erro de tela),
+    -- e contar so avisaria que o numero mudou, sem dizer QUEM. O que precisa
+    -- falhar e componente de OPERACAO ganhando a marca — esse fica mudo para
+    -- sempre e ninguem percebe.
+    select 'E3 somente_painel so nos componentes que foram decididos assim',
+           not exists (
+               select 1 from public.incident_component_catalog
+                where is_active and somente_painel
+                  and component not in ('entrada:', 'front:', 'simulacao-de-alerta',
+                                        'zz-teste:',
+                                        'monitoramento:componente-nao-catalogado')
+           )
     union all
     select 'E4 analise-indisponivel continua indo ao WhatsApp',
            (select somente_painel = false from public.incident_component_info('monitoramento:analise-indisponivel'))

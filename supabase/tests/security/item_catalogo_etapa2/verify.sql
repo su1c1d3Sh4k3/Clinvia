@@ -42,7 +42,9 @@ select format('%-6s %-30s esperado=%-8s obtido=%-8s catalogado=%s  painel=%s',
                    then 'ok' else 'FALHOU' end,
               a.component, a.esperado,
               public.incident_severidade_efetiva(a.component, null),
-              coalesce((select c.catalogado from public.incident_component_info(a.component) c), false),
+              -- catalogado = a linha EXISTE. A coluna homonima valia sempre
+              -- `true` e sumiu na re-emissao de 20260924180000 (42703).
+              exists (select 1 from public.incident_component_info(a.component)),
               coalesce((select c.somente_painel from public.incident_component_info(a.component) c), false)
        ) as linha
   from alvos a

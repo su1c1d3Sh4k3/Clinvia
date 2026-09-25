@@ -640,7 +640,6 @@ type Catalogo = {
      * critico.
      */
     severidadePadrao: Severity;
-    catalogado: boolean;
 };
 
 /**
@@ -652,7 +651,12 @@ async function catalogoDoComponente(supabase: Db, componente: string): Promise<C
     const { data, error } = await supabase.rpc("incident_component_info", { p_component: componente });
     const row = Array.isArray(data) ? data[0] : data;
 
-    if (error || !row?.catalogado) {
+    // "Nao catalogado" e a AUSENCIA de linha, nao uma coluna: a funcao devolve
+    // zero linhas quando o componente nao esta no catalogo. Ate 24/09 isso era
+    // lido por uma coluna `catalogado` que valia sempre `true` — a re-emissao da
+    // funcao em 20260924180000 a removeu, `row.catalogado` virou `undefined` e
+    // TODO componente passou a ser tratado como fora do catalogo.
+    if (error || !row) {
         await supabase.rpc("incident_record", {
             p_payload: {
                 source: "db_job",
@@ -682,7 +686,6 @@ async function catalogoDoComponente(supabase: Db, componente: string): Promise<C
             oQueFaz: "componente não catalogado",
             acaoPadrao: null,
             severidadePadrao: "media",
-            catalogado: false,
         };
     }
 
@@ -691,7 +694,6 @@ async function catalogoDoComponente(supabase: Db, componente: string): Promise<C
         oQueFaz: row.descricao,
         acaoPadrao: row.acao_padrao ?? null,
         severidadePadrao: (row.severidade_padrao as Severity) ?? "media",
-        catalogado: true,
     };
 }
 

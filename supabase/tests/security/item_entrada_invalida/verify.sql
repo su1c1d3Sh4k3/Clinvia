@@ -39,7 +39,9 @@ select 'cadastro', jsonb_build_object(
     'ok_familia_entrada_e_somente_painel', (
         select c.somente_painel from public.incident_component_catalog c where c.component = 'entrada:'),
     'ok_familia_entrada_casa_por_prefixo', (
-        select ci.component = 'entrada:' and ci.catalogado and ci.somente_painel
+        -- casar = vir linha; a coluna `catalogado` (sempre `true`) sumiu na
+        -- re-emissao da funcao em 20260924180000.
+        select ci.component = 'entrada:' and ci.somente_painel
           from public.incident_component_info('entrada:api-scheduling') ci),
     'ok_detectores_nao_sao_somente_painel', (
         select count(*) = 2 from public.incident_component_catalog c

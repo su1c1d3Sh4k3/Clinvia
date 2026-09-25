@@ -57,8 +57,11 @@ with checagens as (
     select 'C1 detector exato vence prefixo',
            (select natureza = 'detector' from public.incident_component_info('openai:daily_anomaly'))
     union all
+    -- "catalogado" e a EXISTENCIA da linha: a coluna homonima existiu ate
+    -- 24/09 valendo sempre `true` e sumiu na re-emissao da funcao em
+    -- 20260924180000, derrubando este verify inteiro com 42703.
     select 'C2 prefixo cobre cron novo',
-           (select catalogado from public.incident_component_info('cron:um-job-que-nao-existe'))
+           exists (select 1 from public.incident_component_info('cron:um-job-que-nao-existe'))
     union all
     select 'C3 componente desconhecido nao inventa descricao',
            not exists (select 1 from public.incident_component_info('zzz:inexistente'))
@@ -87,8 +90,13 @@ with checagens as (
     union all
     -- O claim NAO e chamado aqui de proposito: ele reserva por 5 minutos e
     -- atrasaria alerta de verdade. A condicao e verificada no texto da funcao.
+    -- Corrigido em 24/09: o portao cobrava `i.ai_severity`, e ler a coluna CRUA
+    -- ignora o piso do catalogo — analisador fora do ar segurava critico por 2h.
+    -- Desde 23/09 ele usa a gravidade EFETIVA; o verify ficou cobrando o texto
+    -- velho e acusava falso negativo, o que ninguem viu porque nunca rodou de novo.
     select 'D4 media/baixa sem analise continuam fora da fila',
-           (select p.prosrc like '%i.ai_severity in (''critica'', ''alta'')%'
+           (select p.prosrc like '%incident_severidade_efetiva(i.component, i.ai_severity)%'
+                   and p.prosrc like '%(''critica'', ''alta'')%'
                    and p.prosrc like '%i.analyzed_at is not null%'
               from pg_proc p
               join pg_namespace n on n.oid = p.pronamespace

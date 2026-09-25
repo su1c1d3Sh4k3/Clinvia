@@ -129,7 +129,9 @@ select * from (
     -- O prefixo `front:` tem de casar mesmo com a rota variando, senao cada
     -- tela nova do produto abriria um "componente nao catalogado" junto.
     select 7, 'o prefixo front: cobre a rota sem cadastro por rota',
-           case when (select catalogado from cat) then 'ok' else 'FALHOU' end,
+           -- casou = a CTE `cat` trouxe linha (a coluna `catalogado`, sempre
+           -- `true`, sumiu na re-emissao de 20260924180000).
+           case when exists (select 1 from cat) then 'ok' else 'FALHOU' end,
            coalesce((select component from cat), '(nao casou)')
 
     union all

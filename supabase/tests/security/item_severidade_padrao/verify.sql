@@ -47,9 +47,15 @@ checagens as (
     select 'B4 api-public-booking sem analise da IA e alta',
            public.incident_severidade_efetiva('api-public-booking', null) = 'alta'
     union all
-    -- a IA continua podendo SUBIR e DESCER: ela vence o catalogo
-    select 'B5 IA desce a gravidade de um componente critico',
-           public.incident_severidade_efetiva('alert-notify', 'baixa') = 'baixa'
+    -- INVERTIDO em 24/09, e a inversao e o ponto: cobrava que a IA pudesse
+    -- DESCER a gravidade de um componente critico. O piso do catalogo e PISO,
+    -- nao teto — a funcao devolve o PIOR dos dois — entao esta linha so passaria
+    -- se o piso estivesse quebrado. Descer so acontece com `severidade_teto`
+    -- preenchido, que e excecao decidida por componente.
+    select 'B5 IA nao desce a gravidade de um componente critico sem teto',
+           public.incident_severidade_efetiva('alert-notify', 'baixa') = 'critica'
+           and (select severidade_teto is null from public.incident_component_catalog
+                 where component = 'alert-notify' and is_active)
     union all
     select 'B6 IA sobe a gravidade de um componente baixo',
            public.incident_severidade_efetiva('simulacao-de-alerta', 'critica') = 'critica'
@@ -138,9 +144,17 @@ checagens as (
            (select severidade_padrao = 'baixa'
               from public.incident_component_info('gemini:flash_indisponivel'))
     union all
-    select 'E7 faxina interna segue somente_painel e so ela',
-           (select count(*) = 1 from public.incident_component_catalog
-             where is_active and somente_painel)
+    -- Lista nominal em vez de contagem: quatro marcas novas entraram por decisao
+    -- e contar so avisa que o numero mudou, sem dizer quem. O que precisa falhar
+    -- e componente de OPERACAO ganhando a marca — esse fica mudo para sempre.
+    select 'E7 somente_painel so nos componentes que foram decididos assim',
+           not exists (
+               select 1 from public.incident_component_catalog
+                where is_active and somente_painel
+                  and component not in ('entrada:', 'front:', 'simulacao-de-alerta',
+                                        'zz-teste:',
+                                        'monitoramento:componente-nao-catalogado')
+           )
     union all
     select 'E8 catalogo sem instrucao de cadastro na descricao',
            not exists (select 1 from public.incident_component_catalog
