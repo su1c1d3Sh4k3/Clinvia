@@ -23,13 +23,27 @@ type CorpoDeErro = { message?: string; error?: string; code?: string | number };
  * 502 do gateway) — aí quem chama decide o texto de reserva.
  */
 export async function corpoDoErroDaFuncao(error: unknown): Promise<CorpoDeErro | null> {
+    const contexto = (error as {
+        context?: { json?: () => Promise<unknown>; clone?: () => { json: () => Promise<unknown> } };
+    })?.context;
+    if (!contexto) return null;
     try {
-        const corpo = await (error as { context?: { json?: () => Promise<unknown> } })
-            ?.context?.json?.();
+        // `context` é uma Response, e o corpo de uma Response só pode ser lido
+        // UMA vez. Sem o clone, a segunda leitura estoura e o chamador recebe
+        // `null` achando que a function não explicou nada — quem quer o motivo
+        // E o corpo cru (telas de diagnóstico) perdia um dos dois em silêncio.
+        const fonte = contexto.clone?.() ?? contexto;
+        const corpo = await fonte.json?.();
         return (corpo as CorpoDeErro) ?? null;
     } catch {
         return null;
     }
+}
+
+/** Código HTTP que a function devolveu, quando o erro carrega a Response. */
+export function statusDoErroDaFuncao(error: unknown): number | null {
+    const status = (error as { context?: { status?: number } })?.context?.status;
+    return typeof status === "number" ? status : null;
 }
 
 /**

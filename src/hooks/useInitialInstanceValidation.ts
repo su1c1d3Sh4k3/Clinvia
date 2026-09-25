@@ -30,6 +30,7 @@ async function validateOwnerOnce(ownerId: string): Promise<void> {
 
     const p = (async () => {
         try {
+            // eslint-disable-next-line no-restricted-syntax -- fire-and-forget
             await supabase.functions.invoke("uzapi-health-check", {
                 body: { owner_id: ownerId },
             });

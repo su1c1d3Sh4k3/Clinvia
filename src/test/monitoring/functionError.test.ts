@@ -4,7 +4,24 @@
 // "Edge Function returned a non-2xx status code" porque ninguem leu o corpo.
 
 import { describe, expect, it } from "vitest";
-import { corpoDoErroDaFuncao, mensagemDoErroDaFuncao } from "@/lib/functionError";
+import {
+    corpoDoErroDaFuncao,
+    mensagemDoErroDaFuncao,
+    statusDoErroDaFuncao,
+} from "@/lib/functionError";
+
+/** Imita a Response de verdade: o corpo só pode ser lido UMA vez. */
+function erroHttpResponseReal(corpo: unknown, status = 400) {
+    const e = new Error("Edge Function returned a non-2xx status code") as Error & {
+        context?: unknown;
+    };
+    e.name = "FunctionsHttpError";
+    e.context = new Response(JSON.stringify(corpo), {
+        status,
+        headers: { "Content-Type": "application/json" },
+    });
+    return e;
+}
 
 /** Imita o FunctionsHttpError do supabase-js: frase fixa + corpo em `context`. */
 function erroHttp(corpo: unknown) {
@@ -79,5 +96,19 @@ describe("mensagemDoErroDaFuncao", () => {
         await expect(mensagemDoErroDaFuncao(rede, "reserva")).resolves.toBe(
             "Failed to send a request to the Edge Function",
         );
+    });
+
+    // Tela de diagnostico precisa do motivo E do corpo cru. Sem o clone, a
+    // segunda leitura da Response estoura e um dos dois volta vazio.
+    it("le a Response duas vezes sem perder o corpo", async () => {
+        const erro = erroHttpResponseReal({ error: "token invalido", details: { fb: 190 } });
+        await expect(mensagemDoErroDaFuncao(erro, "reserva")).resolves.toBe("token invalido");
+        const corpo = await corpoDoErroDaFuncao(erro);
+        expect(corpo).toEqual({ error: "token invalido", details: { fb: 190 } });
+    });
+
+    it("expoe o codigo HTTP da function, e null quando nao ha Response", () => {
+        expect(statusDoErroDaFuncao(erroHttpResponseReal({ error: "x" }, 422))).toBe(422);
+        expect(statusDoErroDaFuncao(new Error("rede"))).toBeNull();
     });
 });

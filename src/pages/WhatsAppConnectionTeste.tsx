@@ -2,7 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { mensagemDoErroDaFuncao } from "@/lib/functionError";
+import {
+    corpoDoErroDaFuncao,
+    mensagemDoErroDaFuncao,
+    statusDoErroDaFuncao,
+} from "@/lib/functionError";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -233,44 +237,30 @@ const WhatsAppConnectionTeste = () => {
         setIsManualConnecting(true);
         setManualResult(null);
         try {
-            // Bypass do supabase.functions.invoke para conseguir ler o body
-            // cru da resposta (o wrapper do supabase-js engole 4xx).
-            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://swfshqvvbohnahdyndch.supabase.co";
-            const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY || "";
-            const { data: { session } } = await supabase.auth.getSession();
-            const userJwt = session?.access_token || supabaseAnonKey;
+            // Esta tela driblava o `functions.invoke` com `fetch` cru para
+            // conseguir ler o body de um 4xx. Isso é exatamente o que
+            // `functionError.ts` resolve — o corpo continua acessível por
+            // `error.context`, e agora sem repetir URL, anon key e JWT à mão.
+            const { data: body, error } = await supabase.functions.invoke(
+                "instagram-fb-manual-connect",
+                { body: { user_id: user.id, page_access_token: manualToken.trim() } },
+            );
 
-            const resp = await fetch(`${supabaseUrl}/functions/v1/instagram-fb-manual-connect`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${userJwt}`,
-                    apikey: supabaseAnonKey,
-                },
-                body: JSON.stringify({
-                    user_id: user.id,
-                    page_access_token: manualToken.trim(),
-                }),
-            });
-
-            const bodyText = await resp.text();
-            let body: any = null;
-            try {
-                body = JSON.parse(bodyText);
-            } catch {
-                body = { raw: bodyText };
-            }
-
-            if (!resp.ok || !body?.success) {
+            if (error || !body?.success) {
+                const status = statusDoErroDaFuncao(error);
+                const corpo = error ? await corpoDoErroDaFuncao(error) : body;
+                const motivo = error
+                    ? await mensagemDoErroDaFuncao(error, `HTTP ${status ?? "?"}`)
+                    : (body?.error || "Resposta sem `success`");
                 setManualResult({
                     success: false,
-                    http_status: resp.status,
-                    error: body?.error || body?.raw || `HTTP ${resp.status}`,
-                    details: body?.details ?? body,
+                    http_status: status ?? 200,
+                    error: motivo,
+                    details: (corpo as any)?.details ?? corpo,
                 });
                 toast({
-                    title: `Erro HTTP ${resp.status}`,
-                    description: body?.error || "Veja detalhes abaixo do botão",
+                    title: status ? `Erro HTTP ${status}` : "Erro",
+                    description: motivo || "Veja detalhes abaixo do botão",
                     variant: "destructive",
                 });
                 return;

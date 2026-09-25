@@ -134,9 +134,15 @@ export default function AdminClients({ canEdit, isSuperAdmin }: { canEdit: boole
                 let avatarMap: Record<string, string | null> = {};
 
                 try {
-                    const { data: avatarData } = await supabase.functions.invoke("admin-get-avatars", {
+                    // Avatar que não carrega é cosmético e não pode derrubar a
+                    // lista — mas em não-2xx o `avatarData` vem `null`, então o
+                    // `if` abaixo nunca dispara e a falha sumia sem rastro.
+                    const { data: avatarData, error: avatarError } = await supabase.functions.invoke("admin-get-avatars", {
                         body: { profileIds }
                     });
+                    if (avatarError) {
+                        console.warn("[Admin] avatares não carregados:", avatarError);
+                    }
                     if (avatarData?.success) {
                         avatarMap = avatarData.avatars || {};
                     }
@@ -378,6 +384,7 @@ export default function AdminClients({ canEdit, isSuperAdmin }: { canEdit: boole
     ) => {
         if (!profile.email) return;
         try {
+            // eslint-disable-next-line no-restricted-syntax -- fire-and-forget
             await supabase.functions.invoke("send-account-email", {
                 body: {
                     template,

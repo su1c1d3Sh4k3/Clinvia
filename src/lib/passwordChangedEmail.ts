@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
  *  fica só no console. */
 export async function notifyPasswordChanged(): Promise<void> {
     try {
+        // eslint-disable-next-line no-restricted-syntax -- fire-and-forget
         await supabase.functions.invoke("send-account-email", {
             body: {
                 template: "password_changed",
