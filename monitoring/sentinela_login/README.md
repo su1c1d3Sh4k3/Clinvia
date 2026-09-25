@@ -74,36 +74,62 @@ indistinguível de "tudo bem". É a terceira vez que esse padrão aparece neste
 projeto, depois do canal de alertas mudo e do vigia de cron que precisou se
 acusar.
 
-A resposta é um **e-mail diário em horário fixo** (`SENTINELA_DIARIO_HORA`). A
-ausência dele é o sinal. Ele sai todo dia, inclusive com falha aberta: o diário
-prova que a *sentinela* está viva, não que a aplicação está.
+Quem repara agora é a **plataforma**. Toda passada manda um *heartbeat* para a
+edge function `sentinela-heartbeat`; o cron `sentinela-health-watch` varre de 5
+em 5 minutos e, passados **10 minutos sem sinal**, abre
+`sentinela:parou-de-reportar` — crítica e **fora do painel**, porque quando ele
+dispara a sentinela está muda por definição e não existe segunda via.
+
+Antes disso era um e-mail diário cuja *ausência* era o sinal. Foi removido: uma
+mensagem de rotina todo dia ensina a ignorar mensagem, e reparar na falta de uma
+é a coisa mais fácil de não fazer. Supressão na origem, não na porta.
+
+A ação do alerta carrega as **duas** hipóteses de propósito: pode ser a VPS
+fora, ou pode ser a nossa própria função de heartbeat quebrada — nesse segundo
+caso o silêncio acusa a VPS com a VPS de pé.
 
 ## Onde ela mora
 
-Na **VPS de backup**. Uma sentinela hospedada dentro do que ela vigia fica muda
-exatamente quando deveria falar. A de backup é outra máquina, outra rede, e não
-compartilha destino com a produção nem com o Supabase.
+Na VPS **Hetzner `manager01` (178.156.178.7)**, via systemd, **fora do Swarm**.
+Uma sentinela hospedada dentro do que ela vigia fica muda exatamente quando
+deveria falar; fora do Swarm ela também sobrevive ao orquestrador.
 
-```sh
-scp -r monitoring/sentinela_login <vps-backup>:/tmp/
-ssh <vps-backup>
-sudo cp /tmp/sentinela_login/env.exemplo /etc/sentinela-login.env
-sudo nano /etc/sentinela-login.env      # preencher
-sudo bash /tmp/sentinela_login/instalar.sh
-```
+Instalação passo a passo, com os comandos prontos: **`INSTALACAO.md`**.
 
 Acompanhar: `journalctl -u sentinela-login.service -f`
 
 ## Por onde o aviso sai
 
-**E-mail direto pela Resend**, sem Supabase no caminho. A sentinela existe para
-o caso em que a plataforma está inacessível; um aviso que precise da plataforma
-morre junto com o que deveria denunciar.
+**WhatsApp direto pela API oficial da Meta**, sem Supabase no caminho. A
+sentinela existe para o caso em que a plataforma está inacessível; um aviso que
+precise dela morre junto com o que deveria denunciar.
 
-Isso também decide qual credencial a caixa externa carrega: **só a da Resend**.
-Uma máquina fora da plataforma é por definição menos protegida que ela — dar a
-ela uma chave que lê o banco inteiro trocaria um buraco de observabilidade por
-um buraco de segurança. A chave da Resend, no pior caso, manda e-mail.
+Em paralelo, e com propósito diferente, o heartbeat leva a medição crua para o
+painel do Super Admin — o painel vê o tropeço de um minuto que o WhatsApp, de
+propósito, ainda não viu. Falha confirmada vira também
+`sentinela:aplicacao-inacessivel`, crítica e **só-painel**: o WhatsApp já saiu
+pela sentinela, e deixar a plataforma avisar de novo poria o mesmo fato duas
+vezes no telefone dele.
+
+Sempre **template**, nunca texto livre: fora da janela de 24h a Meta aceita
+texto livre com 200 e wamid real, e derruba depois por webhook assíncrono
+`131047`. A sentinela não tem como ver esse webhook. A escada é v4 → v3 → v2, e
+o degrau só desce nos códigos que significam "template indisponível"
+(`132001`/`132015`/`132016`) — qualquer outro é falha de envio de verdade, e
+descer esconderia.
+
+Isso também decide o que a caixa externa carrega. Uma máquina fora da
+plataforma é por definição menos protegida que ela:
+
+| Credencial | O que abre no pior caso |
+|---|---|
+| `SENTINELA_META_TOKEN` | manda mensagem pelo número de alerta, e nada mais |
+| `SENTINELA_HEARTBEAT_KEY` | uma rota, que só escreve linha de sinal de vida |
+| `SENTINELA_ANON_KEY` | a mesma chave pública que já está no bundle do front |
+| `SENTINELA_SENHA` | conta interna, admin de um tenant **vazio**, fora de `admin_users` |
+
+Nenhuma lê dado de paciente. Trocar um buraco de observabilidade por um buraco
+de segurança seria um mau negócio.
 
 ## Quando ela avisa
 
@@ -143,8 +169,8 @@ python sentinela.py         # mede, decide e avisa
 python teste_logica.py      # prova a decisão sem rede (rodar após instalar)
 ```
 
-O `teste_logica.py` troca a sonda e o e-mail por dublês e roda uma linha do
-tempo de passadas de 1 minuto. A única peça da sentinela que ninguém vê
+O `teste_logica.py` troca a sonda, o WhatsApp e o heartbeat por dublês e roda
+uma linha do tempo de passadas de 1 minuto. A única peça da sentinela que ninguém vê
 funcionando é justamente a que decide **quando** avisar; se ela regredir, o
 defeito aparece no dia do incidente, que é o pior dia para descobrir que o
 vigia estava quebrado.

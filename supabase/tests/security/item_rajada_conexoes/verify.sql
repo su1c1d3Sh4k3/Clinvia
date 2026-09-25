@@ -185,9 +185,25 @@ c9 as (
          group by 1
         having count(distinct d.jobid) >= 3
       ) s
+),
+-- 10. A meta que ele fixou em 25/09/2026: o MINUTO CHEIO tem que sobrar pelo
+--     menos 4 conexoes. O :00 nao e um minuto qualquer — e o offset que todo
+--     cron novo herda por descuido (`* * * * *`, `*/5`, `*/10` e `0 H * * *`
+--     caem todos nele), entao e ali que a proxima rajada vai nascer. As
+--     checagens 1 e 2 olham o PIOR minuto; esta olha o minuto que atrai job.
+--     `20260925220000` tirou dali o worker de reenvio da Meta, o
+--     `appointment-reminders` e o `auto-close-worker`: 11 partidas viraram 9.
+c10 as (
+    select 10, 'minuto :00 sobra pelo menos 4 conexoes',
+           case when (select coalesce(max(jobs), 0) from pico_diario where minuto = 0)
+                     <= (select livres from folga) - 4
+                then 'ok' else 'FALHOU — o minuto cheio voltou a encher' end,
+           'pico ' || (select coalesce(max(jobs), 0) from pico_diario where minuto = 0)::text
+           || ' no :00 contra ' || (select livres from folga)::text || ' livre(s)'
 )
 select checagem, resultado, detalhe from (
     select * from c1 union all select * from c2 union all select * from c3
     union all select * from c4 union all select * from c5 union all select * from c6
     union all select * from c7 union all select * from c8 union all select * from c9
+    union all select * from c10
 ) t order by ord, checagem;

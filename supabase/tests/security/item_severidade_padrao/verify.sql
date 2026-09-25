@@ -183,7 +183,19 @@ checagens as (
                                         -- fora do painel). Suprimir na ORIGEM,
                                         -- nunca na porta.
                                         'envio:bloqueado-',
-                                        'envio:rejeitado-')
+                                        'envio:rejeitado-',
+                                        -- 25/09/2026: a sonda externa de login.
+                                        -- Unico caso do catalogo em que o painel
+                                        -- NAO e supressao: a sentinela mora fora
+                                        -- da plataforma e ja mandou o WhatsApp
+                                        -- dela direto pela Meta, sem Supabase no
+                                        -- caminho. Deixar a plataforma avisar de
+                                        -- novo faria o mesmo fato chegar duas
+                                        -- vezes no telefone dele. O gemeo
+                                        -- `sentinela:parou-de-reportar` NAO esta
+                                        -- nesta lista de proposito: ali a
+                                        -- sentinela esta muda e nao ha 2a via.
+                                        'sentinela:aplicacao-inacessivel')
            )
     union all
     select 'E8 catalogo sem instrucao de cadastro na descricao',

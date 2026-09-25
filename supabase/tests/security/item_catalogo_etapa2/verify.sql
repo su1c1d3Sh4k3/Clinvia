@@ -71,6 +71,12 @@ union all
 -- 10, e `recebimento:fila-parada` e payload de paciente represado ha mais de 10
 -- minutos. Nenhum dispara por mensagem individual: ou e classe de falha nossa,
 -- ou e a conta inteira, ou e agregado do dia.
+-- 25/09/2026, terceira leva: os 2 da sentinela externa (`20260925230000`).
+-- `sentinela:aplicacao-inacessivel` e critica mas SO-PAINEL — a propria sentinela
+-- ja mandou o WhatsApp dela por fora, e deixar a plataforma avisar de novo faria
+-- o mesmo fato chegar duas vezes no telefone. `sentinela:parou-de-reportar` e o
+-- oposto e por isso toca: a sentinela esta muda por definicao quando ele dispara,
+-- entao nao existe segunda via — se a plataforma nao falar, ninguem fala.
 -- Quem acrescentar um componente `alta` novo sem passar por aqui reprova.
 select format('%-6s componentes novos que acordariam telefone: %s (tem que ser 0)',
               case when count(*) = 0 then 'ok' else 'FALHOU' end, count(*))
@@ -88,5 +94,7 @@ select format('%-6s componentes novos que acordariam telefone: %s (tem que ser 0
                          'envio:defeito-',
                          'envio:conta-',
                          'envio:pico-diario',
-                         'recebimento:fila-parada')
+                         'recebimento:fila-parada',
+                         'sentinela:aplicacao-inacessivel',
+                         'sentinela:parou-de-reportar')
 order by 1;

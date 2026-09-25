@@ -438,6 +438,11 @@ verify_jwt = false
 [functions.send-push-notification]
 verify_jwt = false
 
+# Sentinela externa: autentica por segredo compartilhado em `x-sentinela-key`.
+# A caixa de fora nao carrega credencial que abra outra coisa.
+[functions.sentinela-heartbeat]
+verify_jwt = false
+
 [functions.storage-uploader]
 verify_jwt = false
 

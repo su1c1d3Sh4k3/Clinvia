@@ -3,21 +3,27 @@
 
 Divisao de trabalho
 -------------------
-`probe.py` so MEDE e devolve verdade crua. Este arquivo decide o que fazer com
-ela: quando um tropeco vira incidente, quando avisar, e por onde.
+`probe.py` so MEDE e devolve verdade crua. `aviso.py` so FALA (WhatsApp direto
+pela Meta, e heartbeat para a plataforma). Este arquivo decide: quando um
+tropeco vira incidente, quando avisar, e o que a mensagem diz.
 
-Por que o aviso sai por e-mail direto
--------------------------------------
-Esta sentinela e a ultima linha: ela existe para o caso em que a plataforma
-esta inacessivel. Um aviso que precise da plataforma para sair morre junto com
-o que ele deveria denunciar. Entao o caminho e HTTP direto para a Resend, um
-terceiro, sem Supabase no meio.
+Por onde o aviso sai
+--------------------
+WhatsApp DIRETO pela API oficial da Meta, sem Supabase no caminho. Esta
+sentinela e a ultima linha: ela existe para o caso em que a plataforma esta
+inacessivel, e um aviso que precise da plataforma para sair morre junto com o
+que ele deveria denunciar.
 
-Isso tambem decide QUAL credencial a caixa externa carrega: **so a chave da
-Resend**. Uma maquina fora da plataforma e por definicao menos protegida que
-ela; dar a ela uma chave que le o banco inteiro trocaria um buraco de
-observabilidade por um buraco de seguranca. A chave da Resend, no pior caso,
-manda e-mail.
+Em paralelo, e para um proposito diferente, cada passada manda um heartbeat
+para a plataforma. Ele nao e canal de aviso — e o que faz a falha aparecer no
+painel do Super Admin junto com o resto, e o que permite a plataforma gritar
+quando a SENTINELA parar de falar (10 min de silencio =
+`sentinela:parou-de-reportar`, critico).
+
+Essa vigilancia cruzada e o que aposentou o e-mail diario de sinal de vida: a
+ausencia de uma mensagem de rotina e a coisa mais facil de nao reparar, e uma
+mensagem de rotina todo dia ensina a ignorar mensagem. Agora quem repara e a
+plataforma. Nao ha mais e-mail em lugar nenhum deste programa.
 
 Confirmacao antes de avisar
 ---------------------------
@@ -34,6 +40,9 @@ a passada que pula o login mudaria a assinatura e zeraria o relogio de uma
 falha que continua de pe. Cada verificacao tem o seu contador; a que nao foi
 medida nesta passada nao e incrementada NEM zerada — fica como estava.
 
+O heartbeat NAO espera confirmacao: ele leva a medicao crua toda passada. Quem
+espera as tres e o aviso; o painel pode e deve ver o tropeco de um minuto.
+
 Login real e escalonado
 -----------------------
 As verificacoes 1 a 6 sao leitura e rodam a cada minuto. A 7 escreve: 1440
@@ -45,20 +54,14 @@ em LOGIN_A_CADA_MIN + CONFIRMACOES minutos, e so quando a quebra for EXCLUSIVA
 do grant de senha — tudo que o antecede (front, preflight, turnstile, GoTrue,
 REST) continua medido de minuto em minuto.
 
-Quem vigia a sentinela
-----------------------
-Ela roda numa caixa de fora; se a caixa morrer, ela fica muda, e silencio e
-indistinguivel de "tudo bem". Por isso um e-mail diario em horario fixo
-(SENTINELA_DIARIO_HORA). A ausencia dele e o sinal. Ele sai mesmo com falha
-aberta: o diario prova que a SENTINELA esta viva, nao que a aplicacao esta.
-
 Uso
 ---
-    # as mesmas variaveis do probe.py, mais:
-    export SENTINELA_RESEND_KEY=re_...
-    export SENTINELA_EMAIL_PARA=voce@dominio,outro@dominio
+    # as mesmas variaveis do probe.py, mais as de aviso.py:
+    export SENTINELA_META_PHONE_ID=...
+    export SENTINELA_META_TOKEN=...
+    export SENTINELA_WHATSAPP_PARA=55...,55...
+    export SENTINELA_HEARTBEAT_KEY=...
     export SENTINELA_ESTADO=/var/lib/sentinela/estado.json   # opcional
-    export SENTINELA_DIARIO_HORA=08:00                       # opcional
 
     python sentinela.py
 
@@ -71,9 +74,8 @@ import json
 import os
 import sys
 import time
-import urllib.error
-import urllib.request
 
+import aviso
 import probe
 
 # Passadas seguidas com a mesma verificacao quebrada antes de avisar. Em
@@ -93,11 +95,31 @@ LOGIN_A_CADA_MIN = 5
 # empurra o login para a passada seguinte e a cadencia vira 6 min, depois 7.
 TOLERANCIA_S = 30
 
-DIARIO_HORA_PADRAO = "08:00"
-
 ESTADO_PADRAO = "/var/lib/sentinela/estado.json"
-RESEND_API = "https://api.resend.com/emails"
-REMETENTE = "Sentinela Clinvia <nao-responda@clinbia.ai>"
+
+SEV_CRITICO = "🔴 CRITICO"
+SEV_NORMALIZADO = "🟢 NORMALIZADO"
+
+# O que cada verificacao, quando quebra, costuma significar. Sem isto o alerta
+# diz "preflight falhou" e ele precisa reabrir o post-mortem de 24/09 para
+# lembrar o que isso quer dizer. Cada linha e um incidente real deste projeto.
+CAUSA_PROVAVEL = {
+    "front_html": "a hospedagem do front (EasyPanel/Cloudflare) nao esta servindo o index",
+    "front_bundle": "deploy publicou um index apontando para um bundle que nao subiu — tela branca com o servidor respondendo 200",
+    "preflight": "header novo no front sem entrar no Access-Control-Allow-Headers das functions: o navegador recusa a chamada ANTES de sair (incidente de 24/09/2026)",
+    "verify_turnstile": "a function do captcha caiu ou perdeu a chave: e a primeira chamada dos tres caminhos de login",
+    "auth_health": "o GoTrue do Supabase esta fora",
+    "rest_anon": "PostgREST fora, ou a leitura anonima da tela de login perdeu o grant",
+    probe.LOGIN_REAL: "o grant de senha parou de funcionar, ou RLS/grant derrubou quem acabou de entrar",
+}
+
+ACAO = ("Abrir https://app.clinbia.ai numa aba anonima e conferir. "
+        "Esta medicao vem de FORA e reproduz o navegador, inclusive o preflight de CORS: "
+        "o painel de incidentes pode estar verde e isto vermelho ao mesmo tempo, "
+        "porque as coberturas sao diferentes.")
+
+O_QUE_FAZ = ("mede de fora da plataforma se a aplicacao esta acessivel, "
+             "reproduzindo o que o navegador faz no login")
 
 
 # ─────────────────────────────── estado ───────────────────────────────
@@ -124,101 +146,52 @@ def gravar_estado(caminho: str, estado: dict) -> None:
               file=sys.stderr)
 
 
-# ─────────────────────────────── aviso ───────────────────────────────
+# ─────────────────────────────── mensagem ───────────────────────────────
 
-def enviar_email(chave: str, para: list[str], assunto: str, corpo: str) -> bool:
-    req = urllib.request.Request(
-        RESEND_API,
-        data=json.dumps({
-            "from": REMETENTE,
-            "to": para,
-            "subject": assunto,
-            "text": corpo,
-        }).encode("utf-8"),
-        method="POST",
-    )
-    # A Resend tambem esta atras da Cloudflare, que recusa `Python-urllib/*`
-    # com 403 `error code: 1010` — medido em 24/09/2026. O aviso caia calado
-    # justamente na hora em que ele e a unica coisa que importa.
-    req.add_header("User-Agent", probe.USER_AGENT)
-    req.add_header("Authorization", f"Bearer {chave}")
-    req.add_header("Content-Type", "application/json")
-    try:
-        with urllib.request.urlopen(req, timeout=probe.TIMEOUT) as r:
-            return r.status < 300
-    except urllib.error.HTTPError as e:
-        print(f"resend HTTP {e.code}: {e.read()[:200]!r}", file=sys.stderr)
-    except Exception as e:  # noqa: BLE001 — aviso que falha nao derruba a sonda
-        print(f"resend {type(e).__name__}: {e}", file=sys.stderr)
-    return False
+def _causas(nomes: list[str]) -> str:
+    vistas = [CAUSA_PROVAVEL[n] for n in nomes if n in CAUSA_PROVAVEL]
+    if not vistas:
+        return "nao identificada pela sonda"
+    # Uma so causa quando ha uma so quebra. Varias quebras juntas quase sempre
+    # tem causa unica a montante (a plataforma inteira fora), e listar quatro
+    # hipoteses ao mesmo tempo atrapalharia em vez de ajudar.
+    if len(vistas) > 1:
+        return ("varias verificacoes cairam juntas, o que costuma ser uma causa so a montante "
+                "(hospedagem, Supabase ou rede). Primeira hipotese: " + vistas[0])
+    return vistas[0]
 
 
-def corpo_queda(r: dict, falhas: list[dict], minutos: int) -> str:
-    linhas = [
-        "A aplicacao nao esta acessivel de fora.",
-        "",
-        f"Fora ha: {minutos} min",
-        f"Medido em: {r['quando']}",
-        "",
-        "O QUE QUEBROU",
-    ]
-    linhas += [f"  {f['verificacao']}: {f['detalhe']}" for f in falhas]
-    linhas += [
-        "",
-        "O QUE AINDA RESPONDE",
-    ]
-    ok = [x for x in r["resultados"] if x["ok"]]
-    linhas += [f"  {x['verificacao']}: {x['detalhe']}" for x in ok] or ["  nada"]
-    linhas += [
-        "",
-        "Esta medicao vem de fora da plataforma e reproduz o que o NAVEGADOR",
-        "faz, inclusive o preflight de CORS. O painel de incidentes pode estar",
-        "verde e isto aqui vermelho ao mesmo tempo: sao coberturas diferentes.",
-    ]
-    return "\n".join(linhas)
+def alerta_queda(falhas: list[dict], minutos: int) -> dict:
+    return {
+        "severidade": SEV_CRITICO,
+        "origem": "Sonda externa",
+        # Login fora e login fora para todo mundo: nao ha recorte de tenant.
+        "conta": "Todos os clientes",
+        "resolucao": "Equipe Clinvia",
+        "ocorrencias": f"fora ha {minutos} min",
+        "oQueFaz": O_QUE_FAZ,
+        "oQueAconteceu": "; ".join(f"{f['verificacao']}: {f['detalhe']}" for f in falhas),
+        "causa": _causas([f["verificacao"] for f in falhas]),
+        "acao": ACAO,
+    }
 
 
-def corpo_volta(r: dict, minutos: int, restantes: list[str]) -> str:
-    linhas = [
-        "A aplicacao voltou a responder de fora.",
-        "",
-        f"Ficou fora: {minutos} min",
-        f"Medido em: {r['quando']}",
-        "",
-    ]
+def alerta_volta(minutos: int, restantes: list[str]) -> dict:
     # Nunca dizer "tudo passou" quando nao passou: uma quebra nova pode ter
     # comecado na mesma passada em que a antiga se resolveu.
-    if restantes:
-        linhas.append("Em confirmacao (ainda nao avisado): " + ", ".join(restantes))
-    else:
-        linhas.append("Todas as verificacoes passaram.")
-    return "\n".join(linhas)
-
-
-def corpo_diario(r: dict, quedas: int, pendentes: list[str]) -> str:
-    linhas = [
-        "A sentinela esta viva.",
-        "",
-        f"Ultima medicao: {r['quando']}",
-        f"Avisos de queda desde o diario anterior: {quedas}",
-        "",
-        "ULTIMA PASSADA",
-    ]
-    for x in r["resultados"]:
-        linhas.append(f"  {'ok   ' if x['ok'] else 'FALHA'} "
-                      f"{x['verificacao']}: {x['detalhe']}")
-    if not r.get("login_medido", True):
-        linhas.append(f"  (login real roda a cada {LOGIN_A_CADA_MIN} min; "
-                      "nao coube nesta passada)")
-    if pendentes:
-        linhas += ["", "FALHAS AINDA ABERTAS", "  " + ", ".join(pendentes)]
-    linhas += [
-        "",
-        "Este e-mail e o sinal de vida da propria sentinela, que roda fora da",
-        "plataforma. Se ele deixar de chegar neste horario, quem morreu foi ela",
-        "— e a partir dai o silencio nao significa mais que esta tudo bem.",
-    ]
-    return "\n".join(linhas)
+    pendente = (f"ainda em confirmacao, sem aviso: {', '.join(restantes)}"
+                if restantes else "todas as verificacoes passaram")
+    return {
+        "severidade": SEV_NORMALIZADO,
+        "origem": "Sonda externa",
+        "conta": "Todos os clientes",
+        "resolucao": "Nada a fazer",
+        "ocorrencias": f"ficou fora {minutos} min",
+        "oQueFaz": O_QUE_FAZ,
+        "oQueAconteceu": f"a aplicacao voltou a responder de fora ({pendente})",
+        "causa": "nenhuma — este e o aviso de normalizacao do alerta anterior",
+        "acao": "nenhuma acao necessaria; conferir o painel se quiser o historico da janela",
+    }
 
 
 # ─────────────────────────────── contagem ───────────────────────────────
@@ -248,38 +221,11 @@ def atualizar_contagem(anterior: dict, r: dict, agora: int) -> dict:
     return contagem
 
 
-def talvez_diario(estado: dict, r: dict, contagem: dict,
-                  chave: str, para: list[str]) -> str:
-    """Manda o sinal de vida se ja passou do horario e ele nao saiu hoje.
-
-    Devolve a data do ultimo diario (nova ou a antiga). Se o envio falhar, a
-    data NAO avanca: a proxima passada tenta de novo, que e o comportamento
-    certo para o unico e-mail cuja ausencia e o alarme.
-    """
-    hora_alvo = os.environ.get("SENTINELA_DIARIO_HORA", DIARIO_HORA_PADRAO)
-    anterior = estado.get("ultimo_diario", "")
-    hoje = time.strftime("%Y-%m-%d")
-    if anterior == hoje or time.strftime("%H:%M") < hora_alvo:
-        return anterior
-    if not (chave and para):
-        return anterior
-
-    quedas = estado.get("quedas_desde_diario", 0)
-    pendentes = sorted(contagem)
-    assunto = ("[SENTINELA] Diario: tudo certo" if not pendentes
-               else f"[SENTINELA] Diario: falha aberta ({', '.join(pendentes)})")
-    if enviar_email(chave, para, assunto, corpo_diario(r, quedas, pendentes)):
-        return hoje
-    return anterior
-
-
 # ─────────────────────────────── ciclo ───────────────────────────────
 
 def main() -> int:
     caminho = os.environ.get("SENTINELA_ESTADO", ESTADO_PADRAO)
-    chave = os.environ.get("SENTINELA_RESEND_KEY", "")
-    para = [e.strip() for e in
-            os.environ.get("SENTINELA_EMAIL_PARA", "").split(",") if e.strip()]
+    cfg = aviso.config()
 
     estado = ler_estado(caminho)
     agora = int(time.time())
@@ -304,7 +250,6 @@ def main() -> int:
     confirmadas = sorted(k for k, v in contagem.items()
                          if v["seguidas"] >= CONFIRMACOES)
     assinatura = ",".join(confirmadas)
-    quedas = estado.get("quedas_desde_diario", 0)
 
     # Quebrou MAIS COISA do que ele ja viu: o aviso sai na hora, sem esperar o
     # lembrete. So o crescimento do conjunto faz isso — quando ele encolhe, o
@@ -320,27 +265,31 @@ def main() -> int:
             minutos = max(1, (agora - caiu_em) // 60)
             falhas = [{"verificacao": k, "detalhe": contagem[k]["detalhe"]}
                       for k in confirmadas]
-            if chave and para and enviar_email(
-                    chave, para,
-                    f"[SENTINELA] Aplicacao inacessivel: {assinatura}",
-                    corpo_queda(r, falhas, minutos)):
+            if aviso.enviar_whatsapp(cfg, alerta_queda(falhas, minutos)):
                 avisado_em = agora
-                quedas += 1
     elif avisado_em:
         # Volta: so avisa se a queda chegou a ser avisada. Falha que morreu
         # durante a confirmacao nunca existiu para ele, e "voltou" sem "caiu"
         # e ruido puro. Zerar aqui e obrigatorio: sem isso a proxima passada
         # leria o mesmo `avisado_em` e mandaria "voltou" de novo, para sempre.
         minutos = max(1, (agora - estado.get("caiu_em", agora)) // 60)
-        if chave and para:
-            enviar_email(chave, para,
-                         f"[SENTINELA] Aplicacao voltou ({minutos} min fora)",
-                         corpo_volta(r, minutos, sorted(contagem)))
+        aviso.enviar_whatsapp(cfg, alerta_volta(minutos, sorted(contagem)))
         avisado_em = 0
 
-    ultimo_diario = talvez_diario(estado, r, contagem, chave, para)
-    if ultimo_diario != estado.get("ultimo_diario", ""):
-        quedas = 0
+    # Heartbeat DEPOIS do aviso, e sempre — inclusive na passada em que tudo
+    # passou, que e justamente a que prova que a caixa esta viva. Leva a medicao
+    # crua: o painel ve o tropeco de um minuto que o WhatsApp, de proposito,
+    # ainda nao viu.
+    aviso.heartbeat(cfg, {
+        "medido_em": r["quando"],
+        "ok": not contagem,
+        "falhas": r["falhas"],
+        "confirmadas": confirmadas,
+        "detalhe": {k: v["detalhe"] for k, v in contagem.items()},
+        "caiu_em": caiu_em if confirmadas else None,
+        "avisado": bool(avisado_em),
+        "login_medido": r["login_medido"],
+    })
 
     gravar_estado(caminho, {
         "contagem": contagem,
@@ -348,8 +297,6 @@ def main() -> int:
         "caiu_em": caiu_em,
         "avisado_em": avisado_em,
         "ultimo_login_real": ultimo_login,
-        "ultimo_diario": ultimo_diario,
-        "quedas_desde_diario": quedas,
         "ultima_ok": agora if not contagem else estado.get("ultima_ok", 0),
     })
 

@@ -163,7 +163,15 @@ checagens as (
                                         -- regra da Meta ja aparece na caixa
                                         -- vermelha do cartao, para o atendente.
                                         'envio:bloqueado-',
-                                        'envio:rejeitado-')
+                                        'envio:rejeitado-',
+                                        -- 25/09/2026: a sonda externa de login. O
+                                        -- painel aqui nao e supressao: a sentinela
+                                        -- mora FORA e ja mandou o WhatsApp dela
+                                        -- direto pela Meta. O gemeo
+                                        -- `sentinela:parou-de-reportar` fica fora
+                                        -- desta lista: quando ele dispara a
+                                        -- sentinela esta muda, e nao ha 2a via.
+                                        'sentinela:aplicacao-inacessivel')
            )
     union all
     select 'E4 analise-indisponivel continua indo ao WhatsApp',

@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Instala a sentinela de login numa caixa Linux com systemd.
 #
-# Rode na VPS DE BACKUP, nunca na de producao: uma sentinela que mora dentro do
-# que ela vigia fica muda exatamente quando deveria falar.
+# Rode na VPS manager01 (178.156.178.7), FORA do Swarm, e nunca na maquina que
+# serve a producao: uma sentinela que mora dentro do que ela vigia fica muda
+# exatamente quando deveria falar.
 #
 #   sudo ./instalar.sh
 #
@@ -31,11 +32,13 @@ echo "conferindo a logica de decisao..."
 python3 "$AQUI/teste_logica.py"
 
 install -d -m 755 "$DESTINO"
-install -m 644 "$AQUI/probe.py" "$AQUI/sentinela.py" "$AQUI/teste_logica.py" \
-    "$DESTINO/"
+# Os QUATRO modulos. Esquecer um deles nao da erro aqui — da ImportError na
+# primeira passada do timer, com o servico ja instalado e "ativo".
+install -m 644 "$AQUI/probe.py" "$AQUI/aviso.py" "$AQUI/sentinela.py" \
+    "$AQUI/teste_logica.py" "$DESTINO/"
 
-# A chave da Resend mora aqui: so o root le, o servico recebe por
-# EnvironmentFile.
+# O token da Meta e a chave do heartbeat moram aqui: so o root le, o servico
+# recebe por EnvironmentFile.
 chown root:root /etc/sentinela-login.env
 chmod 600 /etc/sentinela-login.env
 
