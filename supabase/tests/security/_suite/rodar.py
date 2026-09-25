@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import concurrent.futures
 import json
+import os
 import pathlib
 import re
 import subprocess
@@ -39,6 +40,15 @@ RAIZ = TESTES.parents[2]                                    # .../Clinvia
 # Sair disso exige SUPABASE_DB_PASSWORD e conexao direta — ai a suite inteira
 # cabe numa sessao so e leva segundos em vez de minutos.
 PARALELO = 1
+
+# `npx supabase` sem versao busca a ULTIMA a cada chamada — entao um release
+# quebrado da CLI derruba a suite inteira no meio da execucao, e o erro vem
+# disfarcado de reprovacao em massa ("QUEBROU" em 41 de 45, todas com a mesma
+# linha do supabase.js). Foi o que a 2.118.0 fez em 25/09/2026: o pacote de
+# binario `@supabase/cli-windows-x64@2.118.0` nunca foi publicado, entao no
+# Windows a CLI morre com "No matching Supabase CLI binary package found".
+# Versao fixa aqui: quem quiser testar uma nova passa SUPABASE_CLI_VERSAO.
+CLI = "supabase@" + os.environ.get("SUPABASE_CLI_VERSAO", "2.117.0")
 
 # Escrevem em tabela real (injetam evento de teste, mexem em llm_platform_settings).
 # Ficam fora da suite automatica e sao rodados a mao quando o item deles muda.
@@ -81,7 +91,7 @@ def sql_cli(caminho: pathlib.Path) -> tuple[int, str, str]:
     e o progresso ('Initialising login role...') no stderr. Concatenar os dois
     suja o JSON e faz TODO verify parecer quebrado."""
     r = subprocess.run(
-        ["npx", "supabase", "db", "query", "--linked", "--file", str(caminho)],
+        ["npx", "-y", CLI, "db", "query", "--linked", "--file", str(caminho)],
         cwd=RAIZ, capture_output=True, text=True, encoding="utf-8", errors="replace",
         shell=(sys.platform == "win32"),
     )
