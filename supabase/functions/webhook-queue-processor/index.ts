@@ -97,8 +97,17 @@ serveMonitored("webhook-queue-processor", async (req) => {
                     continue;
                 }
 
-                // Status updates (read receipts, ack) → webhook-handle-status
-                if (eventType === 'messages_update' || eventType === 'ack' || job.payload?.type === 'ReadReceipt') {
+                // Corpo BRUTO da Meta: o payload não está normalizado e uma
+                // única entrega pode carregar várias mensagens e vários recibos.
+                // Quem sabe desmontar isso é o próprio meta-webhook — devolvê-lo
+                // para lá é o que evita ter uma segunda implementação do mesmo
+                // desmonte, que envelheceria em separado.
+                const ehMetaBruto = eventType === 'meta_raw';
+
+                if (ehMetaBruto) {
+                    targetFunction = 'meta-webhook';
+                } else if (eventType === 'messages_update' || eventType === 'ack' || job.payload?.type === 'ReadReceipt') {
+                    // Status updates (read receipts, ack) → webhook-handle-status
                     targetFunction = 'webhook-handle-status';
                 } else {
                     // Messages (inbound/outbound) → webhook-handle-message
@@ -108,7 +117,12 @@ serveMonitored("webhook-queue-processor", async (req) => {
                 console.log(`[webhook-queue-processor] Routing to ${targetFunction} for event: ${eventType}`);
 
                 const { data, error: invokeError } = await supabase.functions.invoke(targetFunction, {
-                    body: job.payload
+                    body: job.payload,
+                    // `x-fila-id` diz ao meta-webhook "você já está na fila": ele
+                    // pula a gravação bruta (senão o reprocessamento criaria uma
+                    // linha nova a cada volta) e não mexe no status, porque quem
+                    // conta `attempts` é este laço.
+                    ...(ehMetaBruto ? { headers: { 'x-fila-id': job.id } } : {}),
                 });
 
 

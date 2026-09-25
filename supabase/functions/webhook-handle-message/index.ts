@@ -14,7 +14,7 @@ import {
 import { makeOpenAIRequest, trackTokenUsage } from "../_shared/token-tracker.ts";
 import { AC_FREE_TEXT_STATES, matchAcButtonId } from "../_shared/appointment-confirmation-buttons.ts";
 import { buildBdData } from "../_shared/bd-data.ts";
-import { reportIncident } from "../_shared/report-incident.ts";
+import { reportIncident, HEADER_JA_REPORTADO } from "../_shared/report-incident.ts";
 import { fetchProvider } from "../_shared/provider-errors.ts";
 // EdgeRuntime.waitUntil mantém o processo vivo após o return 200 para que
 // tasks de background (persistir foto, download de mídia) terminem mesmo
@@ -585,6 +585,11 @@ serveMonitored("webhook-handle-message", async (req) => {
         let senderProfilePicUrl: string | null = null;
         let conversation: any = null; // Declare in outer scope for webhook forwarding
         let monitorSavedMessageId: string | null = null; // id da msg de grupo salva (intercept de monitoramento)
+        // Onde o caminho parou quando a mensagem NÃO chegou a virar conversa.
+        // Existe porque os dois `if` abaixo não tinham `else`: falha ao criar o
+        // contato (57014) ou a conversa caía direto no `return 200 Processed` lá
+        // no fim, e a mensagem do paciente deixava de existir sem deixar rastro.
+        let perdaMotivo: string | null = null;
 
         if (isGroup) {
             // ===== GROUP PROCESSING =====
@@ -1691,7 +1696,27 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                         }
                     }
                 }
+            } else {
+                // A conversa não existia e não pôde ser criada (o ramo de
+                // recuperação por 23505 só acha o que já está lá; um 57014 sai
+                // daqui com `conversation` nulo). A mensagem não tem onde morar.
+                perdaMotivo = 'sem-conversa';
+                console.error('[webhook-handle-message] PERDA: mensagem sem conversa', {
+                    instancia: instanceName,
+                    contato_id: contactId,
+                    grupo_id: groupId,
+                    wamid: messageId,
+                });
             }
+        } else {
+            // Nem contato nem grupo: a criação do cadastro falhou por motivo que
+            // não é o 23505 recuperável. Sem isso não há a quem pendurar a
+            // conversa, e tudo o que vem depois seria escrito no vazio.
+            perdaMotivo = 'sem-contato';
+            console.error('[webhook-handle-message] PERDA: mensagem sem contato', {
+                instancia: instanceName,
+                grupo: isGroup,
+            });
         }
 
         // ─── Monitoramento de Grupos: match de termo em mensagem de grupo ───
@@ -2036,6 +2061,37 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
         // O processo do edge function permanece vivo até elas terminarem,
         // mas o INSERT da mensagem já foi feito — não pode mais ser perdido.
         flushBackgroundTasks();
+
+        // A mensagem chegou e não virou conversa. Responder 200 aqui era o
+        // defeito: quem chamou (fila da UAZAPI ou meta-webhook) marcava sucesso
+        // e a mensagem do paciente sumia. 5xx é o que faz a fila retentar e o
+        // envelope enxergar a falha.
+        if (perdaMotivo) {
+            reportIncident({
+                component: `recebimento:perdida-${perdaMotivo} (${instanceName})`,
+                route: perdaMotivo,
+                httpCode: 500,
+                message: `mensagem recebida nao virou conversa (${perdaMotivo}) em ${instanceName}`,
+                ownerId: userId,
+                context: { motivo: perdaMotivo, instancia: instanceName, grupo: isGroup },
+            });
+            return new Response(
+                JSON.stringify({
+                    success: false,
+                    error: `mensagem nao virou conversa (${perdaMotivo})`,
+                    code: `recebimento_${perdaMotivo.replace(/-/g, '_')}`,
+                }),
+                {
+                    headers: {
+                        ...corsHeaders,
+                        'Content-Type': 'application/json',
+                        [HEADER_JA_REPORTADO]: '1',
+                    },
+                    status: 500,
+                }
+            );
+        }
+
         return new Response(
             JSON.stringify({ success: true, message: "Processed" }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }

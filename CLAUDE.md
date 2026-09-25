@@ -106,6 +106,18 @@ Mandatory before any `create or replace function` in a migration:
    `pg_get_functiondef` for the guard (model: `item_canal_mudo_contraste/verify.sql`), so the
    next reissue fails in the suite instead of on his phone.
 
+### A migration must fail rather than hold the live traffic hostage
+
+*"Migration que falha a gente reexecuta; mensagem de paciente perdida não volta."*
+
+- **Every production migration session opens with short `lock_timeout` and `statement_timeout`** —
+  `set lock_timeout = '5s'; set statement_timeout = '120s';` at the top of the file. Without them a
+  DDL that waits on a lock queues behind itself every transaction that touches the table, and the
+  webhook path starts timing out at `57014`.
+- **A migration that locks a hot table (`messages`, `conversations`, `contacts`) runs outside
+  business hours.** These three are in the inbound path: a lock on them is a lock on receiving
+  messages from patients.
+
 ### Run the access-test suite before applying a migration
 
 `python supabase/tests/security/_suite/rodar.py [filtro …]` runs every `*/verify.sql`, exits 1 on
@@ -257,6 +269,12 @@ If the report reads correctly bottom-up, the order is wrong. *"O que não aparec
 trato como não feito"* — so a finding that changes his decision belongs in the body, not in a
 footnote: a security hole found on the way (anonymous webhook repointing, a key in plain text)
 leads the report even when it was not the task.
+
+**Patient data is treated like a credential: it never appears in a report.** No full name, no phone
+number, no address — not even to make a case more vivid. Reference the person by internal id
+(`contact_id`, `conversation_id`) or by `wamid`; whoever needs the contact looks it up in the
+database, with access. Naming the affected CLINIC is expected and necessary; naming its patients is
+a leak into a document that circulates.
 
 ## Definition of done
 

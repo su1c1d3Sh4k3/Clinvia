@@ -57,6 +57,27 @@ async function validateMetaSignature(
     }
 }
 
+/** Identidade do corpo bruto — é o que faz reentrega da Meta conflitar em vez de duplicar. */
+async function sha256Hex(texto: string): Promise<string> {
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(texto));
+    return new TextDecoder().decode(hexEncode(new Uint8Array(digest)));
+}
+
+/**
+ * Só navegação no JSON que já está em memória — nenhuma consulta. A regra da
+ * gravação bruta é "sem join, sem lookup", e o nome da instância existe aqui
+ * apenas para que a linha da fila seja diagnosticável a olho nu.
+ */
+function phoneNumberIdDoPayload(payload: any): string | null {
+    for (const entry of payload?.entry ?? []) {
+        for (const change of entry?.changes ?? []) {
+            const id = change?.value?.metadata?.phone_number_id;
+            if (id) return String(id);
+        }
+    }
+    return null;
+}
+
 function mapMetaTypeToUzapi(metaType: string): string {
     const map: Record<string, string> = {
         text: "conversation",
@@ -348,6 +369,13 @@ serveMonitored("meta-webhook", async (req) => {
     }
 
     // ── POST: Event notifications ──
+    // Declarados FORA do try porque o `catch` também precisa devolver a linha
+    // bruta para a fila. Se ele não puder, a mensagem fica presa em
+    // `processing` até o cron `reset-stuck-webhook-jobs` (15 min) — funciona,
+    // mas atrasa justamente o caso em que a pressa importa.
+    let filaId: string | null = null;
+    let clienteDaFila: ReturnType<typeof createClient> | null = null;
+
     try {
         const rawBody = await req.text();
 
@@ -375,6 +403,66 @@ serveMonitored("meta-webhook", async (req) => {
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
         const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
         const supabase = createClient(supabaseUrl, serviceKey);
+        clienteDaFila = supabase;
+
+        // ── Gravação bruta: nada que a Meta entregou pode sumir ──────────────
+        //
+        // Até 25/09/2026 este caminho não tinha fila. O payload era normalizado
+        // em memória, repassado adiante e ESQUECIDO — se o processamento caísse,
+        // não sobrava nada para reprocessar e a Meta já tinha recebido 200.
+        //
+        // A escrita é deliberadamente burra: sem join, sem lookup, sem await de
+        // nada que dependa de outra tabela. Quanto menos ela precisa do banco
+        // estar saudável, mais ela sobrevive justamente à hora em que ele não
+        // está — que é a hora em que ela serve para alguma coisa.
+        const filaIdDoReprocessamento = req.headers.get("x-fila-id");
+        filaId = filaIdDoReprocessamento;
+
+        if (!filaId) {
+            try {
+                const { data: linha, error: filaErr } = await supabase
+                    .from("webhook_queue")
+                    .insert({
+                        instance_name: `meta:${phoneNumberIdDoPayload(payload) ?? "desconhecido"}`,
+                        event_type: "meta_raw",
+                        payload,
+                        body_sha256: await sha256Hex(rawBody),
+                        status: "processing",
+                        started_at: new Date().toISOString(),
+                    })
+                    .select("id")
+                    .single();
+
+                if (filaErr) {
+                    // 23505 = a Meta reentregou um corpo idêntico. O original já
+                    // está na fila (ou já foi processado): seguir adiante criaria
+                    // a duplicata que a reentrega existe para evitar.
+                    if (filaErr.code === "23505") {
+                        console.log("[meta-webhook] Reentrega do mesmo corpo — ignorada");
+                        return new Response("OK", { status: 200 });
+                    }
+                    throw filaErr;
+                }
+                filaId = linha?.id ?? null;
+            } catch (filaErr: any) {
+                // Sem a linha bruta não há rede de segurança: daqui para a frente
+                // a mensagem depende inteiramente do processamento em linha dar
+                // certo. Segue mesmo assim (tentar é melhor que desistir), mas
+                // avisa — é a falha mais grave deste caminho.
+                console.error("[meta-webhook] FALHA ao gravar payload bruto:", filaErr);
+                reportIncident({
+                    component: "recebimento:nao-gravado",
+                    route: "fila",
+                    httpCode: 500,
+                    error: filaErr,
+                    message: "webhook da Meta nao conseguiu gravar o corpo bruto na fila de entrada",
+                });
+            }
+        }
+
+        // Vira true quando QUALQUER repasse não voltou 2xx. É o que decide se a
+        // linha bruta pode ser dada por processada.
+        let algumRepasseFalhou = false;
 
         for (const entry of payload.entry || []) {
             for (const change of entry.changes || []) {
@@ -542,8 +630,14 @@ serveMonitored("meta-webhook", async (req) => {
                             );
                             const result = await resp.text();
                             console.log("[meta-webhook] webhook-handle-message response:", resp.status, result);
+                            // A resposta era LIDA e DESCARTADA: o handler podia
+                            // responder que a mensagem não virou conversa e este
+                            // laço seguia até o 200 final para a Meta. Era aqui
+                            // que a mensagem do paciente deixava de existir.
+                            if (!resp.ok) algumRepasseFalhou = true;
                         } catch (fwdErr) {
                             console.error("[meta-webhook] Forward error:", fwdErr);
+                            algumRepasseFalhou = true;
                         }
                     }
                 }
@@ -594,7 +688,7 @@ serveMonitored("meta-webhook", async (req) => {
 
                         // Forward to webhook-handle-status
                         try {
-                            await fetchProvider(
+                            const respStatus = await fetchProvider(
                                 `${supabaseUrl}/functions/v1/webhook-handle-status`,
                                 {
                                     method: "POST",
@@ -605,21 +699,96 @@ serveMonitored("meta-webhook", async (req) => {
                                     body: JSON.stringify(normalizedStatus),
                                 }
                             );
+                            if (!respStatus.ok) {
+                                console.error(
+                                    "[meta-webhook] webhook-handle-status recusou:",
+                                    respStatus.status,
+                                    await respStatus.text()
+                                );
+                                algumRepasseFalhou = true;
+                            }
                         } catch (fwdErr) {
                             console.error("[meta-webhook] Status forward error:", fwdErr);
+                            algumRepasseFalhou = true;
                         }
                     }
                 }
             }
         }
 
-        // Always return 200 immediately (Meta requirement)
+        // ── Fecho da linha bruta ────────────────────────────────────────────
+        //
+        // `done` só quando TODO repasse voltou 2xx. Qualquer falha devolve a
+        // linha para `pending`, que é o estado que o worker drena — é isto, e
+        // não o código HTTP que a Meta recebe, que garante a retentativa.
+        //
+        // No reprocessamento quem manda na linha é o worker, porque é ele que
+        // conta `attempts`. Mexer no status aqui devolveria a linha para
+        // `pending` sem incrementar tentativa: retentativa eterna, de graça.
+        if (filaId && !filaIdDoReprocessamento) {
+            await supabase
+                .from("webhook_queue")
+                .update(
+                    algumRepasseFalhou
+                        ? {
+                            status: "pending",
+                            error_message: "repasse interno nao retornou 2xx",
+                            completed_at: null,
+                        }
+                        : { status: "done", completed_at: new Date().toISOString() }
+                )
+                .eq("id", filaId);
+        }
+
+        // Reprocessamento: quem chamou foi o `webhook-queue-processor`, e ele
+        // precisa saber se pode dar a linha por encerrada. A resposta vai como
+        // 200 com `success:false` de propósito — o processor confere o CORPO, e
+        // um 5xx aqui criaria um segundo incidente para uma perda que o
+        // `webhook-handle-message` já relatou.
+        if (filaIdDoReprocessamento) {
+            return new Response(
+                JSON.stringify({
+                    success: !algumRepasseFalhou,
+                    message: algumRepasseFalhou
+                        ? "repasse interno nao retornou 2xx no reprocessamento"
+                        : "ok",
+                }),
+                { headers: { "Content-Type": "application/json" }, status: 200 }
+            );
+        }
+
+        // 200 para a Meta mesmo com falha interna: a durabilidade agora mora na
+        // fila, não na retentativa do provedor. Devolver erro aqui faria a Meta
+        // reentregar o LOTE inteiro e, se persistisse, desativar o webhook.
         return new Response("OK", { status: 200 });
     } catch (err: any) {
         console.error("[meta-webhook] Error:", err);
         // Devolvemos 200 de proposito (senao a Meta retenta em cascata), o que
         // significa que ESTE log era o unico rastro da falha. Dai o incidente.
         reportIncident({ route: "webhook", httpCode: 500, error: err });
+
+        // A linha bruta ficou em `processing` e ninguém a reivindicaria antes
+        // do reset de 15 min. Devolver para `pending` aqui é o que transforma
+        // este catch de "log" em "retentativa".
+        if (filaId && clienteDaFila && !req.headers.get("x-fila-id")) {
+            try {
+                await clienteDaFila
+                    .from("webhook_queue")
+                    .update({ status: "pending", error_message: String(err?.message ?? err) })
+                    .eq("id", filaId);
+            } catch (_) { /* fila indisponível: o reset de 15 min é o plano B */ }
+        }
+
+        // No reprocessamento este "OK" seria lido pelo worker como sucesso e a
+        // linha viraria `done` — a exceção apagaria a mensagem em vez de
+        // adiá-la. Aqui o corpo é que fala, e ele diz que falhou.
+        if (req.headers.get("x-fila-id")) {
+            return new Response(
+                JSON.stringify({ success: false, message: String(err?.message ?? err) }),
+                { headers: { "Content-Type": "application/json" }, status: 200 }
+            );
+        }
+
         // Still return 200 to prevent Meta retries on our errors
         return new Response("OK", { status: 200 });
     }
