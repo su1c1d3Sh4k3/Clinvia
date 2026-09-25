@@ -15,6 +15,7 @@ import { NoteBubble } from "@/components/chat/NoteBubble";
 import { resolveOutboundSenderName } from "@/lib/messageSender";
 import { chatDateTime, chatDayLabel, isSameChatDay } from "@/lib/chatDates";
 import { downloadFile, getFileConfig, getFileExtension } from "@/lib/fileTypes";
+import { descreverErroMeta, reenvioEmAndamento, rodapeDoErro } from "@/lib/metaErrorCodes";
 
 interface MessageListProps {
     messages: any[];
@@ -624,9 +625,43 @@ export const MessageList = memo(({
                                 );
                             })()}
 
+                            {/* Falha de envio: a caixa vermelha so aparece quando a falha e FINAL.
+                                Enquanto ha reenvio em andamento (codigo passageiro dentro do teto de
+                                tentativas) o cartao mostra apenas o relogio cinza — avisar de uma
+                                falha que o worker ainda vai desfazer ensina o atendente a reenviar a
+                                mao e duplicar a mensagem no cliente. */}
+                            {(() => {
+                                if (msg.direction !== "outbound" || (msg as any).status !== "failed") return null;
+                                const codigo = (msg as any).error_code ?? null;
+                                if (reenvioEmAndamento(codigo, (msg as any).retry_count)) return null;
+                                const erro = descreverErroMeta(codigo);
+                                return (
+                                    <div className="mt-2 w-full rounded-lg border border-red-500/60 bg-red-500/15 px-3 py-2">
+                                        <div className="flex items-center gap-1.5">
+                                            <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
+                                            <span className="text-sm font-bold text-red-300 dark:text-red-300">
+                                                {(msg as any).error_title || erro.titulo}
+                                            </span>
+                                        </div>
+                                        <p className="mt-1 text-sm text-foreground/90 dark:text-white/90 break-words [overflow-wrap:anywhere]">
+                                            {erro.explicacao}
+                                        </p>
+                                        <p className="mt-1 text-[11px] text-red-400/80">
+                                            {rodapeDoErro(codigo)}
+                                        </p>
+                                    </div>
+                                );
+                            })()}
+
                             <span className={cn("text-xs mt-1 flex items-center gap-1", msg.direction === "outbound" ? "text-gray-800/70 dark:text-white/70" : "text-muted-foreground", "justify-end")}>
                                 {chatDateTime(msg.created_at)}
-                                {msg.direction === "outbound" && ((msg as any).status === 'read' ? <CheckCheck className="w-4 h-4 text-green-400" /> : <Check className="w-4 h-4 text-gray-400" />)}
+                                {msg.direction === "outbound" && ((msg as any).status === 'failed'
+                                    ? (reenvioEmAndamento((msg as any).error_code ?? null, (msg as any).retry_count)
+                                        ? <Clock className="w-4 h-4 text-gray-400" />
+                                        : <AlertCircle className="w-4 h-4 text-red-500" />)
+                                    : (msg as any).status === 'read'
+                                        ? <CheckCheck className="w-4 h-4 text-green-400" />
+                                        : <Check className="w-4 h-4 text-gray-400" />)}
                             </span>
                         </div>
 

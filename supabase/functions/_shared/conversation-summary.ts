@@ -197,6 +197,7 @@ export async function generateConversationSummary(
             functionName,
             model: MODEL,
             usage: data.usage,
+            usedCustomToken,
         });
     }
 

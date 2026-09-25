@@ -7,21 +7,31 @@ import {
     checkRateLimit,
     validateWebhookPayload
 } from "../_shared/utils.ts";
+import {
+    descreverErroMeta,
+    esperaDoReenvio,
+    grupoDoErroMeta,
+    type GrupoErroMeta,
+} from "../_shared/meta-error-codes.ts";
 
 /**
- * Codigos em que a recusa NAO e defeito nosso: o destinatario nao pode receber,
- * ou a politica da Meta barrou aquela mensagem especifica. Continuam virando
- * incidente — a mensagem nao chegou, e isso e um fato que o dono da conta
- * precisa ver — mas numa familia de componente propria, porque o primeiro
- * respondente e outro e a gravidade padrao e outra.
+ * Familia de componente por grupo do codigo. Decide QUEM e acordado:
+ *
+ * - `defeito` e `conta` sao os dois unicos casos que chegam no telefone do
+ *   super admin (regra dele, 25/09/2026): um e conserto nosso, o outro para a
+ *   conta inteira do cliente.
+ * - `bloqueio` e `rejeitado` continuam virando incidente — a mensagem nao
+ *   chegou e isso precisa ficar registrado —, mas o catalogo marca as duas
+ *   familias como `somente_painel`: elas contam no resumo diario e nao acordam
+ *   ninguem. Suprimir na ORIGEM, nunca na porta.
  */
-const RECUSA_DO_DESTINATARIO = new Set([
-    "131026", // mensagem nao entregavel (numero nao tem WhatsApp / recusou)
-    "131047", // precisa reengajar: passaram 24h desde a ultima resposta
-    "131049", // limite por usuario do "healthy ecosystem" (marketing)
-    "131051", // tipo de mensagem nao suportado pelo destinatario
-    "130472", // usuario em experimento da Meta
-]);
+const FAMILIA_POR_GRUPO: Record<GrupoErroMeta, string> = {
+    passageiro: "bloqueado",
+    bloqueio: "bloqueado",
+    defeito: "defeito",
+    conta: "conta",
+    desconhecido: "rejeitado",
+};
 
 /**
  * Mensagem que o provedor ACEITOU no envio e derrubou depois.
@@ -40,12 +50,17 @@ const RECUSA_DO_DESTINATARIO = new Set([
  * instancia entre parenteses e o que faz o titulo do alerta descobrir de qual
  * cliente se trata, pela mesma cadeia que o `alert-notify` ja usa.
  */
-function reportarRejeicao(payload: any, quantas: number): void {
+function reportarRejeicao(
+    payload: any,
+    quantas: number,
+    codigo: string,
+    ownerId: string | null,
+): void {
     const instancia = String(payload?.instanceName ?? "").trim() || "instância desconhecida";
     const erro = payload?.erro ?? null;
-    const codigo = erro?.code != null ? String(erro.code) : "sem_codigo";
     const motivo = erro?.title || erro?.details || "o provedor não informou o motivo";
-    const familia = RECUSA_DO_DESTINATARIO.has(codigo) ? "bloqueado" : "rejeitado";
+    const grupo = grupoDoErroMeta(codigo);
+    const familia = FAMILIA_POR_GRUPO[grupo];
 
     reportIncident({
         component: `envio:${familia}-${codigo} (${instancia})`,
@@ -55,11 +70,88 @@ function reportarRejeicao(payload: any, quantas: number): void {
         // aqui faria o titulo do alerta dizer "Humano (provedor)" e empurrar
         // para fora um problema que quase sempre se resolve deste lado.
         origem: "edge_interna",
+        // Sem o dono, o campo Cliente do alerta so resolvia por parse do nome
+        // da instancia entre parenteses. Agora vai explicito.
+        ownerId,
         message:
             `${quantas} mensagem(ns) aceita(s) no envio e recusada(s) depois pelo provedor ` +
             `[${codigo}]: ${motivo}. O destinatário NÃO recebeu.`,
-        context: { instancia, codigo, quantas },
+        context: { instancia, codigo, grupo, quantas },
     });
+}
+
+/**
+ * Coloca na fila de reenvio a mensagem recusada por motivo PASSAGEIRO.
+ *
+ * O payload guardado e reconstruido a partir da propria linha de `messages`:
+ * o corpo original nao fica em lugar nenhum depois do envio, e template
+ * (familia 1320xx) e sempre bloqueio, entao nunca chega aqui.
+ *
+ * A unicidade por wamid faz a operacao ser idempotente: recibo repetido da
+ * Meta nao duplica o reenvio.
+ */
+async function enfileirarReenvio(
+    supabase: any,
+    alvos: Array<{ wamid: string; messageId: string; conversationId: string | null }>,
+    meta: { codigo: string; ownerId: string | null; instanceName: string },
+): Promise<void> {
+    const ids = alvos.map((a) => a.messageId);
+    const { data: linhas, error } = await supabase
+        .from('messages')
+        .select('id, conversation_id, content, message_type, media_url')
+        .in('id', ids);
+
+    if (error) {
+        console.error('[webhook-handle-status] Não consegui ler as mensagens para reenvio:', error);
+        return;
+    }
+
+    const espera = esperaDoReenvio(1) ?? 30;
+    const proxima = new Date(Date.now() + espera * 1000).toISOString();
+    const porId = new Map<string, any>((linhas ?? []).map((l: any) => [l.id, l]));
+
+    const fila = alvos
+        .map((alvo) => {
+            const linha = porId.get(alvo.messageId);
+            if (!linha || !linha.conversation_id) return null;
+            return {
+                message_id: alvo.messageId,
+                wamid: alvo.wamid,
+                conversation_id: linha.conversation_id,
+                owner_id: meta.ownerId,
+                error_code: meta.codigo,
+                payload: {
+                    conversationId: linha.conversation_id,
+                    body: linha.content ?? '',
+                    messageType: linha.message_type ?? 'text',
+                    mediaUrl: linha.media_url ?? undefined,
+                },
+                attempt: 0,
+                next_attempt_at: proxima,
+            };
+        })
+        .filter((x): x is NonNullable<typeof x> => x !== null);
+
+    if (fila.length === 0) return;
+
+    const { error: insErr } = await supabase
+        .from('meta_send_retry')
+        .upsert(fila, { onConflict: 'wamid', ignoreDuplicates: true });
+
+    if (insErr) {
+        console.error('[webhook-handle-status] Não consegui enfileirar o reenvio:', insErr);
+        reportIncident({
+            component: `envio:defeito-fila-reenvio (${meta.instanceName || 'instância desconhecida'})`,
+            route: 'enfileirar_reenvio',
+            origem: 'edge_interna',
+            ownerId: meta.ownerId,
+            error: insErr,
+            message: 'Falha passageira da Meta identificada, mas o reenvio automático não pôde ser agendado.',
+            context: { codigo: meta.codigo, quantas: fila.length },
+        });
+    } else {
+        console.log('[webhook-handle-status] Reenvio agendado para', fila.length, 'mensagem(ns) em', espera, 's');
+    }
 }
 
 /**
@@ -118,10 +210,17 @@ serveMonitored("webhook-handle-status", async (req) => {
          * apaga as linhas de messages. O recibo da Meta chega depois disso, entao o
          * UPDATE acima nao acha nada — aplica o status direto no historico.
          */
-        const applyToArchivedHistory = async (messageId: string, status: string) => {
+        const applyToArchivedHistory = async (
+            messageId: string,
+            status: string,
+            errorCode: string | null = null,
+            errorTitle: string | null = null,
+        ) => {
             const { data, error } = await supabase.rpc('apply_archived_message_status', {
                 p_wamid: messageId,
                 p_status: status,
+                p_error_code: errorCode,
+                p_error_title: errorTitle,
             });
             if (error) {
                 console.error('[webhook-handle-status] Error patching history:', messageId, error);
@@ -164,6 +263,33 @@ serveMonitored("webhook-handle-status", async (req) => {
 
             console.log('[webhook-handle-status] Mapped status:', status);
 
+            // Motivo da recusa. Antes deste ponto o codigo da Meta chegava e era
+            // jogado fora: o balao virava "falhou" sem dizer POR QUE, e nem o
+            // atendente nem o super admin tinham como saber.
+            const erroDoRecibo = payload?.erro ?? null;
+            const codigo = status === 'failed'
+                ? (erroDoRecibo?.code != null ? String(erroDoRecibo.code) : 'sem_codigo')
+                : null;
+            const traducao = codigo ? descreverErroMeta(codigo) : null;
+            const grupo = codigo ? grupoDoErroMeta(codigo) : null;
+
+            // Dono da conta: sem ele o alerta so descobre o cliente por parse do
+            // nome da instancia. Falha aqui nao pode derrubar o recibo.
+            let ownerId: string | null = null;
+            const instanceName = String(payload?.instanceName ?? '').trim();
+            if (status === 'failed' && instanceName) {
+                const { data: inst, error: instErr } = await supabase
+                    .from('instances')
+                    .select('id, user_id')
+                    .eq('instance_name', instanceName)
+                    .maybeSingle();
+                if (instErr) {
+                    console.error('[webhook-handle-status] Erro ao resolver a instância:', instErr);
+                } else if (inst) {
+                    ownerId = inst.user_id ?? null;
+                }
+            }
+
             // Update each message
             let updated = 0;
             let archived = 0;
@@ -171,13 +297,20 @@ serveMonitored("webhook-handle-status", async (req) => {
             // Um recibo pode trazer dezenas de wamids e o erro tende a ser o mesmo
             // para todos. Guarda o primeiro e reporta UMA vez depois do laco.
             let erroDeRecibo: unknown = null;
+            const paraReenviar: Array<{ wamid: string; messageId: string; conversationId: string | null }> = [];
 
             for (const messageId of messageIds) {
+                const patch: Record<string, unknown> = { status };
+                if (status === 'failed') {
+                    patch.error_code = codigo;
+                    patch.error_title = traducao?.titulo ?? null;
+                }
+
                 const { data, error: updateError } = await supabase
                     .from('messages')
-                    .update({ status: status })
+                    .update(patch)
                     .eq('evolution_id', messageId)
-                    .select('id');
+                    .select('id, conversation_id, retry_count');
 
                 if (updateError) {
                     console.error('[webhook-handle-status] Error updating message:', messageId, updateError);
@@ -185,12 +318,34 @@ serveMonitored("webhook-handle-status", async (req) => {
                 } else if (data && data.length > 0) {
                     console.log('[webhook-handle-status] Updated message:', messageId, '→', status);
                     updated++;
-                } else if (await applyToArchivedHistory(messageId, status)) {
+                    if (grupo === 'passageiro') {
+                        paraReenviar.push({
+                            wamid: messageId,
+                            messageId: data[0].id,
+                            conversationId: data[0].conversation_id ?? null,
+                        });
+                    }
+                } else if (await applyToArchivedHistory(
+                    messageId, status, codigo, traducao?.titulo ?? null,
+                )) {
+                    // Ticket ja encerrado: nao ha para onde reenviar sem
+                    // ressuscitar a conversa, entao so o motivo fica registrado.
                     archived++;
                 } else {
                     console.log('[webhook-handle-status] Message not found:', messageId);
                     notFound++;
                 }
+            }
+
+            // Codigo passageiro: reenvio automatico em 30s, 2min e 10min.
+            // Bloqueio/regra NUNCA entra aqui — insistir em 131049 so piora a
+            // qualidade do numero da clinica.
+            if (paraReenviar.length > 0 && codigo) {
+                await enfileirarReenvio(supabase, paraReenviar, {
+                    codigo,
+                    ownerId,
+                    instanceName,
+                });
             }
 
             // So reporta o que era MESMO mensagem de conversa. O recibo de um
@@ -200,8 +355,8 @@ serveMonitored("webhook-handle-status", async (req) => {
             // este caminho criaria um incidente que so pode ser avisado pelo
             // canal que acabou de cair. Quem cuida daquele caso e o
             // `canal:whatsapp-alertas`, que vive fora do canal de proposito.
-            if (status === 'failed' && updated + archived > 0) {
-                reportarRejeicao(payload, updated + archived);
+            if (status === 'failed' && updated + archived > 0 && codigo) {
+                reportarRejeicao(payload, updated + archived, codigo, ownerId);
             }
 
             // Familia PROPRIA, `recibo:`, e nao `recebimento:`. O que se perde

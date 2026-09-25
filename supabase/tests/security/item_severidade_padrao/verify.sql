@@ -168,7 +168,22 @@ checagens as (
                                         -- vermelho pode ser ignorado.
                                         'recibo:banco-',
                                         'conversa:orfa-migracao',
-                                        'template-sends:log')
+                                        'template-sends:log',
+                                        -- 25/09/2026: as duas familias de recusa
+                                        -- da Meta. A ORDEM dele foi nominal:
+                                        -- alerta so em defeito nosso (131008,
+                                        -- 131009, 131021, 131045), conta inteira
+                                        -- (131031, 131042) ou VOLUME acima de 3x
+                                        -- a media de 7 dias. Recusa avulsa por
+                                        -- regra da Meta e caso individual: o
+                                        -- atendente ja ve a caixa vermelha no
+                                        -- cartao da mensagem, e o que precisa
+                                        -- acordar alguem e o pico, que tem
+                                        -- detector proprio (envio:pico-diario,
+                                        -- fora do painel). Suprimir na ORIGEM,
+                                        -- nunca na porta.
+                                        'envio:bloqueado-',
+                                        'envio:rejeitado-')
            )
     union all
     select 'E8 catalogo sem instrucao de cadastro na descricao',

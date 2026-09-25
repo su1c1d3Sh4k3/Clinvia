@@ -75,7 +75,14 @@ export const useMessages = (
             media_url: item.media_url || null,
             transcription: item.transcription || null,
             sender_name: item.sender_name || null,
-            status: "read",
+            // O recibo de falha chega DEPOIS do ticket ser encerrado, e
+            // `apply_archived_message_status` espelha status/erro no item
+            // arquivado. Forçar "read" aqui apagaria justamente a falha que a
+            // Meta confirmou tarde.
+            status: item.status === "failed" ? "failed" : "read",
+            error_code: item.error_code ?? null,
+            error_title: item.error_title ?? null,
+            retry_count: item.retry_count ?? null,
             evolution_id: null
           } as Message;
         });

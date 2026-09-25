@@ -154,7 +154,16 @@ checagens as (
                                         -- vermelho pode ser ignorado.
                                         'recibo:banco-',
                                         'conversa:orfa-migracao',
-                                        'template-sends:log')
+                                        'template-sends:log',
+                                        -- 25/09/2026: as duas familias de recusa
+                                        -- da Meta, por ordem nominal dele. Alerta
+                                        -- so em defeito nosso, conta inteira ou
+                                        -- VOLUME (envio:pico-diario, que fica
+                                        -- fora do painel). Recusa avulsa por
+                                        -- regra da Meta ja aparece na caixa
+                                        -- vermelha do cartao, para o atendente.
+                                        'envio:bloqueado-',
+                                        'envio:rejeitado-')
            )
     union all
     select 'E4 analise-indisponivel continua indo ao WhatsApp',

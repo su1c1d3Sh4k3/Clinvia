@@ -97,7 +97,8 @@ serveMonitored("ai-suggest-response", async (req) => {
         teamMemberId: null,
         functionName: 'ai-suggest-response',
         model: 'gpt-4.1',
-        usage: data.usage
+        usage: data.usage,
+        usedCustomToken
       });
     }
 

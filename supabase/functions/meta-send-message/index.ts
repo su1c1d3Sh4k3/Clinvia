@@ -2,6 +2,7 @@ import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { reportIncident } from "../_shared/report-incident.ts";
 import { fetchProvider } from "../_shared/provider-errors.ts";
+import { descreverErroMeta, grupoDoErroMeta } from "../_shared/meta-error-codes.ts";
 /**
  * meta-send-message
  *
@@ -366,17 +367,32 @@ serveMonitored("meta-send-message", async (req) => {
             const errorText = await sendResponse.text();
             console.error("[meta-send-message] Meta API error:", sendResponse.status, errorText);
 
+            // O codigo da Meta era descartado aqui: quem chamava recebia um texto
+            // cru em ingles e ninguem conseguia separar "instabilidade de 2 minutos"
+            // de "a conta esta bloqueada". Agora ele sai no corpo, traduzido.
             let errorMsg = "Erro ao enviar mensagem via WhatsApp Cloud API";
+            let metaCode: string | null = null;
             try {
                 const parsed = JSON.parse(errorText);
                 errorMsg = parsed?.error?.message || parsed?.error?.error_user_msg || errorMsg;
+                if (parsed?.error?.code != null) metaCode = String(parsed.error.code);
             } catch {}
+
+            const traducao = descreverErroMeta(metaCode);
+            const grupo = grupoDoErroMeta(metaCode, sendResponse.status);
 
             return new Response(
                 JSON.stringify({
                     success: false,
                     error: "meta_api_error",
-                    message: errorMsg,
+                    // texto humano, do mesmo catalogo que o inbox usa
+                    message: traducao.explicacao,
+                    code: "meta_api_error",
+                    meta_error_code: metaCode,
+                    meta_error_title: traducao.titulo,
+                    meta_error_group: grupo,
+                    // motivo cru da Meta so no detalhe tecnico, nunca na tela
+                    details: errorMsg,
                     http_code: sendResponse.status,
                 }),
                 { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }

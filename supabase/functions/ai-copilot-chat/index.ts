@@ -177,7 +177,8 @@ serveMonitored("ai-copilot-chat", async (req) => {
         teamMemberId,
         functionName: 'ai-copilot-chat',
         model: 'gpt-4.1',
-        usage: data.usage
+        usage: data.usage,
+        usedCustomToken
       });
     }
 

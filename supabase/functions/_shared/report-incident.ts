@@ -80,6 +80,20 @@ export function origemDaRequisicao(
 ): { origem: IncidentOrigem; inferida: boolean } {
     if (!req) return { origem: "nao_identificada", inferida: true };
 
+    /** Le o claim `role` do payload do JWT. Nao valida assinatura de proposito:
+     *  quem valida e o gateway; aqui e so para ETIQUETAR a origem. */
+    function roleDoJwt(token: string): string | null {
+        try {
+            const corpo = token.split(".")[1];
+            if (!corpo) return null;
+            const b64 = corpo.replace(/-/g, "+").replace(/_/g, "/");
+            const json = JSON.parse(atob(b64 + "=".repeat((4 - b64.length % 4) % 4)));
+            return typeof json?.role === "string" ? json.role : null;
+        } catch {
+            return null;
+        }
+    }
+
     const h = req.headers;
 
     // 1. Declaracao explicita.
@@ -98,10 +112,16 @@ export function origemDaRequisicao(
     if (h.get("x-hub-signature-256") || h.get("x-hub-signature")) {
         return { origem: "webhook_externo", inferida: true };
     }
-    //    O front e o unico que manda um JWT de usuario (3 partes, alg no header).
+    //    O front e o unico que manda um JWT de USUARIO. "Tem 3 partes e comeca
+    //    com eyJ" nao prova isso: a chave anon e o service_role legado tambem
+    //    sao JWT de 3 partes, e ambos circulam fora do navegador (a anon esta no
+    //    bundle publico). O que separa um do outro e o claim `role`: so a sessao
+    //    de um usuario logado carrega `authenticated`.
     const auth = h.get("authorization") ?? "";
     if (auth.startsWith("Bearer eyJ") && auth.split(".").length === 3) {
-        return { origem: "front", inferida: true };
+        if (roleDoJwt(auth.slice(7)) === "authenticated") {
+            return { origem: "front", inferida: true };
+        }
     }
     //    Navegador: so ele manda Origin/Referer de dominio nosso.
     const origin = h.get("origin") ?? h.get("referer") ?? "";

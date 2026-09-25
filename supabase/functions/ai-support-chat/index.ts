@@ -576,7 +576,8 @@ ${manualContent}
                     prompt_tokens: Math.round(totalTokens * 0.7),
                     completion_tokens: Math.round(totalTokens * 0.3),
                     total_tokens: totalTokens
-                }
+                },
+                usedCustomToken
             }).catch(err => console.error('[ai-support-chat] Token tracking error:', err));
         }
 

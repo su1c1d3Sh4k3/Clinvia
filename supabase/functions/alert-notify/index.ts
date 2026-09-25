@@ -1503,6 +1503,27 @@ serveMonitored("alert-notify", async (req) => {
             const destaques = abertos
                 .map((i) => `${i.component}: ${i.ai_summary ?? "sem análise"} (${i.event_count}x)`)
                 .join(" · ");
+            // Falha de envio da Meta e ruido individual e sinal COLETIVO: cada
+            // recusa vira incidente so-painel, mas o numero do dia contra a media
+            // de 7 dias e o que diz se a conta esta piorando. Nunca derruba o
+            // resumo: se a contagem falhar, o resumo sai sem a linha.
+            let linhaFalhasMeta = "";
+            try {
+                const { data: falhas } = await supabase.rpc("meta_send_failure_counts");
+                const linha = Array.isArray(falhas) ? falhas[0] : falhas;
+                if (linha) {
+                    const hoje = Number(linha.hoje ?? 0);
+                    const media = Number(linha.media_7d ?? 0);
+                    linhaFalhasMeta =
+                        `${hoje} mensagem(ns) falharam ao serem enviadas pela Meta hoje ` +
+                        `(média 7 dias: ${media.toFixed(1).replace(".", ",")})`;
+                }
+            } catch (err) {
+                console.error("[alert-notify] meta_send_failure_counts falhou:", err);
+            }
+            const destaquesComMeta = linhaFalhasMeta
+                ? `${linhaFalhasMeta} · ${destaques}`
+                : destaques;
             const inicio = new Date(Date.now() - horas * 60 * 60 * 1000).toISOString();
             // O resumo tem texto e template proprios (resumoTexto/TPL_RESUMO) e
             // NAO passa pelos quatro blocos; este objeto so alimenta o filtro de
@@ -1532,7 +1553,7 @@ serveMonitored("alert-notify", async (req) => {
             resumoParams = [
                 `${ddmmHHmm(inicio)} às ${ddmmHHmm(new Date().toISOString())}`,
                 String(abertos.length),
-                destaques,
+                destaquesComMeta,
             ];
         } else {
             incidentId = typeof body?.incident_id === "string" ? body.incident_id : "";

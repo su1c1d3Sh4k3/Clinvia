@@ -31,13 +31,24 @@ export interface TokenUsageParams {
         completion_tokens: number;
         total_tokens?: number;
     };
+    /**
+     * `true` quando a chamada saiu pela chave PROPRIA do cliente — nesse caso o
+     * consumo e dele e nao entra na nossa conta.
+     *
+     * Vem do `usedCustomToken` devolvido por `makeOpenAIRequest`, o unico lugar
+     * que sabe qual chave foi usada NO MOMENTO da chamada. Derivar isto do
+     * perfil (o que o banco fazia por default) mente sempre que a chave do
+     * cliente falha e a chamada cai na chave da plataforma: o gasto real vinha
+     * para nos marcado como se fosse dele.
+     */
+    usedCustomToken?: boolean;
 }
 
 export async function trackTokenUsage(
     supabaseAdmin: any,
     params: TokenUsageParams
 ): Promise<void> {
-    const { ownerId, teamMemberId, functionName, model, usage } = params;
+    const { ownerId, teamMemberId, functionName, model, usage, usedCustomToken } = params;
 
     if (!ownerId || !usage?.prompt_tokens) {
         console.log('[token-tracker] Skipping - missing ownerId or usage data');
@@ -54,7 +65,10 @@ export async function trackTokenUsage(
             p_model: model,
             p_prompt_tokens: usage.prompt_tokens,
             p_completion_tokens: usage.completion_tokens,
-            p_cost_usd: costUsd
+            p_cost_usd: costUsd,
+            // chave propria do cliente => o consumo nao e faturavel para nos.
+            // `undefined` deixa o banco no default de hoje (true).
+            p_billable: usedCustomToken === undefined ? null : !usedCustomToken
         });
 
         if (error) {
