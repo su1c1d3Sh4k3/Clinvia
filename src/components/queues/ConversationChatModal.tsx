@@ -26,6 +26,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
+import { mensagemDoErroDaFuncao } from "@/lib/functionError";
 import { ClientProfileModal } from "@/components/contacts/ClientProfileModal";
 import { NoteBubble } from "@/components/chat/NoteBubble";
 import { AddNoteModal } from "@/components/chat/AddNoteModal";
@@ -443,15 +444,10 @@ export function ConversationChatModal({
                 const { data, error } = await supabase.functions.invoke('instagram-send-message', { body: igPayload });
 
                 if (error || !data?.success) {
-                    let serverMessage: string | undefined;
-                    if (error && 'context' in (error as any) && (error as any).context) {
-                        try {
-                            const body = await (error as any).context.json();
-                            serverMessage = body?.message || body?.error;
-                            console.error("[ConversationChatModal/instagram] Edge Function body:", body);
-                        } catch { /* ignore */ }
-                    }
-                    toast.error(`Erro ao enviar: ${serverMessage || data?.error || error?.message || 'Erro desconhecido'}`);
+                    const motivo = error
+                        ? await mensagemDoErroDaFuncao(error, data?.error || 'Erro desconhecido')
+                        : (data?.error || 'Erro desconhecido');
+                    toast.error(`Erro ao enviar: ${motivo}`);
                     return;
                 }
 

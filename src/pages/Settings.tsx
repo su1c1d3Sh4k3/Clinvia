@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { User, Building2, Lock, Camera, Loader2, Bell, BellRing, Users, Volume2, DollarSign, Settings as SettingsIcon, Pen, Download, Smartphone, Monitor, CheckCircle2, Calendar, ListTodo, TrendingUp, Lightbulb, ChevronDown, ChevronUp, AlertCircle, Zap, Tag as TagIcon, PanelLeft } from "lucide-react";
+import { mensagemDoErroDaFuncao } from "@/lib/functionError";
 import { AutomationSettings } from "@/components/settings/AutomationSettings";
 import { TagsSettings } from "@/components/settings/TagsSettings";
 import { OrcamentoBrandingCard } from "@/components/settings/OrcamentoBrandingCard";
@@ -446,7 +447,7 @@ export default function Settings() {
             );
 
             if (error) {
-                throw error;
+                throw new Error(await mensagemDoErroDaFuncao(error, "Não foi possível excluir a conta."));
             }
 
             if (data?.error) {

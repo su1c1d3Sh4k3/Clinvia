@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { TEAM_MEMBER_COLUMNS } from "@/lib/dbColumns";
+import { mensagemDoErroDaFuncao } from "@/lib/functionError";
 import { useUserRole } from "@/hooks/useUserRole";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useOwnerId } from "@/hooks/useOwnerId";
@@ -188,16 +189,9 @@ export const TeamSettings = () => {
             const { data, error } = await supabase.functions.invoke("create-team-member", {
                 body: { ...newMember, owner_id: user.id },
             });
-            if (error) {
-                let errorMessage = "Erro ao criar membro";
-                try {
-                    if (error instanceof Error && 'context' in error) {
-                        const body = await (error as any).context.json();
-                        errorMessage = body.error || errorMessage;
-                    }
-                } catch {}
-                throw new Error(errorMessage);
-            }
+            // O desembrulho à mão lia só `body.error` e descartava `message`,
+            // que é onde o contrato põe o texto humano.
+            if (error) throw new Error(await mensagemDoErroDaFuncao(error, "Erro ao criar membro"));
             if (data.error) throw new Error(data.error);
             return data;
         },
@@ -244,16 +238,7 @@ export const TeamSettings = () => {
     const deleteMemberMutation = useMutation({
         mutationFn: async (id: string) => {
             const { data, error } = await supabase.functions.invoke("delete-team-member", { body: { id } });
-            if (error) {
-                let errorMessage = "Erro ao remover membro";
-                try {
-                    if (error instanceof Error && 'context' in error) {
-                        const body = await (error as any).context.json();
-                        errorMessage = body.error || errorMessage;
-                    }
-                } catch {}
-                throw new Error(errorMessage);
-            }
+            if (error) throw new Error(await mensagemDoErroDaFuncao(error, "Erro ao remover membro"));
             if (data.error) throw new Error(data.error);
         },
         onSuccess: () => {

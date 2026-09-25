@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { mensagemDoErroDaFuncao } from "@/lib/functionError";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Plus, ShieldCheck, KeyRound, MailCheck, Pencil, Search, Building2 } from "lucide-react";
@@ -145,15 +146,8 @@ export default function AdminTeam({ canEdit }: { canEdit: boolean }) {
 
     const callFunction = async (body: Record<string, unknown>) => {
         const { data, error } = await supabase.functions.invoke("admin-create-user", { body });
-        if (error) {
-            // O corpo do erro traz a mensagem humana do contrato de erros
-            let message = error.message;
-            try {
-                const parsed = await (error as any).context?.json?.();
-                if (parsed?.message) message = parsed.message;
-            } catch { /* mantém a mensagem padrão */ }
-            throw new Error(message);
-        }
+        // O corpo do erro traz a mensagem humana do contrato de erros
+        if (error) throw new Error(await mensagemDoErroDaFuncao(error, "Não foi possível criar o usuário."));
         if (data && data.success === false) throw new Error(data.message || data.error);
         return data;
     };

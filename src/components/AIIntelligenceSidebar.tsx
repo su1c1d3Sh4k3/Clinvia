@@ -29,6 +29,7 @@ import { Session } from "@supabase/supabase-js";
 import { useOwnerId } from "@/hooks/useOwnerId";
 import { useServiceDisplayNames } from "@/hooks/useServiceDisplayNames";
 import { cn } from "@/lib/utils";
+import { mensagemDoErroDaFuncao } from "@/lib/functionError";
 import { CRM_STAGES, STAGE_COLORS, TERMINAL_STAGES, type CrmStage } from "@/types/crm-client";
 
 const getScoreColor = (score: number) => {
@@ -186,13 +187,16 @@ export const AIIntelligenceSidebar = ({
     const loadingToast = toast.loading("Atualizando índice de satisfação...");
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      await supabase.functions.invoke("ai-analyze-conversation", {
+      // `functions.invoke` não lança: sem conferir `error`, uma análise que falhou
+      // continuava anunciando sucesso.
+      const { error } = await supabase.functions.invoke("ai-analyze-conversation", {
         body: { conversationId, userId: user?.id },
       });
+      if (error) throw new Error(await mensagemDoErroDaFuncao(error, "Erro ao atualizar índice."));
       await queryClient.invalidateQueries({ queryKey: ["ai-analysis", conversationId] });
       toast.success("Índice atualizado com sucesso!");
-    } catch {
-      toast.error("Erro ao atualizar índice.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao atualizar índice.");
     } finally {
       setIsUpdatingSatisfaction(false);
       toast.dismiss(loadingToast);
@@ -208,14 +212,17 @@ export const AIIntelligenceSidebar = ({
     setCopilotMessage("");
     setIsLoadingCopilot(true);
     try {
-      const { data } = await supabase.functions.invoke("ai-copilot-chat", {
+      const { data, error } = await supabase.functions.invoke("ai-copilot-chat", {
         body: { message: copilotMessage, conversationId, userId: session?.user?.id },
       });
+      // Sem conferir `error`, a falha não acrescentava nada e o balão ficava mudo
+      if (error) throw new Error(await mensagemDoErroDaFuncao(error, "Desculpe, ocorreu um erro."));
       if (data?.response) {
         setCopilotHistory(prev => [...prev, { role: "assistant", content: data.response }]);
       }
-    } catch {
-      setCopilotHistory(prev => [...prev, { role: "assistant", content: "Desculpe, ocorreu um erro." }]);
+    } catch (err) {
+      const content = err instanceof Error ? err.message : "Desculpe, ocorreu um erro.";
+      setCopilotHistory(prev => [...prev, { role: "assistant", content }]);
     } finally {
       setIsLoadingCopilot(false);
     }

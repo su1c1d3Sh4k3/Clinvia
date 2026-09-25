@@ -540,7 +540,7 @@ export default function IAConfig() {
 
             if (webhookError) {
                 // Erro de invocação da Edge Function (rede, auth) — apenas loga, não bloqueia
-                console.warn(`[IAConfig] Webhook invoke error for ${instance.name}:`, webhookError.message);
+                console.warn(`[IAConfig] Webhook invoke error for ${instance.name}:`, webhookError);
             } else if (!webhookResult?.success) {
                 // Webhook externo falhou — apenas loga, não bloqueia
                 console.warn(`[IAConfig] External webhook warning for ${instance.name}:`, webhookResult?.error);
@@ -598,7 +598,7 @@ export default function IAConfig() {
 
             if (webhookError) {
                 // Erro de invocação da Edge Function — apenas loga, não bloqueia
-                console.warn(`[IAConfig] Webhook invoke error for ${instance.account_name}:`, webhookError.message);
+                console.warn(`[IAConfig] Webhook invoke error for ${instance.account_name}:`, webhookError);
             } else if (!webhookResult?.success) {
                 // Webhook externo falhou — apenas loga, não bloqueia
                 console.warn(`[IAConfig] External webhook warning for ${instance.account_name}:`, webhookResult?.error);

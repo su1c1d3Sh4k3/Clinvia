@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { mensagemDoErroDaFuncao } from "@/lib/functionError";
 import { INSTANCE_COLUMNS_WITH_APIKEY } from "@/lib/dbColumns";
 import { useToast } from "@/hooks/use-toast";
 import { useOwnerId } from "@/hooks/useOwnerId";
@@ -488,7 +489,7 @@ export const NewMessageModal = ({ open, onOpenChange, prefilledPhone, prefilledC
                         messageType: "text",
                     },
                 });
-                if (sendError) throw new Error(sendError.message || "Falha ao enviar mensagem");
+                if (sendError) throw new Error(await mensagemDoErroDaFuncao(sendError, "Falha ao enviar mensagem"));
                 if (sendData?.error) throw new Error(sendData.error);
             } else {
                 const msgBody = isMetaSelected

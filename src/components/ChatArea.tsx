@@ -25,6 +25,7 @@ import { ForwardMessageModal } from "@/components/chat/ForwardMessageModal";
 import { ContactPickerModal } from "@/components/chat/ContactPickerModal";
 import { cn } from "@/lib/utils";
 import { contentTypeForUpload, conversationMediaPath } from "@/lib/fileTypes";
+import { mensagemDoErroDaFuncao } from "@/lib/functionError";
 import {
   Dialog,
   DialogContent,
@@ -405,14 +406,14 @@ export const ChatArea = ({
     const loadingToast = toast.loading("IA trabalhando...");
     try {
       const { data, error } = await supabase.functions.invoke("ai-suggest-response", { body: { conversationId, mode, text: message } });
-      if (error) throw error;
+      if (error) throw new Error(await mensagemDoErroDaFuncao(error, "Erro na IA"));
       if (data?.suggestion) {
         setMessage(data.suggestion);
         toast.success("Sugestão gerada!");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("AI Error:", error);
-      toast.error("Erro na IA");
+      toast.error(error?.message || "Erro na IA");
     } finally {
       toast.dismiss(loadingToast);
     }
@@ -572,7 +573,8 @@ export const ChatArea = ({
             message: { wasSentByApi: true }, // reação não deve assumir/assinar a conversa
           },
         });
-        if (error || data?.error) throw new Error(data?.message || error?.message || "Erro ao reagir");
+        if (error) throw new Error(await mensagemDoErroDaFuncao(error, "Erro ao reagir"));
+        if (data?.error) throw new Error(data?.message || data.error || "Erro ao reagir");
       } else {
         if (!instance?.apikey || !reactingToMessage.clientNumber) return;
         await uzapi.reactToMessage(instance.apikey, reactingToMessage.clientNumber, reactingToMessage.evolution_id, emoji);
@@ -629,15 +631,10 @@ export const ChatArea = ({
         setIsUploading(false);
 
         if (error || !data?.success) {
-          let serverMessage: string | undefined;
-          if (error && 'context' in (error as any) && (error as any).context) {
-            try {
-              const body = await (error as any).context.json();
-              serverMessage = body?.message || body?.error;
-              console.error("[ChatArea/instagram] Edge Function body:", body);
-            } catch { /* ignore */ }
-          }
-          toast.error(`Erro ao enviar: ${serverMessage || data?.error || error?.message || 'Erro desconhecido'}`);
+          const motivo = error
+            ? await mensagemDoErroDaFuncao(error, data?.error || "Erro desconhecido")
+            : (data?.error || "Erro desconhecido");
+          toast.error(`Erro ao enviar: ${motivo}`);
           return;
         }
 
@@ -724,13 +721,13 @@ export const ChatArea = ({
         }
       });
 
-      if (error) throw error;
+      if (error) throw new Error(await mensagemDoErroDaFuncao(error, "Erro ao enviar pesquisa de satisfação"));
 
       toast.success('Pesquisa de satisfação enviada!');
       setShowSurveyModal(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending survey:', error);
-      toast.error('Erro ao enviar pesquisa de satisfação');
+      toast.error(error?.message || 'Erro ao enviar pesquisa de satisfação');
     } finally {
       setIsSendingSurvey(false);
     }
@@ -818,17 +815,7 @@ export const ChatArea = ({
           message: { wasSentByApi: false }
         },
       });
-      if (error) {
-        let serverMessage: string | undefined;
-        if ('context' in (error as any) && (error as any).context) {
-          try {
-            const body = await (error as any).context.json();
-            serverMessage = body?.message || body?.error;
-            console.error("[handleSendContact] Edge Function body:", body);
-          } catch { /* ignore */ }
-        }
-        throw new Error(serverMessage || error.message || "Erro ao enviar contato");
-      }
+      if (error) throw new Error(await mensagemDoErroDaFuncao(error, "Erro ao enviar contato"));
       if (data?.error) throw new Error(data.message || data.error);
 
       queryClient.setQueriesData({ queryKey: ["messages", conversationId] }, (old: any) => {

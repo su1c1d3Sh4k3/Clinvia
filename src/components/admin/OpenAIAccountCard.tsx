@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { mensagemDoErroDaFuncao } from "@/lib/functionError";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -109,7 +110,7 @@ const OpenAIAccountCard = ({ profileId, canEdit, onAccountChanged }: OpenAIAccou
     /** As 4 ações de projeto passam pela mesma edge function (guard de admin + service role). */
     const callAccountAction = async (body: Record<string, unknown>) => {
         const { data, error } = await supabase.functions.invoke("admin-openai-account", { body: { profileId, ...body } });
-        if (error) throw error;
+        if (error) throw new Error(await mensagemDoErroDaFuncao(error, "Falha na operação"));
         if (!data?.success) throw new Error(data?.error || "Falha na operação");
         return data;
     };

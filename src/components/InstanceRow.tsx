@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useEffect } from "react";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { mensagemDoErroDaFuncao } from "@/lib/functionError";
 
 // Formata "tempo desde" uma data ISO (ex: "há 2min", "há 1h", "há 3d")
 function formatTimeSince(iso: string | null | undefined): string {
@@ -37,7 +38,7 @@ export const InstanceRow = ({ instance, onConnect }: InstanceRowProps) => {
                 body: { action: 'check_connection', instanceId: id },
             });
 
-            if (error) throw error;
+            if (error) throw new Error(await mensagemDoErroDaFuncao(error, "Não foi possível verificar a conexão."));
             return data;
         },
         onSuccess: (data) => {
@@ -47,9 +48,12 @@ export const InstanceRow = ({ instance, onConnect }: InstanceRowProps) => {
 
     const deleteMutation = useMutation({
         mutationFn: async (id: string) => {
-            await supabase.functions.invoke("uzapi-delete-instance", {
+            // O erro era descartado: a exclusão falhava e o onSuccess ainda
+            // anunciava "Instância deletada".
+            const { error } = await supabase.functions.invoke("uzapi-delete-instance", {
                 body: { instanceId: id },
             });
+            if (error) throw new Error(await mensagemDoErroDaFuncao(error, "Não foi possível excluir a instância."));
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["instances"] });

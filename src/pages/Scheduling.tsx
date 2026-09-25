@@ -28,6 +28,7 @@ import { useCrmAppointmentSync } from "@/hooks/useCrmAppointmentSync";
 import { useProfessionalDayBlocks, useProfessionalMonthBlocks } from "@/hooks/useProfessionalDayBlocks";
 import { useAgendaView } from "@/hooks/useAgendaView";
 import { useSuporteTour } from "@/lib/suporteTours";
+import { mensagemDoErroDaFuncao } from "@/lib/functionError";
 
 type AgendaMode = "profissionais" | "salas";
 
@@ -102,7 +103,7 @@ export default function Scheduling() {
                         redirect_uri: `${window.location.origin}/scheduling`,
                     },
                 });
-                if (error) throw error;
+                if (error) throw new Error(await mensagemDoErroDaFuncao(error, "Não foi possível concluir a conexão com o Google Calendar."));
                 if (data?.success) {
                     toast({
                         title: "Google Calendar conectado!",
@@ -354,7 +355,7 @@ export default function Scheduling() {
             const { data, error } = await supabase.functions.invoke("google-calendar-poll", {
                 body: { user_id: ownerId },
             });
-            if (error) throw error;
+            if (error) throw new Error(await mensagemDoErroDaFuncao(error, "Não foi possível sincronizar com o Google Calendar."));
             if (data?.success !== false) {
                 await refetchAppointments();
                 if (!silent) {

@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { SalesReport } from "@/types/sales";
+import { mensagemDoErroDaFuncao } from "@/lib/functionError";
 
 // Lista de relatórios salvos
 export function useSalesReports() {
@@ -44,7 +45,7 @@ export function useGenerateSalesReport() {
                 },
             });
 
-            if (response.error) throw response.error;
+            if (response.error) throw new Error(await mensagemDoErroDaFuncao(response.error, "Não foi possível gerar o relatório."));
             return response.data;
         },
         onSuccess: () => {

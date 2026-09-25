@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { mensagemDoErroDaFuncao } from "@/lib/functionError";
 import { PROFESSIONAL_GCAL_COLUMNS } from "@/lib/dbColumns";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Upload, X, CalendarDays, CheckCircle2, Unlink, RefreshCw } from "lucide-react";
@@ -1022,7 +1023,7 @@ function GoogleCalendarSection({ professionalId }: { professionalId: string }) {
             const { data, error } = await supabase.functions.invoke("google-calendar-poll", {
                 body: { user_id: ownerId, connection_id: connection.id },
             });
-            if (error) throw error;
+            if (error) throw new Error(await mensagemDoErroDaFuncao(error, "Não foi possível sincronizar com o Google Agenda."));
             const synced = data?.synced ?? 0;
             const imported = data?.imported ?? 0;
             toast({

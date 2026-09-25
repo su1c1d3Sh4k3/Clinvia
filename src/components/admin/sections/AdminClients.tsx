@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ChevronDown, ChevronUp, Search, Users, Briefcase, Calendar, MessageSquare, UserCheck, UserX, Clock, Check, X, Phone, Instagram, MapPin, Mail, Coins, Eye, AlertTriangle, Trash2, Ban, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
+import { mensagemDoErroDaFuncao } from "@/lib/functionError";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
 import TokenUsageCharts from "@/components/admin/TokenUsageCharts";
 import OpenAITokenManager from "@/components/admin/OpenAITokenManager";
@@ -218,7 +219,7 @@ export default function AdminClients({ canEdit, isSuperAdmin }: { canEdit: boole
                 body: { profile_id: profileId, action: "approve" }
             });
 
-            if (error) throw error;
+            if (error) throw new Error(await mensagemDoErroDaFuncao(error, "Não foi possível aprovar o cadastro."));
             if (!data.success) throw new Error(data.error);
 
             // Send approval webhook with all client data
@@ -257,7 +258,7 @@ export default function AdminClients({ canEdit, isSuperAdmin }: { canEdit: boole
                 body: { profile_id: profileId, action: "reject" }
             });
 
-            if (error) throw error;
+            if (error) throw new Error(await mensagemDoErroDaFuncao(error, "Não foi possível rejeitar o cadastro."));
             if (!data.success) throw new Error(data.error);
 
             toast.success("Cadastro rejeitado");
@@ -349,14 +350,7 @@ export default function AdminClients({ canEdit, isSuperAdmin }: { canEdit: boole
             // FunctionsHttpError só diz "non-2xx status code" — o motivo real vem
             // no corpo da resposta, que o invoke não lê. Sem isto o super admin
             // não tem como saber por que a exclusão falhou.
-            if (error) {
-                let detalhe = error.message;
-                try {
-                    const corpo = await (error as any)?.context?.json?.();
-                    if (corpo?.error) detalhe = corpo.error;
-                } catch { /* corpo não era JSON */ }
-                throw new Error(detalhe);
-            }
+            if (error) throw new Error(await mensagemDoErroDaFuncao(error, "Não foi possível excluir o cliente."));
             if (!data?.success) throw new Error(data?.error || "Erro desconhecido");
 
             const nome = profileToDelete.full_name || profileToDelete.email;

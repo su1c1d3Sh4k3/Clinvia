@@ -9,6 +9,7 @@ import { Lock, Mail, ShieldAlert, ShieldCheck, Timer } from "lucide-react";
 import { toast } from "sonner";
 import TurnstileWidget, { TurnstileWidgetHandle } from "@/components/TurnstileWidget";
 import { getOrCreateSessionId, detectDeviceLabel } from "@/hooks/useSessionLock";
+import { mensagemDoErroDaFuncao } from "@/lib/functionError";
 
 /** Tempo que o admin tem para digitar o código antes de voltar para o login. */
 const CODE_WINDOW_SECONDS = 60;
@@ -19,14 +20,7 @@ const CODE_WINDOW_SECONDS = 60;
 async function invokeAdmin2fa(body: Record<string, unknown>) {
     const { data, error } = await supabase.functions.invoke("admin-2fa", { body });
     if (error) {
-        let detail = "";
-        try {
-            const parsed = await (error as any).context?.json?.();
-            detail = parsed?.message || parsed?.error || "";
-        } catch {
-            /* resposta sem corpo JSON */
-        }
-        throw new Error(detail || error.message || "Falha na verificação em duas etapas.");
+        throw new Error(await mensagemDoErroDaFuncao(error, "Falha na verificação em duas etapas."));
     }
     if (data?.success === false) throw new Error(data.message || data.error);
     return data as { sent_to?: string[] };
@@ -125,7 +119,9 @@ const AdminAuth = () => {
                 });
 
                 if (verifyError || !verifyData?.success) {
-                    toast.error("Falha na verificação de segurança");
+                    toast.error(verifyError
+                        ? await mensagemDoErroDaFuncao(verifyError, "Falha na verificação de segurança")
+                        : "Falha na verificação de segurança");
                     setIsLoading(false);
                     resetCaptcha();
                     return;

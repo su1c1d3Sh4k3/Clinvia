@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { mensagemDoErroDaFuncao } from "@/lib/functionError";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
@@ -172,7 +173,8 @@ export function SystemUpdateModal({ open, onClose }: SystemUpdateModalProps) {
       const { data, error } = await supabase.functions.invoke("ai-suggest-response", {
         body: { mode: "fix", text: textToReview },
       });
-      if (error || !data?.suggestion) throw new Error(error?.message || "Sem resposta da IA");
+      if (error) throw new Error(await mensagemDoErroDaFuncao(error, "Sem resposta da IA"));
+      if (!data?.suggestion) throw new Error("Sem resposta da IA");
 
       // Separar resultado: primeira linha → título, resto → conteúdo
       const lines = data.suggestion.split("\n");

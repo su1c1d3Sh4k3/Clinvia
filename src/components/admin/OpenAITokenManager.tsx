@@ -6,6 +6,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Key, Eye, Copy, CheckCircle, XCircle, Loader2, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { mensagemDoErroDaFuncao } from "@/lib/functionError";
 
 interface OpenAITokenManagerProps {
     profileId: string;
@@ -39,7 +40,7 @@ const OpenAITokenManager = ({
             const { data, error } = await supabase.functions.invoke("admin-openai-account", {
                 body: { profileId, action: "reveal" },
             });
-            if (error) throw error;
+            if (error) throw new Error(await mensagemDoErroDaFuncao(error, "Token indisponível"));
             if (!data?.token) throw new Error(data?.error || "Token indisponível");
             setToken(data.token);
             setTestResult(null);
@@ -57,7 +58,7 @@ const OpenAITokenManager = ({
             const { data, error } = await supabase.functions.invoke("admin-openai-account", {
                 body: { profileId, action: "reveal" },
             });
-            if (error) throw error;
+            if (error) throw new Error(await mensagemDoErroDaFuncao(error, "Token indisponível"));
             if (!data?.token) throw new Error(data?.error || "Token indisponível");
             await navigator.clipboard.writeText(data.token);
             toast.success("Chave copiada.");
@@ -83,7 +84,10 @@ const OpenAITokenManager = ({
             });
 
             if (error) {
-                setTestResult({ success: false, message: error.message });
+                setTestResult({
+                    success: false,
+                    message: await mensagemDoErroDaFuncao(error, "Não foi possível testar o token."),
+                });
             } else if (data?.success) {
                 setTestResult({ success: true, message: data.message });
             } else {
@@ -109,7 +113,7 @@ const OpenAITokenManager = ({
                 }
             });
 
-            if (error) throw error;
+            if (error) throw new Error(await mensagemDoErroDaFuncao(error, "Não foi possível salvar o token."));
             if (!data?.success) throw new Error(data?.error || "Erro desconhecido");
 
             setToken("");
@@ -136,7 +140,7 @@ const OpenAITokenManager = ({
                 }
             });
 
-            if (error) throw error;
+            if (error) throw new Error(await mensagemDoErroDaFuncao(error, "Não foi possível remover o token."));
             if (!data?.success) throw new Error(data?.error || "Erro desconhecido");
 
             setToken("");

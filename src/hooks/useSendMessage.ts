@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { corpoDoErroDaFuncao, mensagemDoErroDaFuncao } from "@/lib/functionError";
 
 /**
  * Parameters for sending a message.
@@ -112,28 +113,13 @@ export const useSendMessage = () => {
           });
 
           if (error) {
-            let serverMessage: string | undefined;
-            let serverErrorCode: string | undefined;
-            try {
-              if ('context' in (error as any) && (error as any).context) {
-                const body = await (error as any).context.json();
-                serverMessage = body?.message || body?.error;
-                serverErrorCode = body?.error;
-                console.error(
-                  "[useSendMessage] Edge Function body:",
-                  body,
-                  "status:",
-                  (error as any).context?.status
-                );
-              }
-            } catch (parseErr) {
-              console.error("[useSendMessage] Falha ao parsear context body:", parseErr);
-            }
-            console.error("[useSendMessage] SDK error raw:", error);
+            const corpo = await corpoDoErroDaFuncao(error);
+            console.error("[useSendMessage] Edge Function body:", corpo, "SDK error raw:", error);
             const e = new Error(
-              serverMessage || error.message || "Erro ao enviar mensagem via servidor."
+              await mensagemDoErroDaFuncao(error, "Erro ao enviar mensagem via servidor.")
             );
-            if (serverErrorCode) (e as any).code = serverErrorCode;
+            // O código estável do contrato é o que o chamador usa para ramificar.
+            if (corpo?.error) (e as any).code = corpo.error;
             throw e;
           }
 

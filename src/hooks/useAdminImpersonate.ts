@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { getOrCreateSessionId, detectDeviceLabel } from './useSessionLock';
+import { mensagemDoErroDaFuncao } from '@/lib/functionError';
 
 const IMPERSONATION_KEY = 'clinvia_impersonation';
 const ADMIN_SESSION_KEY = 'clinvia_admin_session';
@@ -95,7 +96,9 @@ export function useAdminImpersonate() {
             });
 
             if (error || !data?.success) {
-                toast.error(data?.error || 'Erro ao acessar como cliente');
+                toast.error(error
+                    ? await mensagemDoErroDaFuncao(error, 'Erro ao acessar como cliente')
+                    : (data?.error || 'Erro ao acessar como cliente'));
                 localStorage.removeItem(ADMIN_SESSION_KEY);
                 return false;
             }
@@ -179,7 +182,10 @@ export function useAdminImpersonate() {
             });
 
             if (error || !data?.success) {
-                toast.error(data?.error || 'Erro ao alternar usuário. Se persistir, volte ao admin e acesse novamente.');
+                const reserva = 'Erro ao alternar usuário. Se persistir, volte ao admin e acesse novamente.';
+                toast.error(error
+                    ? await mensagemDoErroDaFuncao(error, reserva)
+                    : (data?.error || reserva));
                 return false;
             }
 

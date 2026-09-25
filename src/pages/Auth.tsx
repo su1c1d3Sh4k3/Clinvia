@@ -13,6 +13,7 @@ import TurnstileWidget, { TurnstileWidgetHandle } from "@/components/TurnstileWi
 import { sendClientSignupWebhook } from "@/utils/sendWebhook";
 import { ForgotPasswordDialog } from "@/components/auth/ForgotPasswordDialog";
 import { AuthShell } from "@/components/auth/AuthShell";
+import { mensagemDoErroDaFuncao } from "@/lib/functionError";
 
 // Cores fixas (hex, nao tokens): a caixa de login e IDENTICA no claro e no escuro.
 const INPUT_CLASS =
@@ -115,7 +116,9 @@ const Auth = () => {
         });
 
         if (verifyError || !verifyData?.success) {
-          toast.error("Falha na verificação de segurança. Tente novamente.");
+          toast.error(verifyError
+            ? await mensagemDoErroDaFuncao(verifyError, "Falha na verificação de segurança. Tente novamente.")
+            : "Falha na verificação de segurança. Tente novamente.");
           setIsLoading(false);
           // Token expirado/consumido — gera um novo desafio (tokens são de uso único)
           setLoginCaptchaToken(null);
@@ -163,7 +166,9 @@ const Auth = () => {
           // Token expirado/consumido — gera um novo desafio (tokens são de uso único)
           setSignupCaptchaToken(null);
           signupCaptchaRef.current?.reset();
-          throw new Error("Falha na verificação de segurança. Tente novamente.");
+          throw new Error(verifyError
+            ? await mensagemDoErroDaFuncao(verifyError, "Falha na verificação de segurança. Tente novamente.")
+            : "Falha na verificação de segurança. Tente novamente.");
         }
       }
 

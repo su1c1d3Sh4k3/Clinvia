@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useOwnerId } from "./useOwnerId";
+import { mensagemDoErroDaFuncao } from "@/lib/functionError";
 
 /**
  * Ambiente Sandbox da IA — estado da página /ia-sandbox.
@@ -335,8 +336,7 @@ export function useSandboxActions(sessionId: string | undefined) {
             });
             // O erro útil do edge function vem no corpo, não na mensagem do invoke
             if (error) {
-                const detalhe = (data as any)?.message || (error as any)?.message;
-                throw new Error(detalhe || "Não foi possível falar com o ambiente de teste.");
+                throw new Error(await mensagemDoErroDaFuncao(error, "Não foi possível falar com o ambiente de teste."));
             }
             if ((data as any)?.success === false) {
                 throw new Error((data as any).message || "O fluxo da IA não respondeu.");

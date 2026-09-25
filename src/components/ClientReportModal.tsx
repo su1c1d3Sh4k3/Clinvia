@@ -10,6 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Sparkles, RefreshCw, FileText, User, Phone, Mail, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { mensagemDoErroDaFuncao } from "@/lib/functionError";
 import { useToast } from "@/hooks/use-toast";
 import { marked } from "marked";
 
@@ -70,7 +71,7 @@ export const ClientReportModal = ({
                 body: { contactId: contact.id },
             });
 
-            if (error) throw error;
+            if (error) throw new Error(await mensagemDoErroDaFuncao(error, "Falha ao conectar com a IA."));
 
             setReport(data.report);
             toast({

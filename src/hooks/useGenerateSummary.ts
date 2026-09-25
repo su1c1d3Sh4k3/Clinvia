@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { mensagemDoErroDaFuncao } from "@/lib/functionError";
 
 export const useGenerateSummary = () => {
   const queryClient = useQueryClient();
@@ -12,7 +13,7 @@ export const useGenerateSummary = () => {
         body: { conversationId },
       });
 
-      if (error) throw error;
+      if (error) throw new Error(await mensagemDoErroDaFuncao(error, "Não foi possível gerar o resumo."));
       return data;
     },
     onSuccess: (_, conversationId) => {

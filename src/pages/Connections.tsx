@@ -267,7 +267,7 @@ const Connections = () => {
                 }
             });
 
-            if (error) throw error;
+            if (error) throw new Error(await mensagemDoErroDaFuncao(error, "Não foi possível concluir a conexão com o Instagram."));
 
             if (data.success) {
                 toast({
@@ -482,8 +482,8 @@ const Connections = () => {
                 }
             );
 
-            if (error) throw error;
-            if (!data.success) throw new Error(data.error || "Failed to create instance");
+            if (error) throw new Error(await mensagemDoErroDaFuncao(error, "Não foi possível criar a instância."));
+            if (!data.success) throw new Error(data.error || "Não foi possível criar a instância.");
 
             return data;
         },
@@ -514,8 +514,8 @@ const Connections = () => {
                 body: { instanceId: id, phoneNumber: phone },
             });
 
-            if (error) throw error;
-            if (!data.success) throw new Error(data.error || "Failed to generate pair code");
+            if (error) throw new Error(await mensagemDoErroDaFuncao(error, "Não foi possível gerar o código de pareamento."));
+            if (!data.success) throw new Error(data.error || "Não foi possível gerar o código de pareamento.");
             return data;
         },
         onSuccess: (data) => {
@@ -541,7 +541,7 @@ const Connections = () => {
                 body: { action: 'check_connection', instanceId: id },
             });
 
-            if (error) throw error;
+            if (error) throw new Error(await mensagemDoErroDaFuncao(error, "Não foi possível verificar a conexão."));
             return data;
         },
         onSuccess: () => {
@@ -700,7 +700,10 @@ const Connections = () => {
                             console.error('[WhatsApp] Webhook configuration error:', webhookError);
                             toast({
                                 title: "Aviso",
-                                description: "Webhook não configurado automaticamente. Configure manualmente se necessário.",
+                                description: await mensagemDoErroDaFuncao(
+                                    webhookError,
+                                    "Webhook não configurado automaticamente. Configure manualmente se necessário.",
+                                ),
                                 variant: "destructive"
                             });
                         } else {

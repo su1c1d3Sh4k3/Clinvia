@@ -9,6 +9,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { mensagemDoErroDaFuncao } from "@/lib/functionError";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -262,7 +263,7 @@ export default function AdminAlerts({ canEdit }: { canEdit: boolean }) {
             const { data, error } = await supabase.functions.invoke("alert-notify", {
                 body: { action: "test", message: "disparo de teste pelo painel de alertas" },
             });
-            if (error) throw error;
+            if (error) throw new Error(await mensagemDoErroDaFuncao(error, "Não foi possível disparar o alerta de teste."));
             return data;
         },
         onSuccess: (d) => {

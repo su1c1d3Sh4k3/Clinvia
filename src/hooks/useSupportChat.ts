@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { SupportMessage, SupportTicket } from "@/types/support";
+import { mensagemDoErroDaFuncao } from "@/lib/functionError";
 
 const LAST_SEEN_KEY = "clinvia:support-last-seen";
 
@@ -159,8 +160,7 @@ export function useSendToAi() {
             });
             if (error) {
                 // erro HTTP: o corpo traz a mensagem humana do contrato de erros
-                const detail = await (error as any)?.context?.json?.().catch(() => null);
-                throw new Error(detail?.message || error.message || "Não foi possível falar com o assistente");
+                throw new Error(await mensagemDoErroDaFuncao(error, "Não foi possível falar com o assistente"));
             }
             if (data && data.success === false) throw new Error(data.message || "Não foi possível falar com o assistente");
             return data as { ticket_id: string; transferred: boolean; handled_by: string; message: SupportMessage };

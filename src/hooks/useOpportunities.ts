@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { mensagemDoErroDaFuncao } from "@/lib/functionError";
 
 // =============================================
 // Types
@@ -153,7 +154,7 @@ export function useGenerateOpportunities() {
     return useMutation({
         mutationFn: async () => {
             const { data, error } = await supabase.functions.invoke("generate-opportunities", {});
-            if (error) throw error;
+            if (error) throw new Error(await mensagemDoErroDaFuncao(error, "Não foi possível gerar as oportunidades."));
             return data;
         },
         onSuccess: (data) => {

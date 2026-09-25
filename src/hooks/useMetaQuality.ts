@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { mensagemDoErroDaFuncao } from "@/lib/functionError";
 
 export interface MetaQualityInstance {
     instance_id: string;
@@ -26,7 +27,7 @@ export function useMetaQuality() {
             const { data, error } = await supabase.functions.invoke("meta-quality-status", {
                 body: {},
             });
-            if (error) throw error;
+            if (error) throw new Error(await mensagemDoErroDaFuncao(error, "Não foi possível ler a qualidade das conexões Meta."));
             return (data?.instances || []) as MetaQualityInstance[];
         },
         staleTime: 0,

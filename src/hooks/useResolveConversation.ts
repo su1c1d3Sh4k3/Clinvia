@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { mensagemDoErroDaFuncao } from "@/lib/functionError";
 
 export const useResolveConversation = () => {
   const queryClient = useQueryClient();
@@ -12,7 +13,7 @@ export const useResolveConversation = () => {
         body: { conversationId },
       });
 
-      if (error) throw error;
+      if (error) throw new Error(await mensagemDoErroDaFuncao(error, "Não foi possível resolver o ticket."));
       return data;
     },
     onSuccess: (data, conversationId) => {
