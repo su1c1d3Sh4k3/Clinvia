@@ -1,5 +1,5 @@
 import { serveMonitored } from "../_shared/serve-monitored.ts";
-import { reportIncident } from "../_shared/report-incident.ts";
+import { reportIncident, reportErroDeBanco } from "../_shared/report-incident.ts";
 import {
     corsHeaders,
     createSupabaseClient,
@@ -168,6 +168,9 @@ serveMonitored("webhook-handle-status", async (req) => {
             let updated = 0;
             let archived = 0;
             let notFound = 0;
+            // Um recibo pode trazer dezenas de wamids e o erro tende a ser o mesmo
+            // para todos. Guarda o primeiro e reporta UMA vez depois do laco.
+            let erroDeRecibo: unknown = null;
 
             for (const messageId of messageIds) {
                 const { data, error: updateError } = await supabase
@@ -178,6 +181,7 @@ serveMonitored("webhook-handle-status", async (req) => {
 
                 if (updateError) {
                     console.error('[webhook-handle-status] Error updating message:', messageId, updateError);
+                    erroDeRecibo ??= updateError;
                 } else if (data && data.length > 0) {
                     console.log('[webhook-handle-status] Updated message:', messageId, '→', status);
                     updated++;
@@ -198,6 +202,21 @@ serveMonitored("webhook-handle-status", async (req) => {
             // `canal:whatsapp-alertas`, que vive fora do canal de proposito.
             if (status === 'failed' && updated + archived > 0) {
                 reportarRejeicao(payload, updated + archived);
+            }
+
+            // Familia PROPRIA, `recibo:`, e nao `recebimento:`. O que se perde
+            // aqui e o comprovante de entrega de uma mensagem que JA existe e JA
+            // saiu — o balao fica em "enviada" quando deveria dizer "lida". Nao
+            // ha mensagem de paciente em risco, entao isto e painel, nao telefone.
+            if (erroDeRecibo) {
+                reportErroDeBanco({
+                    familia: 'recibo:banco-',
+                    route: 'atualizar_status',
+                    error: erroDeRecibo,
+                    instancia: String(payload?.instanceName ?? '').trim() || null,
+                    ignorar: [],
+                    context: { status, quantos: messageIds.length },
+                });
             }
 
             return new Response(

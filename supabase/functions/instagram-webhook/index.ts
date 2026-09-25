@@ -7,7 +7,7 @@ import {
     mapMessageType
 } from "../_shared/utils.ts";
 import { buildBdData } from "../_shared/bd-data.ts";
-import { reportIncident } from "../_shared/report-incident.ts";
+import { reportIncident, reportErroDeBanco } from "../_shared/report-incident.ts";
 import { fetchProvider } from "../_shared/provider-errors.ts";
 /**
  * Tipo do anexo do Direct → vocabulário UAZAPI, o mesmo que o WhatsApp manda
@@ -585,10 +585,32 @@ serveMonitored("instagram-webhook", async (req) => {
                                             console.log('[INSTAGRAM WEBHOOK] Contact created concurrently, reusing:', contact.id);
                                         } else {
                                             console.error('[INSTAGRAM WEBHOOK] Duplicate contact error but re-select failed');
+                                            // 23505 e benigno QUANDO a releitura acha a linha.
+                                            // Aqui ela nao achou: o contato existe para o indice
+                                            // e nao existe para a consulta, e a mensagem se perde.
+                                            reportErroDeBanco({
+                                                familia: 'recebimento:banco-',
+                                                route: 'criar_contato_releitura',
+                                                error: contactError,
+                                                instancia: instagramInstance.account_name || null,
+                                                ownerId: userId,
+                                                ignorar: [],
+                                                context: { canal: 'instagram' },
+                                            });
                                             continue;
                                         }
                                     } else {
                                         console.error('[INSTAGRAM WEBHOOK] Error creating contact:', contactError);
+                                        // O `continue` abaixo descarta a mensagem: sem contato
+                                        // nao ha onde grava-la, e o Direct ja recebeu 200.
+                                        reportErroDeBanco({
+                                            familia: 'recebimento:banco-',
+                                            route: 'criar_contato',
+                                            error: contactError,
+                                            instancia: instagramInstance.account_name || null,
+                                            ownerId: userId,
+                                            context: { canal: 'instagram' },
+                                        });
                                         continue;
                                     }
                                 } else {
@@ -727,6 +749,18 @@ serveMonitored("instagram-webhook", async (req) => {
 
                                 if (convError) {
                                     console.error('[INSTAGRAM WEBHOOK] Error creating conversation:', convError);
+                                    // `ignorar: []` de proposito. O 23505 so e benigno
+                                    // onde existe a releitura que recupera a linha; aqui
+                                    // nao existe — qualquer erro descarta a mensagem.
+                                    reportErroDeBanco({
+                                        familia: 'recebimento:banco-',
+                                        route: 'criar_conversa',
+                                        error: convError,
+                                        instancia: instagramInstance.account_name || null,
+                                        ownerId: userId,
+                                        ignorar: [],
+                                        context: { canal: 'instagram' },
+                                    });
                                     continue;
                                 }
                                 conversation = newConv;

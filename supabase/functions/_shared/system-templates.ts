@@ -356,15 +356,29 @@ export async function logTemplateSend(supabase: any, params: {
     sentVia: "automation" | "campaign";
 }): Promise<void> {
     try {
-        await supabase.from("template_sends").insert({
+        // O `error` do supabase-js nao lanca: sem ler aqui, uma recusa do banco
+        // sumia inteira e o catch abaixo so pegava queda de rede.
+        const { error } = await supabase.from("template_sends").insert({
             user_id: params.userId,
             template_name: params.templateName,
             conversation_id: params.conversationId || null,
             contact_id: params.contactId || null,
             sent_via: params.sentVia,
         });
+        if (error) throw error;
     } catch (e) {
         console.error("[template-sends] log failed:", e);
+        // Nada de paciente se perde: o template FOI enviado. O que se perde e a
+        // contagem do dashboard de Satisfacao, que passa a subestimar em silencio.
+        reportIncident({
+            component: "template-sends:log",
+            route: "log_template_send",
+            httpCode: 500,
+            error: e,
+            ownerId: params.userId,
+            message: "o envio do template nao foi registrado em template_sends — o dashboard de Satisfacao subconta",
+            context: { template: params.templateName, via: params.sentVia },
+        });
     }
 }
 

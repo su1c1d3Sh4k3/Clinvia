@@ -1,4 +1,5 @@
 import { fetchProvider } from "./provider-errors.ts";
+import { reportIncident } from "./report-incident.ts";
 
 // Token Tracker Utility - Shared across Edge Functions
 // Price table in USD per 1M tokens
@@ -148,6 +149,16 @@ export async function encryptToken(plainToken: string): Promise<string | null> {
         return 'enc:' + btoa(String.fromCharCode(...combined));
     } catch (err) {
         console.error('[encryptToken] Error:', err);
+        // Devolver null aqui faz o chamador guardar a chave do cliente em texto
+        // puro no banco. Falhar em silencio nisto e criar um vazamento por
+        // acidente, entao isto grita.
+        reportIncident({
+            component: 'token:cripto-falhou',
+            route: 'encrypt_token',
+            httpCode: 500,
+            error: err,
+            message: 'nao foi possivel criptografar a chave da OpenAI — ela seria gravada em texto puro',
+        });
         return null;
     }
 }
@@ -166,6 +177,15 @@ export async function decryptToken(storedToken: string): Promise<string> {
         const key = await getEncryptionKey();
         if (!key) {
             console.error('[decryptToken] OPENAI_TOKEN_ENCRYPTION_KEY not set but encrypted token found');
+            // Existe token criptografado e sumiu a chave que o abre: TODA conta
+            // com chave propria cai calada na chave da plataforma, e a conta
+            // errada passa a pagar a IA do cliente.
+            reportIncident({
+                component: 'token:cripto-ausente',
+                route: 'decrypt_token',
+                httpCode: 500,
+                message: 'OPENAI_TOKEN_ENCRYPTION_KEY nao esta definida e ha token criptografado — a conta cai na chave da plataforma',
+            });
             return '';
         }
 
@@ -182,6 +202,13 @@ export async function decryptToken(storedToken: string): Promise<string> {
         return new TextDecoder().decode(decrypted);
     } catch (err) {
         console.error('[decryptToken] Error:', err);
+        reportIncident({
+            component: 'token:cripto-ilegivel',
+            route: 'decrypt_token',
+            httpCode: 500,
+            error: err,
+            message: 'o token criptografado da OpenAI nao abriu — a conta cai na chave da plataforma',
+        });
         return '';
     }
 }
@@ -218,6 +245,16 @@ export async function getOpenAIToken(
         }
     } catch (err) {
         console.error('[getOpenAIToken] Error fetching custom token:', err);
+        // Mesmo desfecho do caso acima, por outro caminho: a leitura do perfil
+        // falhou e o consumo do cliente vai para a chave da plataforma.
+        reportIncident({
+            component: 'token:openai-leitura',
+            route: 'get_openai_token',
+            httpCode: 500,
+            error: err,
+            ownerId,
+            message: 'nao foi possivel ler a chave OpenAI da conta — o consumo dela foi para a chave da plataforma',
+        });
     }
 
     return { token: defaultToken, isCustom: false };

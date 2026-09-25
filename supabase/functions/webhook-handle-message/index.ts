@@ -14,7 +14,7 @@ import {
 import { makeOpenAIRequest, trackTokenUsage } from "../_shared/token-tracker.ts";
 import { AC_FREE_TEXT_STATES, matchAcButtonId } from "../_shared/appointment-confirmation-buttons.ts";
 import { buildBdData } from "../_shared/bd-data.ts";
-import { reportIncident, HEADER_JA_REPORTADO } from "../_shared/report-incident.ts";
+import { reportIncident, reportErroDeBanco, HEADER_JA_REPORTADO } from "../_shared/report-incident.ts";
 import { fetchProvider } from "../_shared/provider-errors.ts";
 // EdgeRuntime.waitUntil mantém o processo vivo após o return 200 para que
 // tasks de background (persistir foto, download de mídia) terminem mesmo
@@ -570,6 +570,15 @@ serveMonitored("webhook-handle-message", async (req) => {
         const userId = instance.user_id;
         if (!userId) {
             console.error('[webhook-handle-message] Instance has no user_id!');
+            // Instancia sem dono nao processa mensagem nenhuma: e perda de 100%
+            // do que chegar por ela, e calada, porque o 400 nao acorda o envelope.
+            reportIncident({
+                component: `instancia:sem-dono (${instanceName})`,
+                route: 'fetch_instance',
+                httpCode: 400,
+                message: `instancia ${instanceName} nao tem user_id — nenhuma mensagem dela e processada`,
+                context: { instancia: instanceName, instance_id: instance.id },
+            });
             return new Response(
                 JSON.stringify({ success: false, error: "Instance has no user_id" }),
                 { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -934,6 +943,20 @@ serveMonitored("webhook-handle-message", async (req) => {
                             );
                         }
                     }
+
+                    // So reporta o que o fluxo ABSORVEU. Se nao sobrou contato, a
+                    // mensagem se perde e quem relata e o `recebimento:perdida-*`
+                    // la embaixo, com gravidade critica — dois incidentes para o
+                    // mesmo evento seriam duas ligacoes para o mesmo problema.
+                    if (contact) {
+                        reportErroDeBanco({
+                            familia: 'recebimento:banco-',
+                            route: 'criar_contato',
+                            error: createError,
+                            instancia: instanceName,
+                            ownerId: userId,
+                        });
+                    }
                 } else {
                     contact = newContact;
 
@@ -1094,6 +1117,15 @@ serveMonitored("webhook-handle-message", async (req) => {
 
                     if (migrateError) {
                         console.error('[webhook-handle-message] Error migrating orphaned conversation:', migrateError);
+                        reportIncident({
+                            component: `conversa:orfa-migracao (${instanceName})`,
+                            route: 'migrar_conversa_orfa',
+                            httpCode: 500,
+                            error: migrateError,
+                            message: `conversa orfa nao migrou para ${instanceName} — o historico do cliente fica partido em duas`,
+                            ownerId: userId,
+                            context: { instancia: instanceName, conversation_id: orphanedConvs[0].id },
+                        });
                     } else {
                         conversations = [{ ...orphanedConvs[0], instance_id: instance.id }];
                     }
@@ -1262,6 +1294,18 @@ serveMonitored("webhook-handle-message", async (req) => {
 
                     if (existingConvs && existingConvs.length > 0) {
                         conversation = existingConvs[0];
+                    }
+
+                    // So reporta quando a recuperacao deu certo. Sem conversa, a
+                    // mensagem morre e quem relata e o `recebimento:perdida-*`.
+                    if (conversation) {
+                        reportErroDeBanco({
+                            familia: 'recebimento:banco-',
+                            route: 'criar_conversa',
+                            error: convError,
+                            instancia: instanceName,
+                            ownerId: userId,
+                        });
                     }
                 } else {
                     conversation = newConv;
@@ -2009,6 +2053,11 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                     console.error('[webhook-handle-message] Exception finding IA funnel:', err);
                 }
 
+                // `fetchProvider` JA reporta o que ele sabe classificar em
+                // `webhooks.clinvia.com.br` (401/403, 429, 5xx e falha de rede)
+                // como `n8n:*`. Este marcador evita relatar a MESMA falha duas
+                // vezes: depois dele, o catch abaixo cala.
+                let n8nJaChamado = false;
                 try {
                     // ── bd_data: mesmo bloco (mesmas chaves, mesma ordem) que o
                     // instagram-webhook envia — montado em _shared/bd-data.ts ──
@@ -2028,6 +2077,7 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
 
                     const forwardedPayload = { ...payload, bd_data: bdData };
 
+                    n8nJaChamado = true;
                     const webhookResponse = await fetchProvider(n8nForwardUrl, {
                         method: 'POST',
                         headers: {
@@ -2042,9 +2092,43 @@ Responda APENAS com o texto do feedback, sem formatação JSON ou markdown.`;
                     if (!webhookResponse.ok) {
                         const errorText = await webhookResponse.text();
                         console.error('[webhook-handle-message] Webhook Error Response:', errorText);
+                        // O 404 do n8n ("webhook not registered") cai aqui, e e o
+                        // pior deles: a IA nunca responde o paciente e a conversa
+                        // fica parada na fila da IA sem ninguem olhar.
+                        const classificado = webhookResponse.status === 401 ||
+                            webhookResponse.status === 403 ||
+                            webhookResponse.status === 429 ||
+                            webhookResponse.status >= 500;
+                        if (!classificado) {
+                            reportIncident({
+                                component: `n8n:repasse-recusado (${instanceName})`,
+                                route: 'repassar_n8n',
+                                httpCode: webhookResponse.status,
+                                message: `o n8n recusou o repasse com HTTP ${webhookResponse.status} — a IA nao respondeu esta mensagem`,
+                                ownerId: userId,
+                                context: {
+                                    instancia: instanceName,
+                                    status: webhookResponse.status,
+                                    resposta: errorText.slice(0, 300),
+                                },
+                            });
+                        }
                     }
                 } catch (forwardError) {
                     console.error('[webhook-handle-message] Forward error:', forwardError);
+                    if (!n8nJaChamado) {
+                        // Quebrou ANTES do fetch: montar o bd_data falhou. Nada
+                        // saiu para a IA e o `fetchProvider` nao tem o que relatar.
+                        reportIncident({
+                            component: `n8n:repasse-falhou (${instanceName})`,
+                            route: 'montar_bd_data',
+                            httpCode: 500,
+                            error: forwardError,
+                            message: `o repasse para a IA quebrou antes de sair (${instanceName})`,
+                            ownerId: userId,
+                            context: { instancia: instanceName },
+                        });
+                    }
                 }
             } else {
                 console.log('[webhook-handle-message] Webhook NOT sent - filters failed:', {

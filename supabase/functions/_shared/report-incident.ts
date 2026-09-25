@@ -207,6 +207,70 @@ export function reportInputError(init: {
 }
 
 /**
+ * Erro de BANCO num ponto que hoje so escreve `console.error` e segue.
+ *
+ * Nasceu do caso de 22/09/2026: um `57014` (statement timeout) na criacao da
+ * conversa devolvia 200 para a Meta e a mensagem do paciente sumia. O log
+ * estava la; ninguem era avisado.
+ *
+ * DUAS COISAS QUE ESTE HELPER DECIDE, e que valem para todo chamador:
+ *
+ * 1. `23505` (chave duplicada) NUNCA reporta. Na entrada de mensagem ele e
+ *    benigno por construcao: o insert perde a corrida, o SELECT de recuperacao
+ *    acha a linha e o fluxo segue inteiro. Reportar seria fabricar 27 incidentes
+ *    por semana para descrever concorrencia funcionando. Quem quiser calar outro
+ *    codigo passa `ignorar`; quem quiser ouvir o 23505 passa `ignorar: []`.
+ * 2. A mensagem e ESTAVEL. O detalhe do Postgres muda a cada ocorrencia e, se
+ *    entrasse aqui, entraria no fingerprint: daria um incidente por linha em vez
+ *    de um por defeito. O detalhe vai para `context`, que nao agrupa.
+ *
+ * O componente sai como `<familia><codigo> (<instancia>)` — a instancia entre
+ * parenteses e o que faz o campo Cliente do titulo do alerta resolver sozinho
+ * (`componenteNoTitulo`). Sem instancia conhecida, sai so `<familia><codigo>`.
+ */
+export function reportErroDeBanco(init: {
+    /** prefixo catalogado, com o separador incluido (ex.: `recebimento:banco-`) */
+    familia: string;
+    /** o que falhou, em snake_case estavel (ex.: `criar_conversa`) */
+    route: string;
+    /** o erro do supabase-js */
+    error: unknown;
+    /** nome da instancia, para o campo Cliente do alerta */
+    instancia?: string | null;
+    ownerId?: string | null;
+    /** SQLSTATEs que nao viram incidente. Default: `23505`. */
+    ignorar?: readonly string[];
+    context?: Record<string, unknown>;
+    request?: Request;
+}): void {
+    if (!componenteAtual) return;
+
+    const codigo = String((init.error as { code?: unknown })?.code ?? "").trim();
+    const ignorar = init.ignorar ?? ["23505"];
+    if (codigo && ignorar.includes(codigo)) return;
+
+    // Sem codigo nao da para agrupar por defeito — melhor um balde nomeado do
+    // que um componente vazio que o catalogo nao casa com nada.
+    const sufixo = codigo || "sem-codigo";
+    const alvo = init.instancia ? `${sufixo} (${init.instancia})` : sufixo;
+
+    reportIncident({
+        component: `${init.familia}${alvo}`,
+        route: `${init.route}:${sufixo}`,
+        httpCode: 500,
+        message: `${init.route} falhou no banco [${sufixo}]`,
+        ownerId: init.ownerId ?? null,
+        context: {
+            sqlstate: sufixo,
+            instancia: init.instancia ?? undefined,
+            detalhe: textoDoErro(init.error).slice(0, 300) || undefined,
+            ...init.context,
+        },
+        request: init.request,
+    });
+}
+
+/**
  * Registra a falha e devolve na hora. Nao da para `await` de proposito:
  * a assinatura e `void` para que um `await reportIncident(...)` distraido
  * nao segure a resposta.

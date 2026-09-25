@@ -9,6 +9,7 @@ import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-
 import { crypto } from "https://deno.land/std@0.168.0/crypto/mod.ts";
 import { encode as hexEncode } from "https://deno.land/std@0.168.0/encoding/hex.ts";
 import { fetchProvider } from "./provider-errors.ts";
+import { reportIncident } from "./report-incident.ts";
 
 export const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -69,6 +70,17 @@ export async function getInstanceByName(supabase: SupabaseClient, instanceName: 
 
     if (error || !instance) {
         console.error('[SHARED] Instance not found:', instanceName, error);
+        // Quem chama isto esta atendendo um webhook de mensagem. Sem a linha da
+        // instancia o handler responde 404 ao provedor e a mensagem morre ali —
+        // e um 404 nao acorda o `serveMonitored`, que so relata >= 500.
+        reportIncident({
+            component: `instancia:nao-encontrada (${instanceName})`,
+            route: 'get_instance_by_name',
+            httpCode: 404,
+            error,
+            message: `a instancia ${instanceName} nao existe na tabela — o webhook dela nao processa nada`,
+            context: { instancia: instanceName },
+        });
         return null;
     }
 

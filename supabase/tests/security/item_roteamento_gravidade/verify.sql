@@ -139,7 +139,22 @@ checagens as (
                 where is_active and somente_painel
                   and component not in ('entrada:', 'front:', 'simulacao-de-alerta',
                                         'zz-teste:',
-                                        'monitoramento:componente-nao-catalogado')
+                                        'monitoramento:componente-nao-catalogado',
+                                        -- 25/09/2026: os tres do catalogo de erro
+                                        -- silencioso que ficam no painel de
+                                        -- proposito. Nenhum deles perde mensagem
+                                        -- de paciente: `recibo:banco-` perde o
+                                        -- COMPROVANTE de entrega de mensagem que
+                                        -- ja saiu, `conversa:orfa-migracao` parte
+                                        -- o historico em dois cards sem descartar
+                                        -- nada, e `template-sends:log` so faz o
+                                        -- dashboard de Satisfacao subcontar.
+                                        -- Acordar alguem de madrugada por um
+                                        -- recibo de leitura seria ensinar que
+                                        -- vermelho pode ser ignorado.
+                                        'recibo:banco-',
+                                        'conversa:orfa-migracao',
+                                        'template-sends:log')
            )
     union all
     select 'E4 analise-indisponivel continua indo ao WhatsApp',
