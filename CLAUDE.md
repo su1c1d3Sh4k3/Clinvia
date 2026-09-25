@@ -89,6 +89,14 @@ Python integration tests live in `tests/` (test_*.py, grouped by domain: appoint
 
   Limits, all measured: **the window is clamped to 24h from `iso_timestamp_start`, and the API does NOT say so** — a 30-day window silently returns only the first 24h, so a wide query looks like "almost no traffic" (same class of lie as the SPA answering 200 with the fallback index). Retention reaches **≥90 days**. Only three fields exist — `id`, `timestamp`, `event_message`; `metadata` and `level` do not, so filtering is `like` over a raw string (`"POST | 200 | <url>"`). Throttling is aggressive: a few queries in a row return `ThrottlerException: Too Many Requests`, so space them ~90s — sweeping 90 days costs ~90 queries ≈ 2.5h. Reachable only through the Management API (`sbp_` token), not from SQL and not from the app, and **nothing alerts on it**: it is forensics, not monitoring. Anything that must raise an alert still has to reach a TABLE (`incidents`). To inspect a deployed function's actual code, fetch the published bundle: `GET /v1/projects/{ref}/functions/<slug>/body`
 
+  **The endpoint only answers flat row queries.** Anything with `group by`, or with several
+  `countif(...)` in one statement, is refused with `Backend error! Retry your query.` — measured
+  repeatedly, it is not transient and retrying never works. Worse, `scripts/pericia_logs.py` treats
+  that string as throttling and backs off 60→90→135→202s before giving up, so an aggregate query
+  burns ~10 minutes and returns nothing. **Select `timestamp, event_message`, one `like`, and
+  aggregate locally.** Also: a malformed `iso_timestamp_*` returns `400`, which the same script
+  also retries as if it were the network.
+
 ### Reissuing a DB function silently deletes the previous migration's fix
 
 `create or replace function` replaces the WHOLE body. A migration written from an older copy
@@ -106,17 +114,27 @@ Mandatory before any `create or replace function` in a migration:
    `pg_get_functiondef` for the guard (model: `item_canal_mudo_contraste/verify.sql`), so the
    next reissue fails in the suite instead of on his phone.
 
-### A migration must fail rather than hold the live traffic hostage
+### SQL against production must fail rather than hold the live traffic hostage
 
 *"Migration que falha a gente reexecuta; mensagem de paciente perdida não volta."*
 
-- **Every production migration session opens with short `lock_timeout` and `statement_timeout`** —
+These rules cover **any SQL run against production**, not only files under `supabase/migrations/`
+— the throwaway harnesses in `supabase/.temp/` hit the same database.
+
+- **Every session opens with short `lock_timeout` and `statement_timeout`** —
   `set lock_timeout = '5s'; set statement_timeout = '120s';` at the top of the file. Without them a
   DDL that waits on a lock queues behind itself every transaction that touches the table, and the
   webhook path starts timing out at `57014`.
-- **A migration that locks a hot table (`messages`, `conversations`, `contacts`) runs outside
+- **Anything that locks a hot table (`messages`, `conversations`, `contacts`) runs outside
   business hours.** These three are in the inbound path: a lock on them is a lock on receiving
   messages from patients.
+- **A rehearsal that ends in `ROLLBACK` is NOT exempt, and that is the trap.** The rollback protects
+  the DATA, not the AVAILABILITY: while it runs it holds exactly the same row locks as the real
+  thing. On 22/09 a `DELETE` of the largest active tenant, wrapped in a transaction ending in
+  `ROLLBACK`, held `conversations` and `contacts` for minutes and **7 patient messages were lost on
+  the way in** (`docs/diagnostics/2026-09-25_o_ensaio_que_derrubou_a_entrada.md`). Never rehearse a
+  mass delete against a live tenant — clone the volume, or measure with `EXPLAIN` instead of running
+  it.
 
 ### Run the access-test suite before applying a migration
 

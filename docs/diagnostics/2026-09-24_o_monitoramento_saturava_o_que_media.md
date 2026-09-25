@@ -126,6 +126,16 @@ As checagens 1 e 2 **não leem a lista de jobs que a migration mexeu** — elas 
 pico expandindo os schedules de `cron.job`. Job novo cadastrado no offset zero falha aqui,
 que é o ponto: a próxima rajada tem que ser barrada no code review, não no telefone dele.
 
+## Segundo caso da mesma família, sem ser a mesma causa
+
+Em 22/09 a PELE DERMATOLOGIA perdeu **7 mensagens de paciente** na entrada, também com o painel
+verde — mas por **bloqueio de linha**, não por conexão: um ensaio meu que apagava o maior tenant
+ativo e terminava em `ROLLBACK` segurou `conversations` e `contacts` por minutos e a entrada
+morreu na fila. Apurado em `2026-09-25_o_ensaio_que_derrubou_a_entrada.md`.
+
+O que as duas têm em comum não é o mecanismo: é **trabalho nosso de manutenção disputando
+recurso com o tráfego vivo do cliente**.
+
 **Aberto:** `cron.max_running_jobs = 32` continua maior que a folga de 14. Hoje é
 inofensivo porque o pico é 10, mas é um teto que não protege de nada — se alguém
 cadastrar 20 jobs novos no mesmo offset, o pg_cron tentará iniciar os 20. Baixá-lo para
