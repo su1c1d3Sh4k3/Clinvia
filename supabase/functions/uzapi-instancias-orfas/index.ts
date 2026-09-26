@@ -15,8 +15,8 @@
 // exatamente o ruido que a calibragem esta tentando matar.
 //
 // O admintoken vem de `UAZAPI_ADMIN_TOKEN` (secret). NAO copiar o valor para
-// dentro do codigo: `uzapi-create-instance/index.ts` ainda tem o token em texto
-// puro e isso e pendencia aberta, nao padrao a seguir.
+// dentro do codigo — em 26/09/2026 o `uzapi-create-instance` passou a ler o
+// mesmo secret e nao existe mais nenhuma copia do admintoken no repositorio.
 //
 // Acordada pelo cron `uzapi-orfas-scan` (uma vez por dia).
 // =====================================================
@@ -99,6 +99,36 @@ serveMonitored("uzapi-instancias-orfas", async (req) => {
         return new Response(
             JSON.stringify({ success: false, error: "db_read_failed", message: leituraErr.message }),
             { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+    }
+
+    // VARREDURA CEGA. O provedor respondeu 200 com lista VAZIA enquanto nos
+    // temos instancia UAZAPI cadastrada — impossivel na pratica: as nossas
+    // existem la. Acontece de verdade: em 26/09/2026, logo depois da rotacao do
+    // admintoken, `/instance/all` passou a devolver `[]` porque o token novo
+    // enxerga outro escopo de administrador; as 11 instancias continuaram no ar.
+    //
+    // Sem este ramo o resultado seria "0 orfas" com `success: true` — saude
+    // aparente — e na passada seguinte o fechamento automatico RESOLVERIA os
+    // incidentes de orfa abertos, apagando a divida em vez de mostra-la. Um
+    // detector que perde a visao tem que GRITAR, nunca devolver zero.
+    if (doProvedor.length === 0 && (nossas ?? []).length > 0) {
+        reportIncident({
+            component: "uazapi:varredura-cega",
+            route: "instance/all",
+            message: "UAZAPI respondeu 200 com lista vazia de instancias; a varredura de orfas nao mediu nada.",
+            origem: "cron",
+            context: {
+                instancias_uazapi_no_banco: (nossas ?? []).length,
+                provavel_causa: "admintoken com escopo de administrador diferente do que criou as instancias",
+            },
+        });
+        // 200, nao 5xx: `serveMonitored` relata >= 500 e abriria um SEGUNDO
+        // incidente, com o componente da function no lugar do provedor — o
+        // mesmo fato contado duas vezes, com dois nomes e duas gravidades.
+        return new Response(
+            JSON.stringify({ success: false, error: "varredura_cega", no_banco: (nossas ?? []).length }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
     }
 

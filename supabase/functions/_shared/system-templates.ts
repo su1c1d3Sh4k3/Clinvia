@@ -190,7 +190,10 @@ export async function callFunction(
     let result: any = null;
     try {
         result = bruto ? JSON.parse(bruto) : null;
-    } catch { /* resposta não-JSON: o fallback continua, mas agora deixa rastro */ }
+    } catch {
+        // catch-mudo: o corpo cru é tratado logo abaixo, nos dois ramos (falha e
+        // 2xx ilegível). Relatar aqui seria o mesmo fato contado duas vezes.
+    }
 
     if (!resp.ok) {
         console.error(`[system-templates] ${name} respondeu ${resp.status}:`, bruto.slice(0, 300));
@@ -201,9 +204,20 @@ export async function callFunction(
             context: { fn: name, corpo: bruto.slice(0, 300), corpo_era_json: result !== null },
         });
     } else if (result === null && bruto) {
-        // 2xx com corpo ilegível: não derruba nada, mas quem depende do `result`
-        // vai tratar sucesso como ausência de dado.
+        // 2xx com corpo ilegível é a forma mais traiçoeira de falhar: `ok: true`
+        // com `result: null` passa por sucesso, e quem depende do `result` segue
+        // adiante tratando ausência de dado como resposta válida. O log sozinho
+        // não bastava — ninguém lê log que ninguém sabe que existe.
         console.error(`[system-templates] ${name} respondeu 2xx não-JSON:`, bruto.slice(0, 300));
+        reportIncident({
+            component: "chamada-interna:resposta-nao-json",
+            route: `call_function:${name}`,
+            httpCode: resp.status,
+            // Mensagem ESTÁVEL: o corpo varia a cada resposta e entraria no
+            // fingerprint, criando um incidente por variação.
+            message: `chamada interna a ${name} respondeu 2xx com corpo que não é JSON`,
+            context: { fn: name, corpo: bruto.slice(0, 300) },
+        });
     }
     return { ok: resp.ok, result };
 }

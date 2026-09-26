@@ -751,6 +751,8 @@ async function createAppointmentAndUpdateDelivery(
                 .invoke("google-calendar-sync", { body: { appointment_id: apt.id } })
                 .catch((err: any) => console.warn("[respond] gcal sync fire-and-forget error:", err?.message));
         })
+        // catch-mudo: mesma regra do `api-scheduling` — chave ilegível ⇒
+        // desligado, e desligado não relata.
         .catch(() => {});
 
     return apt.id;

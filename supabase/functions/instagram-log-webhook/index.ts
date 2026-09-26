@@ -71,7 +71,15 @@ serveMonitored("instagram-log-webhook", async (req) => {
     for (const [k, v] of req.headers.entries()) headersObj[k.toLowerCase()] = v;
 
     let payload: any = null;
-    try { payload = JSON.parse(rawBody); } catch (_e) { /* keep going */ }
+    try {
+        payload = JSON.parse(rawBody);
+    } catch (_e) {
+        // catch-mudo: o corpo cru é gravado na tabela de log logo abaixo, então
+        // a prova não se perde. Abrir incidente aqui seria pior que o silêncio:
+        // o endpoint é anônimo, e qualquer estranho postando lixo geraria
+        // incidente à vontade.
+        console.warn("[instagram-log-webhook] corpo não-JSON; segue para o log cru");
+    }
 
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 

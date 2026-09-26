@@ -1,5 +1,9 @@
+// O admintoken da UAZAPI NAO pode existir neste arquivo: tudo aqui roda no
+// NAVEGADOR e vira string literal dentro do bundle publico. Criar instancia e
+// operacao de administrador do provedor e mora na edge function
+// `uzapi-create-instance`, que le o segredo do ambiente. O `initInstance` que
+// existia aqui era codigo morto (ninguem o chamava) e carregava o token junto.
 const UZAPI_URL = 'https://clinvia.uazapi.com';
-const UZAPI_GLOBAL_KEY = '6EiMFTZGDpLxaP5u1pD2oXpzTjwL5B73WEdcCfjOIRYsTlGx1l';
 
 export interface UzapiInstance {
     instance: {
@@ -12,36 +16,6 @@ export interface UzapiInstance {
 }
 
 export const uzapi = {
-    // Inicializar (Criar) Instância
-    // Retorna o token da instância que deve ser salvo
-    initInstance: async (instanceName: string) => {
-        try {
-            const sanitizedName = instanceName.trim().toLowerCase().replace(/\s+/g, '_');
-            const response = await fetch(`${UZAPI_URL}/instance/init`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'admintoken': UZAPI_GLOBAL_KEY
-                },
-                body: JSON.stringify({
-                    name: sanitizedName,
-                    systemName: 'omnichat-copilot'
-                })
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`Error creating instance: ${errorText}`);
-            }
-
-            return await response.json();
-        } catch (error) {
-            console.error("Failed to init instance:", error);
-            throw error;
-        }
-    },
-
     // Conectar Instância (Gerar QR Code ou Pareamento)
     // Precisa do token da instância (retornado no init)
     connectInstance: async (instanceToken: string, phone?: string) => {

@@ -222,7 +222,9 @@ serveMonitored("infra-get-metrics", async (req) => {
           console.warn("[infra-get-metrics] DB stats via SUPABASE_DB_URL falhou:", err);
         } finally {
           if (pgClient) {
-            try { await pgClient.end(); } catch (_) { /* ignore */ }
+            // catch-mudo: fechar conexão já perdida. A falha que importa é a do
+            // bloco acima, que já foi logada; gritar aqui esconderia aquela.
+            try { await pgClient.end(); } catch (_) { /* nada a salvar */ }
           }
         }
       }

@@ -776,7 +776,13 @@ serveMonitored("meta-webhook", async (req) => {
                     .from("webhook_queue")
                     .update({ status: "pending", error_message: String(err?.message ?? err) })
                     .eq("id", filaId);
-            } catch (_) { /* fila indisponível: o reset de 15 min é o plano B */ }
+            } catch (erroFila) {
+                // catch-mudo por desenho: já estamos DENTRO do tratador de erro,
+                // e o incidente do fato foi aberto algumas linhas acima. O reset
+                // de 15 min da fila é o plano B; o log é o que diz que ele vai
+                // precisar acontecer.
+                console.error("[meta-webhook] devolver a linha para pending falhou:", erroFila);
+            }
         }
 
         // No reprocessamento este "OK" seria lido pelo worker como sucesso e a

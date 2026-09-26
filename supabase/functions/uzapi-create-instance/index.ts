@@ -9,7 +9,12 @@ const corsHeaders = {
 };
 
 const UZAPI_URL = 'https://clinvia.uazapi.com';
-const UZAPI_ADMIN_TOKEN = '6EiMFTZGDpLxaP5u1pD2oXpzTjwL5B73WEdcCfjOIRYsTlGx1l';
+
+// O admintoken NAO mora no codigo: ele e credencial de ADMINISTRADOR do
+// provedor e abre a conta inteira, nao uma instancia. Vem do secret
+// `UAZAPI_ADMIN_TOKEN`. Sem ele a function FALHA FECHADA — nada de fallback:
+// um fallback aqui so serviria para fazer a criacao "quase funcionar" com
+// credencial errada e devolver erro do provedor no lugar do nosso.
 
 serveMonitored("uzapi-create-instance", async (req) => {
   if (req.method === 'OPTIONS') {
@@ -17,6 +22,20 @@ serveMonitored("uzapi-create-instance", async (req) => {
   }
 
   try {
+    const adminToken = Deno.env.get('UAZAPI_ADMIN_TOKEN') ?? '';
+    if (!adminToken) {
+      // Status 200 porque a tela le `error` do corpo (padrao desta function),
+      // mas `report: true` abre incidente: secret ausente e defeito de
+      // configuracao NOSSO, e sem ele nenhuma clinica consegue conectar.
+      return apiError(corsHeaders, {
+        status: 200,
+        code: "uzapi_admin_token_missing",
+        request: req,
+        report: true,
+        message: "A conexão com o provedor de WhatsApp não está configurada. Avise o suporte: o token de administrador da UAZAPI não está disponível no servidor.",
+      });
+    }
+
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -92,7 +111,7 @@ serveMonitored("uzapi-create-instance", async (req) => {
       headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
-        'admintoken': UZAPI_ADMIN_TOKEN
+        'admintoken': adminToken
       },
       body: JSON.stringify({
         name: sanitizedName,

@@ -376,7 +376,11 @@ serveMonitored("meta-send-message", async (req) => {
                 const parsed = JSON.parse(errorText);
                 errorMsg = parsed?.error?.message || parsed?.error?.error_user_msg || errorMsg;
                 if (parsed?.error?.code != null) metaCode = String(parsed.error.code);
-            } catch {}
+            } catch {
+                // catch-mudo: `errorText` inteiro já foi para o log na linha
+                // acima, e a falha de envio é relatada adiante com o texto cru
+                // junto. Só o parse se perde aqui, não a prova.
+            }
 
             const traducao = descreverErroMeta(metaCode);
             const grupo = grupoDoErroMeta(metaCode, sendResponse.status);

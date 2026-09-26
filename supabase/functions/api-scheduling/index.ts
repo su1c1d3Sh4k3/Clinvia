@@ -93,7 +93,10 @@ function syncGoogleCalendar(
                 .then((r) => { if (!r.ok) relatar(`HTTP ${r.status}`); })
                 .catch((err) => relatar("rede", err));
         })
-        .catch(() => { /* chave ilegível ⇒ desligado, e desligado não relata */ });
+        // catch-mudo: chave ilegível ⇒ desligado, e desligado não relata. Falhar
+        // fechado é a decisão de 25/09/2026; relatar aqui transformaria o
+        // desligamento do Google Calendar em incidente a cada agendamento.
+        .catch(() => {});
 }
 
 function pad(n: number): string { return String(n).padStart(2, "0"); }

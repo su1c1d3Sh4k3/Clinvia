@@ -66,20 +66,23 @@ END $$;
 
 -- 5. Criar o cron job para rodar às 5:00 AM horário de Brasília (8:00 UTC)
 -- Para 5:00 AM horário de Brasília, use 8:00 AM UTC (5 + 3 = 8)
-SELECT cron.schedule(
-    'generate-opportunities-daily',  -- nome do job
-    '0 8 * * *',                     -- 8:00 UTC = 5:00 Brasília
-    $$
-    SELECT net.http_post(
-        url := 'https://fvbmqxmlwerizjlvqrag.supabase.co/functions/v1/generate-opportunities',
-        headers := jsonb_build_object(
-            'Content-Type', 'application/json',
-            'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ2Ym1xeG1sd2VyaXpqbHZxcmFnIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczMTE2NjkyMywiZXhwIjoyMDQ2NzQyOTIzfQ.VBq3PlMqxPBMbbCJObbNe0mIXFjftd1bhmj4Km73E50'
-        ),
-        body := '{}'::jsonb
-    );
-    $$
-);
+--
+-- 26/09/2026 — SEGREDO REMOVIDO DESTE ARQUIVO. Este bloco carregava, em texto
+-- puro, a chave `service_role` do projeto Supabase `fvbmqxmlwerizjlvqrag`, que
+-- NAO e este projeto (`swfshqvvbohnahdyndch`) — resíduo do scaffold original.
+-- `service_role` ignora RLS: quem tivesse o arquivo tinha o banco daquele
+-- projeto inteiro. Tirar daqui NAO invalida a chave; ela precisa ser
+-- ROTACIONADA (ou o projeto encerrado) do lado de quem o administra.
+--
+-- O bloco esta NEUTRALIZADO e nao reagendado: o job `generate-opportunities-
+-- daily` que existe hoje em producao foi recriado por migration posterior,
+-- roda `8 8 * * *` e NAO aponta para aquele projeto nem carrega JWT nenhum
+-- (medido em 26/09/2026). Reexecutar este arquivo nao pode ressuscitar a
+-- chamada com credencial de terceiro.
+DO $$
+BEGIN
+    RAISE NOTICE 'Bloco historico neutralizado: continha service_role de outro projeto. Job atual foi recriado por migration posterior.';
+END $$;
 
 -- 6. Verificar se o job foi criado
 SELECT * FROM cron.job WHERE jobname = 'generate-opportunities-daily';

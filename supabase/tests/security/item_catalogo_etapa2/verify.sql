@@ -86,6 +86,13 @@ union all
 -- consegue sair, porque todos precisam do mesmo banco. Nao dispara por leitura
 -- avulsa: exige 5 amostras consecutivas de minuto acima de 85%, que e o que
 -- separa pico de cron (dura um minuto) de saturacao de verdade.
+-- 26/09/2026: `uzapi_admin_token_missing` (`20260926150000`). Nasceu junto com
+-- a retirada do admintoken da UAZAPI do codigo. Ele so dispara num estado:
+-- a function esta no ar e o secret nao esta no ambiente — e nesse estado
+-- NENHUMA clinica consegue conectar WhatsApp nao-oficial, com a tela do
+-- cliente dizendo apenas "fale com o suporte". Nao existe segunda via: se isto
+-- nao tocar, o primeiro a saber e ele pelo telefone do cliente. Nao dispara por
+-- erro de uso nem por falha do provedor — so por configuracao nossa ausente.
 -- Quem acrescentar um componente `alta` novo sem passar por aqui reprova.
 select format('%-6s componentes novos que acordariam telefone: %s (tem que ser 0)',
               case when count(*) = 0 then 'ok' else 'FALHOU' end, count(*))
@@ -106,5 +113,6 @@ select format('%-6s componentes novos que acordariam telefone: %s (tem que ser 0
                          'recebimento:fila-parada',
                          'sentinela:aplicacao-inacessivel',
                          'sentinela:parou-de-reportar',
-                         'banco:conexoes-saturadas')
+                         'banco:conexoes-saturadas',
+                         'uzapi_admin_token_missing')
 order by 1;

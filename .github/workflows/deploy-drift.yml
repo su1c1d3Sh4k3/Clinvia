@@ -73,3 +73,38 @@ jobs:
 
       - name: Texto cru de erro interno no corpo da resposta
         run: python supabase/tests/security/item_erro_cru_na_resposta/check.py
+
+  # Quarto da familia. O admintoken da UAZAPI viveu meses em `src/lib/uzapi.ts`,
+  # que roda no NAVEGADOR: o bundle publico entregava a credencial de
+  # administrador do provedor a cada visitante, e o unico consumidor dela era
+  # codigo morto. Codigo morto nao e segredo morto -- o bundler inclui a string
+  # do mesmo jeito. Le so o repositorio, nao depende de segredo.
+  segredo-no-codigo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Segredo em texto puro no codigo versionado
+        run: python supabase/tests/security/item_segredo_no_codigo/check.py
+
+  # Quinto da familia, e o mais cru de todos: `catch { }` vazio dentro de edge
+  # function. Nao sobra nem linha de log -- o erro deixou de existir, e nenhuma
+  # das quatro barreiras acima o veria. Tolerancia zero para o catch mudo;
+  # catch que so chama `console.*` e divida contada em `divida.json`, em
+  # catraca (ponto novo reprova, ponto consertado tambem, ate baixar a base com
+  # `--gravar`). Le so o repositorio, nao depende de segredo.
+  catch-mudo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Catch que engole o erro em edge function
+        run: python supabase/tests/security/item_catch_mudo/check.py
