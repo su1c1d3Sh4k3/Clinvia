@@ -15,6 +15,23 @@
 -- A checagem 5 e a que nao pode ser esquecida: espalhar nao pode ter mudado
 -- FREQUENCIA de nada. Se um `*/5` virou `*/7`, o pico melhora e o produto
 -- quebra em silencio.
+--
+-- 26/09/2026 — duas revisoes, ambas medidas:
+--
+-- (a) A FOLGA DESCONTA `mgmt-api`. Este teste estava medindo a si mesmo: cada
+--     `supabase db query` abre uma sessao `mgmt-api` que demora a sumir, e a
+--     suite inteira deixa ~12 penduradas. Rodando sozinho, o mesmo verify no
+--     mesmo minuto media 15 livres; dentro da suite, 3. A sessao existe, mas
+--     nao existe em regime — descontar e o unico jeito de a linha falar do
+--     banco em vez de falar do arnes. O bruto vai no detalhe, ao lado.
+--
+-- (b) O TETO DE c1/c2 SUBIU DE 12 PARA 13, porque entrou o `db-conexoes-watch`
+--     (`* * * * *`, amostra por minuto — sem serie nao da para dizer "85% por 5
+--     minutos"). O 12 era substituto da folga de 14 medida em 24/09; o pool do
+--     PostgREST caiu de 21 para 12 conexoes e a folga foi para 22, entao c3 e
+--     c10, que comparam com a folga REAL, ficaram com MAIS margem do que tinham.
+--     Nao e trave movida no escuro: e um numero fixo obsoleto trocado com a
+--     medicao ao lado.
 
 with
 -- Expande o campo de minuto de cada job ativo nos minutos em que ele dispara.
@@ -74,14 +91,20 @@ pico_diario as (
 folga as (
     select (select setting::int from pg_settings where name = 'max_connections')
          - (select setting::int from pg_settings where name = 'superuser_reserved_connections')
-         - (select count(*)::int from pg_stat_activity) as livres
+         - (select count(*)::int from pg_stat_activity
+             where coalesce(application_name, '') not ilike 'mgmt-api%') as livres,
+           -- Bruto ao lado: se a diferenca entre os dois crescer, o arnes esta
+           -- deixando sessao pendurada e isso tambem e informacao.
+           (select setting::int from pg_settings where name = 'max_connections')
+         - (select setting::int from pg_settings where name = 'superuser_reserved_connections')
+         - (select count(*)::int from pg_stat_activity) as livres_bruto
 ),
 
 -- 1. Pico de partidas no mesmo minuto, considerando so o que roda toda hora.
 c1 as (
     select 1 as ord,
            'pico de jobs partindo no mesmo minuto (toda hora)' as checagem,
-           case when max(jobs) <= 12 then 'ok'
+           case when max(jobs) <= 13 then 'ok'
                 else 'FALHOU — alguem voltou a empilhar no mesmo offset' end as resultado,
            'pico ' || max(jobs)::text || ' no minuto :'
            || to_char((select p2.minuto from pico_horario p2
@@ -92,7 +115,7 @@ c1 as (
 -- 2. Pior minuto do dia inteiro: aqui entram as diarias de hora fixa.
 c2 as (
     select 2, 'pior minuto do dia (com as rotinas diarias)',
-           case when max(jobs) <= 12 then 'ok' else 'FALHOU' end,
+           case when max(jobs) <= 13 then 'ok' else 'FALHOU' end,
            'pico ' || max(jobs)::text || ' as '
            || (select to_char(d.hora, 'FM00') || ':' || to_char(d.minuto, 'FM00')
                  from pico_diario d order by d.jobs desc, d.hora, d.minuto limit 1)
@@ -107,6 +130,8 @@ c3 as (
            'pico ' || (select max(jobs) from pico_diario)::text
            || ' contra ' || (select livres from folga)::text || ' conexao(oes) livre(s) de '
            || (select setting from pg_settings where name = 'max_connections') || ' totais'
+           || ' (bruto, contando as sessoes mgmt-api do proprio arnes: '
+           || (select livres_bruto from folga)::text || ')'
 ),
 -- 4. O pool NAO foi aumentado. A instrucao foi espalhar, nao comprar.
 c4 as (
@@ -200,10 +225,31 @@ c10 as (
                 then 'ok' else 'FALHOU — o minuto cheio voltou a encher' end,
            'pico ' || (select coalesce(max(jobs), 0) from pico_diario where minuto = 0)::text
            || ' no :00 contra ' || (select livres from folga)::text || ' livre(s)'
+),
+-- 11. O vigia de saturacao existe e esta agendado. Ele e quem paga o +1 no
+--     teto de c1/c2: se alguem tirar o vigia, o teto tem que voltar a 12, e
+--     esta linha e o lembrete de que a troca foi um par.
+c11 as (
+    select 11, 'vigia de saturacao de conexao no ar',
+           case when exists (select 1 from cron.job
+                              where jobname = 'db-conexoes-watch' and active)
+                 and exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+                              where n.nspname = 'public' and p.proname = 'db_conexoes_scan')
+                 and exists (select 1 from public.incident_component_catalog
+                              where component = 'banco:conexoes-saturadas'
+                                and is_active and not somente_painel
+                                and severidade_padrao = 'alta')
+                then 'ok'
+                else 'FALHOU — o vigia saiu; devolva o teto de c1/c2 para 12' end,
+           coalesce((select 'cron ' || schedule from cron.job where jobname = 'db-conexoes-watch'),
+                    'cron ausente')
+           || ', amostras nas ultimas 2h: '
+           || (select count(*)::text from public.db_conexoes_amostras
+                where t > now() - interval '2 hours')
 )
 select checagem, resultado, detalhe from (
     select * from c1 union all select * from c2 union all select * from c3
     union all select * from c4 union all select * from c5 union all select * from c6
     union all select * from c7 union all select * from c8 union all select * from c9
-    union all select * from c10
+    union all select * from c10 union all select * from c11
 ) t order by ord, checagem;
