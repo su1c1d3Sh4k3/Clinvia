@@ -2,6 +2,7 @@ import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { fetchProvider } from "../_shared/provider-errors.ts";
 import { apiError } from "../_shared/api-errors.ts";
+import { reportIncident } from "../_shared/report-incident.ts";
 
 // =============================================
 // Instagram Token Refresh
@@ -111,6 +112,20 @@ serveMonitored("instagram-refresh-token", async (req) => {
                     .update({ status: 'expired' })
                     .eq('id', instance_id);
             }
+
+            // DEFEITO NOSSO, nao problema da conta do cliente: chegamos aqui com
+            // um token que AINDA VALE (o vencido ja saiu em 401 la em cima) e a
+            // renovacao automatica — que existe justamente para ele nunca precisar
+            // reconectar — falhou. Se ninguem for avisado agora, a conta vence em
+            // silencio e so descobrimos quando o Direct parar.
+            reportIncident({
+                component: `instagram:renovacao-falhou (@${instance.account_name || 'conta desconhecida'})`,
+                route: 'refresh_access_token',
+                origem: 'cron',
+                ownerId: instance.user_id ?? null,
+                httpCode: response.status,
+                error: `Renovacao automatica do token falhou com o token ainda valido (vence em ${instance.token_expires_at}): ${data.error?.message || JSON.stringify(data)}`,
+            });
 
             return new Response(
                 JSON.stringify({

@@ -1,4 +1,5 @@
 import { serveMonitored } from "../_shared/serve-monitored.ts";
+import { unexpectedErrorResponse } from "../_shared/api-errors.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
 const corsHeaders = {
@@ -90,15 +91,6 @@ serveMonitored("cleanup-evolution-data", async (req) => {
 
     } catch (error: any) {
         console.error('[ERROR] Cleanup failed:', error);
-        return new Response(
-            JSON.stringify({
-                success: false,
-                error: error.message
-            }),
-            {
-                status: 500,
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            }
-        );
+        return unexpectedErrorResponse(corsHeaders, "Limpar os dados da Evolution", error, req);
     }
 });

@@ -52,15 +52,23 @@ c4 as (
                 then 'ok' else 'CONFERIR' end,
            ''
 ),
--- O incidente tem que sair do painel: sem alguem concluir, a pendencia nunca se
--- resolve sozinha. `somente_painel = true` aqui seria mordaca.
+-- MUDOU EM 26/09/2026 (`20260926180000`). A versao anterior deste teste cobrava
+-- o CONTRARIO: `media` e fora do painel, com o argumento de que sem alguem
+-- concluir a pendencia nunca se resolve sozinha. O argumento caiu na REGRA GERAL
+-- dele — o criterio nao e a gravidade, e QUEM PODE AGIR, e uma remocao que a
+-- UAZAPI recusou nao tem acao de madrugada: e trabalho de expediente, com
+-- conferencia de status antes. O que nao pode e a pendencia SUMIR, e isso quem
+-- garante sao c1-c4 e c7 (coluna, indice, comentario e a contagem de abertas):
+-- o componente segue ativo e a linha segue visivel no painel. Baixar isto para
+-- painel nao e mordaca, e tirar do telefone o que ninguem atende de imediato.
 c5 as (
-    select 5, 'componente uazapi:remocao-pendente catalogado e NAO e somente_painel',
+    select 5, 'componente uazapi:remocao-pendente catalogado, baixa e so-painel',
            case when exists (
                     select 1 from public.incident_component_catalog
                      where component = 'uazapi:remocao-pendente'
-                       and is_active and not somente_painel
-                       and severidade_padrao = 'media')
+                       and is_active and somente_painel
+                       and severidade_padrao = 'baixa'
+                       and severidade_teto = 'baixa')
                 then 'ok' else 'CONFERIR' end,
            coalesce((select severidade_padrao || case when somente_painel then ' | PAINEL' else '' end
                        from public.incident_component_catalog

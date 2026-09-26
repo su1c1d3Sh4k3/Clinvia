@@ -1,4 +1,5 @@
 import { serveMonitored } from "../_shared/serve-monitored.ts";
+import { unexpectedErrorResponse } from "../_shared/api-errors.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
 const corsHeaders = {
@@ -43,12 +44,14 @@ serveMonitored("inspect-message", async (req) => {
                     contentLength: res.headers.get('content-length')
                 };
             } catch (err) {
-                result.headers = { error: err.message };
+                // Rota anonima: o motivo cru fica no log, nao no corpo.
+                console.error('[inspect-message] HEAD da midia falhou:', err);
+                result.headers = { error: 'head_falhou' };
             }
         }
 
         return new Response(JSON.stringify(result, null, 2), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     } catch (error) {
-        return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        return unexpectedErrorResponse(corsHeaders, "Inspecionar a mensagem", error, req);
     }
 });

@@ -318,9 +318,19 @@ serveMonitored("evolution-send-message", async (req) => {
         body: JSON.stringify({ ...reqData, conversationId }),
       });
       const metaBody = await metaResp.text();
+      // Erro de negocio da Meta ja passou pelo classificador unico dentro do
+      // `meta-send-message` (reenvio, incidente e texto do inbox saem de la).
+      // O detector generico de 5xx tem que ignora-lo: sem este header, um dia
+      // em que aquela function volte a responder 5xx com `meta_api_error` daria
+      // dois incidentes para a mesma falha, um deles no componente errado.
+      const ehErroDeNegocioDaMeta = metaBody.includes('"meta_api_error"');
       return new Response(metaBody, {
         status: metaResp.status,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json',
+          ...(ehErroDeNegocioDaMeta ? { [HEADER_JA_REPORTADO]: 'meta_api_error' } : {}),
+        },
       });
     }
 

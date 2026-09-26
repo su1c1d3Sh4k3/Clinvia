@@ -474,6 +474,19 @@ const Connections = () => {
         window.location.href = authUrl;
     };
 
+    // O banner de "conexão do Instagram vencida" manda para cá com ?reconectar=instagram.
+    // O OAuth é aberto por esta página, e não pelo banner, porque o `state` que
+    // protege a troca do código carrega o user_id e é validado no retorno aqui —
+    // duplicar isso num segundo lugar seria duplicar a checagem de segurança.
+    useEffect(() => {
+        if (searchParams.get('reconectar') !== 'instagram') return;
+        if (!user?.id) return;
+        const limpa = new URL(window.location.href);
+        limpa.searchParams.delete('reconectar');
+        window.history.replaceState({}, '', limpa.toString());
+        handleConnectInstagram();
+    }, [searchParams, user?.id]);
+
     // WhatsApp Mutations
     const createMutation = useMutation({
         mutationFn: async () => {

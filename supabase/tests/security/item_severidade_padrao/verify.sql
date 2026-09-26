@@ -211,7 +211,37 @@ checagens as (
                                         -- sem ele bastaria a IA achar grave um
                                         -- resto de marco para a classe inteira
                                         -- comecar a tocar o telefone dele.
-                                        'uazapi:instancia-orfa')
+                                        'uazapi:instancia-orfa',
+                                        -- 26/09/2026, REGRA GERAL dele: conta ou
+                                        -- conexao do CLIENTE com problema vira
+                                        -- aviso no front DELE, com a acao que ele
+                                        -- precisa tomar; para o super admin, no
+                                        -- maximo painel. O criterio nao e a
+                                        -- gravidade do fato, e QUEM PODE AGIR:
+                                        -- token do Instagram vencido, WhatsApp
+                                        -- desconectado e conta barrada pela Meta
+                                        -- sao graves para a clinica e nao tem
+                                        -- UMA acao possivel deste lado — so o
+                                        -- dono reconecta ou resolve no Business
+                                        -- Manager. Os dois varredores entram pelo
+                                        -- mesmo motivo (divida de cadastro e
+                                        -- lista desatualizada por um dia), e
+                                        -- `meta:fora_do_ar` porque e terceiro
+                                        -- caido: o envio passageiro ja volta
+                                        -- sozinho pela fila meta_send_retry.
+                                        -- NENHUM detector foi desligado: tudo
+                                        -- continua gravado e visivel no painel.
+                                        -- O contrapeso esta fora desta lista, de
+                                        -- proposito: `instagram:renovacao-falhou`
+                                        -- e defeito NOSSO e continua tocando.
+                                        'instagram:token-vencido',
+                                        'uazapi:instancia-desconectada',
+                                        'meta:instancia-desconectada',
+                                        'uazapi:varredura-cega',
+                                        'uazapi:remocao-pendente',
+                                        'uzapi-instancias-orfas',
+                                        'meta:fora_do_ar',
+                                        'envio:conta-')
            )
     union all
     select 'E8 catalogo sem instrucao de cadastro na descricao',

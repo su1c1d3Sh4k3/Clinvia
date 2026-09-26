@@ -1,6 +1,7 @@
 import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { reportIncident } from "../_shared/report-incident.ts";
+import { apiError } from "../_shared/api-errors.ts";
 
 /**
  * sentinela-heartbeat — a porta por onde a caixa de FORA fala com a plataforma.
@@ -89,10 +90,20 @@ serveMonitored("sentinela-heartbeat", async (req) => {
     });
 
     if (error) {
-        // 500 de proposito: `serveMonitored` transforma em incidente. Um sinal
-        // de vida que nao chega ao banco cega o `sentinela_health_scan`, que
-        // passaria a acusar queda da VPS por culpa nossa.
-        return json({ success: false, error: "insert_falhou", message: error.message }, 500);
+        // 500 de proposito: um sinal de vida que nao chega ao banco cega o
+        // `sentinela_health_scan`, que passaria a acusar queda da VPS por culpa
+        // nossa. O motivo cru do Postgres vai em `details` — para o log e para o
+        // incidente — e NAO para o corpo: quem le esta resposta e uma caixa fora
+        // da nossa infra. `report: true` e o que substitui a leitura do corpo
+        // que o `serveMonitored` faria; sem ele, corpo limpo viraria cegueira.
+        return apiError(corsHeaders, {
+            status: 500,
+            code: "insert_falhou",
+            request: req,
+            report: true,
+            message: "O sinal de vida da sentinela nao foi gravado.",
+            details: String(error.message ?? error),
+        });
     }
 
     // O incidente de painel so nasce depois das 3 confirmacoes da sentinela: e

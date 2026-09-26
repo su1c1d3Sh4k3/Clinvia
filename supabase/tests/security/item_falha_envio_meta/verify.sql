@@ -54,12 +54,18 @@ where schemaname = 'public' and tablename = 'meta_send_retry'
   and indexdef ilike '%unique%' and indexdef ilike '%wamid%'
 
 union all
--- 4. As duas familias barulhentas foram para o painel; as tres que ACORDAM ele
---    continuam fora do painel (somente_painel = false)
+-- 4. Quem acorda e quem nao. MUDOU EM 26/09/2026 (`20260926180000`):
+--    `envio:conta-` saiu do telefone e foi para o painel. 131031/131042 e a
+--    conta inteira da CLINICA barrada pela Meta — pagamento ou elegibilidade do
+--    negocio dela. Nao ha o que fazer deste lado: quem resolve e ela, no
+--    Business Manager. A gravidade continua CRITICA (check 5) porque no painel
+--    ela tem que aparecer no topo, que e por onde o suporte a avisa. Continuam
+--    fora do painel os dois que dependem de nos: `envio:defeito-` (131008/
+--    131009/131021/131045, bug nosso) e `envio:pico-diario` (volume).
 select 4, 'catalogo: quem acorda e quem nao',
     coalesce(string_agg(component || '=' || somente_painel::text, ', ' order by component), 'sem linhas'),
     case when count(*) = 5 and bool_and(
-        case when component in ('envio:bloqueado-', 'envio:rejeitado-')
+        case when component in ('envio:bloqueado-', 'envio:rejeitado-', 'envio:conta-')
              then somente_painel else not somente_painel end)
     then 'ok' else 'CONFERIR' end
 from public.incident_component_catalog

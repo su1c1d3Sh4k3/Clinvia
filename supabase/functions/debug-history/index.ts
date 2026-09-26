@@ -1,4 +1,5 @@
 import { serveMonitored } from "../_shared/serve-monitored.ts";
+import { unexpectedErrorResponse } from "../_shared/api-errors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
@@ -62,9 +63,6 @@ serveMonitored("debug-history", async (req) => {
             { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
     } catch (error) {
-        return new Response(
-            JSON.stringify({ error: error.message }),
-            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return unexpectedErrorResponse(corsHeaders, "Ler o historico da conversa", error, req);
     }
 });

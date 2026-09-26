@@ -182,7 +182,32 @@ checagens as (
                                         -- motivo do par instancia-desconectada:
                                         -- sem ele a IA promoveria um resto de
                                         -- marco a alarme de madrugada.
-                                        'uazapi:instancia-orfa')
+                                        'uazapi:instancia-orfa',
+                                        -- 26/09/2026, REGRA GERAL dele: problema
+                                        -- de conta ou conexao do CLIENTE vira
+                                        -- aviso no front dele, com a acao a
+                                        -- tomar; aqui, no maximo painel. O
+                                        -- criterio e QUEM PODE AGIR, nao a
+                                        -- gravidade: ninguem deste lado reconecta
+                                        -- o Instagram por OAuth, reabre a sessao
+                                        -- do WhatsApp nem tira a conta da clinica
+                                        -- da lista de barradas da Meta. Os dois
+                                        -- varredores e o `meta:fora_do_ar` entram
+                                        -- porque nao ha acao nenhuma: terceiro
+                                        -- caido volta sozinho pela fila de
+                                        -- reenvio. Nada foi desligado — segue
+                                        -- tudo gravado e visivel no painel, e o
+                                        -- contrapeso `instagram:renovacao-falhou`
+                                        -- (defeito NOSSO) ficou fora desta lista
+                                        -- de proposito, para continuar tocando.
+                                        'instagram:token-vencido',
+                                        'uazapi:instancia-desconectada',
+                                        'meta:instancia-desconectada',
+                                        'uazapi:varredura-cega',
+                                        'uazapi:remocao-pendente',
+                                        'uzapi-instancias-orfas',
+                                        'meta:fora_do_ar',
+                                        'envio:conta-')
            )
     union all
     select 'E4 analise-indisponivel continua indo ao WhatsApp',

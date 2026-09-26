@@ -8,9 +8,70 @@ import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 
+/** Faixa visual única — WhatsApp desconectado e Instagram vencido usam a MESMA. */
+function Faixa({
+    tom,
+    titulo,
+    detalhe,
+    rotuloBotao,
+    onAgir,
+    onDispensar,
+}: {
+    tom: "vermelho" | "ambar";
+    titulo: string;
+    detalhe: string;
+    rotuloBotao: string;
+    onAgir: () => void;
+    onDispensar: () => void;
+}) {
+    const v = tom === "vermelho";
+    return (
+        <div
+            className={`flex items-center gap-3 px-4 py-2.5 border-b text-sm animate-in slide-in-from-top-2 duration-300 ${v ? "bg-red-500/10 border-red-500/30" : "bg-amber-500/10 border-amber-500/30"
+                }`}
+        >
+            <AlertTriangle
+                className={`w-4 h-4 flex-shrink-0 ${v ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400"}`}
+            />
+            <div className="flex-1 min-w-0">
+                <span className={`font-semibold ${v ? "text-red-700 dark:text-red-300" : "text-amber-700 dark:text-amber-300"}`}>
+                    {titulo}
+                </span>
+                <span
+                    className={`ml-2 truncate ${v ? "text-red-700/80 dark:text-red-300/80" : "text-amber-700/80 dark:text-amber-300/80"}`}
+                >
+                    {detalhe}
+                </span>
+            </div>
+            <Button
+                size="sm"
+                variant={v ? "destructive" : "outline"}
+                className="h-7 text-xs px-3 flex-shrink-0"
+                onClick={onAgir}
+            >
+                <Wifi className="w-3.5 h-3.5 mr-1.5" />
+                {rotuloBotao}
+            </Button>
+            <Button
+                size="icon"
+                variant="ghost"
+                className={`h-7 w-7 flex-shrink-0 ${v ? "text-red-700/70 hover:text-red-700 dark:text-red-300/70" : "text-amber-700/70 hover:text-amber-700 dark:text-amber-300/70"}`}
+                onClick={onDispensar}
+                title="Dispensar (voltará a aparecer após reload)"
+            >
+                <X className="w-3.5 h-3.5" />
+            </Button>
+        </div>
+    );
+}
+
 /**
  * Banner mostrado quando existem instâncias desconectadas do owner atual.
  * Oculta-se quando todas estão conectadas. Usuário pode dispensar temporariamente.
+ *
+ * Cobre também o Instagram: token vencido é o mesmo problema de conexão do
+ * cliente, e a única saída é ele reconectar por OAuth. Por isso o aviso mora
+ * AQUI, e não num alerta para o super admin — o dono da ação é quem vê a tela.
  */
 export function DisconnectedInstancesBanner() {
     const { user } = useAuth();
@@ -18,6 +79,7 @@ export function DisconnectedInstancesBanner() {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const [dismissed, setDismissed] = useState(false);
+    const [igDismissed, setIgDismissed] = useState(false);
 
     // Valida o status real das instâncias com a UZAPI ANTES de renderizar.
     // Evita o "flash" do banner vermelho logo após o login com estado obsoleto.
@@ -56,6 +118,26 @@ export function DisconnectedInstancesBanner() {
         staleTime: 30_000,
     });
 
+    // Instagram: o que decide é o TOKEN, não o `status` da linha. O cron só
+    // carimba 'expired' na passada da madrugada, então olhar o status faria a
+    // tela mentir por até 24h — justamente na janela em que ainda dá para
+    // renovar sem perder o atendimento.
+    const { data: contasInstagram } = useQuery({
+        queryKey: ["instagram-token-aviso", ownerId],
+        queryFn: async () => {
+            if (!ownerId) return [];
+            const { data, error } = await supabase
+                .from("instagram_instances" as any)
+                .select("id, account_name, token_expires_at, status")
+                .eq("user_id", ownerId);
+            if (error) throw error;
+            return (data ?? []) as any[];
+        },
+        enabled: !!user && !!ownerId,
+        refetchInterval: 60 * 60_000,
+        staleTime: 30 * 60_000,
+    });
+
     // Realtime: invalida o cache imediatamente quando qualquer instance do
     // owner muda de status, evitando que o banner mostre estado obsoleto.
     useEffect(() => {
@@ -81,48 +163,86 @@ export function DisconnectedInstancesBanner() {
         };
     }, [ownerId, queryClient]);
 
-    // Não renderiza nada enquanto a validação inicial não conclui — evita
-    // mostrar banner vermelho com estado obsoleto durante o login.
-    if (!validated) return null;
-    if (dismissed || !disconnected || disconnected.length === 0) return null;
+    const agora = Date.now();
+    const igVencidas = (contasInstagram ?? []).filter(
+        (c) => c.token_expires_at && new Date(c.token_expires_at).getTime() <= agora,
+    );
+    const igVencendo = (contasInstagram ?? [])
+        .filter((c) => {
+            if (!c.token_expires_at) return false;
+            const t = new Date(c.token_expires_at).getTime();
+            return t > agora && t <= agora + 7 * 86400_000;
+        })
+        .sort(
+            (a, b) =>
+                new Date(a.token_expires_at).getTime() - new Date(b.token_expires_at).getTime(),
+        );
 
-    const names = disconnected.map((i) => i.name).join(", ");
-    const plural = disconnected.length > 1;
+    const reconectarInstagram = () => navigate("/connections?reconectar=instagram");
+
+    // Não renderiza a faixa do WhatsApp enquanto a validação inicial não conclui —
+    // evita mostrar banner vermelho com estado obsoleto durante o login. A do
+    // Instagram não depende dessa validação: ela lê uma data, não um estado vivo.
+    const mostraWhats = validated && !dismissed && !!disconnected && disconnected.length > 0;
+
+    if (!mostraWhats && igDismissed) return null;
+    if (!mostraWhats && igVencidas.length === 0 && igVencendo.length === 0) return null;
+
+    const names = (disconnected ?? []).map((i) => i.name).join(", ");
+    const plural = (disconnected ?? []).length > 1;
     // Pega o motivo da primeira instância com motivo populado (caso comum: 1 só)
-    const reason = disconnected.find((i) => (i as any).last_disconnect_reason)
-        ?.["last_disconnect_reason" as keyof (typeof disconnected)[number]] as string | undefined;
+    const reason = (disconnected ?? []).find((i) => (i as any).last_disconnect_reason)
+        ?.["last_disconnect_reason" as keyof NonNullable<typeof disconnected>[number]] as
+        | string
+        | undefined;
+
+    const diasPara = (iso: string) =>
+        Math.max(1, Math.ceil((new Date(iso).getTime() - agora) / 86400_000));
 
     return (
-        <div className="flex items-center gap-3 px-4 py-2.5 bg-red-500/10 border-b border-red-500/30 text-sm animate-in slide-in-from-top-2 duration-300">
-            <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0" />
-            <div className="flex-1 min-w-0">
-                <span className="font-semibold text-red-700 dark:text-red-300">
-                    {plural
-                        ? `${disconnected.length} instâncias desconectadas`
-                        : "Instância desconectada"}
-                </span>
-                <span className="text-red-700/80 dark:text-red-300/80 ml-2 truncate">
-                    {names} — {reason ?? "mensagens não serão entregues até reconectar"}
-                </span>
-            </div>
-            <Button
-                size="sm"
-                variant="destructive"
-                className="h-7 text-xs px-3 flex-shrink-0"
-                onClick={() => navigate("/connections")}
-            >
-                <Wifi className="w-3.5 h-3.5 mr-1.5" />
-                Reconectar agora
-            </Button>
-            <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7 flex-shrink-0 text-red-700/70 hover:text-red-700 dark:text-red-300/70"
-                onClick={() => setDismissed(true)}
-                title="Dispensar (voltará a aparecer após reload)"
-            >
-                <X className="w-3.5 h-3.5" />
-            </Button>
-        </div>
+        <>
+            {mostraWhats && (
+                <Faixa
+                    tom="vermelho"
+                    titulo={
+                        plural
+                            ? `${disconnected!.length} instâncias desconectadas`
+                            : "Instância desconectada"
+                    }
+                    detalhe={`${names} — ${reason ?? "mensagens não serão entregues até reconectar"}`}
+                    rotuloBotao="Reconectar agora"
+                    onAgir={() => navigate("/connections")}
+                    onDispensar={() => setDismissed(true)}
+                />
+            )}
+            {!igDismissed && igVencidas.length > 0 && (
+                <Faixa
+                    tom="vermelho"
+                    titulo={
+                        igVencidas.length > 1
+                            ? `${igVencidas.length} conexões do Instagram vencidas`
+                            : "Conexão do Instagram vencida"
+                    }
+                    detalhe={`${igVencidas
+                        .map((c) => `@${c.account_name ?? "conta"}`)
+                        .join(", ")} — o Direct não entra nem sai até você reconectar.`}
+                    rotuloBotao="Reconectar"
+                    onAgir={reconectarInstagram}
+                    onDispensar={() => setIgDismissed(true)}
+                />
+            )}
+            {!igDismissed && igVencidas.length === 0 && igVencendo.length > 0 && (
+                <Faixa
+                    tom="ambar"
+                    titulo="Instagram"
+                    detalhe={`Sua conexão com o Instagram vence em ${diasPara(
+                        igVencendo[0].token_expires_at,
+                    )} dias. Reconecte para não interromper o atendimento.`}
+                    rotuloBotao="Reconectar"
+                    onAgir={reconectarInstagram}
+                    onDispensar={() => setIgDismissed(true)}
+                />
+            )}
+        </>
     );
 }

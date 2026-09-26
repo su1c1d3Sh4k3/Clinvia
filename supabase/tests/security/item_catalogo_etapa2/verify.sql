@@ -93,6 +93,14 @@ union all
 -- cliente dizendo apenas "fale com o suporte". Nao existe segunda via: se isto
 -- nao tocar, o primeiro a saber e ele pelo telefone do cliente. Nao dispara por
 -- erro de uso nem por falha do provedor — so por configuracao nossa ausente.
+-- 26/09/2026: `instagram:renovacao-falhou` (`20260926180000`). Entra na mesma
+-- migration que CALOU `instagram:token-vencido`, e e essa troca que o justifica:
+-- token vencido e problema da conta do cliente e so ele resolve (reconectar por
+-- OAuth), entao virou so-painel; ja a RENOVACAO que falha com o token ainda
+-- valido e defeito NOSSO — a rotina existe justamente para o cliente nunca
+-- precisar reconectar. Ele tem estopim de ~15 dias e e o unico componente de
+-- Instagram que ainda toca: se ficar mudo, ninguem avisa a tempo e o cliente
+-- descobre com o Direct parado.
 -- Quem acrescentar um componente `alta` novo sem passar por aqui reprova.
 select format('%-6s componentes novos que acordariam telefone: %s (tem que ser 0)',
               case when count(*) = 0 then 'ok' else 'FALHOU' end, count(*))
@@ -114,5 +122,6 @@ select format('%-6s componentes novos que acordariam telefone: %s (tem que ser 0
                          'sentinela:aplicacao-inacessivel',
                          'sentinela:parou-de-reportar',
                          'banco:conexoes-saturadas',
-                         'uzapi_admin_token_missing')
+                         'uzapi_admin_token_missing',
+                         'instagram:renovacao-falhou')
 order by 1;

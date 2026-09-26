@@ -2,7 +2,7 @@ import { serveMonitored } from "../_shared/serve-monitored.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { reportIncident } from "../_shared/report-incident.ts";
 import { fetchProvider } from "../_shared/provider-errors.ts";
-import { descreverErroMeta, grupoDoErroMeta } from "../_shared/meta-error-codes.ts";
+import { descreverErroMeta, esperaDoReenvio, grupoDoErroMeta } from "../_shared/meta-error-codes.ts";
 /**
  * meta-send-message
  *
@@ -385,6 +385,54 @@ serveMonitored("meta-send-message", async (req) => {
             const traducao = descreverErroMeta(metaCode);
             const grupo = grupoDoErroMeta(metaCode, sendResponse.status);
 
+            // Erro de NEGOCIO da Meta nao e defeito de servico: respondendo 502
+            // o `serveMonitored` (que relata >= 500) abria um incidente generico
+            // para cada janela de 24h fechada e para cada numero sem WhatsApp.
+            // Agora a resposta e 200 com `success:false` — quem chamou continua
+            // sabendo que falhou, pelo corpo — e so os grupos `defeito` e `conta`
+            // (131008/131009/131021/131045 e 131031/131042) viram alerta.
+            if (grupo === "defeito" || grupo === "conta") {
+                reportIncident({
+                    component: `envio:${grupo}-${metaCode ?? "sem-codigo"} (${instance.instance_name || "instância desconhecida"})`,
+                    route: "envio_sincrono",
+                    origem: "edge_interna",
+                    ownerId: instance.user_id ?? null,
+                    httpCode: sendResponse.status,
+                    error: errorMsg,
+                });
+            }
+
+            // Passageiro entra na MESMA fila do recibo assincrono. Sem `wamid`
+            // e sem `message_id`: neste ponto a mensagem nem chegou a existir em
+            // `messages` (a linha so e gravada depois do envio aceito), entao nao
+            // ha balao para reconciliar — o reenvio refaz a chamada do zero.
+            let reenviando = false;
+            if (grupo === "passageiro") {
+                const { error: filaErr } = await supabase.from("meta_send_retry").insert({
+                    conversation_id: conversationId,
+                    owner_id: instance.user_id ?? null,
+                    instance_id: instance.id ?? null,
+                    error_code: metaCode ?? String(sendResponse.status),
+                    payload: reqData,
+                    attempt: 0,
+                    status: "pending",
+                    next_attempt_at: new Date(Date.now() + (esperaDoReenvio(1) ?? 30) * 1000).toISOString(),
+                    last_error: errorMsg,
+                });
+                if (filaErr) {
+                    console.error("[meta-send-message] Não consegui enfileirar o reenvio:", filaErr);
+                    reportIncident({
+                        component: `envio:defeito-fila-reenvio (${instance.instance_name || "instância desconhecida"})`,
+                        route: "envio_sincrono:enfileirar_reenvio",
+                        origem: "edge_interna",
+                        ownerId: instance.user_id ?? null,
+                        error: filaErr,
+                    });
+                } else {
+                    reenviando = true;
+                }
+            }
+
             return new Response(
                 JSON.stringify({
                     success: false,
@@ -395,11 +443,12 @@ serveMonitored("meta-send-message", async (req) => {
                     meta_error_code: metaCode,
                     meta_error_title: traducao.titulo,
                     meta_error_group: grupo,
+                    status: reenviando ? "reenviando" : "falhou",
                     // motivo cru da Meta so no detalhe tecnico, nunca na tela
                     details: errorMsg,
                     http_code: sendResponse.status,
                 }),
-                { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+                { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
         }
 

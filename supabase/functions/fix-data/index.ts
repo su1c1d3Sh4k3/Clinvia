@@ -1,4 +1,5 @@
 import { serveMonitored } from "../_shared/serve-monitored.ts";
+import { unexpectedErrorResponse } from "../_shared/api-errors.ts";
 import { Client } from "https://deno.land/x/postgres@v0.17.0/mod.ts";
 
 const corsHeaders = {
@@ -47,9 +48,6 @@ serveMonitored("fix-data", async (req) => {
         });
 
     } catch (error) {
-        return new Response(JSON.stringify({ error: error.message }), {
-            status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
+        return unexpectedErrorResponse(corsHeaders, "Corrigir os dados", error, req);
     }
 });
