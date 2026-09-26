@@ -27,7 +27,10 @@ export function useMyConnections() {
         queryKey: ["minha-conta-connections"],
         queryFn: async (): Promise<MyConnection[]> => {
             const [wpp, ig] = await Promise.all([
-                supabase.from("instances").select(INSTANCE_COLUMNS).order("created_at", { ascending: false }),
+                // Painel de conexoes da conta: cadastro de instancia que nao
+                // existe mais no provedor nao e conexao, e contar como tal
+                // mostraria uma desconexao que ninguem pode resolver.
+                supabase.from("instances").select(INSTANCE_COLUMNS).is("removed_at", null).order("created_at", { ascending: false }),
                 supabase.from("instagram_instances" as any).select(INSTAGRAM_INSTANCE_COLUMNS).order("created_at", { ascending: false }),
             ]);
             if (wpp.error) throw wpp.error;
@@ -72,7 +75,7 @@ export function useMyIAStatus() {
             const [cfgRes, profRes, instRes] = await Promise.all([
                 supabase.from("ia_config" as any).select("agent_name, name, ia_on").eq("user_id", ownerId!).maybeSingle(),
                 supabase.from("profiles" as any).select("company_name").eq("id", ownerId!).maybeSingle(),
-                supabase.from("instances").select(INSTANCE_COLUMNS),
+                supabase.from("instances").select(INSTANCE_COLUMNS).is("removed_at", null),
             ]);
             if (cfgRes.error) throw cfgRes.error;
             if (profRes.error) throw profRes.error;

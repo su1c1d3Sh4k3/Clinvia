@@ -223,7 +223,9 @@ export function useMonitorInstances() {
         queryKey: ["monitor-instances"],
         queryFn: async () => {
             const [wpp, insta] = await Promise.all([
-                supabase.from("instances").select("id, name, provider").order("name"),
+                // So alimenta o seletor de instancia do filtro: cadastro de
+                // instancia removida do provedor nao e opcao de filtro.
+                supabase.from("instances").select("id, name, provider").is("removed_at", null).order("name"),
                 supabase.from("instagram_instances" as any).select("id, account_name").order("account_name"),
             ]);
             if (wpp.error) throw wpp.error;

@@ -83,7 +83,10 @@ export function RestrictedInstancesBanner() {
                 .from("instances")
                 .select("id, name, restriction_active, restriction_until, restriction_type")
                 .eq("user_id", ownerId)
-                .eq("restriction_active", true);
+                .eq("restriction_active", true)
+                // Mesma regra do banner de desconexao: instancia que nao existe
+                // mais no provedor nao tem o que ser resolvido pela clinica.
+                .is("removed_at", null);
             if (error) throw error;
             return (data ?? []) as RestrictedInstance[];
         },

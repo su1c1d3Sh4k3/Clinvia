@@ -175,12 +175,16 @@ export const NavigationSidebar = () => {
   });
 
   // Fetch connected instances for footer status
+  // A queryKey ["instances"] e a MESMA de Connections.tsx (quem monta primeiro
+  // define a queryFn das duas telas) — o filtro de removidas tem que ser igual
+  // nos dois lugares, senao o rodape e a tela de conexoes discordam.
   const { data: whatsappInstances } = useQuery({
     queryKey: ["instances"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("instances")
         .select(INSTANCE_COLUMNS)
+        .is("removed_at", null)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data;

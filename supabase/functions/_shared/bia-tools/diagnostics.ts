@@ -134,7 +134,11 @@ async function checkConnections(
     const { data, error } = await supabase
         .from('instances')
         .select('id, instance_name, status, client_number, created_at')
-        .eq('user_id', context.owner_id);
+        .eq('user_id', context.owner_id)
+        // Instancia removida do provedor nao entra no diagnostico de conexao:
+        // ela apareceria como "desconectada" e mandaria o cliente reconectar
+        // uma linha que so existe para preservar o historico.
+        .is('removed_at', null);
 
     if (error) {
         return { success: false, error: `Erro ao verificar conexões: ${error.message}` };

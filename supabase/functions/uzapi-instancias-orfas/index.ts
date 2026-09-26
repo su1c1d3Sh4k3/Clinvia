@@ -89,10 +89,16 @@ serveMonitored("uzapi-instancias-orfas", async (req) => {
         ? cru
         : (cru?.instances ?? cru?.data ?? []);
 
+    // `removed_at is null`: a linha marcada como removida NAO conta como nossa.
+    // Isso importa nos dois sentidos. Se o provedor devolver lista vazia, ela
+    // nao sustenta a "varredura cega" abaixo (a lista vazia passa a ser a
+    // resposta certa). E se uma instancia com o mesmo token reaparecer la, ela
+    // e orfa de verdade: a gente ja declarou que nao cuida mais dela.
     const { data: nossas, error: leituraErr } = await supabase
         .from("instances")
         .select("id, name, instance_name, apikey")
-        .neq("provider", "meta");
+        .neq("provider", "meta")
+        .is("removed_at", null);
 
     if (leituraErr) {
         console.error("[uzapi-instancias-orfas] erro lendo instances:", leituraErr);
@@ -103,10 +109,13 @@ serveMonitored("uzapi-instancias-orfas", async (req) => {
     }
 
     // VARREDURA CEGA. O provedor respondeu 200 com lista VAZIA enquanto nos
-    // temos instancia UAZAPI cadastrada — impossivel na pratica: as nossas
-    // existem la. Acontece de verdade: em 26/09/2026, logo depois da rotacao do
-    // admintoken, `/instance/all` passou a devolver `[]` porque o token novo
-    // enxerga outro escopo de administrador; as 11 instancias continuaram no ar.
+    // temos instancia UAZAPI VIVA cadastrada — contradicao: a nossa existe la.
+    //
+    // Lista vazia por si so NAO e defeito. Em 26/09/2026 ela passou a ser a
+    // resposta certa: as instancias foram apagadas no servidor e as duas linhas
+    // que sobraram aqui foram marcadas como removidas. O que denuncia cegueira
+    // e a lista vazia CONTRA cadastro vivo — token com escopo errado, servidor
+    // trocado, filtro novo na API do provedor.
     //
     // Sem este ramo o resultado seria "0 orfas" com `success: true` — saude
     // aparente — e na passada seguinte o fechamento automatico RESOLVERIA os
@@ -119,8 +128,8 @@ serveMonitored("uzapi-instancias-orfas", async (req) => {
             message: "UAZAPI respondeu 200 com lista vazia de instancias; a varredura de orfas nao mediu nada.",
             origem: "cron",
             context: {
-                instancias_uazapi_no_banco: (nossas ?? []).length,
-                provavel_causa: "admintoken com escopo de administrador diferente do que criou as instancias",
+                instancias_uazapi_vivas_no_banco: (nossas ?? []).length,
+                provavel_causa: "admintoken enxergando outro escopo, ou servidor UAZAPI diferente do cadastrado",
             },
         });
         // 200, nao 5xx: `serveMonitored` relata >= 500 e abriria um SEGUNDO

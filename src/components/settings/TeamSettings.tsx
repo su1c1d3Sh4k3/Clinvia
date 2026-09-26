@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { TEAM_MEMBER_COLUMNS } from "@/lib/dbColumns";
@@ -39,6 +39,8 @@ import { Loader2, Plus, Pencil, Trash2, Users } from "lucide-react";
 interface ScopeOption {
     id: string;
     label: string;
+    /** Instancia que nao existe mais no provedor: serve de rotulo, nao de escolha. */
+    removida?: boolean;
 }
 
 /**
@@ -128,15 +130,23 @@ export const TeamSettings = () => {
         enabled: !!ownerId,
         queryFn: async (): Promise<ScopeOption[]> => {
             const [wpp, ig] = await Promise.all([
-                supabase.from("instances").select("id, name").eq("user_id", ownerId).order("name"),
+                supabase.from("instances").select("id, name, removed_at").eq("user_id", ownerId).order("name"),
                 supabase.from("instagram_instances").select("id, account_name").eq("user_id", ownerId),
             ]);
             return [
-                ...(wpp.data || []).map((i: any) => ({ id: i.id, label: i.name })),
+                ...(wpp.data || []).map((i: any) => ({ id: i.id, label: i.name, removida: !!i.removed_at })),
                 ...(ig.data || []).map((i: any) => ({ id: i.id, label: `${i.account_name} (Instagram)` })),
             ];
         },
     });
+
+    // A lista CHEIA (com as removidas) so existe para `scopeLabel` conseguir
+    // nomear escopo antigo de atendente; o que se pode ESCOLHER e so o que
+    // ainda existe no provedor.
+    const instanceOptionsAtivas = useMemo(
+        () => (instanceOptions || []).filter((o) => !o.removida),
+        [instanceOptions],
+    );
 
     const { data: queueOptions } = useQuery({
         queryKey: ["team-scope-queues", ownerId],
@@ -362,7 +372,7 @@ export const TeamSettings = () => {
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <ScopeSelector
                                         label="Instâncias liberadas"
-                                        options={instanceOptions || []}
+                                        options={instanceOptionsAtivas}
                                         value={allowedInstanceIds}
                                         onChange={setAllowedInstanceIds}
                                     />
@@ -498,7 +508,7 @@ export const TeamSettings = () => {
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <ScopeSelector
                                     label="Instâncias liberadas"
-                                    options={instanceOptions || []}
+                                    options={instanceOptionsAtivas}
                                     value={allowedInstanceIds}
                                     onChange={setAllowedInstanceIds}
                                 />

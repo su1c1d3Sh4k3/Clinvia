@@ -83,6 +83,10 @@ const Connections = () => {
             const { data, error } = await supabase
                 .from("instances")
                 .select(INSTANCE_COLUMNS)
+                // Cadastro de instancia que nao existe mais no provedor: a linha
+                // so ficou de pe para as conversas dela continuarem legiveis, e
+                // nao ha nada a conectar, reconectar ou apagar aqui.
+                .is("removed_at", null)
                 .order("created_at", { ascending: false });
 
             if (error) throw error;

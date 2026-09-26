@@ -40,7 +40,9 @@ export function useCrmChannels() {
         staleTime: 1000 * 60 * 5,
         queryFn: async (): Promise<CrmChannel[]> => {
             const [wpp, ig] = await Promise.all([
-                supabase.from("instances").select("id, name").eq("user_id", ownerId).order("name"),
+                // `removed_at is null`: a aba de canal do CRM e uma escolha de
+                // por onde falar; instancia que nao existe mais no provedor nao e.
+                supabase.from("instances").select("id, name").eq("user_id", ownerId).is("removed_at", null).order("name"),
                 supabase
                     .from("instagram_instances")
                     .select("id, account_name")

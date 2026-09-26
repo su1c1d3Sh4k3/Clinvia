@@ -77,7 +77,7 @@ serveMonitored("uzapi-create-instance", async (req) => {
     console.log('[2] Checking for duplicate instance name in database...');
     const { data: existingInstance, error: checkError } = await supabaseClient
       .from('instances')
-      .select('id, name, user_id')
+      .select('id, name, user_id, removed_at')
       .eq('name', sanitizedName)
       .maybeSingle();
 
@@ -94,10 +94,18 @@ serveMonitored("uzapi-create-instance", async (req) => {
 
     if (existingInstance) {
       console.log('[2.2] Duplicate found:', existingInstance);
+      // O nome continua reservado mesmo quando a instancia foi removida do
+      // provedor: a linha antiga ficou de pe para preservar as conversas, e o
+      // roteamento do webhook e por NOME — duas linhas com o mesmo nome
+      // fariam a mensagem cair na instancia errada. A mensagem muda para nao
+      // mandar o cliente procurar uma conexao que ele nao ve mais na tela.
+      const erroDuplicado = existingInstance.removed_at
+        ? "Esse nome pertence a uma conexão antiga que foi removida do provedor. O nome continua reservado para preservar o histórico das conversas dela — escolha um nome diferente."
+        : "Instâncias precisam ter nomes únicos para evitar conflitos e esse nome já foi usado.";
       return new Response(
         JSON.stringify({
           success: false,
-          error: "Instâncias precisam ter nomes únicos para evitar conflitos e esse nome já foi usado."
+          error: erroDuplicado
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );

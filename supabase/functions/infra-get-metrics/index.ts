@@ -77,7 +77,11 @@ serveMonitored("infra-get-metrics", async (req) => {
       recentMessagesRes,
     ] = await Promise.allSettled([
       supabase.from("infra_metrics").select("*").order("collected_at", { ascending: false }).limit(1).single(),
-      supabase.from("instances").select("id, name, instance_name, status, user_id"),
+      // `removed_at is null`: cadastro morto (instancia que nao existe mais no
+      // provedor) nao entra no painel de infra. A linha so continua de pe para
+      // as conversas e o historico dela seguirem legiveis — conta-la aqui seria
+      // mostrar uma desconexao que ninguem pode resolver.
+      supabase.from("instances").select("id, name, instance_name, status, user_id").is("removed_at", null),
       supabase.from("instagram_instances").select("id, account_name, instagram_account_id, status, token_expires_at, user_id"),
       supabase.from("support_tickets")
         .select("id, title, priority, status, created_at, user_id, auth_user_id, creator_name, description, client_summary, support_response")

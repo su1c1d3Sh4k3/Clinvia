@@ -277,6 +277,10 @@ export function ConexoesGuide() {
                             a: "Essa lista do rodapé do menu mostra apenas as conexões online, de WhatsApp e de Instagram. Se a sua não está lá, ela caiu: abra Conexões e reconecte (QR, no caso do número não oficial). O status completo, incluindo o que está desconectado, fica sempre nesta página.",
                         },
                         {
+                            q: "Uma conexão sumiu da própria tela de Conexões. Perdi as conversas dela?",
+                            a: "Não. Quando o número deixa de existir no provedor (foi apagado lá), o cadastro dele sai desta tela, das listas de escolha e do aviso vermelho de desconexão — não há o que reconectar. Tudo o que passou por ele continua no lugar: conversas, histórico de atendimentos, campanhas e agendamentos antigos seguem aparecendo com o nome da conexão. O nome também fica reservado: ao criar uma conexão nova, escolha um nome diferente, senão o sistema recusa para não misturar as mensagens das duas.",
+                        },
+                        {
                             q: "Meu template está 'Pendente' há horas. É normal?",
                             a: "Sim, a aprovação leva de minutos a algumas horas (raramente mais). Campanhas com número oficial só disparam com template Aprovado — o sistema segura e avisa.",
                         },

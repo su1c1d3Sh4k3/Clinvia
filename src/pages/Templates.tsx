@@ -454,6 +454,7 @@ const Templates = ({ embedded = false }: { embedded?: boolean }) => {
             const { data, error } = await supabase
                 .from("instances")
                 .select(INSTANCE_COLUMNS)
+                .is("removed_at", null)
                 .order("created_at", { ascending: false });
 
             if (error) {

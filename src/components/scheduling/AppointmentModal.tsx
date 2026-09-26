@@ -227,7 +227,7 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
         queryFn: async () => {
             const { data, error } = await supabase
                 .from("instances")
-                .select("id, name")
+                .select("id, name, removed_at")
                 .eq("user_id", ownerId)
                 .order("name");
             if (error) throw error;
@@ -303,6 +303,15 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
     const watchStartTime = form.watch("start_time");
     const watchCategoryId = form.watch("category_id");
     const watchServiceNameId = form.watch("service_name_id");
+    const watchInstanceId = form.watch("instance_id");
+
+    // Conexao removida do provedor sai da lista, MENOS quando e a do proprio
+    // agendamento sendo editado: esconde-la apagaria o campo na tela e obrigaria
+    // a trocar a conexao de um agendamento antigo so para poder salvar.
+    const instanciasSelecionaveis = useMemo(
+        () => (wppInstances || []).filter((i: any) => !i.removed_at || i.id === watchInstanceId),
+        [wppInstances, watchInstanceId],
+    );
     const currentHour   = watchStartTime?.split(":")[0] ?? "";
     const currentMinute = watchStartTime?.split(":")[1] ?? "";
     const watchPrice = form.watch("price") || 0;
@@ -695,11 +704,11 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
     // Conta com uma conexão só: seleciona sozinha (campo continua obrigatório)
     useEffect(() => {
         if (!open || appointmentToEdit) return;
-        if (wppInstances?.length === 1 && !form.getValues("instance_id")) {
-            form.setValue("instance_id", wppInstances[0].id);
+        if (instanciasSelecionaveis.length === 1 && !form.getValues("instance_id")) {
+            form.setValue("instance_id", instanciasSelecionaveis[0].id);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open, wppInstances, appointmentToEdit]);
+    }, [open, instanciasSelecionaveis, appointmentToEdit]);
 
     // Quando o profissional muda, limpar serviço e duração (serviço pode ser inválido para o novo profissional)
     useEffect(() => {
@@ -1047,7 +1056,7 @@ export function AppointmentModal({ open, onOpenChange, defaultDate, defaultProfe
                                                         </SelectTrigger>
                                                     </FormControl>
                                                     <SelectContent>
-                                                        {(wppInstances || []).map((i: any) => (
+                                                        {instanciasSelecionaveis.map((i: any) => (
                                                             <SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>
                                                         ))}
                                                     </SelectContent>

@@ -212,7 +212,12 @@ serveMonitored("uzapi-health-check", async (req) => {
             .select('id, name, user_id, status, server_url, apikey, last_disconnect_notified_at, last_health_check, restriction_active, restriction_until, provider, client_number, disconnect_email_sent_at')
             .not('apikey', 'is', null)
             .not('server_url', 'is', null)
-            .neq('provider', 'meta');
+            .neq('provider', 'meta')
+            // Instancia marcada como removida nao existe mais no provedor: a
+            // linha so ficou de pe para as conversas e o historico dela
+            // continuarem legiveis. Pingar o token dela e pedir um 404 a cada
+            // 10 minutos e chamar o resultado de "desconectada".
+            .is('removed_at', null);
         if (ownerIdFilter) {
             listQuery = listQuery.eq('user_id', ownerIdFilter);
         }
@@ -288,20 +293,32 @@ serveMonitored("uzapi-health-check", async (req) => {
                 // para o aviso in-app; o incidente nao precisa dela porque a
                 // borda so existe uma vez por queda: enquanto durar,
                 // `prevStatus` ja e 'disconnected' e este ramo nao roda.
-                reportIncident({
-                    component: COMPONENTE_DESCONEXAO,
-                    route: inst.id,
-                    message: mensagemDesconexao(inst.name),
-                    httpCode: ping.httpCode,
-                    ownerId: inst.user_id,
-                    origem: 'cron',
-                    context: {
-                        instance_id: inst.id,
-                        instance_name: inst.name,
-                        motivo: friendlyReason(ping.reason),
-                        http_code: ping.httpCode,
-                    },
-                });
+                //
+                // EXCECAO (ordem dele, 26/09/2026): 401/403/404 no token da
+                // instancia = a UAZAPI nao conhece mais essa instancia. Isso
+                // continua virando `disconnected` e continua avisando o DONO DA
+                // CLINICA (sino + e-mail, logo abaixo) — quem reconecta e ele.
+                // O que nao acontece e abrir incidente de plataforma: nao ha
+                // nada para o super admin consertar, e supressao boa e na
+                // ORIGEM, nao na porta do alerta.
+                const naoConheceAInstancia = [401, 403, 404].includes(ping.httpCode);
+
+                if (!naoConheceAInstancia) {
+                    reportIncident({
+                        component: COMPONENTE_DESCONEXAO,
+                        route: inst.id,
+                        message: mensagemDesconexao(inst.name),
+                        httpCode: ping.httpCode,
+                        ownerId: inst.user_id,
+                        origem: 'cron',
+                        context: {
+                            instance_id: inst.id,
+                            instance_name: inst.name,
+                            motivo: friendlyReason(ping.reason),
+                            http_code: ping.httpCode,
+                        },
+                    });
+                }
 
                 const lastNotified = inst.last_disconnect_notified_at
                     ? new Date(inst.last_disconnect_notified_at).getTime()

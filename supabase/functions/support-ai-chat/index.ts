@@ -529,7 +529,10 @@ async function consultarConta(supabase: any, ownerId: string): Promise<Record<st
     const { data: instances, error: instError } = await supabase
         .from("instances")
         .select("instance_name, provider, status, ia_on_wpp")
-        .eq("user_id", ownerId);
+        .eq("user_id", ownerId)
+        // Ver comentario em _shared/bia-tools/diagnostics.ts: cadastro de
+        // instancia removida do provedor nao e conexao do cliente.
+        .is("removed_at", null);
     if (instError) {
         avisos.push("não consegui ler as conexões de WhatsApp");
     } else {

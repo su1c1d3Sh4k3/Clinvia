@@ -283,17 +283,30 @@ export const ConversationsList = ({
   });
 
   // Fetch instances for filter
+  //
+  // A lista vem CHEIA de proposito: ela e usada em dois lugares com sentidos
+  // diferentes — como opcao de filtro (escolha) e como tradutor de id para
+  // nome no card da conversa (rotulo). Tirar a instancia removida daqui
+  // deixaria sem nome a conversa antiga que ainda aponta para ela.
   const { data: instances } = useQuery({
     queryKey: ["instances-filter"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("instances")
-        .select("id, name, provider")
+        .select("id, name, provider, removed_at")
         .order("name");
       if (error) throw error;
       return data;
     },
   });
+
+  // Ja como OPCAO de filtro a removida sai. A excecao e ela estar marcada:
+  // o filtro fica salvo em localStorage, e esconder a opcao marcada deixaria
+  // a lista vazia sem nenhuma caixa para desmarcar.
+  const instancesFiltraveis = useMemo(
+    () => (instances || []).filter((i: any) => !i.removed_at || selectedInstanceFilter.includes(i.id)),
+    [instances, selectedInstanceFilter],
+  );
 
 
 
@@ -518,7 +531,7 @@ export const ConversationsList = ({
                     Instâncias{selectedInstanceFilter.length > 0 && ` (${selectedInstanceFilter.length})`}
                   </span>
                   <div className="max-h-32 overflow-y-auto border rounded p-1 space-y-0.5">
-                    {instances?.map((i: any) => (
+                    {instancesFiltraveis.map((i: any) => (
                       <label key={i.id} className="flex items-center gap-2 px-1 py-0.5 rounded hover:bg-muted/50 cursor-pointer text-sm">
                         <input
                           type="checkbox"

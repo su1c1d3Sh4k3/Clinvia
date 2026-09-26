@@ -181,6 +181,8 @@ const AutoMessages = () => {
       const { data } = await supabase
         .from("instances")
         .select("id, name, instance_name, status")
+        // Instancia removida do provedor nao pode ser escolhida para enviar.
+        .is("removed_at", null)
         .order("name");
       return (data ?? []) as Instance[];
     },

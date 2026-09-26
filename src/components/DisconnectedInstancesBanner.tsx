@@ -31,7 +31,10 @@ export function DisconnectedInstancesBanner() {
                 .from("instances")
                 .select("id, name, status, last_disconnect_reason, restriction_active, restriction_until")
                 .eq("user_id", ownerId)
-                .eq("status", "disconnected");
+                .eq("status", "disconnected")
+                // Instancia removida do provedor nao pode ser reconectada: cobrar
+                // a clinica por ela seria um banner vermelho eterno e sem saida.
+                .is("removed_at", null);
             if (error) throw error;
             // Exclusividade: se a instância está em restrição temporária ATIVA E ainda
             // dentro do prazo, o RestrictedInstancesBanner cuida dela — não exibimos
