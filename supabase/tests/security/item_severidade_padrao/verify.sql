@@ -195,7 +195,23 @@ checagens as (
                                         -- `sentinela:parou-de-reportar` NAO esta
                                         -- nesta lista de proposito: ali a
                                         -- sentinela esta muda e nao ha 2a via.
-                                        'sentinela:aplicacao-inacessivel')
+                                        'sentinela:aplicacao-inacessivel',
+                                        -- 26/09/2026: instancia que existe na
+                                        -- UAZAPI e nao tem linha em
+                                        -- public.instances. E DIVIDA DE
+                                        -- CADASTRO, nao incidente de operacao:
+                                        -- as 9 medidas sao restos de 2026-03 a
+                                        -- 2026-06, nada esta caindo agora por
+                                        -- causa delas, e o que se faz com uma
+                                        -- orfa (recadastrar ou apagar no
+                                        -- provedor) e decisao de expediente,
+                                        -- com conferencia de status antes. O
+                                        -- teto baixa acompanha pelo mesmo
+                                        -- motivo do par instancia-desconectada:
+                                        -- sem ele bastaria a IA achar grave um
+                                        -- resto de marco para a classe inteira
+                                        -- comecar a tocar o telefone dele.
+                                        'uazapi:instancia-orfa')
            )
     union all
     select 'E8 catalogo sem instrucao de cadastro na descricao',

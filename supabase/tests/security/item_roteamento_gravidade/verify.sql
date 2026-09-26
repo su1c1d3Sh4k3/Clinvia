@@ -171,7 +171,18 @@ checagens as (
                                         -- `sentinela:parou-de-reportar` fica fora
                                         -- desta lista: quando ele dispara a
                                         -- sentinela esta muda, e nao ha 2a via.
-                                        'sentinela:aplicacao-inacessivel')
+                                        'sentinela:aplicacao-inacessivel',
+                                        -- 26/09/2026: instancia que existe na
+                                        -- UAZAPI e nao tem linha em
+                                        -- public.instances. Divida de CADASTRO,
+                                        -- nao incidente de operacao: as 9
+                                        -- medidas sao restos de 2026-03 a
+                                        -- 2026-06 e nada esta caindo agora por
+                                        -- causa delas. Teto baixa pelo mesmo
+                                        -- motivo do par instancia-desconectada:
+                                        -- sem ele a IA promoveria um resto de
+                                        -- marco a alarme de madrugada.
+                                        'uazapi:instancia-orfa')
            )
     union all
     select 'E4 analise-indisponivel continua indo ao WhatsApp',

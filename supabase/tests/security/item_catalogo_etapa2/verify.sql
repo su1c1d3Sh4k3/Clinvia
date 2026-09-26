@@ -77,6 +77,15 @@ union all
 -- o mesmo fato chegar duas vezes no telefone. `sentinela:parou-de-reportar` e o
 -- oposto e por isso toca: a sentinela esta muda por definicao quando ele dispara,
 -- entao nao existe segunda via — se a plataforma nao falar, ninguem fala.
+--
+-- 26/09/2026: `banco:conexoes-saturadas` (`20260926130000`), por ordem nominal
+-- dele — "conexoes em uso acima de 85% do maximo por 5 minutos = alta". Toca o
+-- telefone e nao e supressao mal feita: quando o banco satura, o que para nao e
+-- um detector, e a ENTRADA da mensagem do paciente — o webhook e os 40 jobs do
+-- pg_cron disputam as mesmas 60 conexoes, e nesse estado nenhum outro alerta
+-- consegue sair, porque todos precisam do mesmo banco. Nao dispara por leitura
+-- avulsa: exige 5 amostras consecutivas de minuto acima de 85%, que e o que
+-- separa pico de cron (dura um minuto) de saturacao de verdade.
 -- Quem acrescentar um componente `alta` novo sem passar por aqui reprova.
 select format('%-6s componentes novos que acordariam telefone: %s (tem que ser 0)',
               case when count(*) = 0 then 'ok' else 'FALHOU' end, count(*))
@@ -96,5 +105,6 @@ select format('%-6s componentes novos que acordariam telefone: %s (tem que ser 0
                          'envio:pico-diario',
                          'recebimento:fila-parada',
                          'sentinela:aplicacao-inacessivel',
-                         'sentinela:parou-de-reportar')
+                         'sentinela:parou-de-reportar',
+                         'banco:conexoes-saturadas')
 order by 1;
