@@ -396,3 +396,13 @@ Registradas também no `CLAUDE.md` do projeto:
   (`public, extensions`).
 - `is_staff()` e amigos sem filtro de tenant (item da Fase 2).
 - `copilot`: RLS on, zero policies.
+- **`SUPABASE_SERVICE_ROLE_KEY` no vault ainda é o JWT legado** (`eyJ…`, 219 chars), enquanto o env
+  das edge functions já usa a chave nova (`sb_secret_…`). Decisão de 26/09/2026: **não rotacionar
+  agora** — fica registrado para a migração às chaves novas do Supabase. A pendência é medida pela
+  linha `E7` de `supabase/tests/security/item_segredo_em_cron/verify.sql`, que sai como `medicao`
+  (não reprova a suíte) e vira `ja migrado` sozinha no dia da troca.
+- **`SCHEDULING_API_KEY` não foi trocada** (26/09/2026): ela saiu do texto puro de `cron.job` para o
+  vault, mas o consumidor externo é o **n8n — 127 nós carregam o valor inline no header `x-api-key`
+  de nós HTTP Request, não como credencial do n8n**. Trocar só do lado do servidor deixaria os 127
+  em 401 e derrubaria o agendamento por IA de todas as clínicas até a edição manual terminar. A
+  troca depende de um momento escolhido pelo dono do produto.
